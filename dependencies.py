@@ -1,3 +1,3 @@
-required_modules = 'container:core'
+required_modules = 'base'
 required_dependencies = ''
 optional_dependencies = ''

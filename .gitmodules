@@ -1,0 +1,3 @@
+[submodule "tools/dev_tools"]
+	path = tools/dev_tools
+	url = http://github.com/salilab/developer_tools
