@@ -1,4 +1,4 @@
 # this file is used to determine names for format checks
 {
-    "name": "IMP.template_module"
+    "name": "IMP.module_template"
 }
