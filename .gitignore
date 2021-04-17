@@ -3,5 +3,6 @@
 ~.orig
 *~
 .*.sw?
-CMakeLists.txt
+#CMakeLists.txt
 Files.cmake
+build/
