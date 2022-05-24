@@ -6,11 +6,11 @@ has format checks enabled.
 
 # Info
 
-_Author(s)_:
+_Author(s)_: Thomas-Otavio Peulen
 
-_Maintainer_:
+_Maintainer_: Thomas-Otavio Peulen
 
-_License_: None
+_License_: NONE
 
 _Publications_:
 - None
