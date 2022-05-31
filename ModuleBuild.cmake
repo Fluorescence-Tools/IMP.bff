@@ -2,122 +2,128 @@
 # from tools/build/cmake_templates/Module.cmake
 # Do not edit - any changes will be lost!
 
-project(IMP.fluorescence)
+project(IMP.scratch)
 
-include(${CMAKE_SOURCE_DIR}/Setup.cmake)
 
-imp_get_process_exit_code("Setting up module fluorescence" status ${CMAKE_BINARY_DIR}
+
+imp_get_process_exit_code("Setting up module scratch" status ${CMAKE_BINARY_DIR}
                           COMMAND ${PYTHON_EXECUTABLE}
-                          /home/tpeulen/miniconda3/share/IMP/tools/build/setup_module.py
-                          --build_dir=/home/tpeulen/miniconda3/share/IMP/build_info  --name=fluorescence
+                          ${CMAKE_SOURCE_DIR}/tools/build/setup_module.py
+                           --name=scratch
                           --datapath=${IMP_DATAPATH}
-                          --defines=${IMP_fluorescence_CONFIG}:
+                          --defines=${IMP_scratch_CONFIG}:
                           --source=${CMAKE_SOURCE_DIR}
                           )
 
 if(${status} EQUAL 0)
-  imp_execute_process("setup_swig_wrappers fluorescence" ${CMAKE_BINARY_DIR}
-    COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/miniconda3/share/IMP/tools/build/setup_swig_wrappers.py
-    --build_dir=/home/tpeulen/miniconda3/share/IMP/build_info  --module=fluorescence
+  imp_execute_process("setup_swig_wrappers scratch" ${CMAKE_BINARY_DIR}
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/setup_swig_wrappers.py
+     --module=scratch
     --datapath=${IMP_DATAPATH}
     --source=${CMAKE_SOURCE_DIR})
 
   # for warning control
-  add_definitions(-DIMPFLUORESCENCE_COMPILATION)
+  add_definitions(-DIMPSCRATCH_COMPILATION)
 
   if(0 EQUAL 0)
-    set(allh_command  "${PYTHON_EXECUTABLE}" "/home/tpeulen/miniconda3/share/IMP/tools/dev_tools/make_all_header.py" "${CMAKE_BINARY_DIR}/include/IMP/fluorescence.h" "IMP/fluorescence" "${PROJECT_SOURCE_DIR}/include/" ${IMP_fluorescence_EXTRA_HEADERS})
+    set(allh_command  "${PYTHON_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/dev_tools/make_all_header.py" "${CMAKE_BINARY_DIR}/include/IMP/scratch.h" "IMP/scratch" "${PROJECT_SOURCE_DIR}/include/" ${IMP_scratch_EXTRA_HEADERS})
     # for swig
-    imp_execute_process("IMP.fluorescence making all header" ${PROJECT_BINARY_DIR}
+    imp_execute_process("IMP.scratch making all header" ${PROJECT_BINARY_DIR}
                         COMMAND ${allh_command})
 
-    add_custom_target(IMP.fluorescence-all-header
+    add_custom_target(IMP.scratch-all-header
       COMMAND ${allh_command}
-      DEPENDS "/home/tpeulen/miniconda3/share/IMP/tools/dev_tools/make_all_header.py")
-    set_property(TARGET "IMP.fluorescence-all-header" PROPERTY FOLDER "IMP.fluorescence")
-    list(APPEND IMP_fluorescence_LIBRARY_EXTRA_DEPENDENCIES IMP.fluorescence-all-header)
+      DEPENDS "${CMAKE_SOURCE_DIR}/tools/dev_tools/make_all_header.py")
+    set_property(TARGET "IMP.scratch-all-header" PROPERTY FOLDER "IMP.scratch")
+    list(APPEND IMP_scratch_LIBRARY_EXTRA_DEPENDENCIES IMP.scratch-all-header)
   endif()
 
   
   if(IMP_DOXYGEN_FOUND)
     # documentation
-    file(GLOB headers ${CMAKE_BINARY_DIR}/include/IMP/fluorescence/*.h)
-    file(GLOB docs ${CMAKE_SOURCE_DIR}/doc/*.dox
-      ${CMAKE_SOURCE_DIR}/doc/*.md)
-    file(GLOB examples ${CMAKE_BINARY_DIR}/doc/examples/fluorescence/*.py
-      ${CMAKE_BINARY_DIR}/doc/examples/fluorescence/*.cpp)
+    file(GLOB headers ${CMAKE_BINARY_DIR}/include/IMP/scratch/*.h)
+    file(GLOB docs ${CMAKE_SOURCE_DIR}/modules/scratch/doc/*.dox
+      ${CMAKE_SOURCE_DIR}/modules/scratch/doc/*.md)
+    file(GLOB examples ${CMAKE_BINARY_DIR}/doc/examples/scratch/*.py
+      ${CMAKE_BINARY_DIR}/doc/examples/scratch/*.cpp)
 
     if(NOT IMP_STATIC)
-      set(IMP_fluorescence_TAG_DEPENDS "${IMP.fluorescence-python}")
+      set(IMP_scratch_TAG_DEPENDS "${IMP.scratch-python}")
     endif()
 
-    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/doxygen/fluorescence/tags ${CMAKE_BINARY_DIR}/doxygen/fluorescence/xml/index.xml
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/doxygen/scratch/tags ${CMAKE_BINARY_DIR}/doxygen/scratch/xml/index.xml
       COMMAND mkdir -p ${CMAKE_BINARY_DIR}/doc/html
       COMMAND ln -s -f ../../include
       COMMAND ln -s -f ../../doc/examples
       COMMAND ln -s -f ../../lib
-      COMMAND ${IMP_DOXYGEN_EXECUTABLE} ../../doxygen/fluorescence/Doxyfile 2>&1 /dev/null
-      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/miniconda3/share/IMP/tools/build/doxygen_patch_tags.py --module=fluorescence --file=../../doxygen/fluorescence/tags
-      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/miniconda3/share/IMP/tools/build/doxygen_show_warnings.py --warn=../../doxygen/fluorescence/warnings.txt
-      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/miniconda3/share/IMP/tools/build/doxygen_spell_check.py xml ${CMAKE_SOURCE_DIR}/test/standards_exceptions
-      DEPENDS  ${headers} ${docs} ${examples} ${CMAKE_SOURCE_DIR}/README.md ${IMP_fluorescence_TAG_DEPENDS}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/doxygen/fluorescence/
-      COMMENT "Running doxygen on fluorescence")
+      COMMAND ${IMP_DOXYGEN_EXECUTABLE} ../../doxygen/scratch/Doxyfile 2>&1 /dev/null
+      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_patch_tags.py --module=scratch --file=../../doxygen/scratch/tags
+      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_show_warnings.py --warn=../../doxygen/scratch/warnings.txt
+      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_spell_check.py xml ${CMAKE_SOURCE_DIR}/modules/scratch/test/standards_exceptions
+      DEPENDS ${IMP_kernel_DOC}
+${IMP_cgal_DOC}
+${IMP_algebra_DOC}
+${IMP_display_DOC}
+${IMP_score_functor_DOC}
+${IMP_core_DOC}
+${IMP_container_DOC} ${headers} ${docs} ${examples} ${CMAKE_SOURCE_DIR}/modules/scratch/README.md ${IMP_scratch_TAG_DEPENDS}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/doxygen/scratch/
+      COMMENT "Running doxygen on scratch")
 
-    add_custom_target("IMP.fluorescence-doc" ALL DEPENDS ${CMAKE_BINARY_DIR}/doxygen/fluorescence/tags)
-    set_property(TARGET "IMP.fluorescence-doc" PROPERTY FOLDER "IMP.fluorescence")
-    set(IMP_fluorescence_DOC "IMP.fluorescence-doc" CACHE INTERNAL "" FORCE)
+    add_custom_target("IMP.scratch-doc" ALL DEPENDS ${CMAKE_BINARY_DIR}/doxygen/scratch/tags)
+    set_property(TARGET "IMP.scratch-doc" PROPERTY FOLDER "IMP.scratch")
+    set(IMP_scratch_DOC "IMP.scratch-doc" CACHE INTERNAL "" FORCE)
 
     if(NOT IMP_STATIC)
-      list(APPEND IMP_DOC_DEPENDS "${IMP.fluorescence-python}")
+      list(APPEND IMP_DOC_DEPENDS "${IMP.scratch-python}")
     endif()
     list(REMOVE_DUPLICATES IMP_DOC_DEPENDS)
     set(IMP_DOC_DEPENDS ${IMP_DOC_DEPENDS} CACHE INTERNAL "" FORCE)
   else()
-    set(IMP_fluorescence_DOC "" CACHE INTERNAL "" FORCE)
+    set(IMP_scratch_DOC "" CACHE INTERNAL "" FORCE)
   endif(IMP_DOXYGEN_FOUND)
 
   if(0 EQUAL 0)
-    list(APPEND imp_fluorescence_libs )
-    list(APPEND imp_fluorescence_libs )
-    list(REMOVE_DUPLICATES imp_fluorescence_libs)
+    list(APPEND imp_scratch_libs ${IMP_kernel_LIBRARY};${IMP_cgal_LIBRARY};${IMP_algebra_LIBRARY};${IMP_display_LIBRARY};${IMP_score_functor_LIBRARY};${IMP_core_LIBRARY};${IMP_container_LIBRARY})
+    list(APPEND imp_scratch_libs ${BOOST.FILESYSTEM_LIBRARIES};${BOOST.PROGRAMOPTIONS_LIBRARIES};${BOOST.SYSTEM_LIBRARIES};${GPERFTOOLS_LIBRARIES};${TCMALLOC_HEAPPROFILER_LIBRARIES};${TCMALLOC_HEAPCHECKER_LIBRARIES};${BOOST.RANDOM_LIBRARIES};${NUMPY_LIBRARIES};${CGAL_LIBRARIES};${ANN_LIBRARIES};${HDF5_LIBRARIES};${PYTHON-IHM_LIBRARIES};${ROBIN_MAP_LIBRARIES};${GOOGLE_DENSE_HASH_MAP_LIBRARIES})
+    list(REMOVE_DUPLICATES imp_scratch_libs)
 
     add_custom_command(
-	OUTPUT ${CMAKE_BINARY_DIR}/lib/IMP/fluorescence/_version_check.py
-               ${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp
-        COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/miniconda3/share/IMP/tools/build/make_module_version.py
-	        --name=fluorescence --datapath=${IMP_DATAPATH}
+	OUTPUT ${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py
+               ${CMAKE_BINARY_DIR}/src/scratch_config.cpp
+        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/make_module_version.py
+	        --name=scratch --datapath=${IMP_DATAPATH}
 		--source=${CMAKE_SOURCE_DIR}
         DEPENDS IMP-version
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/
         COMMENT "Building module version info")
 
-    add_custom_target("IMP.fluorescence-version" ALL DEPENDS
-                      ${CMAKE_BINARY_DIR}/lib/IMP/fluorescence/_version_check.py
-                      ${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp)
-    set_property(TARGET "IMP.fluorescence-version" PROPERTY FOLDER "IMP.fluorescence")
-    install(FILES "${CMAKE_BINARY_DIR}/lib/IMP/fluorescence/_version_check.py"
-	    DESTINATION "${CMAKE_INSTALL_PYTHONDIR}/IMP/fluorescence/")
+    add_custom_target("IMP.scratch-version" ALL DEPENDS
+                      ${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py
+                      ${CMAKE_BINARY_DIR}/src/scratch_config.cpp)
+    set_property(TARGET "IMP.scratch-version" PROPERTY FOLDER "IMP.scratch")
+    install(FILES "${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py"
+	    DESTINATION "${CMAKE_INSTALL_PYTHONDIR}/IMP/scratch/")
    endif()
 
-  add_subdirectory(${CMAKE_SOURCE_DIR}/src)
-add_subdirectory(${CMAKE_SOURCE_DIR}/test)
-add_subdirectory(${CMAKE_SOURCE_DIR}/examples)
-add_subdirectory(${CMAKE_SOURCE_DIR}/benchmark)
-add_subdirectory(${CMAKE_SOURCE_DIR}/bin)
-add_subdirectory(${CMAKE_SOURCE_DIR}/utility)
-  set(IMP_fluorescence "IMP.fluorescence" CACHE INTERNAL "" FORCE)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/src)
+add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/test)
+add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/examples)
+add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/benchmark)
+add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/bin)
+add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/utility)
+  set(IMP_scratch "IMP.scratch" CACHE INTERNAL "" FORCE)
 else()
 
   # make sure it is empty
-  set(IMP_fluorescence_DOC "" CACHE INTERNAL "" FORCE)
-  set(IMP_fluorescence_PYTHON "" CACHE INTERNAL "" FORCE)
-  set(IMP_fluorescence "" CACHE INTERNAL "" FORCE)
+  set(IMP_scratch_DOC "" CACHE INTERNAL "" FORCE)
+  set(IMP_scratch_PYTHON "" CACHE INTERNAL "" FORCE)
+  set(IMP_scratch "" CACHE INTERNAL "" FORCE)
 
   if(${status} EQUAL 1)
-    message(FATAL_ERROR "Module IMP.fluorescence disabled")
+    message(STATUS "Module IMP.scratch disabled")
   else()
     message(FATAL_ERROR "setup_module returned ${status}")
   endif()
-  set(IMP_fluorescence_LIBRARY CACHE INTERNAL "" FORCE)
+  set(IMP_scratch_LIBRARY CACHE INTERNAL "" FORCE)
 endif()

@@ -1,1 +1,1 @@
-Place source `.cpp` files here to be compiled into the `IMP.scratch` library.
+Place source `.cpp` files here to be compiled into the `IMP.bff` library.

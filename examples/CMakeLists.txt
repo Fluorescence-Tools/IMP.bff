@@ -2,14 +2,39 @@
 # from tools/build/cmake_templates/ModuleExamples.cmake
 # Do not edit - any changes will be lost!
 
-include_directories()
-link_directories()
+include_directories(${ANN_INCLUDE_PATH}
+        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+        ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
+        ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.SYSTEM_INCLUDE_PATH}
+        ${CGAL_INCLUDE_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
+        ${GPERFTOOLS_INCLUDE_PATH}
+        ${HDF5_INCLUDE_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH}
+        ${ROBIN_MAP_INCLUDE_PATH}
+        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
+        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
+link_directories(${ANN_LINK_PATH}
+        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${BOOST.PROGRAMOPTIONS_LINK_PATH}
+        ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.SYSTEM_LINK_PATH}
+        ${CGAL_LINK_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
+        ${GPERFTOOLS_LINK_PATH}
+        ${HDF5_LINK_PATH}
+        ${NUMPY_LINK_PATH}
+        ${PYTHON-IHM_LINK_PATH}
+        ${ROBIN_MAP_LINK_PATH}
+        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
+        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
 
 include(Files.cmake)
 
 set(IMP_TEST_ARGUMENTS "--run_quick_test" "--deprecation_exceptions")
-set(IMP_LINK_LIBRARIES IMP.fluorescence-lib
-    
-    )
+set(IMP_LINK_LIBRARIES IMP.bff-lib
+    ${IMP_kernel_LIBRARY};${IMP_cgal_LIBRARY};${IMP_algebra_LIBRARY};${IMP_display_LIBRARY};${IMP_score_functor_LIBRARY};${IMP_core_LIBRARY};${IMP_container_LIBRARY}
+    ${BOOST.FILESYSTEM_LIBRARIES};${BOOST.PROGRAMOPTIONS_LIBRARIES};${BOOST.SYSTEM_LIBRARIES};${GPERFTOOLS_LIBRARIES};${TCMALLOC_HEAPPROFILER_LIBRARIES};${TCMALLOC_HEAPCHECKER_LIBRARIES};${BOOST.RANDOM_LIBRARIES};${NUMPY_LIBRARIES};${CGAL_LIBRARIES};${ANN_LIBRARIES};${HDF5_LIBRARIES};${PYTHON-IHM_LIBRARIES};${ROBIN_MAP_LIBRARIES};${GOOGLE_DENSE_HASH_MAP_LIBRARIES})
 
-imp_add_tests("IMP.fluorescence" ${PROJECT_BINARY_DIR}/doc/examples/fluorescence IMP_fluorescence_EXAMPLES example ${pyfiles} ${cppfiles})
+imp_add_tests("IMP.bff" ${PROJECT_BINARY_DIR}/doc/examples/bff IMP_bff_EXAMPLES example ${pyfiles} ${cppfiles})

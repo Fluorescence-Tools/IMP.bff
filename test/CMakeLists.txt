@@ -2,26 +2,51 @@
 # from tools/build/cmake_templates/ModuleTest.cmake
 # Do not edit - any changes will be lost!
 
-include_directories()
-link_directories()
+include_directories(${ANN_INCLUDE_PATH}
+        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+        ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
+        ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.SYSTEM_INCLUDE_PATH}
+        ${CGAL_INCLUDE_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
+        ${GPERFTOOLS_INCLUDE_PATH}
+        ${HDF5_INCLUDE_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH}
+        ${ROBIN_MAP_INCLUDE_PATH}
+        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
+        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
+link_directories(${ANN_LINK_PATH}
+        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${BOOST.PROGRAMOPTIONS_LINK_PATH}
+        ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.SYSTEM_LINK_PATH}
+        ${CGAL_LINK_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
+        ${GPERFTOOLS_LINK_PATH}
+        ${HDF5_LINK_PATH}
+        ${NUMPY_LINK_PATH}
+        ${PYTHON-IHM_LINK_PATH}
+        ${ROBIN_MAP_LINK_PATH}
+        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
+        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
 add_definitions("-DIMP_EXECUTABLE")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLUORESCENCE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BFF_CXX_FLAGS}")
 
-File(GLOB runtimepytests "${CMAKE_BINARY_DIR}/test/fluorescence/test_*.py" "${CMAKE_BINARY_DIR}/test/fluorescence/medium_test_*.py" "${CMAKE_BINARY_DIR}/test/fluorescence/expensive_test_*.py")
+File(GLOB runtimepytests "${CMAKE_BINARY_DIR}/test/bff/test_*.py" "${CMAKE_BINARY_DIR}/test/bff/medium_test_*.py" "${CMAKE_BINARY_DIR}/test/bff/expensive_test_*.py")
 
 include(Files.cmake)
 
-set(IMP_TEST_SETUP ${IMP_TEST_SETUP};${FLUORESCENCE_TEST_SETUP})
-set(IMP_LINK_LIBRARIES IMP.fluorescence-lib
-    
-    )
+set(IMP_TEST_SETUP ${IMP_TEST_SETUP};${BFF_TEST_SETUP})
+set(IMP_LINK_LIBRARIES IMP.bff-lib
+    ${IMP_kernel_LIBRARY};${IMP_cgal_LIBRARY};${IMP_algebra_LIBRARY};${IMP_display_LIBRARY};${IMP_score_functor_LIBRARY};${IMP_core_LIBRARY};${IMP_container_LIBRARY}
+    ${BOOST.FILESYSTEM_LIBRARIES};${BOOST.PROGRAMOPTIONS_LIBRARIES};${BOOST.SYSTEM_LIBRARIES};${GPERFTOOLS_LIBRARIES};${TCMALLOC_HEAPPROFILER_LIBRARIES};${TCMALLOC_HEAPCHECKER_LIBRARIES};${BOOST.RANDOM_LIBRARIES};${NUMPY_LIBRARIES};${CGAL_LIBRARIES};${ANN_LIBRARIES};${HDF5_LIBRARIES};${PYTHON-IHM_LIBRARIES};${ROBIN_MAP_LIBRARIES};${GOOGLE_DENSE_HASH_MAP_LIBRARIES})
 
 set(IMP_TEST_ARGUMENTS "--deprecation_exceptions")
-imp_add_tests("IMP.fluorescence" ${PROJECT_BINARY_DIR}/test/fluorescence IMP_fluorescence_TESTS test ${cppfiles})
+imp_add_tests("IMP.bff" ${PROJECT_BINARY_DIR}/test/bff IMP_bff_TESTS test ${cppfiles})
 
 # Don't pass --deprecation_exceptions to Python tests; this confuses unittest's
 # own command line parsing (and is unnecessary since IMP.test.main() already
 # turns on deprecation exceptions).
 set(IMP_TEST_ARGUMENTS )
-imp_add_tests("IMP.fluorescence" ${PROJECT_BINARY_DIR}/test/fluorescence IMP_fluorescence_TESTS test ${runtimepytests} ${pyfiles})
+imp_add_tests("IMP.bff" ${PROJECT_BINARY_DIR}/test/bff IMP_bff_TESTS test ${runtimepytests} ${pyfiles})

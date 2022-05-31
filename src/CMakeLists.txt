@@ -3,14 +3,39 @@
 # Do not edit - any changes will be lost!
 
 FILE(GLOB gensources
-     "${CMAKE_BINARY_DIR}/src/fluorescence/*.cpp")
+     "${CMAKE_BINARY_DIR}/src/bff/*.cpp")
 
 FILE(GLOB genheaders
-     "${CMAKE_BINARY_DIR}/include/IMP/fluorescence/*.h")
+     "${CMAKE_BINARY_DIR}/include/IMP/bff/*.h")
 
-include_directories()
-link_directories()
-add_definitions("-DIMPFLUORESCENCE_EXPORTS")
+include_directories(${ANN_INCLUDE_PATH}
+        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+        ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
+        ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.SYSTEM_INCLUDE_PATH}
+        ${CGAL_INCLUDE_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
+        ${GPERFTOOLS_INCLUDE_PATH}
+        ${HDF5_INCLUDE_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH}
+        ${ROBIN_MAP_INCLUDE_PATH}
+        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
+        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
+link_directories(${ANN_LINK_PATH}
+        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${BOOST.PROGRAMOPTIONS_LINK_PATH}
+        ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.SYSTEM_LINK_PATH}
+        ${CGAL_LINK_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
+        ${GPERFTOOLS_LINK_PATH}
+        ${HDF5_LINK_PATH}
+        ${NUMPY_LINK_PATH}
+        ${PYTHON-IHM_LINK_PATH}
+        ${ROBIN_MAP_LINK_PATH}
+        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
+        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
+add_definitions("-DIMPBFF_EXPORTS")
 
 include(Files.cmake)
 
@@ -18,19 +43,19 @@ if(NOT "${OpenMP_CXX_FLAGS}" MATCHES ".*NOTFOUND.*")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLUORESCENCE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BFF_CXX_FLAGS}")
 
 set(headers )
 
-if(DEFINED IMP_fluorescence_LIBRARY_EXTRA_SOURCES)
-  set_source_files_properties(${IMP_fluorescence_LIBRARY_EXTRA_SOURCES}
+if(DEFINED IMP_bff_LIBRARY_EXTRA_SOURCES)
+  set_source_files_properties(${IMP_bff_LIBRARY_EXTRA_SOURCES}
                               PROPERTIES GENERATED 1)
 endif()
-set_source_files_properties(${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp
+set_source_files_properties(${CMAKE_BINARY_DIR}/src/bff_config.cpp
   PROPERTIES GENERATED 1)
 
-if(DEFINED IMP_fluorescence_IS_CUDA)
-  #  FILE(GLOB IMP_fluorescence_CUDA_SOURCES "${CMAKE_SOURCE_DIR}/modules/fluorescence/src/*.cu")
+if(DEFINED IMP_bff_IS_CUDA)
+  #  FILE(GLOB IMP_bff_CUDA_SOURCES "${CMAKE_SOURCE_DIR}/modules/bff/src/*.cu")
   message(STATUS "Setting up cuda: " "${cudafiles}")
   FIND_PACKAGE(CUDA REQUIRED)
   INCLUDE(FindCUDA)
@@ -43,65 +68,65 @@ if(DEFINED IMP_fluorescence_IS_CUDA)
   LIST(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_30,code=sm_30)
   LIST(APPEND CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)
   set(sources ${cppfiles} ${cudafiles} )
-  CUDA_ADD_LIBRARY(IMP.fluorescence-lib ${gensources} ${genheaders}
+  CUDA_ADD_LIBRARY(IMP.bff-lib ${gensources} ${genheaders}
     ${headers} ${sources} ${cudasources}
-    ${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp
-    ${IMP_fluorescence_LIBRARY_EXTRA_SOURCES}
+    ${CMAKE_BINARY_DIR}/src/bff_config.cpp
+    ${IMP_bff_LIBRARY_EXTRA_SOURCES}
     ${IMP_LIB_TYPE}
     )
-  target_link_libraries(IMP.fluorescence-lib ${CUDA_LIBRARIES} ${CUDA_curand_LIBRARY} ${CUDA_cufft_LIBRARY})
+  target_link_libraries(IMP.bff-lib ${CUDA_LIBRARIES} ${CUDA_curand_LIBRARY} ${CUDA_cufft_LIBRARY})
   message(STATUS "CUDA libraries: " "${CUDA_LIBRARIES}")
   message(STATUS "CUDA curand library: " "${CUDA_curand_LIBRARY}")
   message(STATUS "CUDA cufft library: " "${CUDA_cufft_LIBRARY}")
-elseif(DEFINED IMP_fluorescence_IS_PER_CPP)
+elseif(DEFINED IMP_bff_IS_PER_CPP)
   set(sources ${cppfiles})
-  add_library(IMP.fluorescence-lib  ${IMP_LIB_TYPE} ${gensources} ${genheaders}
+  add_library(IMP.bff-lib  ${IMP_LIB_TYPE} ${gensources} ${genheaders}
               ${headers} ${sources}
-              ${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp
-              ${IMP_fluorescence_LIBRARY_EXTRA_SOURCES}
+              ${CMAKE_BINARY_DIR}/src/bff_config.cpp
+              ${IMP_bff_LIBRARY_EXTRA_SOURCES}
               )
 else()
-  add_library(IMP.fluorescence-lib  ${IMP_LIB_TYPE} ${gensources} ${genheaders}
-              ${headers} ${CMAKE_BINARY_DIR}/src/fluorescence_all.cpp
-              ${CMAKE_BINARY_DIR}/src/fluorescence_config.cpp
-              ${IMP_fluorescence_LIBRARY_EXTRA_SOURCES}
+  add_library(IMP.bff-lib  ${IMP_LIB_TYPE} ${gensources} ${genheaders}
+              ${headers} ${CMAKE_BINARY_DIR}/src/bff_all.cpp
+              ${CMAKE_BINARY_DIR}/src/bff_config.cpp
+              ${IMP_bff_LIBRARY_EXTRA_SOURCES}
               )
 endif()
-set_target_properties(IMP.fluorescence-lib PROPERTIES
-                      OUTPUT_NAME imp_fluorescence)
+set_target_properties(IMP.bff-lib PROPERTIES
+                      OUTPUT_NAME imp_bff)
 
 # Note that soversion is only set if a version is set in the *source* directory.
 # This is because we have to set soversion at cmake, not build, time. All stable
 # releases have a VERSION file in the source directory, so this should be OK.
-IF (EXISTS ${CMAKE_SOURCE_DIR}/modules/fluorescence/VERSION)
-  file(STRINGS ${CMAKE_SOURCE_DIR}/modules/fluorescence/VERSION sover
+IF (EXISTS ${CMAKE_SOURCE_DIR}/modules/bff/VERSION)
+  file(STRINGS ${CMAKE_SOURCE_DIR}/modules/bff/VERSION sover
        REGEX "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")
 ELSEIF(EXISTS ${CMAKE_SOURCE_DIR}/VERSION)
   file(STRINGS ${CMAKE_SOURCE_DIR}/VERSION sover
        REGEX "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")
 ENDIF()
 IF (NOT "${sover}" STREQUAL "")
-  set_target_properties(IMP.fluorescence-lib PROPERTIES
+  set_target_properties(IMP.bff-lib PROPERTIES
                         VERSION ${sover} SOVERSION ${sover})
 ELSE()
-  set_target_properties(IMP.fluorescence-lib PROPERTIES
+  set_target_properties(IMP.bff-lib PROPERTIES
                         VERSION 0 SOVERSION 0)
 ENDIF()
 
-set_property(TARGET "IMP.fluorescence-lib" PROPERTY FOLDER "IMP.fluorescence")
+set_property(TARGET "IMP.bff-lib" PROPERTY FOLDER "IMP.bff")
 
-INSTALL(TARGETS IMP.fluorescence-lib DESTINATION ${CMAKE_INSTALL_LIBDIR})
+INSTALL(TARGETS IMP.bff-lib DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if (0 EQUAL 0)
-  add_dependencies(IMP.fluorescence-lib IMP.fluorescence-version)
+  add_dependencies(IMP.bff-lib IMP.bff-version)
 endif()
 
-if(DEFINED IMP_fluorescence_LIBRARY_EXTRA_DEPENDENCIES)
-  add_dependencies(IMP.fluorescence-lib ${IMP_fluorescence_LIBRARY_EXTRA_DEPENDENCIES})
+if(DEFINED IMP_bff_LIBRARY_EXTRA_DEPENDENCIES)
+  add_dependencies(IMP.bff-lib ${IMP_bff_LIBRARY_EXTRA_DEPENDENCIES})
 endif()
 
-target_link_libraries(IMP.fluorescence-lib ${imp_fluorescence_libs})
+target_link_libraries(IMP.bff-lib ${imp_bff_libs})
 
 
 
-set(IMP_fluorescence_LIBRARY IMP.fluorescence-lib CACHE INTERNAL "" FORCE)
+set(IMP_bff_LIBRARY IMP.bff-lib CACHE INTERNAL "" FORCE)

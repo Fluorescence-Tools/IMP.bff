@@ -22,8 +22,34 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   endif()
 endif()
 
-include_directories()
-link_directories()
+include_directories(${ANN_INCLUDE_PATH}
+        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+        ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
+        ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.SYSTEM_INCLUDE_PATH}
+        ${CGAL_INCLUDE_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
+        ${GPERFTOOLS_INCLUDE_PATH}
+        ${HDF5_INCLUDE_PATH}
+        ${NUMPY_INCLUDE_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH}
+        ${ROBIN_MAP_INCLUDE_PATH}
+        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
+        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
+link_directories(${ANN_LINK_PATH}
+        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${BOOST.PROGRAMOPTIONS_LINK_PATH}
+        ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.SYSTEM_LINK_PATH}
+        ${CGAL_LINK_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
+        ${GPERFTOOLS_LINK_PATH}
+        ${HDF5_LINK_PATH}
+        ${NUMPY_LINK_PATH}
+        ${PYTHON-IHM_LINK_PATH}
+        ${ROBIN_MAP_LINK_PATH}
+        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
+        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
 
 GET_DIRECTORY_PROPERTY(includes INCLUDE_DIRECTORIES)
 
@@ -31,15 +57,28 @@ GET_DIRECTORY_PROPERTY(includes INCLUDE_DIRECTORIES)
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 # this is needed for some reason that I don't understand
-set(swig_path )
+set(swig_path ${ANN_SWIG_PATH}
+        ${BOOST.FILESYSTEM_SWIG_PATH}
+        ${BOOST.PROGRAMOPTIONS_SWIG_PATH}
+        ${BOOST.RANDOM_SWIG_PATH}
+        ${BOOST.SYSTEM_SWIG_PATH}
+        ${CGAL_SWIG_PATH}
+        ${GOOGLE_DENSE_HASH_MAP_SWIG_PATH}
+        ${GPERFTOOLS_SWIG_PATH}
+        ${HDF5_SWIG_PATH}
+        ${NUMPY_SWIG_PATH}
+        ${PYTHON-IHM_SWIG_PATH}
+        ${ROBIN_MAP_SWIG_PATH}
+        ${TCMALLOC_HEAPCHECKER_SWIG_PATH}
+        ${TCMALLOC_HEAPPROFILER_SWIG_PATH})
 list(APPEND swig_path ${IMP_SWIG_PATH})
 
-file(STRINGS "${CMAKE_BINARY_DIR}/src/fluorescence_swig.deps" swigdeps)
+file(STRINGS "${CMAKE_BINARY_DIR}/src/bff_swig.deps" swigdeps)
 
-set(wrap_py "${CMAKE_BINARY_DIR}/lib/IMP/fluorescence/__init__.py")
-set(wrap_py_orig "${CMAKE_BINARY_DIR}/src/fluorescence_swig/IMP.fluorescence.py")
-set(source "${CMAKE_BINARY_DIR}/src/fluorescence_swig/wrap.cpp"
-                          "${CMAKE_BINARY_DIR}/src/fluorescence_swig/wrap.h")
+set(wrap_py "${CMAKE_BINARY_DIR}/lib/IMP/bff/__init__.py")
+set(wrap_py_orig "${CMAKE_BINARY_DIR}/src/bff_swig/IMP.bff.py")
+set(source "${CMAKE_BINARY_DIR}/src/bff_swig/wrap.cpp"
+                          "${CMAKE_BINARY_DIR}/src/bff_swig/wrap.h")
 
 set(PATH_ARGS )
 foreach(path ${includes})
@@ -50,37 +89,43 @@ foreach(path ${swig_path})
 endforeach(path)
 add_custom_command(OUTPUT ${source} ${wrap_py} ${wrap_py_orig}
    COMMAND  ${PYTHON_EXECUTABLE}
-            "/home/tpeulen/miniconda3/share/IMP/tools/build/make_swig_wrapper.py" "--include=/home/tpeulen/miniconda3/include" "--swig_include=/home/tpeulen/miniconda3/share/IMP/swig" "--swig_include=/home/tpeulen/miniconda3/share/IMP/swig"
+            "${CMAKE_SOURCE_DIR}/tools/build/make_swig_wrapper.py"
             "--swig=${SWIG_EXECUTABLE}"
-            "--module=fluorescence"
+            "--module=bff"
             ${PATH_ARGS}
-   DEPENDS ${swigdeps} ${IMP_fluorescence_PYTHON_EXTRA_DEPENDENCIES}
+   DEPENDS ${swigdeps} ${IMP_bff_PYTHON_EXTRA_DEPENDENCIES}
    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-   COMMENT "Running SWIG on fluorescence")
+   COMMENT "Running SWIG on bff")
 
-add_library(IMP.fluorescence-python MODULE ${source})
+add_library(IMP.bff-python MODULE ${source})
 # Apple linkers complain by default if there are undefined symbols
 if(APPLE)
-  set_target_properties(IMP.fluorescence-python PROPERTIES LINK_FLAGS "-flat_namespace -undefined suppress")
+  set_target_properties(IMP.bff-python PROPERTIES LINK_FLAGS "-flat_namespace -undefined suppress")
 endif(APPLE)
 
-set_target_properties(IMP.fluorescence-python PROPERTIES PREFIX ""
-                      OUTPUT_NAME _IMP_fluorescence)
-set_property(TARGET "IMP.fluorescence-python" PROPERTY FOLDER "IMP.fluorescence")
+set_target_properties(IMP.bff-python PROPERTIES PREFIX ""
+                      OUTPUT_NAME _IMP_bff)
+set_property(TARGET "IMP.bff-python" PROPERTY FOLDER "IMP.bff")
 
 
 if(WIN32 AND NOT CYGWIN)
-  set_target_properties(IMP.fluorescence-python PROPERTIES SUFFIX ".pyd")
+  set_target_properties(IMP.bff-python PROPERTIES SUFFIX ".pyd")
 endif()
 
-target_link_libraries(IMP.fluorescence-python
-    IMP.fluorescence-lib
-    ${imp_fluorescence_libs}
+target_link_libraries(IMP.bff-python
+    IMP.bff-lib
+    ${imp_bff_libs}
     ${IMP_SWIG_LIBRARIES}
   )
 
-set(IMP_fluorescence_PYTHON ${source} IMP.fluorescence-python ${wrap_py} 
+set(IMP_bff_PYTHON ${source} IMP.bff-python ${wrap_py} ${IMP_kernel_PYTHON}
+${IMP_cgal_PYTHON}
+${IMP_algebra_PYTHON}
+${IMP_display_PYTHON}
+${IMP_score_functor_PYTHON}
+${IMP_core_PYTHON}
+${IMP_container_PYTHON}
                    CACHE INTERNAL "" FORCE)
 
-INSTALL(TARGETS IMP.fluorescence-python DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
-INSTALL(FILES ${wrap_py} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/IMP/fluorescence)
+INSTALL(TARGETS IMP.bff-python DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
+INSTALL(FILES ${wrap_py} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/IMP/bff)
