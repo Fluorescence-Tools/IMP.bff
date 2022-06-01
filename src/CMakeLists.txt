@@ -8,33 +8,21 @@ FILE(GLOB gensources
 FILE(GLOB genheaders
      "${CMAKE_BINARY_DIR}/include/IMP/bff/*.h")
 
-include_directories(${ANN_INCLUDE_PATH}
-        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+include_directories(${BOOST.FILESYSTEM_INCLUDE_PATH}
         ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
         ${BOOST.RANDOM_INCLUDE_PATH}
         ${BOOST.SYSTEM_INCLUDE_PATH}
         ${CGAL_INCLUDE_PATH}
-        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
-        ${GPERFTOOLS_INCLUDE_PATH}
         ${HDF5_INCLUDE_PATH}
-        ${PYTHON-IHM_INCLUDE_PATH}
-        ${ROBIN_MAP_INCLUDE_PATH}
-        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
-        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
-link_directories(${ANN_LINK_PATH}
-        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH})
+link_directories(${BOOST.FILESYSTEM_LINK_PATH}
         ${BOOST.PROGRAMOPTIONS_LINK_PATH}
         ${BOOST.RANDOM_LINK_PATH}
         ${BOOST.SYSTEM_LINK_PATH}
         ${CGAL_LINK_PATH}
-        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
-        ${GPERFTOOLS_LINK_PATH}
         ${HDF5_LINK_PATH}
         ${NUMPY_LINK_PATH}
-        ${PYTHON-IHM_LINK_PATH}
-        ${ROBIN_MAP_LINK_PATH}
-        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
-        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
+        ${PYTHON-IHM_LINK_PATH})
 add_definitions("-DIMPBFF_EXPORTS")
 
 include(Files.cmake)
@@ -45,7 +33,13 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BFF_CXX_FLAGS}")
 
-set(headers )
+set(headers ${CMAKE_SOURCE_DIR}/include/Functions.h
+${CMAKE_SOURCE_DIR}/include/MongoObject.h
+${CMAKE_SOURCE_DIR}/include/Test.h
+${CMAKE_SOURCE_DIR}/include/internal/json.h
+${CMAKE_SOURCE_DIR}/include/t/CNode.h
+${CMAKE_SOURCE_DIR}/include/t/NodeCallback.h
+${CMAKE_SOURCE_DIR}/include/t/Port.h)
 
 if(DEFINED IMP_bff_LIBRARY_EXTRA_SOURCES)
   set_source_files_properties(${IMP_bff_LIBRARY_EXTRA_SOURCES}

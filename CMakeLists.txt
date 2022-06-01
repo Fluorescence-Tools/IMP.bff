@@ -11,6 +11,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     cmake_policy(SET CMP0053 NEW)
   endif(POLICY CMP0053)
 
+  # libmongoc
+  ###########################
+  FIND_PACKAGE (libmongoc-1.0)
+  MESSAGE ("-- Found mongoc version \"${MONGOC_VERSION}\"")
+  MESSAGE ("-- include path \"${MONGOC_INCLUDE_DIRS}\"")
+  MESSAGE ("-- libraries \"${MONGOC_LIBRARIES}\"")
+  INCLUDE_DIRECTORIES (${MONGOC_INCLUDE_DIRS})
+  LINK_LIBRARIES (${MONGOC_LIBRARIES})
+  ADD_COMPILE_DEFINITIONS(${MONGOC_DEFINITIONS})
+
   set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
 
   set(SWIG_EXECUTABLE swig CACHE STRING "Swig program")

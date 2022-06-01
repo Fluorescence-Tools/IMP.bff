@@ -2,128 +2,128 @@
 # from tools/build/cmake_templates/Module.cmake
 # Do not edit - any changes will be lost!
 
-project(IMP.scratch)
+project(IMP.bff)
 
 
 
-imp_get_process_exit_code("Setting up module scratch" status ${CMAKE_BINARY_DIR}
+imp_get_process_exit_code("Setting up module bff" status ${CMAKE_BINARY_DIR}
                           COMMAND ${PYTHON_EXECUTABLE}
-                          ${CMAKE_SOURCE_DIR}/tools/build/setup_module.py
-                           --name=scratch
+                          /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/setup_module.py
+                          --build_dir=/home/tpeulen/mambaforge/envs/py38/share/IMP/build_info  --name=bff
                           --datapath=${IMP_DATAPATH}
-                          --defines=${IMP_scratch_CONFIG}:
+                          --defines=${IMP_bff_CONFIG}:
                           --source=${CMAKE_SOURCE_DIR}
                           )
 
 if(${status} EQUAL 0)
-  imp_execute_process("setup_swig_wrappers scratch" ${CMAKE_BINARY_DIR}
-    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/setup_swig_wrappers.py
-     --module=scratch
+  imp_execute_process("setup_swig_wrappers bff" ${CMAKE_BINARY_DIR}
+    COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/setup_swig_wrappers.py
+    --build_dir=/home/tpeulen/mambaforge/envs/py38/share/IMP/build_info  --module=bff
     --datapath=${IMP_DATAPATH}
     --source=${CMAKE_SOURCE_DIR})
 
   # for warning control
-  add_definitions(-DIMPSCRATCH_COMPILATION)
+  add_definitions(-DIMPBFF_COMPILATION)
 
   if(0 EQUAL 0)
-    set(allh_command  "${PYTHON_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/dev_tools/make_all_header.py" "${CMAKE_BINARY_DIR}/include/IMP/scratch.h" "IMP/scratch" "${PROJECT_SOURCE_DIR}/include/" ${IMP_scratch_EXTRA_HEADERS})
+    set(allh_command  "${PYTHON_EXECUTABLE}" "/home/tpeulen/mambaforge/envs/py38/share/IMP/tools/dev_tools/make_all_header.py" "${CMAKE_BINARY_DIR}/include/IMP/bff.h" "IMP/bff" "${PROJECT_SOURCE_DIR}/include/" ${IMP_bff_EXTRA_HEADERS})
     # for swig
-    imp_execute_process("IMP.scratch making all header" ${PROJECT_BINARY_DIR}
+    imp_execute_process("IMP.bff making all header" ${PROJECT_BINARY_DIR}
                         COMMAND ${allh_command})
 
-    add_custom_target(IMP.scratch-all-header
+    add_custom_target(IMP.bff-all-header
       COMMAND ${allh_command}
-      DEPENDS "${CMAKE_SOURCE_DIR}/tools/dev_tools/make_all_header.py")
-    set_property(TARGET "IMP.scratch-all-header" PROPERTY FOLDER "IMP.scratch")
-    list(APPEND IMP_scratch_LIBRARY_EXTRA_DEPENDENCIES IMP.scratch-all-header)
+      DEPENDS "/home/tpeulen/mambaforge/envs/py38/share/IMP/tools/dev_tools/make_all_header.py")
+    set_property(TARGET "IMP.bff-all-header" PROPERTY FOLDER "IMP.bff")
+    list(APPEND IMP_bff_LIBRARY_EXTRA_DEPENDENCIES IMP.bff-all-header)
   endif()
 
   
   if(IMP_DOXYGEN_FOUND)
     # documentation
-    file(GLOB headers ${CMAKE_BINARY_DIR}/include/IMP/scratch/*.h)
-    file(GLOB docs ${CMAKE_SOURCE_DIR}/modules/scratch/doc/*.dox
-      ${CMAKE_SOURCE_DIR}/modules/scratch/doc/*.md)
-    file(GLOB examples ${CMAKE_BINARY_DIR}/doc/examples/scratch/*.py
-      ${CMAKE_BINARY_DIR}/doc/examples/scratch/*.cpp)
+    file(GLOB headers ${CMAKE_BINARY_DIR}/include/IMP/bff/*.h)
+    file(GLOB docs ${CMAKE_SOURCE_DIR}/doc/*.dox
+      ${CMAKE_SOURCE_DIR}/doc/*.md)
+    file(GLOB examples ${CMAKE_BINARY_DIR}/doc/examples/bff/*.py
+      ${CMAKE_BINARY_DIR}/doc/examples/bff/*.cpp)
 
     if(NOT IMP_STATIC)
-      set(IMP_scratch_TAG_DEPENDS "${IMP.scratch-python}")
+      set(IMP_bff_TAG_DEPENDS "${IMP.bff-python}")
     endif()
 
-    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/doxygen/scratch/tags ${CMAKE_BINARY_DIR}/doxygen/scratch/xml/index.xml
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/doxygen/bff/tags ${CMAKE_BINARY_DIR}/doxygen/bff/xml/index.xml
       COMMAND mkdir -p ${CMAKE_BINARY_DIR}/doc/html
       COMMAND ln -s -f ../../include
       COMMAND ln -s -f ../../doc/examples
       COMMAND ln -s -f ../../lib
-      COMMAND ${IMP_DOXYGEN_EXECUTABLE} ../../doxygen/scratch/Doxyfile 2>&1 /dev/null
-      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_patch_tags.py --module=scratch --file=../../doxygen/scratch/tags
-      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_show_warnings.py --warn=../../doxygen/scratch/warnings.txt
-      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/doxygen_spell_check.py xml ${CMAKE_SOURCE_DIR}/modules/scratch/test/standards_exceptions
+      COMMAND ${IMP_DOXYGEN_EXECUTABLE} ../../doxygen/bff/Doxyfile 2>&1 /dev/null
+      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/doxygen_patch_tags.py --module=bff --file=../../doxygen/bff/tags
+      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/doxygen_show_warnings.py --warn=../../doxygen/bff/warnings.txt
+      COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/doxygen_spell_check.py xml ${CMAKE_SOURCE_DIR}/test/standards_exceptions
       DEPENDS ${IMP_kernel_DOC}
 ${IMP_cgal_DOC}
 ${IMP_algebra_DOC}
 ${IMP_display_DOC}
 ${IMP_score_functor_DOC}
 ${IMP_core_DOC}
-${IMP_container_DOC} ${headers} ${docs} ${examples} ${CMAKE_SOURCE_DIR}/modules/scratch/README.md ${IMP_scratch_TAG_DEPENDS}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/doxygen/scratch/
-      COMMENT "Running doxygen on scratch")
+${IMP_container_DOC} ${headers} ${docs} ${examples} ${CMAKE_SOURCE_DIR}/README.md ${IMP_bff_TAG_DEPENDS}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/doxygen/bff/
+      COMMENT "Running doxygen on bff")
 
-    add_custom_target("IMP.scratch-doc" ALL DEPENDS ${CMAKE_BINARY_DIR}/doxygen/scratch/tags)
-    set_property(TARGET "IMP.scratch-doc" PROPERTY FOLDER "IMP.scratch")
-    set(IMP_scratch_DOC "IMP.scratch-doc" CACHE INTERNAL "" FORCE)
+    add_custom_target("IMP.bff-doc" ALL DEPENDS ${CMAKE_BINARY_DIR}/doxygen/bff/tags)
+    set_property(TARGET "IMP.bff-doc" PROPERTY FOLDER "IMP.bff")
+    set(IMP_bff_DOC "IMP.bff-doc" CACHE INTERNAL "" FORCE)
 
     if(NOT IMP_STATIC)
-      list(APPEND IMP_DOC_DEPENDS "${IMP.scratch-python}")
+      list(APPEND IMP_DOC_DEPENDS "${IMP.bff-python}")
     endif()
     list(REMOVE_DUPLICATES IMP_DOC_DEPENDS)
     set(IMP_DOC_DEPENDS ${IMP_DOC_DEPENDS} CACHE INTERNAL "" FORCE)
   else()
-    set(IMP_scratch_DOC "" CACHE INTERNAL "" FORCE)
+    set(IMP_bff_DOC "" CACHE INTERNAL "" FORCE)
   endif(IMP_DOXYGEN_FOUND)
 
   if(0 EQUAL 0)
-    list(APPEND imp_scratch_libs ${IMP_kernel_LIBRARY};${IMP_cgal_LIBRARY};${IMP_algebra_LIBRARY};${IMP_display_LIBRARY};${IMP_score_functor_LIBRARY};${IMP_core_LIBRARY};${IMP_container_LIBRARY})
-    list(APPEND imp_scratch_libs ${BOOST.FILESYSTEM_LIBRARIES};${BOOST.PROGRAMOPTIONS_LIBRARIES};${BOOST.SYSTEM_LIBRARIES};${GPERFTOOLS_LIBRARIES};${TCMALLOC_HEAPPROFILER_LIBRARIES};${TCMALLOC_HEAPCHECKER_LIBRARIES};${BOOST.RANDOM_LIBRARIES};${NUMPY_LIBRARIES};${CGAL_LIBRARIES};${ANN_LIBRARIES};${HDF5_LIBRARIES};${PYTHON-IHM_LIBRARIES};${ROBIN_MAP_LIBRARIES};${GOOGLE_DENSE_HASH_MAP_LIBRARIES})
-    list(REMOVE_DUPLICATES imp_scratch_libs)
+    list(APPEND imp_bff_libs ${IMP_kernel_LIBRARY};${IMP_cgal_LIBRARY};${IMP_algebra_LIBRARY};${IMP_display_LIBRARY};${IMP_score_functor_LIBRARY};${IMP_core_LIBRARY};${IMP_container_LIBRARY})
+    list(APPEND imp_bff_libs ${NUMPY_LIBRARIES};${BOOST.RANDOM_LIBRARIES};${BOOST.SYSTEM_LIBRARIES};${BOOST.PROGRAMOPTIONS_LIBRARIES};${BOOST.FILESYSTEM_LIBRARIES};${CGAL_LIBRARIES};${HDF5_LIBRARIES};${PYTHON-IHM_LIBRARIES})
+    list(REMOVE_DUPLICATES imp_bff_libs)
 
     add_custom_command(
-	OUTPUT ${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py
-               ${CMAKE_BINARY_DIR}/src/scratch_config.cpp
-        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/make_module_version.py
-	        --name=scratch --datapath=${IMP_DATAPATH}
+	OUTPUT ${CMAKE_BINARY_DIR}/lib/IMP/bff/_version_check.py
+               ${CMAKE_BINARY_DIR}/src/bff_config.cpp
+        COMMAND ${PYTHON_EXECUTABLE} /home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/make_module_version.py
+	        --name=bff --datapath=${IMP_DATAPATH}
 		--source=${CMAKE_SOURCE_DIR}
         DEPENDS IMP-version
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/
         COMMENT "Building module version info")
 
-    add_custom_target("IMP.scratch-version" ALL DEPENDS
-                      ${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py
-                      ${CMAKE_BINARY_DIR}/src/scratch_config.cpp)
-    set_property(TARGET "IMP.scratch-version" PROPERTY FOLDER "IMP.scratch")
-    install(FILES "${CMAKE_BINARY_DIR}/lib/IMP/scratch/_version_check.py"
-	    DESTINATION "${CMAKE_INSTALL_PYTHONDIR}/IMP/scratch/")
+    add_custom_target("IMP.bff-version" ALL DEPENDS
+                      ${CMAKE_BINARY_DIR}/lib/IMP/bff/_version_check.py
+                      ${CMAKE_BINARY_DIR}/src/bff_config.cpp)
+    set_property(TARGET "IMP.bff-version" PROPERTY FOLDER "IMP.bff")
+    install(FILES "${CMAKE_BINARY_DIR}/lib/IMP/bff/_version_check.py"
+	    DESTINATION "${CMAKE_INSTALL_PYTHONDIR}/IMP/bff/")
    endif()
 
-  add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/src)
-add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/test)
-add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/examples)
-add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/benchmark)
-add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/bin)
-add_subdirectory(${CMAKE_SOURCE_DIR}/modules/scratch/utility)
-  set(IMP_scratch "IMP.scratch" CACHE INTERNAL "" FORCE)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/src)
+add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+add_subdirectory(${CMAKE_SOURCE_DIR}/examples)
+add_subdirectory(${CMAKE_SOURCE_DIR}/benchmark)
+add_subdirectory(${CMAKE_SOURCE_DIR}/bin)
+add_subdirectory(${CMAKE_SOURCE_DIR}/utility)
+  set(IMP_bff "IMP.bff" CACHE INTERNAL "" FORCE)
 else()
 
   # make sure it is empty
-  set(IMP_scratch_DOC "" CACHE INTERNAL "" FORCE)
-  set(IMP_scratch_PYTHON "" CACHE INTERNAL "" FORCE)
-  set(IMP_scratch "" CACHE INTERNAL "" FORCE)
+  set(IMP_bff_DOC "" CACHE INTERNAL "" FORCE)
+  set(IMP_bff_PYTHON "" CACHE INTERNAL "" FORCE)
+  set(IMP_bff "" CACHE INTERNAL "" FORCE)
 
   if(${status} EQUAL 1)
-    message(STATUS "Module IMP.scratch disabled")
+    message(FATAL_ERROR "Module IMP.bff disabled")
   else()
     message(FATAL_ERROR "setup_module returned ${status}")
   endif()
-  set(IMP_scratch_LIBRARY CACHE INTERNAL "" FORCE)
+  set(IMP_bff_LIBRARY CACHE INTERNAL "" FORCE)
 endif()

@@ -1,6 +1,6 @@
-//IMP_SWIG_OBJECT(IMP::example, ExampleRestraint, ExampleRestraints);
-//IMP_SWIG_DECORATOR(IMP::example, ExampleDecorator, ExampleDecorators);
-//IMP_SWIG_VALUE_TEMPLATE(IMP::example, ExampleTemplateClassD)
 
+IMP_SWIG_OBJECT(IMP::bff, BFFTest, BFFTests);
+// IMP_SWIG_OBJECT(IMP::bff, Port, Ports);
 
-//%include "IMP/example/ExampleRestraint.h"
+%include "IMP_bff_mongo.i"
+%include "IMP/bff/Test.h"

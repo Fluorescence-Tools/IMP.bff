@@ -22,34 +22,22 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   endif()
 endif()
 
-include_directories(${ANN_INCLUDE_PATH}
-        ${BOOST.FILESYSTEM_INCLUDE_PATH}
+include_directories(${BOOST.FILESYSTEM_INCLUDE_PATH}
         ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
         ${BOOST.RANDOM_INCLUDE_PATH}
         ${BOOST.SYSTEM_INCLUDE_PATH}
         ${CGAL_INCLUDE_PATH}
-        ${GOOGLE_DENSE_HASH_MAP_INCLUDE_PATH}
-        ${GPERFTOOLS_INCLUDE_PATH}
         ${HDF5_INCLUDE_PATH}
         ${NUMPY_INCLUDE_PATH}
-        ${PYTHON-IHM_INCLUDE_PATH}
-        ${ROBIN_MAP_INCLUDE_PATH}
-        ${TCMALLOC_HEAPCHECKER_INCLUDE_PATH}
-        ${TCMALLOC_HEAPPROFILER_INCLUDE_PATH})
-link_directories(${ANN_LINK_PATH}
-        ${BOOST.FILESYSTEM_LINK_PATH}
+        ${PYTHON-IHM_INCLUDE_PATH})
+link_directories(${BOOST.FILESYSTEM_LINK_PATH}
         ${BOOST.PROGRAMOPTIONS_LINK_PATH}
         ${BOOST.RANDOM_LINK_PATH}
         ${BOOST.SYSTEM_LINK_PATH}
         ${CGAL_LINK_PATH}
-        ${GOOGLE_DENSE_HASH_MAP_LINK_PATH}
-        ${GPERFTOOLS_LINK_PATH}
         ${HDF5_LINK_PATH}
         ${NUMPY_LINK_PATH}
-        ${PYTHON-IHM_LINK_PATH}
-        ${ROBIN_MAP_LINK_PATH}
-        ${TCMALLOC_HEAPCHECKER_LINK_PATH}
-        ${TCMALLOC_HEAPPROFILER_LINK_PATH})
+        ${PYTHON-IHM_LINK_PATH})
 
 GET_DIRECTORY_PROPERTY(includes INCLUDE_DIRECTORIES)
 
@@ -57,20 +45,14 @@ GET_DIRECTORY_PROPERTY(includes INCLUDE_DIRECTORIES)
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 # this is needed for some reason that I don't understand
-set(swig_path ${ANN_SWIG_PATH}
-        ${BOOST.FILESYSTEM_SWIG_PATH}
+set(swig_path ${BOOST.FILESYSTEM_SWIG_PATH}
         ${BOOST.PROGRAMOPTIONS_SWIG_PATH}
         ${BOOST.RANDOM_SWIG_PATH}
         ${BOOST.SYSTEM_SWIG_PATH}
         ${CGAL_SWIG_PATH}
-        ${GOOGLE_DENSE_HASH_MAP_SWIG_PATH}
-        ${GPERFTOOLS_SWIG_PATH}
         ${HDF5_SWIG_PATH}
         ${NUMPY_SWIG_PATH}
-        ${PYTHON-IHM_SWIG_PATH}
-        ${ROBIN_MAP_SWIG_PATH}
-        ${TCMALLOC_HEAPCHECKER_SWIG_PATH}
-        ${TCMALLOC_HEAPPROFILER_SWIG_PATH})
+        ${PYTHON-IHM_SWIG_PATH})
 list(APPEND swig_path ${IMP_SWIG_PATH})
 
 file(STRINGS "${CMAKE_BINARY_DIR}/src/bff_swig.deps" swigdeps)
@@ -89,7 +71,7 @@ foreach(path ${swig_path})
 endforeach(path)
 add_custom_command(OUTPUT ${source} ${wrap_py} ${wrap_py_orig}
    COMMAND  ${PYTHON_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/build/make_swig_wrapper.py"
+            "/home/tpeulen/mambaforge/envs/py38/share/IMP/tools/build/make_swig_wrapper.py" "--include=/home/tpeulen/mambaforge/envs/py38/include" "--swig_include=/home/tpeulen/mambaforge/envs/py38/share/IMP/swig" "--swig_include=/home/tpeulen/mambaforge/envs/py38/share/IMP/swig"
             "--swig=${SWIG_EXECUTABLE}"
             "--module=bff"
             ${PATH_ARGS}
