@@ -3,14 +3,10 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/Object.h>
-#include <IMP/Pointer.h>
-#include <IMP/object_macros.h>
-#include <IMP/warning_macros.h>
 
 #include <iostream>     // std::cout, std::ios
 #include <sstream>      // std::ostringstream
 #include <map>
-#include <set>
 #include <vector>
 #include <list>
 #include <memory>
@@ -26,7 +22,10 @@ using json = nlohmann::json;
 
 IMPBFF_BEGIN_NAMESPACE
 
-class IMPBFFEXPORT MongoObject : public IMP::Object {
+class IMPBFFEXPORT MongoObject :
+        public IMP::Object,
+        public std::enable_shared_from_this<MongoObject>
+{
 
 private:
 
@@ -52,7 +51,7 @@ protected:
     // Getter & Setter
     //--------------------------------------------------------------------
 
-    //! The object identification number of the @class MongoObject instance
+    //! The object identification number of MongoObject instance
     /*!
      *  get_own_bson_oid() Returns the object's ObjectId value (see:
      *  https://docs.mongodb.com/manual/reference/bson-types/#objectid)
@@ -64,11 +63,11 @@ protected:
         return oid_document;
     }
 
-    /// The BSON document of the @class MongoObject instance
+    /// The BSON document of MongoObject instance
     /// \return
     virtual bson_t get_bson();
 
-    /// A BSON document containing the @class MongoObject instance BSON document
+    /// A BSON document containing MongoObject instance BSON document
     /// excluding a set of keys
     /// \param first is the first key to exclude.
     /// \param ... more keys to exclude
@@ -233,11 +232,7 @@ protected:
     /// \param key the key of the string int the target BSON document
     /// \param content the string that will be written to the BSON document
     /// \param size optional parameter for the string size in the BSON document.
-    static void append_string(
-            bson_t *dst, std::string key,
-            std::string content,
-            size_t size=0
-                    );
+    static void append_string(bson_t *dst, std::string key, std::string content, size_t size=0);
 
 
     /// The string contained in a @class bson_t document with the @param key
@@ -268,7 +263,6 @@ protected:
             bson_oid_t *oid
             );
 
-
 public:
 
     // IMP_OBJECT_METHODS(MongoObject);
@@ -296,8 +290,8 @@ public:
     /// \param o The object that is connected to the same MongoDB
     /// \return True if connected successfully
     template <typename T>
-    bool connect_other_to_db(T &o){
-        return o.connect_to_db(
+    bool connect_object_to_db(T o){
+        return o->connect_to_db(
                 uri_string,
                 db_string,
                 app_string,
@@ -305,10 +299,10 @@ public:
         );
     }
 
-    /// Disconnects the @class MongoObject instance from the DB
+    /// Disconnects the MongoObject instance from the DB
     void disconnect_from_db();
 
-    /// Returns true if the instance of the @class MongoObject is connected
+    /// Returns true if the instance of the MongoObject is connected
     /// to the DB
     bool is_connected_to_db();
 
@@ -351,7 +345,9 @@ public:
         MongoObject::string_to_oid(oid_str, &oid_document);
     }
 
-    MongoObject* get_ptr();
+    std::shared_ptr<MongoObject> getptr() {
+        return shared_from_this();
+    }
 
     /// Create and / or set a string in the MongoObject accessed by @param key
     /// \param key the key to access the content

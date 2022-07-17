@@ -1,25 +1,24 @@
-#ifndef chinet_NODECALLBACK_H
-#define chinet_NODECALLBACK_H
+#ifndef IMPBFF_NODECALLBACK_H
+#define IMPBFF_NODECALLBACK_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/Object.h>
-#include <IMP/object_macros.h>
-#include <IMP/warning_macros.h>
 
+#include <map>
+#include <string>
 #include <functional>
 #include <algorithm> /* std::min std::max */
 #include <rttr/registration>
 
-#include "Port.h"
-#include "CNode.h"
-#include "../Functions.h"
-
-class Port;
-
 
 IMPBFF_BEGIN_NAMESPACE
+class Port;
 
-class NodeCallback{
+#include <IMP/bff/Port.h>
+#include <IMP/bff/Node.h>
+#include <IMP/bff/internal/Functions.h>
+
+
+class IMPBFFEXPORT NodeCallback{
 
 public:
     
@@ -36,4 +35,4 @@ public:
 
 IMPBFF_END_NAMESPACE
 
-#endif //chinet_NODECALLBACK_H
+#endif //IMPBFF_NODECALLBACK_H

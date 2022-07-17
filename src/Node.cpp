@@ -1,12 +1,11 @@
-#include "../../cmake-build-release/include/IMP/bff/CNode.h"
-#include "../../cmake-build-release/include/IMP/bff/Port.h"
+#include <IMP/bff/Node.h>
+#include <IMP/bff/Port.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-Node::Node(
-        std::string name,
-        const std::map<std::string, std::shared_ptr<Port>>& ports,
-        std::shared_ptr<NodeCallback> callback_class
+Node::Node(std::string name,
+           const std::map<std::string, std::shared_ptr<Port>>& ports,
+            std::shared_ptr<NodeCallback> callback_class
 ) : MongoObject(name)
 {
     append_string(&document, "type", "node");
@@ -26,7 +25,7 @@ Node::~Node() = default;
 //--------------------------------------------------------------------
 
 bool Node::read_from_db(const std::string &oid_string){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "READING NODE FROM DB" << std::endl;
     std::clog << "Requested OID:" << oid_string << std::endl;
 #endif
@@ -35,7 +34,7 @@ bool Node::read_from_db(const std::string &oid_string){
     return_value &= create_and_connect_objects_from_oid_doc(
             &document, "ports", &ports
             );
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "callback-restore: " << get_string_by_key(&document, "callback") << std::endl;
     std::clog << "callback_type-restore: " << get_string_by_key(&document, "callback_type") << std::endl;
 #endif
@@ -50,7 +49,6 @@ bool Node::read_from_db(const std::string &oid_string){
 
 bool Node::write_to_db() {
     bool re = MongoObject::write_to_db();
-
     for(auto &o : ports){
         if(!o.second->is_connected_to_db()){
             re &= connect_object_to_db(o.second);
@@ -67,7 +65,7 @@ bool Node::write_to_db() {
 
 std::string Node::get_name(){
     std::string r;
-    r.append(object_name);
+    r.append(IMP::bff::MongoObject::get_name());
     r.append(":");
     r.append(callback);
     r.append(":");
@@ -123,15 +121,13 @@ std::map<std::string, std::shared_ptr<Port>> Node::get_output_ports(){
     return out_;
 }
 
-// Setter
-//--------------------------------------------------------------------
 void Node::set_callback(std::string s_callback, std::string s_callback_type){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "NODE SET CALLBACK" << std::endl;
 #endif
     this->callback = s_callback;
     this->callback_type_string = s_callback_type;
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "-- Callback type: " << callback_type_string << std::endl;
     std::clog << "-- Callback name: " << callback << std::endl;
 #endif
@@ -139,7 +135,7 @@ void Node::set_callback(std::string s_callback, std::string s_callback_type){
         callback_type = 0;
         meth_ = rttr::type::get_global_method(callback);
         if(!meth_){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
             std::cerr << "ERROR: The class type " << callback << " does not exist." <<
                       " No callback set. " << std::endl;
 #endif
@@ -152,18 +148,8 @@ void Node::set_callback(std::shared_ptr<NodeCallback> cb){
     callback_type = 1;
 }
 
-// Private
-//--------------------------------------------------------------------
-
-// Methods
-//--------------------------------------------------------------------
-void Node::add_port(
-        const std::string &key,
-        std::shared_ptr<Port> port,
-        bool is_output,
-        bool fill_in_out
-        ) {
-#if CHINET_VERBOSE
+void Node::add_port(const std::string &key, std::shared_ptr<Port> port, bool is_output, bool fill_in_out) {
+#if IMPBFF_VERBOSE
     std::clog << "ADDING PORT TO NODE" << std::endl;
     std::clog << "-- Name of node: " << get_name() << std::endl;
     std::clog << "-- Key of port: " << key << std::endl;
@@ -171,9 +157,10 @@ void Node::add_port(
     std::clog << "-- Fill value of output: " << fill_in_out << std::endl;
 #endif
     port->set_port_type(is_output);
-    port->set_node(this);
+    auto n = std::dynamic_pointer_cast<Node>(MongoObject::shared_from_this());
+    port->set_node(n);
     if (ports.find(key) == ports.end() ) {
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
         std::clog << "-- The key of the port was not found." << std::endl;
         std::clog << "-- Port " << key << " was created in node. " << std::endl;
 #endif
@@ -181,7 +168,7 @@ void Node::add_port(
     } else {
         auto p = ports[key];
         if(port != p){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
             std::clog << "WARNING: Overwriting the port that was originally associated to the key " << key << "." << std::endl;
 #endif
             ports[key] = port;
@@ -195,18 +182,12 @@ void Node::add_port(
     }
 }
 
-void Node::add_input_port(
-        const std::string &key,
-        std::shared_ptr<Port> port
-        ) {
-    add_port(key, port, false);
+void Node::add_input_port(const std::string &key, std::shared_ptr<Port> port) {
+    add_port(key, port, false, true);
 }
 
-void Node::add_output_port(
-        const std::string &key,
-        std::shared_ptr<Port> port
-        ) {
-    add_port(key, port, true);
+void Node::add_output_port(const std::string &key, std::shared_ptr<Port> port) {
+    add_port(key, port, true, true);
 }
 
 bson_t Node::get_bson(){
@@ -225,30 +206,30 @@ bson_t Node::get_bson(){
 }
 
 void Node::evaluate(){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "NODE EVALUATE" << std::endl;
     std::clog << "-- Node name: " << get_name() << std::endl;
     std::clog << "-- Callback_type: " << callback_type << std::endl;
 #endif
     if(callback_type == 0)
     {
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
         std::clog << "-- Calling registered C function."  << std::endl;
 #endif
         rttr::variant return_value = meth_.invoke({}, in_, out_);
     } else if (callback_class != nullptr) {
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
         std::clog << "-- Calling 'run' method of a callback class."  << std::endl;
 #endif
-            callback_class->run(in_, out_);
+        callback_class->run(in_, out_);
     }
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
     std::clog << "-- Setting nodes associated to output ports to invalid."  << std::endl;
 #endif
     for(auto &o : get_output_ports()){
         auto n = o.second->get_node();
         if(n != nullptr){
-#if CHINET_VERBOSE
+#if IMPBFF_VERBOSE
             std::clog << "-- Node " << n->get_name() << " of port " << o.second->get_name() << " set to invalid." << std::endl;
 #endif
             n->set_valid(false);
@@ -260,7 +241,6 @@ void Node::evaluate(){
 void Node::fill_input_output_port_lookups(){
     out_.clear();
     in_.clear();
-
     for(auto &o: ports){
         if(o.second->is_output()){
             out_[o.first] = o.second;
@@ -276,7 +256,7 @@ bool Node::inputs_valid(){
         if(input_port->is_linked()){
             auto output_port = input_port->get_link();
             auto output_node = output_port->get_node();
-            if(output_node == this) return true;
+            if(output_node.get() == this) return true;
             else if(!output_node->is_valid()) return false;
         }
     }

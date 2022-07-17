@@ -25,17 +25,21 @@ endif()
 include_directories(${BOOST.FILESYSTEM_INCLUDE_PATH}
         ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
         ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.REGEX_INCLUDE_PATH}
         ${BOOST.SYSTEM_INCLUDE_PATH}
         ${CGAL_INCLUDE_PATH}
         ${HDF5_INCLUDE_PATH}
+        ${IMP.EM_INCLUDE_PATH}
         ${NUMPY_INCLUDE_PATH}
         ${PYTHON-IHM_INCLUDE_PATH})
 link_directories(${BOOST.FILESYSTEM_LINK_PATH}
         ${BOOST.PROGRAMOPTIONS_LINK_PATH}
         ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.REGEX_LINK_PATH}
         ${BOOST.SYSTEM_LINK_PATH}
         ${CGAL_LINK_PATH}
         ${HDF5_LINK_PATH}
+        ${IMP.EM_LINK_PATH}
         ${NUMPY_LINK_PATH}
         ${PYTHON-IHM_LINK_PATH})
 
@@ -48,9 +52,11 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 set(swig_path ${BOOST.FILESYSTEM_SWIG_PATH}
         ${BOOST.PROGRAMOPTIONS_SWIG_PATH}
         ${BOOST.RANDOM_SWIG_PATH}
+        ${BOOST.REGEX_SWIG_PATH}
         ${BOOST.SYSTEM_SWIG_PATH}
         ${CGAL_SWIG_PATH}
         ${HDF5_SWIG_PATH}
+        ${IMP.EM_SWIG_PATH}
         ${NUMPY_SWIG_PATH}
         ${PYTHON-IHM_SWIG_PATH})
 list(APPEND swig_path ${IMP_SWIG_PATH})
@@ -105,8 +111,11 @@ ${IMP_cgal_PYTHON}
 ${IMP_algebra_PYTHON}
 ${IMP_display_PYTHON}
 ${IMP_score_functor_PYTHON}
+${IMP_statistics_PYTHON}
 ${IMP_core_PYTHON}
 ${IMP_container_PYTHON}
+${IMP_atom_PYTHON}
+${IMP_em_PYTHON}
                    CACHE INTERNAL "" FORCE)
 
 INSTALL(TARGETS IMP.bff-python DESTINATION ${CMAKE_INSTALL_PYTHONDIR})

@@ -3,7 +3,7 @@ import IMP.bff as bff
 
 DB_DICT = {
     'uri_string': "mongodb://localhost:27017",
-    'db_string': "IMP.bff",
+    'db_string': "IMP_bff",
     'app_string': "bff",
     'collection_string': "test_collection"
 }

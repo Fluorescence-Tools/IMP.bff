@@ -1,13 +1,10 @@
-#ifndef chinet_FUNCTIONS_H
-#define chinet_FUNCTIONS_H
+#ifndef IMPBFF_FUNCTIONS_H
+#define IMPBFF_FUNCTIONS_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/Object.h>
-#include <IMP/object_macros.h>
-#include <IMP/warning_macros.h>
 
 #include <vector>
-#include <algorithm>  /* std::min, STD::max */
+#include <algorithm>  /* std::min, std::max */
 #include <math.h>
 #include <iostream>
 #include <chrono>
@@ -16,7 +13,6 @@
 IMPBFF_BEGIN_NAMESPACE
 
 namespace Functions {
-
 
     /*!
      * Shifts a vector by a floating number.
@@ -120,13 +116,7 @@ namespace Functions {
     }
 
     template <typename T>
-    void internal2value(
-            T *values,
-            int n_values,
-            double lower_bound,
-            double upper_bound
-    )
-    {
+    void internal2value(T *values, int n_values, double lower_bound, double upper_bound){
         T delta = upper_bound - lower_bound;
         for(int i = 0; i<n_values; i++)
         {
@@ -135,80 +125,12 @@ namespace Functions {
     }
 
     template <typename T>
-    void bound_values(
-            T *values,
-            int n_values,
-            double lower_bound,
-            double upper_bound
-    )
-    {
+    void bound_values(T *values, int n_values, double lower_bound, double upper_bound){
         for(int i = 0; i<n_values; i++)
         {
           values[i] = (T) std::min(std::max((double)values[i], lower_bound), upper_bound);
         }
     }
-
-    /*!
-     * This function convolves a sum of exponential decays with an instrument
-     * response function (IRF)
-     *
-     * The sum of exponential decays is passed by the lifetime array @param
-     * lifetime_spectrum that contains the amplitudes and the corresponding
-     * fluorescence lifetimes in an interleaved array (amplitude_1, lifetime_1,
-     * amplitude_2, lifetime_2, ...). The instrument response function is
-     * passed by the array @param irf. The IRF and the and the sum of
-     * exponential decays are convolved up to the index @param convolution_stop.
-     * In this convolution, the time axis is uniform an linear with a time
-     * interval specified by the parameter @param dt.
-     *
-     * @param out The array to which the convoluted decay is written to
-     * @param n_out The number of elements in the output array
-     * @param lifetime_spectrum The array containing the fluorescence lifetimes
-     * and the amplitudes
-     * @param n_lifetime_spectrum The number of fluorescence lifetimes
-     * @param irf The array containing the instrument response function
-     * @param n_irf The number of elements of the instrument response function
-     * @param convolution_stop The stop of the convolution
-     * @param dt The time resolution
-     *
-     */
-    void convolve_sum_of_exponentials(
-            double *out, int n_out,
-            const double *lifetime_spectrum, int n_lifetime_spectrum,
-            const double *irf, int n_irf,
-            int convolution_stop,
-            double dt);
-
-    /*!
-     * This function convolves a sum of exponential decays with an instrument response function (IRF)
-     *
-     * The sum of exponential decays is passed by the lifetime array @param lifetime that contains the amplitudes
-     * and the corresponding fluorescence lifetimes in an interleaved array (amplitude_1, lifetime_1, amplitude_2,
-     * lifetime_2, ...). The instrument response function is passed by the array @param irf. The IRF and the and
-     * the sum of exponential decays are convolved up to the index @param convolution_stop. In this convolution,
-     * the time axis is uniform an linear with a time interval specified by the parameter @param dt.
-     *
-     * @param out The array to which the convoluted decay is written to
-     * @param n_out The number of elements in the output array
-     * @param lifetime The array containing the fluorescence lifetimes and the amplitudes
-     * @param n_lifetimes The number of fluorescence lifetimes
-     * @param irf The array containing the instrument response function
-     * @param n_irf The number of elements of the instrument response function
-     * @param start The start index of the convolution
-     * @param stop The stop index of the convolution
-     * @param dt The time resolution
-     * @param period The time between repeated excitation intervals
-     *
-     */
-    void convolve_sum_of_exponentials_periodic(
-            double *out, int n_out,
-            const double *lifetime, int n_lifetimes,
-            const double *irf, int n_irf,
-            int start,
-            int stop,
-            double dt,
-            double period
-    );
 
     /*!
      * Calculates the discrete difference for an vector
@@ -260,4 +182,4 @@ namespace Functions {
 
 IMPBFF_END_NAMESPACE
 
-#endif //chinet_FUNCTIONS_H
+#endif //IMPBFF_FUNCTIONS_H

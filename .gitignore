@@ -9,7 +9,7 @@
 test/CMakeLists.txt
 src/CMakeLists.txt
 ModuleBuild.cmake
-CMakeModules/
+CMakeModules
 benchmark/CMakeLists.txt
 bin/CMakeLists.txt
 dependency/CMakeLists.txt
@@ -17,3 +17,11 @@ examples/CMakeLists.txt
 pyext/CMakeLists.txt
 utility/CMakeLists.txt
 */Files.cmake
+build
+cmake-build-*
+pyext/documentation.i
+scratch
+doc/_build
+doc/examples
+
+

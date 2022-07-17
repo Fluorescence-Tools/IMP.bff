@@ -11,16 +11,20 @@ FILE(GLOB genheaders
 include_directories(${BOOST.FILESYSTEM_INCLUDE_PATH}
         ${BOOST.PROGRAMOPTIONS_INCLUDE_PATH}
         ${BOOST.RANDOM_INCLUDE_PATH}
+        ${BOOST.REGEX_INCLUDE_PATH}
         ${BOOST.SYSTEM_INCLUDE_PATH}
         ${CGAL_INCLUDE_PATH}
         ${HDF5_INCLUDE_PATH}
+        ${IMP.EM_INCLUDE_PATH}
         ${PYTHON-IHM_INCLUDE_PATH})
 link_directories(${BOOST.FILESYSTEM_LINK_PATH}
         ${BOOST.PROGRAMOPTIONS_LINK_PATH}
         ${BOOST.RANDOM_LINK_PATH}
+        ${BOOST.REGEX_LINK_PATH}
         ${BOOST.SYSTEM_LINK_PATH}
         ${CGAL_LINK_PATH}
         ${HDF5_LINK_PATH}
+        ${IMP.EM_LINK_PATH}
         ${NUMPY_LINK_PATH}
         ${PYTHON-IHM_LINK_PATH})
 add_definitions("-DIMPBFF_EXPORTS")
@@ -33,13 +37,24 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BFF_CXX_FLAGS}")
 
-set(headers ${CMAKE_SOURCE_DIR}/include/Functions.h
+set(headers ${CMAKE_SOURCE_DIR}/include/AV.h
+${CMAKE_SOURCE_DIR}/include/AVNetworkRestraint.h
 ${CMAKE_SOURCE_DIR}/include/MongoObject.h
-${CMAKE_SOURCE_DIR}/include/Test.h
-${CMAKE_SOURCE_DIR}/include/internal/json.h
-${CMAKE_SOURCE_DIR}/include/t/CNode.h
-${CMAKE_SOURCE_DIR}/include/t/NodeCallback.h
-${CMAKE_SOURCE_DIR}/include/t/Port.h)
+${CMAKE_SOURCE_DIR}/include/Node.h
+${CMAKE_SOURCE_DIR}/include/NodeCallback.h
+${CMAKE_SOURCE_DIR}/include/PathMap.h
+${CMAKE_SOURCE_DIR}/include/PathMapHeader.h
+${CMAKE_SOURCE_DIR}/include/PathMapTile.h
+${CMAKE_SOURCE_DIR}/include/Port.h
+${CMAKE_SOURCE_DIR}/include/Session.h
+${CMAKE_SOURCE_DIR}/include/json.h
+${CMAKE_SOURCE_DIR}/include/internal/FPSReaderWriter.h
+${CMAKE_SOURCE_DIR}/include/internal/Functions.h
+${CMAKE_SOURCE_DIR}/include/internal/InverseSampler.h
+${CMAKE_SOURCE_DIR}/include/internal/PathMapTileEdge.h
+${CMAKE_SOURCE_DIR}/include/internal/pcg_extras.h
+${CMAKE_SOURCE_DIR}/include/internal/pcg_random.h
+${CMAKE_SOURCE_DIR}/include/internal/pcg_uint128.h)
 
 if(DEFINED IMP_bff_LIBRARY_EXTRA_SOURCES)
   set_source_files_properties(${IMP_bff_LIBRARY_EXTRA_SOURCES}

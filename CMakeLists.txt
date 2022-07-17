@@ -3,29 +3,43 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 2.8.12)
   project(imp_module)
 
-  if(POLICY CMP0058)
-    cmake_policy(SET CMP0058 NEW)
-  endif(POLICY CMP0058)
+  # Default Python3_FIND_STRATEGY to LOCATION
+  if(POLICY CMP0094)
+    cmake_policy(SET CMP0094 NEW)
+  endif(POLICY CMP0094)
+  cmake_policy(SET CMP0058 NEW)
 
+  # Use new-style variables/escapes
   if(POLICY CMP0053)
     cmake_policy(SET CMP0053 NEW)
   endif(POLICY CMP0053)
 
-  # libmongoc
+  # Quiet warning from cmake 3.1 or later about quoted variables in if()
+  if(POLICY CMP0054)
+    cmake_policy(SET CMP0054 NEW)
+  endif(POLICY CMP0054)
+
+  # Honor link flags in try_compile() tests
+  if(POLICY CMP0056)
+    cmake_policy(SET CMP0056 NEW)
+  endif(POLICY CMP0056)
+
+  SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
+  SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
+  ADD_DEFINITIONS("-DIMPBFF_VERBOSE=1")
+
+  # IMP
   ###########################
-  FIND_PACKAGE (libmongoc-1.0)
-  MESSAGE ("-- Found mongoc version \"${MONGOC_VERSION}\"")
-  MESSAGE ("-- include path \"${MONGOC_INCLUDE_DIRS}\"")
-  MESSAGE ("-- libraries \"${MONGOC_LIBRARIES}\"")
-  INCLUDE_DIRECTORIES (${MONGOC_INCLUDE_DIRS})
-  LINK_LIBRARIES (${MONGOC_LIBRARIES})
-  ADD_COMPILE_DEFINITIONS(${MONGOC_DEFINITIONS})
+  FIND_PACKAGE(IMP REQUIRED)
+  MESSAGE ("-- IMP_USE_FILE \"${IMP_USE_FILE}\"")
+  MESSAGE ("-- IMP_INCLUDE_DIR \"${IMP_INCLUDE_DIR}\"")
 
-  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
+  # Python
+  ###########################
+  FIND_PACKAGE(Python)
+  INCLUDE_DIRECTORIES(${Python_INCLUDE_DIR})
+  INCLUDE_DIRECTORIES(${Python_NumPy_PATH})
 
-  set(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
-
-  find_package(IMP REQUIRED)
   include(${IMP_USE_FILE})
 
   enable_testing()
@@ -43,3 +57,4 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 else()
   include(ModuleBuild.cmake)
 endif()
+include(Setup.cmake)

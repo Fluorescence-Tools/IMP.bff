@@ -2,37 +2,61 @@
 #define IMPBFF_PORT_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/Object.h>
 #include <IMP/object_macros.h>
-#include <IMP/warning_macros.h>
 
 #include <cstdint>
 #include <memory>
 #include <algorithm> /* std::max, std::min */
 #include <cmath>
 #include <cstdlib>
+#include <vector>
+#include <map>
+#include <string>
 
 #include <IMP/bff/MongoObject.h>
-#include <IMP/bff/CNode.h>
+#include <IMP/bff/Node.h>
+#include <IMP/bff/Functions.h>
 
 IMPBFF_BEGIN_NAMESPACE
-
 class Node;
-class Port : public MongoObject {
+
+/// Specifies the type of the Port
+/*!
+ * 0: long vector
+ * 1: double vector
+ * 2: numpy binary
+ * 3: long single number
+ * 4: double single number
+ */
+typedef enum{
+    BFF_PORT_VECTOR_INT,
+    BFF_PORT_VECTOR_FLOAT,
+    BFF_PORT_INT,
+    BFF_PORT_FLOAT,
+    BFF_PORT_BINARY
+} PortType;
+
+typedef enum{
+    BFF_PORT_ADD,
+    BFF_PORT_MUL
+} PortOperation;
+
+
+class IMPBFFEXPORT Port : public MongoObject{
 
 private:
-    void *buffer_;
-    bool own_buffer = false;
+
+    void *buffer_ = nullptr;
     int n_buffer_elements_ = 0;
     int buffer_element_size_ = 1;
     std::vector<double> bounds_{};
-    Node* node_ = nullptr;
+    std::shared_ptr<Node> node_ = nullptr;
+    bool own_buffer = false;
 
     /*!
      * @brief This attribute can point to another Port (default value nullptr).
-     * If the attribute points to another port, the value returned by the
-     * method @class Port::get_value_vector corresponds to the value the other
-     * Port.
+     * If this is not a nullptr the value returned by the Port is the value
+     * it the value the other Port.
      */
     std::shared_ptr<Port> link_ = nullptr;
 
@@ -43,17 +67,7 @@ private:
      */
     std::vector<Port *> linked_to_;
 
-    bool remove_links_to_port() {
-        if (link_ != nullptr) {
-            // remove pointer to this port in the port to which this is linked
-            auto it = std::find(linked_to_.begin(), linked_to_.end(), this);
-            if (it != linked_to_.end()) {
-                linked_to_.erase(it);
-                return true;
-            }
-        }
-        return false;
-    }
+    bool remove_links_to_port();
 
     template<typename T>
     void set_value_of_dependents(T *input, int n_input) {
@@ -62,23 +76,13 @@ private:
         }
     }
 
-    /// Specifies the type of the Port
-    /*!
-     * 0: long vector
-     * 1: double vector
-     * 2: numpy binary
-     * 3: long single number
-     * 4: double single number
-     */
-    int value_type = 0;
+    int value_type = BFF_PORT_VECTOR_INT;
 
 public:
 
-    size_t current_size() {
+    size_t size() {
         return n_buffer_elements_;
     }
-
-    virtual std::shared_ptr<Port> get_ptr();
 
     // Constructor & Destructor
     //--------------------------------------------------------------------
@@ -87,7 +91,7 @@ public:
         if (own_buffer) {
             free(buffer_);
         }
-    };
+    }
 
     Port(
             bool fixed = false,
@@ -96,7 +100,7 @@ public:
             bool is_bounded = false,
             double lb = 0,
             double ub = 0,
-            int value_type = 1,
+            int value_type = BFF_PORT_VECTOR_FLOAT,
             std::string name = ""
     ) : MongoObject(name) {
         append_string(&document, "type", "port");
@@ -118,9 +122,9 @@ public:
         Port::value_type = value_type;
     }
 
-    void set_node(Node *node_ptr);
+    void set_node(std::shared_ptr<Node> node_ptr);
 
-    Node* get_node();
+    std::shared_ptr<Node> get_node();
 
     // Getter & Setter
     //--------------------------------------------------------------------
@@ -134,16 +138,11 @@ public:
 
     void set_value_type(int v) {
         value_type = v;
-        if (is_linked()) {
-            get_link()->set_value_type(v);
-        }
+        if (is_linked()) get_link()->set_value_type(v);
     }
 
     template<typename T>
-    void set_value(
-            T *input, int n_input,
-            bool copy_values = true
-    ) {
+    void set_value(T *input, int n_input, bool copy_values = true) {
 #if IMPBFF_VERBOSE
         std::clog << "SET PORT VALUE" << std::endl;
         std::clog << "-- Name of port: " << get_name() << std::endl;
@@ -152,7 +151,7 @@ public:
 #endif
         if (is_fixed()) {
 #if IMPBFF_VERBOSE
-            std::clog << "WARNING: The port is fixed the action will be ignored." << std::endl;
+            std::clog << "WARNING: The port is fixed the action is ignored." << std::endl;
 #endif
             return;
         }
@@ -162,11 +161,13 @@ public:
         } else {
             value_type = 0;
         }
-        if(n_input == 1) value_type += 2; // use scalar type for single numbers
+        // use scalar type for single numbers
+        if(n_input == 1) value_type += 2;
         if(!copy_values){
 #if IMPBFF_VERBOSE
             std::clog << "-- Avoiding copy - assign pointer of local buffer to input." << std::endl;
 #endif
+            // use pointer
             free(buffer_);
             buffer_ = input;
             buffer_element_size_ = sizeof(T);
@@ -210,11 +211,7 @@ public:
     }
 
     template<typename T>
-    void get_own_value(
-            T **output,
-            int *n_output,
-            bool update_local_buffer = false
-    ) {
+    void get_own_value(T **output, int *n_output, bool update_local_buffer = false) {
 #if IMPBFF_VERBOSE
         std::clog << "GET OWN VALUE" << std::endl;
         std::clog << "-- Name of Port: " << get_name() << std::endl;
@@ -270,11 +267,7 @@ public:
 #endif
             auto bounded_array = (T *) malloc(n_buffer_elements_ * sizeof(T));
             memcpy(bounded_array, origin, (size_t) n_buffer_elements_ * sizeof(T));
-
-            Functions::bound_values<T>(
-                    bounded_array, n_buffer_elements_,
-                    bounds_[0], bounds_[1]
-            );
+            Functions::bound_values<T>(bounded_array, n_buffer_elements_, bounds_[0], bounds_[1]);
             *n_output = n_buffer_elements_;
             *output = reinterpret_cast<T *>(bounded_array);
         } else {
@@ -293,7 +286,7 @@ public:
             std::clog << "GET VALUE" << std::endl;
             std::clog << "-- Name of Port: " << get_name() << std::endl;
             std::clog << "-- Local value type: " << value_type << std::endl;
-            std::clog << "-- Local buffer is filled: " << (n_buffer_elements_ > 0) << std::endl;
+            std::clog << "-- Local buffer filled: " << (n_buffer_elements_ > 0) << std::endl;
             std::clog << "-- Number of elements in local buffer: " << n_buffer_elements_ << std::endl;
             std::clog << "-- Port is not linked." << std::endl;
 #endif
@@ -312,16 +305,6 @@ public:
 
     virtual bson_t get_bson() final;
 
-    // void set_imp_particle(IMP::Model* m, IMP::Particle* pi){
-    //     imp_model = m;
-    //     imp_particle = pi;
-    // }
-
-    // IMP::Particle* get_imp_particle(){
-    //     return imp_particle;
-    // }
-
-
     // Methods
     //--------------------------------------------------------------------
     void update_attached_node();
@@ -332,9 +315,9 @@ public:
 
     bool is_bounded();
 
-    void set_bounds(double *input, int n_input);
+    void set_bounds(std::vector<double> bounds);
 
-    void get_bounds(double **output, int *n_output);
+    std::vector<double> get_bounds();
 
     bool is_fixed();
 
@@ -347,7 +330,7 @@ public:
     bool is_reactive();
 
     bool is_float() {
-        return ((get_value_type() == 1) || (get_value_type() == 3));
+        return ((get_value_type() == BFF_PORT_VECTOR_FLOAT) || (get_value_type() == BFF_PORT_FLOAT));
     }
 
     void set_reactive(bool reactive);
@@ -356,7 +339,7 @@ public:
 
     bool read_from_db(const std::string &oid_string);
 
-    void get_bytes(unsigned char **output, int *n_output, bool copy = false);
+    std::vector<unsigned char> get_bytes();
 
     void set_bytes(unsigned char *input, int n_input);
 
@@ -371,10 +354,21 @@ public:
     }
 
     void set_link(std::shared_ptr<Port> v) {
+#if IMPBFF_VERBOSE
+        std::clog << "SET_LINK" << std::endl;
+        std::clog << "-- Link to Port: " << v->get_name() << std::endl;
+        std::clog << "-- Link value type: " << v->value_type << std::endl;
+#endif
         if (v != nullptr) {
-            set_oid("link", v->get_bson_oid());
-            link_ = v;
-            v->linked_to_.push_back(this);
+            if((v.get() == this)){
+#if IMPBFF_VERBOSE
+                std::clog << "WARNING: cannot link to self." << std::endl;
+#endif
+            } else{
+                set_oid("link", v->get_bson_oid());
+                link_ = v;
+                v->linked_to_.push_back(this);
+            }
         } else {
             unlink();
         }
@@ -401,14 +395,6 @@ public:
         return link_;
     }
 
-    // Operators
-    //---------------------------------------
-
-    std::shared_ptr<Port> operator+(std::shared_ptr<Port> v);
-
-    std::shared_ptr<Port> operator*(std::shared_ptr<Port> v);
-//    Port operator-(Port &v);
-//    Port operator/(Port &v);
 
 };
 

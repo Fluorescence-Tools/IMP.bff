@@ -1,18 +1,18 @@
 #include <IMP/bff/MongoObject.h>
-#include <IMP/bff/Functions.h>
+#include <IMP/bff/internal/Functions.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
 std::list<MongoObject*> MongoObject::registered_objects = std::list<MongoObject*>();
 
 MongoObject::MongoObject(std::string name) :
+    IMP::Object("MongoObject%1%"),
     uri_string(""),
     db_string(""),
     app_string(""),
     collection_string(""),
     is_connected_to_db_(false),
-    time_of_death(0),
-    IMP::Object("MongoObject%1%")
+    time_of_death(0)
 {
 #if IMPBFF_VERBOSE
     std::clog << "NEW MONGOOBJECT" << std::endl;
@@ -71,7 +71,7 @@ void MongoObject::register_instance(MongoObject* x){
     int use_count_offset = 0;
 #endif
     if(x == nullptr){
-        x = get_ptr();
+        x = getptr().get();
 #if IMPBFF_VERBOSE
         use_count_offset++;
 #endif
@@ -80,35 +80,22 @@ void MongoObject::register_instance(MongoObject* x){
     if(x != nullptr){
         std::clog << "-- OID: " << x->get_own_oid() << std::endl;
         std::clog << "-- Name: " << x->get_name() << std::endl;
-        std::clog << "-- Use count before registration: " << (x.use_count() - use_count_offset) << std::endl;
     }
 #endif
     if(std::find(v.begin(),v.end(),x) == v.end())
     {
         v.emplace_back(x);
     }
-#if IMPBFF_VERBOSE
-    std::clog << "-- Use count after registration: " << (x.use_count() - use_count_offset)<< std::endl;
-#endif
 }
 
 void MongoObject::unregister_instance(MongoObject* x){
 #if IMPBFF_VERBOSE
     std::clog << "UNREGISTER MONGOOBJECT" << std::endl;
-    int use_count_offset = 0;
 #endif
     if(x != nullptr){
-        x = get_ptr();
+        x = getptr().get();
         registered_objects.remove(x);
     }
-#if IMPBFF_VERBOSE
-   use_count_offset++;
-    if(x != nullptr){
-        std::clog << "-- Use count before unregister: " << (x.use_count() - use_count_offset) << std::endl;
-    }
-    std::clog << "-- Use count after unregister: " << (x.use_count() - use_count_offset)<< std::endl;
-#endif
-
 }
 
 
@@ -116,20 +103,9 @@ std::list<MongoObject*> MongoObject::get_instances(){
 #if IMPBFF_VERBOSE
     std::clog << "MONGOOBJECT GET INSTANCES" << std::endl;
 #endif
-#if IMPBFF_VERBOSE
-    for(auto &v: registered_objects){
-        if(v.use_count() > 1){
-            std::clog << "-- OID: " << v->get_own_oid() << std::endl;
-            std::clog << "-- Use count: " << v.use_count() << std::endl;
-        }
-    }
-#endif
     return registered_objects;
 }
 
-MongoObject* MongoObject::get_ptr(){
-    return this;
-}
 
 bool MongoObject::connect_to_db(
         const std::string &uri_string,
@@ -235,9 +211,7 @@ bool MongoObject::write_to_db(
 
         query = BCON_NEW ("_id", BCON_OID(&oid_document));
 
-        bson_t *opts = BCON_NEW(
-                "upsert", BCON_BOOL(true)
-        );
+        bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
 
         switch (write_option) {
             case 1:
@@ -337,8 +311,8 @@ bool MongoObject::read_from_db(const std::string &oid_string)
             // find the oid in the DB collection
             bson_t *query = nullptr;
             query = BCON_NEW ("_id", BCON_OID(&oid));
-            size_t len;
 #if IMPBFF_VERBOSE
+            size_t len;
             std::clog << "-- Query result: " << bson_as_json(query, &len) << std::endl;
 #endif
             mongoc_cursor_t *cursor; // cursor pointing to the new document
@@ -551,8 +525,8 @@ std::string MongoObject::create_copy_in_db()
     } else {
         bson_append_oid(&document_copy, "precursor", 9, &oid_document);
     }
-    size_t len;
 #if IMPBFF_VERBOSE
+    size_t len;
     std::clog << "created copy: " << bson_as_json(&document_copy, &len) << std::endl;
 #endif
     write_to_db(document_copy, 2);
@@ -566,8 +540,8 @@ bool MongoObject::is_connected_to_db()
         bson_t *b = BCON_NEW ("ping", BCON_INT32 (1));
         bson_error_t error;
         bool r;
-        mongoc_server_description_t **sds;
-        size_t i, n;
+//        mongoc_server_description_t **sds;
+//        size_t i, n;
 
         /* ensure client has connected */
         r = mongoc_client_command_simple (client, "db", b, NULL, NULL, &error);
@@ -683,7 +657,7 @@ bool MongoObject::read_json(std::string json_string)
 
 MongoObject* MongoObject::operator[](std::string key)
 {
-    auto mo = new MongoObject();
+    MongoObject* mo = new MongoObject();
     mo->read_json(get_json_of_key(key.c_str()));
     return mo;
 }

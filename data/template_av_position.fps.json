@@ -1,0 +1,18 @@
+{
+  "allowed_sphere_radius": 1.5,
+  "anchor_atoms": "",
+  "atom_name": "CA",
+  "chain_identifier": "",
+  "chain_weighting": false,
+  "contact_volume_thickness": 0,
+  "contact_volume_trapped_fraction": -1,
+  "linker_length": 20.0,
+  "linker_width": 0.5,
+  "min_sphere_volume_fraction": 0,
+  "radius1": 3.5,
+  "residue_name": "",
+  "residue_seq_number": 0,
+  "simulation_grid_resolution": 1.5,
+  "simulation_type": "AV1",
+  "strip_mask": ""
+}
