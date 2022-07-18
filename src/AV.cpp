@@ -231,7 +231,8 @@ IMP::ParticleIndex search_labeling_site(
 std::vector<double> av_distance_distribution(
         const AV& av1,
         const AV& av2,
-        double start, double stop, int n_bins,
+        //double start, double stop, int n_bins,
+        std::vector<double> axis,
         int n_samples
 ){
 
@@ -250,14 +251,25 @@ std::vector<double> av_distance_distribution(
         data.emplace_back(tmp.get_magnitude());
     }
 
-    using namespace boost::histogram; // strip the boost::histogram prefix
-    auto hist_axis = axis::regular<>(n_bins, start, stop);
-    auto h = make_histogram(hist_axis);
-    std::for_each(data.begin(), data.end(), std::ref(h));
-    auto hist = std::vector<double>(n_bins);
-    for(int i = 0; i < n_bins; i++){
-        hist[i] = h[i];
-    }
+//    // For future versions (requires C++14)
+//    using namespace boost::histogram; // strip the boost::histogram prefix
+//    auto hist_axis = axis::regular<>(n_bins, start, stop);
+//    auto h = make_histogram(hist_axis);
+//    std::for_each(data.begin(), data.end(), std::ref(h));
+//    auto hist = std::vector<double>(n_bins);
+//    for(int i = 0; i < n_bins; i++){
+//        hist[i] = h[i];
+//    }
+
+    auto hist = std::vector<double>(axis.size(), 0);
+    IMP::bff::histogram1D<double>(
+            data.data(), data.size(),  // sampled distances
+            nullptr, 0,                          // weights
+            axis.data(), axis.size(),            // axis
+            hist.data(), hist.size(),            // data
+            IMP::bff::AXIS_LIN,                  // axis type
+            false
+    );
 
     return hist;
 }

@@ -26,7 +26,9 @@
 
 #include <IMP/bff/internal/json.h>
 #include <IMP/bff/internal/InverseSampler.h>
-#include <boost/histogram.hpp> // make_histogram, regular, weight, indexed
+// requires C++14
+// #include <boost/histogram.hpp> // make_histogram, regular, weight, indexed
+#include <IMP/bff/internal/Histogram.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -261,7 +263,8 @@ IMPBFFEXPORT double av_distance(
 IMPBFFEXPORT std::vector<double> av_distance_distribution(
         const AV& av1,
         const AV& av2,
-        double start, double stop, int n_bins,
+        std::vector<double> axis,
+        //double start, double stop, int n_bins, // for boost histogram
         int n_samples=10000
 );
 
