@@ -26,20 +26,12 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
   SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
-  ADD_DEFINITIONS("-DIMPBFF_VERBOSE=1")
 
   # IMP
   ###########################
   FIND_PACKAGE(IMP REQUIRED)
   MESSAGE ("-- IMP_USE_FILE \"${IMP_USE_FILE}\"")
   MESSAGE ("-- IMP_INCLUDE_DIR \"${IMP_INCLUDE_DIR}\"")
-
-  # Python
-  ###########################
-  FIND_PACKAGE(Python)
-  INCLUDE_DIRECTORIES(${Python_INCLUDE_DIR})
-  INCLUDE_DIRECTORIES(${Python_NumPy_PATH})
-
   include(${IMP_USE_FILE})
 
   enable_testing()
