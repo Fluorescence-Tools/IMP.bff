@@ -313,9 +313,6 @@ public:
 };
 
 
-void bincount1D(int *data, int n_data, int *bins, int n_bins);
-
-
 /*!
  * Compute a 1D Histogram for a set of data points
  *
@@ -382,7 +379,7 @@ void histogram1D(
 
 }
 
-IMPBFFEXPORT void bincount1D(int* data, int n_data, int* bins, int n_bins){
+void bincount1D(int* data, int n_data, int* bins, int n_bins){
     for(int j=0; j < n_data; j++)
     {
         int v = data[j];
