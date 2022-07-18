@@ -15,7 +15,7 @@
 
 #include <IMP/bff/MongoObject.h>
 #include <IMP/bff/Node.h>
-#include <IMP/bff/Functions.h>
+#include <IMP/bff/internal/Functions.h>
 
 IMPBFF_BEGIN_NAMESPACE
 class Node;

@@ -9,8 +9,6 @@
 #include <map>
 #include <algorithm>
 
-#include <rttr/registration>
-
 #include <IMP/bff/MongoObject.h>
 #include <IMP/bff/Port.h>
 #include <IMP/bff/NodeCallback.h>
