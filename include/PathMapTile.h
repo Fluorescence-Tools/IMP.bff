@@ -21,8 +21,6 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class PathMap;
-
 const double TILE_PENALTY_THRESHOLD = 100000;
 const double TILE_OBSTACLE_THRESHOLD = 0.000001;
 
@@ -42,10 +40,9 @@ typedef enum{
 
 class PathMap;
 
-class PathMapTile{
+class IMPBFFEXPORT PathMapTile{
 
 friend class PathMap;
-
 
 private:
 
