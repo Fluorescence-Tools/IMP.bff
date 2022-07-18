@@ -26,10 +26,11 @@ public:
 
     std::map<std::string, std::shared_ptr<Node>> nodes;
 
+
     Session()
     {
         append_string(&document, "type", "session");
-    };
+    }
 
     explicit Session(std::map<std::string, std::shared_ptr<Node>> nodes) :
             Session()
@@ -37,7 +38,7 @@ public:
         for (auto &o : nodes) {
             add_node(o.first, o.second);
         }
-    };
+    }
 
     void add_node(std::string name, std::shared_ptr<Node> object);
 

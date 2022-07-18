@@ -71,10 +71,10 @@
                 empty_type = funcsigs._empty
                 _use_py2 = False
 
-            class CallbackNodePython(IMP.bff.NodeCallback):
+            class NodeCallbackPython(IMP.bff.NodeCallback):
         
                 def __init__(self, cb_function, *args, **kwargs):
-                    super(CallbackNodePython, self).__init__(*args, **kwargs)
+                    super(NodeCallbackPython, self).__init__(*args, **kwargs)
                     self._cb = cb_function
         
                 def run(self, inputs, outputs):

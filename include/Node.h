@@ -30,9 +30,6 @@ protected:
     rttr::method meth_ = rttr::type::get_global_method("nothing");
     std::map<std::string, std::shared_ptr<Port>> in_;
     std::map<std::string, std::shared_ptr<Port>> out_;
-    std::string callback;
-    std::string callback_type_string;
-    int callback_type;
 
 public:
 
@@ -78,7 +75,6 @@ public:
     // Setter
     //-----------------------------------------------------------
     void set_callback(std::shared_ptr<NodeCallback> cb);
-    void set_callback(std::string callback, std::string callback_type);
     void set_valid(bool is_valid=false);
 };
 

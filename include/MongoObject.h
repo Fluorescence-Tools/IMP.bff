@@ -191,42 +191,6 @@ protected:
         return return_value;
     }
 
-    template <typename T>
-    bool create_and_connect_objects_from_oid_array(
-            const bson_t *doc,
-            const char *array_name,
-            std::map<std::string, std::shared_ptr<T>> *target_map)
-    {
-        bool return_value = true;
-        bson_iter_t iter;
-        bson_iter_t child;
-        if (bson_iter_init_find (&iter, doc, array_name) &&
-            BSON_ITER_HOLDS_ARRAY (&iter) &&
-            bson_iter_recurse (&iter, &child)) {
-            while (bson_iter_next (&child)) {
-                if (BSON_ITER_HOLDS_OID(&child)){
-                    // read oid
-                    bson_oid_t new_oid;
-                    bson_oid_copy(bson_iter_oid(&child), &new_oid);
-                    // create new obj
-                    std::shared_ptr<T> o = std::make_shared<T>();
-                    // connect obj to db
-                    return_value &= connect_object_to_db(o);
-                    // read obj from db
-                    o->read_from_db(oid_to_string(new_oid));
-                    // add obj to the target set
-                    target_map->insert(std::make_pair(o->get_own_oid(), o));
-                }
-            }
-        } else{
-#if IMPBFF_VERBOSE
-            std::cerr << "Error: no nodes section in Session" << std::endl;
-#endif
-            return_value &= false;
-        }
-        return return_value;
-    }
-
     /// Append a string to a BSON document
     /// \param dst pointer to the target BSON document
     /// \param key the key of the string int the target BSON document

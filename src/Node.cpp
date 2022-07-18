@@ -10,9 +10,7 @@ Node::Node(std::string name,
 {
     append_string(&document, "type", "node");
     set_ports(ports);
-    if(callback_class != nullptr){
-        this->callback_class = callback_class;
-    }
+    this->callback_class = callback_class;
 }
 
 
@@ -26,7 +24,7 @@ Node::~Node() = default;
 
 bool Node::read_from_db(const std::string &oid_string){
 #if IMPBFF_VERBOSE
-    std::clog << "READING NODE FROM DB" << std::endl;
+    std::clog << "TODO!! READING NODE FROM DB" << std::endl;
     std::clog << "Requested OID:" << oid_string << std::endl;
 #endif
     bool return_value = true;
@@ -36,14 +34,7 @@ bool Node::read_from_db(const std::string &oid_string){
             );
 #if IMPBFF_VERBOSE
     std::clog << "callback-restore: " << get_string_by_key(&document, "callback") << std::endl;
-    std::clog << "callback_type-restore: " << get_string_by_key(&document, "callback_type") << std::endl;
 #endif
-
-    set_callback(
-            get_string_by_key(&document, "callback"),
-            get_string_by_key(&document, "callback_type")
-            );
-
     return return_value;
 }
 
@@ -66,9 +57,6 @@ bool Node::write_to_db() {
 std::string Node::get_name(){
     std::string r;
     r.append(IMP::bff::MongoObject::get_name());
-    r.append(":");
-    r.append(callback);
-    r.append(":");
     r.append("(");
     for(auto const &n : get_input_ports()){
         r.append(n.first);
@@ -121,34 +109,14 @@ std::map<std::string, std::shared_ptr<Port>> Node::get_output_ports(){
     return out_;
 }
 
-void Node::set_callback(std::string s_callback, std::string s_callback_type){
-#if IMPBFF_VERBOSE
-    std::clog << "NODE SET CALLBACK" << std::endl;
-#endif
-    this->callback = s_callback;
-    this->callback_type_string = s_callback_type;
-#if IMPBFF_VERBOSE
-    std::clog << "-- Callback type: " << callback_type_string << std::endl;
-    std::clog << "-- Callback name: " << callback << std::endl;
-#endif
-    if(s_callback_type == "C"){
-        callback_type = 0;
-        meth_ = rttr::type::get_global_method(callback);
-        if(!meth_){
-#if IMPBFF_VERBOSE
-            std::cerr << "ERROR: The class type " << callback << " does not exist." <<
-                      " No callback set. " << std::endl;
-#endif
-        }
-    }
-}
 
 void Node::set_callback(std::shared_ptr<NodeCallback> cb){
     callback_class = cb;
-    callback_type = 1;
 }
 
-void Node::add_port(const std::string &key, std::shared_ptr<Port> port, bool is_output, bool fill_in_out) {
+void Node::add_port(
+        const std::string &key,
+        std::shared_ptr<Port> port, bool is_output, bool fill_in_out) {
 #if IMPBFF_VERBOSE
     std::clog << "ADDING PORT TO NODE" << std::endl;
     std::clog << "-- Name of node: " << get_name() << std::endl;
@@ -200,8 +168,6 @@ bson_t Node::get_bson(){
     );
 
     create_oid_dict_in_doc<Port>(&dst, "ports", ports);
-    append_string(&dst, "callback", callback);
-    append_string(&dst, "callback_type", callback_type_string);
     return dst;
 }
 
@@ -209,20 +175,8 @@ void Node::evaluate(){
 #if IMPBFF_VERBOSE
     std::clog << "NODE EVALUATE" << std::endl;
     std::clog << "-- Node name: " << get_name() << std::endl;
-    std::clog << "-- Callback_type: " << callback_type << std::endl;
 #endif
-    if(callback_type == 0)
-    {
-#if IMPBFF_VERBOSE
-        std::clog << "-- Calling registered C function."  << std::endl;
-#endif
-        rttr::variant return_value = meth_.invoke({}, in_, out_);
-    } else if (callback_class != nullptr) {
-#if IMPBFF_VERBOSE
-        std::clog << "-- Calling 'run' method of a callback class."  << std::endl;
-#endif
-        callback_class->run(in_, out_);
-    }
+    callback_class->run(in_, out_);
 #if IMPBFF_VERBOSE
     std::clog << "-- Setting nodes associated to output ports to invalid."  << std::endl;
 #endif

@@ -2,7 +2,6 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-//using namespace rttr;
 
 template <typename T>
 inline void mul(T* tmp, size_t &n_elements, const std::map<std::string, std::shared_ptr<Port>> &inputs){
@@ -139,18 +138,6 @@ void passthrough(
             break;
         }
     }
-}
-
-
-RTTR_REGISTRATION{
-    using namespace rttr;
-    registration::class_<NodeCallback>("NodeCallback").constructor<>().method("run", &NodeCallback::run);
-    registration::method("multiply_double", &multiply<double>);
-    registration::method("multiply_int", &multiply<long>);
-    registration::method("addition_double", &addition<double>);
-    registration::method("addition_int", &addition<long>);
-    registration::method("nothing", &nothing);
-    registration::method("passthrough", &passthrough);
 }
 
 IMPBFF_END_NAMESPACE
