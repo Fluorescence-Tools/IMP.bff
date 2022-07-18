@@ -25,7 +25,6 @@ private:
     std::map<std::string, std::shared_ptr<Port>> ports;
 
 protected:
-    rttr::method meth_ = rttr::type::get_global_method("nothing");
     std::map<std::string, std::shared_ptr<Port>> in_;
     std::map<std::string, std::shared_ptr<Port>> out_;
 
