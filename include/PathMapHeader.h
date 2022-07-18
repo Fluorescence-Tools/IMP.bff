@@ -11,6 +11,8 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <cmath> /* ceil */
+
 #include <IMP/Particle.h>
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/atom/Atom.h>
@@ -28,7 +30,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 class PathMap;
 
-class IMPEMEXPORT PathMapHeader {
+class IMPBFFEXPORT PathMapHeader {
 
 friend class IMP::bff::PathMap;
 
@@ -46,6 +48,9 @@ protected:
     IMP::algebra::Vector3D path_origin_;
 
 public:
+
+    PathMapHeader() = default;
+    ~PathMapHeader() = default;
 
     /*!
      *
@@ -73,13 +78,7 @@ public:
      */
     void update_map_dimensions(int nx=-1, int ny=-1, int nz=-1);
 
-    void set_path_origin(IMP::algebra::Vector3D v){
-        path_origin_ = v;
-        double lr = get_grid_edge_length() / 2;
-        density_header_.set_xorigin(v[0] - lr);
-        density_header_.set_yorigin(v[1] - lr);
-        density_header_.set_zorigin(v[2] - lr);
-    }
+    void set_path_origin(const IMP::algebra::Vector3D &v);
 
     //! Returns position of the labeling site
     IMP::algebra::Vector3D get_path_origin() const {
@@ -91,32 +90,21 @@ public:
         return max_path_length_;
     }
 
-    double get_simulation_grid_resolution() {
-        grid_spacing_ = (double) density_header_.get_spacing();
-        return grid_spacing_;
-    }
+    double get_simulation_grid_resolution();
 
-    void set_obstacle_threshold(
-            double obstacle_threshold){
-        obstacle_threshold_ = obstacle_threshold;
-    }
+    void set_obstacle_threshold(double obstacle_threshold);
 
     double get_obstacle_threshold() const{
         return obstacle_threshold_;
     }
 
-    double set_neighbor_radius(
-            double neighbor_radius){
-        neighbor_radius_ = neighbor_radius;
-    }
+    void set_neighbor_radius(double neighbor_radius);
 
     int get_neighbor_radius() const{
         return neighbor_radius_;
     }
 
-    int get_neighbor_box_size() const{
-        return ceil(neighbor_radius_);
-    }
+    int get_neighbor_box_size() const;
 
     //! Returns a read-only pointer to the header of the map
     const IMP::em::DensityHeader *get_density_header() const {
@@ -127,25 +115,17 @@ public:
         return &density_header_; }
 
     //! Get origin on the PathMap (the corner of the grid)
-    IMP::algebra::Vector3D get_origin() const {
-        return {
-                (double) density_header_.get_xorigin(),
-                (double) density_header_.get_yorigin(),
-                (double) density_header_.get_zorigin()
-        };
-    }
+    IMP::algebra::Vector3D get_origin() const ;
 
     double get_grid_edge_length();
 
     //! Set origin on the PathMap (the corner of the grid)
-    void set_origin(float x, float y, float z){
-        density_header_.set_xorigin(x);
-        density_header_.set_yorigin(y);
-        density_header_.set_zorigin(z);
-    }
+    void set_origin(float x, float y, float z);
 
 
 };
+
+IMP_OBJECTS(PathMapHeader, PathMapHeaders);
 
 IMPBFF_END_NAMESPACE
 

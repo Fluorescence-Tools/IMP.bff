@@ -7,7 +7,6 @@
 #include <string>
 #include <functional>
 #include <algorithm> /* std::min std::max */
-#include <rttr/registration>
 
 
 IMPBFF_BEGIN_NAMESPACE
