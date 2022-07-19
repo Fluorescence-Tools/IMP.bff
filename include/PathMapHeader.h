@@ -49,7 +49,6 @@ protected:
 
 public:
 
-    PathMapHeader() = default;
     ~PathMapHeader() = default;
 
     /*!
@@ -62,8 +61,8 @@ public:
      * threshold value are considered an obstacle.
      */
     PathMapHeader(
-            double max_path_length,
-            double grid_spacing,
+            double max_path_length = 10.0,
+            double grid_spacing = 1.0,
             int neighbor_radius = 2,
             double obstacle_threshold = std::numeric_limits<double>::epsilon()
     );
