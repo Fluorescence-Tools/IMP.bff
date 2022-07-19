@@ -1,0 +1,16 @@
+
+.. currentmodule:: IMP.bff
+
+.. _changes_0_12:
+
+Version 0.12
+============
+
+**July, 2022**
+
+Changelog
+---------
+* Initial public release
+
+API changes summary
+-------------------
