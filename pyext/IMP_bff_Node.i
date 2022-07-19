@@ -152,7 +152,7 @@
                             is_reactive=reactive_outputs
                     )
                     self.add_output_port(on, po)
-            cb_instance = CallbackNodePython(cb_function=cb)
+            cb_instance = NodeCallbackPython(cb_function=cb)
             cb_instance.__disown__()
             self.set_callback(cb_instance)
         
