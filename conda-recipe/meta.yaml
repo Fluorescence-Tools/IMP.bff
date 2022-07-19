@@ -9,37 +9,36 @@ source:
   path: ../
 
 build:
-    number: 0
-    string: py{{ PY_VER_MAJOR }}{{ PY_VER_MINOR }}h{{ PKG_HASH }}_{{ PKG_BUILDNUM }}
+  number: 0
+  string: py{{ PY_VER_MAJOR }}{{ PY_VER_MINOR }}h{{ PKG_HASH }}_{{ PKG_BUILDNUM }}
 
 requirements:
   build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
     - python
     - numpy
-    - cmake 3.20.*
+    - cmake >=3.14
     - swig
     - ninja
     - pkg-config
     - doxygen
   host:
-    - python
-    - numpy
-    - imp
     - boost-cpp
     - libmongoc
-    - librttr
     - eigen
+    - imp
+    - python
+    - numpy
   run:
     - boost-cpp
     - libmongoc
-    - librttr
     - python
-    - imp
     - numpy
-    - numba
+    - imp
+    - tqdm
     - click
     - click-didyoumean
-    - tqdm
 
 test:
   imports:
@@ -64,3 +63,4 @@ about:
 extra:
   recipe-maintainers:
     - tpeulen
+
