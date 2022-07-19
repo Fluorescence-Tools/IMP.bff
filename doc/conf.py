@@ -318,17 +318,17 @@ def filter_search_index(app, exception):
         f.write(searchindex_text)
 
 
-breathe_projects = {}
 # latex and breathe do not play very well together. Therefore,
 # breathe is only used for the webpage.
 # compatible with readthedocs online builder and local builder
 if sys.argv[0].endswith('sphinx-build') and \
-        ('html' in sys.argv or sys.argv[-1] == '_build/html'):
+        ('html' in sys.argv or sys.argv[-1] == '_build'):
     subprocess.call('doxygen', shell=True)
-    breathe_projects['IMP.bff'] = './_build/xml'
-    breathe_default_project = "IMP.bff"
-    extensions += ['breathe']
-
+breathe_projects = {
+    'IMP.bff': './_build/xml'
+}
+breathe_default_project = "IMP.bff"
+extensions += ['breathe']
 
 
 # Hack to get kwargs to appear in docstring #18434
