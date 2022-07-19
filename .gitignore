@@ -6,22 +6,25 @@
 *.orig
 *.gcno
 *.gcda
-test/CMakeLists.txt
-src/CMakeLists.txt
+*/Files.cmake
 ModuleBuild.cmake
 CMakeModules
 benchmark/CMakeLists.txt
+benchmark/Files.cmake
 bin/CMakeLists.txt
+bin/Files.cmake
 dependency/CMakeLists.txt
-examples/CMakeLists.txt
-pyext/CMakeLists.txt
-utility/CMakeLists.txt
-*/Files.cmake
-build
-cmake-build-*
-pyext/documentation.i
-scratch
 doc/_build
 doc/examples
+examples/CMakeLists.txt
+
+test/CMakeLists.txt
+src/CMakeLists.txt
+pyext/CMakeLists.txt
+pyext/documentation.i
+utility/CMakeLists.txt
+build
+cmake-build-*
+scratch
 
 
