@@ -131,12 +131,12 @@ html_short_title = 'IMP.bff'
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-# html_logo = 'logos/IMP.bff-logo-small.png'
+html_logo = 'logos/imp_bff-logo.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = 'logos/favicon.ico'
+html_favicon = 'logos/favicon.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -201,7 +201,7 @@ latex_elements = {
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
-# latex_logo = "logos/IMP.bff-logo.png"
+latex_logo = "logos/IMP.bff-logo.png"
 
 # Documents to append as an appendix to all manuals.
 # latex_appendices = []
@@ -221,6 +221,7 @@ intersphinx_mapping = {
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
     'joblib': ('https://joblib.readthedocs.io/en/latest/', None),
     'seaborn': ('https://seaborn.pydata.org/', None),
+    'tttrlib': ('https://docs.peulen.xyz/tttrlib', None)
 }
 
 
