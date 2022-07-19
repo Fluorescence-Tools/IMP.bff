@@ -115,7 +115,8 @@ distance_sets = {
 }
 exp_means = {}
 
-for ds in distance_sets:
+# Plot here only the first distance set
+for ds in distance_sets[:1]:
     Rapp_ms = distance_sets[ds]['Rapp_ms']
     Rapp_m_refs = distance_sets[ds]['RDA_ref']
     Rapp_sds = distance_sets[ds]['Rapp_sd']
@@ -180,13 +181,6 @@ for ds in distance_sets:
 
         k2_wic = k2_pdf_wic
 
-        # path = 'X:/Science/Papers/00_in_preparation/Bayesian_Fluorescence_Toolkit/Figures/Figure_4_Results/samples/'
-        # np.savetxt(path + 'k2_%s_axs.txt' % name, k2_ax)
-        # np.savetxt(path + 'k2_%s_wic.txt' % name, k2_wic)
-        #
-        # np.savetxt(path + 'r_%s_axs.txt' % name, Rapp_ax)
-        # np.savetxt(path + 'r_%s_wic.txt' % name, RDA_pdf_wic_k2)
-        # np.savetxt(path + 'r_%s_app.txt' % name, Rapp_pdf)
         exp_mean = np.dot(RDA_pdf_wic_k2, RDA_ax) / np.sum(RDA_pdf_wic_k2)
         ref_mean = Rapp_m_ref
         exp_mean2 = np.dot(RDA_pdf_wic_k2, RDA_ax**2) / np.sum(RDA_pdf_wic_k2)
@@ -200,7 +194,6 @@ for ds in distance_sets:
         ax.plot(Rapp_ax, RDA_pdf_wic_k2, label='RDA_pdf_wic_k2', color='green')
         ax.fill_between(Rapp_ax, 0.0, RDA_pdf_wic_k2, facecolor='green', alpha=0.5)
         ax.vlines(x=Rapp_m_ref, ymin=0.0, ymax=ymax, linestyles='solid', colors=['black'])
-
 
     plt.tight_layout()
     fname = ds + '.png'
