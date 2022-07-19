@@ -150,10 +150,10 @@ html_additional_pages = {
     'documentation': 'documentation.html'}  # redirects to index
 
 # If false, no module index is generated.
-html_domain_indices = False
+html_domain_indices = True
 
 # If false, no index is generated.
-html_use_index = False
+html_use_index = True
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'IMP.bff.doc'
