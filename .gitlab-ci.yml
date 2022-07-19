@@ -1,86 +1,72 @@
 stages:
-- build
-- test
-- deploy
-- trigger-cross-projects
+  - build
+  - test
+  - deploy
 
-# Change pip's cache directory to be inside the project directory since we can
-# only cache local items.
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  DEPLOY_VARIABLE: "nightly"
-  MINICONDA_VERSION: "latest"
-
-workflow:
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /master/
-      variables:
-        DEPLOY_VARIABLE: "main"  # Override globally-defined DEPLOY_VARIABLE
-    - when: always               # Run the pipeline in other cases
-
-
-build:linux:
-  image: continuumio/miniconda3:latest
+.build_lnx: &build_linux
   stage: build
+  image: condaforge/mambaforge
+  before_script:
+    - apt update -yq && apt -yq install build-essential
+    - git submodule update --init --recursive --remote
+  script:
+    - mamba install -y boa
+    - conda mambabuild conda-recipe --output-folder bld-dir
+  artifacts:
+    paths:
+      - bld-dir/
+build:lnx_x86_64:
+  <<: *build_linux
+  tags:
+    - x86_64
+
+build:windows:
+  stage: build
+  tags:
+    - win
+  before_script:
+    - git submodule update --init --recursive --remote
+  script:
+    - mamba install -y boa
+    - conda mambabuild conda-recipe --output-folder bld-dir
+  artifacts:
+    paths:
+      - bld-dir/
+
+build:osx:
+  stage: build
+  tags:
+    - osx
+  before_script:
+    - git submodule update --init --recursive --remote
+  script:
+    - mamba install -y boa
+    - conda mambabuild conda-recipe --output-folder bld-dir
+  artifacts:
+    paths:
+      - bld-dir/
+
+test:linux:
+  stage: test
+  tags:
+    - linux
+  image: condaforge/mambaforge
+  needs: ["build:lnx_x86_64"]
+  script:
+    - source activate base
+    - conda config --add channels "file://`pwd`/bld-dir"
+    - mamba install python im.bff nose numba
+    - nosetests test
+
+deploy:conda:
+  stage: deploy
+  image: condaforge/mambaforge
   tags:
     - linux
   before_script:
-    - apt update -yq && apt -yq install build-essential cmake
+    - git submodule update --init --recursive --remote
   script:
-    - echo "I am the build stage."
-    - source activate base
-    - conda install imp -c salilab
-    - mkdir build
-    - cd build 
-    - cmake ..
-  # artifacts:
-  #   expire_in: 7 days
-  #   paths:
-  #     - bld-dir/
-
-# test:linux:
-#   image: ubuntu:18.04
-#   before_script:
-#     - export DEBIAN_FRONTEND=noninteractive
-#     - apt update -yq
-#     - apt install -yq procps wget git git-lfs
-#     # Download and install miniconda
-#     - wget https://repo.continuum.io/miniconda/Miniconda3-$MINICONDA_VERSION-$MINICONDA_OS-x86_64.sh -O miniconda.sh
-#     - bash miniconda.sh -b -p $HOME/miniconda
-#     - export PATH="$HOME/miniconda/bin:$PATH"
-#     # setup conda to always accept commands
-#     - conda config --set always_yes yes --set changeps1 no
-#   script:
-#     - echo "I am a test stage."
-#     - source activate base
-#     - conda install mamba conda-verify -c conda-forge
-#     - |
-#       conda config --add channels salilab
-#       conda config --add channels "file://`pwd`/bld-dir"
-#     - mamba create -n test python=3.8
-#     - conda activate test
-#     - mamba install tttrlib nose scipy
-#     - git clone https://gitlab.peulen.xyz/tpeulen/tttr-data --depth 1
-#     - |
-#       cd test
-#       nosetests
-
-# deploy:
-#   image: continuumio/miniconda3:latest
-#   stage: deploy
-#   tags:
-#     - linux
-#   dependencies:
-#     - build:linux
-#   script:
-#     - echo "I am a depolyment stage job."
-#     - source activate base
-#     - conda install anaconda-client
-#     - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_VARIABLE} -u ${CONDA_USER} --force bld-dir/linux-64/*.tar.bz2
-
-
-# # Downstream projects
-# imp:
-#   stage: trigger-cross-projects
-#   trigger: tpeulen/imp
-
+    - source activate
+    - mamba install anaconda-client
+    - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
+    - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/**/*.tar.bz2

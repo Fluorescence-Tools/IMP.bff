@@ -1,0 +1,116 @@
+{% extends "layout.html" %}
+{% set title = 'IMP.bff: Bayesian fluorescence framework for integrative modeling' %}
+{% block content %}
+<div class="container-fluid sk-landing-bg py-3">
+  <div class="container sk-landing-container">
+    <div class="row">
+      <div class="col-md-6 mb-3 mb-md-0">
+        <h1 class="sk-landing-header text-white text-monospace">IMP.bff</h1>
+        <h4 class="sk-landing-subheader text-white font-italic mb-3">Bayesian Fluorescence Framework</h4>
+        <a class="btn sk-landing-btn mb-1" href="{{ pathto('getting_started') }}" role="button">Getting Started</a>
+        <a class="btn sk-landing-btn mb-1" href="{{ pathto(release_highlights) }}" role="button">Release Highlights for {{ release_highlights_version }}</a>
+        <a class="btn sk-landing-btn mb-1" href="https://github.com/fluorescence-tools/imp.bff" role="button">GitHub</a>
+      </div>
+      <div class="col-md-6 d-flex">
+        <ul class="sk-landing-header-body">
+          <li>Fluorescence-based structural modeling</li>
+          <li>Accessible to everybody, and reusable in various contexts</li>
+          <li>Built in C/C++ and wrapped for Python and NumPy</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container sk-landing-container pt-3 body" role="main">
+  <div class="row no-gutters">
+    <div class="col-md-4 mb-3 px-md-2 sk-px-xl-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <a href="examples/index.html#structural-modeling"><h4 class="sk-card-title card-title">Structural modeling</h4></a>
+          <p class="card-text">Label-based integrative modeling.</p>
+          <p class="card-text"><strong>Applications:</strong>
+            <a href="examples/structure/T4L.html">Conformers</a>,
+            <a href="examples/structure/hGBP1.dimer.html">complexes</a>.</br>
+          <strong>Methods:</strong>
+          <a href="examples/labels/AVScreening.html">Scoring</a>,
+          <a href="examples/structure/imp_bff_flexfit.html">Flexible fitting</a>,
+          and <a href="examples/index.html#structural-modeling">More...</a></p>
+        </div>
+        <div class="overflow-hidden mx-2 text-center flex-fill">
+          <a href="examples/structure/imp_bff_flexfit.html"  aria-label="Flexible fitting">
+          <img src="_images/avff_tg2_output_chimera.gif" class="sk-index-img" style="width:initial;max-width:initial" alt="Flexible fitting of structures">
+          </a>
+        </div>
+          <a href="examples/index.html#structural-modeling" class="sk-btn-primary btn text-white btn-block" role="button">Examples</a>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3 px-md-2 sk-px-xl-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <a href="modules/labels.html"><h4 class="sk-card-title card-title">Labels</h4></a>
+          <p class="card-text">Compute positional distributions of labels around attachment sites.</p>
+          <p class="card-text"><strong>Applications:</strong> FRET, EPR, XL-MS, ...</br>
+          <strong>Methods:</strong>
+          <a href="examples/labels/plot_search.html#path-search">Path search</a>,
+          <a href="examples/labels/AVDecorator.html">Accessible volume</a>,
+          and <a href="examples/index.html#label-simulations">More...</a></p>
+        </div>
+        <div class="overflow-hidden mx-2 text-center flex-fill">
+          <a href="examples/labels/plot_search.html"  aria-label="Path search on molecules">
+          <img src="_images/sphx_glr_plot_path_maps_002.png" class="sk-index-img" alt="Path search on molecules">
+          </a>
+        </div>
+          <a href="examples/index.html#label-simulations" class="sk-btn-primary btn text-white btn-block" role="button">Examples</a>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3 px-md-2 sk-px-xl-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <a href="modules/spectroscopy.html"><h4 class="sk-card-title card-title">Fluorescence spectroscopy</h4></a>
+          <p class="card-text">Proccess and analyze fluorescence data.</p>
+          <p class="card-text"><strong>Applications:</strong> Imaging, FRET, interaction studies, etc.</br>
+          <strong>Methods:</strong>
+          <a href="examples/index.html#fluorescence-spectroscopy">Orientation factor</a>,
+          <a href="examples/index.html#fluorescence-spectroscopy">Fluorescence decays</a>
+          and <a href="examples/index.html#fluorescence-spectroscopy">more...</a></p>
+        </div>
+        <div class="overflow-hidden mx-2 text-center flex-fill">
+          <a href="examples/index.html#fluorescence-spectroscopy"  aria-label="Orientation uncertainty">
+          <img src="_images/sphx_glr_plot_k2_uncertainty_001.png" class="sk-index-img" alt="Orientation uncertainty">
+          </a>
+        </div>
+          <a href="examples/index.html#spectroscopy" class="sk-btn-primary btn text-white btn-block" role="button">Examples</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container-fluid sk-landing-bg-more-info py-3">
+  <div class="container sk-landing-container">
+    <div class="row">
+      <div class="col-md-4">
+        <h4 class="sk-landing-call-header">News</h4>
+        <ul class="sk-landing-call-list list-unstyled">
+
+          <li><strong>On-going development:</strong>
+            <a href="whats_new.html"><strong>What's new</strong> (Changelog)</a>
+          <li><strong>July 2022.</strong> IMP.bff 0.12.0 is available for download (<a href="whats_new/v0.12.0.html#version-0-0-12">Changelog</a>).
+          <li><strong>IMP.bff from 0.12.0 requires Python 3.8 or greater.</strong>
+          </li>
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <h4 class="sk-landing-call-header">Community</h4>
+        <ul class="sk-landing-call-list list-unstyled">
+          <li><strong>About us:</strong> See <a href="about.html#authors">about</a></li>
+          <li><strong>Questions?</strong> See <a href="faq.html">FAQ</a></li>
+          <li>Communication on all channels should respect <a href="https://www.python.org/psf/conduct/">PSF's code of conduct.</a></li>
+        </ul>
+        <a class="btn btn-warning btn-big mb-1" href="about.html#citing-IMP.bff"><strong>Cite us!</strong></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

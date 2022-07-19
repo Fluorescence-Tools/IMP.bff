@@ -1,0 +1,20 @@
+name: doc
+channels:
+    - tpeulen
+    - conda-forge
+dependencies:
+    - python=3.8
+    - doxygen
+    - numba
+    - scipy
+    - pillow
+    - sphinx-gallery
+    - nbsphinx
+    - jupyter_client # needed for nbsphinx
+    - breathe
+    - matplotlib
+    - numpy
+    - numpydoc
+    - pyyaml
+    - sphinxcontrib-bibtex<2.0.0
+    - sphinxcontrib-websupport

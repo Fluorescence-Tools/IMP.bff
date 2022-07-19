@@ -1,0 +1,738 @@
+{
+  "Distances": {
+    "S1_A155_A680": {
+      "distance": 78.2357144062243,
+      "position1_name": "A155",
+      "position2_name": "A680",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 6.2,
+      "error_pos": 9.1
+    },
+    "S1_A363_A661": {
+      "distance": 81.76653345650688,
+      "position1_name": "A363",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.2,
+      "error_pos": 27.0
+    },
+    "S1_A366_A502": {
+      "distance": 32.87178208545156,
+      "position1_name": "A366",
+      "position2_name": "A502",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.2,
+      "error_pos": 7.2
+    },
+    "S1_A388_A588": {
+      "distance": 60.0,
+      "position1_name": "A388",
+      "position2_name": "A588",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.0,
+      "error_pos": 4.0
+    },
+    "S1_A406_A523": {
+      "distance": 44.2,
+      "position1_name": "A406",
+      "position2_name": "A523",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 1.9,
+      "error_pos": 4.1
+    },
+    "S1_A406_A610": {
+      "distance": 38.9,
+      "position1_name": "A406",
+      "position2_name": "A610",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.2,
+      "error_pos": 3.4
+    },
+    "S1_A425_A519": {
+      "distance": 34.0,
+      "position1_name": "A425",
+      "position2_name": "A519",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 14.1,
+      "error_pos": 6.2
+    },
+    "S1_A425_A540": {
+      "distance": 57.4,
+      "position1_name": "A425",
+      "position2_name": "A540",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 2.1,
+      "error_pos": 3.0
+    },
+    "S1_A457_A592": {
+      "distance": 52.5,
+      "position1_name": "A457",
+      "position2_name": "A592",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.6,
+      "error_pos": 7.6
+    },
+    "S1_A498_A661": {
+      "distance": 43.7,
+      "position1_name": "A498",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.0,
+      "error_pos": 3.6
+    },
+    "S1_A550_A659": {
+      "distance": 56.8,
+      "position1_name": "A550",
+      "position2_name": "A659",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 11.9,
+      "error_pos": 6.4
+    },
+    "S1_A173_A659": {
+      "distance": 68.4571,
+      "position1_name": "A173",
+      "position2_name": "A659",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.9,
+      "error_pos": 20.4
+    },
+    "S1_A155_A571": {
+      "distance": 46.3926,
+      "position1_name": "A155",
+      "position2_name": "A571",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.9,
+      "error_pos": 6.4
+    },
+    "S1_A406_A661": {
+      "distance": 37.62,
+      "position1_name": "A406",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.9,
+      "error_pos": 6.4
+    },
+    "S1_A425_A646": {
+      "distance": 74.7365,
+      "position1_name": "A425",
+      "position2_name": "A646",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.9,
+      "error_pos": 8.4
+    },
+    "S1_A385_A661": {
+      "distance": 75.4914,
+      "position1_name": "A385",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.9,
+      "error_pos": 20.4
+    },
+    "S1_A406_A618": {
+      "distance": 58.0081,
+      "position1_name": "A406",
+      "position2_name": "A618",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 6.9,
+      "error_pos": 7.4
+    },
+    "S2_A155_A680": {
+      "distance": 35.77465423526891,
+      "position1_name": "A155",
+      "position2_name": "A680",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 2.5,
+      "error_pos": 2.5
+    },
+    "S2_A363_A661": {
+      "distance": 59.0,
+      "position1_name": "A363",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 10.1,
+      "error_pos": 4.3
+    },
+    "S2_A366_A502": {
+      "distance": 63.287897592233065,
+      "position1_name": "A366",
+      "position2_name": "A502",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.3,
+      "error_pos": 8.1
+    },
+    "S2_A388_A588": {
+      "distance": 60.0,
+      "position1_name": "A388",
+      "position2_name": "A588",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.0,
+      "error_pos": 4.0
+    },
+    "S2_A406_A523": {
+      "distance": 31.9,
+      "position1_name": "A406",
+      "position2_name": "A523",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 12.0,
+      "error_pos": 8.2
+    },
+    "S2_A406_A610": {
+      "distance": 56.3,
+      "position1_name": "A406",
+      "position2_name": "A610",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 3.6,
+      "error_pos": 4.0
+    },
+    "S2_A425_A519": {
+      "distance": 46.4,
+      "position1_name": "A425",
+      "position2_name": "A519",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 2.1,
+      "error_pos": 3.9
+    },
+    "S2_A425_A540": {
+      "distance": 36.0,
+      "position1_name": "A425",
+      "position2_name": "A540",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 16.5,
+      "error_pos": 6.6
+    },
+    "S2_A457_A592": {
+      "distance": 68.4,
+      "position1_name": "A457",
+      "position2_name": "A592",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.6,
+      "error_pos": 21.6
+    },
+    "S2_A498_A661": {
+      "distance": 60.0,
+      "position1_name": "A498",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 3.4,
+      "error_pos": 6.1
+    },
+    "S2_A550_A659": {
+      "distance": 68.8,
+      "position1_name": "A550",
+      "position2_name": "A659",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.2,
+      "error_pos": 21.2
+    },
+    "S2_A173_A659": {
+      "distance": 43.3197,
+      "position1_name": "A173",
+      "position2_name": "A659",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 6.9,
+      "error_pos": 8.4
+    },
+    "S2_A155_A571": {
+      "distance": 65.5717,
+      "position1_name": "A155",
+      "position2_name": "A571",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.9,
+      "error_pos": 20.4
+    },
+    "S2_A406_A661": {
+      "distance": 64.0168,
+      "position1_name": "A406",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 6.3,
+      "error_pos": 10.4
+    },
+    "S2_A425_A646": {
+      "distance": 45.8742,
+      "position1_name": "A425",
+      "position2_name": "A646",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.9,
+      "error_pos": 3.4
+    },
+    "S2_A385_A661": {
+      "distance": 56.4723,
+      "position1_name": "A385",
+      "position2_name": "A661",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 5.3,
+      "error_pos": 8.4
+    },
+    "S2_A406_A618": {
+      "distance": 43.3691,
+      "position1_name": "A406",
+      "position2_name": "A618",
+      "distance_type": "RDAMean",
+      "Forster_radius": 52.0,
+      "error_neg": 4.9,
+      "error_pos": 5.4
+    }
+  },
+  "Positions": {
+    "A173": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 173,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 173 and not name CA CB C N O"
+    },
+    "A571": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 571,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 571 and not name CA CB C N O"
+    },
+    "A646": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 646,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 646 and not name CA CB C N O"
+    },
+    "A385": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 385,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 385 and not name CA CB C N O"
+    },
+    "A618": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 618,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 618 and not name CA CB C N O"
+    },
+    "A15": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 15,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 15 and not name CA CB C N O"
+    },
+    "A52": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 52,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 52 and not name CA CB C N O"
+    },
+    "A155": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 155,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 155 and not name CA CB C N O"
+    },
+    "A363": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 363,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 363 and not name CA CB C N O"
+    },
+    "A366": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 366,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 366 and not name CA CB C N O"
+    },
+    "A388": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 388,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 388 and not name CA CB C N O"
+    },
+    "A406": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 406,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 406 and not name CA CB C N O"
+    },
+    "A425": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 425,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 425 and not name CA CB C N O"
+    },
+    "A457": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 457,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 457 and not name CA CB C N O"
+    },
+    "A498": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 498,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 498 and not name CA CB C N O"
+    },
+    "A502": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 502,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 502 and not name CA CB C N O"
+    },
+    "A519": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 519,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 519 and not name CA CB C N O"
+    },
+    "A523": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 523,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 523 and not name CA CB C N O"
+    },
+    "A540": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 540,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 540 and not name CA CB C N O"
+    },
+    "A550": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 550,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 550 and not name CA CB C N O"
+    },
+    "A588": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 588,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 588 and not name CA CB C N O"
+    },
+    "A592": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 592,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 592 and not name CA CB C N O"
+    },
+    "A610": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 610,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 610 and not name CA CB C N O"
+    },
+    "A659": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 659,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 659 and not name CA CB C N O"
+    },
+    "A661": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 661,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 661 and not name CA CB C N O"
+    },
+    "A680": {
+      "atom_name": "CA",
+      "chain_identifier": "A",
+      "linker_length": 20,
+      "linker_width": 1,
+      "radius1": 4,
+      "residue_seq_number": 680,
+      "simulation_grid_resolution": 2.0,
+      "simulation_type": "AV1",
+      "strip_mask": "chain A and resid 680 and not name CA CB C N O"
+    }
+  },
+  "χ²": {
+    "S1_chi2": {
+      "distances": [
+        "S1_A155_A680",
+        "S1_A363_A661",
+        "S1_A366_A502",
+        "S1_A388_A588",
+        "S1_A406_A523",
+        "S1_A406_A610",
+        "S1_A425_A519",
+        "S1_A425_A540",
+        "S1_A457_A592",
+        "S1_A498_A661",
+        "S1_A550_A659"
+      ],
+      "maximum_NaNs_allowed": 0,
+      "penalty_NaN": 0
+    },
+    "S1_val_chi2": {
+      "distances": [
+        "A173_A659",
+        "A155_A571",
+        "A406_A661",
+        "A425_A646",
+        "A385_A661",
+        "A406_A618"
+      ],
+      "maximum_NaNs_allowed": 0,
+      "penalty_NaN": 0
+    },
+    "S2_chi2": {
+      "distances": [
+        "S2_A155_A680",
+        "S2_A363_A661",
+        "S2_A366_A502",
+        "S2_A388_A588",
+        "S2_A406_A523",
+        "S2_A406_A610",
+        "S2_A425_A519",
+        "S2_A425_A540",
+        "S2_A457_A592",
+        "S2_A498_A661",
+        "S2_A550_A659"
+      ],
+      "maximum_NaNs_allowed": 0,
+      "penalty_NaN": 0
+    },
+    "S2_val_chi2": {
+      "distances": [
+        "S2_A173_A659",
+        "S2_A155_A571",
+        "S2_A406_A661",
+        "S2_A425_A646",
+        "S2_A385_A661",
+        "S2_A406_A618"
+      ],
+      "maximum_NaNs_allowed": 0,
+      "penalty_NaN": 0
+    }
+  },
+  "FlexFit": {
+    "FexResSet1": {
+      "Flexible residues": [
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 461
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 462
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 463
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 464
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 465
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 466
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 467
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 468
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 469
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 470
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 471
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 472
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 584
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 585
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 586
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 587
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 588
+        },
+        {
+          "chain_identifier": "A",
+          "residue_seq_number": 589
+        }
+      ],
+      "Bonds": [
+      ]
+    }
+  }
+}
