@@ -31,7 +31,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(mo.is_connected_to_db, False)
 
         mo2 = bff.MongoObject()
-        mo.connect_other_to_db_mongo(mo2)
+        mo.connect_object_to_db_mongo(mo2)
         self.assertEqual(mo2.is_connected_to_db, True)
         mo2.disconnect_from_db()
         self.assertEqual(mo2.is_connected_to_db, False)
