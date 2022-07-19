@@ -47,6 +47,8 @@ test:
   requires:
     - imp
     - python
+  commands:
+    - imp_bff --help
 
 about:
   home: https://github.com/tpeulen/imp.bff
