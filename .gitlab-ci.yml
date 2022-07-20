@@ -17,10 +17,10 @@ build:lnx_x86_64:
   image: condaforge/mambaforge
   tags:
     - x86_64
-build:osx:
-  <<: *build_psx
-  tags:
-    - osx
+#build:osx:
+#  <<: *build_psx
+#  tags:
+#    - osx
 
 build:windows:
   stage: build
