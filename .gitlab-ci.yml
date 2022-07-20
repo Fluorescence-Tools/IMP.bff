@@ -8,13 +8,15 @@ stages:
   before_script:
     - git submodule update --init --recursive --remote
   script:
+    - cp tools/conda_build_config.yaml ./conda-recipe/
+    - mamba install boa
     - conda mambabuild conda-recipe --output-folder bld-dir
   artifacts:
     paths:
       - bld-dir/
 build:lnx_x86_64:
   <<: *build_linux
-  image: condaforge/linux-anvil-cuda:11.7
+  image: condaforge/mambaforge
   tags:
     - x86_64
 
