@@ -2,8 +2,8 @@ echo off
 git submodule update --recursive --init --remote
 
 :: echo "Patch IMPConfig.cmake"
-set IMP_CMAKE=%LIBRARY_LIB%\cmake\IMP\IMPConfig.cmake
-powershell -Command "(gc %IMP_CMAKE%) -replace '.dll', '.lib' | Out-File -encoding ASCII %IMP_CMAKE%"
+:: set IMP_CMAKE=%LIBRARY_LIB%\cmake\IMP\IMPConfig.cmake
+:: powershell -Command "(gc %IMP_CMAKE%) -replace '.dll', '.lib' | Out-File -encoding ASCII %IMP_CMAKE%"
 
 echo "Build documentation.i"
 echo off

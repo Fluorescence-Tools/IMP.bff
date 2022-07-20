@@ -18,6 +18,7 @@ build:lnx_x86_64:
   tags:
     - x86_64
 build:osx:
+  <<: *build_psx
   tags:
     - osx
 
