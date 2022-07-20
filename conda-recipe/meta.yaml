@@ -38,8 +38,8 @@ requirements:
     - imp {{ imp }}
   run:
     - {{ pin_compatible('numpy') }}
-    - python
-    - imp
+    - python {{ python }}
+    - imp {{ imp }}
     - boost-cpp
     - libmongoc
     - pandas
