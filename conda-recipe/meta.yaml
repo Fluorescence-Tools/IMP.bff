@@ -1,45 +1,48 @@
-{% set PY_VER_MAJOR = PY_VER[0] %}
-{% set PY_VER_MINOR = PY_VER[2] %}
+{% set version = "0.10.0" %}
 
 package:
   name: imp.bff
-  version: 0.0.10
+  version: {{ version }}
 
 source:
   path: ../
 
 build:
     number: 0
-    string: py{{ PY_VER_MAJOR }}{{ PY_VER_MINOR }}h{{ PKG_HASH }}_{{ PKG_BUILDNUM }}
+    detect_binary_files_with_prefix: True  # [not win]
 
 requirements:
   build:
-    - python
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - python                                 # [build_platform != target_platform]
+    - cross-python_{{ target_platform }}     # [build_platform != target_platform]
     - numpy
-    - cmake 3.20.*
+    - cmake
     - swig
     - ninja
-    - pkg-config
+    - llvm-openmp  # [osx]
+    - libgomp      # [linux]
+    - pkg-config   # [not win]
     - doxygen
   host:
-    - python
-    - numpy
-    - imp
     - boost-cpp
     - libmongoc
-    - librttr
     - eigen
+    - imp
+    - python
+    - numpy
   run:
     - boost-cpp
     - libmongoc
-    - librttr
     - python
+    - {{ pin_compatible('numpy') }}
+    - pandas
+    - mdtraj
     - imp
-    - numpy
-    - numba
+    - tqdm
     - click
     - click-didyoumean
-    - tqdm
 
 test:
   imports:
