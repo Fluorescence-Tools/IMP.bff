@@ -5,9 +5,10 @@ stages:
 
 .build_lnx: &build_linux
   stage: build
-  before_script:
-    - git submodule update --init --recursive --remote
   script:
+    - git config --global --add safe.directory /builds/imp/bff
+    - git submodule update --init --recursive --remote
+    - cp tools/conda_build_config.yaml ./conda-recipe/
     - conda mambabuild conda-recipe --output-folder bld-dir
   artifacts:
     paths:
