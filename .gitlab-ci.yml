@@ -37,7 +37,9 @@ build:osx:
   tags:
     - osx
   before_script:
-    - git submodule update --init --recursive --remote
+    - cp tools/conda_build_config.yaml ./conda-recipe/
+    - mamba install boa
+    - conda mambabuild conda-recipe --output-folder bld-dir
   script:
     - ./tools/build.sh
   artifacts:
