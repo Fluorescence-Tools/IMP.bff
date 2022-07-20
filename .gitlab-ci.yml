@@ -5,18 +5,16 @@ stages:
 
 .build_lnx: &build_linux
   stage: build
-  image: condaforge/mambaforge
   before_script:
-    - apt update -yq && apt -yq install build-essential
     - git submodule update --init --recursive --remote
   script:
-    - mamba install -y boa
     - conda mambabuild conda-recipe --output-folder bld-dir
   artifacts:
     paths:
       - bld-dir/
 build:lnx_x86_64:
   <<: *build_linux
+  image: condaforge/linux-anvil-cuda:11.7
   tags:
     - x86_64
 
@@ -27,8 +25,7 @@ build:windows:
   before_script:
     - git submodule update --init --recursive --remote
   script:
-    - mamba install -y boa
-    - conda mambabuild conda-recipe --output-folder bld-dir
+    - ./tools/build.bat
   artifacts:
     paths:
       - bld-dir/
@@ -40,8 +37,7 @@ build:osx:
   before_script:
     - git submodule update --init --recursive --remote
   script:
-    - mamba install -y boa
-    - conda mambabuild conda-recipe --output-folder bld-dir
+    - ./tools/build.sh
   artifacts:
     paths:
       - bld-dir/
