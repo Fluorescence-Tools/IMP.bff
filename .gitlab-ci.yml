@@ -44,7 +44,7 @@ test:linux:
   script:
     - source activate base
     - conda config --add channels "file://`pwd`/bld-dir"
-    - mamba install python im.bff nose numba
+    - mamba install python imp.bff nose numba numpy
     - nosetests test
 
 deploy:conda:
