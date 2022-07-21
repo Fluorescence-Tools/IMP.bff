@@ -11,28 +11,28 @@ stages:
   artifacts:
     paths:
       - bld-dir/
-.build:cf: &build_cf
+.build:lnx: &build_lnx
   <<: *build_posix
   before_script:
     - source "/opt/conda/etc/profile.d/conda.sh"
     - conda activate /opt/conda/
     - git submodule update --init --recursive --remote
-build:cf_x86:
-  <<: *build_cf
+build:lnx_x86:
+  <<: *build_lnx
   image:
     name: condaforge/linux-anvil-cos7-x86_64
     entrypoint: [ "/bin/bash", "-i", "-c" ]
   tags:
     - x86_64
-build:cf_ppc64le:
-  <<: *build_cf
+build:lnx_ppc64le:
+  <<: *build_lnx
   image:
     name: condaforge/linux-anvil-ppc64le
     entrypoint: [ "/bin/bash", "-i", "-c" ]
   tags:
     - ppc64le
-build:cf_aarch64:
-  <<: *build_cf
+build:lnx_aarch64:
+  <<: *build_lnx
   image:
     name: condaforge/linux-anvil-aarch64
     entrypoint: [ "/bin/bash", "-i", "-c" ]
@@ -60,7 +60,7 @@ test:linux:
   tags:
     - linux
   image: condaforge/mambaforge
-  needs: ["build:cf_x86"]
+  needs: ["build:lnx_x86"]
   script:
     - source activate base
     - conda config --add channels "file://`pwd`/bld-dir"
