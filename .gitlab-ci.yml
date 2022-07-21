@@ -19,7 +19,7 @@ build:lnx_x86_64:
   tags:
     - x86_64
   before_script:
-    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
+    - conda activate /opt/conda/
     - git submodule update --init --recursive --remote
 #build:lnx_ppc64le:
 #  <<: *build_psx
