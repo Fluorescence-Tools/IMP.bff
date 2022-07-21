@@ -19,6 +19,7 @@ build:lnx_x86_64:
   tags:
     - x86_64
   before_script:
+    - conda init bash
     - conda activate /opt/conda/
     - git submodule update --init --recursive --remote
 #build:lnx_ppc64le:
