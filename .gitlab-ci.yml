@@ -19,28 +19,28 @@ build:lnx_x86_64:
   tags:
     - x86_64
   before_script:
-    - /opt/docker/bin/entrypoint
+    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
     - git submodule update --init --recursive --remote
-build:lnx_ppc64le:
-  <<: *build_psx
-  image:
-    name: condaforge/linux-anvil-ppc64le
-    entrypoint: [ "/bin/bash", "-i", "-c" ]
-  before_script:
-    - /opt/docker/bin/entrypoint
-    - git submodule update --init --recursive --remote
-  tags:
-    - ppc64le
-build:lnx_aarch64:
-  <<: *build_psx
-  image:
-    name: condaforge/linux-anvil-aarch64
-    entrypoint: [ "/bin/bash", "-i", "-c" ]
-  before_script:
-    - /opt/docker/bin/entrypoint
-    - git submodule update --init --recursive --remote
-  tags:
-    - aarch64
+#build:lnx_ppc64le:
+#  <<: *build_psx
+#  image:
+#    name: condaforge/linux-anvil-ppc64le
+#    entrypoint: [ "/bin/bash", "-i", "-c" ]
+#  before_script:
+#    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
+#    - git submodule update --init --recursive --remote
+#  tags:
+#    - ppc64le
+#build:lnx_aarch64:
+#  <<: *build_psx
+#  image:
+#    name: condaforge/linux-anvil-aarch64
+#    entrypoint: [ "/bin/bash", "-i", "-c" ]
+#  before_script:
+#    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
+#    - git submodule update --init --recursive --remote
+#  tags:
+#    - aarch64
 build:osx:
   <<: *build_psx
   tags:
