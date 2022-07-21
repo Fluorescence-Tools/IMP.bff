@@ -14,9 +14,19 @@ stages:
       - bld-dir/
 build:lnx_x86_64:
   <<: *build_psx
-  image: condaforge/mambaforge
+  image: condaforge/linux-anvil
   tags:
     - x86_64
+build:lnx_ppc64le:
+  <<: *build_psx
+  image: condaforge/linux-anvil-ppc64le
+  tags:
+    - ppc64le
+build:lnx_aarch64:
+  <<: *build_psx
+  image: condaforge/linux-anvil-aarch64
+  tags:
+    - aarch64
 build:osx:
   <<: *build_psx
   tags:
