@@ -14,8 +14,10 @@ import IMP.atom
 
 import RMF
 import IMP.rmf
+import ihm.cross_linkers
 
 import IMP.pmi
+import IMP.pmi.io.crosslink
 import IMP.pmi.tools
 import IMP.pmi.topology
 import IMP.pmi.dof
@@ -24,6 +26,7 @@ import IMP.pmi.macros
 import IMP.bayesianem
 import IMP.bayesianem.restraint
 import IMP.pmi.restraints
+import IMP.pmi.restraints.crosslinking
 import IMP.pmi.restraints.saxs
 import IMP.pmi.restraints.basic
 import IMP.pmi.restraints.stereochemistry
@@ -34,7 +37,7 @@ import IMP.bff.restraints
 
 
 output_objects = list()
-root_dir = pathlib.Path(IMP.bff.get_example_path('structure')) / "hGBP1.dimer/"
+root_dir = pathlib.Path(IMP.bff.get_example_path('structure')) / "GBP/"
 output_dir = root_dir / 'modeling/'
 
 # %%
@@ -122,6 +125,32 @@ else:
     IMP.pmi.tools.add_restraint_to_model(mdl, gem.rs, True)
     output_objects.append(gem)
 
+###############################
+# XL-MS
+###############################
+# Crosslinks - dataset
+# These have a different format and label, but other settings are the same
+xldbkwc = IMP.pmi.io.crosslink.CrossLinkDataBaseKeywordsConverter()
+xldbkwc.set_protein1_key("Protein 1")
+xldbkwc.set_protein2_key("Protein 2")
+xldbkwc.set_residue1_key("Residue 1")
+xldbkwc.set_residue2_key("Residue 2")
+xldb = IMP.pmi.io.crosslink.CrossLinkDataBase(xldbkwc)
+xldb.create_set_from_file(str(root_dir / 'xlinks.txt'))
+xl = IMP.pmi.restraints.crosslinking.CrossLinkingMassSpectrometryRestraint(
+    root_hier=hier,
+    database=xldb,
+    length=21.0,
+    slope=0.01,
+    label="XL",
+    resolution=1.0,
+    linker=ihm.cross_linkers.bs3,
+    weight=1.
+)
+xl._include_in_rmf = True
+xl.add_to_model()
+output_objects.append(xl)
+
 # %%
 # FRET restraint
 # --------------
@@ -140,6 +169,7 @@ score_set = "inter"  # molecule in close c2, go from c2 -> open c1
 fret_restraint = IMP.bff.restraints.AVNetworkRestraintWrapper(
     hier, fps_json_fn,
     mean_position_restraint=True,
+    occupy_volume=False,
     score_set=score_set
 )
 fret_restraint.add_to_model()
@@ -157,7 +187,7 @@ IMP.bff.tools.display_mean_av_positions(used_avs)
 for state in bs.system.get_states():
     IMP.pmi.tools.shuffle_configuration(state.get_hierarchy())
 # Quickly move all flexible beads into place
-dof.optimize_flexible_beads(1000)
+dof.optimize_flexible_beads(100)
 
 # Monte carlo sampling. For better results increase the number of frames
 num_frames = 100000
