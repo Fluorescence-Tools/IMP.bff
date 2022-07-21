@@ -3,7 +3,7 @@ stages:
   - test
   - deploy
 
-.build_psx: &build_psx
+.build_posix: &build_posix
   stage: build
   script:
     - git submodule update --init --recursive --remote
@@ -11,39 +11,33 @@ stages:
   artifacts:
     paths:
       - bld-dir/
-build:lnx_x86_64:
-  <<: *build_psx
-  image:
-    name: condaforge/linux-anvil-comp7
-    entrypoint: [ "/bin/bash", "-i", "-c" ]
-  tags:
-    - x86_64
+build:cf: &build_cf
+  <<: *build_posix
   before_script:
     - source "/opt/conda/etc/profile.d/conda.sh"
     - conda activate /opt/conda/
     - git submodule update --init --recursive --remote
-#build:lnx_ppc64le:
-#  <<: *build_psx
-#  image:
-#    name: condaforge/linux-anvil-ppc64le
-#    entrypoint: [ "/bin/bash", "-i", "-c" ]
-#  before_script:
-#    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
-#    - git submodule update --init --recursive --remote
-#  tags:
-#    - ppc64le
-#build:lnx_aarch64:
-#  <<: *build_psx
-#  image:
-#    name: condaforge/linux-anvil-aarch64
-#    entrypoint: [ "/bin/bash", "-i", "-c" ]
-#  before_script:
-#    - /opt/conda/bin/tini -- /opt/docker/bin/entrypoint
-#    - git submodule update --init --recursive --remote
-#  tags:
-#    - aarch64
+build:cf_x86:
+   <<: *build_cf
+  image:
+    name: condaforge/linux-anvil-cos7-x86_64
+    entrypoint: [ "/bin/bash", "-i", "-c" ]
+  tags:
+    - x86_64
+build:cf_ppc64le:
+  image:
+    name: condaforge/linux-anvil-ppc64le
+    entrypoint: [ "/bin/bash", "-i", "-c" ]
+  tags:
+    - ppc64le
+build:cf_aarch64:
+  image:
+    name: condaforge/linux-anvil-aarch64
+    entrypoint: [ "/bin/bash", "-i", "-c" ]
+  tags:
+    - aarch64
 build:osx:
-  <<: *build_psx
+  <<: *build_posix
   tags:
     - osx
 
