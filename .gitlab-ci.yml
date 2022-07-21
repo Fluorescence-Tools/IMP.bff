@@ -5,6 +5,7 @@ stages:
 
 .build_psx: &build_psx
   stage: build
+  entrypoint: ["/bin/bash", "-i", "-c"]
   script:
     - git submodule update --init --recursive --remote
     - ./tools/build.sh
