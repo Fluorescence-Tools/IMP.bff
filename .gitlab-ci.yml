@@ -11,7 +11,7 @@ stages:
   artifacts:
     paths:
       - bld-dir/
-build:cf: &build_cf
+.build:cf: &build_cf
   <<: *build_posix
   before_script:
     - source "/opt/conda/etc/profile.d/conda.sh"
