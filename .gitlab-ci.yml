@@ -5,9 +5,8 @@ stages:
 
 .build_psx: &build_psx
   stage: build
-  before_script:
-    - git submodule update --init --recursive --remote
   script:
+    - git submodule update --init --recursive --remote
     - ./tools/build.sh
   artifacts:
     paths:
