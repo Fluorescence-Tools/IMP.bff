@@ -19,8 +19,7 @@ build:lnx_x86_64:
   tags:
     - x86_64
   before_script:
-    - conda init bash
-    - conda activate /opt/conda/
+    - source "/opt/conda/etc/profile.d/conda.sh"
     - git submodule update --init --recursive --remote
 #build:lnx_ppc64le:
 #  <<: *build_psx
