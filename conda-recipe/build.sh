@@ -12,4 +12,6 @@ cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PRE
 ninja install -k 0
 
 # Copy examples
-cp -r ../examples/* $PREFIX/share/doc/IMP/examples/
+mkdir $PREFIX/share/doc/IMP/examples/bff
+cp -r ../examples/* $PREFIX/share/doc/IMP/examples/bff
+
