@@ -18,11 +18,17 @@ build:lnx_x86_64:
     entrypoint: [ "/bin/bash", "-i", "-c" ]
   tags:
     - x86_64
+  before_script:
+    - /opt/docker/bin/entrypoint
+    - git submodule update --init --recursive --remote
 build:lnx_ppc64le:
   <<: *build_psx
   image:
     name: condaforge/linux-anvil-ppc64le
     entrypoint: [ "/bin/bash", "-i", "-c" ]
+  before_script:
+    - /opt/docker/bin/entrypoint
+    - git submodule update --init --recursive --remote
   tags:
     - ppc64le
 build:lnx_aarch64:
@@ -30,6 +36,9 @@ build:lnx_aarch64:
   image:
     name: condaforge/linux-anvil-aarch64
     entrypoint: [ "/bin/bash", "-i", "-c" ]
+  before_script:
+    - /opt/docker/bin/entrypoint
+    - git submodule update --init --recursive --remote
   tags:
     - aarch64
 build:osx:
