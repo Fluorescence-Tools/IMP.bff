@@ -55,13 +55,12 @@ build:windows:
     paths:
       - bld-dir/
 
-
 test:linux:
   stage: test
   tags:
     - linux
   image: condaforge/mambaforge
-  needs: ["build:lnx_x86_64"]
+  needs: ["build:cf_x86"]
   script:
     - source activate base
     - conda config --add channels "file://`pwd`/bld-dir"
