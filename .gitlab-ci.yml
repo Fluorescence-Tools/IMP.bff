@@ -24,20 +24,20 @@ build:cf_x86:
     entrypoint: [ "/bin/bash", "-i", "-c" ]
   tags:
     - x86_64
-build:cf_ppc64le:
-  <<: *build_cf
-  image:
-    name: condaforge/linux-anvil-ppc64le
-    entrypoint: [ "/bin/bash", "-i", "-c" ]
-  tags:
-    - ppc64le
-build:cf_aarch64:
-  <<: *build_cf
-  image:
-    name: condaforge/linux-anvil-aarch64
-    entrypoint: [ "/bin/bash", "-i", "-c" ]
-  tags:
-    - aarch64
+#build:cf_ppc64le:
+#  <<: *build_cf
+#  image:
+#    name: condaforge/linux-anvil-ppc64le
+#    entrypoint: [ "/bin/bash", "-i", "-c" ]
+#  tags:
+#    - ppc64le
+#build:cf_aarch64:
+#  <<: *build_cf
+#  image:
+#    name: condaforge/linux-anvil-aarch64
+#    entrypoint: [ "/bin/bash", "-i", "-c" ]
+#  tags:
+#    - aarch64
 build:osx:
   <<: *build_posix
   tags:
