@@ -1,0 +1,18 @@
+|molecule_name|color  |fasta_fn  |fasta_id   |pdb_fn    |chain|residue_range|pdb_offset|bead_size|em_residues_per_gaussian|rigid_body|super_rigid_body|chain_of_super_rigid_bodies|flags|
+|mGBP2_eGFP   |orange |GBP.fasta |eGFP_mGBP2 |BEADS     |A    |1,3          |0         |8        |8                       |1         |1,17            |1                          |     |
+|mGBP2_eGFP   |orange |GBP.fasta |eGFP_mGBP2 |4EUL.cif  |A    |4,231        |0         |16       |8                       |1         |1,17            |1                          |     |
+|mGBP2_eGFP   |orange |GBP.fasta |eGFP_mGBP2 |BEADS     |A    |232,238      |0         |8        |8                       |3         |1,17            |1                          |     |
+|mGBP2_eGFP   |white  |GBP.fasta |eGFP_mGBP2 |BEADS     |A    |239,260      |0         |8        |8                       |3         |1,17            |1                          |     |
+|mGBP2_eGFP   |blue   |GBP.fasta |eGFP_mGBP2 |mGBP2A.pdb|A    |261,555      |0         |1        |8                       |5         |1,17            |1                          |     |
+|mGBP2_eGFP   |gray   |GBP.fasta |eGFP_mGBP2 |mGBP2A.pdb|A    |556,624      |0         |1        |8                       |6         |1,17            |1                          |     |
+|mGBP2_eGFP   |white  |GBP.fasta |eGFP_mGBP2 |mGBP2A.pdb|A    |625,730      |0         |1        |8                       |6         |1,17            |1                          |     |
+|mGBP2_eGFP   |green  |GBP.fasta |eGFP_mGBP2 |mGBP2A.pdb|A    |731,812      |0         |1        |8                       |8         |1,17            |1                          |     |
+|mGBP2_eGFP   |yellow |GBP.fasta |eGFP_mGBP2 |mGBP2A.pdb|A    |813,END      |0         |1        |8                       |9         |1,17            |1                          |     |
+|mGBP2_mCh    |magenta|GBP.fasta |mCh_mGBP2  |BEADS     |B    |1,8          |0         |8        |8                       |10        |1,17            |1                          |     |
+|mGBP2_mCh    |magenta|GBP.fasta |mCh_mGBP2  |2H5Q.cif  |A    |9,228        |0         |16       |8                       |10        |1,17            |1                          |     |
+|mGBP2_mCh    |white  |GBP.fasta |mCh_mGBP2  |BEADS     |B    |229,249      |0         |8        |8                       |12        |1,17            |1                          |     |
+|mGBP2_mCh    |blue   |GBP.fasta |mCh_mGBP2  |mGBP2B.pdb|B    |250,544      |0         |1        |8                       |5         |1,17            |1                          |     |
+|mGBP2_mCh    |gray   |GBP.fasta |mCh_mGBP2  |mGBP2B.pdb|B    |545,613      |0         |1        |8                       |14        |1,17            |1                          |     |
+|mGBP2_mCh    |white  |GBP.fasta |mCh_mGBP2  |mGBP2B.pdb|B    |614,719      |0         |1        |8                       |14        |1,17            |1                          |     |
+|mGBP2_mCh    |green  |GBP.fasta |mCh_mGBP2  |mGBP2B.pdb|B    |720,801      |0         |1        |8                       |16        |1,17            |1                          |     |
+|mGBP2_mCh    |yellow |GBP.fasta |mCh_mGBP2  |mGBP2B.pdb|B    |802,END      |0         |1        |8                       |17        |1,17            |1                          |     |

@@ -1,0 +1,16 @@
+{
+  "Distances": {
+    "B577F-A577F": {"error_neg": 2, "error_pos": 2, "distance": 28.3947, "position1_name": "B577F", "position2_name": "A577F", "Forster_radius": 52, "distance_type": "RDAMean"}
+  },
+  "Positions": {
+    "A577F": {"allowed_sphere_radius": 2, "atom_name": "CB", "chain_identifier": "A", "linker_length": 20, "linker_width": 3.5, "radius1": 3.5, "residue_seq_number": 825, "simulation_grid_resolution": 2.0,"simulation_type": "AV1"},
+    "B577F": {"allowed_sphere_radius": 2, "atom_name": "CB", "chain_identifier": "B", "linker_length": 20, "linker_width": 3.5, "radius1": 3.5, "residue_seq_number": 815, "simulation_grid_resolution": 2.0,"simulation_type": "AV1"}
+  },
+  "χ²": {
+    "577_577": {
+      "distances": [
+        "B577F-A577F"
+      ]
+    }
+  }
+}
