@@ -8,9 +8,11 @@ DB_DICT = {
     'collection_string': "test_collection"
 }
 
+
 def connects_to_db():
-    mo = bff.MongoObject()
+    mo = bff.CnMongoObject()
     mo.connect_to_db(**DB_DICT)
     return mo.is_connected_to_db 
+
 
 CONNECTS = connects_to_db()
