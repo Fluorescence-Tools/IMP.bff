@@ -1,4 +1,4 @@
-#include "../../../../../../../../opt/tljh/user/opt/builds/imp_release/include/IMP/bff/internal/PhotonStatistics.h"
+#include "IMP/bff/internal/PhotonStatistics.h"
 
 IMPBFF_BEGIN_NAMESPACE
 
