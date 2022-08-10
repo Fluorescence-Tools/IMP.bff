@@ -10,26 +10,27 @@
 
 
 IMPBFF_BEGIN_NAMESPACE
-class Port;
+class CnPort;
 
-#include <IMP/bff/Port.h>
-#include <IMP/bff/Node.h>
+#include <IMP/bff/CnPort.h>
+#include <IMP/bff/CnNode.h>
 #include <IMP/bff/internal/Functions.h>
 
 
-class IMPBFFEXPORT NodeCallback{
+
+class IMPBFFEXPORT CnNodeCallback{
 
 public:
     
     virtual void run(
-            std::map<std::string, std::shared_ptr<Port>>,
-            std::map<std::string, std::shared_ptr<Port>>
+            std::map<std::string, std::shared_ptr<CnPort>>,
+            std::map<std::string, std::shared_ptr<CnPort>>
             ){
         std::cout << "This print by NodeCallback class from C++" << std::endl;
     }
 
-    NodeCallback() = default;
-    virtual ~NodeCallback() {};
+    CnNodeCallback() = default;
+    virtual ~CnNodeCallback() {};
 };
 
 IMPBFF_END_NAMESPACE

@@ -1,34 +1,35 @@
-#include <IMP/bff/MongoObject.h>
+#include <IMP/bff/CnMongoObject.h>
 #include <IMP/bff/internal/Functions.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::list<MongoObject*> MongoObject::registered_objects = std::list<MongoObject*>();
+std::list<CnMongoObject*> CnMongoObject::registered_objects = std::list<CnMongoObject*>();
 
-MongoObject::MongoObject(std::string name) :
-    IMP::Object("MongoObject%1%"),
+CnMongoObject::CnMongoObject(std::string name) :
+//    IMP::Object("CnMongoObject%1%"),
+    is_connected_to_db_(false),
+    object_name(""),
     uri_string(""),
     db_string(""),
     app_string(""),
     collection_string(""),
-    is_connected_to_db_(false),
     time_of_death(0)
 {
 #if IMPBFF_VERBOSE
-    std::clog << "NEW MONGOOBJECT" << std::endl;
+    std::clog << "NEW CnMongoObject" << std::endl;
 #endif
     bson_oid_init(&oid_document, nullptr);
     bson_oid_copy(&oid_document, &oid_precursor);
     uri = nullptr;
     client = nullptr;
     collection = nullptr;
-
     bson_t *doc = BCON_NEW(
             "_id", BCON_OID(&oid_document),
             "precursor", BCON_OID(&oid_document),
             "death", BCON_INT64(time_of_death)
     );
     set_document(doc);
+    bson_destroy(doc);
 
     if(name.empty()){
         name = get_own_oid();
@@ -40,10 +41,10 @@ MongoObject::MongoObject(std::string name) :
     set_name(name);
 }
 
-MongoObject::~MongoObject()
+CnMongoObject::~CnMongoObject()
 {
 #if IMPBFF_VERBOSE
-    std::clog << "DESTROYING MONGOOBJECT" << std::endl;
+    std::clog << "DESTROYING CnMongoObject" << std::endl;
     std::clog << "-- OID: " << get_own_oid() << std::endl;
     std::clog << "-- Connected to DB: " << is_connected_to_db()
     << std::endl;
@@ -57,14 +58,15 @@ MongoObject::~MongoObject()
         disconnect_from_db();
     }
 #if IMPBFF_VERBOSE
-    std::clog << "-- Total number of MongoObject instances: " <<
+    std::clog << "-- Total number of CnMongoObject instances: " <<
     registered_objects.size() << std::endl;
 #endif
+    mongoc_collection_destroy(collection);
 }
 
-void MongoObject::register_instance(MongoObject* x){
+void CnMongoObject::register_instance(CnMongoObject* x){
 #if IMPBFF_VERBOSE
-    std::clog << "REGISTER MONGOOBJECT" << std::endl;
+    std::clog << "REGISTER CnMongoObject" << std::endl;
 #endif
     auto& v = registered_objects;
 #if IMPBFF_VERBOSE
@@ -88,9 +90,9 @@ void MongoObject::register_instance(MongoObject* x){
     }
 }
 
-void MongoObject::unregister_instance(MongoObject* x){
+void CnMongoObject::unregister_instance(CnMongoObject* x){
 #if IMPBFF_VERBOSE
-    std::clog << "UNREGISTER MONGOOBJECT" << std::endl;
+    std::clog << "UNREGISTER CnMongoObject" << std::endl;
 #endif
     if(x != nullptr){
         x = getptr().get();
@@ -99,15 +101,15 @@ void MongoObject::unregister_instance(MongoObject* x){
 }
 
 
-std::list<MongoObject*> MongoObject::get_instances(){
+std::list<CnMongoObject*> CnMongoObject::get_instances(){
 #if IMPBFF_VERBOSE
-    std::clog << "MONGOOBJECT GET INSTANCES" << std::endl;
+    std::clog << "CnMongoObject GET INSTANCES" << std::endl;
 #endif
     return registered_objects;
 }
 
 
-bool MongoObject::connect_to_db(
+bool CnMongoObject::connect_to_db(
         const std::string &uri_string,
         const std::string &db_string,
         const std::string &app_string,
@@ -115,14 +117,15 @@ bool MongoObject::connect_to_db(
 )
 {
 #if IMPBFF_VERBOSE
-    std::clog << "CONNECT MONGOOBJECT TO DB" << std::endl;
+    std::clog << "CONNECT CnMongoObject TO DB" << std::endl;
 #endif
     this->uri_string = uri_string;
     this->db_string = db_string;
     this->app_string = app_string;
     this->collection_string = collection_string;
 
-    mongoc_init();
+    // Should be only called once -> handeld by swig init
+    // mongoc_init();
 
     // Database
     //----------------------------------------------------------------
@@ -156,46 +159,28 @@ bool MongoObject::connect_to_db(
         * Get a handle on the collection
         */
         collection = mongoc_client_get_collection(
-                client,
-                db_string.c_str(),
-                collection_string.c_str()
-                );
+                client, db_string.c_str(), collection_string.c_str());
         is_connected_to_db_ = true;
         return true;
     }
 }
 
-void MongoObject::disconnect_from_db()
+void CnMongoObject::disconnect_from_db()
 {
 #if IMPBFF_VERBOSE
-    std::clog << "DISCONNECT MONGOOBJECT FROM DB" << std::endl;
+    std::clog << "DISCONNECT CnMongoObject FROM DB" << std::endl;
     std::clog << "-- is_connected_to_db: " << is_connected_to_db() << std::endl;
     std::clog << "-- collection: " << collection << std::endl;
     std::clog << "-- uri: " << uri << std::endl;
 #endif
-    if (is_connected_to_db()) {
-        // destroy cursor, collection, session before the client they came from
-        if (collection) {
-            mongoc_collection_destroy(collection);
-        }
-        if (uri) {
-            mongoc_uri_destroy(uri);
-        }
-        if (client) {
-            mongoc_client_destroy(client);
-        }
-        mongoc_cleanup();
-    }
+    mongoc_uri_destroy(uri);
+    mongoc_client_destroy (client);
     is_connected_to_db_ = false;
 }
 
-bool MongoObject::write_to_db(
-        const bson_t &doc,
-        int write_option
-    )
-{
+bool CnMongoObject::write_to_db(const bson_t &doc, int write_option){
 #if IMPBFF_VERBOSE
-    std::clog << "WRITING MONGOOBJECT TO DB" << std::endl;
+    std::clog << "WRITING CnMongoObject TO DB" << std::endl;
 #endif
     bool return_value = false;
 #if IMPBFF_VERBOSE
@@ -207,11 +192,11 @@ bool MongoObject::write_to_db(
 
         bson_t *query = nullptr;
         bson_t *update = nullptr;
+        bson_t *opts = nullptr;
         bson_t reply;
 
         query = BCON_NEW ("_id", BCON_OID(&oid_document));
-
-        bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+        opts = BCON_NEW("upsert", BCON_BOOL(true));
 
         switch (write_option) {
             case 1:
@@ -254,7 +239,7 @@ bool MongoObject::write_to_db(
 #if IMPBFF_VERBOSE
                 std::clog << "-- Updating existing object in DB." << std::endl;
 #endif
-                // option 0 - write as a update
+                // option 0 - write as an update
                 update = BCON_NEW ("$set", BCON_DOCUMENT(&doc));
                 if (!mongoc_collection_find_and_modify(
                         collection,
@@ -270,35 +255,36 @@ bool MongoObject::write_to_db(
 #if IMPBFF_VERBOSE
                     std::cerr << error.message;
 #endif
+                    bson_destroy(update);
                     return_value &= false;
                 }
                 break;
         }
+
         // destroy
-        bson_destroy(update);
         bson_destroy(query);
-        bson_destroy(&reply);
+        bson_destroy(opts);
     } else {
         std::cerr << "ERROR: Not connected to DB - cannot write!" << std::endl;
     }
     return return_value;
 }
 
-bool MongoObject::write_to_db()
+bool CnMongoObject::write_to_db()
 {
 #if IMPBFF_VERBOSE
-    std::clog << "WRITING MONGOOBJECT TO DB" << std::endl;
-    std::clog << "-- MongoObject OID: " << get_own_oid() << std::endl;
+    std::clog << "WRITING CnMongoObject TO DB" << std::endl;
+    std::clog << "-- CnMongoObject OID: " << get_own_oid() << std::endl;
 #endif
     return write_to_db(get_bson(), 0);
 }
 
-bool MongoObject::read_from_db(const std::string &oid_string)
+bool CnMongoObject::read_from_db(const std::string &oid_string)
 {
 #if IMPBFF_VERBOSE
-    std::clog << "READ MONGOOBJECT FROM DB" << std::endl;
+    std::clog << "READ CnMongoObject FROM DB" << std::endl;
     auto str = std::string(oid_string.c_str(), oid_string.size());
-    std::clog << "-- Requested MongoObject OID:"<< str << std::endl;
+    std::clog << "-- Requested CnMongoObject OID:"<< str << std::endl;
 #endif
     bson_oid_t oid;
     if (string_to_oid(oid_string, &oid)) {
@@ -411,15 +397,15 @@ bool MongoObject::read_from_db(const std::string &oid_string)
 }
 
 
-bool MongoObject::read_from_db()
+bool CnMongoObject::read_from_db()
 {
     return read_from_db(oid_to_string(oid_document));
 }
 
-std::string MongoObject::get_json_of_key(std::string key){
+std::string CnMongoObject::get_json_of_key(std::string key){
     std::string re;
     bson_iter_t iter, desc;
-    bson_iter_init (&iter, &document);
+    bson_iter_init(&iter, &document);
     if(bson_iter_find_descendant (&iter, key.c_str(), &desc)){
         if (BSON_ITER_HOLDS_DOCUMENT (&desc)) {
             char *str = NULL;
@@ -437,22 +423,17 @@ std::string MongoObject::get_json_of_key(std::string key){
     return re;
 }
 
-std::string MongoObject::get_json(int indent)
+std::string CnMongoObject::get_json()
 {
     size_t len;
     bson_t doc = get_bson();
     char *str = bson_as_json(&doc, &len);
-    if(indent == 0){
-        return std::string(str, len);
-    } else{
-        auto j = json::parse(str);
-        return j.dump(indent);
-    }
+    bson_destroy(&doc);
+    return {str, len};
 }
 
 
-bson_t MongoObject::get_bson()
-{
+bson_t CnMongoObject::get_bson() {
     bson_iter_t iter;
     bson_t doc;
     bson_init(&doc);
@@ -487,9 +468,9 @@ bson_t MongoObject::get_bson()
     return doc;
 }
 
-bson_t MongoObject::get_bson_excluding(const char *first, ...)
+bson_t CnMongoObject::get_bson_excluding(const char *first, ...)
 {
-    bson_t src = MongoObject::get_bson();
+    bson_t src = CnMongoObject::get_bson();
     bson_t dst;
     bson_init(&dst);
     va_list va;
@@ -499,12 +480,12 @@ bson_t MongoObject::get_bson_excluding(const char *first, ...)
     return dst;
 }
 
-const bson_t *MongoObject::get_document()
+const bson_t *CnMongoObject::get_document()
 {
     return &document;
 }
 
-std::string MongoObject::create_copy_in_db()
+std::string CnMongoObject::create_copy_in_db()
 {
     bson_t document_copy;
     // update oid of copy
@@ -533,7 +514,7 @@ std::string MongoObject::create_copy_in_db()
     return oid_to_string(oid_copy);
 }
 
-bool MongoObject::is_connected_to_db()
+bool CnMongoObject::is_connected_to_db()
 {
     if(is_connected_to_db_){
         // Double check connection by pinging the DB
@@ -545,6 +526,7 @@ bool MongoObject::is_connected_to_db()
 
         /* ensure client has connected */
         r = mongoc_client_command_simple (client, "db", b, NULL, NULL, &error);
+        bson_destroy(b);
         if (!r) {
             MONGOC_ERROR ("could not connect: %s\n", error.message);
             return false;
@@ -553,7 +535,7 @@ bool MongoObject::is_connected_to_db()
     return is_connected_to_db_;
 }
 
-void MongoObject::set_oid(const char *key, bson_oid_t value)
+void CnMongoObject::set_oid(const char *key, bson_oid_t value)
 {
     bson_iter_t iter;
     if (bson_iter_init_find(&iter, &document, key) &&
@@ -562,7 +544,7 @@ void MongoObject::set_oid(const char *key, bson_oid_t value)
     }
 }
 
-bool MongoObject::string_to_oid(const std::string &oid_string, bson_oid_t *oid)
+bool CnMongoObject::string_to_oid(const std::string &oid_string, bson_oid_t *oid)
 {
     if (bson_oid_is_valid(oid_string.c_str(), oid_string.size())) {
         // convert the oid string to an oid
@@ -577,7 +559,7 @@ bool MongoObject::string_to_oid(const std::string &oid_string, bson_oid_t *oid)
     }
 }
 
-void MongoObject::append_string(
+void CnMongoObject::append_string(
         bson_t *dst,
         const std::string key,
         const std::string content,
@@ -599,11 +581,9 @@ void MongoObject::append_string(
     }
 }
 
-void MongoObject::set_string(
-        std::string key,
-        std::string str
-){
-    bson_t dst; bson_init(&dst);
+void CnMongoObject::set_string(std::string key, std::string str){
+    bson_t dst;
+    bson_init(&dst);
     bson_copy_to_excluding_noinit(
             &document, &dst,
             key.c_str(),
@@ -616,11 +596,11 @@ void MongoObject::set_string(
     );
     bson_reinit(&document);
     bson_copy_to(&dst, &document);
-    bson_destroy(&dst);
+    //bson_destroy(&dst);
 }
 
 
-const std::string MongoObject::get_string_by_key(bson_t *doc, const std::string key)
+const std::string CnMongoObject::get_string_by_key(bson_t *doc, const std::string key)
 {
     bson_iter_t iter;
 
@@ -639,7 +619,7 @@ const std::string MongoObject::get_string_by_key(bson_t *doc, const std::string 
     return "";
 }
 
-bool MongoObject::read_json(std::string json_string)
+bool CnMongoObject::read_json(std::string json_string)
 {
     bson_t b;
     bson_error_t error;
@@ -655,9 +635,9 @@ bool MongoObject::read_json(std::string json_string)
     }
 }
 
-MongoObject* MongoObject::operator[](std::string key)
+CnMongoObject* CnMongoObject::operator[](std::string key)
 {
-    MongoObject* mo = new MongoObject();
+    CnMongoObject* mo = new CnMongoObject();
     mo->read_json(get_json_of_key(key.c_str()));
     return mo;
 }

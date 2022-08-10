@@ -1,10 +1,11 @@
-#include <IMP/bff/NodeCallback.h>
+#include <IMP/bff/CnNodeCallback.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
 
 template <typename T>
-inline void mul(T* tmp, size_t &n_elements, const std::map<std::string, std::shared_ptr<Port>> &inputs){
+inline void mul(T* tmp, size_t &n_elements, 
+                const std::map<std::string, CnPort*> &inputs){
     std::fill(tmp, tmp + n_elements, 1.0);
     for(auto &o : inputs){
         T* va; int vn;
@@ -19,7 +20,7 @@ template <typename T>
 inline void add(
         T* tmp,
         size_t &n_elements,
-        const std::map<std::string, std::shared_ptr<Port>> &inputs
+        const std::map<std::string, CnPort*> &inputs
 )
 {
     std::fill(tmp, tmp + n_elements, 1.0);
@@ -35,12 +36,12 @@ inline void add(
 
 template <typename T>
 void combine(
-        std::map<std::string, std::shared_ptr<Port>> &inputs,
-        std::map<std::string, std::shared_ptr<Port>> &outputs,
+        std::map<std::string, CnPort*> &inputs,
+        std::map<std::string, CnPort*> &outputs,
         int operation
         ){
 #if IMPBFF_VERBOSE
-    std::clog << "-- Combining values of input ports."  << std::endl;
+    std::clog << "-- Combining values of input CnPorts."  << std::endl;
 #endif
     size_t n_elements = UINT_MAX;
 #if IMPBFF_VERBOSE
@@ -56,13 +57,13 @@ void combine(
     switch(operation){
         case BFF_PORT_ADD:
 #if IMPBFF_VERBOSE
-            std::clog << "-- Adding input ports" << std::endl;
+            std::clog << "-- Adding input CnPorts" << std::endl;
 #endif
             add(tmp, n_elements, inputs);
             break;
         case BFF_PORT_MUL:
 #if IMPBFF_VERBOSE
-            std::clog << "-- Multiplying input ports" << std::endl;
+            std::clog << "-- Multiplying input CnPorts" << std::endl;
 #endif
             mul(tmp, n_elements, inputs);
             break;
@@ -72,7 +73,7 @@ void combine(
     if(!outputs.empty()){
         if (outputs.find("outA") == outputs.end() ) {
 #if IMPBFF_VERBOSE
-            std::clog << "ERROR: Node does not define output port with the name 'outA' " << std::endl;
+            std::clog << "ERROR: CnNode does not define output CnPort with the name 'outA' " << std::endl;
 #endif
             outputs.begin()->second->set_value(tmp, n_elements);
         } else {
@@ -82,7 +83,7 @@ void combine(
             outputs["outA"]->set_value(tmp, n_elements);
         }
     } else{
-        std::cerr << "ERROR: There are no output ports." << std::endl;
+        std::cerr << "ERROR: There are no output CnPorts." << std::endl;
     }
     free(tmp);
 }
@@ -90,8 +91,8 @@ void combine(
 
 template <typename T>
 void addition(
-        std::map<std::string, std::shared_ptr<Port>> &inputs,
-        std::map<std::string, std::shared_ptr<Port>> &outputs
+        std::map<std::string, CnPort*> &inputs,
+        std::map<std::string, CnPort*> &outputs
 )
 {
 #if IMPBFF_VERBOSE
@@ -102,21 +103,21 @@ void addition(
 
 template <typename T>
 void multiply(
-        std::map<std::string, std::shared_ptr<Port>> &inputs,
-        std::map<std::string, std::shared_ptr<Port>> &outputs
+        std::map<std::string, CnPort*> &inputs,
+        std::map<std::string, CnPort*> &outputs
 )
 {
     combine<T>(inputs, outputs, BFF_PORT_MUL);
 }
 
 void nothing(
-        std::map<std::string, std::shared_ptr<Port>> &inputs,
-        std::map<std::string, std::shared_ptr<Port>> &outputs){
+        std::map<std::string, CnPort*> &inputs,
+        std::map<std::string, CnPort*> &outputs){
 }
 
 void passthrough(
-        std::map<std::string, std::shared_ptr<Port>> &inputs,
-        std::map<std::string, std::shared_ptr<Port>> &outputs
+        std::map<std::string, CnPort*> &inputs,
+        std::map<std::string, CnPort*> &outputs
         ){
     for(auto it_in = inputs.cbegin(), end_in = inputs.cend(),
             it_out = outputs.cbegin(), end_out = outputs.cend();

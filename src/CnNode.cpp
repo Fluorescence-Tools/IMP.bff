@@ -1,14 +1,14 @@
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/CnNode.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-Node::Node(std::string name,
-           const std::map<std::string, std::shared_ptr<Port>>& ports,
-            std::shared_ptr<NodeCallback> callback_class
-) : MongoObject(name)
+CnNode::CnNode(
+        std::string name,
+        const std::map<std::string, std::shared_ptr<CnPort>>& ports,
+        std::shared_ptr<CnNodeCallback>
+) : CnMongoObject(name)
 {
-    append_string(&document, "type", "node");
+    append_string(&document, "type", "CnNode");
     set_ports(ports);
     this->callback_class = callback_class;
 }
@@ -16,30 +16,29 @@ Node::Node(std::string name,
 
 // Destructor
 //--------------------------------------------------------------------
-Node::~Node() = default;
+CnNode::~CnNode() = default;
 
 
 // Methods
 //--------------------------------------------------------------------
 
-bool Node::read_from_db(const std::string &oid_string){
+bool CnNode::read_from_db(const std::string &oid_string){
 #if IMPBFF_VERBOSE
-    std::clog << "TODO!! READING NODE FROM DB" << std::endl;
+    std::clog << "TODO!! READING CnNode FROM DB" << std::endl;
     std::clog << "Requested OID:" << oid_string << std::endl;
 #endif
     bool return_value = true;
-    return_value &= MongoObject::read_from_db(oid_string);
+    return_value &= CnMongoObject::read_from_db(oid_string);
     return_value &= create_and_connect_objects_from_oid_doc(
-            &document, "ports", &ports
-            );
+            &document, "ports", &ports);
 #if IMPBFF_VERBOSE
     std::clog << "callback-restore: " << get_string_by_key(&document, "callback") << std::endl;
 #endif
     return return_value;
 }
 
-bool Node::write_to_db() {
-    bool re = MongoObject::write_to_db();
+bool CnNode::write_to_db() {
+    bool re = CnMongoObject::write_to_db();
     for(auto &o : ports){
         if(!o.second->is_connected_to_db()){
             re &= connect_object_to_db(o.second);
@@ -54,34 +53,31 @@ bool Node::write_to_db() {
 //--------------------------------------------------------------------
 
 
-std::string Node::get_name(){
-    std::string r;
-    r.append(IMP::bff::MongoObject::get_name());
-    r.append("(");
-    for(auto const &n : get_input_ports()){
-        r.append(n.first);
-        r.append(",");
-    }
-    r.append(")");
-
-    r.append("->");
-
-    r.append("(");
-    for(auto const &n : get_output_ports()){
-        r.append(n.first);
-        r.append(",");
-    }
-    r.append(")");
-
-    return r;
-}
+//std::string CnNode::get_name(){
+//    std::string r;
+//    r.append(IMP::bff::CnMongoObject::get_name());
+//    r.append("(");
+//    for(auto const &n : get_input_ports()){
+//        r.append(n.first);
+//        r.append(",");
+//    }
+//    r.append(")");
+//    r.append("->");
+//    r.append("(");
+//    for(auto const &n : get_output_ports()){
+//        r.append(n.first);
+//        r.append(",");
+//    }
+//    r.append(")");
+//    return r;
+//}
 
 
-std::map<std::string, std::shared_ptr<Port>> Node::get_ports(){
+std::map<std::string, std::shared_ptr<CnPort>> CnNode::get_ports(){
     return ports;
 }
 
-void Node::set_ports(const std::map<std::string, std::shared_ptr<Port>>& ports){
+void CnNode::set_ports(const std::map<std::string, std::shared_ptr<CnPort>>& ports){
     for(auto &o: ports){
         o.second->set_name(o.first);
         add_port(o.first, o.second, o.second->is_output(), false);
@@ -89,48 +85,48 @@ void Node::set_ports(const std::map<std::string, std::shared_ptr<Port>>& ports){
     fill_input_output_port_lookups();
 }
 
-Port* Node::get_port(const std::string &port_name){
+CnPort* CnNode::get_port(const std::string &port_name){
     return ports[port_name].get();
 }
 
-Port* Node::get_input_port(const std::string &port_name){
+CnPort* CnNode::get_input_port(const std::string &port_name){
     return in_[port_name].get();
 }
 
-Port* Node::get_output_port(const std::string &port_name){
+CnPort* CnNode::get_output_port(const std::string &port_name){
     return out_[port_name].get();
 }
 
-std::map<std::string, std::shared_ptr<Port>> Node::get_input_ports(){
+std::map<std::string, std::shared_ptr<CnPort>> CnNode::get_input_ports(){
     return in_;
 }
 
-std::map<std::string, std::shared_ptr<Port>> Node::get_output_ports(){
+std::map<std::string, std::shared_ptr<CnPort>> CnNode::get_output_ports(){
     return out_;
 }
 
 
-void Node::set_callback(std::shared_ptr<NodeCallback> cb){
+void CnNode::set_callback(std::shared_ptr<CnNodeCallback> cb){
     callback_class = cb;
 }
 
-void Node::add_port(
+void CnNode::add_port(
         const std::string &key,
-        std::shared_ptr<Port> port, bool is_output, bool fill_in_out) {
+        std::shared_ptr<CnPort> port, bool is_output, bool fill_in_out) {
 #if IMPBFF_VERBOSE
-    std::clog << "ADDING PORT TO NODE" << std::endl;
-    std::clog << "-- Name of node: " << get_name() << std::endl;
+    std::clog << "ADDING PORT TO CnNode" << std::endl;
+    std::clog << "-- Name of CnNode: " << get_name() << std::endl;
     std::clog << "-- Key of port: " << key << std::endl;
     std::clog << "-- Port is_output: " << is_output << std::endl;
     std::clog << "-- Fill value of output: " << fill_in_out << std::endl;
 #endif
     port->set_port_type(is_output);
-    auto n = std::dynamic_pointer_cast<Node>(MongoObject::shared_from_this());
-    port->set_node(n);
+    // auto n = std::dynamic_pointer_cast<CnNode>(MongoObject::shared_from_this());
+    port->set_node(this);
     if (ports.find(key) == ports.end() ) {
 #if IMPBFF_VERBOSE
         std::clog << "-- The key of the port was not found." << std::endl;
-        std::clog << "-- Port " << key << " was created in node. " << std::endl;
+        std::clog << "-- Port " << key << " was created in CnNode. " << std::endl;
 #endif
         ports[key] = port;
     } else {
@@ -141,7 +137,7 @@ void Node::add_port(
 #endif
             ports[key] = port;
         } else{
-            std::cerr << "WARNING: Port is already part of the node." << std::endl;
+            std::cerr << "WARNING: Port is already part of the CnNode." << std::endl;
             std::cerr << "-- Assigning Port to the key: " << key << "." << std::endl;
         }
     }
@@ -150,41 +146,40 @@ void Node::add_port(
     }
 }
 
-void Node::add_input_port(const std::string &key, std::shared_ptr<Port> port) {
+void CnNode::add_input_port(const std::string &key, std::shared_ptr<CnPort> port) {
     add_port(key, port, false, true);
 }
 
-void Node::add_output_port(const std::string &key, std::shared_ptr<Port> port) {
+void CnNode::add_output_port(const std::string &key, std::shared_ptr<CnPort> port) {
     add_port(key, port, true, true);
 }
 
-bson_t Node::get_bson(){
-    bson_t dst = MongoObject::get_bson_excluding(
+bson_t CnNode::get_bson(){
+    bson_t dst = CnMongoObject::get_bson_excluding(
             "input_ports",
             "output_ports",
              "callback",
              "callback_type",
              NULL
     );
-
-    create_oid_dict_in_doc<Port>(&dst, "ports", ports);
+    create_oid_dict_in_doc<CnPort>(&dst, "ports", ports);
     return dst;
 }
 
-void Node::evaluate(){
+void CnNode::evaluate(){
 #if IMPBFF_VERBOSE
-    std::clog << "NODE EVALUATE" << std::endl;
-    std::clog << "-- Node name: " << get_name() << std::endl;
+    std::clog << "CnNode EVALUATE" << std::endl;
+    std::clog << "-- CnNode name: " << get_name() << std::endl;
 #endif
     callback_class->run(in_, out_);
 #if IMPBFF_VERBOSE
-    std::clog << "-- Setting nodes associated to output ports to invalid."  << std::endl;
+    std::clog << "-- Setting CnNodes associated to output ports to invalid."  << std::endl;
 #endif
     for(auto &o : get_output_ports()){
         auto n = o.second->get_node();
         if(n != nullptr){
 #if IMPBFF_VERBOSE
-            std::clog << "-- Node " << n->get_name() << " of port " << o.second->get_name() << " set to invalid." << std::endl;
+            std::clog << "-- CnNode " << n->get_name() << " of port " << o.second->get_name() << " set to invalid." << std::endl;
 #endif
             n->set_valid(false);
         }
@@ -192,7 +187,7 @@ void Node::evaluate(){
     node_valid_ = true;
 }
 
-void Node::fill_input_output_port_lookups(){
+void CnNode::fill_input_output_port_lookups(){
     out_.clear();
     in_.clear();
     for(auto &o: ports){
@@ -204,20 +199,20 @@ void Node::fill_input_output_port_lookups(){
     }
 }
 
-bool Node::inputs_valid(){
+bool CnNode::inputs_valid(){
     for(const auto &i : in_){
         auto input_port = i.second;
         if(input_port->is_linked()){
             auto output_port = input_port->get_link();
             auto output_node = output_port->get_node();
-            if(output_node.get() == this) return true;
+            if(output_node == this) return true;
             else if(!output_node->is_valid()) return false;
         }
     }
     return true;
 }
 
-void Node::set_valid(bool is_valid){
+void CnNode::set_valid(bool is_valid){
     node_valid_ = is_valid;
     for(auto &v : out_)
     {
@@ -226,7 +221,7 @@ void Node::set_valid(bool is_valid){
     }
 }
 
-bool Node::is_valid(){
+bool CnNode::is_valid(){
     if(get_input_ports().empty()) return true;
     else if(!inputs_valid()) return false;
     else return node_valid_;

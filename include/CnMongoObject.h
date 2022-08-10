@@ -1,8 +1,7 @@
-#ifndef IMPBFF_MONGOOBJECT_H
-#define IMPBFF_MONGOOBJECT_H
+#ifndef IMPBFF_CNMONGOOBJECT_H
+#define IMPBFF_CNMONGOOBJECT_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/Object.h>
 
 #include <iostream>     // std::cout, std::ios
 #include <sstream>      // std::ostringstream
@@ -22,23 +21,24 @@ using json = nlohmann::json;
 
 IMPBFF_BEGIN_NAMESPACE
 
-class IMPBFFEXPORT MongoObject :
-        public IMP::Object,
-        public std::enable_shared_from_this<MongoObject>
+class IMPBFFEXPORT CnMongoObject :
+        public std::enable_shared_from_this<CnMongoObject>
 {
 
 private:
 
-    static std::list<MongoObject*> registered_objects;
-
-    bool is_connected_to_db_ = false;
     mongoc_uri_t *uri;
     mongoc_client_t *client;
-    bson_error_t error;
     mongoc_collection_t *collection;
+
+    bool is_connected_to_db_;
+    bson_error_t error;
+
+    static std::list<CnMongoObject*> registered_objects;
 
 protected:
 
+    std::string object_name;
     bson_t document;
     std::string uri_string;
     std::string db_string;
@@ -51,7 +51,7 @@ protected:
     // Getter & Setter
     //--------------------------------------------------------------------
 
-    //! The object identification number of MongoObject instance
+    //! The object identification number of CnMongoObject instance
     /*!
      *  get_own_bson_oid() Returns the object's ObjectId value (see:
      *  https://docs.mongodb.com/manual/reference/bson-types/#objectid)
@@ -63,18 +63,18 @@ protected:
         return oid_document;
     }
 
-    /// The BSON document of MongoObject instance
+    /// The BSON document of CnMongoObject instance
     /// \return
     virtual bson_t get_bson();
 
-    /// A BSON document containing MongoObject instance BSON document
+    /// A BSON document containing CnMongoObject instance BSON document
     /// excluding a set of keys
     /// \param first is the first key to exclude.
     /// \param ... more keys to exclude
     /// \return a bson_t document
     bson_t get_bson_excluding(const char* first, ...);
 
-    /// Pointer to the BSON document of the MongoObject
+    /// Pointer to the BSON document of the CnMongoObject
     /// \return
     const bson_t* get_document();
 
@@ -99,7 +99,8 @@ protected:
 
     template <typename T>
     void create_oid_dict_in_doc(bson_t *doc, std::string key,
-            const std::map<std::string, std::shared_ptr<T>> &mongo_obj_array){
+                                const std::map<std::string,
+                                std::shared_ptr<T>> &mongo_obj_array){
         bson_t child;
         bson_append_document_begin(doc, key.c_str(), key.size(), &child);
         for(auto &v : mongo_obj_array){
@@ -196,7 +197,8 @@ protected:
     /// \param key the key of the string int the target BSON document
     /// \param content the string that will be written to the BSON document
     /// \param size optional parameter for the string size in the BSON document.
-    static void append_string(bson_t *dst, std::string key, std::string content, size_t size=0);
+    static void append_string(
+            bson_t *dst, std::string key, std::string content, size_t size=0);
 
 
     /// The string contained in a @class bson_t document with the @param key
@@ -204,9 +206,7 @@ protected:
     /// \param key
     /// \return string contained under the @param key
     static const std::string get_string_by_key(
-            bson_t *doc, std::string key
-            );
-
+            bson_t *doc, std::string key);
 
     /// Converts a @class bson_oid_t oid into a @class std::string
     /// \param oid
@@ -229,13 +229,12 @@ protected:
 
 public:
 
-    // IMP_OBJECT_METHODS(MongoObject);
-    ~MongoObject();
-    MongoObject(std::string name="MongoObject%1%");
+    // IMP_OBJECT_METHODS(CnMongoObject);
+    ~CnMongoObject();
+    CnMongoObject(std::string name="CnMongoObject%1%");
 
-    //! Connects the instance of @class MongoObject to a database
+    //! Connects the instance of @class CnMongoObject to a database
     /*!
-     *
      * @param uri_string
      * @param db_string
      * @param app_string
@@ -263,21 +262,21 @@ public:
         );
     }
 
-    /// Disconnects the MongoObject instance from the DB
+    /// Disconnects the CnMongoObject instance from the DB
     void disconnect_from_db();
 
-    /// Returns true if the instance of the MongoObject is connected
+    /// Returns true if the instance of the CnMongoObject is connected
     /// to the DB
     bool is_connected_to_db();
 
-    void register_instance(MongoObject*);
+    void register_instance(CnMongoObject*);
 
-    void unregister_instance(MongoObject*);
+    void unregister_instance(CnMongoObject*);
 
     ///
-    static std::list<MongoObject*> get_instances();
+    static std::list<CnMongoObject*> get_instances();
 
-    /// Writes @class MongoObject to the connected MongoDB
+    /// Writes @class CnMongoObject to the connected MongoDB
     /// \return
     virtual bool write_to_db();
 
@@ -290,7 +289,7 @@ public:
     /// \return True if successful otherwise false
     virtual bool read_from_db(const std::string &oid_string);
 
-    /// Read the content of a JSON string into a MongoObject
+    /// Read the content of a JSON string into a CnMongoObject
     /// \param json_string
     /// \return
     bool read_json(std::string json_string);
@@ -306,17 +305,26 @@ public:
     /// \param oid_str
     void set_own_oid(std::string oid_str)
     {
-        MongoObject::string_to_oid(oid_str, &oid_document);
+        CnMongoObject::string_to_oid(oid_str, &oid_document);
     }
 
-    std::shared_ptr<MongoObject> getptr() {
+    std::shared_ptr<CnMongoObject> getptr() {
         return shared_from_this();
     }
 
-    /// Create and / or set a string in the MongoObject accessed by @param key
+    /// Create and / or set a string in the CnMongoObject accessed
+    /// by @param key
     /// \param key the key to access the content
     /// \param str The content
     void set_string(std::string key, std::string str);
+
+    void set_name(std::string name){
+        object_name = name;
+    }
+
+    virtual std::string get_name(){
+        return object_name;
+    }
 
     virtual std::string get_string(){
         return get_name();
@@ -429,7 +437,7 @@ public:
         bson_copy_to(&dst, &document);
     }
 
-    std::string get_json(int indent=2);
+    std::string get_json();
 
     std::string get_json_of_key(std::string key);
 
@@ -442,16 +450,16 @@ public:
 
     // Operators
     //--------------------------------------------------------------------
-    virtual MongoObject* operator[](std::string key);
+    virtual CnMongoObject* operator[](std::string key);
 
-    bool operator==(MongoObject const& b){
+    bool operator==(CnMongoObject const& b){
         return (
                 bson_oid_equal(&b.oid_document, &oid_document) &&
                 (uri_string == b.uri_string)
         );
     };
 
-    friend std::ostream& operator<<(std::ostream &out, MongoObject& o)
+    friend std::ostream& operator<<(std::ostream &out, CnMongoObject& o)
     {
         out << o.get_json();
         return out;
@@ -461,4 +469,4 @@ public:
 
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_MONGOOBJECT_H
+#endif //IMPBFF_CNMONGOOBJECT_H
