@@ -26,7 +26,7 @@ private:
     std::vector<double> _lifetime_spectrum = std::vector<double>();
 
     /// Lifetime spectrum / for getter
-    std::vector<double> lt = std::vector<double>();
+    std::vector<double> lt_ = std::vector<double>();
 
     /// Threshold used to discriminate lifetimes with small amplitudes
     double amplitude_threshold = std::numeric_limits<double>::epsilon();
@@ -73,18 +73,18 @@ public:
     }
 
     std::vector<double>& get_lifetime_spectrum(){
-        lt = _lifetime_spectrum;
+        lt_ = _lifetime_spectrum;
         if(use_amplitude_threshold){
-            discriminate_small_amplitudes(lt.data(), lt.size(), amplitude_threshold);
+            discriminate_small_amplitudes(lt_.data(), lt_.size(), amplitude_threshold);
         }
         if (abs_lifetime_spectrum) {
-            for(auto &v: lt) v = std::abs(v);
+            for(auto &v: lt_) v = std::abs(v);
         }
-        return lt;
+        return lt_;
     }
 
     void get_lifetime_spectrum(double **output_view, int *n_output) {
-        get_lifetime_spectrum();
+        auto lt = get_lifetime_spectrum();
         *output_view = lt.data();
         *n_output = (int) lt.size();
     }
