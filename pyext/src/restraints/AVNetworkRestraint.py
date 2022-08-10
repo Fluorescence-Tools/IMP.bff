@@ -4,6 +4,8 @@ Restraints for handling distances between accessible volumes.
 
 from __future__ import print_function
 
+import pathlib
+
 import typing
 
 import IMP
@@ -30,37 +32,6 @@ class AVMeanDistanceRestraint(IMP.Restraint):
             sigma: float,
             weight: float = 1.0
     ):
-        """
-        input two AV particles, the two equilibrium distances, their amplitudes,
-        and their weights (populations)
-        sigma is the width of the av1,av2 distance distribution
-
-        :param m:
-        :param av1:
-        :param av2:
-        :param dist:
-        :param sigma:
-        :param weight:
-
-        Examples
-        --------
-        import IMP
-        import IMP.core
-        import IMP.atom
-        import IMP.bff
-
-        >>> rmf_file = './test/data/screen/h1_run1_8031.rmf3'
-        >>> get_obstacles(rmf_file)
-
-        >>> rmf_file = './test/data/screen_kala/h1_run3_4059_.rmf'
-        >>> get_obstacles(rmf_file)
-
-        Returns
-        -------
-        obstacles: np.ndarray
-            An array
-
-        """
         IMP.Restraint.__init__(self, m, "BiStableDistanceRestraint %1%")
         self.dist = dist
         self.av1 = av1
@@ -159,8 +130,11 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
 
         name = self.name
         self.mean_position_restraint = mean_position_restraint
-
-        self.av_network_restraint = IMP.bff.AVNetworkRestraint(hier, fps_json_fn, name, score_set)
+        if pathlib.Path(fps_json_fn).is_file():
+            self.av_network_restraint = IMP.bff.AVNetworkRestraint(
+                hier, fps_json_fn, name, score_set)
+        else:
+            raise FileNotFoundError("{}".format(fps_json_fn))
         self.rs = IMP.RestraintSet(m, 'AVNetworkRestraint')
         self.used_avs = dict([(v.get_name(), v) for v in self.av_network_restraint.get_used_avs()])
         if not self.mean_position_restraint:
