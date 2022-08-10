@@ -15,7 +15,7 @@ TOPDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 utils.set_search_paths(TOPDIR)
 
 
-class CallbackNodePassOn(IMP.bff.NodeCallback):
+class CallbackNodePassOn(IMP.bff.CnNodeCallback):
 
     def __init__(self, *args, **kwargs):
         super(CallbackNodePassOn, self).__init__(*args, **kwargs)
@@ -24,7 +24,7 @@ class CallbackNodePassOn(IMP.bff.NodeCallback):
         outputs["outA"].value = inputs["inA"].value
 
 
-class NodeCallbackMultiply(IMP.bff.NodeCallback):
+class NodeCallbackMultiply(IMP.bff.CnNodeCallback):
 
     def __init__(self, *args, **kwargs):
         super(NodeCallbackMultiply, self).__init__(*args, **kwargs)
@@ -40,7 +40,7 @@ class NodeCallbackMultiply(IMP.bff.NodeCallback):
 
 def node_cb(func, ):
 
-    class NodeCB(IMP.bff.NodeCallback):
+    class NodeCB(IMP.bff.CnNodeCallback):
 
         def __init__(self, *args, **kwargs):
             super(NodeCB, self).__init__(*args, **kwargs)
@@ -71,12 +71,12 @@ class Tests(unittest.TestCase):
         node_d = {
             'name': 'NodeName',
             'ports': {
-                'inA': IMP.bff.Port(7.0),
-                'inB': IMP.bff.Port(13.0),
-                'outC': IMP.bff.Port(**port_d)
+                'inA': IMP.bff.CnPort(7.0),
+                'inB': IMP.bff.CnPort(13.0),
+                'outC': IMP.bff.CnPort(**port_d)
             }
         }
-        node_with_ports = IMP.bff.Node(**node_d)
+        node_with_ports = IMP.bff.CnNode(**node_d)
         self.assertEqual(
             node_with_ports.get_input_ports().keys(),
             ['inA', 'inB']
@@ -87,23 +87,23 @@ class Tests(unittest.TestCase):
         np.testing.assert_allclose(values, np.array([7.0, 13.0, 0.0]))
 
     def test_node_ports(self):
-        node = IMP.bff.Node()
+        node = IMP.bff.CnNode()
         portA_name = "portA"
-        portA = IMP.bff.Port(17)
+        portA = IMP.bff.CnPort(17)
         node.add_input_port(portA_name, portA)
         portB_name = "portB"
-        portB = IMP.bff.Port(23)
+        portB = IMP.bff.CnPort(23)
         node.add_output_port(portB_name, portB)
 
         self.assertEqual(portA, node.get_input_port(portA_name))
         self.assertEqual(portB, node.get_output_port(portB_name))
 
     # def test_node_array_callback(self):
-    #     inA = IMP.bff.Port([2., 3., 4.])
-    #     inB = IMP.bff.Port([2., 3., 4.])
-    #     outA = IMP.bff.Port([0., 0., 0.])
+    #     inA = IMP.bff.CnPort([2., 3., 4.])
+    #     inB = IMP.bff.CnPort([2., 3., 4.])
+    #     outA = IMP.bff.CnPort([0., 0., 0.])
     #
-    #     node = IMP.bff.Node()
+    #     node = IMP.bff.CnNode()
     #     node.add_input_port("inA", inA)
     #     node.add_input_port("inB", inB)
     #     node.add_output_port("outA", outA)
@@ -114,19 +114,19 @@ class Tests(unittest.TestCase):
     #     # np.testing.assert_allclose(inA.value * inB.value, outA.value)
 
     def test_callback_2(self):
-        node = IMP.bff.Node(
+        node = IMP.bff.CnNode(
             ports={
-                "inA": IMP.bff.Port(
+                "inA": IMP.bff.CnPort(
                     value=[2., 3., 4.],
                     fixed=False,
                     is_output=False
                 ),
-                "inB": IMP.bff.Port(
+                "inB": IMP.bff.CnPort(
                     value=[2., 3., 4.],
                     fixed=False,
                     is_output=False
                 ),
-                "outA": IMP.bff.Port(
+                "outA": IMP.bff.CnPort(
                     value=0,
                     fixed=False,
                     is_output=True
@@ -134,6 +134,7 @@ class Tests(unittest.TestCase):
             }
         )
         multiply = lambda inA, inB: inA * inB
+        node.set_python_callback_function(multiply)
         node.callback_function = multiply
         self.assertEqual(node.is_valid, False)
 
@@ -148,12 +149,12 @@ class Tests(unittest.TestCase):
 
     def test_node_python_callback_1(self):
         """Test chinet Node class python callbacks"""
-        node = IMP.bff.Node()
-        portIn1 = IMP.bff.Port(55)
+        node = IMP.bff.CnNode()
+        portIn1 = IMP.bff.CnPort(55)
         node.add_input_port("portA", portIn1)
-        portIn2 = IMP.bff.Port(2)
+        portIn2 = IMP.bff.CnPort(2)
         node.add_input_port("portB", portIn2)
-        portOut1 = IMP.bff.Port()
+        portOut1 = IMP.bff.CnPort()
         node.add_output_port("portC", portOut1)
 
         cb = NodeCallbackMultiply()
@@ -161,19 +162,16 @@ class Tests(unittest.TestCase):
         node.set_callback(cb)
         node.evaluate()
 
-        self.assertEqual(
-            portOut1.value,
-            portIn1.value * portIn2.value
-        )
+        self.assertEqual(portOut1.value, portIn1.value * portIn2.value)
 
     def test_node_python_callback_2(self):
         """Test chinet Node class python callbacks"""
-        node = IMP.bff.Node()
-        portIn1 = IMP.bff.Port(55)
+        node = IMP.bff.CnNode()
+        portIn1 = IMP.bff.CnPort(55)
         node.add_input_port("portA", portIn1)
-        portIn2 = IMP.bff.Port(2)
+        portIn2 = IMP.bff.CnPort(2)
         node.add_input_port("portB", portIn2)
-        portOut1 = IMP.bff.Port()
+        portOut1 = IMP.bff.CnPort()
         node.add_output_port("portC", portOut1)
         m = NodeCallbackMultiply()
         node.set_callback(m)
@@ -186,33 +184,35 @@ class Tests(unittest.TestCase):
 
     @unittest.skipUnless(CONNECTS, "Cloud not connect to DB")
     def test_node_write_to_db(self):
-        node = IMP.bff.Node(
+        node = IMP.bff.CnNode(
             ports={
-                'portA': IMP.bff.Port(55),
-                'portB': IMP.bff.Port(2),
-                'portC': IMP.bff.Port()
+                'portA': IMP.bff.CnPort(55),
+                'portB': IMP.bff.CnPort(2),
+                'portC': IMP.bff.CnPort()
             }
         )
-        node.set_callback("multiply_int", "C")
+        m = NodeCallbackMultiply()
+        node.set_callback(m)
         self.assertEqual(node.connect_to_db(**DB_DICT), True)
         self.assertEqual(node.write_to_db(), True)
 
     @unittest.skipUnless(CONNECTS, "Cloud not connect to DB")
     def test_node_restore_from_db(self):
         # Make new node that will be written to the DB
-        node = IMP.bff.Node(
+        node = IMP.bff.CnNode(
             ports={
-                'portA': IMP.bff.Port(13.0),
-                'portB': IMP.bff.Port(2.0),
-                'portC': IMP.bff.Port(1.0)
+                'portA': IMP.bff.CnPort(13.0),
+                'portB': IMP.bff.CnPort(2.0),
+                'portC': IMP.bff.CnPort(1.0, is_output=True)
             }
         )
-        node.set_callback("multiply_double", "C")
+        m = NodeCallbackMultiply()
+        node.set_callback(m)
         node.connect_to_db(**DB_DICT)
         node.write_to_db()
 
         # Restore the Node
-        node_restore = IMP.bff.Node()
+        node_restore = IMP.bff.CnNode()
         node_restore.connect_to_db(**DB_DICT)
         node_restore.read_from_db(node.oid)
 
@@ -231,14 +231,14 @@ class Tests(unittest.TestCase):
         of a node changes, the node is set to invalid. A node is set to valid
         when it is evaluated. When a node is initialized it is invalid.
         """
-        out_node_1 = IMP.bff.Port(
+        out_node_1 = IMP.bff.CnPort(
             1.0,
             fixed=False,
             is_reactive=True,
             is_output=True
         )
-        in_node_1 = IMP.bff.Port(3.0)
-        node_1 = IMP.bff.Node(
+        in_node_1 = IMP.bff.CnPort(3.0)
+        node_1 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_1,
                 'outA': out_node_1
@@ -263,18 +263,18 @@ class Tests(unittest.TestCase):
         the node is evaluated.
         """
 
-        out_node_1 = IMP.bff.Port(
+        out_node_1 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=True
         )
-        in_node_1 = IMP.bff.Port(
+        in_node_1 = IMP.bff.CnPort(
             value=3.0,
             fixed=False,
             is_output=False,
             is_reactive=True
         )
-        node_1 = IMP.bff.Node(
+        node_1 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_1,
                 'outA': out_node_1
@@ -307,18 +307,18 @@ class Tests(unittest.TestCase):
         of a node changes, the node is set to invalid. A node is set to valid
         when it is evaluated. When a node is initialized it is invalid.
         """
-        in_node_1 = IMP.bff.Port(
+        in_node_1 = IMP.bff.CnPort(
             value=3.0,
             fixed=False,
             is_output=False,
             is_reactive=False
         )
-        out_node_1 = IMP.bff.Port(
+        out_node_1 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=True
         )
-        node_1 = IMP.bff.Node(
+        node_1 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_1,
                 'outA': out_node_1
@@ -335,18 +335,18 @@ class Tests(unittest.TestCase):
         self.assertEqual(node_1.is_valid, True)
         self.assertEqual(in_node_1.value, out_node_1.value)
 
-        in_node_2 = IMP.bff.Port(
+        in_node_2 = IMP.bff.CnPort(
             value=13.0,
             fixed=False,
             is_output=False,
             is_reactive=False
         )
-        out_node_2 = IMP.bff.Port(
+        out_node_2 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=True
         )
-        node_2 = IMP.bff.Node(
+        node_2 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_2,
                 'outA': out_node_2
@@ -389,18 +389,18 @@ class Tests(unittest.TestCase):
         of a node changes, the node is set to invalid. A node is set to valid
         when it is evaluated. When a node is initialized it is invalid.
         """
-        in_node_1 = IMP.bff.Port(
+        in_node_1 = IMP.bff.CnPort(
             value=3.0,
             fixed=False,
             is_output=False,
             is_reactive=True
         )
-        out_node_1 = IMP.bff.Port(
+        out_node_1 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=True
         )
-        node_1 = IMP.bff.Node(
+        node_1 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_1,
                 'outA': out_node_1
@@ -409,18 +409,18 @@ class Tests(unittest.TestCase):
         f = lambda inA: inA
         node_1.callback_function = f
 
-        in_node_2 = IMP.bff.Port(
+        in_node_2 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=False,
             is_reactive=True
         )
-        out_node_2 = IMP.bff.Port(
+        out_node_2 = IMP.bff.CnPort(
             value=1.0,
             fixed=False,
             is_output=True
         )
-        node_2 = IMP.bff.Node(
+        node_2 = IMP.bff.CnNode(
             ports={
                 'inA': in_node_2,
                 'outA': out_node_2
@@ -440,7 +440,7 @@ class Tests(unittest.TestCase):
             # type: (np.ndarray, np.ndarray)
             return x * y
 
-        node = IMP.bff.Node(
+        node = IMP.bff.CnNode(
             callback_function=h,
             name="NodeName"
         )
@@ -464,7 +464,7 @@ class Tests(unittest.TestCase):
         """
         # one input to one output
         import IMP.bff
-        node = IMP.bff.Node()
+        node = IMP.bff.CnNode()
         f = lambda x: 2.*x
         node.callback_function = f
         x = node.inputs['x']
@@ -477,7 +477,7 @@ class Tests(unittest.TestCase):
         )
 
         # one input to many outputs
-        node = IMP.bff.Node()
+        node = IMP.bff.CnNode()
 
         def g(x):
             return x // 4.0, x % 4.0
@@ -491,7 +491,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(out_1, x % 4.0)
 
         # use of numba decorated function as a Node callback
-        node = IMP.bff.Node()
+        node = IMP.bff.CnNode()
 
         @nb.jit
         def h(x, y):

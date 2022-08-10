@@ -6,7 +6,7 @@ import json
 TOPDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 utils.set_search_paths(TOPDIR)
 
-import IMP.bff as bff
+import IMP.bff
 from constants import *
 
 
@@ -14,46 +14,44 @@ class Tests(unittest.TestCase):
 
     def test_mongo_init(self):
         mo_name = "test_name"
-        mo = bff.MongoObject()
+        mo = IMP.bff.CnMongoObject()
         mo.name = mo_name
         self.assertEqual(
             mo.name,
-            bff.MongoObject(mo_name).name
+            IMP.bff.CnMongoObject(mo_name).name
         )
 
     @unittest.skipUnless(CONNECTS, "Cloud not connect to DB")
     def test_mongo_db_connect(self):
-        mo = bff.MongoObject()
+        mo = IMP.bff.CnMongoObject()
         self.assertEqual(mo.connect_to_db(**DB_DICT), True)
         self.assertEqual(mo.is_connected_to_db, True)
         mo.write_to_db()
         mo.disconnect_from_db()
         self.assertEqual(mo.is_connected_to_db, False)
 
-        mo2 = bff.MongoObject()
+        mo2 = IMP.bff.CnMongoObject()
         mo.connect_object_to_db_mongo(mo2)
         self.assertEqual(mo2.is_connected_to_db, True)
         mo2.disconnect_from_db()
         self.assertEqual(mo2.is_connected_to_db, False)
 
-        # mo3 = bff.MongoObject()
-        # mo3.connect_to_db(
-        #     **db_dict
-        # )
-        # mo3.read_from_db(mo.get_oid())
-        # self.assertEqual(mo3.read_from_db(mo.get_oid()), True)
+        mo3 = IMP.bff.CnMongoObject()
+        mo3.connect_to_db(**DB_DICT)
+        mo3.read_from_db(mo.oid)
+        self.assertEqual(mo3.read_from_db(mo.oid), True)
 
     def test_mongo_oid(self):
-        mo = bff.MongoObject()
+        mo = IMP.bff.CnMongoObject()
         self.assertEqual(len(mo.oid), 24)
 
     def test_mongo_json(self):
-        mo = bff.MongoObject("test_name")
+        mo = IMP.bff.CnMongoObject("test_name")
         d = json.loads(mo.get_json())
         self.assertEqual(set(d.keys()), set(['_id', 'precursor', 'death', 'name']))
 
-    def test_singleton(self):
-        mo = bff.MongoObject()
+    def test_single(self):
+        mo = IMP.bff.CnMongoObject()
         mo.set_double("d", 22.3)
         self.assertAlmostEqual(mo.get_double("d"), 22.3)
 
@@ -67,7 +65,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(mo.get_bool("b2"), False)
 
     def test_array(self):
-        mo = bff.MongoObject()
+        mo = IMP.bff.CnMongoObject()
         mo.set_array_double("d", (1.1, 2.2))
         self.assertTupleEqual(mo.get_array_double("d"), (1.1, 2.2))
         mo.set_array_int("i", [3, 4])
@@ -83,11 +81,11 @@ class Tests(unittest.TestCase):
     #         json_string = fp.read()
 
     #     # contains node & links dict
-    #     mo1 = bff.MongoObject()
+    #     mo1 = IMP.bff.CnMongoObject()
     #     mo1.read_json(json_string)
 
     #     # contains only node dict
-    #     mo2 = bff.MongoObject()
+    #     mo2 = IMP.bff.CnMongoObject()
     #     mo2.read_json(mo1.get_json())
     #     sub_json = mo1["nodes"].get_json()
 
