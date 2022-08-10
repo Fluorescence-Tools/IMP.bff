@@ -1,13 +1,50 @@
 %feature("kwargs", 1);
+%{
+#define SWIG_FILE_WITH_INIT
+%}
+
+%include "numpy.i"
+
+%{
+    #include <mongoc.h>
+    void cleanup()
+    {
+//        printf("cleanup!\n");
+        mongoc_cleanup();
+    }
+%}
+
+%init %{
+    import_array();
+    mongoc_init();
+    atexit(cleanup);
+%}
 
 %pythoncode %{
 import numpy as np
 %}
 
-%include "IMP_bff.types.i"
-%include "IMP_bff_MongoObject.i"
-%include "IMP_bff_Port.i"
-%include "IMP_bff_Node.i"
-//%include "IMP_bff_Session.i"
-%include "IMP_bff_PathMap.i"
-%include "IMP_bff_AV.i"
+%include "BFF.types.i"
+
+/* Chinet */
+%include "CnMongoObject.i"
+%include "CnPort.i"
+%include "CnNode.i"
+//%include "CnSession.i"
+
+/* PathMap & AV */
+%include "PathMap.i"
+%include "AV.i"
+
+/* Fluorescence decays */
+%include "DecayRoutines.i"
+%include "DecayCurve.i"
+%include "DecayRange.i"
+%include "DecayLifetimeHandler.i"
+%include "DecayModifier.i"
+%include "DecayConvolution.i"
+%include "DecayPattern.i"
+%include "DecayPileup.i"
+%include "DecayLinearization.i"
+%include "DecayScale.i"
+%include "DecayScore.i"
