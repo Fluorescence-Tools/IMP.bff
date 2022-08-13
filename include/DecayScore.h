@@ -23,7 +23,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-class DecayScore : public DecayRange {
+class IMPBFFEXPORT DecayScore : public DecayRange {
 
 private:
 

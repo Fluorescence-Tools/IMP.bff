@@ -18,7 +18,7 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class DecayLifetimeHandler{
+class IMPBFFEXPORT DecayLifetimeHandler{
 
 private:
 

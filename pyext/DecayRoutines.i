@@ -2,9 +2,6 @@
 #include "IMP/bff/DecayRoutines.h"
 %}
 
-// %include "IMP/bff/DecayRoutines.h"
-// manually added instead of including header file as all other functions
-
 %apply
 (double* INPLACE_ARRAY1, int DIM1) {
     (double* fit, int len1),
@@ -23,27 +20,27 @@
 }
 
 
-//void IMP::bff::fconv_per_cs_time_axis(
-//        double *model, int n_model,
-//        double *time_axis, int n_time_axis,
-//        double *irf, int n_irf,
-//        double *lifetime_spectrum, int n_lifetime_spectrum,
-//        int convolution_start = 0,
-//        int convolution_stop = -1,
-//        double period = 100.0
-//);
-//
-//
-//void IMP::bff::add_pile_up_to_model(
-//        double* model, int n_model,
-//        double* data, int n_data,
-//        double repetition_rate,
-//        double instrument_dead_time,
-//        double measurement_time,
-//        std::string pile_up_model = "coates",
-//        int start = 0,
-//        int stop = -1
-//);
+void IMP::bff::fconv_per_cs_time_axis(
+        double *model, int n_model,
+        double *time_axis, int n_time_axis,
+        double *irf, int n_irf,
+        double *lifetime_spectrum, int n_lifetime_spectrum,
+        int convolution_start = 0,
+        int convolution_stop = -1,
+        double period = 100.0
+);
+
+
+void IMP::bff::add_pile_up_to_model(
+        double* model, int n_model,
+        double* data, int n_data,
+        double repetition_rate,
+        double instrument_dead_time,
+        double measurement_time,
+        std::string pile_up_model = "coates",
+        int start = 0,
+        int stop = -1
+);
 
 
 

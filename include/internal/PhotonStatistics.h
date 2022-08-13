@@ -98,6 +98,11 @@ double Wcm_p2s(int* C, double* M, int Nchannels);
  */
 double twoIstar_p2s(int* C, double* M, int Nchannels);
 
+
+// overall log-likelihood w(C,M) for 1 ch data
+double twoIstar_1ch(int* C, double* M, int Ndata);
+
+
 /*!
  * Compute overall 2I* for Cp & Cs
  *

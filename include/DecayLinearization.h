@@ -22,7 +22,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-class DecayLinearization: public DecayModifier{
+class IMPBFFEXPORT DecayLinearization: public DecayModifier{
 
 
 public:

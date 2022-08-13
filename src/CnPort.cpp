@@ -3,6 +3,37 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
+CnPort::CnPort(
+        bool fixed,
+        bool is_output,
+        bool is_reactive,
+        bool is_bounded,
+        double lb,
+        double ub,
+        int value_type,
+        std::string name
+) : CnMongoObject(name) {
+
+    append_string(&document, "type", "port");
+    bson_append_bool(&document, "is_output", 9, false);
+    bson_append_bool(&document, "is_fixed", 8, false);
+    bson_append_bool(&document, "is_reactive", 11, false);
+    bson_append_oid(&document, "link", 4, &oid_document);
+    bson_append_bool(&document, "is_bounded", 10, false);
+
+    set_fixed(fixed);
+    set_port_type(is_output);
+    set_reactive(is_reactive);
+    set_bounded(is_bounded);
+
+    if (is_bounded) {
+        bounds_.push_back(lb);
+        bounds_.push_back(ub);
+    }
+
+    CnPort::value_type = value_type;
+}
+
 void CnPort::get_bytes(unsigned char **output, int *n_output, bool copy){
     *n_output = cc_.size();
     if(copy){
@@ -133,9 +164,71 @@ CnNode* CnPort::get_node()
     return node_;
 }
 
-void CnPort::set_node(CnNode* node_ptr)
+void CnPort::set_node(CnNode *node_ptr)
 {
     node_ = node_ptr;
+}
+
+bool CnPort::is_float() {
+    return ((get_value_type() == BFF_PORT_VECTOR_FLOAT) ||
+            (get_value_type() == BFF_PORT_FLOAT));
+}
+
+int CnPort::get_value_type() {
+    if (!is_linked()) {
+        return value_type;
+    } else {
+        return get_link()->value_type;
+    }
+}
+
+void CnPort::set_value_type(int v) {
+    value_type = v;
+    if (is_linked()) {
+        get_link()->set_value_type(v);
+    }
+}
+
+void CnPort::set_link(std::shared_ptr<CnPort> v) {
+#if IMPBFF_VERBOSE
+    std::clog << "SET_LINK" << std::endl;
+std::clog << "-- Link to Port: " << v->get_name() << std::endl;
+std::clog << "-- Link value type: " << v->value_type << std::endl;
+#endif
+    if (v != nullptr) {
+        if(v.get() == this){
+#if IMPBFF_VERBOSE
+            std::clog << "WARNING: cannot link to self." << std::endl;
+#endif
+        } else{
+            set_oid("link", v->get_bson_oid());
+            link_ = v;
+            v->linked_to_.push_back(this);
+        }
+    } else {
+        unlink();
+    }
+    if(node_!=nullptr) update_attached_node();
+}
+
+bool CnPort::unlink() {
+    set_oid("link", get_bson_oid());
+    bool re = true;
+    re &= remove_links_to_port();
+    link_ = nullptr;
+    return re;
+}
+
+bool CnPort::is_linked() {
+    return (link_ != nullptr);
+}
+
+std::vector<CnPort *> CnPort::get_linked_ports() {
+    return linked_to_;
+}
+
+std::shared_ptr<CnPort> CnPort::get_link() {
+    return link_;
 }
 
 void CnPort::update_attached_node() {

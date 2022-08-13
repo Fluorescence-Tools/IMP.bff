@@ -562,43 +562,43 @@ void fconv_cs_time_axis(
 #endif
 }
 
-
-void fconv_cs_time_axis_old(
-        double* output, int n_output,
-        double* time_axis, int n_time_axis,
-        double *irf, int n_irf,
-        double* lifetime_spectrum, int n_lifetime_spectrum,
-        int convolution_start,
-        int convolution_stop
-){
-    int number_of_exponentials = n_lifetime_spectrum / 2;
-#if IMPBFF_VERBOSE
-    std::clog << "convolve_lifetime_spectrum... " << std::endl;
-std::clog << "-- number_of_exponentials: " << number_of_exponentials << std::endl;
-std::clog << "-- convolution_start: " << convolution_start << std::endl;
-std::clog << "-- convolution_stop: " << convolution_stop << std::endl;
-#endif
-    for(int ne=0; ne<number_of_exponentials; ne++){
-        double a = lifetime_spectrum[2 * ne];
-        double current_lifetime = (lifetime_spectrum[2 * ne + 1]);
-        if((a == 0.0) || (current_lifetime == 0.0)) continue;
-        double current_model_value = 0.0;
-        for(int i = convolution_start; i < convolution_stop; i++){
-            double dt;
-            int pre = std::max(0, i - 1);
-            if(i < convolution_stop - 1){
-                dt = (time_axis[i + 1] - time_axis[i]);
-            } else{
-                dt = (time_axis[i] - time_axis[i - 1]);
-            }
-            double dt_2 = dt / 2.0;
-            double current_exponential = std::exp(-dt / current_lifetime);
-            current_model_value = (current_model_value + dt_2 * irf[pre]) *
-                                  current_exponential + dt_2 * irf[i];
-            output[i] += current_model_value * a;
-        }
-    }
-}
+//
+//void fconv_cs_time_axis_old(
+//        double* output, int n_output,
+//        double* time_axis, int n_time_axis,
+//        double *irf, int n_irf,
+//        double* lifetime_spectrum, int n_lifetime_spectrum,
+//        int convolution_start,
+//        int convolution_stop
+//){
+//    int number_of_exponentials = n_lifetime_spectrum / 2;
+//#if IMPBFF_VERBOSE
+//    std::clog << "convolve_lifetime_spectrum... " << std::endl;
+//std::clog << "-- number_of_exponentials: " << number_of_exponentials << std::endl;
+//std::clog << "-- convolution_start: " << convolution_start << std::endl;
+//std::clog << "-- convolution_stop: " << convolution_stop << std::endl;
+//#endif
+//    for(int ne=0; ne<number_of_exponentials; ne++){
+//        double a = lifetime_spectrum[2 * ne];
+//        double current_lifetime = (lifetime_spectrum[2 * ne + 1]);
+//        if((a == 0.0) || (current_lifetime == 0.0)) continue;
+//        double current_model_value = 0.0;
+//        for(int i = convolution_start; i < convolution_stop; i++){
+//            double dt;
+//            int pre = std::max(0, i - 1);
+//            if(i < convolution_stop - 1){
+//                dt = (time_axis[i + 1] - time_axis[i]);
+//            } else{
+//                dt = (time_axis[i] - time_axis[i - 1]);
+//            }
+//            double dt_2 = dt / 2.0;
+//            double current_exponential = std::exp(-dt / current_lifetime);
+//            current_model_value = (current_model_value + dt_2 * irf[pre]) *
+//                                  current_exponential + dt_2 * irf[i];
+//            output[i] += current_model_value * a;
+//        }
+//    }
+//}
 
 
 IMPBFF_END_NAMESPACE

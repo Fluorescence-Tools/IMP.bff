@@ -24,8 +24,6 @@ double twoIstar_1ch(int* C, double* M, int Ndata)
     return -2.*(W-W0)/(double)Ndata;
 }
 
-
-
 double statistics::chi2_counting(
         std::vector<double> &data,
         std::vector<double> &model,

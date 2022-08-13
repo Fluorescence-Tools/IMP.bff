@@ -22,7 +22,7 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class DecayPileup : public DecayModifier {
+class IMPBFFEXPORT DecayPileup : public DecayModifier {
 
 private:
 

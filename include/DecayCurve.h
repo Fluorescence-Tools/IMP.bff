@@ -30,7 +30,7 @@ enum NoiseModelTypes{
 
 
 
-class DecayCurve {
+class IMPBFFEXPORT DecayCurve {
 
     friend class DecayConvolution;
     friend class DecayPileup;

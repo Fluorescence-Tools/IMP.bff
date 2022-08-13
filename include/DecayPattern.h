@@ -19,7 +19,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-class DecayPattern: public DecayModifier{
+class IMPBFFEXPORT DecayPattern: public DecayModifier{
 
 private:
 

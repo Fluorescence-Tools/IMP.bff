@@ -17,7 +17,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-class DecayRange{
+class IMPBFFEXPORT DecayRange{
 
 private:
 

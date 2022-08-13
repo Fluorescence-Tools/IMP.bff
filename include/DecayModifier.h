@@ -21,7 +21,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-class DecayModifier : public DecayRange {
+class IMPBFFEXPORT DecayModifier : public DecayRange {
 
 private:
 

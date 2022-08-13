@@ -39,7 +39,7 @@ IMPBFF_BEGIN_NAMESPACE
 //             * @param data[in] Data array to which the model function can be scaled
 //             * @param squared_data_weights[in] squared weights of the data
 //             */
-class DecayScale : public DecayModifier{
+class IMPBFFEXPORT DecayScale : public DecayModifier{
 
 private:
 

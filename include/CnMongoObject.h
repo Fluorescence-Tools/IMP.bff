@@ -266,7 +266,7 @@ public:
     void disconnect_from_db();
 
     /// Returns true if the instance of the CnMongoObject is connected
-    /// to the DB
+    /// to the DBf
     bool is_connected_to_db();
 
     void register_instance(CnMongoObject*);

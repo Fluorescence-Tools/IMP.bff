@@ -39,7 +39,7 @@ typedef enum{
 
 
 
-class CnPort : public CnMongoObject {
+class IMPBFFEXPORT CnPort : public CnMongoObject {
 
 private:
 
@@ -115,27 +115,7 @@ public:
         double ub = 0,
         int value_type = 1,
         std::string name = ""
-    ) : CnMongoObject(name) {
-
-        append_string(&document, "type", "port");
-        bson_append_bool(&document, "is_output", 9, false);
-        bson_append_bool(&document, "is_fixed", 8, false);
-        bson_append_bool(&document, "is_reactive", 11, false);
-        bson_append_oid(&document, "link", 4, &oid_document);
-        bson_append_bool(&document, "is_bounded", 10, false);
-
-        set_fixed(fixed);
-        set_port_type(is_output);
-        set_reactive(is_reactive);
-        set_bounded(is_bounded);
-
-        if (is_bounded) {
-            bounds_.push_back(lb);
-            bounds_.push_back(ub);
-        }
-
-        CnPort::value_type = value_type;
-    }
+    );
 
     void set_node(CnNode *node_ptr);
 
@@ -143,20 +123,9 @@ public:
 
     // Getter & Setter
     //--------------------------------------------------------------------
-    int get_value_type() {
-        if (!is_linked()) {
-            return value_type;
-        } else {
-            return get_link()->value_type;
-        }
-    }
+    int get_value_type();
 
-    void set_value_type(int v) {
-        value_type = v;
-        if (is_linked()) {
-            get_link()->set_value_type(v);
-        }
-    }
+    void set_value_type(int v);
 
     template<typename T>
     void update_value_type(int n_input){
@@ -271,10 +240,7 @@ public:
 
     bool is_reactive();
 
-    bool is_float() {
-        return ((get_value_type() == BFF_PORT_VECTOR_FLOAT) || 
-        (get_value_type() == BFF_PORT_FLOAT));
-    }
+    bool is_float();
 
     void set_reactive(bool reactive);
 
@@ -286,47 +252,15 @@ public:
 
     void set_bytes(unsigned char *input, int n_input);
     
-    void set_link(std::shared_ptr<CnPort> v) {
-#if IMPBFF_VERBOSE
-        std::clog << "SET_LINK" << std::endl;
-        std::clog << "-- Link to Port: " << v->get_name() << std::endl;
-        std::clog << "-- Link value type: " << v->value_type << std::endl;
-#endif
-        if (v != nullptr) {
-            if(v.get() == this){
-#if IMPBFF_VERBOSE
-                std::clog << "WARNING: cannot link to self." << std::endl;
-#endif
-            } else{
-                set_oid("link", v->get_bson_oid());
-                link_ = v;
-                v->linked_to_.push_back(this);
-            }
-        } else {
-            unlink();
-        }
-        if(node_!=nullptr) update_attached_node();
-    }
+    void set_link(std::shared_ptr<CnPort> v);
 
-    bool unlink() {
-        set_oid("link", get_bson_oid());
-        bool re = true;
-        re &= remove_links_to_port();
-        link_ = nullptr;
-        return re;
-    }
+    bool unlink();
 
-    bool is_linked() {
-        return (link_ != nullptr);
-    }
+    bool is_linked();
 
-    std::vector<CnPort *> get_linked_ports() {
-        return linked_to_;
-    }
+    std::vector<CnPort *> get_linked_ports();
 
-    std::shared_ptr<CnPort> get_link() {
-        return link_;
-    }
+    std::shared_ptr<CnPort> get_link();
 
 };
 
