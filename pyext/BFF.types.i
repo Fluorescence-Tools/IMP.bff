@@ -46,16 +46,12 @@
 #if #SetMethod != ""
         %pythoncode
         {
-            Name = property(
-                GetMethod,
-                SetMethod
-            )
+            Name = property(GetMethod, SetMethod)
         }
 #else
         %pythoncode
         {
             Name = property(GetMethod)
-            )
         }
 #endif
 }
