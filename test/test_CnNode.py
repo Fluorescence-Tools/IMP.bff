@@ -82,36 +82,34 @@ class Tests(unittest.TestCase):
             ['inA', 'inB']
         )
         values = np.hstack(
-            [v.value for v in node_with_ports.ports.values()]
+            [v.value for n, v in node_with_ports.ports]
         )
         np.testing.assert_allclose(values, np.array([7.0, 13.0, 0.0]))
 
     def test_node_ports(self):
         node = IMP.bff.CnNode()
-        portA_name = "portA"
-        portA = IMP.bff.CnPort(17)
-        node.add_input_port(portA_name, portA)
-        portB_name = "portB"
-        portB = IMP.bff.CnPort(23)
-        node.add_output_port(portB_name, portB)
+        portA = IMP.bff.CnPort(17, name="portA")
+        node.add_input_port(portA)
+        portB = IMP.bff.CnPort(23, name="portB")
+        node.add_output_port(portB)
 
-        self.assertEqual(portA, node.get_input_port(portA_name))
-        self.assertEqual(portB, node.get_output_port(portB_name))
+        self.assertEqual(portA, node.get_input_port(portA.name))
+        self.assertEqual(portB, node.get_output_port(portB.name))
 
-    # def test_node_array_callback(self):
-    #     inA = IMP.bff.CnPort([2., 3., 4.])
-    #     inB = IMP.bff.CnPort([2., 3., 4.])
-    #     outA = IMP.bff.CnPort([0., 0., 0.])
-    #
-    #     node = IMP.bff.CnNode()
-    #     node.add_input_port("inA", inA)
-    #     node.add_input_port("inB", inB)
-    #     node.add_output_port("outA", outA)
-    #     multiply = lambda inA, inB: inA * inB
-    #     node.callback_function = multiply
-    #
-    #     node.evaluate()
-    #     # np.testing.assert_allclose(inA.value * inB.value, outA.value)
+    def test_node_array_callback(self):
+        inA = IMP.bff.CnPort([2., 3., 4.], name="inA")
+        inB = IMP.bff.CnPort([2., 3., 4.], name="inB")
+        outA = IMP.bff.CnPort([0., 0., 0.], name="outA")
+
+        node = IMP.bff.CnNode()
+        node.add_input_port(inA)
+        node.add_input_port(inB)
+        node.add_output_port(outA)
+        multiply = lambda inA, inB: inA * inB
+        node.callback_function = multiply
+
+        node.evaluate()
+        # np.testing.assert_allclose(inA.value * inB.value, outA.value)
 
     def test_callback_2(self):
         node = IMP.bff.CnNode(
@@ -141,21 +139,21 @@ class Tests(unittest.TestCase):
         node.evaluate()
         self.assertEqual(node.is_valid, True)
 
-        outA = node.ports["outA"]
-        inA = node.ports["inA"]
-        inB = node.ports["inB"]
+        outA = node.outputs["outA"]
+        inA = node.inputs["inA"]
+        inB = node.inputs["inB"]
 
         np.testing.assert_allclose(inA.value * inB.value, outA.value)
 
     def test_node_python_callback_1(self):
         """Test chinet Node class python callbacks"""
         node = IMP.bff.CnNode()
-        portIn1 = IMP.bff.CnPort(55)
-        node.add_input_port("portA", portIn1)
-        portIn2 = IMP.bff.CnPort(2)
-        node.add_input_port("portB", portIn2)
-        portOut1 = IMP.bff.CnPort()
-        node.add_output_port("portC", portOut1)
+        portIn1 = IMP.bff.CnPort(55, name="portA")
+        node.add_input_port(portIn1)
+        portIn2 = IMP.bff.CnPort(2, name="portB")
+        node.add_input_port(portIn2)
+        portOut1 = IMP.bff.CnPort(name="portC")
+        node.add_output_port(portOut1)
 
         cb = NodeCallbackMultiply()
         cb.thisown = 0
@@ -167,12 +165,12 @@ class Tests(unittest.TestCase):
     def test_node_python_callback_2(self):
         """Test chinet Node class python callbacks"""
         node = IMP.bff.CnNode()
-        portIn1 = IMP.bff.CnPort(55)
-        node.add_input_port("portA", portIn1)
-        portIn2 = IMP.bff.CnPort(2)
-        node.add_input_port("portB", portIn2)
-        portOut1 = IMP.bff.CnPort()
-        node.add_output_port("portC", portOut1)
+        portIn1 = IMP.bff.CnPort(55, name="portA")
+        node.add_input_port(portIn1)
+        portIn2 = IMP.bff.CnPort(2, name="portB")
+        node.add_input_port(portIn2)
+        portOut1 = IMP.bff.CnPort(name="portC")
+        node.add_output_port(portOut1)
         m = NodeCallbackMultiply()
         node.set_callback(m)
         # node.set_callback(NodeCallbackMultiply().__disown__())
