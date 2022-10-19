@@ -22,7 +22,7 @@ class IMPBFFEXPORT CnNode : public CnMongoObject{
 private:
     friend CnPort;
     bool node_valid_ = false;
-    std::map<std::string, std::shared_ptr<CnPort>> ports;
+    std::vector<std::pair<std::string, std::shared_ptr<CnPort>>> ports;
 
 protected:
     std::map<std::string, std::shared_ptr<CnPort>> in_;
@@ -39,8 +39,7 @@ public:
     // Constructor & Destructor
     //--------------------------------------------------------------------
     CnNode(std::string name="",
-         const std::map<std::string, std::shared_ptr<CnPort>>& ports =
-                 std::map<std::string, std::shared_ptr<CnPort>>(),
+        const std::vector<std::shared_ptr<CnPort>>& ports = std::vector<std::shared_ptr<CnPort>>(),
          std::shared_ptr<CnNodeCallback> callback_class = nullptr
     );
     ~CnNode();
@@ -59,13 +58,11 @@ public:
 //    std::string get_name();
     std::map<std::string, std::shared_ptr<CnPort>> get_input_ports();
     std::map<std::string, std::shared_ptr<CnPort>> get_output_ports();
-    std::map<std::string, std::shared_ptr<CnPort>> get_ports();
-    void set_ports(const std::map<std::string, std::shared_ptr<CnPort>>& ports);
-    void add_port(const std::string &key, std::shared_ptr<CnPort>,
-            bool is_source, bool fill_in_out=true);
-    void add_input_port(const std::string &key, std::shared_ptr<CnPort>);
-    void add_output_port(const std::string &key, std::shared_ptr<CnPort>);
-    CnPort* get_port(const std::string &port_name);
+    std::vector<std::pair<std::string, std::shared_ptr<CnPort>>> get_ports();
+    void set_ports(const std::vector<std::shared_ptr<CnPort>>& ports);
+    void add_port(std::shared_ptr<CnPort>, bool is_source, bool fill_in_out=true);
+    void add_input_port(std::shared_ptr<CnPort>);
+    void add_output_port(std::shared_ptr<CnPort>);
     CnPort* get_input_port(const std::string &port_name);
     CnPort* get_output_port(const std::string &port_name);
 

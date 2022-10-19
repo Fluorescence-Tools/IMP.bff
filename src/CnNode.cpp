@@ -4,7 +4,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 CnNode::CnNode(
         std::string name,
-        const std::map<std::string, std::shared_ptr<CnPort>>& ports,
+        const std::vector<std::shared_ptr<CnPort>>& ports,
         std::shared_ptr<CnNodeCallback>
 ) : CnMongoObject(name)
 {
@@ -29,8 +29,7 @@ bool CnNode::read_from_db(const std::string &oid_string){
 #endif
     bool return_value = true;
     return_value &= CnMongoObject::read_from_db(oid_string);
-    return_value &= create_and_connect_objects_from_oid_doc(
-            &document, "ports", &ports);
+    return_value &= create_and_connect_objects_from_oid_doc(&document, "ports", &ports);
 #if IMPBFF_VERBOSE
     std::clog << "callback-restore: " << get_string_by_key(&document, "callback") << std::endl;
 #endif
@@ -45,7 +44,6 @@ bool CnNode::write_to_db() {
         }
         o.second->write_to_db();
     }
-
     return re;
 }
 
@@ -73,20 +71,16 @@ bool CnNode::write_to_db() {
 //}
 
 
-std::map<std::string, std::shared_ptr<CnPort>> CnNode::get_ports(){
+std::vector<std::pair<std::string, std::shared_ptr<CnPort>>> CnNode::get_ports(){
     return ports;
 }
 
-void CnNode::set_ports(const std::map<std::string, std::shared_ptr<CnPort>>& ports){
-    for(auto &o: ports){
-        o.second->set_name(o.first);
-        add_port(o.first, o.second, o.second->is_output(), false);
+void CnNode::set_ports(
+        const std::vector<std::shared_ptr<CnPort>>& ports){
+    for(auto &p: ports){
+        add_port(p, p->is_output(), false);
     }
     fill_input_output_port_lookups();
-}
-
-CnPort* CnNode::get_port(const std::string &port_name){
-    return ports[port_name].get();
 }
 
 CnPort* CnNode::get_input_port(const std::string &port_name){
@@ -110,9 +104,7 @@ void CnNode::set_callback(std::shared_ptr<CnNodeCallback> cb){
     callback_class = cb;
 }
 
-void CnNode::add_port(
-        const std::string &key,
-        std::shared_ptr<CnPort> port, bool is_output, bool fill_in_out) {
+void CnNode::add_port(std::shared_ptr<CnPort> port, bool is_output, bool fill_in_out) {
 #if IMPBFF_VERBOSE
     std::clog << "ADDING PORT TO CnNode" << std::endl;
     std::clog << "-- Name of CnNode: " << get_name() << std::endl;
@@ -123,35 +115,37 @@ void CnNode::add_port(
     port->set_port_type(is_output);
     // auto n = std::dynamic_pointer_cast<CnNode>(MongoObject::shared_from_this());
     port->set_node(this);
-    if (ports.find(key) == ports.end() ) {
-#if IMPBFF_VERBOSE
-        std::clog << "-- The key of the port was not found." << std::endl;
-        std::clog << "-- Port " << key << " was created in CnNode. " << std::endl;
-#endif
-        ports[key] = port;
-    } else {
-        auto p = ports[key];
-        if(port != p){
-#if IMPBFF_VERBOSE
-            std::clog << "WARNING: Overwriting the port that was originally associated to the key " << key << "." << std::endl;
-#endif
-            ports[key] = port;
-        } else{
-            std::cerr << "WARNING: Port is already part of the CnNode." << std::endl;
-            std::cerr << "-- Assigning Port to the key: " << key << "." << std::endl;
-        }
-    }
+    auto p = std::pair<std::string, std::shared_ptr<CnPort>>(port->get_name(), port);
+    ports.emplace_back(p);
+//    if (ports.find(key) == ports.end() ) {
+//#if IMPBFF_VERBOSE
+//        std::clog << "-- The key of the port was not found." << std::endl;
+//        std::clog << "-- Port " << key << " was created in CnNode. " << std::endl;
+//#endif
+//        ports[key] = port;
+//    } else {
+//        auto p = ports[key];
+//        if(port != p){
+//#if IMPBFF_VERBOSE
+//            std::clog << "WARNING: Overwriting the port that was originally associated to the key " << key << "." << std::endl;
+//#endif
+//            ports[key] = port;
+//        } else{
+//            std::cerr << "WARNING: Port is already part of the CnNode." << std::endl;
+//            std::cerr << "-- Assigning Port to the key: " << key << "." << std::endl;
+//        }
+//    }
     if(fill_in_out){
         fill_input_output_port_lookups();
     }
 }
 
-void CnNode::add_input_port(const std::string &key, std::shared_ptr<CnPort> port) {
-    add_port(key, port, false, true);
+void CnNode::add_input_port(std::shared_ptr<CnPort> port) {
+    add_port(port, false, true);
 }
 
-void CnNode::add_output_port(const std::string &key, std::shared_ptr<CnPort> port) {
-    add_port(key, port, true, true);
+void CnNode::add_output_port(std::shared_ptr<CnPort> port) {
+    add_port(port, true, true);
 }
 
 bson_t CnNode::get_bson(){

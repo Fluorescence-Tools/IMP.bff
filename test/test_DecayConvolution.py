@@ -18,16 +18,14 @@ class Tests(unittest.TestCase):
         irf = IMP.bff.DecayCurve(x, irf_y)
         lh = IMP.bff.DecayLifetimeHandler([1, 4])
         settings = {
-            "instrument_response_function": irf,
             "lifetime_handler": lh,
-            "use_corrected_irf_as_scatter": True,
-            "scatter_fraction": 0.0,
-            "convolution_method": 0,
+            "instrument_response_function": irf,
+            "convolution_method": IMP.bff.DecayConvolution.CONV_FAST,
             "excitation_period": 100,
-            "irf_shift_channels": 0,
-            "irf_background_counts": 0,
-            "start": 0,
-            "stop": -1
+            "irf_shift_channels": 0.0,
+            "irf_background_counts": 0.0,
+            "start": 0, "stop": -1,
+            "active": True
         }
         dc = IMP.bff.DecayConvolution(**settings)
         decay = IMP.bff.DecayCurve(x)
@@ -72,12 +70,12 @@ class Tests(unittest.TestCase):
             [4.49386205e-11, 9.27072464e-01, 2.65610708e-01, 7.60987419e-02]
         ]
         conv_methods = [
-            IMP.bff.CONV_FAST_PERIODIC_TIME,
-            IMP.bff.CONV_FAST_TIME,
-            IMP.bff.CONV_FAST_PERIODIC,
-            IMP.bff.CONV_FAST,
-            IMP.bff.CONV_FAST_AVX,
-            IMP.bff.CONV_FAST_PERIODIC_AVX
+            IMP.bff.DecayConvolution.FAST_PERIODIC_TIME,
+            IMP.bff.DecayConvolution.FAST_TIME,
+            IMP.bff.DecayConvolution.FAST_PERIODIC,
+            IMP.bff.DecayConvolution.FAST,
+            IMP.bff.DecayConvolution.FAST_AVX,
+            IMP.bff.DecayConvolution.FAST_PERIODIC_AVX
         ]
         for i in conv_methods:
             settings["convolution_method"] = i
@@ -131,9 +129,9 @@ class Tests(unittest.TestCase):
         dc = IMP.bff.DecayConvolution()
         dc.irf = irf
 
-        self.assertEqual(dc.convolution_method, IMP.bff.CONV_FAST)
-        dc.convolution_method = IMP.bff.CONV_FAST_PERIODIC
-        self.assertEqual(dc.convolution_method, IMP.bff.CONV_FAST_PERIODIC)
+        self.assertEqual(dc.convolution_method, IMP.bff.DecayConvolution.FAST)
+        dc.convolution_method = IMP.bff.DecayConvolution.FAST_PERIODIC
+        self.assertEqual(dc.convolution_method, IMP.bff.DecayConvolution.FAST_PERIODIC)
 
         self.assertEqual(dc.excitation_period, 100.0)
         dc.excitation_period = 32.0

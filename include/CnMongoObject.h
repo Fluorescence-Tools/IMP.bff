@@ -111,6 +111,21 @@ protected:
     }
 
     template <typename T>
+    void create_oid_dict_in_doc(
+            bson_t *doc, std::string key,
+            const std::vector<
+                    std::pair<std::string, std::shared_ptr<T>>
+            > &mongo_obj_array){
+        bson_t child;
+        bson_append_document_begin(doc, key.c_str(), key.size(), &child);
+        for(auto &v : mongo_obj_array){
+            const bson_oid_t b = v.second->get_bson_oid();
+            bson_append_oid(&child, v.first.c_str(), v.first.size(), &b);
+        }
+        bson_append_document_end(doc, &child);
+    }
+
+    template <typename T>
     void append_number_array(bson_t *doc, std::string key, T &values){
         bson_t child;
         bson_append_array_begin(doc, key.c_str(), key.size(), &child);
@@ -192,7 +207,47 @@ protected:
         return return_value;
     }
 
-    /// Append a string to a BSON document
+    template <typename T>
+    bool create_and_connect_objects_from_oid_doc(
+            const bson_t *doc,
+            const char *document_name,
+            std::vector<std::pair<std::string, std::shared_ptr<T>>> *target){
+        bool return_value = true;
+        bson_iter_t iter; bson_iter_t child;
+        if (bson_iter_init_find (&iter, doc, document_name) &&
+            BSON_ITER_HOLDS_DOCUMENT (&iter) &&
+            bson_iter_recurse (&iter, &child)) {
+            while (bson_iter_next (&child)) {
+                if (BSON_ITER_HOLDS_OID(&child)){
+                    // read oid
+                    bson_oid_t oid;
+                    bson_oid_copy(bson_iter_oid(&child), &oid);
+                    // create new obj
+                    auto o = new T();
+                    // connect obj to db
+                    return_value &= connect_object_to_db(o);
+                    // read obj from db
+    #if IMPBFF_VERBOSE
+                    std::cout << oid_to_string(oid) << std::endl;
+    #endif
+                    o->read_from_db(oid_to_string(oid));
+                    std::string key = bson_iter_key(&child);
+                    // add obj to the target
+                    auto p = std::pair<std::string, std::shared_ptr<T>>(key, o);
+                    target->emplace_back(p);
+                }
+            }
+        } else{
+    #if IMPBFF_VERBOSE
+            std::cerr << "Error: no nodes section in Session" << std::endl;
+    #endif
+            return_value &= false;
+        }
+        return return_value;
+    }
+
+
+/// Append a string to a BSON document
     /// \param dst pointer to the target BSON document
     /// \param key the key of the string int the target BSON document
     /// \param content the string that will be written to the BSON document

@@ -26,19 +26,20 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-typedef enum {
-    CONV_FAST_PERIODIC_TIME,
-    CONV_FAST_TIME,
-    CONV_FAST_PERIODIC,
-    CONV_FAST,
-    CONV_FAST_AVX,
-    CONV_FAST_PERIODIC_AVX
-} ConvolutionType;
 
 
 class DecayConvolution : public DecayModifier{
 
 public:
+
+    typedef enum {
+        FAST_PERIODIC_TIME,
+        FAST_TIME,
+        FAST_PERIODIC,
+        FAST,
+        FAST_AVX,
+        FAST_PERIODIC_AVX
+    } ConvolutionType;
 
     static void compute_corrected_irf(
             DecayCurve *irf,
@@ -164,29 +165,29 @@ private:
             if(zero_fill){
                 std::fill(my, my + nm, 0.0);
             }
-            if (cm == CONV_FAST_PERIODIC_TIME) {
-                fconv_per_cs_time_axis(
+            if (cm == FAST_PERIODIC_TIME) {
+                decay_fconv_per_cs_time_axis(
                         my, nm,
                         mx, nm,
                         iy, ni,
                         lt, ln,
                         start, stop,
                         ex_per);
-            } else if (cm == CONV_FAST_TIME) {
-                fconv_cs_time_axis(
+            } else if (cm == FAST_TIME) {
+                decay_fconv_cs_time_axis(
                         my, nm,
                         mx, nm,
                         iy, ni,
                         lt, ln,
                         start, stop);
-            } else if (cm == CONV_FAST_PERIODIC) {
-                fconv_per(my, lt, iy, ln / 2, start, stop, nm, ex_per, dt);
-            } else if (cm == CONV_FAST) {
-                fconv(my, lt, iy, ln / 2, start, stop, dt);
-            } else if (cm == CONV_FAST_AVX) {
-                fconv_avx(my, lt, iy, ln / 2, start, stop, dt);
-            } else if (cm == CONV_FAST_PERIODIC_AVX) {
-                fconv_per_avx(my, lt, iy, ln / 2, start, stop, nm, ex_per, dt);
+            } else if (cm == FAST_PERIODIC) {
+                decay_fconv_per(my, lt, iy, ln / 2, start, stop, nm, ex_per, dt);
+            } else if (cm == FAST) {
+                decay_fconv(my, lt, iy, ln / 2, start, stop, dt);
+            } else if (cm == FAST_AVX) {
+                decay_fconv_avx(my, lt, iy, ln / 2, start, stop, dt);
+            } else if (cm == FAST_PERIODIC_AVX) {
+                decay_fconv_per_avx(my, lt, iy, ln / 2, start, stop, nm, ex_per, dt);
             }
         }
 #if IMPBFF_VERBOSE
@@ -297,7 +298,7 @@ public:
     }
 
     void set(
-            int convolution_method = CONV_FAST_PERIODIC_TIME,
+            int convolution_method = FAST_PERIODIC_TIME,
             double excitation_period = 100,
             double irf_shift_channels = 0.0,
             double irf_background_counts = 0
@@ -311,12 +312,11 @@ public:
     DecayConvolution(
             DecayLifetimeHandler *lifetime_handler= nullptr,
             DecayCurve *instrument_response_function = nullptr,
-            int convolution_method = CONV_FAST,
+            int convolution_method = FAST,
             double excitation_period = 100,
             double irf_shift_channels = 0.0,
             double irf_background_counts = 0,
-            int start = 0,
-            int stop = -1,
+            int start = 0, int stop = -1,
             bool active = true
     ) : DecayModifier(instrument_response_function, start, stop, active){
 #if IMPBFF_VERBOSE
@@ -339,8 +339,8 @@ public:
         delete corrected_irf;
     }
 
-    void add(DecayCurve* out){
-        if(is_active()){
+    void add(DecayCurve* out) override{
+        if ((out != nullptr) && is_active()) {
             // resize output to IRF
             out->resize(get_data()->size(), 0.0);
             convolve_lifetimes(out);
