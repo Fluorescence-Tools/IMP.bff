@@ -20,6 +20,9 @@
 #include <cstring> /* strcmp */
 #include <limits> /* std::numeric_limits */
 
+#include <IMP/bff/internal/MovingAverage.h>
+#include <IMP/bff/DecayRoutines.h>
+
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -62,9 +65,7 @@ public:
 
     static std::vector<double> shift_array(
             double *input, int n_input,
-            double shift,
-            bool set_outside = true,
-            double outside_value = 0.0
+            double shift
     );
 
     size_t size() const{
@@ -174,15 +175,8 @@ public:
     /*--------------------*/
     /* time shift         */
     /*--------------------*/
-    void set_shift(double v, double outside=0.0, bool shift_set_outside=true){
-        current_shift = v;
-        double* d = _y.data(); int n = _y.size();
-        y = shift_array(d, n, current_shift, shift_set_outside, outside);
-    }
-
-    double get_shift(){
-        return current_shift;
-    }
+    void set_shift(double v);
+    double get_shift();
     
     DecayCurve(
             std::vector<double> x = std::vector<double>(),
@@ -194,19 +188,39 @@ public:
     ){
         this->acquisition_time = acquisition_time;
         this->noise_model = noise_model;
-        set_ey(ey);
-        set_y(y);
+        set_ey(ey); // note the order the elements are set matter
+        set_y(y);   // no not change order
         set_x(x);
         if(size > 0) resize(size);
     }
 
-    DecayCurve& operator+(const DecayCurve& other) const;
-    DecayCurve& operator*(const DecayCurve& other) const;
+    double sum(int start=0, int stop=-1){
+        stop = (stop < 0) ? y.size() : std::min((size_t)stop, y.size());
+        return std::accumulate(y.begin() + start, y.begin() + stop, 0.0);
+    }
+
+    /// Apply a simple moving average (SMA) filter to the data
+    void apply_simple_moving_average(int start, int stop, int n_window=5, bool normalize=false);
+
     DecayCurve& operator+(double v) const;
+    DecayCurve& operator-(double v) const;
     DecayCurve& operator*(double v) const;
+    DecayCurve& operator/(double v) const;
+
     DecayCurve& operator+=(double v);
+    DecayCurve& operator-=(double v);
     DecayCurve& operator*=(double v);
+    DecayCurve& operator/=(double v);
+
+    DecayCurve& operator+(const DecayCurve& other) const;
+    DecayCurve& operator-(const DecayCurve& other) const;
+    DecayCurve& operator*(const DecayCurve& other) const;
+    DecayCurve& operator/(const DecayCurve& other) const;
+
     DecayCurve& operator=(const DecayCurve& other);
+
+    /// Shift the curve by a float
+    DecayCurve& operator<<(double v);
 
 };
 

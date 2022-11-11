@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 import numpy.testing
 import scipy.stats
+import math
 import IMP.bff
 
 
@@ -14,73 +15,18 @@ class Tests(unittest.TestCase):
         irf_position = 6.0
         irf_width = 1.0
         irf = scipy.stats.norm.pdf(time_axis, loc=irf_position, scale=irf_width)
-        # integer shift
-        shifted_irf_ip = IMP.bff.DecayCurve.shift_array(
-            input=irf,
-            shift=1.0
-        )
-        ref = np.array(
-            [0.00000000e+00, 1.48671951e-06, 1.59837411e-05, 1.33830226e-04,
-             8.72682695e-04, 4.43184841e-03, 1.75283005e-02, 5.39909665e-02,
-             1.29517596e-01, 2.41970725e-01, 3.52065327e-01, 3.98942280e-01,
-             3.52065327e-01, 2.41970725e-01, 1.29517596e-01, 5.39909665e-02,
-             1.75283005e-02, 4.43184841e-03, 8.72682695e-04, 1.33830226e-04,
-             1.59837411e-05, 1.48671951e-06, 1.07697600e-07, 6.07588285e-09,
-             6.07588285e-09]
-        )        
-        np.testing.assert_allclose(shifted_irf_ip, ref)
-        shifted_irf_in = IMP.bff.DecayCurve.shift_array(
-            input=irf,
-            shift=-1.0
-        )
-        ref = np.array(
-            [6.07588285e-09, 6.07588285e-09, 1.07697600e-07, 1.48671951e-06,
-             1.59837411e-05, 1.33830226e-04, 8.72682695e-04, 4.43184841e-03,
-             1.75283005e-02, 5.39909665e-02, 1.29517596e-01, 2.41970725e-01,
-             3.52065327e-01, 3.98942280e-01, 3.52065327e-01, 2.41970725e-01,
-             1.29517596e-01, 5.39909665e-02, 1.75283005e-02, 4.43184841e-03,
-             8.72682695e-04, 1.33830226e-04, 1.59837411e-05, 1.48671951e-06,
-             1.07697600e-07]
-        )
-        np.testing.assert_allclose(shifted_irf_in, ref)
-
-        # floating shift
-        shifted_irf_fp = IMP.bff.DecayCurve.shift_array(
-            input=irf,
-            shift=1.5
-        )
-        ref = np.array(
-            [0.00000000e+00, 8.73523031e-06, 7.49069834e-05, 5.03256460e-04,
-             2.65226555e-03, 1.09800745e-02, 3.57596335e-02, 9.17542811e-02,
-             1.85744160e-01, 2.97018026e-01, 3.75503804e-01, 3.75503804e-01,
-             2.97018026e-01, 1.85744160e-01, 9.17542811e-02, 3.57596335e-02,
-             1.09800745e-02, 2.65226555e-03, 5.03256460e-04, 7.49069834e-05,
-             8.73523031e-06, 7.97208558e-07, 5.68867416e-08, 6.07588285e-09,
-             5.68867416e-08]
-        )
-        np.testing.assert_allclose(ref, shifted_irf_fp)
-
-        shifted_irf_fn = IMP.bff.DecayCurve.shift_array(
-            input=irf,
-            shift=-1.5
-        )
-        ref = np.array(
-            [6.07588285e-09, 5.68867416e-08, 7.97208558e-07, 8.73523031e-06,
-             7.49069834e-05, 5.03256460e-04, 2.65226555e-03, 1.09800745e-02,
-             3.57596335e-02, 9.17542811e-02, 1.85744160e-01, 2.97018026e-01,
-             3.75503804e-01, 3.75503804e-01, 2.97018026e-01, 1.85744160e-01,
-             9.17542811e-02, 3.57596335e-02, 1.09800745e-02, 2.65226555e-03,
-             5.03256460e-04, 7.49069834e-05, 8.73523031e-06, 7.97208558e-07,
-             5.68867416e-08]
-        )
-        np.testing.assert_allclose(ref, shifted_irf_fn)
-
-        # rollover
-        shifted_irf_irp = IMP.bff.DecayCurve.shift_array(
-            input=irf,
-            shift=26.0
-        )
-        np.testing.assert_allclose(shifted_irf_irp, shifted_irf_ip)
+        shifts = [2.1, 1.1, 0.5, 0.0, -0.5, -1.1, -2.1, 26.0, -26.2]
+        for shift in shifts:
+            shifted_irf_ip = IMP.bff.DecayCurve.shift_array(
+                input=irf,
+                shift=shift
+            )
+            shifted_irf_ip = np.array(shifted_irf_ip)
+            i0 = math.floor(shift)
+            i1 = math.ceil(shift)
+            f_shift = shift - i0
+            ref = np.roll(irf, -i0) * (1 - f_shift) + f_shift * np.roll(irf, -i1)
+            np.testing.assert_allclose(shifted_irf_ip, ref)
 
     def test_shift_2(self):
         x = np.arange(0, 8, dtype=np.float64)
