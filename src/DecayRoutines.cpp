@@ -476,7 +476,7 @@ std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
 }
 
 
-void lifetimes_discriminate_small_amplitudes(
+void discriminate_small_amplitudes(
         double* lifetime_spectrum, int n_lifetime_spectrum,
         double amplitude_threshold
 ){

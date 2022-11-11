@@ -311,7 +311,7 @@ IMPBFFEXPORT void decay_add_pile_up_to_model(
  * @param n_lifetime_spectrum number of elements in lifetime spectrum
  * @param amplitude_threshold
  */
-IMPBFFEXPORT void lifetimes_discriminate_small_amplitudes(
+IMPBFFEXPORT void discriminate_small_amplitudes(
         double* lifetime_spectrum, int n_lifetime_spectrum,
         double amplitude_threshold
 );
