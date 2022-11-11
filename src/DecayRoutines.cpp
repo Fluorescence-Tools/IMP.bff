@@ -4,7 +4,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 
 /* rescaling -- old version. sum(fit)->sum(decay) */
-void rescale(double *fit, double *decay, double *scale, int start, int stop) {
+void decay_rescale(double *fit, double *decay, double *scale, int start, int stop) {
     /* scaling */
     if (*scale == 0.) {
         double sumfit = 0., sumcurve = 0.;
@@ -19,7 +19,7 @@ void rescale(double *fit, double *decay, double *scale, int start, int stop) {
 }
 
 /* rescaling -- new version. scale = sum(fit*decay/w^2)/sum(fit^2/w^2) */
-void rescale_w(double *fit, double *decay, double *w_sq, double *scale, int start, int stop) {
+void decay_rescale_w(double *fit, double *decay, double *w_sq, double *scale, int start, int stop) {
     /* scaling */
     if (*scale == 0.) {
         double sumnom = 0., sumdenom = 0.;
@@ -37,7 +37,7 @@ void rescale_w(double *fit, double *decay, double *w_sq, double *scale, int star
 }
 
 /* rescaling -- new version + background. scale = sum(fit*decay/w^2)/sum(fit^2/w^2) */
-void rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *scale, int start, int stop) {
+void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *scale, int start, int stop) {
     double sumnom = 0., sumdenom = 0.;
     for (int i = start; i < stop; i++) {
         if(decay[i] > 0){
@@ -62,7 +62,7 @@ std::clog << "-- final scale: " << *scale << std::endl;
 
 
 // fast convolution - OK
-void fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
+void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
     std::vector<double> l2(stop);
     start = std::max(1, start);
     for (int i = 0; i < stop; i++) l2[i] = dt * 0.5 * lamp[i];
@@ -81,7 +81,7 @@ void fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop
 
 
 // fast convolution AVX
-void fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
+void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
 
 #ifdef __AVX__
 
@@ -157,7 +157,7 @@ fit[0] += double(tmp.m256d_f64[3]);
 
 
 /* fast convolution, high repetition rate */
-void fconv_per(double *fit, double *x, double *lamp, int numexp, int start, int stop,
+void decay_fconv_per(double *fit, double *x, double *lamp, int numexp, int start, int stop,
                int n_points, double period, double dt)
 {
     stop = (stop < 0) ? n_points: stop;
@@ -205,7 +205,7 @@ std::clog << "-- dt:" << dt << std::endl;
 
 
 // fast convolution, high repetition rate, AVX
-void fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop,
+void decay_fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop,
                    int n_points, double period, double dt) {
 #ifdef __AVX__
 
@@ -335,7 +335,7 @@ fit[0] += double(tmp.m256d_f64[3]);
 
 /* fast convolution, high repetition rate, with convolution stop for Paris */
 /* fast convolution, high repetition rate, with convolution stop for Paris */
-void fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
+void decay_fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
                   int n_points, double period, int conv_stop, double dt)
 {
     int ne, i,
@@ -369,7 +369,7 @@ void fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
 
 
 /* fast convolution with reference compound decay */
-void fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int stop, double tauref, double dt) {
+void decay_fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int stop, double tauref, double dt) {
     double deltathalf = dt * 0.5, sum_a = 0;
     for (int i = 0; i < stop; i++) fit[i] = 0;
     /* convolution */
@@ -387,7 +387,7 @@ void fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int 
 }
 
 /* slow convolution */
-void sconv(double *fit, double *p, double *lamp, int start, int stop) {
+void decay_sconv(double *fit, double *p, double *lamp, int start, int stop) {
     int i, j;
     /* convolution */
     for (i = start; i < stop; i++) {
@@ -401,7 +401,7 @@ void sconv(double *fit, double *p, double *lamp, int start, int stop) {
 
 
 /* shifting lamp */
-void shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double out_value) {
+void decay_shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double out_value) {
     int tsint = (int) (floor(ts));
     double tsdbl = ts - (double) tsint;
     int out_left = 0, out_right = 0, j;
@@ -417,7 +417,7 @@ void shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double ou
 }
 
 
-void add_pile_up_to_model(
+void decay_add_pile_up_to_model(
         double* model, int n_model,
         double* data, int n_data,
         double repetition_rate,
@@ -476,7 +476,7 @@ std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
 }
 
 
-void discriminate_small_amplitudes(
+void lifetimes_discriminate_small_amplitudes(
         double* lifetime_spectrum, int n_lifetime_spectrum,
         double amplitude_threshold
 ){
@@ -507,7 +507,7 @@ std::clog << std::endl;
 
 
 /* fast convolution, high repetition rate, with time axis */
-void fconv_per_cs_time_axis(
+void decay_fconv_per_cs_time_axis(
         double* model, int n_model,
         double* time_axis, int n_time_axis,
         double *irf, int n_irf,
@@ -518,22 +518,22 @@ void fconv_per_cs_time_axis(
 ){
     double dt = time_axis[1] - time_axis[0];
 #ifdef __AVX__
-    fconv_per_avx(
+    decay_fconv_per_avx(
             model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
             convolution_start, convolution_stop, n_model, period, dt
     );
 #endif
 #ifndef __AVX__
-    fconv_per(
-    model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
-    convolution_start, convolution_stop, n_model, period, dt
-);
+    decay_fconv_per(
+        model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
+        convolution_start, convolution_stop, n_model, period, dt
+    );
 #endif
 }
 
 
 /* fast convolution, high repetition rate, with time axis */
-void fconv_cs_time_axis(
+void decay_fconv_cs_time_axis(
         double* output, int n_output,
         double* time_axis, int n_time_axis,
         double *irf, int n_irf,
@@ -543,7 +543,7 @@ void fconv_cs_time_axis(
 ){
     double dt = time_axis[1] - time_axis[0];
 #ifdef __AVX__
-    fconv_avx(
+    decay_fconv_avx(
             output,
             lifetime_spectrum,
             irf,
@@ -552,53 +552,14 @@ void fconv_cs_time_axis(
     );
 #endif
 #ifndef __AVX__
-    fconv(
-    output,
-    lifetime_spectrum,
-    irf,
-    (int) n_lifetime_spectrum / 2,
-    convolution_start, convolution_stop, dt
-);
+    decay_fconv(
+        output,
+        lifetime_spectrum,
+        irf,
+        (int) n_lifetime_spectrum / 2,
+        convolution_start, convolution_stop, dt
+    );
 #endif
 }
-
-//
-//void fconv_cs_time_axis_old(
-//        double* output, int n_output,
-//        double* time_axis, int n_time_axis,
-//        double *irf, int n_irf,
-//        double* lifetime_spectrum, int n_lifetime_spectrum,
-//        int convolution_start,
-//        int convolution_stop
-//){
-//    int number_of_exponentials = n_lifetime_spectrum / 2;
-//#if IMPBFF_VERBOSE
-//    std::clog << "convolve_lifetime_spectrum... " << std::endl;
-//std::clog << "-- number_of_exponentials: " << number_of_exponentials << std::endl;
-//std::clog << "-- convolution_start: " << convolution_start << std::endl;
-//std::clog << "-- convolution_stop: " << convolution_stop << std::endl;
-//#endif
-//    for(int ne=0; ne<number_of_exponentials; ne++){
-//        double a = lifetime_spectrum[2 * ne];
-//        double current_lifetime = (lifetime_spectrum[2 * ne + 1]);
-//        if((a == 0.0) || (current_lifetime == 0.0)) continue;
-//        double current_model_value = 0.0;
-//        for(int i = convolution_start; i < convolution_stop; i++){
-//            double dt;
-//            int pre = std::max(0, i - 1);
-//            if(i < convolution_stop - 1){
-//                dt = (time_axis[i + 1] - time_axis[i]);
-//            } else{
-//                dt = (time_axis[i] - time_axis[i - 1]);
-//            }
-//            double dt_2 = dt / 2.0;
-//            double current_exponential = std::exp(-dt / current_lifetime);
-//            current_model_value = (current_model_value + dt_2 * irf[pre]) *
-//                                  current_exponential + dt_2 * irf[i];
-//            output[i] += current_model_value * a;
-//        }
-//    }
-//}
-
 
 IMPBFF_END_NAMESPACE

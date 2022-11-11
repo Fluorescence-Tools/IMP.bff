@@ -7,8 +7,8 @@
  *
  */
 
-#ifndef IMPBFF_FSCONV_H
-#define IMPBFF_FSCONV_H
+#ifndef IMPBFF_DECAYROUTINES_H
+#define IMPBFF_DECAYROUTINES_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -37,6 +37,10 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+// -1 -> n - 1, -2 -> n - 2,
+inline int mod_p(int a, int n){
+    return (n + (a % n)) % n;
+}
 
 /*!
  * @brief Scale model function to the data (old version)
@@ -56,7 +60,7 @@ IMPBFF_BEGIN_NAMESPACE
  * @param start[in] The start micro time channel
  * @param stop[in] The stop micro time channel
  */
-void rescale(double *fit, double *decay, double *scale, int start, int stop);
+IMPBFFEXPORT void decay_rescale(double *fit, double *decay, double *scale, int start, int stop);
 
 
 /*!
@@ -79,8 +83,7 @@ void rescale(double *fit, double *decay, double *scale, int start, int stop);
  * @param start[in] The start micro time channel
  * @param stop[in] The stop micro time channel
  */
-void rescale_w(double *fit, double *decay, double *w_sq, double *scale, int start, int stop);
-
+IMPBFFEXPORT void decay_rescale_w(double *fit, double *decay, double *w_sq, double *scale, int start, int stop);
 
 /*!
  * @brief Scale model function to the data (with weights and background)
@@ -102,7 +105,7 @@ void rescale_w(double *fit, double *decay, double *w_sq, double *scale, int star
  * @param start[in] The start micro time channel
  * @param stop[in] The stop micro time channel
  */
-void rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *scale, int start, int stop);
+IMPBFFEXPORT void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *scale, int start, int stop);
 
 
 /*!
@@ -122,8 +125,7 @@ void rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *s
  * @param stop[in] stop micro time index for convolution.
  * @param dt[in] time difference between two micro time channels
  */
-void fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
-
+IMPBFFEXPORT void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
 
 /*!
  * @brief Convolve lifetime spectrum with instrument response (fast convolution,
@@ -142,8 +144,7 @@ void fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop
  * @param n_points
  * @param dt
  */
-void fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
-
+IMPBFFEXPORT void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
 
 /*!
  * @brief Convolve lifetime spectrum with instrument response (fast convolution,
@@ -165,10 +166,11 @@ void fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int 
  * nanoseconds)
  * @param dt[in] time difference between two micro time channels
  */
-void fconv_per(
+IMPBFFEXPORT void decay_fconv_per(
         double *fit, double *x, double *lamp, int numexp, int start, int stop,
         int n_points, double period, double dt=0.05
 );
+
 /*!
  * @brief Convolve lifetime spectrum with instrument response (fast convolution,
  * high repetition rate), AVX optimized version
@@ -189,11 +191,10 @@ void fconv_per(
  * nanoseconds)
  * @param dt[in] time difference between two micro time channels
  */
-void fconv_per_avx(
+IMPBFFEXPORT void decay_fconv_per_avx(
         double *fit, double *x, double *lamp, int numexp, int start, int stop,
         int n_points, double period, double dt=0.05
 );
-
 
 /*!
  * @brief Convolve lifetime spectrum - fast convolution, high repetition rate,
@@ -212,9 +213,8 @@ void fconv_per_avx(
  * @param conv_stop convolution stop micro channel number
  * @param dt[in] time difference between two micro time channels
  */
-void fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
+IMPBFFEXPORT void decay_fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
                   int n_points, double period, int conv_stop, double dt);
-
 
 /*!
  * @brief Convolve lifetime spectrum - fast convolution with reference compound
@@ -239,8 +239,7 @@ void fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
  * fluorescence lifetime spectrum
  * @param dt[in] time difference between two micro time channels
  */
-void fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int stop, double tauref, double dt=0.05);
-
+IMPBFFEXPORT void decay_fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int stop, double tauref, double dt=0.05);
 
 /*!
  * @brief Convolve fluorescence decay curve with irf
@@ -254,11 +253,10 @@ void fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int 
  * @param start start index of the convolution
  * @param stop stop index of the convolution
  */
-void sconv(double *fit, double *p, double *lamp, int start, int stop);
-
+IMPBFFEXPORT void decay_sconv(double *fit, double *p, double *lamp, int start, int stop);
 
 /*!
- * @brief shift instrumnet response function
+ * @brief shift instrument response function
  *
  * @param lampsh
  * @param lamp
@@ -267,8 +265,7 @@ void sconv(double *fit, double *p, double *lamp, int start, int stop);
  * @param out_value the value of the shifted response function outside of the
  * valid indices
  */
-void shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double out_value=0.0);
-
+IMPBFFEXPORT void decay_shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double out_value=0.0);
 
 /*!
  * @brief Add a pile-up distortion to the model function
@@ -293,7 +290,7 @@ void shift_lamp(double *lampsh, double *lamp, double ts, int n_points, double ou
  * @param stop Stop index for pile up
  * (default "coates")
  */
-void add_pile_up_to_model(
+IMPBFFEXPORT void decay_add_pile_up_to_model(
         double* model, int n_model,
         double* data, int n_data,
         double repetition_rate,
@@ -304,9 +301,8 @@ void add_pile_up_to_model(
         int stop = -1
 );
 
-
 /*!
- * Threshold the amplitudes
+ * Threshold amplitudes
  *
  * Amplitudes with absolute values smaller than the specified threshold are
  * set to zero.
@@ -315,14 +311,13 @@ void add_pile_up_to_model(
  * @param n_lifetime_spectrum number of elements in lifetime spectrum
  * @param amplitude_threshold
  */
-void discriminate_small_amplitudes(
+IMPBFFEXPORT void lifetimes_discriminate_small_amplitudes(
         double* lifetime_spectrum, int n_lifetime_spectrum,
         double amplitude_threshold
 );
 
-
 /*!
-* Compute the fluorescence decay for a lifetime spectrum and a instrument
+* Compute the fluorescence decay for a lifetime spectrum and an instrument
 * response function considering periodic excitation.
 *
 * Fills the pre-allocated output array `output_decay` with a fluorescence
@@ -354,7 +349,7 @@ void discriminate_small_amplitudes(
 * @param period Period of repetition in units of the lifetime (usually,
 * nano-seconds)
 */
-void fconv_per_cs_time_axis(
+IMPBFFEXPORT void decay_fconv_per_cs_time_axis(
         double *model, int n_model,
         double *time_axis, int n_time_axis,
         double *irf, int n_irf,
@@ -363,7 +358,6 @@ void fconv_per_cs_time_axis(
         int convolution_stop = -1,
         double period = 100.0
 );
-
 
 /*!
 * Compute the fluorescence decay for a lifetime spectrum and a instrument
@@ -402,10 +396,10 @@ void fconv_per_cs_time_axis(
 * not omitted in the convolution.
 * @param amplitude_threshold[in] Threshold value for the amplitudes
 */
-void fconv_cs_time_axis(
+IMPBFFEXPORT void decay_fconv_cs_time_axis(
         double *inplace_output, int n_output,
         double *time_axis, int n_time_axis,
-        double *instrument_response_function, int n_instrument_response_function,
+        double *irf, int n_irf,
         double *lifetime_spectrum, int n_lifetime_spectrum,
         int convolution_start = 0,
         int convolution_stop = -1
@@ -414,5 +408,4 @@ void fconv_cs_time_axis(
 
 IMPBFF_END_NAMESPACE
 
-
-#endif //IMPBFF_FSCONV_H
+#endif //IMPBFF_DECAYROUTINES_H

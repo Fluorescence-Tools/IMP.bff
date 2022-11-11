@@ -60,7 +60,7 @@ class Tests(unittest.TestCase):
         model = np.copy(self.model)
         data = np.copy(self.data)
         model /= 10
-        scale = IMP.bff.rescale(
+        scale = IMP.bff.decay_rescale(
             fit=model,
             decay=data,
             start=0,
@@ -75,7 +75,7 @@ class Tests(unittest.TestCase):
         data = np.copy(self.data)
         w_sq = np.copy(self.w_sq)
         model /= 10
-        scale = IMP.bff.rescale_w(
+        scale = IMP.bff.decay_rescale_w(
             fit=model,
             decay=data,
             w_sq=w_sq,
@@ -91,7 +91,7 @@ class Tests(unittest.TestCase):
         data = np.copy(self.data)
         w_sq = np.copy(self.w_sq)
         model /= 10
-        scale = IMP.bff.rescale_w_bg(
+        scale = IMP.bff.decay_rescale_w_bg(
             fit=model,
             decay=data,
             w_sq=w_sq,
@@ -133,7 +133,7 @@ class Tests(unittest.TestCase):
                               2.42000631e-01, 2.31015019e-01, 2.20528099e-01, 2.10517232e-01,
                               2.00960808e-01, 1.91838198e-01, 1.83129708e-01, 1.74816540e-01])
         model_fconv = np.zeros_like(irf)
-        IMP.bff.fconv(
+        IMP.bff.decay_fconv(
             fit=model_fconv,
             irf=irf,
             x=lifetime_spectrum,
@@ -142,10 +142,10 @@ class Tests(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(model_ref, model_fconv)
 
-        # AVX wont be supported on Apple -> M1
+        # AVX won't be supported on Apple -> M1
         if platform != "darwin":
             model_fconv_avx = np.zeros_like(irf)
-            IMP.bff.fconv_avx(
+            IMP.bff.decay_fconv_avx(
                 fit=model_fconv_avx,
                 irf=irf,
                 x=lifetime_spectrum,
@@ -167,7 +167,7 @@ class Tests(unittest.TestCase):
         dt = time_axis[1] - time_axis[0]
 
         model_fconv_per = np.zeros_like(irf)
-        IMP.bff.fconv_per(
+        IMP.bff.decay_fconv_per(
             fit=model_fconv_per,
             irf=irf,
             x=lifetime_spectrum,
@@ -191,10 +191,10 @@ class Tests(unittest.TestCase):
         )
         np.testing.assert_array_almost_equal(model_fconv_per, ref)
 
-        # AVX wont be supported on Apple -> M1
+        # AVX won't be supported on Apple -> M1
         if platform != "darwin":
             model_fconv_avx = np.zeros_like(irf)
-            IMP.bff.fconv_per_avx(
+            IMP.bff.decay_fconv_per_avx(
                 fit=model_fconv_avx,
                 irf=irf,
                 x=lifetime_spectrum,
@@ -219,7 +219,7 @@ class Tests(unittest.TestCase):
         dt = time_axis[1] - time_axis[0]
 
         model_fconv_per_cs = np.zeros_like(irf)
-        IMP.bff.fconv_per_cs(
+        IMP.bff.decay_fconv_per_cs(
             fit=model_fconv_per_cs,
             irf=irf,
             x=lifetime_spectrum,
@@ -254,7 +254,7 @@ class Tests(unittest.TestCase):
         tau = 4.1
         decay = np.exp(-time_axis / tau)
         model_sconv = np.zeros_like(irf)
-        IMP.bff.sconv(
+        IMP.bff.decay_sconv(
             fit=model_sconv,
             irf=irf,
             model=decay
@@ -304,7 +304,7 @@ class Tests(unittest.TestCase):
         irf = scipy.stats.norm.pdf(time_axis, loc=irf_position, scale=irf_width)
         irf_shift = np.empty_like(irf)
         time_shift = 0.5
-        IMP.bff.shift_lamp(irf, irf_shift, time_shift)
+        IMP.bff.decay_shift_lamp(irf, irf_shift, time_shift)
         ref = np.array(
             [
                 0.28561886, 0.44980189, 0.66053707, 0.90452776, 1.15505166,
