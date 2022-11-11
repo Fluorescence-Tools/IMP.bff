@@ -6,8 +6,8 @@
  * Copyright 2007-2022 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_DecayPattern_H
-#define IMPBFF_DecayPattern_H
+#ifndef IMPBFF_DECAYPATTERN_H
+#define IMPBFF_DECAYPATTERN_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -31,10 +31,12 @@ private:
 
 public:
 
+    /// Fraction (area) of background pattern
     double get_pattern_fraction() const{
         return pattern_fraction;
     }
 
+    /// Fraction (area) of background pattern
     void set_pattern_fraction(double v){
         pattern_fraction = std::max(0.0, std::min(1.0, std::abs(v)));
     }
@@ -55,13 +57,13 @@ public:
         return constant_offset;
     }
 
-    void add(DecayCurve* decay) override{
-        if(is_active()) {
+    void add(DecayCurve* out) override{
+        if(out != nullptr && is_active()) {
             // resize background pattern to size of input decay
-            resize(decay->size());
+            resize(out->size());
 
-            int start = get_start(decay);
-            int stop = get_stop(decay);
+            int start = get_start(out);
+            int stop = get_stop(out);
 
             double f = get_pattern_fraction();
             auto bg = get_pattern();
@@ -70,7 +72,7 @@ public:
             // Compute pre-factors of decay and added pattern
             double ds, bs;
             if (f > 0.0) {
-                ds = std::accumulate(decay->y.begin() + start, decay->y.begin() + stop, 0.0);
+                ds = std::accumulate(out->y.begin() + start, out->y.begin() + stop, 0.0);
                 bs = std::accumulate(bg->y.begin() + start, bg->y.begin() + stop, 0.0);
             } else {
                 ds = bs = 1.0;
@@ -82,7 +84,7 @@ public:
             // mix constant offset, decay, and pattern
             double offset = get_constant_offset();
             for (int i = start; i < stop; i++) {
-                decay->y[i] = decay->y[i] * fd + bg->y[i] * fb + offset;
+                out->y[i] = out->y[i] * fd + bg->y[i] * fb + offset;
             }
         }
     }
@@ -107,4 +109,4 @@ public:
 IMPBFF_END_NAMESPACE
 
 
-#endif //IMPBFF_DecayPattern_H
+#endif //IMPBFF_DECAYPATTERN_H

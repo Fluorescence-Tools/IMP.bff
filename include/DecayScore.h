@@ -159,20 +159,27 @@ public:
 
 
     /// Evaluate and return the score
-    double score(){
+    double score(DecayCurve* model = nullptr){
 #if IMPBFF_VERBOSE
         std::clog << "DecayScore::evaluate" << std::endl;
 #endif
+        if(model != nullptr){
+            set_model(model);
+        }
         return get_score(
                 get_start(get_data()), get_stop(get_data()),
                 get_score_type().c_str()
         );
     }
 
+    /*!
+     * score_type:
+     * poisson, pearson, gauss, cnp, sswr (sum of weighted squared residuals)
+     */
     DecayScore(
             DecayCurve* model= nullptr,
             DecayCurve* data= nullptr,
-            std::string score_type= "default",
+            std::string score_type= "poisson",
             int start=0, int stop=-1
     ) : DecayRange(start, stop){
 #if IMPBFF_VERBOSE

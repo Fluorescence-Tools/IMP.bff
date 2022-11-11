@@ -63,32 +63,46 @@ public:
 
 public:
 
-
-    void add(DecayCurve* model){
-        if(is_active()){
-            model->resize(data->size());
-            add_pile_up_to_model(
-                    model->y.data(), model->y.size(),
-                    data->y.data(), data->y.size(),
-                    get_repetition_rate(),
-                    get_instrument_dead_time(),
-                    data->get_acquisition_time(),
-                    pile_up_model.c_str()
+    void add(DecayCurve* out) override{
+        IMP_USAGE_CHECK(data != nullptr, "Experimental data not set.");
+#if IMPBFF_VERBOSE
+        std::clog << "DecayPileup::add" << std::endl;
+        std::clog << "-- data->size(): " << data->size() << std::endl;
+        std::clog << "-- out->size(): " << out->size() << std::endl;
+        std::clog << "-- get_repetition_rate(): " << get_repetition_rate() << std::endl;
+        std::clog << "-- get_instrument_dead_time(): " << get_instrument_dead_time() << std::endl;
+        std::clog << "-- data->get_acquisition_time(): " << data->get_acquisition_time() << std::endl;
+        std::clog << "-- data->get_acquisition_time(): " << data->get_acquisition_time() << std::endl;
+#endif
+        if(out != nullptr && is_active()) {
+            out->resize(data->size());
+            decay_add_pile_up_to_model(
+                out->y.data(), out->y.size(),
+                data->y.data(), data->y.size(),
+                get_repetition_rate(),
+                get_instrument_dead_time(),
+                data->get_acquisition_time(),
+                pile_up_model.c_str()
             );
         }
     }
 
     DecayPileup(
-        DecayCurve* data = nullptr,
+        DecayCurve* data,
         const char* pile_up_model = "coates",
         double repetition_rate = 100,
         double instrument_dead_time = 120,
-        int start = 0,
-        int stop = -1,
+        int start = 0, int stop = -1,
         bool active = true
     ) : DecayModifier(data, start, stop, active) {
 #if IMPBFF_VERBOSE
         std::clog << "DecayPileup::DecayPileup" << std::endl;
+        std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
+        std::clog << "-- repetition_rate: " << repetition_rate << std::endl;
+        std::clog << "-- instrument_dead_time: " << instrument_dead_time << std::endl;
+        std::clog << "-- start: " << start << std::endl;
+        std::clog << "-- stop: " << stop << std::endl;
+        std::clog << "-- active: " << active << std::endl;
 #endif
         set_pile_up_model(pile_up_model);
         set_repetition_rate(repetition_rate);

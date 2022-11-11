@@ -21,30 +21,13 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-/// Scales the model in the specified range
-//            /*!
-//             *
-//             *
-//             * The model is either scaled to the data or to a specified number of photons
-//             *
-//             * @param scale_model_to_data[in] If true the model is scaled to the data
-//             * @param number_of_photons[in] If scale_model_to_data is false the model is
-//             * scaled to the specified number of photons
-//             * @param start[in] Specifies the start index of the model range
-//             * @param stop[in] Specifies the stop index of the model range
-//             * @param constant_background[in] number of constant background photons in
-//             * each histogram bin.
-//             * @param model[in, out] Model function that is scaled. The model function is
-//             * changed inplace.
-//             * @param data[in] Data array to which the model function can be scaled
-//             * @param squared_data_weights[in] squared weights of the data
-//             */
 class IMPBFFEXPORT DecayScale : public DecayModifier{
 
 private:
 
     /// A constant that is subtracted from the data
     double _constant_background = 0.0;
+    bool _blank_outside = true;
 
 public:
 
@@ -66,22 +49,33 @@ public:
         _constant_background = v;
     }
 
+    void set_blank_outside(double v){
+        _blank_outside = v;
+    }
+
+    bool get_blank_outside(){
+        return _blank_outside;
+    }
+
     void set(
             DecayCurve* data = nullptr,
             double constant_background = 0.0,
-            int start = 0, int stop = -1, bool active = true
+            int start = 0, int stop = -1, bool active = true,
+            bool blank_outside=true
     ){
         set_data(data);
         set_constant_background(constant_background);
         set_start(start);
         set_stop(stop);
         set_active(active);
+        set_blank_outside(blank_outside);
     }
 
     DecayScale(
             DecayCurve* data = nullptr,
             double constant_background = 0.0,
-            int start=0, int stop=-1, bool active=true
+            int start=0, int stop=-1, bool active=true,
+            bool blank_outside=true
     ) : DecayModifier(data, start, stop, active){
         set_constant_background(constant_background);
     }
@@ -90,20 +84,29 @@ public:
 #if IMPBFF_VERBOSE
         std::clog << "DecayScale::add" << std::endl;
 #endif
+        IMP_USAGE_CHECK(data != nullptr, "Experimental data not set - cannot scale model.");
         if(is_active()){
             auto d = get_data();
             double scale = 0.0;
             double* model = decay->y.data();
             double* data = d->y.data();
             double* squared_data_weights = d->ey.data();
+            int n_model = decay->y.size();
             int start = (int) get_start(decay);
             int stop = (int) get_stop(decay);
             auto constant_background = get_constant_background();
-            rescale_w_bg(
+            decay_rescale_w_bg(
                     model, data,
                     squared_data_weights, constant_background,
                     &scale, start, stop);
-
+            if(_blank_outside){
+                for(int i = 0; i < start; i++){
+                    model[i] = 0.0;
+                }
+                for(int i = stop; i < n_model; i++){
+                    model[i] = 0.0;
+                }
+            }
         }
     }
 

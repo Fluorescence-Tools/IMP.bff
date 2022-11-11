@@ -30,7 +30,6 @@ private:
 
 protected:
 
-    /// Input data potentially by modifier
     DecayCurve* data = nullptr;
     DecayCurve* default_data = nullptr;
 
@@ -54,16 +53,30 @@ public:
         return _is_active;
     }
 
+    /// Setter to define if DecayModifier is active. An active
+    /// DecayModifier modifies a DecayCurve using
     void set_active(bool v){
         _is_active = v;
     }
 
+    /*!
+     * Set values of DecayModifier
+     * @param data DecayModifier data
+     * @param start start of DecayModifier
+     * @param stop stop of DecayModifier
+     * @param active if active is true DecayModifier::add modifies input decay
+     */
     void set(DecayCurve* data, int start=0, int stop=-1, bool active = true){
         DecayRange::set(start, stop);
         set_data(data);
         set_active(active);
     }
 
+    /*!
+     * Resize data of DecayModifier
+     * @param n new size of data
+     * @param v value of data (if larger than original size)
+     */
     void resize(size_t n, double v = 0.0) {
         default_data->resize(n, v);
         if(data != nullptr){
@@ -71,9 +84,15 @@ public:
         }
     }
 
-    // Modify a DecayCurve
+    /*!
+     * Modify DecayCurve object
+     * @param out DecayCurve that is modified
+     */
     virtual void add(DecayCurve* out) = 0;
 
+    /*!
+     * DecayModifier modifies DecayCurve in range [start, stop]
+     */
     DecayModifier(DecayCurve *data = nullptr, int start = 0, int stop = -1, bool active = true) :
             DecayRange(start, stop){
         default_data = new DecayCurve();
