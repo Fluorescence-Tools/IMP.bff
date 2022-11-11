@@ -25,8 +25,9 @@ void PathMap::set_path_map_header(PathMapHeader &av_header, float resolution)
 {
     header_ = *av_header.get_density_header();
     header_.compute_xyz_top(true);
-    if(resolution > 0)
-        header_.set_resolution(resolution);
+    if(resolution < 0)
+        resolution = av_header.get_simulation_grid_resolution();
+    header_.set_resolution(resolution);
     // allocate the data
     long nvox = get_number_of_voxels();
     resize(nvox);

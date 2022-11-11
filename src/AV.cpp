@@ -104,6 +104,7 @@ void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
     IMP::Particle* parent = get_model()->get_particle(get_particle_index(0));
+
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
     auto root = IMP::atom::get_root(h);
     av_map_->set_particles(get_leaves(root));
