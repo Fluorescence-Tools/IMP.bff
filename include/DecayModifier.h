@@ -23,6 +23,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 class IMPBFFEXPORT DecayModifier : public DecayRange {
 
+
 private:
 
     bool _is_active = true;
@@ -70,7 +71,8 @@ public:
         }
     }
 
-    virtual void add(DecayCurve* decay) = 0;
+    // Modify a DecayCurve
+    virtual void add(DecayCurve* out) = 0;
 
     DecayModifier(DecayCurve *data = nullptr, int start = 0, int stop = -1, bool active = true) :
             DecayRange(start, stop){
