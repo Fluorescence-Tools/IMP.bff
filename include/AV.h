@@ -16,6 +16,8 @@
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/Transformation3D.h>
 #include <IMP/core/XYZ.h>
+#include <IMP/log.h>
+
 
 #include <IMP/bff/PathMap.h>
 
@@ -44,15 +46,29 @@ typedef enum{
 } DyePairMeasures;
 
 
+
 struct AVPairDistanceMeasurement{
 
-    std::string position_1;
-    std::string position_2;
     double distance = -1;
     double error_neg = -1;
     double error_pos = -1;
     double forster_radius = 52.0;
     int distance_type = IMP::bff::DYE_PAIR_DISTANCE_MEAN;
+    std::string position_1;
+    std::string position_2;
+
+    std::string get_json(){
+        // create an empty structure (null)
+        nlohmann::json j;
+        j["position1_name"] = position_1;
+        j["position2_name"] = position_2;
+        j["distance"] = distance;
+        j["error_neg"] = error_neg;
+        j["error_pos"] = error_pos;
+        j["Forster_radius"] = forster_radius;
+        j["distance_type"] = distance_type;
+        return j.dump();
+    }
 
     double score_model(double model){
         auto ev = [](auto f, auto m, auto en, auto ep){
@@ -87,8 +103,8 @@ private:
 
 protected:
 
-    IMP::algebra::VectorD<8> get_parameter() const {
-        IMP::algebra::VectorD<8> v;
+    IMP::algebra::VectorD<9> get_parameter() const {
+        IMP::algebra::VectorD<9> v;
         v[0] = get_linker_length();
         v[1] = get_radius1();
         v[2] = get_radius2();
