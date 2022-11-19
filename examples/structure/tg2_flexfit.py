@@ -1,6 +1,10 @@
+## \example bff/structure/imp_bff_flexfit.py
 """
-Flexible fitting with AV restraints
-======================================
+Transglutaminase 2: Flexible fitting with AV restraints
+========================================
+transglutaminase 2 (TG2)
+
+
 ``IMP.bff`` includes the command line tool ``imp_bff`` that
 contains the program ``flexfit`` - a software to sample and
 optimize  biomolecular structures with flexible regions based on
@@ -23,6 +27,7 @@ For full help on the rrt_sample tool, run from a command line:
    $ imp_bff flexfit --help
 
 """
+# sphinx_gallery_thumbnail_path = 'img/examples_structure_flexfit.gif'
 
 # %%
 # Setup
