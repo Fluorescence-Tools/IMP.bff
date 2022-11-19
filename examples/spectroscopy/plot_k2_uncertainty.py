@@ -1,20 +1,18 @@
 """
 Orientation factor
 ==================
+Compute the probability of distance distributions for an
+experimental steady state donor and acceptor anisotropies.
 """
-
-# This script is an implementation that
-# takes p(k2) and p(Rapp) and outputs p(RDA|Rapp,k2)
-# see equation xxx in manuscript
 
 import numpy as np
 import numba as nb
 import scipy.stats
-from scipy.optimize import curve_fit
 
 import pylab as plt
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-import IMP.bff.fret.kappa2
+import IMP.bff.spectroscopy.kappa2
+from IMP.bff.spectroscopy.kappa2 import s2delta, kappasq_all_delta
 
 
 @nb.njit
@@ -76,13 +74,13 @@ def k2_call(
     step = kwargs['step']
     n_bins = kwargs['n_bins']
     r_0 = kwargs['r_0']
-    _, delta = IMP.bff.fret.kappa2.s2delta(
+    _, delta = s2delta(
         s2_donor=sD2,
         s2_acceptor=sA2,
         r_inf_AD=kwargs.get(r_ADinf, 0.0001),
         r_0=r_0
     )
-    return IMP.bff.fret.kappa2.kappasq_all_delta(
+    return kappasq_all_delta(
         delta = delta,
         sD2 = sD2,
         sA2 = sA2,
@@ -116,7 +114,7 @@ distance_sets = {
 exp_means = {}
 
 # Plot here only the first distance set
-for ds in distance_sets[:1]:
+for ds in list(distance_sets.keys())[1:]:
     Rapp_ms = distance_sets[ds]['Rapp_ms']
     Rapp_m_refs = distance_sets[ds]['RDA_ref']
     Rapp_sds = distance_sets[ds]['Rapp_sd']
