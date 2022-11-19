@@ -7,7 +7,9 @@ powershell -Command "(gc %IMP_CMAKE%) -replace '.dll', '.lib' | Out-File -encodi
 
 echo "Build documentation.i"
 echo off
-cd doc && mkdir -p _build && doxygen
+cd doc
+mkdir _build/html/stable/api
+doxygen
 python ../tools/doxy2swig.py _build/xml/index.xml ../pyext/documentation.i
 cd ..
 
