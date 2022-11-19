@@ -6,7 +6,6 @@ set IMP_CMAKE="%LIBRARY_LIB%\cmake\IMP\IMPConfig.cmake"
 powershell -Command "(gc %IMP_CMAKE%) -replace '.dll', '.lib' | Out-File -encoding ASCII %IMP_CMAKE%"
 
 echo "Build documentation.i"
-echo off
 cd doc
 mkdir _build/html/stable/api
 doxygen
