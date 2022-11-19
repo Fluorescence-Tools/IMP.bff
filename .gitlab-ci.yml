@@ -5,6 +5,8 @@ stages:
 
 .build: &build
   stage: build
+  before_script:
+    - git submodule update --init --recursive --remote
   artifacts:
     paths:
       - bld-dir/
@@ -14,10 +16,6 @@ stages:
     - ./tools/build.sh
 .build:lnx: &build_lnx
   <<: *build_posix
-  before_script:
-    - source "/opt/conda/etc/profile.d/conda.sh"
-    - conda activate /opt/conda/
-    - git submodule update --init --recursive --remote
 build:lnx_x86:
   <<: *build_lnx
   image:
