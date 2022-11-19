@@ -39,5 +39,5 @@ class Tests(unittest.TestCase):
             pattern_fraction=f
         )
         bg.add(dc)
-        r = y * (1-f) + bg_pattern * f * y.sum() / sum(bg_pattern) + offset
+        r = y * (1-f) + bg_pattern * f * y.sum() / np.sum(bg_pattern) + offset
         np.testing.assert_allclose(r, dc.y)
