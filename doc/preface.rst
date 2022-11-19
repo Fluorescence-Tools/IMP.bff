@@ -10,19 +10,19 @@
 .. include:: includes/big_toc_css.rst
 .. include:: tune_toc.rst
 
-==================
-Welcome to IMP.bff
-==================
+=======================
+Welcome
+=======================
 
 |
+
 .. toctree::
     :maxdepth: 2
 
     install
-    faq
-    support
     related_projects
     about
     whats_new
+    roadmap
 
 |

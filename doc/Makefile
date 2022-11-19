@@ -42,7 +42,9 @@ html:
 	# These two lines make the build a bit more lengthy, and the
 	# the embedding of images more robust
 	rm -rf $(BUILDDIR)/html/_images
-	#rm -rf _build/doctrees/
+	rm -rf _build/doctrees/
+	rm -rf examples/
+	mkdir -p _build/html/stable
 
 	# Use Doxygen to build xml files (used to breathe for sphinx docs)
 	doxygen

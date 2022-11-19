@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
 #
-# Configuration file for the Sphinx documentation builder.
-#
-# This file does only contain a selection of the most common options. For a
-# full list see the documentation:
-# http://www.sphinx-doc.org/en/master/config
-
-# -- Path setup --------------------------------------------------------------
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-#
 import os
 import subprocess
 import sys
@@ -35,17 +23,24 @@ root_doc = 'contents'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc', 'sphinx.ext.autosummary',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'numpydoc',
+    'nbsphinx',
+    'sphinx_gallery.gen_gallery',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.imgconverter',
-    'sphinx_gallery.gen_gallery',
     'add_toctree_functions',
     'matplotlib.sphinxext.plot_directive',
-    'sphinxcontrib.bibtex'
-    # 'sphinx.ext.autosectionlabel'
+    'sphinx.ext.autosectionlabel'
 ]
+
+nbsphinx_allow_errors = True
+
+# BibTEex
+extensions += ['sphinxcontrib.bibtex']
+bibtex_bibfiles = ['references.bib']
 
 # this is needed for some reason...
 # see https://github.com/numpy/numpydoc/issues/69
@@ -169,7 +164,7 @@ release_highlights_dir = Path("..") / "examples" / "release_highlights"
 # Finds the highlight with the latest version number
 latest_highlights = sorted(release_highlights_dir.glob("*.py"))[-1]
 latest_highlights = latest_highlights.with_suffix('').name
-html_context["release_highlights"] = f"examples/release_highlights/{latest_highlights}"
+html_context["release_highlights"] = f"auto_examples/release_highlights/{latest_highlights}"
 
 # get version from higlight name assuming highlights have the form
 # plot_release_highlights_0_22_0
@@ -193,28 +188,11 @@ latex_elements = {
         """
 }
 
-# # Grouping the document tree into LaTeX files. List of tuples
-# # (source start file, target name, title, author, documentclass
-# # [howto/manual]).
-# latex_documents = [('contents', 'user_guide.tex', 'scikit-learn user guide',
-#                     'scikit-learn developers', 'manual'), ]
-
-# The name of an image file (relative to this directory) to place at the top of
-# the title page.
-latex_logo = "logos/IMP.bff-logo.png"
-
-# Documents to append as an appendix to all manuals.
-# latex_appendices = []
-
-# If false, no module index is generated.
-latex_domain_indices = False
-
 trim_doctests_flags = True
 
 # intersphinx configuration
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/{.major}'.format(
-        sys.version_info), None),
+    'python': ('https://docs.python.org/{.major}'.format(sys.version_info), None),
     'numpy': ('https://numpy.org/doc/stable', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
     'matplotlib': ('https://matplotlib.org/', None),
@@ -258,18 +236,15 @@ class SubSectionTitleOrder:
         return directory
 
 
-# This is largely from
-# https://github.com/scikit-learn/scikit-learn/blob/master/doc/conf.py
 sphinx_gallery_conf = {
     'doc_module': 'IMP.bff',
     'show_memory': False,
     'examples_dirs': ['../examples'],
-    'gallery_dirs': ['examples'],
+    'gallery_dirs': ['auto_examples'],
     'subsection_order': SubSectionTitleOrder('../examples'),
-    # avoid generating too many cross links
+    # avoid generating too many cross-links
     'inspect_global_variables': False,
-    'remove_config_comments': True,
-    #'ignore_pattern': r'^(?!_.*$)*.py'  # match files ending with .py not starting with _
+    'remove_config_comments': True
 }
 
 # The following dictionary contains the information used to create the
@@ -277,7 +252,7 @@ sphinx_gallery_conf = {
 # key: first image in set
 # values: (number of plot in set, height of thumbnail)
 carousel_thumbs = {
-    'avff_tg2_output_chimera.gif': 600,
+    'examples_structure_flexfit.gif': 600,
     'sphx_glr_plot_k2_thumb.png': 600,
     'sphx_glr_plot_path_maps_002': 600
 }
@@ -288,7 +263,6 @@ def make_carousel_thumbs(app, exception):
     if exception is not None:
         return
     print('Preparing carousel images')
-
     image_dir = os.path.join(app.builder.outdir, '_images')
     for glr_plot, max_width in carousel_thumbs.items():
         image = os.path.join(image_dir, glr_plot)
@@ -316,19 +290,6 @@ def filter_search_index(app, exception):
 
     with open(searchindex_path, 'w') as f:
         f.write(searchindex_text)
-
-
-# latex and breathe do not play very well together. Therefore,
-# breathe is only used for the webpage.
-# compatible with readthedocs online builder and local builder
-if sys.argv[0].endswith('sphinx-build') and \
-        ('html' in sys.argv or sys.argv[-1] == '_build'):
-    subprocess.call('doxygen', shell=True)
-breathe_projects = {
-    'IMP.bff': './_build/xml'
-}
-breathe_default_project = "IMP.bff"
-extensions += ['breathe']
 
 
 # Hack to get kwargs to appear in docstring #18434

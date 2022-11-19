@@ -9,15 +9,20 @@
 .. include:: ../tune_toc.rst
 
 =================
-IMP.bff Tutorials
+Tutorials
 =================
 
 |
 
 .. toctree::
    :maxdepth: 2
+   :glob:
 
-   basic/tttr.rst
+   structure/index
+   fluorescence_decays/index
+   fluorescence_correlation/index
+   single_molecule/index
+   computational_graphs/index
 
 |
 

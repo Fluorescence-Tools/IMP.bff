@@ -7,14 +7,14 @@
 {%- endif %}
 
 {%- set drop_down_navigation = [
-  ('Getting Started', pathto('getting_started')),
-  ("What's new", pathto('whats_new/v' + version)),
-  ('Glossary', pathto('glossary')),
-  ('FAQ', pathto('faq')),
-  ('Related packages', pathto('related_projects')),
-  ('Roadmap', pathto('roadmap')),
-  ('About us', pathto('about')),
-  ('GitHub', 'https://github.com/fluorescence-tools/imp.bff')]
+  ('Glossary', pathto('glossary'), ""),
+  ('References', pathto('zreferences'), ""),
+  ('FAQ', pathto('faq'), ""),
+  ('Related packages', pathto('related_projects'), ""),
+  ('Roadmap', pathto('roadmap'), ""),
+  ('About us', pathto('about'), ""),
+  ('IMP', 'https://integrativemodeling.org/', ""),
+  ('GitHub', 'https://github.com/fluorescence-tools/imp.bff', "")]
 -%}
 
 <nav id="navbar" class="{{ nav_bar_class }} navbar navbar-expand-md navbar-light bg-light py-0">
@@ -43,27 +43,27 @@
     <div class="sk-navbar-collapse collapse navbar-collapse" id="navbarSupportedContent">
       <ul class="navbar-nav mr-auto">
         <li class="nav-item">
-          <a class="sk-nav-link nav-link" href="https://integrativemodeling.org/">IMP</a>
-        </li>
-        <li class="nav-item">
           <a class="sk-nav-link nav-link" href="{{ pathto('install') }}">Install</a>
         </li>
         <li class="nav-item">
-          <a class="sk-nav-link nav-link" href="{{ pathto('api') }}">API</a>
+          <a class="sk-nav-link nav-link" href="{{ pathto('contents') }}">User Guide</a>
         </li>
         <li class="nav-item">
-          <a class="sk-nav-link nav-link" href="{{ pathto('examples/index') }}">Applications</a>
+          <a class="sk-nav-link nav-link" href="{{ pathto('api/index') }}">API</a>
         </li>
-        {%- for title, link in drop_down_navigation %}
         <li class="nav-item">
-          <a class="sk-nav-link nav-link nav-more-item-mobile-items" href="{{ link }}">{{ title }}</a>
+          <a class="sk-nav-link nav-link" href="{{ pathto('auto_examples/index') }}">Examples</a>
+        </li>
+        {%- for title, link, link_attrs in drop_down_navigation %}
+        <li class="nav-item">
+          <a class="sk-nav-link nav-link nav-more-item-mobile-items" href="{{ link }}" {{ link_attrs }}>{{ title }}</a>
         </li>
         {%- endfor %}
         <li class="nav-item dropdown nav-more-item-dropdown">
           <a class="sk-nav-link nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</a>
           <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-            {%- for title, link in drop_down_navigation %}
-              <a class="sk-nav-dropdown-item dropdown-item" href="{{ link }}">{{ title}}</a>
+            {%- for title, link, link_attrs in drop_down_navigation %}
+              <a class="sk-nav-dropdown-item dropdown-item" href="{{ link }}" {{ link_attrs }}>{{ title}}</a>
             {%- endfor %}
           </div>
         </li>

@@ -1,5 +1,4 @@
 .. _about:
-
 About us
 ========
 
@@ -12,8 +11,8 @@ and maintenance:
 
 .. _citing-imp.bff:
 
-Citing IMP.bff
---------------
+Citing
+------
 If you use ``IMP.bff`` in a scientific publication, we would appreciate
 citations to the following paper(s) (depending on the used functionality.
 

@@ -1,7 +1,7 @@
-.. _installing-openmm:
+.. _installing-imp.bff:
 
-Installing IMP.bff
-******************
+Installation
+************
 
 ``IMP.bff`` is installed from prebuilt binaries using the Conda package manager (https://docs.conda.io).
 Conda is included as part of the Anaconda Python distribution, which you can
@@ -13,10 +13,13 @@ which includes only Python itself, plus the Conda package manager.  That offers
 a much smaller initial download, with the ability to then install only the
 packages you want.
 
-\1. Begin by installing a recent 64 bit, Python 3.x version of either
+Binaries
+--------
+1. Begin by installing a recent 64 bit, Python 3.x version of either
 Anaconda or Miniconda.
 
 2. Open a command line terminal and type the following command
+
 .. code-block:: bash
 
     conda install -c conda-forge imp.bff
@@ -24,6 +27,7 @@ Anaconda or Miniconda.
 This will install a version of IMP.bff compiled with the latest version of IMP.
 Alternatively you can request a version that is compiled for a specific IMP
 version with the command
+
 .. code-block:: bash
 
     conda install -c tpeulen imp.bff imp=2.17
@@ -41,6 +45,7 @@ IMP version it was compiled with.
 
 3. Optionally verify your installation using the unit-test that ship with the IMP.bff
 git repository by typing the following commands:
+
 .. code-block:: bash
 
     conda install nose git

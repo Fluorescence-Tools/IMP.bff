@@ -3,18 +3,25 @@ channels:
     - tpeulen
     - conda-forge
 dependencies:
-    - python=3.8
+    - python=3.10
     - doxygen
     - numba
     - scipy
     - pillow
     - sphinx-gallery
     - nbsphinx
+    - pandoc
+    - ipykernel
     - jupyter_client # needed for nbsphinx
-    - breathe
+    - sphinx_rtd_theme
     - matplotlib
     - numpy
     - numpydoc
+    - xeus-cling
+    - gcc_linux-64=9.4.0
     - pyyaml
-    - sphinxcontrib-bibtex<2.0.0
+    - graphviz
+    - sphinxcontrib-bibtex
     - sphinxcontrib-websupport
+    - openmm
+    - tqdm
