@@ -1,7 +1,0 @@
-This folder contains IMP.bff examples. Python files (plot_*.py)
-are used to build the corresponding documentation
-via 'sphinx-gallery'.
-
-Files and folder that start within a "broken" are ignored
-either because they are currently broken, outdated,
-or work in progress.
