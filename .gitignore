@@ -26,6 +26,5 @@ utility/CMakeLists.txt
 build
 cmake-build-*
 scratch
-broken
 TODO/
 .ipynb_checkpoints
