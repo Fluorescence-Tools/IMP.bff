@@ -13,6 +13,10 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/score_functor/distance_pair_score_macros.h>
 
+#include <IMP/Model.h>
+#include <IMP/Restraint.h>
+#include <IMP/Object.h>
+#include <IMP/Pointer.h>
 #include <IMP/atom/Hierarchy.h>
 #include <IMP/UnaryFunction.h>
 
@@ -22,7 +26,6 @@
 
 #include <vector>
 #include <algorithm>
-#include <functional> // placeholders
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -32,14 +35,26 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
 
 private:
 
-    IMP::ParticleIndexes model_ps_;
+    /// Map to AVs that are used to compute the score
+    std::map<std::string, IMP::bff::AV*> avs_{};
+    /// IMP ParticleIndexes of AVs used to compute the score
     IMP::ParticleIndexes av_pi_;
-    IMP::core::Hierarchy hier_;
-    ParticleIndexes pis_;
-    nlohmann::json fps_json_;
 
-    std::vector<IMP::bff::AV*> avs_;
+    /// ParticleIndexes particles contributing to the score
+    IMP::ParticleIndexes model_ps_;
+
+    /// Map of experimental distance measurements (incl. errors)
     std::map<std::string, AVPairDistanceMeasurement> distances_;
+
+    /// Find and decorate labeled particles with accessible volume (AVs)
+    /** This is method is automatically called by the constructor.
+     *  You only need to call this if you change parameters of
+     *  AVs (e.g., the linker length).
+     */
+    std::map<std::string, IMP::bff::AV*> create_av_decorated_particles(
+            nlohmann::json used_positions,
+            const IMP::core::Hierarchy &hier);
+
     IMP::bff::AV* get_av(std::string name) const;
 
 public:
@@ -64,35 +79,31 @@ public:
         return exp(-unprotected_evaluate(nullptr));
     }
 
-    /// Find and decorate labeled particles with accessible volume (AVs)
-    /** This is automatically called by the constructor.
-     *  You only need to call this if you change parameters of
-     *  AVs (e.g., the linker length).
-     */
-    void create_av_decorated_particles(nlohmann::json used_positions);
-
     const IMP::bff::AVs get_used_avs();
 
+    /// Get used experimental distances
     const std::map<std::string, AVPairDistanceMeasurement> get_used_distances(){
         return distances_;
     }
 
+    /// Get the model distance (or FRET efficiency) between two dyes
+    double get_model_distance(
+            std::string position1_name,
+            std::string position2_name,
+            double forster_radius,
+            int distance_type
+    ) const;
+
+
     ParticleIndexes const get_indexes(){
-        return pis_;
+        return av_pi_;
     }
 
-    virtual double unprotected_evaluate(
-            IMP::DerivativeAccumulator *accum) const override;
+    virtual double unprotected_evaluate(IMP::DerivativeAccumulator *accum) const override;
 
-    virtual IMP::ModelObjectsTemp do_get_inputs() const override{
-        IMP::ModelObjectsTemp ret;
-        for (size_t i = 0; i < model_ps_.size(); i++) {
-            ret.push_back(get_model()->get_particle(model_ps_[i]));
-        }
-        return ret;
-    }
+    virtual IMP::ModelObjectsTemp do_get_inputs() const override;
 
-    void show(std::ostream &out) const {out << "FRETNetwork restraint";}
+    void show(std::ostream &out) const {out << "AVNetwork restraint";}
 
     IMP_OBJECT_METHODS(AVNetworkRestraint)
 

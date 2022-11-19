@@ -73,8 +73,16 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         for dk in used_avs:
             dye = used_avs[dk]
             p_dye = dye.get_particle()
+            # The coordinates of an AV are the mean AV the density map. Thus, the position of the
+            # AV changes when the AV is resampled.
             dye.resample()
-            print("Adding", dk, "with parameters", dye, "to RB at location", IMP.core.XYZ(dye))
+
+            # dye_xyz = IMP.core.XYZ(p_dye)
+            # print("Adding dye to RB:")
+            # print("-- Position key:", dk)
+            # print("-- Label parameter:", dye)
+            # print("-- Mean dye position:", dye_xyz)
+
             p_att = dye.get_source()
             if IMP.core.RigidBodyMember.get_is_setup(p_att):
                 rbm = IMP.core.RigidBodyMember(p_att)
@@ -82,13 +90,23 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
                 rb.add_member(p_dye)
 
     def add_xyz_mass_to_avs(self):
+        """
+        IMP_NEW(Particle,p2,(m,"p2"));
+        IMP::core::XYZR d2=IMP::core::XYZR::setup_particle(
+        m,p2->get_index(),IMP::algebra::Sphere3D(
+        IMP::algebra::Vector3D(1.0,4.0,6.0),1.0));
+        atom::Mass mm2 = atom::Mass::setup_particle(p2, 30.0);
+        rbps.push_back(d2);
+        """
         for ak in self.used_avs:
             av: IMP.bff.AV = self.used_avs[ak]
             r_mean = max(av.get_radii())
-            IMP.core.XYZR.setup_particle(av, r_mean)
-            IMP.atom.Mass.setup_particle(av, 1)
-            av_h = IMP.atom.Hierarchy(av)
-            self.hier.add_child(av_h)
+            # add radius
+            av_d = IMP.core.XYZR.setup_particle(av)
+            av_d.set_radius(r_mean * 1.0)
+            # add Mass
+            av_m = IMP.atom.Mass.setup_particle(av, 0.1)
+            av_m.set_mass(r_mean * 2.0)
 
     """Restraint for Accessible Volume (AV) decorated particles
 
@@ -121,8 +139,8 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         """
         # some parameters
         m = hier.get_model()
-        self.mdl : IMP.Model = m
-        self.hier : IMP.atom.Hierarchy = hier
+        self.mdl: IMP.Model = m
+        self.hier: IMP.atom.Hierarchy = hier
         super(AVNetworkRestraintWrapper, self).__init__(m, label=label, weight=weight)
 
         self.model_ps = []
@@ -132,7 +150,11 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         self.mean_position_restraint = mean_position_restraint
         if pathlib.Path(fps_json_fn).is_file():
             self.av_network_restraint = IMP.bff.AVNetworkRestraint(
-                hier, fps_json_fn, name, score_set)
+                hier,
+                fps_json_fn,
+                name,
+                score_set
+            )
         else:
             raise FileNotFoundError("{}".format(fps_json_fn))
         self.rs = IMP.RestraintSet(m, 'AVNetworkRestraint')
