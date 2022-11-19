@@ -3,14 +3,15 @@ stages:
   - test
   - deploy
 
-.build_posix: &build_posix
+.build: &build
   stage: build
-  script:
-    - git submodule update --init --recursive --remote
-    - ./tools/build.sh
   artifacts:
     paths:
       - bld-dir/
+.build_posix: &build_posix
+  <<: *build
+  script:
+    - ./tools/build.sh
 .build:lnx: &build_lnx
   <<: *build_posix
   before_script:
@@ -39,22 +40,20 @@ build:lnx_x86:
 #    entrypoint: [ "/bin/bash", "-i", "-c" ]
 #  tags:
 #    - aarch64
+
 build:osx:
   <<: *build_posix
   tags:
     - osx
 
 build:windows:
-  stage: build
+  <<: *build
   tags:
     - win
   before_script:
     - git submodule update --init --recursive --remote
   script:
     - ./tools/build.bat
-  artifacts:
-    paths:
-      - bld-dir/
 
 test:linux:
   stage: test
@@ -65,8 +64,10 @@ test:linux:
   script:
     - source activate base
     - conda config --add channels "file://`pwd`/bld-dir"
-    - mamba install python imp.bff nose numba numpy
-    - nosetests test
+    - mamba install python imp.bff nose numba numpy mongodb pandas
+    - mkdir db & nohup mongod --dbpath db &
+    - cd test
+    - nosetests
 
 deploy:conda:
   stage: deploy
