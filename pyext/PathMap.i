@@ -1,4 +1,3 @@
-
 /* Make selected classes extensible in Python */
 IMP_SWIG_OBJECT(IMP::bff, PathMap, PathMaps);
 

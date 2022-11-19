@@ -169,7 +169,7 @@
 
 %}
 
-//%include "IMP/bff/DecayRoutines.h"
+%include "IMP/bff/DecayRoutines.h"
 
 
 

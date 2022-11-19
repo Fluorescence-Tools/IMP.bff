@@ -5,6 +5,8 @@
 %shared_ptr(IMP::bff::CnNode)
 %shared_ptr(IMP::bff::CnNodeCallback)
 
+%template(PairStringCnPortPtr) std::pair<std::string, std::shared_ptr<IMP::bff::CnPort>>;
+%template(VecPairStringCnPortPtr) std::vector<std::pair<std::string, std::shared_ptr<IMP::bff::CnPort>>>;
 %template(MapStringCnPortPtr) std::map<std::string, std::shared_ptr<IMP::bff::CnPort>>;
 %template(ListCnNodePtr) std::list<std::shared_ptr<IMP::bff::CnNode>>;
 %template(MapStringDouble) std::map<std::string, double>;
@@ -39,20 +41,20 @@
 
         @property
         def ports(self):
-            return dict(self.get_ports())
+            return list(self.get_ports())
         
         @ports.setter
         def ports(self, v):
-            p = dict()
             for key in v:
                 if isinstance(v[key], IMP.bff.CnPort):
-                    p[key] = v[key]
+                    p = v[key]
                 elif isinstance(v[key], dict):
-                    p[key] = IMP.bff.CnPort(**v[key])
+                    p = IMP.bff.CnPort(**v[key])
                 else:
-                    p[key] = IMP.bff.CnPort(value=v[key])
-            self.set_ports(p)
-        
+                    p = IMP.bff.CnPort(value=v[key])
+                p.name = key
+                self.add_port(p, p.is_output, True)
+
         def set_python_callback_function(self, cb, reactive_inputs = True, reactive_outputs = True):
             # type: (Callable, bool, bool) -> None
             import sys
@@ -118,9 +120,10 @@
                         value = np.array([1.0], dtype=np.float64)
                 else:
                     value = o.default
-                if o.name not in self.ports.keys():
+                names = [str(n) for n, _ in self.ports]
+                if str(o.name) not in names:
                     p = IMP.bff.CnPort(name=o.name, value=value, is_output=False, is_reactive=reactive_inputs)
-                    self.add_input_port(o.name, p)
+                    self.add_input_port(p)
                     input_ports.append(p)
                 else:
                     input_ports.append(self.get_input_ports()[o.name])
@@ -149,7 +152,7 @@
                             is_output=True,
                             is_reactive=reactive_outputs
                     )
-                    self.add_output_port(on, po)
+                    self.add_output_port(po)
             cb_instance = CnNodeCallbackPython(cb_function=cb)
             cb_instance.__disown__()
             self.set_callback(cb_instance)
