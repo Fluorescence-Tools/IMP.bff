@@ -7,15 +7,15 @@
 *.gcno
 *.gcda
 */Files.cmake
+db/
 ModuleBuild.cmake
-CMakeModules
 benchmark/CMakeLists.txt
 benchmark/Files.cmake
 bin/CMakeLists.txt
 bin/Files.cmake
 dependency/CMakeLists.txt
-doc/_build
-doc/examples
+doc/_*
+doc/auto_examples
 examples/CMakeLists.txt
 
 test/CMakeLists.txt
@@ -26,5 +26,6 @@ utility/CMakeLists.txt
 build
 cmake-build-*
 scratch
-
-
+broken
+TODO/
+.ipynb_checkpoints
