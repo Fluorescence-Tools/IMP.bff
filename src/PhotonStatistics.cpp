@@ -1,4 +1,4 @@
-#include "IMP/bff/internal/PhotonStatistics.h"
+#include <IMP/bff/internal/PhotonStatistics.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
