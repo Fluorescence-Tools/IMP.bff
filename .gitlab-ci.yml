@@ -11,11 +11,14 @@ stages:
 .build_posix: &build_posix
   <<: *build
   script:
-    - mamba install git
     - git submodule update --init --recursive --remote
     - ./tools/build.sh
 .build:lnx: &build_lnx
   <<: *build_posix
+  before_script:
+    - source "/opt/conda/etc/profile.d/conda.sh"
+    - conda activate /opt/conda/
+    - git submodule update --init --recursive --remote
 build:lnx_x86:
   <<: *build_lnx
   image:
@@ -41,6 +44,8 @@ build:lnx_x86:
 
 build:osx:
   <<: *build_posix
+  before_script:
+    - git submodule update --init --recursive --remote
   tags:
     - osx
 
