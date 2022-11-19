@@ -197,10 +197,9 @@ IMP::ParticleIndex search_labeling_site(
     std::string chain_id = js.value("chain_identifier", "");
     int residue_seq_number = js.value("residue_seq_number", -1);
     std::string atom_name = js.value("atom_name", "");
-    std::clog << "search_labeling_site:" << "\n"
-              << "  chain_identifier:" << chain_id << "\n"
-              << "  residue_seq_number:" << residue_seq_number << "\n"
-              << "  atom_name:" << atom_name << std::endl;
+
+    std::string s = "search_labeling_site:" + std::string(chain_id) + ":" + std::to_string(residue_seq_number) + ":" + std::string(atom_name);
+    IMP::add_to_log(PROGRESS, s);
 
     if(!chain_id.empty()){
         sel.set_chain_id(chain_id);
