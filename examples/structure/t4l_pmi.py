@@ -1,10 +1,15 @@
+## \example bff/structure/T4L.py
 """
-Conformer modeling
-==================
+T4 lysozyme: Using PMI
+======================
+T4 lysozme
 
-This example illustrate modeling of T4 lysozme by rigid bodies (RBs) in PMI.
+This example illustrate modeling of  by rigid bodies (RBs) in PMI.
 Note, this example serves illustration and not scientific purposes.
 """
+# sphinx_gallery_thumbnail_path = 'img/example_structure_t4l.png'
+
+import sys
 import pathlib
 
 import IMP
@@ -24,6 +29,12 @@ import IMP.pmi.macros
 import IMP.pmi.restraints
 import IMP.pmi.restraints.basic
 import IMP.pmi.restraints.stereochemistry
+
+IMP.setup_from_argv(sys.argv, "Simulation of an atomic T4L system")
+if IMP.get_is_quick_test():
+    print("This example is too slow to test in debug mode - run without")
+    print("internal tests enabled, or without the --run-quick-test flag")
+    sys.exit(0)
 
 
 output_objects = list()
@@ -64,18 +75,9 @@ for molname in moldict:
         IMP.pmi.tools.display_bonds(mol)
         cr = IMP.pmi.restraints.stereochemistry.ConnectivityRestraint(mol)
         cr.add_to_model()
-        cr.set_label(molname)
         output_objects.append(cr)
         crs.append(cr)
         mols.append(mol)
-
-# %%
-# Excluded volume - automatically more efficient due to rigid bodies
-ev_weight = 1.0
-evr = IMP.pmi.restraints.stereochemistry.ExcludedVolumeSphere(included_objects=mols)
-evr.add_to_model()
-evr.set_weight(ev_weight)
-output_objects.append(evr)
 
 # %%
 # Restrain in sphere
@@ -96,21 +98,31 @@ output_objects.append(barrier_restraint)
 # between the mean dye positions computed for the initial RB arrangement
 # are used for scoring (with the use of a transfer function). Elsewise,
 # the AVs are recalculated on each restraint evaluation.
-fps_json_fn = str(root_dir / "screening.fps.json")
-score_set = "chi2_C1_33p"  # molecule in close c2, go from c2 -> open c1
+fps_json_fn = str(root_dir / "fret.fps.json")
+score_set = "chi2_C3"  # molecule in close c2, go from c2 -> open c1
 fret_restraint = IMP.bff.restraints.AVNetworkRestraintWrapper(
     hier, fps_json_fn,
     mean_position_restraint=True,
+    occupy_volume=True,
     score_set=score_set
 )
 fret_restraint.add_to_model()
 output_objects.append(fret_restraint)
 
 # %%
+# Excluded volume - automatically more efficient due to rigid bodies
+# Note: add after AV restraint if the dyes should occupy some volume
+ev_weight = 1.0
+evr = IMP.pmi.restraints.stereochemistry.ExcludedVolumeSphere(included_objects=mols)
+evr.add_to_model()
+evr.set_weight(ev_weight)
+output_objects.append(evr)
+
+
+# %%
 # Adds the AV to the atom Hierarchy to display the dye mean position:
 used_avs = fret_restraint.av_network_restraint.get_used_avs()
 IMP.bff.tools.display_mean_av_positions(used_avs)
-
 
 # %%
 # Sampling
@@ -123,14 +135,14 @@ dof.optimize_flexible_beads(10)
 
 # %%
 # Monte carlo sampling. For better results increase the number of frames
-num_frames = 100
-rex = IMP.pmi.macros.ReplicaExchange0(
+num_frames = 1000
+rex = IMP.pmi.macros.ReplicaExchange(
     mdl,
     simulated_annealing=False,
     root_hier=hier,  # pass the root hierarchy
     monte_carlo_sample_objects=dof.get_movers(),  # pass MC movers
     output_objects=output_objects,
-    monte_carlo_steps=10,
+    monte_carlo_steps=100,
     global_output_directory='./out/',
     rmf_output_objects=None,
     monte_carlo_temperature=1.0,
