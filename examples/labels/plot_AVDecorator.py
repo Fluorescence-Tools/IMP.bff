@@ -3,7 +3,8 @@ Accessible volume decorator
 ===========================
 IMP particles can be decorated with accessible volume (AV)
 decorators to compute the sterically allowed volume of a
-label around its attachment site.
+label around its attachment site, i.e., the decorated IMP
+particle.
 
 The AV decorator uses the Dijkstra's algorithm to compute
 all path from the attachment site to a set of grid points
