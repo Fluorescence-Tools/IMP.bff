@@ -77,7 +77,8 @@ path_map.update_tiles()
 # %%
 # The obstacles in a PathMap can be written to density files using
 # standard IMP routines.
-IMP.em.write_map(path_map, "OBSTACLES.mrc")
+
+# IMP.em.write_map(path_map, "OBSTACLES.mrc")
 
 # %%
 # Path search

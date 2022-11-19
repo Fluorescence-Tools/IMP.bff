@@ -29,7 +29,6 @@ m = IMP.Model()
 pdb_fn = pathlib.Path(IMP.bff.get_example_path('structure')) / "T4L/3GUN.pdb"
 hier = IMP.atom.read_pdb(str(pdb_fn), m)
 
-
 # %%
 # Decorate particle
 # -----------------
@@ -76,7 +75,8 @@ av1.resample()  # Updates the AV
 # using standard IMP methods.
 av_map = av1.get_map()
 bounds = 0.01, 20
-IMP.em.write_map(av_map, "/mnt/c/temp/OBSTACLES.mrc")
+# write to map
+#IMP.em.write_map(av_map, "OBSTACLES.mrc")
 
 # %%
 # Features of a IMP.bff.PathMap are identified by the following constants
@@ -94,30 +94,32 @@ pm_features = [
 
 # %%
 # These features can be written to density maps
-IMP.bff.write_path_map(
-    av_map, "BFF_TILE_PENALTY.mrc",
-    IMP.bff.PM_TILE_PENALTY,
-    (0, 1)
-)
+
+
+# IMP.bff.write_path_map(
+#     av_map, "BFF_TILE_PENALTY.mrc",
+#     IMP.bff.PM_TILE_PENALTY,
+#     (0, 1)
+# )
 
 # PM_TILE_PATH_LENGTH_WEIGHT : filter by path length and write tile weight
-IMP.bff.write_path_map(
-    av_map, "PM_TILE_PATH_LENGTH.mrc",
-    IMP.bff.PM_TILE_PATH_LENGTH,
-    bounds
-)
+# IMP.bff.write_path_map(
+#     av_map, "PM_TILE_PATH_LENGTH.mrc",
+#     IMP.bff.PM_TILE_PATH_LENGTH,
+#     bounds
+# )
 
-IMP.bff.write_path_map(
-    av_map, "PM_TILE_PATH_LENGTH_DENSITY_132.mrc",
-    IMP.bff.PM_TILE_PATH_LENGTH_DENSITY,
-    bounds
-)
+# IMP.bff.write_path_map(
+#     av_map, "PM_TILE_PATH_LENGTH_DENSITY_132.mrc",
+#     IMP.bff.PM_TILE_PATH_LENGTH_DENSITY,
+#     bounds
+# )
 
-IMP.bff.write_path_map(
-    av_map, "PM_TILE_ACCESSIBLE_DENSITY.mrc",
-    IMP.bff.PM_TILE_ACCESSIBLE_DENSITY,
-    bounds
-)
+# IMP.bff.write_path_map(
+#     av_map, "PM_TILE_ACCESSIBLE_DENSITY.mrc",
+#     IMP.bff.PM_TILE_ACCESSIBLE_DENSITY,
+#     bounds
+# )
 
 # %%
 # Measure AV/AV-distance
