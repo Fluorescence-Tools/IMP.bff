@@ -15,17 +15,17 @@ class Tests(unittest.TestCase):
     def test_session_init(self):
         n1 = IMP.bff.Node(
             ports={
-                'portA': IMP.bff.Port(1),
-                'portB': IMP.bff.Port(2),
-                'portC': IMP.bff.Port(3)
+                'portA': IMP.bff.CnPort(1),
+                'portB': IMP.bff.CnPort(2),
+                'portC': IMP.bff.CnPort(3)
             },
         )
         n2 = IMP.bff.Node(
             ports={
-                'inA': IMP.bff.Port(5),
-                'inB': IMP.bff.Port(7),
-                'outA': IMP.bff.Port(11, False, True),
-                'outB': IMP.bff.Port(13, False, True)
+                'inA': IMP.bff.CnPort(5),
+                'inB': IMP.bff.CnPort(7),
+                'outA': IMP.bff.CnPort(11, False, True),
+                'outB': IMP.bff.CnPort(13, False, True)
             }
         )
 

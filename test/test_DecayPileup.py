@@ -47,7 +47,7 @@ class Tests(unittest.TestCase):
         data = IMP.bff.DecayCurve(**decay_settings)
         model = IMP.bff.DecayCurve(**decay_settings)
 
-        dp = IMP.bff.DecayPileup()
+        dp = IMP.bff.DecayPileup(data)
 
         dp.repetition_rate = 13.0
         self.assertEqual(dp.repetition_rate, 13.0)

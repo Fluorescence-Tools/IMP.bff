@@ -77,7 +77,7 @@ class Tests(unittest.TestCase):
         np.testing.assert_allclose(model.y, np.ones_like(ds.data.y) * 100)
 
         ds(model)  # equivalent to ds.add(model)
-        self.assertEqual(np.sum(model.y), np.sum(ds.data.y))
+        np.testing.assert_almost_equal(np.sum(model.y), np.sum(ds.data.y))
 
     def test_scale_scale_3(self):
         ds = IMP.bff.DecayScale(**settings)
@@ -87,4 +87,4 @@ class Tests(unittest.TestCase):
         model = IMP.bff.DecayCurve(x, y)
         ds.add(model)
         np.testing.assert_allclose(model.y, ds.data.y - 100)
-        self.assertEqual(ds.number_of_photons, 16000)
+        np.testing.assert_almost_equal(ds.number_of_photons, 16000)

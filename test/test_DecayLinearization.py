@@ -2,32 +2,37 @@ from __future__ import division
 import unittest
 
 import numpy as np
+import pandas as pd
+
 import IMP.bff
 
 
 class Tests(unittest.TestCase):
 
     def test_lin(self):
-        x = np.arange(0, 16)
-        y = np.ones_like(x) * 10000
-        model = IMP.bff.DecayCurve(x, y)
-
-        lin = np.sin(x) * 0.2 + 0.8
-        linearization = IMP.bff.DecayCurve(x, lin)
-        dl = IMP.bff.DecayLinearization(
-            linearization_table=linearization,
-            start=0, stop=-1, active=True
+        dt = 0.0141
+        df = pd.read_csv(
+            IMP.bff.get_example_path("spectroscopy/hgbp1/eTCSPC_whitelight.txt"),
+            skiprows=6,
+            sep='\t'
         )
+        lin_data = IMP.bff.DecayCurve(x=df['Chan'] * dt, y=df['Data'])
+        model = IMP.bff.DecayCurve(
+            x=df['Chan'] * dt,
+            y=np.ones_like(lin_data.y)
+        )
+        dl = IMP.bff.DecayLinearization(
+            linearization_table=lin_data,
+            start=200, stop=3700, active=True, n_window=20
+        )
+        lin = dl.get_linearization_table()
         dl.add(model)
 
-        ref = np.array([8000., 9682.94196962, 9818.59485365, 8282.24001612,
-                        6486.39500938, 6082.15145067, 7441.1690036, 9313.97319744,
-                        9978.71649325, 8824.23697048, 6911.95777822, 6000.0195869,
-                        6926.854164, 8840.33407365, 9981.21471139, 9300.57568031])
-        self.assertEqual(np.allclose(model.y, ref), True)
-
-        model = IMP.bff.DecayCurve(x, y)
-        dl.active = False
-        dl.add(model)
-        self.assertEqual(np.allclose(model.y, y), True)
-
+        ref_lin = [1., 0.99886486, 1.00740838, 0.99532836, 0.99401942, 1.0006662,
+                   0.99965218, 0.99696761, 1.00444274, 0.99765081, 0.99634392, 1.00284555,
+                   1.00678725, 1.00884042, 0.9865171, 1.]
+        ref_mdl = [1., 0.99886486, 1.00740838, 0.99532836, 0.99401942, 1.0006662,
+                   0.99965218, 0.99696761, 1.00444274, 0.99765081, 0.99634392, 1.00284555,
+                   1.00678725, 1.00884042, 0.9865171, 1.]
+        np.testing.assert_array_almost_equal(ref_lin, lin.y[::256])
+        np.testing.assert_array_almost_equal(ref_mdl, model.y[::256])

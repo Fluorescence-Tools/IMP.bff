@@ -20,7 +20,7 @@ class Tests(unittest.TestCase):
         settings = {
             "lifetime_handler": lh,
             "instrument_response_function": irf,
-            "convolution_method": IMP.bff.DecayConvolution.CONV_FAST,
+            "convolution_method": IMP.bff.DecayConvolution.FAST,
             "excitation_period": 100,
             "irf_shift_channels": 0.0,
             "irf_background_counts": 0.0,

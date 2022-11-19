@@ -23,9 +23,9 @@ class Tests(unittest.TestCase):
 
     def test_score_1(self):
         dc = IMP.bff.DecayScore(**score_settings)
-        self.assertAlmostEqual(dc.score, 1114.2359946704964)
+        self.assertAlmostEqual(dc.score, 1103.302834296032)
         dc.model.y = ym * 0.95
-        self.assertAlmostEqual(dc.score, 2185.4654851901237)
+        self.assertAlmostEqual(dc.score, 2322.2798604757454)
 
     def test_score_range(self):
         dc = IMP.bff.DecayScore(**score_settings)
