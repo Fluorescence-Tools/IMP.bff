@@ -25,7 +25,7 @@ requirements:
     - swig
     - cmake
     - ninja
-    - dot
+    - graphviz
   host:
     - python {{ python }}
     - numpy
