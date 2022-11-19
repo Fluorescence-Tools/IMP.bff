@@ -3,4 +3,4 @@
 Release Highlights
 ------------------
 
-These examples illustrate the main features of the releases of ``IMP.bff``.
+These examples illustrate the main features of current ``IMP.bff`` releases.
