@@ -25,6 +25,7 @@ requirements:
     - swig
     - cmake
     - ninja
+    - dot
   host:
     - python {{ python }}
     - numpy
