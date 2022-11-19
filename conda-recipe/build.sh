@@ -1,7 +1,7 @@
 #!/bin/bash
 git submodule update --recursive --init --remote
-rm -r -f build
 cd doc
+rm -rf build
 mkdir _build
 doxygen
 $PYTHON ../tools/doxy2swig.py _build/xml/index.xml ../pyext/documentation.i
