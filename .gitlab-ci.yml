@@ -54,6 +54,7 @@ build:windows:
   tags:
     - win
   before_script:
+    - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
   script:
     - ./tools/build.bat
