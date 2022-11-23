@@ -27,7 +27,7 @@ double DecayPileup::get_instrument_dead_time(){
     return instrument_dead_time;
 }
 
-void DecayPileup::add(DecayCurve* out) override{
+void DecayPileup::add(DecayCurve* out){
     IMP_USAGE_CHECK(data != nullptr, "Experimental data not set.");
 #if IMPBFF_VERBOSE
     std::clog << "DecayPileup::add" << std::endl;

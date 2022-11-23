@@ -108,8 +108,8 @@ std::string DecayScore::get_score_type(){
 
 void DecayScore::set(
         DecayCurve* model, DecayCurve* data,
-        std::string score_type = "poisson",
-        int start=0, int stop=-1
+        std::string score_type,
+        int start, int stop
 ){
 #if IMPBFF_VERBOSE
     std::clog << "DecayScore::DecayScore" << std::endl;
@@ -122,7 +122,7 @@ void DecayScore::set(
 }
 
 
-double DecayScore::score(DecayCurve* model = nullptr){
+double DecayScore::score(DecayCurve* model){
 #if IMPBFF_VERBOSE
     std::clog << "DecayScore::evaluate" << std::endl;
 #endif
