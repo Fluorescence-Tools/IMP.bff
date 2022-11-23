@@ -3,13 +3,13 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-virtual void set_data(DecayCurve* v){
+void DecayModifier::set_data(DecayCurve* v){
     if(v != nullptr){
         data = v;
     }
 }
 
-virtual DecayModifier::DecayCurve* get_data(){
+DecayCurve* DecayModifier::get_data(){
     auto re = default_data;
     if(data != nullptr){
         re = data;
@@ -37,7 +37,6 @@ void DecayModifier::resize(size_t n, double v) {
         data->resize(n, v);
     }
 }
-
 
 DecayModifier::DecayModifier(DecayCurve *data, int start, int stop, bool active) : DecayRange(start, stop){
     default_data = new DecayCurve();

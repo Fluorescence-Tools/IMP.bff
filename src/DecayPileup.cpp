@@ -1,6 +1,5 @@
 #include <IMP/bff/DecayPileup.h>
 
-
 IMPBFF_BEGIN_NAMESPACE
 
 void DecayPileup::set_pile_up_model(std::string v){
@@ -59,7 +58,7 @@ DecayPileup::DecayPileup(
             int start,
             int stop,
             bool active
-    ) : DecayModifier(data, start, stop, active) {
+) : DecayModifier(data, start, stop, active) {
 #if IMPBFF_VERBOSE
         std::clog << "DecayPileup::DecayPileup" << std::endl;
 std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
@@ -72,8 +71,6 @@ std::clog << "-- active: " << active << std::endl;
         set_pile_up_model(pile_up_model);
         set_repetition_rate(repetition_rate);
         set_instrument_dead_time(instrument_dead_time);
-    }
-
 }
 
 IMPBFF_END_NAMESPACE
