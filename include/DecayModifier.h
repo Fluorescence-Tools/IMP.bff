@@ -35,29 +35,15 @@ protected:
 
 public:
 
-    virtual void set_data(DecayCurve* v){
-        if(v != nullptr){
-            data = v;
-        }
-    }
+    virtual void set_data(DecayCurve* v);
 
-    virtual DecayCurve* get_data(){
-        auto re = default_data;
-        if(data != nullptr){
-            re = data;
-        }
-        return re;
-    }
+    virtual DecayCurve* get_data();
 
-    bool is_active() const {
-        return _is_active;
-    }
+    bool is_active() const;
 
     /// Setter to define if DecayModifier is active. An active
     /// DecayModifier modifies a DecayCurve using
-    void set_active(bool v){
-        _is_active = v;
-    }
+    void set_active(bool v);
 
     /*!
      * Set values of DecayModifier
@@ -66,23 +52,14 @@ public:
      * @param stop stop of DecayModifier
      * @param active if active is true DecayModifier::add modifies input decay
      */
-    void set(DecayCurve* data, int start=0, int stop=-1, bool active = true){
-        DecayRange::set(start, stop);
-        set_data(data);
-        set_active(active);
-    }
+    void set(DecayCurve* data, int start=0, int stop=-1, bool active = true);
 
     /*!
      * Resize data of DecayModifier
      * @param n new size of data
      * @param v value of data (if larger than original size)
      */
-    void resize(size_t n, double v = 0.0) {
-        default_data->resize(n, v);
-        if(data != nullptr){
-            data->resize(n, v);
-        }
-    }
+    void resize(size_t n, double v = 0.0);
 
     /*!
      * Modify DecayCurve object
@@ -93,12 +70,8 @@ public:
     /*!
      * DecayModifier modifies DecayCurve in range [start, stop]
      */
-    DecayModifier(DecayCurve *data = nullptr, int start = 0, int stop = -1, bool active = true) :
-            DecayRange(start, stop){
-        default_data = new DecayCurve();
-        set_data(data);
-        set_active(active);
-    }
+    DecayModifier(DecayCurve *data = nullptr,
+                  int start = 0, int stop = -1, bool active = true);
 
     ~DecayModifier() {
         delete default_data;

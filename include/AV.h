@@ -57,27 +57,9 @@ struct AVPairDistanceMeasurement{
     std::string position_1;
     std::string position_2;
 
-    std::string get_json(){
-        // create an empty structure (null)
-        nlohmann::json j;
-        j["position1_name"] = position_1;
-        j["position2_name"] = position_2;
-        j["distance"] = distance;
-        j["error_neg"] = error_neg;
-        j["error_pos"] = error_pos;
-        j["Forster_radius"] = forster_radius;
-        j["distance_type"] = distance_type;
-        return j.dump();
-    }
+    std::string get_json();
 
-    double score_model(double model){
-        auto ev = [](auto f, auto m, auto en, auto ep){
-            auto dev = m - f;
-            auto w = (dev < 0) ? 1. / en : 1. / ep;
-            return .5 * algebra::get_squared(dev * w);
-        };
-        return 0.5 * ev(model, distance, error_neg, error_pos);
-    }
+    double score_model(double model);
 
 };
 
