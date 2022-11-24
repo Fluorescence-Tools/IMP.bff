@@ -51,12 +51,14 @@ build:osx:
 
 build:windows:
   <<: *build
+  image:
+    name: mambaforge:vs16
+    entrypoint: [ "CMD", "/S", "/C"]
   tags:
     - win
   before_script:
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
-  entrypoint: [ "CMD", "/S", "/C"]
   script:
     - ./tools/build.bat
 
