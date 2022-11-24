@@ -59,6 +59,7 @@ build:windows:
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
   script:
+    - echo "Before AAAAAAA"
     - Init64.ps1
     - ./tools/build.bat
 
