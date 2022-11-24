@@ -60,6 +60,7 @@ build:windows:
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
   script:
+    - echo "KLLLLLLLL"
     - ./tools/build.bat
 
 test:linux:
