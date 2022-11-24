@@ -55,6 +55,7 @@ build:windows:
   tags:
     - win
   before_script:
+    - echo "Before SSSSSS"
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
   script:
