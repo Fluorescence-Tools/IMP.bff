@@ -58,7 +58,7 @@ build:windows:
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
   script:
-    - echo "KLLLLLLLL"
+    - Init64.ps1
     - ./tools/build.bat
 
 test:linux:
