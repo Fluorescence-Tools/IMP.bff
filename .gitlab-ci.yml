@@ -53,7 +53,7 @@ build:windows:
   <<: *build
   image:
     name: mambaforge:vs16
-    entrypoint: [ "CMD", "/S", "/C"]
+    entrypoint: [ "powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass"]
   tags:
     - win
   before_script:
