@@ -15,9 +15,9 @@ cd ..
 echo "Build app wrapper"
 
 :: build app wrapper
-:: copy "%RECIPE_DIR%\app_wrapper.c" .
-:: cl app_wrapper.c shell32.lib
-:: if errorlevel 1 exit 1
+copy "%RECIPE_DIR%\app_wrapper.c" .
+cl app_wrapper.c shell32.lib
+if errorlevel 1 exit 1
 
 mkdir build
 cd build
