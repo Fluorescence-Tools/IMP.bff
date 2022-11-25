@@ -1,7 +1,3 @@
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
-  GIT_SUBMODULE_UPDATE_FLAGS: --jobs 4
-
 stages:
   - build
   - test
