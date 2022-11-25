@@ -34,7 +34,7 @@ requirements:
     - mpir  # [win]
     - msmpi  # [win]
     - libmongoc
-    - imp {{ imp }}
+    - imp
   run:
     - {{ pin_compatible('numpy') }}
     - python
