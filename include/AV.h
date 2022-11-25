@@ -48,7 +48,10 @@ typedef enum{
 
 
 
-struct AVPairDistanceMeasurement{
+/// Container for experimental distance measurement
+class AVPairDistanceMeasurement{
+
+public:
 
     double distance = -1;
     double error_neg = -1;
@@ -58,8 +61,10 @@ struct AVPairDistanceMeasurement{
     std::string position_1;
     std::string position_2;
 
+    /// Get a JSON string
     std::string get_json();
 
+    /// Score a model distance against the experimental distance
     double score_model(double model);
 
 };
