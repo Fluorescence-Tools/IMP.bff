@@ -17,7 +17,7 @@ stages:
   before_script:
     - source "/opt/conda/etc/profile.d/conda.sh"
     - conda activate /opt/conda/
-    - git submodule update --init --recursive --remote
+    - git submodule foreach git pull
 build:lnx_x86:
   <<: *build_lnx
   image:
@@ -46,7 +46,7 @@ build:osx:
   tags:
     - osx
   before_script:
-    - git submodule update --init --recursive --remote
+    - git submodule foreach git pull
 
 build:windows:
   <<: *build
@@ -56,7 +56,7 @@ build:windows:
   script:
     - cmd.exe
     - conda activate base
-    - git submodule update --init --recursive --remote
+    - cd tools && git pull --force && cd..
     - .\tools\build.bat
     - conda mambabuild conda-recipe --output-folder bld-dir
 
