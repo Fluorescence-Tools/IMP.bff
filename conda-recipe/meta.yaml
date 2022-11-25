@@ -15,7 +15,7 @@ build:
 requirements:
   build:
     - python {{ python }}
-    - numpy
+    - numpy {{ numpy }}
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - llvm-openmp  # [osx]
@@ -27,7 +27,7 @@ requirements:
     - graphviz
   host:
     - python {{ python }}
-    - numpy
+    - numpy {{ numpy }}
     - boost-cpp
     - hdf5
     - eigen
