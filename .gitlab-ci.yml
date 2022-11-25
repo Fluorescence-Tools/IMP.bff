@@ -1,3 +1,7 @@
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_UPDATE_FLAGS: --jobs 4
+
 stages:
   - build
   - test
@@ -58,9 +62,8 @@ build:windows:
     - echo "Before SSSSSS"
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
-    - Init64.ps1
-    - echo "Before AAAAAAA"
   script:
+    - Init64.ps1
     - ./tools/build.bat
 
 test:linux:
