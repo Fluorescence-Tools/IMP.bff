@@ -58,11 +58,6 @@ build:windows:
   image: mambaforge:vs16
   tags:
     - win
-  before_script:
-    - echo "Before AAAAAAAAAAAA"
-    - git config --global --add safe.directory *
-    - git submodule update --init --recursive --remote
-    - echo "Before BBBBBBBB"
   script:
     - echo "Before CCCCCCCCCCC"
     - ./tools/build.bat
