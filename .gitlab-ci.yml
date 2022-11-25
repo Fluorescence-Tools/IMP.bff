@@ -17,7 +17,7 @@ stages:
   before_script:
     - source "/opt/conda/etc/profile.d/conda.sh"
     - conda activate /opt/conda/
-    - git submodule update --init --recursive --remote
+    - git submodule foreach git pull origin master
 build:lnx_x86:
   <<: *build_lnx
   image:
@@ -45,6 +45,8 @@ build:osx:
   <<: *build_posix
   tags:
     - osx
+  before_script:
+    - git submodule foreach git pull origin master
 
 build:windows:
   <<: *build
