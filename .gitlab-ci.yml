@@ -11,7 +11,6 @@ stages:
 .build_posix: &build_posix
   <<: *build
   script:
-    - git submodule update --init --recursive --remote
     - ./tools/build.sh
 .build:lnx: &build_lnx
   <<: *build_posix
@@ -44,8 +43,6 @@ build:lnx_x86:
 
 build:osx:
   <<: *build_posix
-  before_script:
-    - git submodule update --init --recursive --remote
   tags:
     - osx
 
@@ -55,9 +52,9 @@ build:windows:
   tags:
     - win
   script:
-    - echo "Before CCCCCCCCCCC"
-    - ./tools/build.bat
-    - echo "Before DDDDDDDDDDDDD"
+    - copy tools\.condarc %userprofile%
+    - copy tools\conda_build_config.yaml conda_build_config.yaml
+    - conda mambabuild conda-recipe --output-folder bld-dir
 
 test:linux:
   stage: test
