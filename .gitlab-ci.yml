@@ -54,7 +54,7 @@ build:windows:
   script:
     - cmd.exe
     - conda activate base
-    - git submodule foreach git pull origin master
+    - cd tools && git pull --force && cd ..
     - .\tools\build.bat
     - conda mambabuild conda-recipe --output-folder bld-dir
 
