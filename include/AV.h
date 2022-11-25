@@ -21,6 +21,7 @@
 
 #include <IMP/bff/PathMap.h>
 
+#include <string>
 #include <cmath>
 #include <vector>
 #include <limits>

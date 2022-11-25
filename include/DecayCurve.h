@@ -68,109 +68,49 @@ public:
             double shift
     );
 
-    size_t size() const{
-        return x.size();
-    }
+    size_t size() const;
 
-    bool empty(){
-        return x.empty();
-    }
+    bool empty();
 
-    std::vector<double> get_dx(){
-        std::vector<double> dx(size(), 0.0);
-        if(!empty()){
-            for(size_t i = 1; i < x.size(); i++){
-                dx[i] = x[i] - x[i - 1];
-            }
-        }
-        return dx;
-    }
+    std::vector<double> get_dx();
 
-    void resize(size_t n, double v=0.0, double dx=1.0){
-        size_t old_size = size();
+    void resize(size_t n, double v=0.0, double dx=1.0);
 
-        // get last dx to extend the axis linearly
-        auto dx_vec = get_dx();
-        if(!dx_vec.empty()) dx = dx_vec[dx_vec.size() - 1];
-
-        x.resize(n);
-        y.resize(n, v); _y.resize(n, v);
-        ey.resize(n, std::numeric_limits<double>::max());
-
-        for(size_t i = old_size; i < n; i++){
-            if(i > 0) x[i] = x[i - 1] + dx;
-        }
-    }
-
-    double get_average_dx(){
-        auto dx = get_dx();
-        return std::accumulate(dx.begin(), dx.end(), 0.0) / (double) dx.size();
-    }
+    double get_average_dx();
 
     /*-------*/
     /* x     */
     /*-------*/
-    std::vector<double>& get_x(){
-        return x;
-    }
+    std::vector<double>& get_x();
 
-    void set_x(const std::vector<double>& v){
-        resize(v.size());
-        x = v;
-    }
+    void set_x(const std::vector<double>& v);
 
-    void set_x(double *input, int n_input){
-        auto vec = std::vector<double>(input, input+n_input);
-        set_x(vec);
-    }
+    void set_x(double *input, int n_input);
 
     /*-------*/
     /* y     */
     /*-------*/
-    std::vector<double>& get_y(){
-        return y;
-    }
+    std::vector<double>& get_y();
 
-    void set_y(std::vector<double>& v){
-        resize(v.size());
-        y = v; _y = v;
-        compute_noise(noise_model);
-    }
+    void set_y(std::vector<double>& v);
 
-    void set_y(double *input, int n_input){
-        auto vec = std::vector<double>(input, input+n_input);
-        set_y(vec);
-    }
+    void set_y(double *input, int n_input);
 
     /*-------*/
     /* ey    */
     /*-------*/
-    std::vector<double>& get_ey(){
-        return ey;
-    }
+    std::vector<double>& get_ey();
 
-    void set_ey(std::vector<double>& v){
-        resize(v.size());
-        ey = v;
-    }
+    void set_ey(std::vector<double>& v);
 
-    void set_ey(double *input, int n_input){
-        auto vec = std::vector<double>(input, input+n_input);
-        set_ey(vec);
-    }
+    void set_ey(double *input, int n_input);
 
     /*--------------------*/
     /* aquisition time    */
     /*--------------------*/
-    void set_acquisition_time(double v) {
-        if(acquisition_time < 0)
-            acquisition_time = std::numeric_limits<double>::max();
-        acquisition_time = v;
-    }
+    void set_acquisition_time(double v);
 
-    double get_acquisition_time() const {
-        return acquisition_time;
-    }
+    double get_acquisition_time() const;
 
     /*--------------------*/
     /* time shift         */
@@ -185,19 +125,9 @@ public:
             double acquisition_time = std::numeric_limits<double>::max(),
             int noise_model = NOISE_POISSON,
             int size = -1
-    ){
-        this->acquisition_time = acquisition_time;
-        this->noise_model = noise_model;
-        set_ey(ey); // note the order the elements are set matter
-        set_y(y);   // no not change order
-        set_x(x);
-        if(size > 0) resize(size);
-    }
+    );
 
-    double sum(int start=0, int stop=-1){
-        stop = (stop < 0) ? y.size() : std::min((size_t)stop, y.size());
-        return std::accumulate(y.begin() + start, y.begin() + stop, 0.0);
-    }
+    double sum(int start=0, int stop=-1);
 
     /// Apply a simple moving average (SMA) filter to the data
     void apply_simple_moving_average(int start, int stop, int n_window=5, bool normalize=false);

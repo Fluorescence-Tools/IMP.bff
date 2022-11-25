@@ -1,7 +1,101 @@
-#include "IMP/bff/DecayCurve.h"
+#include <IMP/bff/DecayCurve.h>
 
 
 IMPBFF_BEGIN_NAMESPACE
+
+size_t DecayCurve::size() const{
+    return x.size();
+}
+
+std::vector<double>& DecayCurve::get_x(){
+    return x;
+}
+
+void DecayCurve::set_x(const std::vector<double>& v){
+    resize(v.size());
+    x = v;
+}
+
+void DecayCurve::set_x(double *input, int n_input){
+    auto vec = std::vector<double>(input, input+n_input);
+    set_x(vec);
+}
+
+std::vector<double>& DecayCurve::get_y(){
+    return y;
+}
+
+void DecayCurve::set_y(std::vector<double>& v){
+    resize(v.size());
+    y = v; _y = v;
+    compute_noise(noise_model);
+}
+
+void DecayCurve::set_y(double *input, int n_input){
+    auto vec = std::vector<double>(input, input+n_input);
+    set_y(vec);
+}
+
+std::vector<double>& DecayCurve::get_ey(){
+    return ey;
+}
+
+void DecayCurve::set_ey(std::vector<double>& v){
+    resize(v.size());
+    ey = v;
+}
+
+void DecayCurve::set_ey(double *input, int n_input){
+    auto vec = std::vector<double>(input, input+n_input);
+    set_ey(vec);
+}
+
+void DecayCurve::set_acquisition_time(double v) {
+    if(acquisition_time < 0)
+        acquisition_time = std::numeric_limits<double>::max();
+    acquisition_time = v;
+}
+
+double DecayCurve::get_acquisition_time() const {
+    return acquisition_time;
+}
+
+
+bool DecayCurve::empty(){
+    return x.empty();
+}
+
+std::vector<double> DecayCurve::get_dx(){
+    std::vector<double> dx(size(), 0.0);
+    if(!empty()){
+        for(size_t i = 1; i < x.size(); i++){
+            dx[i] = x[i] - x[i - 1];
+        }
+    }
+    return dx;
+}
+
+void DecayCurve::resize(size_t n, double v, double dx){
+    size_t old_size = size();
+
+    // get last dx to extend the axis linearly
+    auto dx_vec = get_dx();
+    if(!dx_vec.empty()) dx = dx_vec[dx_vec.size() - 1];
+
+    x.resize(n);
+    y.resize(n, v); _y.resize(n, v);
+    ey.resize(n, std::numeric_limits<double>::max());
+
+    for(size_t i = old_size; i < n; i++){
+        if(i > 0) x[i] = x[i - 1] + dx;
+    }
+}
+
+double DecayCurve::get_average_dx(){
+    auto dx = get_dx();
+    return std::accumulate(dx.begin(), dx.end(), 0.0) / (double) dx.size();
+}
+
 
 void DecayCurve::set_shift(double v){
     current_shift = v;
@@ -274,6 +368,28 @@ void DecayCurve::apply_simple_moving_average(int start, int stop, int n_window, 
             _y[i] /= m;
     }
     y = _y;
+}
+
+
+DecayCurve::DecayCurve(
+    std::vector<double> x,
+    std::vector<double> y,
+    std::vector<double> ey,
+    double acquisition_time,
+    int noise_model,
+    int size
+){
+    this->acquisition_time = acquisition_time;
+    this->noise_model = noise_model;
+    set_ey(ey); // note the order the elements are set matter
+    set_y(y);   // no not change order
+    set_x(x);
+    if(size > 0) resize(size);
+}
+
+double DecayCurve::sum(int start, int stop){
+    stop = (stop < 0) ? y.size() : std::min((size_t)stop, y.size());
+    return std::accumulate(y.begin() + start, y.begin() + stop, 0.0);
 }
 
 

@@ -16,6 +16,8 @@
 #include <limits>
 #include <iostream>
 
+#include <IMP/bff/DecayRoutines.h>
+
 IMPBFF_BEGIN_NAMESPACE
 
 class IMPBFFEXPORT DecayLifetimeHandler{
@@ -39,67 +41,32 @@ private:
 
 public:
 
-    double get_amplitude_threshold(){
-        return std::abs(amplitude_threshold);
-    }
+    double get_amplitude_threshold();
 
-    void set_amplitude_threshold(double v){
-        amplitude_threshold = v;
-    }
+    void set_amplitude_threshold(double v);
 
-    bool get_use_amplitude_threshold(){
-        return use_amplitude_threshold;
-    }
+    bool get_use_amplitude_threshold();
 
-    void set_use_amplitude_threshold(bool v){
-        use_amplitude_threshold = v;
-    }
+    void set_use_amplitude_threshold(bool v);
 
-    bool get_abs_lifetime_spectrum() const{
-        return abs_lifetime_spectrum;
-    }
+    bool get_abs_lifetime_spectrum() const;
 
-    void set_abs_lifetime_spectrum(bool v){
-        abs_lifetime_spectrum = v;
-    }
+    void set_abs_lifetime_spectrum(bool v);
 
-    void set_lifetime_spectrum(std::vector<double> v) {
-        _lifetime_spectrum = v;
-    }
+    void set_lifetime_spectrum(std::vector<double> v);
 
-    void add_lifetime(double amplitude, double lifetime) {
-        _lifetime_spectrum.emplace_back(amplitude);
-        _lifetime_spectrum.emplace_back(lifetime);
-    }
+    void add_lifetime(double amplitude, double lifetime);
 
-    std::vector<double>& get_lifetime_spectrum(){
-        lt_ = _lifetime_spectrum;
-        if(use_amplitude_threshold){
-            discriminate_small_amplitudes(lt_.data(), lt_.size(), amplitude_threshold);
-        }
-        if (abs_lifetime_spectrum) {
-            for(auto &v: lt_) v = std::abs(v);
-        }
-        return lt_;
-    }
+    std::vector<double>& get_lifetime_spectrum();
 
-    void get_lifetime_spectrum(double **output_view, int *n_output) {
-        auto lt = get_lifetime_spectrum();
-        *output_view = lt.data();
-        *n_output = (int) lt.size();
-    }
+    void get_lifetime_spectrum(double **output_view, int *n_output);
 
     DecayLifetimeHandler(
             std::vector<double> lifetime_spectrum = std::vector<double>(),
             bool use_amplitude_threshold = false,
             bool abs_lifetime_spectrum = false,
             double amplitude_threshold = std::numeric_limits<double>::epsilon()
-            ){
-        set_use_amplitude_threshold(use_amplitude_threshold);
-        set_abs_lifetime_spectrum(abs_lifetime_spectrum);
-        set_amplitude_threshold(amplitude_threshold);
-        set_lifetime_spectrum(lifetime_spectrum);
-    }
+            );
 
 };
 
