@@ -47,7 +47,7 @@ cd %PREFIX%\Library\bin
 for /f %%f in ('dir /b *.') do copy "%SRC_DIR%\app_wrapper.exe" "%PREFIX%\Library\bin\%%f.exe"
 if errorlevel 1 exit 1
 
-echo "Copy examples"
-mkdir %PREFIX%\Library\share\doc\IMP\examples\bff
-xcopy /e /k /h /i %SRC_DIR%\examples\ %PREFIX%\Library\share\doc\IMP\examples\bff
-if errorlevel 1 exit 1
+:: echo "Copy examples"
+mkdir -p %PREFIX%\Library\share\doc\IMP\examples\bff
+xcopy /e /k /h /i %SRC_DIR%\examples %PREFIX%\Library\share\doc\IMP\examples\bff
+:: if errorlevel 1 exit 1
