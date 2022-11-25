@@ -52,8 +52,8 @@ build:windows:
   tags:
     - win
   script:
-    - copy tools\.condarc %userprofile%
-    - copy tools\conda_build_config.yaml conda_build_config.yaml
+    - git submodule foreach git pull origin master
+    - .\tools\build.bat
     - conda mambabuild conda-recipe --output-folder bld-dir
 
 test:linux:
