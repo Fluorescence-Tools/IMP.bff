@@ -14,9 +14,8 @@ build:
 
 requirements:
   build:
-    - python {{ python }}                    # [build_platform != target_platform]
-    - cross-python_{{ target_platform }}     # [build_platform != target_platform]
-    - numpy                                  # [build_platform != target_platform]
+    - python {{ python }}
+    - numpy
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - llvm-openmp  # [osx]
@@ -27,7 +26,7 @@ requirements:
     - ninja
     - graphviz
   host:
-    - python
+    - python {{ python }}
     - numpy
     - boost-cpp
     - hdf5
@@ -36,11 +35,11 @@ requirements:
     - mpir  # [win]
     - msmpi  # [win]
     - libmongoc
-    - imp
+    - imp {{ imp }}
   run:
     - {{ pin_compatible('numpy') }}
-    - python
-    - imp
+    - python {{ python }}
+    - imp {{ imp }}
     - boost-cpp
     - libmongoc
     - pandas
