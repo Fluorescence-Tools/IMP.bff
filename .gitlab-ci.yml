@@ -59,12 +59,14 @@ build:windows:
   tags:
     - win
   before_script:
-    - echo "Before SSSSSS"
+    - echo "Before AAAAAAAAAAAA"
     - git config --global --add safe.directory *
     - git submodule update --init --recursive --remote
+    - echo "Before BBBBBBBB"
   script:
-    - Init64.ps1
+    - echo "Before CCCCCCCCCCC"
     - ./tools/build.bat
+    - echo "Before DDDDDDDDDDDDD"
 
 test:linux:
   stage: test
