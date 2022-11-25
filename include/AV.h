@@ -49,7 +49,7 @@ typedef enum{
 
 
 /// Container for experimental distance measurement
-class AVPairDistanceMeasurement{
+class IMPBFFEXPORT class AVPairDistanceMeasurement{
 
 public:
 

@@ -30,7 +30,8 @@ std::string AVPairDistanceMeasurement::get_json(){
 }
 
 
-double AVPairDistanceMeasurement::score_model(double model){
+double AVPairDistanceMeasurement::score_model(
+        double model){
     auto ev = [](auto f, auto m, auto en, auto ep){
         auto dev = m - f;
         auto w = (dev < 0) ? 1. / en : 1. / ep;
