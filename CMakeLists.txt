@@ -1,3 +1,4 @@
+set (CMAKE_CXX_STANDARD 14)
 # Are we running cmake from this directory (out of tree build) ?
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 2.8.12)
