@@ -58,7 +58,6 @@ build:windows:
     - conda activate base
     - cd tools && git pull --force && cd..
     - .\tools\build.bat
-    - conda mambabuild conda-recipe --output-folder bld-dir
 
 test:linux:
   stage: test
