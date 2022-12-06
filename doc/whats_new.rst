@@ -1,7 +1,9 @@
 .. currentmodule:: IMP.bff
 
+==========================================================================
 Release History
-===============
+==========================================================================
+
 
 Release notes for all IMP.bff releases are linked in this page.
 

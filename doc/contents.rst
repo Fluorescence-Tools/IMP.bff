@@ -6,9 +6,9 @@
 :globalsidebartoc: True
 
 .. _toc:
-=================
-Table Of Contents
-=================
+==========================================================================
+Table of contents
+==========================================================================
 
 .. Define an order for the Table of Contents:
 
@@ -17,6 +17,6 @@ Table Of Contents
 
     preface
     getting_started
-    tutorial/index
+    manual/index
 
 

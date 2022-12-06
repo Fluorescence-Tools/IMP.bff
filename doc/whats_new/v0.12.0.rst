@@ -6,11 +6,11 @@
 Version 0.12.0
 ==============
 
-**July, 2022**
+**December, 2022**
 
 Changelog
 ---------
-* Initial public release
+* First public release
 
 API changes summary
 -------------------

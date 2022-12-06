@@ -1,13 +1,13 @@
 .. _related_projects:
-=====================================
+==========================================================================
 Related Projects
-=====================================
+==========================================================================
 
 Below is a list of sister-projects, extensions, domain specific packages,
 and related software.
 
 Interoperability and framework enhancements
--------------------------------------------
+--------------------------------------------------------------------------
 
 These tools adapt tttrlib for use with other technologies or otherwise
 enhance the functionality of tttrlib estimators.
