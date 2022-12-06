@@ -12,7 +12,7 @@ experimental information such as fluorophore distances in a protein.
 
 The output of ``imp_bff flexfit`` can be visualized in Chimera.
 
-.. image:: ../../img/avff_tg2_output_chimera.gif
+.. image:: ../../img/examples_structure_flexfit.gif
    :alt: Accessible Volume Flexible Fitting illustrated in Chimera
    :align: center
 
