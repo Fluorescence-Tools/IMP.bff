@@ -3,6 +3,21 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+std::string DecayCurve::get_json() const{
+    nlohmann::json j;
+    j["noise_model"] = noise_model;
+    j["current_shift"] = current_shift;
+    j["acquisition_time"] = acquisition_time;
+    j["x"] = x;
+    j["y"] = y;
+    j["ey"] = ey;
+    return j.dump();
+}
+
+bool DecayCurve::read_json(std::string json_string){
+
+}
+
 size_t DecayCurve::size() const{
     return x.size();
 }
@@ -41,6 +56,7 @@ std::vector<double>& DecayCurve::get_ey(){
 }
 
 void DecayCurve::set_ey(std::vector<double>& v){
+    noise_model = NOISE_NA;
     resize(v.size());
     ey = v;
 }
@@ -142,8 +158,11 @@ std::vector<double> DecayCurve::shift_array(
 void DecayCurve::compute_noise(int noise_model){
     if(noise_model == NOISE_POISSON){
         for (size_t i = 0; i < size(); i++){
-            ey[i] = std::max(1.0, std::sqrt(std::abs(y[i])));
+            auto v = std::max(1.0, std::sqrt(std::abs(y[i])));
+            ey[i] = v;
         }
+    } else if(noise_model == NOISE_NA){
+        std::fill(ey.begin(), ey.end(), 1.0);
     }
 }
 
@@ -379,12 +398,17 @@ DecayCurve::DecayCurve(
     int noise_model,
     int size
 ){
+    if(size > 0) resize(size);
+
     this->acquisition_time = acquisition_time;
     this->noise_model = noise_model;
-    set_ey(ey); // note the order the elements are set matter
     set_y(y);   // no not change order
     set_x(x);
-    if(size > 0) resize(size);
+
+    if(!ey.empty()){
+        set_ey(ey);
+    }
+
 }
 
 double DecayCurve::sum(int start, int stop){

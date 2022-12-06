@@ -17,18 +17,22 @@
 #include <numeric>
 #include <algorithm>
 #include <iostream> /* std::cerr */
+#include <string>
 #include <cstring> /* strcmp */
 #include <limits> /* std::numeric_limits */
 
 #include <IMP/bff/internal/MovingAverage.h>
+#include <IMP/bff/internal/json.h>
 #include <IMP/bff/DecayRoutines.h>
+
 
 
 IMPBFF_BEGIN_NAMESPACE
 
 
 enum NoiseModelTypes{
-    NOISE_NA, NOISE_POISSON
+    NOISE_NA,
+    NOISE_POISSON
 };
 
 
@@ -44,22 +48,25 @@ class IMPBFFEXPORT DecayCurve {
 
 private:
 
-    void compute_noise(int noise_model = NOISE_POISSON);
-
     int noise_model = NOISE_NA;
+
     double current_shift = 0.0;
     double acquisition_time = std::numeric_limits<double>::max();
     std::vector<double> dx = {1.0};
 
     /// x-values
     std::vector<double> x = std::vector<double>();
+
     /// initial y values
     std::vector<double> _y;
+
     /// transformed (e.g., shifted) y values
     std::vector<double> y = std::vector<double>();
+
     /// error of y values
     std::vector<double> ey = std::vector<double>();
 
+    void compute_noise(int noise_model = NOISE_POISSON);
 
 public:
 
@@ -106,7 +113,7 @@ public:
     void set_ey(double *input, int n_input);
 
     /*--------------------*/
-    /* aquisition time    */
+    /* acquisition time   */
     /*--------------------*/
     void set_acquisition_time(double v);
 
@@ -117,7 +124,13 @@ public:
     /*--------------------*/
     void set_shift(double v);
     double get_shift();
-    
+
+    std::string get_json() const;
+
+    /// Read from JSON string
+    bool read_json(std::string json_string);
+
+
     DecayCurve(
             std::vector<double> x = std::vector<double>(),
             std::vector<double> y  = std::vector<double>(),

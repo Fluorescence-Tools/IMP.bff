@@ -82,9 +82,7 @@ void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, in
 
 // fast convolution AVX
 void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
-
 #ifdef __AVX__
-
     int start1 = std::max(1, start);
 
     // make sure that there are always multiple of 4 in the lifetimes
@@ -150,7 +148,6 @@ fit[0] += double(tmp.m256d_f64[3]);
         }
     }
     _mm_free(ex); _mm_free(p); free(l2);
-
 #endif //__AVX__
 }
 
@@ -424,12 +421,10 @@ void decay_add_pile_up_to_model(
         double instrument_dead_time,
         double measurement_time,
         std::string pile_up_model,
-        int start,
-        int stop
+        int start, int stop
 ){
     stop = stop < 0 ? n_data : std::min(n_data, stop);
     start = start < 0 ? 0 : std::min(n_data, start);
-    stop = std::min(n_data, n_model);
 #if IMPBFF_VERBOSE
     std::clog << "ADD PILE-UP" << std::endl;
 std::clog << "-- Repetition_rate [MHz]: " << repetition_rate << std::endl;
@@ -442,7 +437,7 @@ std::clog << "-- stop: " << stop << std::endl;
 #endif
     if(strcmp(pile_up_model.c_str(), "coates") == 0){
 #if IMPBFF_VERBOSE
-        std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
+std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
 #endif
         repetition_rate *= 1e6;
         instrument_dead_time *= 1e-9;
@@ -453,25 +448,26 @@ std::clog << "-- stop: " << stop << std::endl;
         double live_time = measurement_time - total_dead_time;
         double n_excitation_pulses = std::max(live_time * repetition_rate, (double) n_pulse_detected);
 #if IMPBFF_VERBOSE
-        std::clog << "-- live_time [s]: " << live_time << std::endl;
+std::clog << "-- live_time [s]: " << live_time << std::endl;
 std::clog << "-- total_dead_time [s]: " << total_dead_time << std::endl;
 std::clog << "-- n_pulse_detected [#]: " << n_pulse_detected << std::endl;
 std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
 #endif
         // Coates, 1968, eq. 2 & 4
         std::vector<double> rescaled_data(n_data);
-
         for(int i = start; i < stop; i++)
             rescaled_data[i] = -std::log(1.0 - data[i] / (n_excitation_pulses - cum_sum[i]));
         for(int i = start; i < stop; i++)
             rescaled_data[i] = (rescaled_data[i] == 0) ? 1.0 : rescaled_data[i];
         // rescale model function to preserve data counting statistics
         std::vector<double> sf(n_data);
-        for(int i = start; i < stop; i++)
+        for(int i = start; i < stop; i++){
             sf[i] = data[i] / rescaled_data[i];
+        }
         double s = std::accumulate(sf.begin(),sf.end(),0.0);
-        for(int i = start; i < stop; i++)
+        for(int i = start; i < stop; i++){
             model[i] = model[i] * (sf[i] / s * n_data);
+        }
     }
 }
 
