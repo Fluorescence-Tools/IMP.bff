@@ -14,8 +14,8 @@ std::string DecayCurve::get_json() const{
     return j.dump();
 }
 
-bool DecayCurve::read_json(std::string json_string){
-
+int DecayCurve::read_json(std::string json_string){
+    return -1;
 }
 
 size_t DecayCurve::size() const{

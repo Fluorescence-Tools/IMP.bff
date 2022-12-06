@@ -128,8 +128,7 @@ public:
     std::string get_json() const;
 
     /// Read from JSON string
-    bool read_json(std::string json_string);
-
+    int read_json(std::string json_string);
 
     DecayCurve(
             std::vector<double> x = std::vector<double>(),
