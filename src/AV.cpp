@@ -172,7 +172,7 @@ void AV::resample(bool shift_xyz){
     double r = get_radius1();
     map->sample_obstacles(r);
     auto obstacle = map->get_data();
-    std::vector<PathMapTile>& tiles = map->get_tiles();
+    auto tiles = map->get_tiles();
     long nvox = map->get_number_of_voxels();
     for(long i=0; i<nvox; i++){
         if(obstacle[i] > TILE_OBSTACLE_THRESHOLD){
