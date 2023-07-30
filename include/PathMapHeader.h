@@ -38,7 +38,7 @@ private:
 
     double grid_spacing_;
     double max_path_length_;
-    int neighbor_radius_;
+    double neighbor_radius_;
     double obstacle_threshold_;
 
     IMP::em::DensityHeader density_header_;
@@ -63,7 +63,7 @@ public:
     PathMapHeader(
             double max_path_length = 10.0,
             double grid_spacing = 1.0,
-            int neighbor_radius = 2,
+            double neighbor_radius = 2,
             double obstacle_threshold = std::numeric_limits<double>::epsilon()
     );
 
@@ -99,7 +99,7 @@ public:
 
     void set_neighbor_radius(double neighbor_radius);
 
-    int get_neighbor_radius() const{
+    double get_neighbor_radius() const{
         return neighbor_radius_;
     }
 
