@@ -5,6 +5,7 @@
 *.old
 *.orig
 *.gcno
+.vscode
 *.gcda
 */Files.cmake
 db/
