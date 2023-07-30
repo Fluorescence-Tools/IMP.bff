@@ -17,6 +17,7 @@ dependency/CMakeLists.txt
 doc/_*
 doc/auto_examples
 examples/CMakeLists.txt
+.history
 
 test/CMakeLists.txt
 src/CMakeLists.txt
