@@ -9,6 +9,11 @@
 *.gcda
 */Files.cmake
 db/
+*_run*
+*out
+*.rmf3
+*.pse
+Untitled*
 ModuleBuild.cmake
 benchmark/CMakeLists.txt
 benchmark/Files.cmake
