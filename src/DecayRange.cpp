@@ -17,7 +17,7 @@ size_t DecayRange::get_start(DecayCurve* d) const {
 
 void DecayRange::set_stop(int v) {
     if(v < 0){
-        _stop = std::numeric_limits<size_t>::max();
+        _stop = -1;
     } else{
         _stop = v;
     }
