@@ -24,6 +24,7 @@ doc/_*
 doc/auto_examples
 examples/CMakeLists.txt
 .history
+doc/IMP.bff.docset
 
 test/CMakeLists.txt
 src/CMakeLists.txt
