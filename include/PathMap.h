@@ -3,7 +3,7 @@
  *  \brief Class to search path on grids
  *
  * \authors Thomas-Otavio Peulen
- *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *  Copyright 2007-2023 IMP Inventors. All rights reserved.
  *
  */
 #ifndef IMPBFF_PATHMAP_H
@@ -33,7 +33,7 @@
 
 #include <IMP/bff/PathMapHeader.h>
 #include <IMP/bff/PathMapTile.h>
-#include <IMP/bff/internal/PathMapTileEdge.h>
+#include <IMP/bff/PathMapTileEdge.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -42,14 +42,77 @@ class PathMapTile;
 
 class IMPBFFEXPORT PathMap : public IMP::em::SampledDensityMap {
 
+friend class PathMapTile;
+
 private:
 
-    PathMapHeader pathMapHeader_;
+    // used in path search
+    std::vector<bool>  visited;
+    std::vector<bool>  edge_computed;
+    std::vector<float> cost;
+
+
+protected:
+
+    PathMapHeader pathMapHeader_;    
     std::vector<PathMapTile> tiles;
+    std::vector<int> offsets_;
+    std::vector<PathMapTileEdge>& get_edges(int tile_idx);
 
 public:
 
+    void update_tiles(
+        float obstacle_threshold=-1.0, 
+        bool binarize=true, 
+        float obstacle_penalty=TILE_PENALTY_DEFAULT,
+        bool reset_tile_edges=true
+    );
+
     void resize(unsigned int nvox);
+
+    void set_data(double *input, int n_input, 
+        float obstacle_threshold=-1, bool binarize=true, 
+        float obstacle_penalty=TILE_PENALTY_DEFAULT);
+
+    std::vector<int> get_neighbor_idx_offsets(double neighbor_radius = -1){
+        if(neighbor_radius < 0){
+            auto pmh = get_path_map_header();
+            neighbor_radius = pmh->get_neighbor_radius();
+        }
+        const int nn = ceil(neighbor_radius);
+        const double nr2 = neighbor_radius * neighbor_radius;
+
+        const IMP::em::DensityHeader* header = get_header();
+        int nx = header->get_nx();
+        int ny = header->get_ny();
+        int nx_ny = nx * ny;
+
+        std::vector<int> offsets;
+        for(int z = -nn; z < nn; z += 1) {
+            double dz2 = z * z;
+            int oz = z * nx_ny;
+            for(int y = -nn; y < nn; y++) {
+                int oy = y * nx;
+                double dz2_dy2 = dz2 + y * y;
+                for(int x = -nn; x < nn; x++) {
+                    int ox = x;
+                    int dz2_dy2_dx2 = dz2_dy2 + x * x;
+                    if(dz2_dy2_dx2 <= nr2){
+                        int d;                  // edge_cost is a float stored in an 32bit int
+                        float *p = (float*) &d; // Make a float pointer point at the integer
+                        *p = sqrt((float) dz2_dy2_dx2); // Pretend that the integer is a float and store the value
+                        int tile_offset = oz + oy + ox;
+                        offsets.emplace_back(z);
+                        offsets.emplace_back(y);
+                        offsets.emplace_back(x);
+                        offsets.emplace_back(tile_offset);
+                        offsets.emplace_back(d);
+                    }
+                }
+            }
+        }
+        return offsets;
+    }
 
     //! Get index of voxel in an axis
     /*!
@@ -69,18 +132,6 @@ public:
 
     /// Set the path map header
     void set_path_map_header(PathMapHeader &path_map_header, float resolution = -1.0);
-
-    //! Update the path map tiles and the tile edges
-    /*!
-     * Compute a ordered list of tiles with initialized edges for an
-     * path map. A tile can correspond to a voxel in an AV.
-
-     * @param obstacle_penalty tile at obstacle voxels are assigned the
-     * specified visit penalty.
-     */
-    void update_tiles(
-            float obstacle_penalty=std::numeric_limits<float>::max()
-    );
 
     //! Get the values of all tile
     /*!
@@ -143,11 +194,10 @@ public:
      * @param path_begin_idx
      * @param path_end_idx
      */
+    void find_path(long path_begin_idx, long path_end_idx = -1, int heuristic_mode = 0);
     void find_path_dijkstra(long path_begin_idx, long path_end_idx = -1);
     void find_path_astar(long path_begin_idx, long path_end_idx = -1);
 
-
-    ///
     std::vector<IMP::algebra::Vector4D> get_xyz_density();
 
     /// Resamples (updated) the obstacles

@@ -17,12 +17,19 @@
 #include <algorithm>
 
 #include <IMP/bff/PathMap.h>
-#include <IMP/bff/internal/PathMapTileEdge.h>
+#include <IMP/bff/PathMapTileEdge.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-const double TILE_PENALTY_THRESHOLD = 100000;
-const double TILE_OBSTACLE_THRESHOLD = 0.000001;
+const bool  TILE_VISITED_DEFAULT    = false;
+const float TILE_PENALTY_DEFAULT    = 100000.0f;
+const float TILE_COST_DEFAULT       = 100000.0f;
+const float TILE_EDGE_COST_DEFAULT  = 100000.0f;
+
+const float TILE_PENALTY_THRESHOLD  = 100000.0f;
+const float TILE_OBSTACLE_THRESHOLD = 0.000001f;
+const float TILE_OBSTACLE_PENALTY   = 100000.0f;
+
 
 /// Value types that can be read from a PathMapTile
 typedef enum{
@@ -57,17 +64,24 @@ private:
      *
      * @param av AccessibleVolume
      * @param tiles List of tiles with empty edges
-     * @param neighbor_box_size Size of box, n. Tiles in a 3D box
-     * of the range i - n .. i + n are considered neighbors.
+     * @param neighbor_radius neighboring tiles closer than neighbor_radius
+     * are connected by edges.
      * @param tile_penalty_threshold Tiles with a visit penalty
      * larger than this threshold are not added to the edge list
      */
     void update_edges(
             IMP::bff::PathMap* av,
             std::vector<PathMapTile> &tiles,
-            int neighbor_box_size,
-            float tile_penalty_threshold= TILE_PENALTY_THRESHOLD
+            double neighbor_radius,
+            float tile_penalty_threshold = TILE_PENALTY_THRESHOLD
     );
+    void update_edges_2(
+            int nx, int ny, int nz,
+            std::vector<PathMapTile>& tiles,
+            std::vector<int> neighbor_idxs,
+            float tile_penalty_threshold =TILE_PENALTY_THRESHOLD
+    );
+
 
 protected:
 

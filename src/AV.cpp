@@ -82,7 +82,8 @@ double av_distance(
             IMP::algebra::Vector3D mp2 = IMP::core::XYZ(p2).get_coordinates();
             return get_l2_norm((mp1 - mp2));
         }
-        default: { // case BFF_DYE_PAIR_DISTANCE_MEAN:
+        case DYE_PAIR_DISTANCE_MEAN:
+        default: {
             for (int s = 0; s < n_samples; s++) {
                 auto tmp = sampler1.get_random() - sampler2.get_random();
                 tmp[3] = 0.0;
