@@ -116,9 +116,9 @@ void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start
         tmp = _mm256_mul_pd(l2c, a);
 #ifdef _WIN32
         fit[0] += double(tmp.m256d_f64[0]);
-fit[0] += double(tmp.m256d_f64[1]);
-fit[0] += double(tmp.m256d_f64[2]);
-fit[0] += double(tmp.m256d_f64[3]);
+        fit[0] += double(tmp.m256d_f64[1]);
+        fit[0] += double(tmp.m256d_f64[2]);
+        fit[0] += double(tmp.m256d_f64[3]);
 #else
         fit[0] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
@@ -138,12 +138,12 @@ fit[0] += double(tmp.m256d_f64[3]);
             // fit[i] += fitcurr * a;
             tmp = _mm256_mul_pd(fitcurr, a);
 #ifdef _WIN32
-            fit[i] = double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[0]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
-            fit[i] = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
         }
     }
@@ -168,12 +168,12 @@ void decay_fconv_per(double *fit, double *x, double *lamp, int numexp, int start
 
 #if IMPBFF_VERBOSE
     std::clog << "FCONV_PER" << std::endl;
-std::clog << "-- numexp:" << numexp << std::endl;
-std::clog << "-- start:" << start << std::endl;
-std::clog << "-- stop:" << stop << std::endl;
-std::clog << "-- n_points:" << n_points << std::endl;
-std::clog << "-- period:" << period << std::endl;
-std::clog << "-- dt:" << dt << std::endl;
+    std::clog << "-- numexp:" << numexp << std::endl;
+    std::clog << "-- start:" << start << std::endl;
+    std::clog << "-- stop:" << stop << std::endl;
+    std::clog << "-- n_points:" << n_points << std::endl;
+    std::clog << "-- period:" << period << std::endl;
+    std::clog << "-- dt:" << dt << std::endl;
 #endif
 
     // Precompute everything needed for the convolution
@@ -205,16 +205,16 @@ std::clog << "-- dt:" << dt << std::endl;
 void decay_fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop,
                    int n_points, double period, double dt) {
 #ifdef __AVX__
-
 #if IMPBFF_VERBOSE
     std::clog << "FCONV_PER_AVX" << std::endl;
-std::clog << "-- numexp: " << numexp << std::endl;
-std::clog << "-- start: " << start << std::endl;
-std::clog << "-- stop: " << stop << std::endl;
-std::clog << "-- n_points: " << n_points << std::endl;
-std::clog << "-- period: " << period << std::endl;
-std::clog << "-- dt: " << dt << std::endl;
+    std::clog << "-- numexp: " << numexp << std::endl;
+    std::clog << "-- start: " << start << std::endl;
+    std::clog << "-- stop: " << stop << std::endl;
+    std::clog << "-- n_points: " << n_points << std::endl;
+    std::clog << "-- period: " << period << std::endl;
+    std::clog << "-- dt: " << dt << std::endl;
 #endif
+
     int start1 = std::max(1, start);
     stop = (stop < 0) ? n_points: stop;
     // make sure that there are always multiple of the AVX register size
@@ -227,12 +227,11 @@ std::clog << "-- dt: " << dt << std::endl;
 
     // Check if the window is larger than the decay histogram.
     // If it is larger only convolve till the end of the decay. Otherwise,
-    // convolve till end of period. The period starts at the
-    // excitation pulse.
+    // convolve till end of period. The period starts at the excitation pulse.
     // Find the position where the IRF starts
     int lamp_start = 0;
-    while (lamp[lamp_start++] == 0);
-    int stop1 = std::min(period_n+lamp_start, n_points);
+    while(lamp[lamp_start++] == 0);
+    int stop1 = std::min(period_n + lamp_start, n_points);
 
     // Precompute everything needed for the convolution
     // lamp * dt * 0.5
@@ -252,12 +251,14 @@ std::clog << "-- dt: " << dt << std::endl;
     // scale of decay relative to tail
     auto scale = (double *) _mm_malloc(n_ele * sizeof(double), 32);
     std::fill(scale, scale + n_ele, 0.0);
-    for (int i = 0; i < numexp; i++) scale[i] = exp(-(period_n - stop1 + start) * dt / x[2 * i + 1]);
+    for (int i = 0; i < numexp; i++) scale[i] = 
+        exp(-(period_n - stop1 + start) * dt / x[2 * i + 1]);
 
-    // tails wrapping to next period
+    // // tails wrapping to next period
     auto tails = (double *) _mm_malloc(n_ele * sizeof(double), 32);
     std::fill(tails, tails + n_ele, 0.0);
-    for (int i = 0; i < numexp; i++) tails[i] = 1. / (1. - exp(-period / x[2 * i + 1]));
+    for (int i = 0; i < numexp; i++) 
+        tails[i] = 1. / (1. - exp(-period / x[2 * i + 1]));
 
     // CONVOLUTION
     std::fill(fit, fit + n_points, 0.0);
@@ -266,43 +267,42 @@ std::clog << "-- dt: " << dt << std::endl;
         e = _mm256_load_pd(&ex[ne]);     // expcurr = exp(-dt / x[2 * ne + 1]);
         a = _mm256_load_pd(&p[ne]);      // amplitudes
         s = _mm256_load_pd(&scale[ne]);  // scales
-        t = _mm256_load_pd(&tails[ne]);  // tail
+        t = _mm256_load_pd(&tails[ne]);  // tails
 
         // take care of first channel
+        // double fitcurr = 0;
+        fitcurr = _mm256_set1_pd(0.0);
         // fit[0] += l2[0] * a;
         l2c = _mm256_set1_pd(l2[0]);
         tmp = _mm256_mul_pd(l2c, a);
 #ifdef _WIN32
         fit[0] += double(tmp.m256d_f64[0]);
-fit[0] += double(tmp.m256d_f64[1]);
-fit[0] += double(tmp.m256d_f64[2]);
-fit[0] += double(tmp.m256d_f64[3]);
+        fit[0] += double(tmp.m256d_f64[1]);
+        fit[0] += double(tmp.m256d_f64[2]);
+        fit[0] += double(tmp.m256d_f64[3]);
 #else
         fit[0] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
-        fitcurr = _mm256_set1_pd(0.0);
         for (int i = start1; i < stop1; i++) {
             //fitcurr = (fitcurr + l2[i - 1]) * expcurr + l2[i];
-            int pre = std::max(0, i - 1);
-
-            l2p = _mm256_set1_pd(l2[pre]);
+            l2p = _mm256_set1_pd(l2[i - 1]);
             l2c = _mm256_set1_pd(l2[i]);
             fitcurr = _mm256_add_pd(fitcurr, l2p);
 #ifdef __FMA__
             fitcurr = _mm256_fmadd_pd(fitcurr, e, l2c);
 #else
             fitcurr = _mm256_mul_pd(fitcurr, e);
-    fitcurr = _mm256_add_pd(fitcurr, l2c);
+            fitcurr = _mm256_add_pd(fitcurr, l2c);
 #endif
             // fit[i] += fitcurr * a;
             tmp = _mm256_mul_pd(fitcurr, a);
 #ifdef _WIN32
-            fit[i] = double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[0]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
-            fit[i] = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
         }
         // fitcurr *= scale[ne];
@@ -312,13 +312,13 @@ fit[0] += double(tmp.m256d_f64[3]);
             //fitcurr *= e[ne];
             fitcurr = _mm256_mul_pd(fitcurr, e);
             //fit[i] += fitcurr * a[ne] * tails[ne];
-            tmp = _mm256_mul_pd(fitcurr, a);
-            tmp = _mm256_mul_pd(tmp, t);
+            tmp = _mm256_mul_pd(t, a);
+            tmp = _mm256_mul_pd(fitcurr, tmp);
 #ifdef _WIN32
             fit[i] += double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
             fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
