@@ -61,6 +61,17 @@ protected:
 
 public:
 
+    /**
+
+    @brief Updates the tiles in the path map.
+    *
+    This function updates the tiles in the path map based on the given parameters.
+    *
+    @param obstacle_threshold The threshold value for considering a cell as an obstacle. Default value is -1.0.
+    @param binarize A flag indicating whether to binarize the path map. Default value is true.
+    @param obstacle_penalty The penalty value for obstacle cells. Default value is TILE_PENALTY_DEFAULT.
+    @param reset_tile_edges A flag indicating whether to reset the edges of the tiles. Default value is true.
+    */
     void update_tiles(
         float obstacle_threshold=-1.0, 
         bool binarize=true, 
@@ -68,12 +79,42 @@ public:
         bool reset_tile_edges=true
     );
 
+    /**
+     * @brief Resizes the PathMap object.
+     *
+     * This function resizes the PathMap object to accommodate the specified number of voxels.
+     *
+     * @param nvox The number of voxels to resize the PathMap to.
+     */
     void resize(unsigned int nvox);
 
+    /**
+
+    @brief Sets the data for the path map.
+    *
+    This function sets the input data for the path map. The input data is a 1D array of doubles representing the map.
+    *
+    @param input Pointer to the input data array.
+    @param n_input Number of elements in the input data array.
+    @param obstacle_threshold The threshold value for considering a cell as an obstacle. Default value is -1.
+    @param binarize Flag indicating whether to binarize the input data. Default value is true.
+    @param obstacle_penalty The penalty value for obstacle cells. Default value is TILE_PENALTY_DEFAULT.
+    *
+    @note The input data array should be of size n_input.
+    @note If binarize is set to true, the input data will be converted to binary values based on the obstacle_threshold.
+    @note The obstacle_penalty is used to assign penalty values to obstacle cells in the path map.
+    */
     void set_data(double *input, int n_input, 
         float obstacle_threshold=-1, bool binarize=true, 
         float obstacle_penalty=TILE_PENALTY_DEFAULT);
 
+    /**
+
+    Returns a vector of neighbor index offsets within a given radius.
+    @param neighbor_radius The radius within which to find neighbors. If negative, the radius is obtained from the path map header.
+    @return A vector of neighbor index offsets, where each offset consists of three integers (z, y, x) representing the relative position of the neighbor,
+    and one integer representing the tile offset. The vector also includes the edge cost between the current tile and the neighbor.
+    */
     std::vector<int> get_neighbor_idx_offsets(double neighbor_radius = -1){
         if(neighbor_radius < 0){
             auto pmh = get_path_map_header();
@@ -124,36 +165,53 @@ public:
      */
     int get_dim_index_by_voxel(long index, int dim);
 
-    //! Returns a read-only pointer to the header of the map
+    /**
+
+    @brief Returns a read-only pointer to the header of the map.
+    *
+    @return const PathMapHeader* A read-only pointer to the header of the map.
+    */
     const PathMapHeader *get_path_map_header() const { return &pathMapHeader_; }
 
-    //! Returns a pointer to the header of the map in a writable version
+
+    /**
+
+    @brief Returns a pointer to the header of the map in a writable version.
+    *
+    @return A pointer to the header of the map in a writable version.
+    */
     PathMapHeader *get_path_map_header_writable() { return &pathMapHeader_; }
 
-    /// Set the path map header
+
+    /**
+
+    @brief Set the path map header.
+    *
+    This function sets the path map header for the path map.
+    *
+    @param path_map_header The path map header to set.
+    @param resolution The resolution of the path map. Default value is -1.0.
+    */
     void set_path_map_header(PathMapHeader &path_map_header, float resolution = -1.0);
 
-    //! Get the values of all tile
-    /*!
-     * A tile in an path map contains information
-     * on the penalty for visiting a tile, the cost of a path
-     * from the origin of a path search to the tile, the density
-     * of the tile in addition to other (user-defined) information.
-     *
-     * When getting information from a tile, the returned values
-     * can be cropped to a range.
-     *
-     * @param value_type specifies the type of the returned information
-     * (see: PathMapTileOutputs). Depending on the value type
-     * the output can be the penalty for visiting the tile, the total
-     * cost of a path to the tile, the density of the tile. Additionally,
-     * user-defined content can be accessed.
-     * @param bounds bound for cropping the output values
-     * @param feature_name name of a feature (when accessing additional
-     * information.
-     * @return values tiles for the specified parameters.
-     * \relates PathMapTile::get_value
-     */
+
+    /**
+
+    @brief Get the values of all tiles.
+    *
+    A tile in a path map contains information on the penalty for visiting a tile, the cost of a path
+    from the origin of a path search to the tile, the density of the tile, and other user-defined information.
+    *
+    When getting information from a tile, the returned values can be cropped to a specified range.
+    *
+    @param value_type Specifies the type of the returned information (see: PathMapTileOutputs).
+    Depending on the value type, the output can be the penalty for visiting the tile, the total
+    cost of a path to the tile, or the density of the tile. Additional user-defined content can also be accessed.
+    @param bounds Bound for cropping the output values.
+    @param feature_name Name of a feature when accessing additional information.
+    @return A vector of values for the specified parameters.
+    @relates PathMapTile::get_value
+    */
     std::vector<float> get_tile_values(
             int value_type = PM_TILE_COST,
             std::pair<float, float> bounds = std::pair<float, float>(
@@ -161,6 +219,23 @@ public:
                      std::numeric_limits<float>::max()}),
             const std::string &feature_name=""
     );
+
+    /**
+
+    @brief Retrieves the values of the tiles in the path map.
+    *
+    This function retrieves the values of the tiles in the path map and stores them in the output array.
+    *
+    @param output A pointer to a 2D array of floats where the tile values will be stored.
+    @param nx A pointer to an integer that will store the number of tiles in the x-direction.
+    @param ny A pointer to an integer that will store the number of tiles in the y-direction.
+    @param nz A pointer to an integer that will store the number of tiles in the z-direction.
+    @param value_type The type of value to retrieve for each tile. Defaults to PM_TILE_COST.
+    @param bounds A pair of floats representing the lower and upper bounds for the tile values. 
+    Defaults to the minimum and maximum float values.
+    @param feature_name The name of the feature for which to retrieve the tile values. 
+    Defaults to an empty string.
+    */
     void get_tile_values(
             float **output, int *nx, int *ny, int *nz,
             int value_type = PM_TILE_COST,
@@ -189,27 +264,79 @@ public:
      */
     void fill_sphere(IMP::algebra::Vector3D r0, double radius, double value, bool inverse=true);
 
-    /*!
-     *
-     * @param path_begin_idx
-     * @param path_end_idx
-     */
+    /**
+
+    @brief Finds a path between two indices in the path map.
+    *
+    This function finds a path between the specified path begin index and path end index in the path map.
+    If the path end index is not specified, the function will find a path from the path begin index to the last index in the path map.
+    The heuristic mode parameter determines the heuristic function to be used for path finding.
+    *
+    @param path_begin_idx The index of the path begin point in the path map.
+    @param path_end_idx The index of the path end point in the path map. Default value is -1, which means the last index in the path map.
+    @param heuristic_mode The mode of the heuristic function to be used for path finding. Default value is 0.
+    *
+    @return void
+    */
     void find_path(long path_begin_idx, long path_end_idx = -1, int heuristic_mode = 0);
+
+
+    /**
+
+    @brief Finds the shortest path between two nodes using Dijkstra's algorithm.
+    *
+    This function finds the shortest path between two nodes in the path map using Dijkstra's algorithm.
+    The path is calculated from the node at index path_begin_idx to the node at index path_end_idx.
+    If path_end_idx is not provided, the function will calculate the path to the last node in the map.
+    *
+    @param path_begin_idx The index of the starting node.
+    @param path_end_idx The index of the ending node (optional).
+    */    
     void find_path_dijkstra(long path_begin_idx, long path_end_idx = -1);
+    
+    
+    /**
+
+    @brief Finds the shortest path between two indices using the A* algorithm.
+    *
+    This function uses the A* algorithm to find the shortest path between two indices in the path map.
+    The path is stored in the 
+    path
+    member variable.
+    *
+    @param path_begin_idx The index of the starting point of the path.
+    @param path_end_idx The index of the ending point of the path. If not provided, the function will use the last index in the path map.
+    */
     void find_path_astar(long path_begin_idx, long path_end_idx = -1);
 
+    /**
+
+    @brief Get the XYZ density of the path map.
+    This function returns a vector of IMP::algebra::Vector4D objects representing
+    the XYZ density of the path map.
+    @return std::vector The XYZ density of the path map.
+    */
     std::vector<IMP::algebra::Vector4D> get_xyz_density();
 
-    /// Resamples (updated) the obstacles
+    /**
+
+    @brief Resamples the obstacles in the path map.
+    *
+    This function resamples the obstacles in the path map, updating their positions and sizes.
+    *
+    @param extra_radius The extra radius to add to the obstacles (optional, default is 0.0).
+    */
     void sample_obstacles(double extra_radius=0.0);
 
-    /*!
-     *
-     * @param header
-     * @param name
-     * @param kt
-     * @param resolution
-     */
+    /**
+
+    @brief Constructs a PathMap object.
+    *
+    @param header The PathMapHeader object.
+    @param name The name of the PathMap.
+    @param kt The kernel type.
+    @param resolution The resolution of the PathMap.
+    */
     explicit PathMap(
             PathMapHeader &header,
             std::string name = "PathMap%1%",
@@ -220,26 +347,31 @@ public:
 };
 
 
-//! Write a av map to a file.
-/** Guess the file type from the
-    file name. The file formats supported are:
-    - .mrc/.map
-    - .em
-    - .vol
-    - .xplor
-    \relates AccessibleVolume
-*/
-IMPEMEXPORT
+/**
+ * @brief Writes a path map to a file.
+ *
+ * Guesses the file type from the file name. The supported file formats are:
+ * - .mrc/.map
+ * - .em
+ * - .vol
+ * - .xplor
+ *
+ * @param m The PathMap object to write.
+ * @param filename The name of the file to write to.
+ * @param value_type The value type.
+ * @param bounds The bounds of the path map.
+ * @param feature_name The name of the feature.
+ */
 void write_path_map(
         PathMap *m,
         std::string filename,
         int value_type,
         std::pair<float, float> bounds = std::pair<float, float>(
-                {std::numeric_limits<float>::min(),
-                 std::numeric_limits<float>::max()}),
-        const std::string &feature_name=""
+                std::numeric_limits<float>::min(),
+                std::numeric_limits<float>::max()
+        ),
+        const std::string &feature_name = ""
 );
-
 
 IMPBFF_END_NAMESPACE
 
