@@ -148,7 +148,7 @@ public:
      * @brief Computes the path from a tile to the origin.
      * @return A vector of long integers representing the path.
      */
-    std::vector backtrack_to_path();
+    std::vector<long> backtrack_to_path();
 
    /**
     * @brief Get the value of a tile.
