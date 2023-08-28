@@ -67,8 +67,9 @@ test:linux:
   needs: ["build:lnx_x86"]
   script:
     - source activate base
+    - apt update && apt install -y mongodb
     - conda config --add channels "file://`pwd`/bld-dir"
-    - mamba install python imp.bff nose numba numpy mongodb pandas
+    - mamba install python imp.bff nose numba numpy pandas
     - mkdir db & nohup mongod --dbpath db &
     - cd test
     - nosetests
