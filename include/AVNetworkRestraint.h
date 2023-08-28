@@ -49,6 +49,14 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
 private:
 
     /**
+     * @brief Number of random samples in distance computation
+     *
+     * The number of random samples used to compute a distance.
+     * larger numbers increase the precision of the distance computation.
+     */
+    int n_samples = 50000;
+
+    /**
      * @brief Map of AVs used to compute the score.
      *
      * This map stores the AVs used to compute the score. The keys are the names of the AVs,
@@ -104,7 +112,8 @@ public:
         const IMP::core::Hierarchy &hier,
         std::string fps_json_fn,
         std::string name = "AVNetworkRestraint%1%",
-        std::string score_set = ""
+        std::string score_set = "",
+        int n_samples = 50000
     );
 
     /**
