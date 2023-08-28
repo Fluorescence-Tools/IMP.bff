@@ -131,7 +131,11 @@ public:
     /**
      * @brief Destroys the DecayScore object and frees any allocated memory.
      */
-    ~DecayScore();
+     ~DecayScore() override {
+        delete _default_data;
+        delete _default_model;
+    }
+
 
 };
 

@@ -76,10 +76,10 @@ double DecayScore::get_score(int start, int stop, const char* score_type){
     }
 #if IMPBFF_VERBOSE
     std::clog << "DecayScore::get_score" << std::endl;
-std::clog << "-- score_type: " << st << std::endl;
-std::clog << "-- score range: " << start << ", " << stop << std::endl;
-std::clog << "-- model.size(): " << m->size() << std::endl;
-std::clog << "-- data.size(): " << d->size() << std::endl;
+    std::clog << "-- score_type: " << st << std::endl;
+    std::clog << "-- score range: " << start << ", " << stop << std::endl;
+    std::clog << "-- model.size(): " << m->size() << std::endl;
+    std::clog << "-- data.size(): " << d->size() << std::endl;
 #endif
     double v = statistics::chi2_counting(
             d->get_y(), m->get_y(), e,

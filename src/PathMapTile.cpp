@@ -127,17 +127,17 @@ float PathMapTile::get_value(
             value = clamp(density, bounds);
             break;
         case PM_TILE_COST_DENSITY:
-            c = (cost >= bounds.first && cost < bounds.second) ? cost :0.0f;
+            c = (cost >= bounds.first && cost < bounds.second) ? cost : 0.0f;
             value = c * density;
             value = clamp(value, bounds);
             break;
         case PM_TILE_PATH_LENGTH:
             c = cost * grid_spacing;
-            value = (c >= bounds.first && c < bounds.second) ? c : -1.0f;
+            value = (c >= bounds.first && c < bounds.second) ? c : 0.0f;
             break;
         case PM_TILE_PATH_LENGTH_DENSITY:
             c = cost * grid_spacing;
-            value = (c >= bounds.first && c < bounds.second) ? c : -1.0f;
+            value = (c >= bounds.first && c < bounds.second) ? c : 0.0f;
             value *= density;
             break;
         case PM_TILE_ACCESSIBLE_DENSITY:
@@ -150,16 +150,16 @@ float PathMapTile::get_value(
             break;
         case PM_TILE_ACCESSIBLE_FEATURE:
             c = cost * grid_spacing;
-            value = (c >= bounds.first && c < bounds.second) ? 1.0 : -1.0f;
+            value = (c >= bounds.first && c < bounds.second) ? 1.0 : 0.0f;
             value *= clamp(features[name], bounds);
             break;
-        case PM_TILE_COST:
-        default:
+        default: // case PM_TILE_COST:
             value = clamp(cost, bounds);
             break;
     }
     return value;
 }
+
 
 void PathMapTile::set_value(int value_type, float value, const std::string &name){
     IMP_USAGE_CHECK(value_type != PM_TILE_COST_DENSITY, "Cannot set combined features.");

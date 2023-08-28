@@ -120,7 +120,8 @@ public:
     /**
      * @brief Initializes the path map.
      *
-     * This function initializes the path map used by the AV system. The path map is a data structure that stores information about the available paths or routes in the system.
+     * This function initializes the path map used by the AV system. The path map is a 
+     * data structure that stores information about the available paths or routes in the system.
      *
      * @return void
      */
@@ -386,6 +387,19 @@ IMPBFFEXPORT double av_distance(
         double forster_radius = 52.0,
         int distance_type = DYE_PAIR_DISTANCE_MEAN,
         int n_samples = 10000
+);
+
+// Draw random points in AV. Returns (x,y,z,d) vector
+IMPBFFEXPORT std::vector<double> av_random_points(
+        const AV& av1,
+        int n_samples=10000
+);
+
+//! Random sampling over AV/AV distances
+IMPBFFEXPORT std::vector<double> av_random_distances(
+        const AV& av1,
+        const AV& av2,
+        int n_samples=10000
 );
 
 

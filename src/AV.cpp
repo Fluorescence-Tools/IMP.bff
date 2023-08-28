@@ -30,14 +30,18 @@ std::string AVPairDistanceMeasurement::get_json(){
 }
 
 
-double AVPairDistanceMeasurement::score_model(
-        double model){
+double AVPairDistanceMeasurement::score_model(double model){
     auto ev = [](auto f, auto m, auto en, auto ep){
         auto dev = m - f;
         auto w = (dev < 0) ? 1. / en : 1. / ep;
         return .5 * algebra::get_squared(dev * w);
     };
-    return 0.5 * ev(model, distance, error_neg, error_pos);
+    if(std::isnan(model)){
+        return std::numeric_limits<double>::infinity();
+    }
+    else{
+        return 0.5 * ev(model, distance, error_neg, error_pos);
+    }
 }
 
 
@@ -53,44 +57,49 @@ double av_distance(
     using points_type = std::vector<IMP::algebra::Vector4D>;
     auto m1 = av1.get_map();
     auto m2 = av2.get_map();
-    InverseSampler<points_type> sampler1(m1->get_xyz_density(), el3getter);
-    InverseSampler<points_type> sampler2(m2->get_xyz_density(), el3getter);
-
-    double val = 0.;
-    switch(distance_type){
-        case DYE_PAIR_EFFICIENCY: {
-            for (int s = 0; s < n_samples; s++) {
-                auto tmp = sampler1.get_random() - sampler2.get_random();
-                tmp[3] = 0.0;
-                val += fret_efficiency<double>(tmp.get_magnitude(), forster_radius);
+    auto p1 = m1->get_xyz_density();
+    auto p2 = m2->get_xyz_density();
+    if(!p1.empty() && !p2.empty()){
+        InverseSampler<points_type> sampler1(p1, el3getter);
+        InverseSampler<points_type> sampler2(p2, el3getter);
+        double val = 0.;
+        switch(distance_type){
+            case DYE_PAIR_EFFICIENCY: {
+                for (int s = 0; s < n_samples; s++) {
+                    auto tmp = sampler1.get_random() - sampler2.get_random();
+                    tmp[3] = 0.0;
+                    val += fret_efficiency<double>(tmp.get_magnitude(), forster_radius);
+                }
+                return val / n_samples;
             }
-            return val / n_samples;
-        }
-        case DYE_PAIR_DISTANCE_E: {
-            double fret_eff = av_distance(av1, av2, forster_radius, DYE_PAIR_EFFICIENCY, n_samples);
-            return distance_fret<double>(fret_eff, forster_radius);
-        }
-        case DYE_PAIR_DISTANCE_MP: {
-            IMP::algebra::Vector3D mp1 = av1.get_mean_position();
-            IMP::algebra::Vector3D mp2 = av2.get_mean_position();
-            return get_l2_norm((mp1 - mp2));
-        }
-        case DYE_PAIR_XYZ_DISTANCE: {
-            IMP::Particle* p1 = av1.get_particle();
-            IMP::Particle* p2 = av2.get_particle();
-            IMP::algebra::Vector3D mp1 = IMP::core::XYZ(p1).get_coordinates();
-            IMP::algebra::Vector3D mp2 = IMP::core::XYZ(p2).get_coordinates();
-            return get_l2_norm((mp1 - mp2));
-        }
-        case DYE_PAIR_DISTANCE_MEAN:
-        default: {
-            for (int s = 0; s < n_samples; s++) {
-                auto tmp = sampler1.get_random() - sampler2.get_random();
-                tmp[3] = 0.0;
-                val += tmp.get_magnitude();
+            case DYE_PAIR_DISTANCE_E: {
+                double fret_eff = av_distance(av1, av2, forster_radius, DYE_PAIR_EFFICIENCY, n_samples);
+                return distance_fret<double>(fret_eff, forster_radius);
             }
-            return val / n_samples;
+            case DYE_PAIR_DISTANCE_MP: {
+                IMP::algebra::Vector3D mp1 = av1.get_mean_position();
+                IMP::algebra::Vector3D mp2 = av2.get_mean_position();
+                return get_l2_norm((mp1 - mp2));
+            }
+            case DYE_PAIR_XYZ_DISTANCE: {
+                IMP::Particle* p1 = av1.get_particle();
+                IMP::Particle* p2 = av2.get_particle();
+                IMP::algebra::Vector3D mp1 = IMP::core::XYZ(p1).get_coordinates();
+                IMP::algebra::Vector3D mp2 = IMP::core::XYZ(p2).get_coordinates();
+                return get_l2_norm((mp1 - mp2));
+            }
+            case DYE_PAIR_DISTANCE_MEAN:
+            default: {
+                for (int s = 0; s < n_samples; s++) {
+                    auto tmp = sampler1.get_random() - sampler2.get_random();
+                    tmp[3] = 0.0;
+                    val += tmp.get_magnitude();
+                }
+                return val / n_samples;
+            }
         }
+    } else {
+        return std::numeric_limits<double>::quiet_NaN();
     }
 }
 
@@ -153,7 +162,7 @@ void AV::resample(bool shift_xyz){
     header->set_path_origin(source);
     av_map_->set_origin(source);
 
-    // 1. Sample obstacles
+    // 1.1 Sample obstacles
     map->sample_obstacles(get_linker_width() * 0.5);
 
     // 2. Block voxels further away from source than linker length
@@ -161,11 +170,12 @@ void AV::resample(bool shift_xyz){
     critical_radius = get_linker_length();
     map->fill_sphere(source, critical_radius, TILE_PENALTY_THRESHOLD, true);
 
-    // 3. Unblock voxels in initial sphere
+    // 3.1 Unblock voxels in initial sphere
     critical_radius = get_allowed_sphere_radius();
     map->fill_sphere(source, critical_radius, 0, false);
 
     // 4. Find a path from source to other tiles
+    map->update_tiles(); // Update tiles to assure that the nodes are updated
     long source_idx = map->get_voxel_by_location(source);
     map->find_path_dijkstra(source_idx, -1);
 
@@ -173,11 +183,12 @@ void AV::resample(bool shift_xyz){
     double r = get_radius1();
     map->sample_obstacles(r);
     auto obstacle = map->get_data();
-    auto tiles = map->get_tiles();
     long nvox = map->get_number_of_voxels();
     for(long i=0; i<nvox; i++){
         if(obstacle[i] > TILE_OBSTACLE_THRESHOLD){
-            tiles[i].density = 0.0;
+            // Tile density is by default 1 (or another user specified number)
+            // Setting the tile density to zeros effectively removes the tile.
+            map->tiles[i].density *= 0.0;
         }
     }
 
@@ -255,6 +266,48 @@ IMP::ParticleIndex search_labeling_site(
     return p->get_index();
 }
 
+//! Random sampling over AV
+    void get_xyz_density();
+
+std::vector<double> av_random_points(const AV& av, int n_samples){
+    auto m = av.get_map();
+    auto d = m->get_xyz_density();
+    std::vector<double> data; 
+    if(!d.empty()){
+        // Draw points using Inverse transform sampling
+        using points_type = std::vector<IMP::algebra::Vector4D>;
+        auto el3getter = [](const IMP::algebra::Vector4D &p) { return p[3]; };
+        InverseSampler<points_type> sampler(d, el3getter);
+        data.reserve(4 * n_samples);
+        for (int s = 0; s < n_samples; s++) {
+            auto v = sampler.get_random();
+            data.emplace_back(v[0]);
+            data.emplace_back(v[1]);
+            data.emplace_back(v[2]);
+            data.emplace_back(v[3]);
+        }
+    }
+
+    return data;    
+}
+
+std::vector<double> av_random_distances(
+        const AV& av1,
+        const AV& av2,
+        int n_samples
+){
+    auto p1 = av_random_points(av1, n_samples);
+    auto p2 = av_random_points(av2, n_samples);
+    std::vector<double> data; data.reserve(n_samples);
+    for (int s = 0; s < n_samples; s++) {
+        auto dx = p1[s * 4 + 0] - p2[s * 4 + 0];
+        auto dy = p1[s * 4 + 1] - p2[s * 4 + 1];
+        auto dz = p1[s * 4 + 2] - p2[s * 4 + 2];
+        auto d2 = dx*dx + dy*dy + dz*dz;
+        data.emplace_back(sqrt(d2));
+    }
+    return data;
+}
 
 std::vector<double> av_distance_distribution(
         const AV& av1,
@@ -263,22 +316,8 @@ std::vector<double> av_distance_distribution(
         std::vector<double> axis,
         int n_samples
 ){
-
-    // Draw points using Inverse transform sampling
-    auto el3getter = [](const IMP::algebra::Vector4D &p) { return p[3]; };
-    using points_type = std::vector<IMP::algebra::Vector4D>;
-    auto m1 = av1.get_map();
-    auto m2 = av2.get_map();
-    InverseSampler<points_type> sampler1(m1->get_xyz_density(), el3getter);
-    InverseSampler<points_type> sampler2(m2->get_xyz_density(), el3getter);
-
-    std::vector<double> data; data.reserve(n_samples);
-    for (int s = 0; s < n_samples; s++) {
-        auto tmp = sampler1.get_random() - sampler2.get_random();
-        tmp[3] = 0.0;
-        data.emplace_back(tmp.get_magnitude());
-    }
-
+    auto data = av_random_distances(av1, av2, n_samples);
+ 
 //    // For future versions (requires C++14)
 //    using namespace boost::histogram; // strip the boost::histogram prefix
 //    auto hist_axis = axis::regular<>(n_bins, start, stop);

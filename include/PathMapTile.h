@@ -98,8 +98,8 @@ protected:
     long idx;                  // tile index: corresponds to voxel index
 
     // Variable for path search
-    float penalty;                  // penalty for visiting tile
-    float cost;                     // total cost for visiting tile
+    float penalty;                  // penalty for visiting tile in a path search
+    float cost;                     // total cost for visiting tile in a path search (integrated cost)
     PathMapTile* previous; // tile previously visited in path search
 
     // Additional tile feature (e.g. av density)
@@ -112,7 +112,6 @@ public:
 
     /// AV density
     float density;
-
 
     //! Construct an accessible volume tile
     /*!

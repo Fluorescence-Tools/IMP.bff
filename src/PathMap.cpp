@@ -246,6 +246,7 @@ int PathMap::get_dim_index_by_voxel(long index, int dim){
 
 void PathMap::sample_obstacles(double extra_radius){
     set_origin(pathMapHeader_.get_origin());
+
     std::vector<double> radii_original;
     // 1. Update radii = radius + dye radius
     if(extra_radius!=0.0){
@@ -267,25 +268,15 @@ void PathMap::sample_obstacles(double extra_radius){
             xyzr_[i].set_radius(radii_original[i]);
         }
     }
+
 }
 
 std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
-    // std::cout << "std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){" << std::endl;
     long n_voxel = get_number_of_voxels();
     float linker_length = pathMapHeader_.get_max_path_length();
     float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
 
-    // std::cout << "n_voxel: " << n_voxel << std::endl;
-    // std::cout << "linker_length: " << linker_length << std::endl;
-    // std::cout << "grid_spacing: " << grid_spacing << std::endl;
-
     std::vector<IMP::algebra::Vector4D> v;
-    v.reserve(n_voxel);
-    // std::cout << "v.size(): " << v.size() << std::endl;
-        v.emplace_back(
-                IMP::algebra::Vector4D({0, 0, 0, 0})
-        );
-    // std::cout << "tiles.size()" << tiles.size() << std::endl;
     for(int i = 0; i < n_voxel; i++){
         IMP::algebra::Vector3D r = get_location_by_voxel(i);
         float density = tiles[i].get_value(
@@ -293,12 +284,42 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
                 std::pair<float, float>({0.0f, linker_length}), "",
                 grid_spacing
         );
-        // std::cout << "density:" << density << std::endl;
-        v.emplace_back(
-                IMP::algebra::Vector4D({r[0], r[1], r[2], density})
-        );
+        if(density > 0){
+            IMP::algebra::Vector3D r = get_location_by_voxel(i);
+            auto n = IMP::algebra::Vector4D({r[0], r[1], r[2], density});
+            v.emplace_back(n);
+        }
     }
+
     return v;
+}
+
+void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
+    long n_voxel = get_number_of_voxels();
+    float linker_length = pathMapHeader_.get_max_path_length();
+    float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
+
+    int n_dim = 4;
+    int n = 0;
+    auto* t = (double*) calloc(n_voxel * n_dim, sizeof(double)); 
+    for(int i = 0; i < n_voxel; i++){
+        double density = tiles[i].get_value(
+                PM_TILE_ACCESSIBLE_DENSITY,
+                std::pair<float, float>({0.0f, linker_length}), "",
+                grid_spacing
+        );
+        if(density > 0){
+            IMP::algebra::Vector3D r = get_location_by_voxel(i);            
+            t[n * n_dim + 0] = r[0];
+            t[n * n_dim + 1] = r[1];
+            t[n * n_dim + 2] = r[2];
+            t[n * n_dim + 3] = density;
+            n += 1;
+        }
+    }
+    *n_output1 = (int) n;
+    *n_output2 = (int) n_dim;
+    *output = t;
 }
 
 void write_path_map(

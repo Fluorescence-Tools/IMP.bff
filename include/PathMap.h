@@ -43,6 +43,7 @@ class PathMapTile;
 class IMPBFFEXPORT PathMap : public IMP::em::SampledDensityMap {
 
 friend class PathMapTile;
+friend class AV;
 
 private:
 
@@ -51,15 +52,15 @@ private:
     std::vector<bool>  edge_computed;
     std::vector<float> cost;
 
-
 protected:
 
-    PathMapHeader pathMapHeader_;    
     std::vector<PathMapTile> tiles;
+    PathMapHeader pathMapHeader_;
     std::vector<int> offsets_;
     std::vector<PathMapTileEdge>& get_edges(int tile_idx);
 
 public:
+
 
     /**
 
@@ -317,6 +318,16 @@ public:
     @return std::vector The XYZ density of the path map.
     */
     std::vector<IMP::algebra::Vector4D> get_xyz_density();
+    
+    /**
+
+    @brief Get the XYZ density of the path map.
+    This function returns the XYZ density of the path map as a 2D array.
+    @param output A pointer to a 2D array to store the XYZ density.
+    @param n_output1 A pointer to an integer to store the number of rows in the output array.
+    @param n_output2 A pointer to an integer to store the number of columns in the output array.
+    */
+    void get_xyz_density(double** output, int* n_output1, int* n_output2);
 
     /**
 

@@ -49,7 +49,7 @@ public:
     }
 
     template <typename KeyAccessor>
-    InverseSampler(T &&_vec, KeyAccessor accessor) : vec(_vec){
+    InverseSampler(T &_vec, KeyAccessor accessor) : vec(_vec){
         // Since entries in the flat_map are only added for unique
         // weights(densities), the map stays small and fast.
         auto adder = [accessor](double sum, const val_t &p) {

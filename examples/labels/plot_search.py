@@ -79,7 +79,7 @@ r_start = path_map.get_location_by_voxel(start_idx)
 # do not have edges connecting to them. After sampling obstacles tiles and edges
 # of tiles should be updated. Updating the tiles resets the costs of visiting a tile.
 # the cost of visiting a tile are updated by the path search (here Djikstra).
-path_map.update_tiles()
+
 path_map.find_path_dijkstra(start_idx, end_idx)
 
 # %%
@@ -92,7 +92,6 @@ path_map.find_path_dijkstra(start_idx, end_idx)
 tiles = path_map.get_tiles()
 path_dijkstra = tiles[end_idx].backtrack_to_path()
 
-path_map.update_tiles()  # reinit / update tiles
 path_map.find_path_astar(start_idx, end_idx)
 path_astar = path_map.get_tiles()[end_idx].backtrack_to_path()
 
