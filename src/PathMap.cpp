@@ -326,7 +326,7 @@ void write_path_map(
     PathMap *d,
     std::string name,
     int value_type,
-    std::pair<float, float> bounds,
+    const std::pair<float, float> bounds,
     const std::string &feature_name
 ) {
     IMP_USAGE_CHECK(name.rfind('.') != std::string::npos, "No suffix in file name: " << name);
