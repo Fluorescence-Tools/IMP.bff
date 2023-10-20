@@ -30,6 +30,7 @@ requirements:
     - boost-cpp
     - hdf5
     - eigen
+    - cereal    
     - fftw
     - mpir  # [win]
     - msmpi  # [win]
@@ -48,8 +49,10 @@ requirements:
     - click-didyoumean
 
 test:
+  # Python imports
   imports:
     - IMP.bff
+  # Command line tools
   commands:
     - imp_bff --help
 
