@@ -519,7 +519,7 @@ void decay_fconv_per_cs_time_axis(
             convolution_start, convolution_stop, n_model, period, dt
     );
 #endif //WITH_AVX
-#ifdef WITH_AVX
+#ifndef WITH_AVX
     decay_fconv_per(
         model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
         convolution_start, convolution_stop, n_model, period, dt
@@ -547,7 +547,7 @@ void decay_fconv_cs_time_axis(
             convolution_start, convolution_stop, dt
     );
 #endif //WITH_AVX
-#ifdef WITH_AVX
+#ifndef WITH_AVX
     decay_fconv(
         output,
         lifetime_spectrum,

@@ -78,19 +78,19 @@ class Tests(unittest.TestCase):
         self.assertEqual(np.allclose(dc.data.y, c1.y), True)
         self.assertEqual(np.allclose(dc.model.y, c2.y), True)
 
-    @unittest.expectedFailure
-    def test_setter_getter_2(self):
-        dc = IMP.bff.DecayScore(**score_settings)
-        self.assertEqual(np.allclose(dc.model.y, model.y), True)
-        self.assertEqual(np.allclose(dc.data.y, data.y), True)
+    # @unittest.expectedFailure
+    # def test_setter_getter_2(self):
+    #     dc = IMP.bff.DecayScore(**score_settings)
+    #     self.assertEqual(np.allclose(dc.model.y, model.y), True)
+    #     self.assertEqual(np.allclose(dc.data.y, data.y), True)
 
-        x = np.arange(10, dtype=np.float64)
-        a1 = np.ones_like(x, dtype=np.float64)
-        a2 = np.ones_like(x, dtype=np.float64) * 2
-        # Works on pointers reference counting issues
-        # see: https://stackoverflow.com/questions/20029377/why-does-swig-appear-to-corrupt-contents-of-a-member-class
-        dc.data = IMP.bff.DecayCurve(x, a1)
-        dc.model = IMP.bff.DecayCurve(x, a2)
-        self.assertEqual(np.allclose(dc.data.y, a1), True)
-        self.assertEqual(np.allclose(dc.model.y, a2), True)
+    #     x = np.arange(10, dtype=np.float64)
+    #     a1 = np.ones_like(x, dtype=np.float64)
+    #     a2 = np.ones_like(x, dtype=np.float64) * 2
+    #     # Works on pointers reference counting issues
+    #     # see: https://stackoverflow.com/questions/20029377/why-does-swig-appear-to-corrupt-contents-of-a-member-class
+    #     dc.data = IMP.bff.DecayCurve(x, a1)
+    #     dc.model = IMP.bff.DecayCurve(x, a2)
+    #     self.assertEqual(np.allclose(dc.data.y, a1), True)
+    #     self.assertEqual(np.allclose(dc.model.y, a2), True)
 

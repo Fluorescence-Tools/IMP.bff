@@ -1,4 +1,5 @@
 set (CMAKE_CXX_STANDARD 14)
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
 # Are we running cmake from this directory (out of tree build) ?
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 2.8.12)
@@ -31,7 +32,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   ## Compiler flags
   ########################
   IF((NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64") OR APPLE)
-    set(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
+    SET(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
   ENDIF()
   IF(WITH_AVX)
     IF (MSVC)
@@ -48,11 +49,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   FIND_PACKAGE(IMP REQUIRED)
   MESSAGE ("-- IMP_USE_FILE \"${IMP_USE_FILE}\"")
   MESSAGE ("-- IMP_INCLUDE_DIR \"${IMP_INCLUDE_DIR}\"")
-  include(${IMP_USE_FILE})
+  INCLUDE(${IMP_USE_FILE})
 
   enable_testing()
 
-  set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
+  SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 
   # Don't set MACOSX_RPATH by default
   set(CMAKE_MACOSX_RPATH 0)
