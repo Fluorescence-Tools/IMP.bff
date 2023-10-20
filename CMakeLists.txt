@@ -28,6 +28,21 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
   SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
 
+  ## Compiler flags
+  ########################
+  IF((NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64") OR APPLE)
+    set(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
+  ENDIF()
+  IF(WITH_AVX)
+    IF (MSVC)
+        # https://devblogs.microsoft.com/cppblog/simd-extension-to-c-openmp-in-visual-studio/
+        # /Oi is for intrinsics
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX -openmp:experimental /Oi")
+    ELSE(MSVC)
+        STRING(APPEND CMAKE_CXX_FLAGS " -Ofast -mavx -mfma -ffast-math -funroll-loops")
+    ENDIF (MSVC)
+  ENDIF(WITH_AVX)
+  
   # IMP
   ###########################
   FIND_PACKAGE(IMP REQUIRED)

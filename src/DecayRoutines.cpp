@@ -51,12 +51,12 @@ void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, dou
         fit[i] *= *scale;
 #if IMPBFF_VERBOSE
     std::clog << "RESCALE_W_BG" << std::endl;
-std::clog << "w_sq [start:stop]: "; for(int i=start; i<stop; i++) std::clog << e_sq[i] << " "; std::clog << std::endl;
-std::clog << "decay [start:stop]: "; for(int i=start; i<stop; i++) std::clog << decay[i] << " "; std::clog << std::endl;
-std::clog << "fit [start:stop]: "; for(int i=start; i<stop; i++) std::clog << fit[i] << " "; std::clog << std::endl;
-std::clog << "-- sumnom: " << sumnom << std::endl;
-std::clog << "-- sumdenom: " << sumdenom << std::endl;
-std::clog << "-- final scale: " << *scale << std::endl;
+    std::clog << "w_sq [start:stop]: "; for(int i=start; i<stop; i++) std::clog << e_sq[i] << " "; std::clog << std::endl;
+    std::clog << "decay [start:stop]: "; for(int i=start; i<stop; i++) std::clog << decay[i] << " "; std::clog << std::endl;
+    std::clog << "fit [start:stop]: "; for(int i=start; i<stop; i++) std::clog << fit[i] << " "; std::clog << std::endl;
+    std::clog << "-- sumnom: " << sumnom << std::endl;
+    std::clog << "-- sumdenom: " << sumdenom << std::endl;
+    std::clog << "-- final scale: " << *scale << std::endl;
 #endif
 }
 
@@ -82,7 +82,7 @@ void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, in
 
 // fast convolution AVX
 void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
-#ifdef __AVX__
+#ifdef WITH_AVX
     int start1 = std::max(1, start);
 
     // make sure that there are always multiple of 4 in the lifetimes
@@ -148,7 +148,7 @@ void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start
         }
     }
     _mm_free(ex); _mm_free(p); free(l2);
-#endif //__AVX__
+#endif //WITH_AVX
 }
 
 
@@ -204,7 +204,7 @@ void decay_fconv_per(double *fit, double *x, double *lamp, int numexp, int start
 // fast convolution, high repetition rate, AVX
 void decay_fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop,
                    int n_points, double period, double dt) {
-#ifdef __AVX__
+#ifdef WITH_AVX
 #if IMPBFF_VERBOSE
     std::clog << "FCONV_PER_AVX" << std::endl;
     std::clog << "-- numexp: " << numexp << std::endl;
@@ -326,7 +326,7 @@ void decay_fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int s
     }
     free(l2); _mm_free(p); _mm_free(ex); _mm_free(scale); _mm_free(tails);
 
-#endif //__AVX__
+#endif //WITH_AVX
 }
 
 
@@ -427,17 +427,17 @@ void decay_add_pile_up_to_model(
     start = start < 0 ? 0 : std::min(n_data, start);
 #if IMPBFF_VERBOSE
     std::clog << "ADD PILE-UP" << std::endl;
-std::clog << "-- Repetition_rate [MHz]: " << repetition_rate << std::endl;
-std::clog << "-- Dead_time [ns]: " << instrument_dead_time << std::endl;
-std::clog << "-- Measurement_time [s]: " << measurement_time << std::endl;
-std::clog << "-- n_data: " << n_data << std::endl;
-std::clog << "-- n_model: " << n_model << std::endl;
-std::clog << "-- start: " << start << std::endl;
-std::clog << "-- stop: " << stop << std::endl;
+    std::clog << "-- Repetition_rate [MHz]: " << repetition_rate << std::endl;
+    std::clog << "-- Dead_time [ns]: " << instrument_dead_time << std::endl;
+    std::clog << "-- Measurement_time [s]: " << measurement_time << std::endl;
+    std::clog << "-- n_data: " << n_data << std::endl;
+    std::clog << "-- n_model: " << n_model << std::endl;
+    std::clog << "-- start: " << start << std::endl;
+    std::clog << "-- stop: " << stop << std::endl;
 #endif
     if(strcmp(pile_up_model.c_str(), "coates") == 0){
 #if IMPBFF_VERBOSE
-std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
+    std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
 #endif
         repetition_rate *= 1e6;
         instrument_dead_time *= 1e-9;
@@ -448,10 +448,10 @@ std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
         double live_time = measurement_time - total_dead_time;
         double n_excitation_pulses = std::max(live_time * repetition_rate, (double) n_pulse_detected);
 #if IMPBFF_VERBOSE
-std::clog << "-- live_time [s]: " << live_time << std::endl;
-std::clog << "-- total_dead_time [s]: " << total_dead_time << std::endl;
-std::clog << "-- n_pulse_detected [#]: " << n_pulse_detected << std::endl;
-std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
+        std::clog << "-- live_time [s]: " << live_time << std::endl;
+        std::clog << "-- total_dead_time [s]: " << total_dead_time << std::endl;
+        std::clog << "-- n_pulse_detected [#]: " << n_pulse_detected << std::endl;
+        std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
 #endif
         // Coates, 1968, eq. 2 & 4
         std::vector<double> rescaled_data(n_data);
@@ -479,10 +479,10 @@ void discriminate_small_amplitudes(
     int number_of_exponentials = n_lifetime_spectrum / 2;
 #if IMPBFF_VERBOSE
     std::clog << "APPLY_AMPLITUDE_THRESHOLD" << std::endl;
-std::clog << "-- amplitude_threshold spectrum: " << amplitude_threshold << std::endl;
-std::clog << "-- lifetime spectrum before: ";
-for (int i=0; i < number_of_exponentials * 2; i++){
-std::clog << lifetime_spectrum[i] << ' ';
+    std::clog << "-- amplitude_threshold spectrum: " << amplitude_threshold << std::endl;
+    std::clog << "-- lifetime spectrum before: ";
+    for (int i=0; i < number_of_exponentials * 2; i++){
+    std::clog << lifetime_spectrum[i] << ' ';
 }
 std::clog << std::endl;
 #endif
@@ -494,10 +494,10 @@ std::clog << std::endl;
     }
 #if IMPBFF_VERBOSE
     std::clog << "-- lifetime spectrum after: ";
-for (int i=0; i < number_of_exponentials * 2; i++){
-std::clog << lifetime_spectrum[i] << ' ';
-}
-std::clog << std::endl;
+    for (int i=0; i < number_of_exponentials * 2; i++){
+        std::clog << lifetime_spectrum[i] << ' ';
+    }
+    std::clog << std::endl;
 #endif
 }
 
@@ -513,18 +513,18 @@ void decay_fconv_per_cs_time_axis(
         double period
 ){
     double dt = time_axis[1] - time_axis[0];
-#ifdef __AVX__
+#ifdef WITH_AVX
     decay_fconv_per_avx(
             model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
             convolution_start, convolution_stop, n_model, period, dt
     );
-#endif
-#ifndef __AVX__
+#endif //WITH_AVX
+#ifdef WITH_AVX
     decay_fconv_per(
         model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
         convolution_start, convolution_stop, n_model, period, dt
     );
-#endif
+#endif //WITH_AVX
 }
 
 
@@ -538,7 +538,7 @@ void decay_fconv_cs_time_axis(
         int convolution_stop
 ){
     double dt = time_axis[1] - time_axis[0];
-#ifdef __AVX__
+#ifdef WITH_AVX
     decay_fconv_avx(
             output,
             lifetime_spectrum,
@@ -546,8 +546,8 @@ void decay_fconv_cs_time_axis(
             (int) n_lifetime_spectrum / 2,
             convolution_start, convolution_stop, dt
     );
-#endif
-#ifndef __AVX__
+#endif //WITH_AVX
+#ifdef WITH_AVX
     decay_fconv(
         output,
         lifetime_spectrum,
@@ -555,7 +555,7 @@ void decay_fconv_cs_time_axis(
         (int) n_lifetime_spectrum / 2,
         convolution_start, convolution_stop, dt
     );
-#endif
+#endif //WITH_AVX
 }
 
 IMPBFF_END_NAMESPACE

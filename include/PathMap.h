@@ -378,10 +378,10 @@ void write_path_map(
         PathMap *m,
         std::string filename,
         int value_type,
-        const std::pair<float, float> bounds = {
-            std::numeric_limits<float>::min(),
-            std::numeric_limits<float>::max()
-        },
+        const std::pair<float, float> bounds = std::pair<float, float>(
+                std::numeric_limits<float>::min(),
+                std::numeric_limits<float>::max()
+        ),
         const std::string &feature_name = ""
 );
 
