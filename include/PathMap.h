@@ -374,6 +374,7 @@ public:
  * @param bounds The bounds of the path map.
  * @param feature_name The name of the feature.
  */
+ IMPEMEXPORT
 void write_path_map(
         PathMap *m,
         std::string filename,
