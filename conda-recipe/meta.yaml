@@ -28,10 +28,8 @@ requirements:
     - python
     - numpy
     - boost-cpp
-    - hdf5
     - eigen
-    - cereal    
-    - fftw
+    - cereal
     - mpir  # [win]
     - msmpi  # [win]
     - libmongoc
@@ -39,7 +37,7 @@ requirements:
   run:
     - {{ pin_compatible('numpy') }}
     - python
-    - imp
+    - {{ pin_compatible('imp', max_pin='x.x') }}
     - boost-cpp
     - libmongoc
     - pandas
@@ -49,9 +47,6 @@ requirements:
     - click-didyoumean
 
 test:
-  # Python imports
-  imports:
-    - IMP.bff
   # Command line tools
   commands:
     - imp_bff --help
