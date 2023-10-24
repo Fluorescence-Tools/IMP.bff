@@ -31,7 +31,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   ## Compiler flags
   ########################
-  IF((NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64") OR APPLE)
+  IF(NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
     SET(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
   ENDIF()
   IF(WITH_AVX)
@@ -46,17 +46,20 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   if(APPLE)
     FIND_PACKAGE(Threads)
-
-    # comatibility with older systems
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=10.13 -fvisibility=hidden")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.13 -fvisibility=hidden -fvisibility-inlines-hidden")
-    set(CMAKE_LFLAGS "${CMAKE_LFLAGS} -mmacosx-version-min=10.13")
-
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
+
+    SET(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
+
+    # compatability with older systems
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=10.13")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.13")
+    SET(CMAKE_LFLAGS "${CMAKE_LFLAGS} -mmacosx-version-min=10.13")
+
     # explicit link to libc++ for recent osx versions
     MESSAGE(STATUS "Explicitly link to libc++ on modern osx versions")
     ADD_DEFINITIONS(-stdlib=libc++)
+
     # Don't set MACOSX_RPATH by default
     # https://github.com/conda/conda/issues/3624
     if(DEFINED ENV{CONDA_PREFIX})
@@ -64,6 +67,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       set(CMAKE_SKIP_RPATH TRUE)
       set(CMAKE_SKIP_INSTALL_RPATH TRUE)
     endif()
+
   endif()
 
   # IMP

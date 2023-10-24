@@ -27,11 +27,14 @@ IMPBFF_BEGIN_NAMESPACE
  * which modifies the input DecayCurve object.
  */
 class IMPBFFEXPORT DecayModifier : public DecayRange {
+
 private:
     bool _is_active = true;
+
 protected:
     DecayCurve* data = nullptr;
     DecayCurve* default_data = nullptr;
+
 public:
     /**
      * Set the DecayCurve object to be modified.
