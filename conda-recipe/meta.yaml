@@ -32,14 +32,14 @@ requirements:
     - cereal
     - mpir  # [win]
     - msmpi  # [win]
-    - libmongoc
+#    - libmongoc
     - imp
   run:
     - {{ pin_compatible('numpy') }}
     - python
     - {{ pin_compatible('imp', max_pin='x.x') }}
     - boost-cpp
-    - libmongoc
+#    - libmongoc
     - pandas
     - mdtraj
     - tqdm

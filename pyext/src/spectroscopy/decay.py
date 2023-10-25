@@ -239,7 +239,7 @@ class Decay(object):
         self._decay_modifier = [
             self.decay_convolution,
             self.decay_scatter,
-            # self.decay_pileup, # TODO: seems broken
+            # self.decay_pileup, # TODO: seems cn
             self.decay_linearization,
             self.decay_scale,
             self.decay_background,

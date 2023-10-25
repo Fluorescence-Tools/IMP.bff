@@ -91,26 +91,26 @@ uint64_t Functions::get_time()
     return value.count();
 }
 
-bool Functions::bson_iter_skip(bson_iter_t *iter, std::vector<std::string> *skip)
-{
-    for (auto &sk : *skip) {
-        if (strcmp(bson_iter_key(iter), sk.c_str()) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void Functions::add_documents(bson_t *src, bson_t *dst, std::vector<std::string> skip)
-{
-    bson_iter_t iter;
-    if (bson_iter_init(&iter, src)) {
-        while (bson_iter_next(&iter)) {
-            if (!Functions::bson_iter_skip(&iter, &skip)) {
-                BSON_APPEND_VALUE(dst, bson_iter_key(&iter), bson_iter_value(&iter));
-            }
-        }
-    }
-}
+//bool Functions::bson_iter_skip(bson_iter_t *iter, std::vector<std::string> *skip)
+//{
+//    for (auto &sk : *skip) {
+//        if (strcmp(bson_iter_key(iter), sk.c_str()) == 0) {
+//            return true;
+//        }
+//    }
+//    return false;
+//}
+//
+//void Functions::add_documents(bson_t *src, bson_t *dst, std::vector<std::string> skip)
+//{
+//    bson_iter_t iter;
+//    if (bson_iter_init(&iter, src)) {
+//        while (bson_iter_next(&iter)) {
+//            if (!Functions::bson_iter_skip(&iter, &skip)) {
+//                BSON_APPEND_VALUE(dst, bson_iter_key(&iter), bson_iter_value(&iter));
+//            }
+//        }
+//    }
+//}
 
 IMPBFF_END_NAMESPACE

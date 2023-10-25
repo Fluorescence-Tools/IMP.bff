@@ -8,7 +8,7 @@
 #include <math.h>
 #include <iostream>
 #include <chrono>
-#include <bson.h>
+//#include <bson.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -146,19 +146,19 @@ namespace Functions {
      */
     uint64_t get_time();
 
-    /*!
-     * Adds the content in the bson_t document src to the document dst omitting the keys
-     * provided by the vector skip.
-     */
-    void add_documents(bson_t *src, bson_t *dst, std::vector<std::string> skip);
-
-    /*!
-     * Returns true if the key associated to @param iter is in the list of vectors @param skip
-     *
-     * @param iter pointer to a bson_iter_t
-     * @param skip vector of strings containing keys that are skipped by iter
-     */
-    bool bson_iter_skip(bson_iter_t *iter, std::vector<std::string> *skip);
+//    /*!
+//     * Adds the content in the bson_t document src to the document dst omitting the keys
+//     * provided by the vector skip.
+//     */
+//    void add_documents(bson_t *src, bson_t *dst, std::vector<std::string> skip);
+//
+//    /*!
+//     * Returns true if the key associated to @param iter is in the list of vectors @param skip
+//     *
+//     * @param iter pointer to a bson_iter_t
+//     * @param skip vector of strings containing keys that are skipped by iter
+//     */
+//    bool bson_iter_skip(bson_iter_t *iter, std::vector<std::string> *skip);
 
     /*!
      * Returns a vector with a size that is is min(a.size(), b.size())

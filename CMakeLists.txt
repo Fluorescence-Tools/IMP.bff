@@ -29,7 +29,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
   SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
 
-
   IF(APPLE)
 
     FIND_PACKAGE(Threads)
@@ -71,6 +70,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 
   imp_build_module(${CMAKE_SOURCE_DIR} bff)
+
+#  # libmongoc
+#  ###########################
+#  FIND_PACKAGE (mongoc-1.0 1.7 REQUIRED)
+#  LINK_LIBRARIES (mongo::mongoc_shared)
 
 else()
   INCLUDE(ModuleBuild.cmake)

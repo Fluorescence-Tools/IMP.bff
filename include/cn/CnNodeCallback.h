@@ -17,7 +17,6 @@ class CnPort;
 #include <IMP/bff/internal/Functions.h>
 
 
-
 class IMPBFFEXPORT CnNodeCallback{
 
 public:
