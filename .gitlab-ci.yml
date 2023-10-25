@@ -25,6 +25,7 @@ build:lnx_x86:
     entrypoint: [ "/bin/bash", "-i", "-c" ]
   tags:
     - x86_64
+
 # No PPC or ARM64 IMP builds
 #build:lnx_ppc64le:
 #  <<: *build_lnx
@@ -41,23 +42,23 @@ build:lnx_x86:
 #  tags:
 #    - aarch64
 
-build:osx:
-  <<: *build_posix
-  tags:
-    - osx
-  before_script:
-    - git submodule foreach git pull
-
-build:windows:
-  <<: *build
-#  image: mambaforge:vs16
-  tags:
-    - win
-  script:
-    - cmd.exe
-    - conda activate base
-    - cd tools && git pull --force && cd..
-    - .\tools\build.bat
+#build:osx:
+#  <<: *build_posix
+#  tags:
+#    - osx
+#  before_script:
+#    - git submodule foreach git pull
+#
+#build:windows:
+#  <<: *build
+##  image: mambaforge:vs16
+#  tags:
+#    - win
+#  script:
+#    - cmd.exe
+#    - conda activate base
+#    - cd tools && git pull --force && cd..
+#    - .\tools\build.bat
 
 test:linux:
   stage: test
@@ -86,17 +87,5 @@ deploy:
     - mamba install anaconda-client
     - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
     - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/**/*.tar.bz2
+    - git switch -c ${CI_COMMIT_REF_NAME}
     - git push --force https://${GITHUB_TOKEN}@github.com/fluorescence-tools/imp.bff
-
-deploy:github:
-  stage: deploy
-  image: condaforge/mambaforge
-  tags:
-    - linux
-  before_script:
-    - git submodule update --init --recursive --remote
-  script:
-    - source activate
-    - mamba install anaconda-client
-    - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
-    - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/**/*.tar.bz2

@@ -36,3 +36,7 @@ cmake-build-*
 scratch
 TODO/
 .ipynb_checkpoints
+dbtemp/
+.DS_Store
+.idea/
+*/broken/
