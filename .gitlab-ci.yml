@@ -42,23 +42,23 @@ build:lnx_x86:
 #  tags:
 #    - aarch64
 
-#build:osx:
-#  <<: *build_posix
-#  tags:
-#    - osx
-#  before_script:
-#    - git submodule foreach git pull
-#
-#build:windows:
-#  <<: *build
-##  image: mambaforge:vs16
-#  tags:
-#    - win
-#  script:
-#    - cmd.exe
-#    - conda activate base
-#    - cd tools && git pull --force && cd..
-#    - .\tools\build.bat
+build:osx:
+  <<: *build_posix
+  tags:
+    - osx
+  before_script:
+    - git submodule foreach git pull
+
+build:windows:
+  <<: *build
+#  image: mambaforge:vs16
+  tags:
+    - win
+  script:
+    - cmd.exe
+    - conda activate base
+    - cd tools && git pull --force && cd..
+    - .\tools\build.bat
 
 test:linux:
   stage: test
