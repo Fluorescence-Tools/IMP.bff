@@ -12,6 +12,7 @@ IF(NOT APPLE)
         INCLUDE(simd)
         IF(${AVX_FOUND})
             MESSAGE("BUILD WITH SIMD")
+            SET(WITH_AVX ON CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
             IF (MSVC)
                 # https://devblogs.microsoft.com/cppblog/simd-extension-to-c-openmp-in-visual-studio/
                 # /Oi is for intrinsics
