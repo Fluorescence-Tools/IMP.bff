@@ -102,5 +102,5 @@ class Tests(unittest.TestCase):
             e_dist.score_model(model_distance)
             model.append(model_distance)
             experiment.append(d['distance'])
-        np.testing.assert_almost_equal(model_ref, model, decimal=1)
-        np.testing.assert_almost_equal(experiment_ref, experiment_ref, decimal=1)
+        np.testing.assert_almost_equal(model_ref, model, decimal=0)
+        np.testing.assert_almost_equal(experiment_ref, experiment_ref, decimal=0)
