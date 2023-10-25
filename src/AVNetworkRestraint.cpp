@@ -14,8 +14,9 @@ AVNetworkRestraint::AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
         std::string fps_json_fn,
         std::string name,
-        std::string score_set
-) : IMP::Restraint(hier.get_model(), name){
+        std::string score_set,
+        int n_samples
+) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples){
     auto fps_reader = IMP::bff::FPSReaderWriter(fps_json_fn, score_set);
 
     distances_ = fps_reader.get_distances();
@@ -116,9 +117,7 @@ double AVNetworkRestraint::get_model_distance(
 ) const {
     auto av1 = get_av(position1_name);
     auto av2 = get_av(position2_name);
-    return av_distance(
-            *av1, *av2, forster_radius,
-            distance_type);
+    return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
 }
 
 IMPBFF_END_NAMESPACE

@@ -5,9 +5,15 @@
 *.old
 *.orig
 *.gcno
+.vscode
 *.gcda
 */Files.cmake
 db/
+*_run*
+*out
+*.rmf3
+*.pse
+Untitled*
 ModuleBuild.cmake
 benchmark/CMakeLists.txt
 benchmark/Files.cmake
@@ -17,6 +23,8 @@ dependency/CMakeLists.txt
 doc/_*
 doc/auto_examples
 examples/CMakeLists.txt
+.history
+doc/IMP.bff.docset
 
 test/CMakeLists.txt
 src/CMakeLists.txt
@@ -28,3 +36,7 @@ cmake-build-*
 scratch
 TODO/
 .ipynb_checkpoints
+dbtemp/
+.DS_Store
+.idea/
+*/broken/

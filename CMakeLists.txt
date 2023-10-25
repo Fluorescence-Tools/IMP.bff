@@ -1,4 +1,5 @@
 set (CMAKE_CXX_STANDARD 14)
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
 # Are we running cmake from this directory (out of tree build) ?
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 2.8.12)
@@ -28,27 +29,51 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/tools)
   SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
 
+
+  IF(APPLE)
+
+    FIND_PACKAGE(Threads)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
+
+    # compatability with older systems
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=10.13")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.13")
+    SET(CMAKE_LFLAGS "${CMAKE_LFLAGS} -mmacosx-version-min=10.13")
+
+    # explicit link to libc++ for recent osx versions
+    MESSAGE(STATUS "Explicitly link to libc++ on modern osx versions")
+    ADD_DEFINITIONS(-stdlib=libc++)
+
+    # Don't set MACOSX_RPATH by default
+    # https://github.com/conda/conda/issues/3624
+    if(DEFINED ENV{CONDA_PREFIX})
+      SET(MACOSX_RPATH OFF)
+      SET(CMAKE_SKIP_RPATH TRUE)
+      SET(CMAKE_SKIP_INSTALL_RPATH TRUE)
+    endif()
+
+    # Don't set MACOSX_RPATH by default
+    SET(CMAKE_MACOSX_RPATH 0)
+  ENDIF(APPLE)
+
   # IMP
   ###########################
   FIND_PACKAGE(IMP REQUIRED)
   MESSAGE ("-- IMP_USE_FILE \"${IMP_USE_FILE}\"")
   MESSAGE ("-- IMP_INCLUDE_DIR \"${IMP_INCLUDE_DIR}\"")
-  include(${IMP_USE_FILE})
+  INCLUDE(${IMP_USE_FILE})
+  INCLUDE_DIRECTORIES(SYSTEM ${IMP_INCLUDE_DIR})
+  INCLUDE_DIRECTORIES("${CMAKE_BINARY_DIR}/include")
 
   enable_testing()
 
-  set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
-
-  # Don't set MACOSX_RPATH by default
-  set(CMAKE_MACOSX_RPATH 0)
-
-  include_directories(SYSTEM ${IMP_INCLUDE_DIR})
-  include_directories("${CMAKE_BINARY_DIR}/include")
+  SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 
   imp_build_module(${CMAKE_SOURCE_DIR} bff)
 
 else()
-  include(ModuleBuild.cmake)
+  INCLUDE(ModuleBuild.cmake)
 endif()
 
-include(Setup.cmake)
+INCLUDE(Setup.cmake)

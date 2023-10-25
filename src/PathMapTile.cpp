@@ -14,10 +14,12 @@ IMPBFF_BEGIN_NAMESPACE
 void PathMapTile::update_edges(
         PathMap* av,
         std::vector<PathMapTile> &tiles,
-        const int nn,
+        const double nr,
         const float tile_penalty_threshold
 ){
     const IMP::em::DensityHeader* header = av->get_header();
+    const int nn = ceil(nr);
+    const double nr2 = nr * nr;
 
     int nx = header->get_nx();
     int ny = header->get_ny();
@@ -39,24 +41,61 @@ void PathMapTile::update_edges(
     for(int z = za; z < ze; z++) {  // z slowest
         int oz = z * nx_ny;
         int dz = (z - z0);
-        int dz2 = dz * dz;
+        double dz2 = dz * dz;
         for(int y = ya; y < ye; y++) {
             int oy = y * nx;
             int dy = (y - y0);
-            int dz2_dy2 = dz2 + dy * dy;
+            double dz2_dy2 = dz2 + dy * dy;
             for(int x = xa; x < xe; x++) {
                 int ox = x;
                 int dx = (x - x0);
-                int dz2_dy2_dx2 = dz2_dy2 + dx * dx;
-                PathMapTile* tile = &tiles[oz + oy + ox];
-                if(tile->penalty < tile_penalty_threshold){
-                    float edge_cost = std::sqrt(dz2_dy2_dx2);
-                    edges.emplace_back(
-                            PathMapTileEdge(tile, edge_cost)
-                    );
+                double dz2_dy2_dx2 = dz2_dy2 + dx * dx;
+                if(dz2_dy2_dx2 <= nr2){
+                    int tile_idx = oz + oy + ox;
+                    std::cout << idx << ":"<< tile_idx << ":" << idx - tile_idx << std::endl;
+                    PathMapTile* tile = &tiles[tile_idx];
+                    if(tile->penalty < tile_penalty_threshold){
+                        float edge_cost = std::sqrt(dz2_dy2_dx2);
+                        edges.emplace_back(
+                                PathMapTileEdge(tile_idx, edge_cost)
+                        );
+                    }
                 }
             }
         }
+    }
+}
+
+
+void PathMapTile::update_edges_2(
+    int nx, int ny, int nz,
+    std::vector<PathMapTile> &tiles,
+    std::vector<int> neighbor_idxs,
+    float tile_penalty_threshold
+){
+
+    int x0 = idx % nx;
+    int y0 = idx / nx % ny;
+    int z0 = idx / (nx * ny);    
+
+    edges.clear();
+    for(size_t i = 0; i < neighbor_idxs.size(); i += 5){
+        int iz = z0 + neighbor_idxs[i + 0];
+        int iy = y0 + neighbor_idxs[i + 1];
+        int ix = x0 + neighbor_idxs[i + 2];
+
+        if(iz >= nz || iz < 0) continue;
+        if(iy >= nz || iy < 0) continue;
+        if(ix >= nz || ix < 0) continue;
+
+        int tile_idx = idx + neighbor_idxs[i + 3];
+        PathMapTile* tile = &tiles[tile_idx];
+        if(tile->penalty < tile_penalty_threshold){
+            // edge_cost is a float stored in an 32bit int
+            float edge_cost = *(float*)&neighbor_idxs[i + 4];
+            edges.emplace_back(PathMapTileEdge(tile_idx, edge_cost));
+        }
+
     }
 }
 
@@ -120,6 +159,7 @@ float PathMapTile::get_value(
     }
     return value;
 }
+
 
 void PathMapTile::set_value(int value_type, float value, const std::string &name){
     IMP_USAGE_CHECK(value_type != PM_TILE_COST_DENSITY, "Cannot set combined features.");

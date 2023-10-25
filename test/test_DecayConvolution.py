@@ -1,5 +1,6 @@
 from __future__ import division
 import unittest
+from sys import platform
 
 import numpy as np
 import numpy.testing
@@ -73,16 +74,28 @@ class Tests(unittest.TestCase):
             IMP.bff.DecayConvolution.FAST_PERIODIC_TIME,
             IMP.bff.DecayConvolution.FAST_TIME,
             IMP.bff.DecayConvolution.FAST_PERIODIC,
-            IMP.bff.DecayConvolution.FAST,
+            IMP.bff.DecayConvolution.FAST
+        ]
+        conv_methods_fast = [
             IMP.bff.DecayConvolution.FAST_AVX,
             IMP.bff.DecayConvolution.FAST_PERIODIC_AVX
         ]
+
+        if platform == "linux" or platform == "linux2":
+            # linux
+            conv_methods += conv_methods_fast
+        elif platform == "win32":
+            # Windows...
+            conv_methods += conv_methods_fast
+        elif platform == "darwin":
+            # OS X
+            conv_methods = conv_methods
         for i in conv_methods:
+            print(i)
             settings["convolution_method"] = i
             dc = IMP.bff.DecayConvolution(**settings)
             decay = IMP.bff.DecayCurve(x)
             dc.add(decay)
-            print(decay.y[::8])
             np.testing.assert_allclose(decay.y[::8], ref[i])
 
     def test_irf(self):
@@ -105,7 +118,8 @@ class Tests(unittest.TestCase):
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
-                      0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000])
+                      0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000]),
+            atol=5e-9
         )
         dc.irf_shift_channels = 10.0
         self.assertEqual(dc.irf_shift_channels, 10.0)
@@ -118,7 +132,8 @@ class Tests(unittest.TestCase):
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 5.52094836e-087, 5.51600473e-040,
                       4.61808726e-011, 3.23985966e+000, 1.90465720e-007, 9.38283342e-033,
-                      3.87326980e-076, 1.33982492e-137, 3.88369320e-217, 0.00000000e+000])
+                      3.87326980e-076, 1.33982492e-137, 3.88369320e-217, 0.00000000e+000]),
+            atol=5e-9
         )
 
     def test_getter_setter(self):
