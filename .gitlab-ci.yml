@@ -50,7 +50,7 @@ build:osx:
 
 build:windows:
   <<: *build
-  image: mambaforge:vs16
+#  image: mambaforge:vs16
   tags:
     - win
   script:
@@ -74,7 +74,21 @@ test:linux:
     - cd test
     - nosetests
 
-deploy:conda:
+deploy:
+  stage: deploy
+  image: condaforge/mambaforge
+  tags:
+    - linux
+  before_script:
+    - git submodule update --init --recursive --remote
+  script:
+    - source activate
+    - mamba install anaconda-client
+    - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
+    - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/**/*.tar.bz2
+    - git push --force https://${GITHUB_TOKEN}@github.com/fluorescence-tools/imp.bff
+
+deploy:github:
   stage: deploy
   image: condaforge/mambaforge
   tags:

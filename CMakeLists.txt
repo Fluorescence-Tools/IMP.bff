@@ -30,14 +30,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(SWIG_EXECUTABLE swig CACHE STRING "Swig program")
 
   # Compiler flags
-  OPTION(WITH_AVX "Compile with AVX support" ON)
-  IF(NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    SET(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
+  IF(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    SET(WITH_AVX ON CACHE STRING "Enable AVX on x86_64." FORCE)
   ENDIF()
 
   IF(APPLE)
-    # Just to be save also disable AVX on mac
-    SET(WITH_AVX OFF CACHE STRING "Disable AVX when compiling WITH_AVX=OFF." FORCE)
+    # Disable AVX on Apple
+    UNSET(WITH_AVX OFF CACHE)
 
     FIND_PACKAGE(Threads)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
