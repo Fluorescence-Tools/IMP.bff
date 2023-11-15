@@ -114,9 +114,13 @@ IMP::bff::PathMap* AV::get_map() const{
     return av_map_;
 }
 
-IMP::algebra::Vector3D AV::get_mean_position() const{
+IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
     IMP::algebra::Vector3D r = {0.0, 0.0, 0.0};
-    double sum = 0.0;
+    double sum = 1.0;
+    if(include_source){
+        r += get_source_coordinates();
+        sum += 1.0;
+    }
     auto xyzd = get_map()->get_xyz_density();
     for(auto &a: xyzd){
         if(a[3] <= 0.0f) continue;

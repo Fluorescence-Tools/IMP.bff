@@ -1,4 +1,4 @@
-{% set version = "0.14.0" %}
+{% set version = "0.14.1" %}
 
 package:
   name: imp.bff
@@ -32,7 +32,6 @@ requirements:
     - cereal
     - mpir  # [win]
     - msmpi  # [win]
-#    - libmongoc
     - imp
   run:
     - {{ pin_compatible('numpy') }}

@@ -329,7 +329,7 @@ public:
      * @brief Get the mean position of the AV object.
      * @return The mean position as a Vector3D.
      */
-    IMP::algebra::Vector3D get_mean_position() const;
+    IMP::algebra::Vector3D get_mean_position(bool include_source=true) const;
 
     /**
      * @brief Get the source coordinates of the AV object.
