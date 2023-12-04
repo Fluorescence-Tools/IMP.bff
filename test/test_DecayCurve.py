@@ -3,9 +3,16 @@ import unittest
 
 import numpy as np
 import numpy.testing
-import scipy.stats
 import math
 import IMP.bff
+
+
+def norm_pdf(x, mu, sigma):
+    variance = sigma**2
+    num = x - mu
+    denom = 2*variance
+    pdf = ((1/(np.sqrt(2*np.pi)*sigma))*np.exp(-(num**2)/denom))
+    return pdf
 
 
 class Tests(unittest.TestCase):
@@ -14,7 +21,7 @@ class Tests(unittest.TestCase):
         time_axis = np.linspace(0, 12, 25)
         irf_position = 6.0
         irf_width = 1.0
-        irf = scipy.stats.norm.pdf(time_axis, loc=irf_position, scale=irf_width)
+        irf = norm_pdf(time_axis, irf_position, irf_width)
         shifts = [2.1, 1.1, 0.5, 0.0, -0.5, -1.1, -2.1, 26.0, -26.2]
         for shift in shifts:
             shifted_irf_ip = IMP.bff.DecayCurve.shift_array(
