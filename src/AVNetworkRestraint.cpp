@@ -103,7 +103,7 @@ double AVNetworkRestraint::unprotected_evaluate(
                 distance.position_2,
                 distance.forster_radius,
                 distance.distance_type
-                );
+        );
         score += distance.score_model(model);
     }
     return score;
