@@ -31,17 +31,15 @@ std::string AVPairDistanceMeasurement::get_json(){
 
 
 double AVPairDistanceMeasurement::score_model(double model){
-    auto ev = [](auto f, auto m, auto en, auto ep){
-        auto dev = m - f;
-        auto w = (dev < 0) ? 1. / en : 1. / ep;
+    auto ev = [](double f, double m, double en, double ep){
+        double dev = m - f;
+        double w = (dev < 0) ? 1. / en : 1. / ep;
         return .5 * algebra::get_squared(dev * w);
     };
     if(std::isnan(model)){
         return std::numeric_limits<double>::infinity();
     }
-    else{
-        return 0.5 * ev(model, distance, error_neg, error_pos);
-    }
+    return 0.5 * ev(model, distance, error_neg, error_pos);
 }
 
 
