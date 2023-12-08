@@ -30,7 +30,7 @@ friend class PathMap;
 
 protected:
 
-    PathMapTile* tile; /// The tile the edge is pointing to
+    int tile_idx; /// The tile the edge is pointing to
     float length; /// the path length / cost of going to the tile
 
 public:
@@ -46,10 +46,10 @@ public:
      * @param edge_cost
      */
     PathMapTileEdge(
-            PathMapTile* edge_target = nullptr,
+            int edge_target = -1,
             float edge_cost = std::numeric_limits<float>::max()
     ) :
-            tile(edge_target), length(edge_cost){}
+            tile_idx(edge_target), length(edge_cost){}
 };
 
 

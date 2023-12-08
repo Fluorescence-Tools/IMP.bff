@@ -74,6 +74,7 @@ ps = [a.get_particle() for a in IMP.atom.get_leaves(hier)]
 path_map.set_particles(ps)
 path_map.sample_obstacles(extra_radius=0.0)
 path_map.update_tiles()
+
 # %%
 # The obstacles in a PathMap can be written to density files using
 # standard IMP routines.
@@ -106,7 +107,7 @@ print(path_2)
 # starting tile has a path-length of 1.
 paths = [t[e].backtrack_to_path() for e in range(path_map.get_number_of_voxels())]
 path_length = [len(p) for p in paths]
-plt.hist(path_length, 31)
+plt.hist(path_length, 27)
 plt.show()
 
 no_paths = [i for i, p in enumerate(paths) if len(p) <= 1]

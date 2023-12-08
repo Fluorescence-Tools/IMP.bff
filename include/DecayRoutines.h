@@ -3,7 +3,7 @@
  * \brief Decay routines (e.g. convolution, scaling, and lamp shift routines)
  *
  * \authors Thomas-Otavio Peulen
- * Copyright 2007-2022 IMP Inventors. All rights reserved.
+ * Copyright 2007-2023 IMP Inventors. All rights reserved.
  *
  */
 
@@ -37,55 +37,61 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-// -1 -> n - 1, -2 -> n - 2,
-inline int mod_p(int a, int n){
+/**
+ * \brief Compute the modulo of a number with respect to a positive integer.
+ *  
+ * This function computes the modulo of a number 'a' with respect to a positive
+ * integer 'n'. The result is always in the range from -1 to n - 1.
+ *
+ * -1 -> n - 1, -2 -> n - 2,
+ * \param a The number to compute the modulo for.
+ * \param n The positive integer to compute the modulo with respect to.
+ * \return The modulo of 'a' with respect to 'n'.
+ */inline int mod_p(int a, int n){
     return (n + (a % n)) % n;
 }
 
-/*!
- * @brief Scale model function to the data (old version)
+/**
+ * \brief Scale model function to the data (old version).
  *
- * This function rescales the model function (fit) to the data by the number
- * of photons between a start and a stop micro time counting channel. The number
- * of photons between start and stop are counted and the model function is scaled
- * to match the data by area.
+ * This function rescales the model function (fit) to the data by counting the
+ * number of photons between a start and a stop micro time counting channel.
+ * The model function is scaled to match the data by area. This rescaling
+ * function does not consider the noise in the data.
  *
- * This rescaling function does not consider the noise in the data when rescaling
- * the model.
- *
- * @param fit[in,out] model function that is scaled (modified in-place)
- * @param decay[in] the experimental data to which the model function is scaled
- * @param scale[out] the scaling parameter (the factor) by which the model
- * function is multiplied.
- * @param start[in] The start micro time channel
- * @param stop[in] The stop micro time channel
+ * \param fit The model function that is scaled (modified in-place).
+ * \param decay The experimental data to which the model function is scaled.
+ * \param scale The scaling parameter (the factor) by which the model function
+ *              is multiplied.
+ * \param start The start micro time channel.
+ * \param stop The stop micro time channel.
  */
 IMPBFFEXPORT void decay_rescale(double *fit, double *decay, double *scale, int start, int stop);
 
 
-/*!
- * @brief Scale model function to the data (with weights)
+/**
+ * \brief Scale model function to the data (with weights).
  *
- * This function rescales the model function (fit) to the data by the number
- * of photons between a start and a stop micro time counting channel. The number
- * of photons between start and stop are counted and the model function is scaled
- * to match the data by area considering the noise of the data.
+ * This function rescales the model function (fit) to the data by counting the
+ * number of photons between a start and a stop micro time counting channel.
+ * The model function is scaled to match the data by area, considering the noise
+ * of the data. The scaling factor is computed by:
  *
- * The scaling factor is computed by:
+ * \f[
+ * \text{scale} = \frac{\sum \left(\frac{{\text{fit}} \cdot \text{decay}}}{{w^2}}\right)}{\sum \left(\frac{{\text{fit}}^2}}{{w^2}}\right)}
+ * \f]
  *
- * scale = sum(fit*decay/w^2)/sum(fit^2/w^2)
- *
- * @param fit[in,out] model function that is scaled (modified in-place)
- * @param decay[in] the experimental data to which the model function is scaled
- * @param w_sq[in] squared weights of the data.
- * @param scale[out] the scaling parameter (the factor) by which the model
- * function is multiplied.
- * @param start[in] The start micro time channel
- * @param stop[in] The stop micro time channel
+ * \param fit The model function that is scaled (modified in-place).
+ * \param decay The experimental data to which the model function is scaled.
+ * \param w_sq The squared weights of the data.
+ * \param scale The scaling parameter (the factor) by which the model function
+ *              is multiplied.
+ * \param start The start micro time channel.
+ * \param stop The stop micro time channel.
  */
 IMPBFFEXPORT void decay_rescale_w(double *fit, double *decay, double *w_sq, double *scale, int start, int stop);
 
-/*!
+/**
  * @brief Scale model function to the data (with weights and background)
  *
  * This function scales the model function (fit) to the data by the number
@@ -108,12 +114,11 @@ IMPBFFEXPORT void decay_rescale_w(double *fit, double *decay, double *w_sq, doub
 IMPBFFEXPORT void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, double *scale, int start, int stop);
 
 
-/*!
- * @brief Convolve lifetime spectrum with instrument response (fast convolution,
- * low repetition rate)
+/**
+ * @brief Convolve lifetime spectrum with instrument response (fast convolution, low repetition rate)
  *
  * This function computes the convolution of a lifetime spectrum (a set of
- * lifetimes with corresponding amplitudes) with a instrument response function
+ * lifetimes with corresponding amplitudes) with an instrument response function
  * (irf). This function does not consider periodic excitation and is suited for
  * experiments at low repetition rate.
  *
@@ -127,32 +132,28 @@ IMPBFFEXPORT void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, d
  */
 IMPBFFEXPORT void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
 
-/*!
- * @brief Convolve lifetime spectrum with instrument response (fast convolution,
- * AVX optimized for large lifetime spectra)
+/**
+ * @brief Convolve lifetime spectrum with instrument response (fast convolution, AVX optimized for large lifetime spectra)
  *
- * This function is a modification of fconv for large lifetime spectra. The
- * lifetime spectrum is processed by AVX intrinsics. Four lifetimes are convolved
- * at once. Spectra with lifetimes that are not multiple of four are zero padded.
+ * This function is a modification of fconv for large lifetime spectra. The lifetime spectrum is processed by AVX intrinsics.
+ * Four lifetimes are convolved at once. Spectra with lifetimes that are not multiple of four are zero padded.
  *
- * @param fit
- * @param x
- * @param lamp
- * @param numexp
- * @param start
- * @param stop
- * @param n_points
- * @param dt
+ * @param fit[out] model function. The convoluted decay is written to this array
+ * @param x[in] lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...)
+ * @param lamp[in] instrument response function
+ * @param numexp[in] number of fluorescence lifetimes
+ * @param start[in] start micro time index for convolution (not used)
+ * @param stop[in] stop micro time index for convolution.
+ * @param n_points[in] number of points in the lifetime spectrum
+ * @param dt[in] time difference between two micro time channels
  */
 IMPBFFEXPORT void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt=0.05);
 
-/*!
- * @brief Convolve lifetime spectrum with instrument response (fast convolution,
- * high repetition rate)
+/**
+ * @brief Convolve lifetime spectrum with instrument response (fast convolution, high repetition rate)
  *
- * This function computes the convolution of a lifetime spectrum (a set of
- * lifetimes with corresponding amplitudes) with a instrument response function
- * (irf). This function does consider periodic excitation and is suited for experiments
+ * This function computes the convolution of a lifetime spectrum (a set of lifetimes with corresponding amplitudes)
+ * with an instrument response function (irf). This function considers periodic excitation and is suited for experiments
  * at high repetition rate.
  *
  * @param fit[out] model function. The convoluted decay is written to this array
@@ -162,8 +163,7 @@ IMPBFFEXPORT void decay_fconv_avx(double *fit, double *x, double *lamp, int nume
  * @param start[in] start micro time index for convolution (not used)
  * @param stop[in] stop micro time index for convolution.
  * @param n_points number of points in the model function.
- * @param period excitation period in units of the fluorescence lifetimes (typically
- * nanoseconds)
+ * @param period excitation period in units of the fluorescence lifetimes (typically nanoseconds)
  * @param dt[in] time difference between two micro time channels
  */
 IMPBFFEXPORT void decay_fconv_per(
@@ -171,14 +171,12 @@ IMPBFFEXPORT void decay_fconv_per(
         int n_points, double period, double dt=0.05
 );
 
-/*!
- * @brief Convolve lifetime spectrum with instrument response (fast convolution,
- * high repetition rate), AVX optimized version
+/**
+ * @brief Convolve lifetime spectrum with instrument response (fast convolution, high repetition rate), AVX optimized version
  *
- * This function computes the convolution of a lifetime spectrum (a set of
- * lifetimes with corresponding amplitudes) with a instrument response function
- * (irf). This function does consider periodic excitation and is suited for experiments
- * at high repetition rate.
+ * This function computes the convolution of a lifetime spectrum (a set of lifetimes with corresponding amplitudes)
+ * with an instrument response function (irf). This function considers periodic excitation and is suited for experiments
+ * at high repetition rate. It is an AVX optimized version.
  *
  * @param fit[out] model function. The convoluted decay is written to this array
  * @param x[in] lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...)
@@ -187,8 +185,7 @@ IMPBFFEXPORT void decay_fconv_per(
  * @param start[in] start micro time index for convolution (not used)
  * @param stop[in] stop micro time index for convolution.
  * @param n_points number of points in the model function.
- * @param period excitation period in units of the fluorescence lifetimes (typically
- * nanoseconds)
+ * @param period excitation period in units of the fluorescence lifetimes (typically nanoseconds)
  * @param dt[in] time difference between two micro time channels
  */
 IMPBFFEXPORT void decay_fconv_per_avx(
@@ -196,48 +193,44 @@ IMPBFFEXPORT void decay_fconv_per_avx(
         int n_points, double period, double dt=0.05
 );
 
-/*!
- * @brief Convolve lifetime spectrum - fast convolution, high repetition rate,
- * with convolution stop
+/**
+ * @brief Convolve lifetime spectrum - fast convolution, high repetition rate, with convolution stop
  *
- * fast convolution, high repetition rate, with convolution stop for Paris
+ * This function performs fast convolution of a lifetime spectrum with an instrument response function.
+ * The convolution is stopped at a specified micro time index.
  *
- * @param fit[out] model function. The convoluted decay is written to this array
- * @param x[in] lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...)
- * @param lamp[in] instrument response function
- * @param numexp[in] number of fluorescence lifetimes
- * @param stop[in] stop micro time index for convolution.
- * @param n_points number of points in the model function.
- * @param period excitation period in units of the fluorescence lifetimes (typically
- * nanoseconds)
- * @param conv_stop convolution stop micro channel number
- * @param dt[in] time difference between two micro time channels
+ * @param fit[out] Model function. The convoluted decay is written to this array.
+ * @param x[in] Lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...).
+ * @param lamp[in] Instrument response function.
+ * @param numexp[in] Number of fluorescence lifetimes.
+ * @param stop[in] Stop micro time index for convolution.
+ * @param n_points Number of points in the model function.
+ * @param period Excitation period in units of the fluorescence lifetimes (typically nanoseconds).
+ * @param conv_stop Convolution stop micro channel number.
+ * @param dt[in] Time difference between two micro time channels.
  */
 IMPBFFEXPORT void decay_fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int stop,
                   int n_points, double period, int conv_stop, double dt);
 
-/*!
- * @brief Convolve lifetime spectrum - fast convolution with reference compound
- * decay
+/**
+ * @brief Convolve lifetime spectrum - fast convolution with reference compound decay.
  *
- * This function convolves a set of fluorescence lifetimes and with associated
- * amplitudes with an instrument response function. The provided amplitudes are
- * scaled prior to the convolution by area using a reference fluorescence lifetime.
- * The amplitudes are computed by
+ * This function convolves a set of fluorescence lifetimes and associated amplitudes with an instrument response function. 
+ * The provided amplitudes are scaled prior to the convolution by area using a reference fluorescence 
+ * lifetime. The amplitudes are computed as:
  *
- * amplitude_corrected = a * ( 1 /tauref - 1 / tau)
+ * amplitude_corrected = a * (1 / tauref - 1 / tau)
  *
- * where a and tau are provided amplitudes.
+ * where a and tau are the provided amplitudes.
  *
- * @param fit[out] model function. The convoluted decay is written to this array
- * @param x[in] lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...)
- * @param lamp[in] instrument response function
- * @param numexp[in] number of fluorescence lifetimes
- * @param start[in] start micro time index for convolution (not used)
- * @param stop[in] stop micro time index for convolution.
- * @param tauref a reference lifetime used to rescale the amplitudes of the
- * fluorescence lifetime spectrum
- * @param dt[in] time difference between two micro time channels
+ * @param fit[out] Model function. The convoluted decay is written to this array.
+ * @param x[in] Lifetime spectrum (amplitude1, lifetime1, amplitude2, lifetime2, ...).
+ * @param lamp[in] Instrument response function.
+ * @param numexp[in] Number of fluorescence lifetimes.
+ * @param start[in] Start micro time index for convolution (not used).
+ * @param stop[in] Stop micro time index for convolution.
+ * @param tauref A reference lifetime used to rescale the amplitudes of the fluorescence lifetime spectrum.
+ * @param dt[in] Time difference between two micro time channels.
  */
 IMPBFFEXPORT void decay_fconv_ref(double *fit, double *x, double *lamp, int numexp, int start, int stop, double tauref, double dt=0.05);
 

@@ -18870,7 +18870,7 @@ class basic_json
 
     @param[in] i  input to read from
     @param[in] cb  a parser callback function of type @ref parser_callback_t
-    which is used to control the deserialization by filtering unwanted values
+    which is used to control the deserialization by filtering cn values
     (optional)
     @param[in] allow_exceptions  whether to throw exceptions in case of a
     parse error (optional, true by default)
@@ -19008,7 +19008,7 @@ class basic_json
     @param[in] first  begin of the range to parse (included)
     @param[in] last  end of the range to parse (excluded)
     @param[in] cb  a parser callback function of type @ref parser_callback_t
-    which is used to control the deserialization by filtering unwanted values
+    which is used to control the deserialization by filtering cn values
     (optional)
     @param[in] allow_exceptions  whether to throw exceptions in case of a
     parse error (optional, true by default)

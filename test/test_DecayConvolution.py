@@ -1,15 +1,26 @@
 from __future__ import division
 import unittest
+import platform
 
 import numpy as np
 import numpy.testing
-import scipy.stats
 import IMP.bff
 
 x = np.linspace(0, 20, 32)
 irf_position = 2.0
 irf_width = 0.1
-irf_y = scipy.stats.norm.pdf(x, loc=irf_position, scale=irf_width)
+
+
+def norm_pdf(x, mu, sigma):
+    variance = sigma**2
+    num = x - mu
+    denom = 2*variance
+    pdf = ((1/(np.sqrt(2*np.pi)*sigma))*np.exp(-(num**2)/denom))
+    return pdf
+
+
+
+irf_y = norm_pdf(x, irf_position, irf_width)
 
 
 class Tests(unittest.TestCase):
@@ -38,7 +49,7 @@ class Tests(unittest.TestCase):
                         6.68957600e-02, 5.69312992e-02, 4.84510951e-02, 4.12340602e-02,
                         3.50920390e-02, 2.98649029e-02, 2.54163750e-02, 2.16304778e-02,
                         1.84085090e-02, 1.56664688e-02, 1.33328693e-02, 1.13468712e-02])
-        self.assertEqual(np.allclose(decay.y, ref), True)
+        np.testing.assert_allclose(decay.y, ref)
         ref = np.array([ 0.        ,  0.64516129,  1.29032258,  1.93548387,  2.58064516,
                          3.22580645,  3.87096774,  4.51612903,  5.16129032,  5.80645161,
                          6.4516129 ,  7.09677419,  7.74193548,  8.38709677,  9.03225806,
@@ -46,7 +57,7 @@ class Tests(unittest.TestCase):
                          12.90322581, 13.5483871 , 14.19354839, 14.83870968, 15.48387097,
                          16.12903226, 16.77419355, 17.41935484, 18.06451613, 18.70967742,
                          19.35483871, 20.        ])
-        self.assertEqual(np.allclose(decay.x, ref), True)
+        np.testing.assert_allclose(decay.x, ref)
 
     def test_DecayConvolution_init(self):
         irf = IMP.bff.DecayCurve(x, irf_y)
@@ -73,16 +84,22 @@ class Tests(unittest.TestCase):
             IMP.bff.DecayConvolution.FAST_PERIODIC_TIME,
             IMP.bff.DecayConvolution.FAST_TIME,
             IMP.bff.DecayConvolution.FAST_PERIODIC,
-            IMP.bff.DecayConvolution.FAST,
+            IMP.bff.DecayConvolution.FAST
+        ]
+        conv_methods_fast = [
             IMP.bff.DecayConvolution.FAST_AVX,
             IMP.bff.DecayConvolution.FAST_PERIODIC_AVX
         ]
+        if "AMD64" in platform.machine():
+            if platform.system() == "Linux":
+                conv_methods += conv_methods_fast
+            elif platform.system() == "Windows":
+                conv_methods += conv_methods_fast
         for i in conv_methods:
             settings["convolution_method"] = i
             dc = IMP.bff.DecayConvolution(**settings)
             decay = IMP.bff.DecayCurve(x)
             dc.add(decay)
-            print(decay.y[::8])
             np.testing.assert_allclose(decay.y[::8], ref[i])
 
     def test_irf(self):
@@ -105,7 +122,8 @@ class Tests(unittest.TestCase):
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
-                      0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000])
+                      0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000]),
+            atol=5e-9
         )
         dc.irf_shift_channels = 10.0
         self.assertEqual(dc.irf_shift_channels, 10.0)
@@ -118,7 +136,8 @@ class Tests(unittest.TestCase):
                       0.00000000e+000, 0.00000000e+000, 0.00000000e+000, 0.00000000e+000,
                       0.00000000e+000, 0.00000000e+000, 5.52094836e-087, 5.51600473e-040,
                       4.61808726e-011, 3.23985966e+000, 1.90465720e-007, 9.38283342e-033,
-                      3.87326980e-076, 1.33982492e-137, 3.88369320e-217, 0.00000000e+000])
+                      3.87326980e-076, 1.33982492e-137, 3.88369320e-217, 0.00000000e+000]),
+            atol=5e-9
         )
 
     def test_getter_setter(self):

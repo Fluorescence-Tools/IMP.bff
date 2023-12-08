@@ -51,12 +51,12 @@ void decay_rescale_w_bg(double *fit, double *decay, double *e_sq, double bg, dou
         fit[i] *= *scale;
 #if IMPBFF_VERBOSE
     std::clog << "RESCALE_W_BG" << std::endl;
-std::clog << "w_sq [start:stop]: "; for(int i=start; i<stop; i++) std::clog << e_sq[i] << " "; std::clog << std::endl;
-std::clog << "decay [start:stop]: "; for(int i=start; i<stop; i++) std::clog << decay[i] << " "; std::clog << std::endl;
-std::clog << "fit [start:stop]: "; for(int i=start; i<stop; i++) std::clog << fit[i] << " "; std::clog << std::endl;
-std::clog << "-- sumnom: " << sumnom << std::endl;
-std::clog << "-- sumdenom: " << sumdenom << std::endl;
-std::clog << "-- final scale: " << *scale << std::endl;
+    std::clog << "w_sq [start:stop]: "; for(int i=start; i<stop; i++) std::clog << e_sq[i] << " "; std::clog << std::endl;
+    std::clog << "decay [start:stop]: "; for(int i=start; i<stop; i++) std::clog << decay[i] << " "; std::clog << std::endl;
+    std::clog << "fit [start:stop]: "; for(int i=start; i<stop; i++) std::clog << fit[i] << " "; std::clog << std::endl;
+    std::clog << "-- sumnom: " << sumnom << std::endl;
+    std::clog << "-- sumdenom: " << sumdenom << std::endl;
+    std::clog << "-- final scale: " << *scale << std::endl;
 #endif
 }
 
@@ -82,7 +82,7 @@ void decay_fconv(double *fit, double *x, double *lamp, int numexp, int start, in
 
 // fast convolution AVX
 void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop, double dt) {
-#ifdef __AVX__
+#ifdef WITH_AVX
     int start1 = std::max(1, start);
 
     // make sure that there are always multiple of 4 in the lifetimes
@@ -116,9 +116,9 @@ void decay_fconv_avx(double *fit, double *x, double *lamp, int numexp, int start
         tmp = _mm256_mul_pd(l2c, a);
 #ifdef _WIN32
         fit[0] += double(tmp.m256d_f64[0]);
-fit[0] += double(tmp.m256d_f64[1]);
-fit[0] += double(tmp.m256d_f64[2]);
-fit[0] += double(tmp.m256d_f64[3]);
+        fit[0] += double(tmp.m256d_f64[1]);
+        fit[0] += double(tmp.m256d_f64[2]);
+        fit[0] += double(tmp.m256d_f64[3]);
 #else
         fit[0] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
@@ -138,17 +138,17 @@ fit[0] += double(tmp.m256d_f64[3]);
             // fit[i] += fitcurr * a;
             tmp = _mm256_mul_pd(fitcurr, a);
 #ifdef _WIN32
-            fit[i] = double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[0]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
-            fit[i] = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
         }
     }
     _mm_free(ex); _mm_free(p); free(l2);
-#endif //__AVX__
+#endif //WITH_AVX
 }
 
 
@@ -168,12 +168,12 @@ void decay_fconv_per(double *fit, double *x, double *lamp, int numexp, int start
 
 #if IMPBFF_VERBOSE
     std::clog << "FCONV_PER" << std::endl;
-std::clog << "-- numexp:" << numexp << std::endl;
-std::clog << "-- start:" << start << std::endl;
-std::clog << "-- stop:" << stop << std::endl;
-std::clog << "-- n_points:" << n_points << std::endl;
-std::clog << "-- period:" << period << std::endl;
-std::clog << "-- dt:" << dt << std::endl;
+    std::clog << "-- numexp:" << numexp << std::endl;
+    std::clog << "-- start:" << start << std::endl;
+    std::clog << "-- stop:" << stop << std::endl;
+    std::clog << "-- n_points:" << n_points << std::endl;
+    std::clog << "-- period:" << period << std::endl;
+    std::clog << "-- dt:" << dt << std::endl;
 #endif
 
     // Precompute everything needed for the convolution
@@ -204,17 +204,17 @@ std::clog << "-- dt:" << dt << std::endl;
 // fast convolution, high repetition rate, AVX
 void decay_fconv_per_avx(double *fit, double *x, double *lamp, int numexp, int start, int stop,
                    int n_points, double period, double dt) {
-#ifdef __AVX__
-
+#ifdef WITH_AVX
 #if IMPBFF_VERBOSE
     std::clog << "FCONV_PER_AVX" << std::endl;
-std::clog << "-- numexp: " << numexp << std::endl;
-std::clog << "-- start: " << start << std::endl;
-std::clog << "-- stop: " << stop << std::endl;
-std::clog << "-- n_points: " << n_points << std::endl;
-std::clog << "-- period: " << period << std::endl;
-std::clog << "-- dt: " << dt << std::endl;
+    std::clog << "-- numexp: " << numexp << std::endl;
+    std::clog << "-- start: " << start << std::endl;
+    std::clog << "-- stop: " << stop << std::endl;
+    std::clog << "-- n_points: " << n_points << std::endl;
+    std::clog << "-- period: " << period << std::endl;
+    std::clog << "-- dt: " << dt << std::endl;
 #endif
+
     int start1 = std::max(1, start);
     stop = (stop < 0) ? n_points: stop;
     // make sure that there are always multiple of the AVX register size
@@ -227,12 +227,11 @@ std::clog << "-- dt: " << dt << std::endl;
 
     // Check if the window is larger than the decay histogram.
     // If it is larger only convolve till the end of the decay. Otherwise,
-    // convolve till end of period. The period starts at the
-    // excitation pulse.
+    // convolve till end of period. The period starts at the excitation pulse.
     // Find the position where the IRF starts
     int lamp_start = 0;
-    while (lamp[lamp_start++] == 0);
-    int stop1 = std::min(period_n+lamp_start, n_points);
+    while(lamp[lamp_start++] == 0);
+    int stop1 = std::min(period_n + lamp_start, n_points);
 
     // Precompute everything needed for the convolution
     // lamp * dt * 0.5
@@ -252,12 +251,14 @@ std::clog << "-- dt: " << dt << std::endl;
     // scale of decay relative to tail
     auto scale = (double *) _mm_malloc(n_ele * sizeof(double), 32);
     std::fill(scale, scale + n_ele, 0.0);
-    for (int i = 0; i < numexp; i++) scale[i] = exp(-(period_n - stop1 + start) * dt / x[2 * i + 1]);
+    for (int i = 0; i < numexp; i++) scale[i] = 
+        exp(-(period_n - stop1 + start) * dt / x[2 * i + 1]);
 
-    // tails wrapping to next period
+    // // tails wrapping to next period
     auto tails = (double *) _mm_malloc(n_ele * sizeof(double), 32);
     std::fill(tails, tails + n_ele, 0.0);
-    for (int i = 0; i < numexp; i++) tails[i] = 1. / (1. - exp(-period / x[2 * i + 1]));
+    for (int i = 0; i < numexp; i++) 
+        tails[i] = 1. / (1. - exp(-period / x[2 * i + 1]));
 
     // CONVOLUTION
     std::fill(fit, fit + n_points, 0.0);
@@ -266,43 +267,42 @@ std::clog << "-- dt: " << dt << std::endl;
         e = _mm256_load_pd(&ex[ne]);     // expcurr = exp(-dt / x[2 * ne + 1]);
         a = _mm256_load_pd(&p[ne]);      // amplitudes
         s = _mm256_load_pd(&scale[ne]);  // scales
-        t = _mm256_load_pd(&tails[ne]);  // tail
+        t = _mm256_load_pd(&tails[ne]);  // tails
 
         // take care of first channel
+        // double fitcurr = 0;
+        fitcurr = _mm256_set1_pd(0.0);
         // fit[0] += l2[0] * a;
         l2c = _mm256_set1_pd(l2[0]);
         tmp = _mm256_mul_pd(l2c, a);
 #ifdef _WIN32
         fit[0] += double(tmp.m256d_f64[0]);
-fit[0] += double(tmp.m256d_f64[1]);
-fit[0] += double(tmp.m256d_f64[2]);
-fit[0] += double(tmp.m256d_f64[3]);
+        fit[0] += double(tmp.m256d_f64[1]);
+        fit[0] += double(tmp.m256d_f64[2]);
+        fit[0] += double(tmp.m256d_f64[3]);
 #else
         fit[0] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
-        fitcurr = _mm256_set1_pd(0.0);
         for (int i = start1; i < stop1; i++) {
             //fitcurr = (fitcurr + l2[i - 1]) * expcurr + l2[i];
-            int pre = std::max(0, i - 1);
-
-            l2p = _mm256_set1_pd(l2[pre]);
+            l2p = _mm256_set1_pd(l2[i - 1]);
             l2c = _mm256_set1_pd(l2[i]);
             fitcurr = _mm256_add_pd(fitcurr, l2p);
 #ifdef __FMA__
             fitcurr = _mm256_fmadd_pd(fitcurr, e, l2c);
 #else
             fitcurr = _mm256_mul_pd(fitcurr, e);
-    fitcurr = _mm256_add_pd(fitcurr, l2c);
+            fitcurr = _mm256_add_pd(fitcurr, l2c);
 #endif
             // fit[i] += fitcurr * a;
             tmp = _mm256_mul_pd(fitcurr, a);
 #ifdef _WIN32
-            fit[i] = double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[0]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
-            fit[i] = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
         }
         // fitcurr *= scale[ne];
@@ -312,13 +312,13 @@ fit[0] += double(tmp.m256d_f64[3]);
             //fitcurr *= e[ne];
             fitcurr = _mm256_mul_pd(fitcurr, e);
             //fit[i] += fitcurr * a[ne] * tails[ne];
-            tmp = _mm256_mul_pd(fitcurr, a);
-            tmp = _mm256_mul_pd(tmp, t);
+            tmp = _mm256_mul_pd(t, a);
+            tmp = _mm256_mul_pd(fitcurr, tmp);
 #ifdef _WIN32
             fit[i] += double(tmp.m256d_f64[0]);
-    fit[i] += double(tmp.m256d_f64[1]);
-    fit[i] += double(tmp.m256d_f64[2]);
-    fit[i] += double(tmp.m256d_f64[3]);
+            fit[i] += double(tmp.m256d_f64[1]);
+            fit[i] += double(tmp.m256d_f64[2]);
+            fit[i] += double(tmp.m256d_f64[3]);
 #else
             fit[i] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 #endif
@@ -326,7 +326,7 @@ fit[0] += double(tmp.m256d_f64[3]);
     }
     free(l2); _mm_free(p); _mm_free(ex); _mm_free(scale); _mm_free(tails);
 
-#endif //__AVX__
+#endif //WITH_AVX
 }
 
 
@@ -427,17 +427,17 @@ void decay_add_pile_up_to_model(
     start = start < 0 ? 0 : std::min(n_data, start);
 #if IMPBFF_VERBOSE
     std::clog << "ADD PILE-UP" << std::endl;
-std::clog << "-- Repetition_rate [MHz]: " << repetition_rate << std::endl;
-std::clog << "-- Dead_time [ns]: " << instrument_dead_time << std::endl;
-std::clog << "-- Measurement_time [s]: " << measurement_time << std::endl;
-std::clog << "-- n_data: " << n_data << std::endl;
-std::clog << "-- n_model: " << n_model << std::endl;
-std::clog << "-- start: " << start << std::endl;
-std::clog << "-- stop: " << stop << std::endl;
+    std::clog << "-- Repetition_rate [MHz]: " << repetition_rate << std::endl;
+    std::clog << "-- Dead_time [ns]: " << instrument_dead_time << std::endl;
+    std::clog << "-- Measurement_time [s]: " << measurement_time << std::endl;
+    std::clog << "-- n_data: " << n_data << std::endl;
+    std::clog << "-- n_model: " << n_model << std::endl;
+    std::clog << "-- start: " << start << std::endl;
+    std::clog << "-- stop: " << stop << std::endl;
 #endif
     if(strcmp(pile_up_model.c_str(), "coates") == 0){
 #if IMPBFF_VERBOSE
-std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
+    std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
 #endif
         repetition_rate *= 1e6;
         instrument_dead_time *= 1e-9;
@@ -448,10 +448,10 @@ std::clog << "-- pile_up_model: " << pile_up_model << std::endl;
         double live_time = measurement_time - total_dead_time;
         double n_excitation_pulses = std::max(live_time * repetition_rate, (double) n_pulse_detected);
 #if IMPBFF_VERBOSE
-std::clog << "-- live_time [s]: " << live_time << std::endl;
-std::clog << "-- total_dead_time [s]: " << total_dead_time << std::endl;
-std::clog << "-- n_pulse_detected [#]: " << n_pulse_detected << std::endl;
-std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
+        std::clog << "-- live_time [s]: " << live_time << std::endl;
+        std::clog << "-- total_dead_time [s]: " << total_dead_time << std::endl;
+        std::clog << "-- n_pulse_detected [#]: " << n_pulse_detected << std::endl;
+        std::clog << "-- n_excitation_pulses [#]: " << n_excitation_pulses << std::endl;
 #endif
         // Coates, 1968, eq. 2 & 4
         std::vector<double> rescaled_data(n_data);
@@ -479,10 +479,10 @@ void discriminate_small_amplitudes(
     int number_of_exponentials = n_lifetime_spectrum / 2;
 #if IMPBFF_VERBOSE
     std::clog << "APPLY_AMPLITUDE_THRESHOLD" << std::endl;
-std::clog << "-- amplitude_threshold spectrum: " << amplitude_threshold << std::endl;
-std::clog << "-- lifetime spectrum before: ";
-for (int i=0; i < number_of_exponentials * 2; i++){
-std::clog << lifetime_spectrum[i] << ' ';
+    std::clog << "-- amplitude_threshold spectrum: " << amplitude_threshold << std::endl;
+    std::clog << "-- lifetime spectrum before: ";
+    for (int i=0; i < number_of_exponentials * 2; i++){
+    std::clog << lifetime_spectrum[i] << ' ';
 }
 std::clog << std::endl;
 #endif
@@ -494,10 +494,10 @@ std::clog << std::endl;
     }
 #if IMPBFF_VERBOSE
     std::clog << "-- lifetime spectrum after: ";
-for (int i=0; i < number_of_exponentials * 2; i++){
-std::clog << lifetime_spectrum[i] << ' ';
-}
-std::clog << std::endl;
+    for (int i=0; i < number_of_exponentials * 2; i++){
+        std::clog << lifetime_spectrum[i] << ' ';
+    }
+    std::clog << std::endl;
 #endif
 }
 
@@ -513,18 +513,18 @@ void decay_fconv_per_cs_time_axis(
         double period
 ){
     double dt = time_axis[1] - time_axis[0];
-#ifdef __AVX__
+#ifdef WITH_AVX
     decay_fconv_per_avx(
             model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
             convolution_start, convolution_stop, n_model, period, dt
     );
-#endif
-#ifndef __AVX__
+#endif //WITH_AVX
+#ifndef WITH_AVX
     decay_fconv_per(
         model, lifetime_spectrum, irf, (int) n_lifetime_spectrum / 2,
         convolution_start, convolution_stop, n_model, period, dt
     );
-#endif
+#endif //WITH_AVX
 }
 
 
@@ -538,7 +538,7 @@ void decay_fconv_cs_time_axis(
         int convolution_stop
 ){
     double dt = time_axis[1] - time_axis[0];
-#ifdef __AVX__
+#ifdef WITH_AVX
     decay_fconv_avx(
             output,
             lifetime_spectrum,
@@ -546,8 +546,8 @@ void decay_fconv_cs_time_axis(
             (int) n_lifetime_spectrum / 2,
             convolution_start, convolution_stop, dt
     );
-#endif
-#ifndef __AVX__
+#endif //WITH_AVX
+#ifndef WITH_AVX
     decay_fconv(
         output,
         lifetime_spectrum,
@@ -555,7 +555,7 @@ void decay_fconv_cs_time_axis(
         (int) n_lifetime_spectrum / 2,
         convolution_start, convolution_stop, dt
     );
-#endif
+#endif //WITH_AVX
 }
 
 IMPBFF_END_NAMESPACE

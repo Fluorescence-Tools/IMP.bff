@@ -2,7 +2,6 @@ from __future__ import division
 import unittest
 
 import numpy as np
-import pandas as pd
 
 import IMP.bff
 
@@ -11,14 +10,14 @@ class Tests(unittest.TestCase):
 
     def test_lin(self):
         dt = 0.0141
-        df = pd.read_csv(
+        x, y = np.genfromtxt(
             IMP.bff.get_example_path("spectroscopy/hgbp1/eTCSPC_whitelight.txt"),
-            skiprows=6,
-            sep='\t'
-        )
-        lin_data = IMP.bff.DecayCurve(x=df['Chan'] * dt, y=df['Data'])
+            skip_header=9,
+            delimiter='\t'
+        ).T
+        lin_data = IMP.bff.DecayCurve(x * dt, y)
         model = IMP.bff.DecayCurve(
-            x=df['Chan'] * dt,
+            x=x * dt,
             y=np.ones_like(lin_data.y)
         )
         dl = IMP.bff.DecayLinearization(

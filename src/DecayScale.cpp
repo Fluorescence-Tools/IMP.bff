@@ -46,6 +46,7 @@ DecayScale::DecayScale(
         int start, int stop, bool active,
         bool blank_outside
 ) : DecayModifier(data, start, stop, active){
+    _blank_outside = blank_outside;
     set_constant_background(constant_background);
 }
 
