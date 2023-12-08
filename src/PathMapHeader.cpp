@@ -14,7 +14,7 @@ IMPBFF_BEGIN_NAMESPACE
 PathMapHeader::PathMapHeader(
         double max_path_length,
         double grid_spacing,
-        int neighbor_radius,
+        double neighbor_radius,
         double obstacle_threshold
 ) :
         grid_spacing_(grid_spacing),

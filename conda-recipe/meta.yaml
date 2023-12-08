@@ -1,4 +1,4 @@
-{% set version = "0.10.0" %}
+{% set version = "0.14.2" %}
 
 package:
   name: imp.bff
@@ -28,19 +28,17 @@ requirements:
     - python
     - numpy
     - boost-cpp
-    - hdf5
     - eigen
-    - fftw
+    - cereal
     - mpir  # [win]
     - msmpi  # [win]
-    - libmongoc
     - imp
   run:
     - {{ pin_compatible('numpy') }}
     - python
-    - imp
+    - {{ pin_compatible('imp', max_pin='x.x') }}
     - boost-cpp
-    - libmongoc
+#    - libmongoc
     - pandas
     - mdtraj
     - tqdm
@@ -48,8 +46,7 @@ requirements:
     - click-didyoumean
 
 test:
-  imports:
-    - IMP.bff
+  # Command line tools
   commands:
     - imp_bff --help
 

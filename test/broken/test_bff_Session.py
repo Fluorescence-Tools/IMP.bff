@@ -13,14 +13,14 @@ from constants import *
 class Tests(unittest.TestCase):
 
     def test_session_init(self):
-        n1 = IMP.bff.Node(
+        n1 = IMP.bff.CnNode(
             ports={
                 'portA': IMP.bff.CnPort(1),
                 'portB': IMP.bff.CnPort(2),
                 'portC': IMP.bff.CnPort(3)
             },
         )
-        n2 = IMP.bff.Node(
+        n2 = IMP.bff.CnNode(
             ports={
                 'inA': IMP.bff.CnPort(5),
                 'inB': IMP.bff.CnPort(7),

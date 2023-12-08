@@ -29,6 +29,6 @@ except ModuleNotFoundError:
     print("WARNING typing not found", file=sys.stderr)
     typing = None
 
-__version__ = "0.12.0"
+__version__ = "0.14.0"
 
 

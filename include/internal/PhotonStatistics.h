@@ -132,6 +132,18 @@ double Wcm(int* C, double* M, int Nchannels);
 
 namespace statistics{
 
+
+    /**
+     * @brief Calculates the Neyman chi-squared statistic.
+     * 
+     * The Neyman chi-squared statistic is used to compare a model to observed data. It measures the difference between the expected model values and the observed data values, taking into account the uncertainties in the observed data.
+     * 
+     * @param data An array of observed data values.
+     * @param model An array of expected model values.
+     * @param start The starting index of the data and model arrays to consider.
+     * @param stop The stopping index of the data and model arrays to consider.
+     * @return The Neyman chi-squared statistic.
+     */
     inline double neyman(double* data, double *model, int start, int stop){
         double chi2 = 0.0;
         for(int i = start; i < stop; i++){
@@ -142,6 +154,16 @@ namespace statistics{
         return chi2;
     }
 
+    /**
+     * Calculates the chi-squared value for comparing Poisson distributed data to a model.
+     *
+     * @param data   Pointer to an array of observed data.
+     * @param model  Pointer to an array of model predictions.
+     * @param start  The starting index of the data and model arrays.
+     * @param stop   The stopping index of the data and model arrays.
+     *
+     * @return The chi-squared value.
+     */
     inline double poisson(double* data, double *model, int start, int stop){
         double chi2 = 0.0;
         for(int i = start; i < stop; i++){
@@ -153,6 +175,18 @@ namespace statistics{
         return chi2;
     }
 
+    /**
+     * @brief Calculates the Pearson chi-square statistic for a given set of data and model.
+     * 
+     * The Pearson chi-square statistic is a measure of the difference between observed data and expected model values.
+     * This function calculates the chi-square statistic by comparing the data and model values from the specified start index to the stop index.
+     * 
+     * @param data An array of double values representing the observed data.
+     * @param model An array of double values representing the expected model values.
+     * @param start The start index of the data and model arrays to consider.
+     * @param stop The stop index (exclusive) of the data and model arrays to consider.
+     * @return The calculated Pearson chi-square statistic.
+     */
     inline double pearson(double* data, double *model, int start, int stop){
         double chi2 = 0.0;
         for(int i = start; i < stop; i++){
@@ -165,6 +199,34 @@ namespace statistics{
         return chi2;
     }
 
+    /**
+     * @brief Calculates the chi-squared value for a given data set and model.
+     * 
+     * This function calculates the chi-squared value for a given data set and model.
+     * It iterates over the data array from the start index to the stop index (exclusive),
+     * and calculates the chi-squared value using the formula:
+     * 
+     * chi2 += (mu - m) * (mu - m) / mu + log(mu/mu_p) - (mu_p - m) * (mu_p - m) / mu_p
+     * 
+     * where:
+     * - `mu` is the model value at the current index
+     * - `m` is the data value at the current index
+     * - `mu_p` is the square root of (0.25 + m * m) - 0.5
+     * 
+     * If `mu_p` is less than or equal to 1.e-12, the iteration continues to the next index.
+     * 
+     * Reference:
+     * Xiangpan Ji, Wenqiang Gu, Xin Qian, Hanyu Wei, Chao Zhang.
+     * Combined Neyman–Pearson chi-square: An improved approximation to the Poisson-likelihood chi-square.
+     * Nuclear Instruments and Methods in Physics Research Section A: Accelerators, Spectrometers, Detectors and Associated Equipment, Volume 967, 2020, 163677.
+     * https://doi.org/10.1016/j.nima.2020.163677
+     * 
+     * @param data The data array.
+     * @param model The model array.
+     * @param start The start index of the iteration.
+     * @param stop The stop index of the iteration (exclusive).
+     * @return The calculated chi-squared value.
+     */
     inline double gauss(double* data, double *model, int start, int stop){
         double chi2 = 0.0;
         for(int i = start; i < stop; i++){
@@ -177,6 +239,36 @@ namespace statistics{
         return chi2;
     }
 
+    /**
+     * @brief Calculates the chi-squared value for a given set of data and model.
+     * 
+     * The cnp function calculates the chi-squared value for a given set of data and model.
+     * It iterates over the data array from the start index to the stop index (exclusive),
+     * and for each element, it calculates the chi-squared value using the formula:
+     * 
+     *     chi2 += (mu - m) * (mu - m) / (3. / (1./m + 2./mu))
+     * 
+     * where m is the data value at the current index, mu is the model value at the current index,
+     * and chi2 is the accumulated chi-squared value.
+     * 
+     * If the data value at the current index is less than or equal to 1e-12, it is skipped.
+     * 
+     * This function is based on the method described in the paper "Combined Neyman–Pearson chi-square:
+     * An improved approximation to the Poisson-likelihood chi-square" by Xiangpan Ji, Wenqiang Gu, Xin Qian,
+     * Hanyu Wei, and Chao Zhang.
+     * 
+     * Reference:
+     * Xiangpan Ji, Wenqiang Gu, Xin Qian, Hanyu Wei, Chao Zhang.
+     * Combined Neyman–Pearson chi-square: An improved approximation to the Poisson-likelihood chi-square.
+     * Nuclear Instruments and Methods in Physics Research Section A: Accelerators, Spectrometers, Detectors and Associated Equipment, Volume 967, 2020, 163677.
+     * https://doi.org/10.1016/j.nima.2020.163677
+     * 
+     * @param data The array of data values.
+     * @param model The array of model values.
+     * @param start The start index of the iteration (inclusive).
+     * @param stop The stop index of the iteration (exclusive).
+     * @return The calculated chi-squared value.
+     */
     inline double cnp(double* data, double *model, int start, int stop){
         double chi2 = 0.0;
         for(int i = start; i < stop; i++){
@@ -198,17 +290,23 @@ namespace statistics{
         return chi2;
     }
 
-    /*!
-     * Different chi2 measures for counting data:
+    /**
+     * @brief Calculates the chi2 measure for counting data.
      *
-     * https://arxiv.org/pdf/1903.07185.pdf
+     * This function calculates the chi2 measure for counting data using the specified method.
+     * The chi2 measure is a statistical measure used to compare observed data with a model.
      *
-     * @param data
-     * @param model
-     * @param x_min
-     * @param x_max
-     * @param type
-     * @return
+     * @param data The observed data.
+     * @param model The model data.
+     * @param weights The weights for each data point.
+     * @param x_min The minimum value of the data range to consider. Default is -1.
+     * @param x_max The maximum value of the data range to consider. Default is -1.
+     * @param type The type of chi2 measure to calculate. Default is "neyman".
+     * @return The calculated chi2 measure.
+     *
+     * @see Xiangpan Ji, Wenqiang Gu, Xin Qian, Hanyu Wei, Chao Zhang. "Combined Neyman–Pearson Chi-square: 
+     * An Improved Approximation to the Poisson-likelihood Chi-square." arXiv preprint arXiv:1903.07185 (2019).
+     * @see https://arxiv.org/pdf/1903.07185.pdf
      */
     double chi2_counting(
             std::vector<double> &data,

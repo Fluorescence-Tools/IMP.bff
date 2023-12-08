@@ -1,3 +1,0 @@
-pkg_config_name="libmongoc-1.0"
-libraries="mongoc-1.0:bson-1.0"
-headers="mongoc.h:bson.h"

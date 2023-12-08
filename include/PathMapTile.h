@@ -17,12 +17,19 @@
 #include <algorithm>
 
 #include <IMP/bff/PathMap.h>
-#include <IMP/bff/internal/PathMapTileEdge.h>
+#include <IMP/bff/PathMapTileEdge.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-const double TILE_PENALTY_THRESHOLD = 100000;
-const double TILE_OBSTACLE_THRESHOLD = 0.000001;
+const bool  TILE_VISITED_DEFAULT    = false;
+const float TILE_PENALTY_DEFAULT    = 100000.0f;
+const float TILE_COST_DEFAULT       = 100000.0f;
+const float TILE_EDGE_COST_DEFAULT  = 100000.0f;
+
+const float TILE_PENALTY_THRESHOLD  = 100000.0f;
+const float TILE_OBSTACLE_THRESHOLD = 0.000001f;
+const float TILE_OBSTACLE_PENALTY   = 100000.0f;
+
 
 /// Value types that can be read from a PathMapTile
 typedef enum{
@@ -57,25 +64,42 @@ private:
      *
      * @param av AccessibleVolume
      * @param tiles List of tiles with empty edges
-     * @param neighbor_box_size Size of box, n. Tiles in a 3D box
-     * of the range i - n .. i + n are considered neighbors.
+     * @param neighbor_radius neighboring tiles closer than neighbor_radius
+     * are connected by edges.
      * @param tile_penalty_threshold Tiles with a visit penalty
      * larger than this threshold are not added to the edge list
      */
     void update_edges(
             IMP::bff::PathMap* av,
             std::vector<PathMapTile> &tiles,
-            int neighbor_box_size,
-            float tile_penalty_threshold= TILE_PENALTY_THRESHOLD
+            double neighbor_radius,
+            float tile_penalty_threshold = TILE_PENALTY_THRESHOLD
     );
+
+    /**
+      * @brief Updates the edges of the tile.
+      * @param nx The x-coordinate of the tile.
+      * @param ny The y-coordinate of the tile.
+      * @param nz The z-coordinate of the tile.
+      * @param tiles The vector of PathMapTile objects.
+      * @param neighbor_idxs The vector of neighbor indices.
+      * @param tile_penalty_threshold The tile penalty threshold.
+      */
+    void update_edges_2(
+            int nx, int ny, int nz,
+            std::vector<PathMapTile>& tiles,
+            std::vector<int> neighbor_idxs,
+            float tile_penalty_threshold =TILE_PENALTY_THRESHOLD
+    );
+
 
 protected:
 
     long idx;                  // tile index: corresponds to voxel index
 
     // Variable for path search
-    float penalty;                  // penalty for visiting tile
-    float cost;                     // total cost for visiting tile
+    float penalty;                  // penalty for visiting tile in a path search
+    float cost;                     // total cost for visiting tile in a path search (integrated cost)
     PathMapTile* previous; // tile previously visited in path search
 
     // Additional tile feature (e.g. av density)
@@ -88,7 +112,6 @@ public:
 
     /// AV density
     float density;
-
 
     //! Construct an accessible volume tile
     /*!
@@ -106,8 +129,6 @@ public:
      * obstacles)
      * @param tile_density Additional information of tile (can be used to
      * implement weighted AVs)
-     * @param initial_cost Initial cost (before path search) of the tiles.
-     * Initially there is no path to the tile. Thus, should be a large number.
      */
     explicit PathMapTile(
             long index=-1,
@@ -122,31 +143,30 @@ public:
     {}
 
 
-    //! Compute the path from a tile to the origin.
+    /**
+     * @brief Computes the path from a tile to the origin.
+     * @return A vector of long integers representing the path.
+     */
     std::vector<long> backtrack_to_path();
 
-    //! Get the value of a tile
-    /*!
-     * A tile in an accessible volume contains information
-     * on the penalty for visiting a tile, the cost of a path
-     * from the origin of a path search to the tile, the density
-     * of the tile in addition to other (user-defined) information.
-     *
-     * When getting information from a tile, the returned values
-     * can be cropped to a range.
-     *
-     * @param value_type specifies the type of the returned information
-     * (see: PathMapTileOutputs). Depending on the value type
-     * the output can be the penalty for visiting the tile, the total
-     * cost of a path to the tile, the density of the tile. Additionally,
-     * user-defined content can be accessed.
-     * @param bounds bound for cropping the output values
-     * @param feature_name name of a feature (when accessing additional
-     * information.
-     * @param grid_spacing Spacing between the tiles (important to specify
-     * when accessing path length)
-     * @return value of the tile for the specified parameters.
-     */
+   /**
+    * @brief Get the value of a tile.
+    *
+    * A tile in an accessible volume contains information on the penalty for visiting a tile,
+    * the cost of a path from the origin of a path search to the tile, the density of the tile,
+    * and other user-defined information.
+    *
+    * When getting information from a tile, the returned values can be cropped to a range.
+    *
+    * @param value_type Specifies the type of the returned information (see: PathMapTileOutputs).
+    * Depending on the value type, the output can be the penalty for visiting the tile,
+    * the total cost of a path to the tile, or the density of the tile.
+    * Additionally, user-defined content can be accessed.
+    * @param bounds Bound for cropping the output values.
+    * @param feature_name Name of a feature (when accessing additional information).
+    * @param grid_spacing Spacing between the tiles (important to specify when accessing path length).
+    * @return Value of the tile for the specified parameters.
+    */
     float get_value(
             int value_type,
             std::pair<float, float> bounds = std::pair<float, float>(
