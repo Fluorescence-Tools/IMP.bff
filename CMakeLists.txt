@@ -1,7 +1,8 @@
-set (CMAKE_CXX_STANDARD 14)
-set(CMAKE_OSX_ARCHITECTURES "x86_64")
 # Are we running cmake from this directory (out of tree build) ?
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set (CMAKE_CXX_STANDARD 14)
+  set(CMAKE_OSX_ARCHITECTURES "x86_64")
+
   cmake_minimum_required(VERSION 2.8.12)
   project(imp_module)
 
@@ -70,11 +71,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 
   imp_build_module(${CMAKE_SOURCE_DIR} bff)
-
-#  # libmongoc
-#  ###########################
-#  FIND_PACKAGE (mongoc-1.0 1.7 REQUIRED)
-#  LINK_LIBRARIES (mongo::mongoc_shared)
 
 else()
   INCLUDE(ModuleBuild.cmake)
