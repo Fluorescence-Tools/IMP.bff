@@ -27,7 +27,6 @@
  #endif
  #if (defined(__GNUC__) || defined(__clang__))
    #include <immintrin.h>
-   #include <avxintrin.h>
  #endif
  #if !defined(__FMA__)
    #define __FMA__ 1
