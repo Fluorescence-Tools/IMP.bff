@@ -72,6 +72,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   imp_build_module(${CMAKE_SOURCE_DIR} bff)
 
+#  # libmongoc
+#  ###########################
+#  FIND_PACKAGE (mongoc-1.0 1.7 REQUIRED)
+#  LINK_LIBRARIES (mongo::mongoc_shared)
+
 else()
   INCLUDE(ModuleBuild.cmake)
 endif()
