@@ -3,7 +3,7 @@ name: Build Conda Recipe
 on:
   push:
     branches:
-      - development  # You can change this to the branch you want to trigger on
+      - develop  # You can change this to the branch you want to trigger on
 
 jobs:
   build-linux:
