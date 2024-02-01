@@ -31,17 +31,15 @@ std::string AVPairDistanceMeasurement::get_json(){
 
 
 double AVPairDistanceMeasurement::score_model(double model){
-    auto ev = [](auto f, auto m, auto en, auto ep){
-        auto dev = m - f;
-        auto w = (dev < 0) ? 1. / en : 1. / ep;
+    auto ev = [](double f, double m, double en, double ep){
+        double dev = m - f;
+        double w = (dev < 0) ? 1. / en : 1. / ep;
         return .5 * algebra::get_squared(dev * w);
     };
     if(std::isnan(model)){
         return std::numeric_limits<double>::infinity();
     }
-    else{
-        return 0.5 * ev(model, distance, error_neg, error_pos);
-    }
+    return 0.5 * ev(model, distance, error_neg, error_pos);
 }
 
 
@@ -114,9 +112,13 @@ IMP::bff::PathMap* AV::get_map() const{
     return av_map_;
 }
 
-IMP::algebra::Vector3D AV::get_mean_position() const{
+IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
     IMP::algebra::Vector3D r = {0.0, 0.0, 0.0};
-    double sum = 0.0;
+    double sum = 1.0;
+    if(include_source){
+        r += get_source_coordinates();
+        sum += 1.0;
+    }
     auto xyzd = get_map()->get_xyz_density();
     for(auto &a: xyzd){
         if(a[3] <= 0.0f) continue;

@@ -60,8 +60,6 @@ class Tests(unittest.TestCase):
         # fps.json files can contain multiple sets of distances for scoring
         # structures.
         fps_json_path = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
-        with open(fps_json_path) as fp:
-            fps_json = json.load(fp)
         score_set_c1 = "chi2_C2_33p"
         fret_restraint = IMP.bff.AVNetworkRestraint(
             hier, str(fps_json_path), 
@@ -74,8 +72,8 @@ class Tests(unittest.TestCase):
 
         model_ref = np.array(
             [
-                49. , 38. , 41.7, 52.6, 38.8, 38.7, 44.3, 52. , 60.3, 50.3, 52.7,
-                30. , 49.7, 46. , 46.7, 61.5, 56.2, 51.6, 35.4, 57.2, 53.5, 43.2,
+                49.0, 38.0, 41.7, 52.6, 38.8, 38.7, 44.3, 52.0, 60.3, 50.3, 52.7,
+                30.0, 49.7, 46.0, 46.7, 61.5, 56.2, 51.6, 35.4, 57.2, 53.5, 43.2,
                 52.2, 43.4, 47.5, 47.4, 35.3, 37.9, 41.3, 50.8, 45.9, 33.1, 47.4
             ]
         )

@@ -2,10 +2,17 @@ from __future__ import division
 
 import unittest
 import numpy as np
-from sys import platform
-import scipy.stats
+import platform
 
 import IMP.bff
+
+
+def norm_pdf(x, mu, sigma):
+    variance = sigma**2
+    num = x - mu
+    denom = 2*variance
+    pdf = ((1/(np.sqrt(2*np.pi)*sigma))*np.exp(-(num**2)/denom))
+    return pdf
 
 
 def model_irf(
@@ -16,10 +23,7 @@ def model_irf(
         irf_width: float = 0.25
 ):
     time_axis = np.linspace(0, period, n_channels * 2)
-    irf_np = scipy.stats.norm.pdf(time_axis, loc=irf_position_p,
-                                  scale=irf_width) + \
-             scipy.stats.norm.pdf(time_axis, loc=irf_position_s,
-                                  scale=irf_width)
+    irf_np = norm_pdf(time_axis, irf_position_p, irf_width) + norm_pdf(time_axis, irf_position_s, irf_width)
     return irf_np, time_axis
 
 
@@ -142,8 +146,7 @@ class Tests(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(model_ref, model_fconv)
 
-        # AVX won't be supported on Apple -> M1
-        if platform != "darwin":
+        if "AMD64" in platform.machine():
             model_fconv_avx = np.zeros_like(irf)
             IMP.bff.decay_fconv_avx(
                 fit=model_fconv_avx,
@@ -192,7 +195,7 @@ class Tests(unittest.TestCase):
         np.testing.assert_array_almost_equal(model_fconv_per, ref)
 
         # AVX won't be supported on Apple -> M1
-        if platform != "darwin":
+        if "AMD64" in platform.machine():
             model_fconv_avx = np.zeros_like(irf)
             IMP.bff.decay_fconv_per_avx(
                 fit=model_fconv_avx,
@@ -301,7 +304,7 @@ class Tests(unittest.TestCase):
         time_axis = np.linspace(4.5, 5.5, 16)
         irf_position = 5.0
         irf_width = 0.25
-        irf = scipy.stats.norm.pdf(time_axis, loc=irf_position, scale=irf_width)
+        irf = norm_pdf(time_axis, irf_position, irf_width)
         irf_shift = np.empty_like(irf)
         time_shift = 0.5
         IMP.bff.decay_shift_lamp(irf, irf_shift, time_shift)

@@ -5,20 +5,6 @@
 
 %include "numpy.i"
 
-//%{
-//    #include <mongoc.h>
-//    void cleanup()
-//    {
-////        printf("cleanup!\n");
-//        mongoc_cleanup();
-//    }
-//%}
-//%init %{
-//    import_array();
-//    mongoc_init();
-//    atexit(cleanup);
-//%}
-
 %pythoncode %{
 import numpy as np
 %}
