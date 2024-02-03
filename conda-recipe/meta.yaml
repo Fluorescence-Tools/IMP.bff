@@ -1,4 +1,4 @@
-{% set version = "0.14.2" %}
+{% set version = "0.14.3" %}
 
 package:
   name: imp.bff
@@ -38,7 +38,6 @@ requirements:
     - python
     - {{ pin_compatible('imp', max_pin='x.x') }}
     - boost-cpp
-#    - libmongoc
     - pandas
     - mdtraj
     - tqdm

@@ -3,7 +3,7 @@ name: Build Conda Recipe
 on:
   push:
     branches:
-      - development  # You can change this to the branch you want to trigger on
+      - develop  # You can change this to the branch you want to trigger on
 
 jobs:
   build-linux:
@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.8", "3.11"]
+        python-version: ["3.8", "3.10"]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
