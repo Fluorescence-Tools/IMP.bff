@@ -23,5 +23,6 @@ if (WITH_AVX AND NOT APPLE AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
     endif (${AVX_FOUND})
 else ()
     # AVX only on x86_64 and not on Apple
+    message("BUILD WITHOUT SIMD")
     unset(WITH_AVX)
 endif()
