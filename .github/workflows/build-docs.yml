@@ -14,7 +14,10 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
+      - name: Checkout Repository
       - uses: actions/checkout@v4
+
+      - name: Set up Conda
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: doc
@@ -28,3 +31,12 @@ jobs:
           conda list
           cd doc
           make
+
+      - name: Upload Documentation
+      - uses: bxb100/action-upload-webdav@v1
+        with:
+          webdav_address: ${{secrets.WEBDAV_ADDRESS}}
+          webdav_username: ${{secrets.WEBDAV_USERNAME}}
+          webdav_password: ${{secrets.WEBDAV_PASSWORD}}
+          webdav_upload_path: "/www/docs.peulen.xyz/project/bff/master"
+          files: "./doc/_build/html/stable/**"
