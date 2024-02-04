@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.8", "3.10"]
+        python-version: ["3.8", "3.9", "3.10"]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -43,6 +43,10 @@ jobs:
         shell: bash -el {0}
         run: |
           mamba install conda-build boa anaconda-client
-          conda mambabuild conda-recipe
-          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload -u tpeulen --force /usr/local/miniconda/envs/test/conda-bld/**/*.tar.bz2
+          conda mambabuild conda-recipe --output-folder conda-bld
+
+      - name: Upload Conda Package
+        shell: bash -el {0}
+        run: |
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload -u tpeulen --force conda-bld/**/*.tar.bz2
 
