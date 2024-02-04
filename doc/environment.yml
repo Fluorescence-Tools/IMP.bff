@@ -19,7 +19,6 @@ dependencies:
     - numpy
     - numpydoc
     - xeus-cling
-    - gcc_linux-64=9.4.0
     - pyyaml
     - graphviz
     - sphinxcontrib-bibtex
