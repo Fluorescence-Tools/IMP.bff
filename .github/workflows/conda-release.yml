@@ -1,12 +1,12 @@
 
-name: Build and upload conda packages
+name: Build and Upload Conda Packages
 
 on:
-  push:
-    branches:
-      - develop
-#  release:
-#    types: ['released', 'prereleased']
+#  push:
+#    branches:
+#      - develop
+  release:
+    types: ['released', 'prereleased']
 
 jobs:
   build:
