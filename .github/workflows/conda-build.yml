@@ -6,7 +6,7 @@ on:
       - develop  # You can change this to the branch you want to trigger on
 
 jobs:
-  build-linux:
+  build:
     name: CondaBuild (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
