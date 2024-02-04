@@ -37,5 +37,5 @@ jobs:
             endpoint=${{ secrets.WEBDAV_ADDRESS }}
             username=${{ secrets.WEBDAV_USERNAME }}
             password=${{ secrets.WEBDAV_PASSWORD }}
-            root=/www/docs.peulen.xyz/project/bff/master
+            root=/www/docs.peulen.xyz/project/bff/master/
           include: './doc/_build/html/stable/**'
