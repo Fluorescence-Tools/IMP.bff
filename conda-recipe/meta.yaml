@@ -1,8 +1,6 @@
-{% set version = "0.14.3" %}
-
 package:
   name: imp.bff
-  version: {{ version }}
+  version: "{{ environ['GIT_DESCRIBE_TAG'] }}"
 
 source:
   path: ../
