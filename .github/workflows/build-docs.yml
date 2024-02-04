@@ -35,5 +35,5 @@ jobs:
           password: ${{secrets.SFTP_PASSWORD}}
           port: ${{secrets.SFTP_PORT}}
           uploads: |
-            ./doc/_build/html/ => ./www/docs.peulen.xyz/project/bff/master/
+            ./doc/_build/html/stable/ => ./www/docs.peulen.xyz/project/bff/master/
           delete: 'true'
