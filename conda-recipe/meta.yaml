@@ -1,11 +1,9 @@
 {% set default_version = '0.14.5' %}
-
-  {% set raw_version = environ.get('GIT_DESCRIBE_TAG', default_version) %}
-  {% set sanitized_version = raw_version | replace('[^0-9.]', '') | replace('^v', '') %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', default_version) %}
 
 package:
   name: imp.bff
-  version: '{{ sanitized_version }}'
+  version: {{ version }}
 
 source:
   path: ../
