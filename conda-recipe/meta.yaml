@@ -1,6 +1,8 @@
+{% set default_version = '0.14.3' %}
+
 package:
   name: imp.bff
-  version: "{{ environ['GIT_DESCRIBE_TAG'] }}"
+  version: "{{ environ.get('GIT_DESCRIBE_TAG', default_version) }}"
 
 source:
   path: ../
