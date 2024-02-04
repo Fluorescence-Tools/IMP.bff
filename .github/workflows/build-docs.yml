@@ -33,5 +33,6 @@ jobs:
           webdav_address: ${{secrets.WEBDAV_ADDRESS}}
           webdav_username: ${{secrets.WEBDAV_USERNAME}}
           webdav_password: ${{secrets.WEBDAV_PASSWORD}}
-          webdav_upload_path: "/www/docs.peulen.xyz/project/bff/master"
+          webdav_upload_path: "./test/bff_test/master"
+          #webdav_upload_path: "./www/docs.peulen.xyz/project/bff/master"
           files: "./doc/_build/html/stable/**"
