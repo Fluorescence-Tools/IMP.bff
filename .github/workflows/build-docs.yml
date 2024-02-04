@@ -28,11 +28,12 @@ jobs:
           conda list
           cd doc
           make
-      - uses: bxb100/action-upload-webdav@v1
+      - uses: Dylan700/sftp-upload-action@latest
         with:
-          webdav_address: ${{secrets.WEBDAV_ADDRESS}}
-          webdav_username: ${{secrets.WEBDAV_USERNAME}}
-          webdav_password: ${{secrets.WEBDAV_PASSWORD}}
-          #webdav_upload_path: "./test/bff_test/master"
-          webdav_upload_path: "./www/docs.peulen.xyz/project/bff/master"
-          files: "./doc/_build/html/stable/**"
+          server: ${{secrets.SFTP_ENDPOINT}}
+          username: ${{secrets.SFTP_USER}}
+          passphrase: ${{secrets.SFTP_PASSWORD}}
+          port: ${{secrets.SFTP_PORT}}
+          uploads: |
+            ./doc/_build/html/ => ./www/docs.peulen.xyz/project/bff/master/
+          delete: 'true'
