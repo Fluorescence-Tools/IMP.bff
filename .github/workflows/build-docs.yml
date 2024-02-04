@@ -1,0 +1,29 @@
+on:
+  push:
+    branches:
+      - master
+      - develop
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: doc
+          environment-file: doc/environment.yml
+          python-version: 3.9
+          mamba-version: "*"
+          channels: conda-forge,tpeulen,defaults
+          channel-priority: true
+          auto-activate-base: false
+      - run: |
+          conda info
+          conda list
+          cd doc
+          make
