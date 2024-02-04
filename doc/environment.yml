@@ -8,19 +8,20 @@ dependencies:
     - numba
     - scipy
     - pillow
-    - sphinx-gallery
-    - nbsphinx
     - pandoc
     - imp.bff
     - ipykernel
     - jupyter_client # needed for nbsphinx
+    - sphinx < 7.0
+    - nbsphinx
     - sphinx_rtd_theme
+    - sphinx-gallery
+    - sphinxcontrib-bibtex
+    - sphinxcontrib-websupport
     - matplotlib
     - numpy
     - numpydoc
     - pyyaml
     - graphviz
-    - sphinxcontrib-bibtex
-    - sphinxcontrib-websupport
     - openmm
     - tqdm
