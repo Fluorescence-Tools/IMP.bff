@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build Documentation
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: self-hosted
     defaults:
       run:
         shell: bash -el {0}
