@@ -44,9 +44,13 @@ path_origin = labeled_p.get_coordinates()
 # The PathMapHeader defines the grid spacing and the size of the grid used
 # in the path search. The grid will have an edge that has twice the maximum
 # path length.
-max_path_length = 20.0
-grid_spacing = 1.0
-path_map_header = IMP.bff.PathMapHeader(max_path_length, grid_spacing)
+path_map_header_parameter = {
+    "max_path_length": 20.0,
+    "grid_spacing": 1.0,
+    "neighbor_radius": 2,
+    "obstacle_threshold": 1e-5
+}
+path_map_header = IMP.bff.PathMapHeader(**path_map_header_parameter)
 path_map_header.set_path_origin(path_origin)
 
 # %%

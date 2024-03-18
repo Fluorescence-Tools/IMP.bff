@@ -73,6 +73,9 @@ path_map = IMP.bff.PathMap(path_map_header)
 ps = [a.get_particle() for a in IMP.atom.get_leaves(hier)]
 path_map.set_particles(ps)
 path_map.sample_obstacles(extra_radius=0.0)
+# The origin is located on an atom and hence blocked. Thus, there cannot be
+# a path to the origin. Hence, unblock sphere around the origin.
+path_map.fill_sphere(path_origin, radius=3.0, value=0.0, inverse=False)
 path_map.update_tiles()
 
 # %%
@@ -92,7 +95,7 @@ start_idx = path_map.get_voxel_by_location(path_origin)
 path_map.find_path_dijkstra(start_idx, -1)  # if the end_idx
 # %%
 # Now, we can backtrace the shortest path from every tile (voxel) to the
-# start index. A path is a squence of tile/voxel ids.
+# start index. A path is a sequence of tile/voxel ids.
 t = path_map.get_tiles()
 end_idx_1 = 829
 path_1 = t[end_idx_1].backtrack_to_path()
@@ -101,6 +104,7 @@ print(path_1)
 end_idx_2 = 229
 path_2 = t[end_idx_2].backtrack_to_path()
 print(path_2)
+
 
 # %%
 # Not to all tiles a path can be found. A tile without a path to the
