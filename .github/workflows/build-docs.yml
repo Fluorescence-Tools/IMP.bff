@@ -3,7 +3,7 @@ name: Build Documentation
 on:
   push:
     branches:
-      - master
+      - main
       - develop
 
 jobs:
@@ -35,5 +35,5 @@ jobs:
           password: ${{secrets.SFTP_PASSWORD}}
           port: ${{secrets.SFTP_PORT}}
           uploads: |
-            ./doc/_build/html/stable/ => ./www/docs.peulen.xyz/project/bff/master/
+            ./doc/_build/html/stable/ => ./www/docs.peulen.xyz/project/bff/${{ github.ref_slug }}/
           delete: 'true'
