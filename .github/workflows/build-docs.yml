@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build Documentation
-    runs-on: self-hosted
+    runs-on: "ubuntu-latest"
     defaults:
       run:
         shell: bash -el {0}
