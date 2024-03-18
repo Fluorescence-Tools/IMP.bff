@@ -14,8 +14,9 @@ dependencies:
     - jupyter_client # needed for nbsphinx
     - sphinx < 7.0
     - nbsphinx
+    - sphinx 4.5.*
     - sphinx_rtd_theme
-    - sphinx-gallery
+    - sphinx-gallery 0.14.*
     - sphinxcontrib-bibtex
     - sphinxcontrib-websupport
     - matplotlib
