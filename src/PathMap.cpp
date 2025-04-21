@@ -149,7 +149,7 @@ void PathMap::update_tiles(
 
     if(reset_tile_edges){
         edge_computed.resize(0);
-        edge_computed.resize(false, nvox);
+        edge_computed.resize(nvox, false);
     }
 
     normalized_ = false;
