@@ -2,4 +2,4 @@
    Handling of spectroscopy data.
 """
 
-from . decay import *
+from . decay import *  # noqa: F401, F403

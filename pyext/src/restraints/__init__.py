@@ -2,4 +2,4 @@
    Restraints.
 """
 
-from .AVNetworkRestraint import AVNetworkRestraintWrapper
+from .AVNetworkRestraint import AVNetworkRestraintWrapper  # noqa: F401

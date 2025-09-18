@@ -77,7 +77,6 @@ class WriteRMFFrame(IMP.OptimizerState):
         IMP.rmf.save_frame(self._rh)
 
     def do_update(self, arg0):
-        #print(*[r.evaluate(False) for r in self.restraints], sep="\t")
         IMP.rmf.save_frame(self._rh)
 
 
@@ -110,7 +109,8 @@ class WritePDBFrame(IMP.OptimizerState):
     def do_update(self, arg0):
         with open(self._restraint_filename, "a+") as fp:
             fp.write("%s\t" % self.frame)
-            fp.write("\t".join(["{:.3f}".format(r.evaluate(False)) for r in self.restraints]))
+            fp.write("\t".join(["{:.3f}".format(r.evaluate(False))
+                                for r in self.restraints]))
             fp.write("\t")
             if isinstance(self.output_objects, list):
                 for obj in self.output_objects:
@@ -122,6 +122,7 @@ class WritePDBFrame(IMP.OptimizerState):
         else:
             hiers = self._hier.get_children()
         for i, hier in enumerate(hiers):
-            out_fn = lead + "_state_" + str(i) + "_" + "{:04d}".format(self.frame) + ".pdb"
+            out_fn = (lead + "_state_" + str(i)
+                      + "_" + "{:04d}".format(self.frame) + ".pdb")
             IMP.atom.write_pdb(hier, out=out_fn)
         self.frame += 1

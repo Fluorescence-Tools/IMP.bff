@@ -12,6 +12,14 @@ import IMP.bff
 import numpy as np
 
 
+def get_obstacles(*args, **keys):
+    raise NotImplementedError()
+
+
+def get_path_length(*args, **keys):
+    raise NotImplementedError()
+
+
 class XLinkScore(typing.TypedDict):
     """
     Attributes
@@ -23,9 +31,9 @@ class XLinkScore(typing.TypedDict):
         cross-linker length
 
     total: np.ndarray
-        The sum of scores to all potential cross linking partners. The score is the
-        fraction of distances of all path that are shorter or equal to the
-        cross-linker length
+        The sum of scores to all potential cross linking partners.
+        The score is the fraction of distances of all path that are
+        shorter or equal to the cross-linker length
 
     """
     individual: list
@@ -60,7 +68,8 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
         linker_length = kwargs.get('linker_length', self.linker_length)
         linker_width = kwargs.get('linker_width', self.linker_width)
         radius = kwargs.get('radius', self.radius)
-        simulation_grid_spacing = kwargs.get('simulation_grid_spacing', self.simulation_grid_spacing)
+        simulation_grid_spacing = kwargs.get(
+            'simulation_grid_spacing', self.simulation_grid_spacing)
         verbose = kwargs.get('verbose', self.verbose)
         min_points = kwargs.get('min_points', self.min_points)
         obstacles = self.obstacles
@@ -72,8 +81,12 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
             protein_2 = xlink['protein_2']
             residue_1 = xlink['residue_1']
             residue_2 = xlink['residue_2']
-            attachment_idx_1 = np.where((obstacles['res_id'] == residue_1) & (obstacles['protein_name'] == protein_1))[0]
-            attachment_idx_2 = np.where((obstacles['res_id'] == residue_2) & (obstacles['protein_name'] == protein_2))[0]
+            attachment_idx_1 = np.where(
+                (obstacles['res_id'] == residue_1)
+                & (obstacles['protein_name'] == protein_1))[0]
+            attachment_idx_2 = np.where(
+                (obstacles['res_id'] == residue_2)
+                & (obstacles['protein_name'] == protein_2))[0]
             x_links_scores = []
             for idx_1 in attachment_idx_1:
                 origin = obstacles['xyz'][idx_1]
@@ -94,16 +107,20 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
                         )
                         if len(np.array(av.points()).T) < min_points:
                             if verbose:
-                                print(protein_1, residue_1, "is not accessible")
+                                print(protein_1, residue_1,
+                                      "is not accessible")
                             x_links_scores.append(0.0)
                         else:
                             if verbose:
-                                print("Eucledian distance < linker length.. Testing surface distance")
+                                print("Eucledian distance < linker length.. "
+                                      "Testing surface distance")
                             points = av.points()
                             xyz = points[0:3]
                             dist = points[3]
-                            dist_eq = np.linalg.norm(xyz.T - target, axis=1) + dist
-                            shorter = np.sum(dist_eq < (linker_length + radius))
+                            dist_eq = np.linalg.norm(
+                                xyz.T - target, axis=1) + dist
+                            shorter = np.sum(
+                                dist_eq < (linker_length + radius))
                             score = shorter / len(dist_eq)
                             x_links_scores.append(score)
             indiviudal_scores = np.array(x_links_scores)
@@ -141,7 +158,7 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
             label=label
         )
         self.model = model
-        keys, formats = list(zip(*OBSTACLES_KEYS_FORMATS))
+        keys, formats = list(zip(*OBSTACLES_KEYS_FORMATS))  # noqa: F821
         obstacles = np.zeros(0, dtype={
                 'names': keys,
                 'formats': formats
@@ -152,7 +169,8 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
         self.linker_length = xlink_settings['linker_length']
         self.linker_width = xlink_settings['linker_width']
         self.radius = xlink_settings['radius']
-        self.simulation_grid_spacing = xlink_settings['simulation_grid_spacing']
+        self.simulation_grid_spacing = \
+            xlink_settings['simulation_grid_spacing']
         self.min_points = xlink_settings['min_points']
         self.verbose = verbose
         xlink_file = xlink_settings['xlink_file']
@@ -200,5 +218,3 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
     def get_score(self) -> float:
         total_score = float(np.sum(self()['total']))
         return total_score
-
-

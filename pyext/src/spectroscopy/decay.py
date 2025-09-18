@@ -88,7 +88,7 @@ class Decay(object):
     ]
 
     _attributes = {
-        #VERSION
+        # VERSION
         #####################
         # TODO
         # 'version': ("", "get_version"),
@@ -107,8 +107,10 @@ class Decay(object):
         # 'tttr_irf': ("_irf", None, "set_tttr"),
         # LIFETIME SPECTRUM
         ############################
-        'lifetime_spectrum': ("lifetime_handler", "get_lifetime_spectrum", "set_lifetime_spectrum"),
-        'use_amplitude_threshold': ("lifetime_handler", "use_amplitude_threshold"),
+        'lifetime_spectrum': ("lifetime_handler", "get_lifetime_spectrum",
+                              "set_lifetime_spectrum"),
+        'use_amplitude_threshold': ("lifetime_handler",
+                                    "use_amplitude_threshold"),
         'abs_lifetime_spectrum': ("lifetime_handler", "abs_lifetime_spectrum"),
         'amplitude_threshold': ("lifetime_handler", "amplitude_threshold"),
         # CONVOLUTION
@@ -118,7 +120,8 @@ class Decay(object):
         'convolution_method': ("decay_convolution", "convolution_method"),
         'excitation_period': ("decay_convolution", "excitation_period"),
         'irf_shift_channels': ("decay_convolution", "irf_shift_channels"),
-        'irf_background_counts': ("decay_convolution", "irf_background_counts"),
+        'irf_background_counts': ("decay_convolution",
+                                  "irf_background_counts"),
         # Scatter
         ############################
         'scatter_fraction': ("decay_scatter", "pattern_fraction"),
@@ -174,7 +177,8 @@ class Decay(object):
             irf_histogram = np.zeros_like(data)
             if len(irf_histogram) > 0:
                 irf_histogram[0] = 1.0
-        decay = IMP.bff.DecayCurve(x=time_axis, y=data, acquisition_time=acquisition_time)
+        decay = IMP.bff.DecayCurve(x=time_axis, y=data,
+                                   acquisition_time=acquisition_time)
         irf = IMP.bff.DecayCurve(x=time_axis, y=irf_histogram)
         if data_noise is not None:
             decay.set_ey(data_noise)
@@ -217,12 +221,14 @@ class Decay(object):
         model = IMP.bff.DecayCurve(data.x)
 
         lifetime_handler = IMP.bff.DecayLifetimeHandler(*lifetime_settings)
-        decay_convolution = IMP.bff.DecayConvolution(lifetime_handler, irf, *convolution_settings)
+        decay_convolution = IMP.bff.DecayConvolution(
+            lifetime_handler, irf, *convolution_settings)
         decay_scatter = IMP.bff.DecayPattern(*scatter_settings)
         decay_scatter.data = irf
         decay_background = IMP.bff.DecayPattern(*background_settings)
         decay_pileup = IMP.bff.DecayPileup(data, *pileup_settings)
-        decay_linearization = IMP.bff.DecayLinearization(*linearization_settings)
+        decay_linearization = IMP.bff.DecayLinearization(
+            *linearization_settings)
         decay_scale = IMP.bff.DecayScale(data, *scaling_settings)
         decay_score = IMP.bff.DecayScore(model, data, *score_settings)
 
@@ -280,4 +286,3 @@ class Decay(object):
         for dm in self._decay_modifier:
             dm.set_range(start_stop)
         self.decay_score.set_range(start_stop)
-

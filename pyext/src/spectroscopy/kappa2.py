@@ -56,8 +56,10 @@ def kappasq_dwt(
     for i in range(n_samples):
         donor = donor_vec[i]
         acceptor = acceptor_vec[i]
-        # Assumption here: connecting vector R_DA is along the x-axis (R_DA=[1,0,0])
-        delta = np.arccos(np.dot(donor, acceptor) / (np.linalg.norm(donor) * np.linalg.norm(acceptor)))
+        # Assumption here: connecting vector R_DA is along
+        # the x-axis (R_DA=[1,0,0])
+        delta = np.arccos(np.dot(donor, acceptor)
+                          / (np.linalg.norm(donor) * np.linalg.norm(acceptor)))
         beta1 = np.arccos(donor[0] / np.linalg.norm(donor))
         beta2 = np.arccos(acceptor[0] / np.linalg.norm(acceptor))
 
@@ -83,8 +85,10 @@ def kappasq_dwt(
             beta2=beta2
         )
         ##
-        Ek2 = (1 - sD2) * (1 - sA2) / (1 + x) + sD2 * sA2 / (1 + 2 / 3. / k2_trapped_trapped * x) + sD2 * (1 - sA2) / (
-                1 + 2 / 3. / k2_trapped_free * x) + (1 - sD2) * sA2 / (1 + 2 / 3. / k2_free_trapped * x)
+        Ek2 = ((1 - sD2) * (1 - sA2) / (1 + x)
+               + sD2 * sA2 / (1 + 2 / 3. / k2_trapped_trapped * x)
+               + sD2 * (1 - sA2) / (1 + 2 / 3. / k2_trapped_free * x)
+               + (1 - sD2) * sA2 / (1 + 2 / 3. / k2_free_trapped * x))
         k2 = 2 / 3. * x / (1 / Ek2 - 1)
         k2s[i] = k2
 
@@ -134,7 +138,6 @@ def kappasq_all_delta_new(
     return k2scale, k2hist, ks
 
 
-
 @nb.jit(nopython=True)
 def kappasq_all_delta(
         delta: float,
@@ -145,22 +148,23 @@ def kappasq_all_delta(
         k2_min: float = 0.0,
         k2_max: float = 4.0
 ) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Computes a orientation factor distribution for a wobbling in a cone model
-    using parameters that can be estimated by experimental anisotropies.
+    """Computes a orientation factor distribution for a wobbling in
+    a cone model using parameters that can be estimated by experimental
+    anisotropies.
 
     The function used second rank order parameter of the donor and acceptor
     and the angle delta between the symmetry axes of the dyes as input. These
     parameters can be estimated by the residual anisotropy the the dyes. The
     second rank order parameter of the donor and acceptor are estimated by the
-    dye's residual anisotropies. The angle between the symmetry axes is estimated
-    by the residual anisotropy of the FRET sensitized emission (see:
-    `chisurf.fluorescence.anisotropy.kappa2.s2delta`).
+    dye's residual anisotropies. The angle between the symmetry axes is
+    estimated by the residual anisotropy of the FRET sensitized emission
+    (see: `chisurf.fluorescence.anisotropy.kappa2.s2delta`).
 
-    This function computes a orientation factor distribution, :math:`p(/kappa^2)`,
-    for a wobbling in a cone model (WIC) for second rank structure factors of
-    the donor and acceptor, and an angle :math:`delta`. The angle
-    :math:`delta` is the angle between the symmetry axes of the dyes and can be
-    estimated using experimental residual anisotropies [1]_.
+    This function computes a orientation factor distribution,
+    :math:`p(/kappa^2)`, for a wobbling in a cone model (WIC) for second rank
+    structure factors of the donor and acceptor, and an angle :math:`delta`.
+    The angle :math:`delta` is the angle between the symmetry axes of the
+    dyes and can be estimated using experimental residual anisotropies [1]_.
 
     Parameters
     ----------
@@ -204,7 +208,8 @@ def kappasq_all_delta(
     ...     step=2.0,
     ...     n_bins=31
     ... )
-    >>> np.allclose(k2h, np.array([   0.        ,    0.        ,    0.        ,    0.        ,
+    >>> np.allclose(k2h, np.array(
+    ...   [   0.        ,    0.        ,    0.        ,    0.        ,
     ...    3205.72877776, 1001.19048825,  611.44917432,  252.97166906,
     ...       0.        ,    0.        ,    0.        ,    0.        ,
     ...       0.        ,    0.        ,    0.        ,    0.        ,
@@ -229,7 +234,8 @@ def kappasq_all_delta(
 
     """
     # beta angles
-    beta1 = np.arange(0.001, np.pi / 2.0, step * np.pi / 180.0, dtype=np.float64)
+    beta1 = np.arange(0.001, np.pi / 2.0, step * np.pi / 180.0,
+                      dtype=np.float64)
     phi = np.arange(0.001, 2.0 * np.pi, step * np.pi / 180.0, dtype=np.float64)
     n = beta1.shape[0]
     m = phi.shape[0]
@@ -247,7 +253,8 @@ def kappasq_all_delta(
         n1 = np.array([-np.sin(beta1[i]), 0, np.cos(beta1[i])])
         n2 = np.array([0, 1, 0])
         for j in range(m):
-            d2 = (n1*np.cos(phi[j])+n2*np.sin(phi[j]))*np.sin(delta)+d1*np.cos(delta)
+            d2 = ((n1 * np.cos(phi[j]) + n2 * np.sin(phi[j]))
+                  * np.sin(delta) + d1 * np.cos(delta))
             beta2 = np.arccos(np.abs(d2.dot(rda_vec)))
             k2[i, j] = kappasq(
                 delta=delta,
@@ -270,12 +277,14 @@ def kappasq_all(
         k2_max: float = 4.0,
         n_samples: int = 10000
 ) -> typing.Tuple[np.array, np.array, np.array]:
-    """Computes a orientation factor distribution for a wobbling in a cone model
-    using specific second rank structure factors of the donor and acceptor.
+    """Computes a orientation factor distribution for a wobbling in a
+    cone model using specific second rank structure factors of the donor
+    and acceptor.
 
-    This function computes a orientation factor distribution, :math:`p(/kappa^2)`,
-    for a wobbling in a cone model (WIC) for second rank structure factors of
-    the donor and acceptor estimated using experimental residual anisotropies [1]_.
+    This function computes a orientation factor distribution,
+    :math:`p(/kappa^2)`, for a wobbling in a cone model (WIC) for second rank
+    structure factors of the donor and acceptor estimated using experimental
+    residual anisotropies [1]_.
 
     Parameters
     ----------
@@ -320,7 +329,8 @@ def kappasq_all(
            2.66666667, 2.8       , 2.93333333, 3.06666667, 3.2       ,
            3.33333333, 3.46666667, 3.6       , 3.73333333, 3.86666667,
            4.        ])
-    >>> reference = np.array([0.0000e+00, 0.0000e+00, 0.0000e+00, 3.1920e+04, 4.3248e+04,
+    >>> reference = np.array(
+    ...   [0.0000e+00, 0.0000e+00, 0.0000e+00, 3.1920e+04, 4.3248e+04,
     ...    1.4842e+04, 5.8930e+03, 2.5190e+03, 1.0840e+03, 3.9700e+02,
     ...    9.4000e+01, 3.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
     ...    0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
@@ -347,7 +357,8 @@ def kappasq_all(
         d2 = np.random.random(3)
         n1 = np.linalg.norm(d1)
         n2 = np.linalg.norm(d2)
-        # Assumption here: connecting vector R_DA is along the x-axis (R_DA=[1,0,0])
+        # Assumption here: connecting vector R_DA is along the
+        # x-axis (R_DA=[1,0,0])
         delta = np.arccos(np.dot(d1, d2) / (n1 * n2))
         beta1 = np.arccos(d1[0] / n1)
         beta2 = np.arccos(d2[0] / n2)
@@ -439,7 +450,7 @@ def kappa_distance(
     ... )
     (0.8660254037844386, 1.0000000000000002)
 
-    """
+    """  # noqa: E501
     # coordinates of the dipole
     d11 = d1[0]
     d12 = d1[1]
@@ -466,7 +477,7 @@ def kappa_distance(
     dM2 = d12 + dD21 * muD2 / 2.0
     dM3 = d13 + dD21 * muD3 / 2.0
 
-    ### Acceptor ###
+    # -- Acceptor -- #
     # cartesian coordinates of the acceptor
     a11 = a1[0]
     a12 = a1[1]
@@ -507,11 +518,9 @@ def kappa_distance(
     nRDA3 = RDA3 / dRDA
 
     # Orientation factor kappa2
-    kappa = muA1 * muD1 + \
-            muA2 * muD2 + \
-            muA3 * muD3 - \
-            3.0 * (muD1 * nRDA1 + muD2 * nRDA2 + muD3 * nRDA3) * \
-            (muA1 * nRDA1 + muA2 * nRDA2 + muA3 * nRDA3)
+    kappa = (muA1 * muD1 + muA2 * muD2 + muA3 * muD3
+             - 3.0 * (muD1 * nRDA1 + muD2 * nRDA2 + muD3 * nRDA3)
+             * (muA1 * nRDA1 + muA2 * nRDA2 + muA3 * nRDA3))
     return dRDA, kappa
 
 
@@ -529,8 +538,10 @@ def kappa(
     -------
 
     >>> import numpy as np
-    >>> donor_dipole = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
-    >>> acceptor_dipole = np.array([[0.0, 0.5, 0.0], [0.0, 0.5, 1.0]], dtype=np.float64)
+    >>> donor_dipole = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+    ...                         dtype=np.float64)
+    >>> acceptor_dipole = np.array([[0.0, 0.5, 0.0], [0.0, 0.5, 1.0]],
+    ...                            dtype=np.float64)
     >>> kappa(donor_dipole, acceptor_dipole)
     (0.8660254037844386, 1.0000000000000002)
     """
@@ -546,7 +557,8 @@ def s2delta(
         r_inf_AD: float,
         r_0: float = 0.38
 ) -> typing.Tuple[float, float]:
-    """Calculate s2delta from the residual anisotropies of the donor and acceptor
+    """Calculate s2delta from the residual anisotropies of the donor
+        and acceptor
 
     Parameters
     ----------
@@ -586,8 +598,9 @@ def s2delta(
 
     Notes
     -----
-    The parameters `s2_donor` and `s2_acceptor`, which correspond to :math:`S^{(2)}_D`
-    and :math:`S^{(2)}_A` are calculated using the dye's residual anisotropy [1]_
+    The parameters `s2_donor` and `s2_acceptor`, which correspond to
+    :math:`S^{(2)}_D` and :math:`S^{(2)}_A` are calculated using the dye's
+    residual anisotropy [1]_
 
     ..math::
 
@@ -639,7 +652,7 @@ def calculate_kappa_distance(
             )
             ks[i_frame] = k
             ds[i_frame] = d
-        except:
+        except:  # noqa: E722
             print("Frame ", i_frame, "skipped, calculation error")
 
     return ds, ks
@@ -732,9 +745,9 @@ def p_isotropic_orientation_factor(
 
     Example
     -------
-    >>> import scikit_fluorescence.modeling.kappa2
+    >>> from scikit_fluorescence.modeling import kappa2
     >>> k2 = np.linspace(0.1, 4, 32)
-    >>> p_k2 = scikit_fluorescence.modeling.kappa2.p_isotropic_orientation_factor(k2=k2)
+    >>> p_k2 = kappa2.p_isotropic_orientation_factor(k2=k2)
     >>> p_k2
     array([0.17922824, 0.11927194, 0.09558154, 0.08202693, 0.07297372,
            0.06637936, 0.06130055, 0.05723353, 0.04075886, 0.03302977,
@@ -756,7 +769,8 @@ def p_isotropic_orientation_factor(
         if 0 <= k <= 1:
             r[i] = 0.5 / (s3 * k) * np.log(2 + s3)
         elif 1 <= k <= 2:
-            r[i] = 0.5 / (s3 * k) * np.log((2 + s3) / (k + np.sqrt(k**2 - 1.0)))
+            r[i] = 0.5 / (s3 * k) * np.log((2 + s3)
+                                           / (k + np.sqrt(k**2 - 1.0)))
     if normalize:
         r /= max(1.0, r.sum())
     return r
