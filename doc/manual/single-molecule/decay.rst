@@ -54,7 +54,7 @@ are accessible via a simplified object-based interface that reduces the number o
 lines of code that need to be written for analyzing fluorescence decay histograms.
 The code blocks that are used below to illustrate the tttrlib functionality are
 extracts from the tests located in the test folder of the tttrlib repository. The
-test can be used as a more detailed refernce on how to use tttrlib.
+test can be used as a more detailed reference on how to use tttrlib.
 
 Model functions can be computed using for instance the ``DecayFit23.modelf``
 function of the ``tttrlib`` module. Here, the ``23`` represents a particular model
@@ -117,7 +117,7 @@ interface handles the creation of auxiliary data structures such as ``tttrlib.MP
 In the example shown above, first a fit object of the type ``fit2x.DecayFit23`` is
 created. All necessary data except for the experimental data for a fit is passed
 to the fit object when it is created. To perform a fit on experimental data for
-a set for a set of initial values, the fit object is called using the inital values
+a set for a set of initial values, the fit object is called using the initial values
 and the data as parameters.
 
 

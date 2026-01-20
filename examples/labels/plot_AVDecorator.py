@@ -70,7 +70,7 @@ av1.resample()  # Updates the AV
 # Access AV features
 # ------------------
 # AV decorated particles use PathMaps to sample the accessible volume.
-# Thus, features of the AV are accesses trough PathMap. The features can
+# Thus, features of the AV are accessed through PathMap. The features can
 # be written to density maps (see: PathMapTile). PathMaps derive from
 # IMP EM density maps and sampled obstacles can be written to density files
 # using standard IMP methods.
@@ -82,7 +82,7 @@ bounds = 0.01, 20
 # %%
 # Features of a IMP.bff.PathMap are identified by the following constants
 pm_features = [
-    IMP.bff.PM_TILE_PENALTY,             # Penality of visiting a tile
+    IMP.bff.PM_TILE_PENALTY,             # Penalty of visiting a tile
     IMP.bff.PM_TILE_COST,                # Cost of a path to the tile
     IMP.bff.PM_TILE_DENSITY,             # Density of tile
     IMP.bff.PM_TILE_COST_DENSITY,        # Cost * Density of tile

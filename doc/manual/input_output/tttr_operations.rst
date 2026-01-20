@@ -51,7 +51,7 @@ data that are offset by the last macro time record in the first set in addition 
 the value specified by ``macro_time_offset``. The parameter ``macro_time_offset``
 is set to zero by default.
 
-By appending TTTR objects to each other data that is splitted into multiple files
+By appending TTTR objects to each other data that is split into multiple files
 can be joined into a single TTTR object as follows
 
 
@@ -77,7 +77,7 @@ can be joined into a single TTTR object as follows
 Selections
 ==========
 A defining feature of TTTR data is that subsets can be selected and defined for
-more detailed analysis. This is for instance exploited in single-molecule experimetns
+more detailed analysis. This is for instance exploited in single-molecule experiments
 There are different methods to access subsets of a TTTR object that are described
 in this section.
 
@@ -130,7 +130,7 @@ fluorescence were (0, 8) and (1, 9) for the red detection window.
 The method 'get_selection_by_channel' provides an array that contains the indices
 of the events when a the channel equals the channel number of the provided
 arguments. To obtain the indices where the channel number. In the example below
-the indices of the green (channel = 0 or channel = 8) and the indeces of the red
+the indices of the green (channel = 0 or channel = 8) and the indices of the red
 (channel = 1 or channel = 9) are saved in the variables ``green_indices``  and
 ``red_indices``, respectively.
 

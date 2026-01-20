@@ -73,7 +73,7 @@ void PathMap::find_path(
         heuristic = [&](long left, long right){
             return 0.0;
         };
-    } else if (heuristic_mode == 1) { // A* (euclidian)
+    } else if (heuristic_mode == 1) { // A* (euclidean)
         heuristic = [&](long left, long right){
             auto dx = (x_loc_[left] - x_loc_[right]);
             auto dy = (y_loc_[left] - y_loc_[right]);

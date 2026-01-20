@@ -229,7 +229,7 @@ def rmsd(
         -r ~/science/Papers/00_in_preparation/Bayesian_Fluorescence_Toolkit/Test_case_candiates/01_Antibody/targets/nodes1_045.pdb \
         -k structure
 
-    With provided column for RMSD reference calcualtion
+    With provided column for RMSD reference calculation
 
     structure rmsd \
         -f /home/tpeulen/science/Papers/00_in_preparation/Bayesian_Fluorescence_Toolkit/Test_case_candiates/01_Antibody/targets/experiments/eTCSPC/ucfret/02_structure_search/local_scaling/species_sampling.sort.ol4 \
@@ -343,7 +343,7 @@ def auto_model(input_file, output_path=None, settings=None, fret_efficiency=None
         output_path = pathlib.Path(input_file).parent.absolute()
     input_file = pathlib.Path(input_file).absolute()
 
-    print("OUPTUT DIRECTORIES")
+    print("OUTPUT DIRECTORIES")
     print("===============================")
     OUT_PREANALYSIS = output_path / 'init'
     OUT_PREANALYSIS.mkdir(exist_ok=True)

@@ -3,7 +3,7 @@
 
 Writing TTTR-files
 ==================
-TTTR objects can be writen to files using the method ``write`` of TTTR objects.
+TTTR objects can be written to files using the method ``write`` of TTTR objects.
 
 .. code-block:: python
 
@@ -74,9 +74,9 @@ writing to a file.
     data_ptu = tttrlib.TTTR(ptu_file)
 
 
-When a TTTR file is writen to another format certain meta data need to be provided.
+When a TTTR file is written to another format certain meta data need to be provided.
 The combination of tttr_container_type and tttr_record_type determines of the header
-determines the ouput format of the TTTR writer method.
+determines the output format of the TTTR writer method.
 
 For PTU files at least the instrument and the measurement mode (T2, T3) need to be
 provided.

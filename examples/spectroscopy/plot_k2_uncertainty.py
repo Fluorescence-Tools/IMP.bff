@@ -167,7 +167,7 @@ for ds in list(distance_sets.keys())[1:]:
         k2_ax = k2_axis[1:]
         _, k2_sd = mean_sd(k2_ax, k2_pdf_wic)
 
-        # Use norm distirbution with width ovls
+        # Use norm distribution with width ovls
         # instead of delta function (numeric stability)
         ovls = (r_max - r_min) / (2 * n_axis)
 

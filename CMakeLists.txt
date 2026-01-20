@@ -36,7 +36,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
 
-    # compatability with older systems
+    # compatibility with older systems
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=10.13")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.13")
     SET(CMAKE_LFLAGS "${CMAKE_LFLAGS} -mmacosx-version-min=10.13")

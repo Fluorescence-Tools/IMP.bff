@@ -100,7 +100,7 @@ class Tests(IMP.test.TestCase):
             IMP.em.write_map(av1_map, temp_file.name)
 
         pm_features = [
-            IMP.bff.PM_TILE_PENALTY,             # Penality of visiting a tile
+            IMP.bff.PM_TILE_PENALTY,             # Penalty of visiting a tile
             IMP.bff.PM_TILE_COST,                # Cost of a path to the tile
             IMP.bff.PM_TILE_DENSITY,             # Density of tile
             IMP.bff.PM_TILE_COST_DENSITY,        # Cost * Density of tile
