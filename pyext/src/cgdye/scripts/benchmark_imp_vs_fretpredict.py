@@ -18,6 +18,17 @@ import IMP.algebra
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes, place_dye_from_coords
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 
 def _numpy_transform(ca, n, c, coords):
     """Reference numpy-based transform (backbone frame)."""
@@ -38,8 +49,8 @@ def _numpy_transform(ca, n, c, coords):
 @click.option("--output-json", default="output/benchmarks/placement_speed.json")
 def main(n_trials, output_json):
     model = IMP.Model()
-    protein = IMP.atom.read_pdb("inputs/structures/1DG3.pdb", model, IMP.atom.NonWaterPDBSelector())
-    dye = IMP.atom.read_pdb("inputs/structures/alexa488_r48.pdb", model, IMP.atom.AllPDBSelector())
+    protein = IMP.atom.read_pdb(_structure("1DG3.pdb"), model, IMP.atom.NonWaterPDBSelector())
+    dye = IMP.atom.read_pdb(_structure("alexa488_r48.pdb"), model, IMP.atom.AllPDBSelector())
 
     # Get CA, N, C coordinates for hGBP1 residue 481
     sel = IMP.atom.Selection(protein, chain_id="A", residue_index=481)

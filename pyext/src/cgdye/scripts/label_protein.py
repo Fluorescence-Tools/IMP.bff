@@ -19,6 +19,17 @@ from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
 from IMP.bff.cgdye.sampling.rotamer import apply_rotamer_coords
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 def _rotamer_library_dir():
     """Directory of the bundled rotamer library.
 
@@ -138,9 +149,9 @@ def main(pdb_id_or_path, chain, residue, dye, linker, output, strip_sidechain):
         pdb_name = Path(pdb_path).stem
     else:
         pdb_name = pdb_id_or_path.upper()
-        pdb_path = f"inputs/structures/{pdb_name}.pdb"
+        pdb_path = _structure(f"{pdb_name}.pdb")
         if not os.path.exists(pdb_path):
-            os.makedirs("inputs/structures", exist_ok=True)
+            os.makedirs(os.path.dirname(_structure("x")), exist_ok=True)
             if not download_pdb(pdb_id_or_path, pdb_path):
                 sys.exit(1)
                 
@@ -166,7 +177,7 @@ def main(pdb_id_or_path, chain, residue, dye, linker, output, strip_sidechain):
         if base_pdb.exists():
             dye_hier = IMP.atom.read_pdb(str(base_pdb), model, IMP.atom.AllPDBSelector())
         else:
-            dye_hier = IMP.atom.read_mol2("inputs/structures/alexa488_r48.mol2", model)
+            dye_hier = IMP.atom.read_mol2(_structure("alexa488_r48.mol2"), model)
             
         try:
             apply_rotamer_coords(dye_hier, lib["coords"][1])

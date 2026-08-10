@@ -8,17 +8,28 @@ import IMP.atom
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--protein-pdb",
-    default="inputs/structures/1DG3.pdb",
+    default=_structure("1DG3.pdb"),
     show_default=True,
     help="Protein PDB path",
 )
 @click.option(
     "--dye-mol2",
-    default="inputs/structures/alexa488_r48.mol2",
+    default=_structure("alexa488_r48.mol2"),
     show_default=True,
     help="Dye MOL2 path",
 )

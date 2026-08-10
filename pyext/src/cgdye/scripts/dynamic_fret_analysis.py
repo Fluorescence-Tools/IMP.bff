@@ -30,6 +30,17 @@ from IMP.bff.cgdye.sampling.kinetic import build_transition_probability_matrix
 from IMP.bff.cgdye.analysis.fret import calculate_fret_exact
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 
 def compute_kappa2(mu_d, mu_a, r_vec):
     """Compute kappa^2 orientation factor."""
@@ -48,7 +59,7 @@ def compute_kappa2(mu_d, mu_a, r_vec):
 @click.option("--dt", default=0.1, show_default=True, help="Simulation step timescale (ns)")
 def main(n_steps, threshold, r0, tau0, dt):
     dye_dir = get_structure_dir()
-    pdb_path = "inputs/structures/1DG3.pdb"
+    pdb_path = _structure("1DG3.pdb")
     
     def sample_at_site(mol2_name, resnum):
         click.echo(f"Sampling site {resnum}...")

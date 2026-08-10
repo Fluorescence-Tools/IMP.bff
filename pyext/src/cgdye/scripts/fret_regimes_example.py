@@ -21,6 +21,17 @@ import IMP.algebra
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
 from IMP.bff.cgdye.labeling.attachment import backbone_frame, place_dye_from_coords
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 
 def compute_kappa2(mu_d, mu_a, r_vec):
     """Compute kappa^2 orientation factor."""
@@ -34,7 +45,7 @@ def compute_kappa2(mu_d, mu_a, r_vec):
 def main():
     # 1. Load system
     model = IMP.Model()
-    protein = IMP.atom.read_pdb("inputs/structures/1DG3.pdb", model, IMP.atom.NonWaterPDBSelector())
+    protein = IMP.atom.read_pdb(_structure("1DG3.pdb"), model, IMP.atom.NonWaterPDBSelector())
     
     # 2. Setup backbone frames for labeling sites
     # NOTE: user requested 488 and 344

@@ -21,6 +21,17 @@ import RMF
 from IMP.bff.cgdye.labeling.attachment import attach_dyes
 from IMP.bff.cgdye.topology.builder import parse_mol2
 
+def _structure(name):
+    """A bundled input structure, wherever IMP.bff is installed.
+
+    These paths used to be relative to the working directory, so a script only
+    ran from one place -- and stopped running at all once the data became IMP
+    module data under data/cgdye.
+    """
+    from IMP.bff.cgdye.utils import get_structure_dir
+    return str(get_structure_dir(name))
+
+
 
 def _protein_residue_groups(protein_hier):
     groups = {}
@@ -175,12 +186,12 @@ def _pdb_linker_indices(dye_pdb):
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option("--protein-pdb", default="inputs/structures/1DG3.pdb", show_default=True)
+@click.option("--protein-pdb", default=_structure("1DG3.pdb"), show_default=True)
 @click.option(
-    "--dye-pdb", default="inputs/structures/alexa488_r48.pdb", show_default=True
+    "--dye-pdb", default=_structure("alexa488_r48.pdb"), show_default=True
 )
 @click.option(
-    "--dye-mol2", default="inputs/structures/alexa488_r48.mol2", show_default=True
+    "--dye-mol2", default=_structure("alexa488_r48.mol2"), show_default=True
 )
 @click.option("--chain", default="A", show_default=True)
 @click.option("--residue", default=481, show_default=True, type=int)
