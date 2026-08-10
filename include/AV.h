@@ -33,6 +33,9 @@
 // #include <boost/histogram.hpp> // make_histogram, regular, weight, indexed
 #include <IMP/bff/internal/Histogram.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/string.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
 
 
@@ -50,6 +53,13 @@ typedef enum{
 
 /// Container for experimental distance measurement
 class IMPBFFEXPORT AVPairDistanceMeasurement{
+
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(distance, error_neg, error_pos, forster_radius,
+           distance_type, position_1, position_2);
+    }
 
 public:
 

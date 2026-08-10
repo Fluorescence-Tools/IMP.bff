@@ -17,7 +17,12 @@
 #include <IMP/bff/DecayCurve.h>
 #include <vector>
 
+#include <cereal/access.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
+
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
 
 /**
  * \class DecayRange
@@ -28,6 +33,12 @@ IMPBFF_BEGIN_NAMESPACE
  * as well as setting the range using a vector of indices.
  */
 class IMPBFFEXPORT DecayRange {
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(_start, _stop);
+    }
+
 private:
     size_t _start = 0; ///< Start index of the decay range
     size_t _stop = -1; ///< Stop index of the decay range

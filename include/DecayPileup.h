@@ -22,6 +22,9 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
+
 /**
  * \class DecayPileup
  * \brief A decorator that adds pile-up effects to a DecayCurve object.

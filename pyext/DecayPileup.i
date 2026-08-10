@@ -3,3 +3,5 @@
 %attributestring(IMP::bff::DecayPileup, std::string, pile_up_model, get_pile_up_model, set_pile_up_model);
 
 %include <IMP/bff/DecayPileup.h>
+
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayPileup)

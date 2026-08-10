@@ -16,6 +16,8 @@
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/PathMapTile.h>
 
+#include <cereal/access.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
 
 class PathMap;
@@ -26,6 +28,11 @@ class PathMapTileEdge{
 
 friend class PathMapTile;
 friend class PathMap;
+friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(tile_idx, length);
+    }
 
 
 protected:

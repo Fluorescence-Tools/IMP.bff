@@ -1,0 +1,92 @@
+# IMP coding-standards deviations for IMP.bff.
+#
+# Consumed by tools/build/setup.py, which bakes these into the generated
+# test/bff/medium_test_standards.py. Entries here are *documented*
+# deviations, not fixes: the names are public API that ChiSurf and
+# imp-tricks call, so renaming them is a breaking change, and most of the
+# list is SWIG-generated STL container boilerplate that cannot be renamed
+# at all (128 of 172 entries).
+
+# Domain vocabulary IMP's spell check does not know.
+spelling_exceptions=[
+    'astar', 'avs', 'dijkstra', 'idx', 'irf',
+    'json', 'xy', 'xz', 'yz',
+]
+
+# Methods that do not begin with one of IMP's approved verbs.
+function_name_exceptions=[
+    'AV.init_path_map', 'AV.normalize_rotation', 'AV.pull_back_body_member_adjoints',
+    'AV.pull_back_member_adjoints', 'AV.pull_back_members_adjoints', 'AV.resample',
+    'AVNetworkRestraint.get_used_avs', 'AVPairDistanceMeasurement.get_json', 'AVPairDistanceMeasurement.score_model',
+    'DecayConvolution.compute_corrected_irf', 'DecayConvolution.get_irf', 'DecayConvolution.resize',
+    'DecayConvolution.set_irf', 'DecayCurve.empty', 'DecayCurve.get_json',
+    'DecayCurve.read_json', 'DecayCurve.resize', 'DecayCurve.shift_array',
+    'DecayCurve.size', 'DecayCurve.sum', 'DecayLinearization.resize',
+    'DecayModifier.resize', 'DecayPattern.resize', 'DecayPileup.resize',
+    'DecayScale.resize', 'MapStringAVPairDistanceMeasurement.asdict', 'MapStringAVPairDistanceMeasurement.begin',
+    'MapStringAVPairDistanceMeasurement.count', 'MapStringAVPairDistanceMeasurement.empty', 'MapStringAVPairDistanceMeasurement.end',
+    'MapStringAVPairDistanceMeasurement.has_key', 'MapStringAVPairDistanceMeasurement.items', 'MapStringAVPairDistanceMeasurement.iterator',
+    'MapStringAVPairDistanceMeasurement.iteritems', 'MapStringAVPairDistanceMeasurement.iterkeys', 'MapStringAVPairDistanceMeasurement.itervalues',
+    'MapStringAVPairDistanceMeasurement.key_iterator', 'MapStringAVPairDistanceMeasurement.keys', 'MapStringAVPairDistanceMeasurement.lower_bound',
+    'MapStringAVPairDistanceMeasurement.rbegin', 'MapStringAVPairDistanceMeasurement.rend', 'MapStringAVPairDistanceMeasurement.size',
+    'MapStringAVPairDistanceMeasurement.upper_bound', 'MapStringAVPairDistanceMeasurement.value_iterator', 'MapStringAVPairDistanceMeasurement.values',
+    'PathMap.calcRMS', 'PathMap.calc_all_voxel2loc', 'PathMap.copy_map',
+    'PathMap.fill_sphere', 'PathMap.find_path_astar', 'PathMap.find_path_dijkstra',
+    'PathMap.get_maximum_value_in_xy_plane', 'PathMap.get_maximum_value_in_xz_plane', 'PathMap.get_maximum_value_in_yz_plane',
+    'PathMap.get_neighbor_idx_offsets', 'PathMap.is_normalized', 'PathMap.is_part_of_volume',
+    'PathMap.is_xyz_ind_part_of_volume', 'PathMap.lower_voxel_shift', 'PathMap.multiply',
+    'PathMap.pad', 'PathMap.pad_margin', 'PathMap.pick_max',
+    'PathMap.project', 'PathMap.resample', 'PathMap.resize',
+    'PathMap.same_dimensions', 'PathMap.same_origin', 'PathMap.same_voxel_size',
+    'PathMap.sample_obstacles', 'PathMap.std_normalize', 'PathMap.upper_voxel_shift',
+    'PathMap.xyz_ind2voxel', 'PathMapTile.backtrack_to_path', 'VectorDouble.append',
+    'VectorDouble.assign', 'VectorDouble.back', 'VectorDouble.begin',
+    'VectorDouble.capacity', 'VectorDouble.empty', 'VectorDouble.end',
+    'VectorDouble.front', 'VectorDouble.insert', 'VectorDouble.iterator',
+    'VectorDouble.rbegin', 'VectorDouble.rend', 'VectorDouble.resize',
+    'VectorDouble.size', 'VectorFloat.append', 'VectorFloat.assign',
+    'VectorFloat.back', 'VectorFloat.begin', 'VectorFloat.capacity',
+    'VectorFloat.empty', 'VectorFloat.end', 'VectorFloat.front',
+    'VectorFloat.insert', 'VectorFloat.iterator', 'VectorFloat.rbegin',
+    'VectorFloat.rend', 'VectorFloat.resize', 'VectorFloat.size',
+    'VectorInt.append', 'VectorInt.assign', 'VectorInt.back',
+    'VectorInt.begin', 'VectorInt.capacity', 'VectorInt.empty',
+    'VectorInt.end', 'VectorInt.front', 'VectorInt.insert',
+    'VectorInt.iterator', 'VectorInt.rbegin', 'VectorInt.rend',
+    'VectorInt.resize', 'VectorInt.size', 'VectorLong.append',
+    'VectorLong.assign', 'VectorLong.back', 'VectorLong.begin',
+    'VectorLong.capacity', 'VectorLong.empty', 'VectorLong.end',
+    'VectorLong.front', 'VectorLong.insert', 'VectorLong.iterator',
+    'VectorLong.rbegin', 'VectorLong.rend', 'VectorLong.resize',
+    'VectorLong.size', 'VectorPathMapTile.append', 'VectorPathMapTile.assign',
+    'VectorPathMapTile.back', 'VectorPathMapTile.begin', 'VectorPathMapTile.capacity',
+    'VectorPathMapTile.empty', 'VectorPathMapTile.end', 'VectorPathMapTile.front',
+    'VectorPathMapTile.insert', 'VectorPathMapTile.iterator', 'VectorPathMapTile.rbegin',
+    'VectorPathMapTile.rend', 'VectorPathMapTile.resize', 'VectorPathMapTile.size',
+    'VectorPathMapTileEdge.append', 'VectorPathMapTileEdge.assign', 'VectorPathMapTileEdge.back',
+    'VectorPathMapTileEdge.begin', 'VectorPathMapTileEdge.capacity', 'VectorPathMapTileEdge.empty',
+    'VectorPathMapTileEdge.end', 'VectorPathMapTileEdge.front', 'VectorPathMapTileEdge.insert',
+    'VectorPathMapTileEdge.iterator', 'VectorPathMapTileEdge.rbegin', 'VectorPathMapTileEdge.rend',
+    'VectorPathMapTileEdge.resize', 'VectorPathMapTileEdge.size', 'VectorString.append',
+    'VectorString.assign', 'VectorString.back', 'VectorString.begin',
+    'VectorString.capacity', 'VectorString.empty', 'VectorString.end',
+    'VectorString.front', 'VectorString.insert', 'VectorString.iterator',
+    'VectorString.rbegin', 'VectorString.rend', 'VectorString.resize',
+    'VectorString.size',
+]
+
+# Value-like classes that expose no show().
+show_exceptions=[
+    'AVPairDistanceMeasurement', 'DecayConvolution', 'DecayCurve',
+    'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
+    'DecayPattern', 'DecayPileup', 'DecayRange',
+    'DecayScale', 'DecayScore', 'MapStringAVPairDistanceMeasurement',
+    'PairFloatFloat', 'PathMapHeader', 'PathMapTile',
+    'PathMapTileEdge', 'VectorDouble', 'VectorFloat',
+    'VectorInt', 'VectorLong', 'VectorPathMapTile',
+    'VectorPathMapTileEdge', 'VectorString',
+]
+
+class_name_exceptions=[]
+value_object_exceptions=[]
+plural_exceptions=[]

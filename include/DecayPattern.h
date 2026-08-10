@@ -16,6 +16,9 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
+
 /**
  * @class DecayPattern
  * @brief The DecayPattern class represents a decay pattern with a constant offset and a background pattern.

@@ -2,5 +2,7 @@
 %attribute(IMP::bff::DecayPattern, double, pattern_fraction, get_pattern_fraction, set_pattern_fraction);
 %attribute(IMP::bff::DecayPattern, double, constant_offset, get_constant_offset, set_constant_offset);
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayPattern)
+
 %include "IMP/bff/DecayPattern.h"
 

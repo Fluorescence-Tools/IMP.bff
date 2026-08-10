@@ -19,9 +19,22 @@
 #include <iostream>
 #include <IMP/bff/DecayRoutines.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/vector.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
 
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
+
 class IMPBFFEXPORT DecayLifetimeHandler {
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(_lifetime_spectrum, lt_, amplitude_threshold,
+           use_amplitude_threshold, abs_lifetime_spectrum);
+    }
+
 private:
     std::vector<double> _lifetime_spectrum = std::vector<double>();  //!< Lifetime spectrum / original
     std::vector<double> lt_ = std::vector<double>();  //!< Lifetime spectrum / for getter

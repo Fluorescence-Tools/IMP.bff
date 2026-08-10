@@ -18,6 +18,12 @@
 #include <IMP/Object.h>
 #include <IMP/Pointer.h>
 #include <IMP/atom/Hierarchy.h>
+
+#include <cereal/access.hpp>
+#include <cereal/types/base_class.hpp>
+#include <cereal/types/map.hpp>
+#include <cereal/types/polymorphic.hpp>
+#include <cereal/types/string.hpp>
 #include <IMP/UnaryFunction.h>
 
 #include <IMP/bff/AV.h>
@@ -45,6 +51,34 @@ IMPBFF_BEGIN_NAMESPACE
  * score set is provided, all distances are used for scoring.
  */
 class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
+
+    friend class cereal::access;
+
+    /* `avs_` holds bare AV decorator handles, which are views onto particles
+       that the Model owns, not state of their own. They are therefore stored
+       as the particle indices they decorate and rebuilt against the restored
+       model on load, rather than archived as pointers. */
+    template<class Archive> void serialize(Archive &ar) {
+        ar(cereal::base_class<IMP::Restraint>(this),
+           n_samples, av_pi_, model_ps_, distances_);
+        // On save this is built from avs_; on load ar() overwrites it and the
+        // decorators are rebuilt from it below. A single serialize() (rather
+        // than a save/load pair) is required here because IMP::Restraint
+        // already supplies one, and cereal rejects two candidate functions.
+        std::map<std::string, IMP::ParticleIndex> av_index;
+        for (const auto &kv : avs_) {
+            av_index[kv.first] = kv.second->get_particle_index();
+        }
+        ar(av_index);
+        if (std::is_base_of<cereal::detail::InputArchiveBase, Archive>::value) {
+            avs_.clear();
+            for (const auto &kv : av_index) {
+                avs_[kv.first] = new IMP::bff::AV(get_model(), kv.second);
+            }
+        }
+    }
+
+    IMP_OBJECT_SERIALIZE_DECL(AVNetworkRestraint);
 
 private:
 
@@ -115,6 +149,9 @@ public:
         std::string score_set = "",
         int n_samples = 50000
     );
+
+    //! Default constructor, needed to deserialize the restraint.
+    AVNetworkRestraint() {}
 
     /**
      * @brief Returns exp(score).

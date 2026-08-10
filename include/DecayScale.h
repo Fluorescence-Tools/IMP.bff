@@ -19,7 +19,13 @@
 #include <IMP/bff/DecayModifier.h>
 #include <IMP/bff/DecayRoutines.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/base_class.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
+
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
 
 /**
  * \class DecayScale
@@ -32,6 +38,13 @@ IMPBFF_BEGIN_NAMESPACE
  * to the DecayCurve when the modify() method is called.
  */
 class IMPBFFEXPORT DecayScale : public DecayModifier {
+
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(cereal::base_class<DecayModifier>(this), _constant_background, _blank_outside);
+    }
+
 private:
     double _constant_background = 0.0;  //!< A constant that is subtracted from the data
     bool _blank_outside = true;  //!< Flag indicating whether the curve should be blanked outside a specified range

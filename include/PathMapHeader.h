@@ -18,6 +18,8 @@
 #include <IMP/atom/Atom.h>
 #include <IMP/atom/Hierarchy.h>
 #include <IMP/atom/Selection.h>
+
+#include <cereal/access.hpp>
 #include <IMP/em/DensityHeader.h>
 
 #include <IMP/bff/internal/json.h>
@@ -33,6 +35,12 @@ class PathMap;
 class IMPBFFEXPORT PathMapHeader {
 
 friend class IMP::bff::PathMap;
+friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(grid_spacing_, max_path_length_, neighbor_radius_,
+           obstacle_threshold_, density_header_, path_origin_);
+    }
 
 private:
 

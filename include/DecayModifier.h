@@ -15,7 +15,13 @@
 #include <IMP/bff/DecayRange.h>
 #include <IMP/bff/DecayCurve.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/base_class.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
+
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
 
 /**
  * \class DecayModifier
@@ -27,6 +33,29 @@ IMPBFF_BEGIN_NAMESPACE
  * which modifies the input DecayCurve object.
  */
 class IMPBFFEXPORT DecayModifier : public DecayRange {
+
+    friend class cereal::access;
+
+    /* One serialize(), not a save/load pair: DecayRange already supplies a
+       serialize() that this class inherits, and cereal rejects a type that
+       offers two candidate functions.
+
+       The two curve pointers differ in ownership. `default_data` is owned (the
+       destructor deletes it) and is archived by value. `data` points at a curve
+       owned by the caller, so archiving it would silently take a copy and hand
+       this object ownership of it; it is cleared on load and must be
+       re-attached with set_data(). */
+    template<class Archive> void serialize(Archive &ar) {
+        ar(cereal::base_class<DecayRange>(this), _is_active);
+        bool has_default = (default_data != nullptr);
+        ar(has_default);
+        if (std::is_base_of<cereal::detail::InputArchiveBase, Archive>::value) {
+            delete default_data;
+            default_data = has_default ? new DecayCurve() : nullptr;
+            data = nullptr;
+        }
+        if (has_default) ar(*default_data);
+    }
 
 private:
     bool _is_active = true;

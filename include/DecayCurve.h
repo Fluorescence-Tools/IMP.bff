@@ -20,7 +20,13 @@
 #include <IMP/bff/internal/json.h>
 #include <IMP/bff/DecayRoutines.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/vector.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
+
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
 
 enum NoiseModelTypes{
     NOISE_NA,
@@ -42,6 +48,11 @@ class IMPBFFEXPORT DecayCurve {
     friend class DecayScale;
     friend class DecayScore;
     friend class DecayPattern;
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(noise_model, current_shift, acquisition_time, dx, x, _y, y, ey);
+    }
 
 private:
 

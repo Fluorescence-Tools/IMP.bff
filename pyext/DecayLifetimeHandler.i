@@ -3,4 +3,6 @@
 %attribute(IMP::bff::DecayLifetimeHandler, double, amplitude_threshold, get_amplitude_threshold, set_amplitude_threshold);
 %attribute(IMP::bff::DecayLifetimeHandler, std::vector<double>, lifetime_spectrum, get_lifetime_spectrum, set_lifetime_spectrum);
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayLifetimeHandler)
+
 %include "IMP/bff/DecayLifetimeHandler.h"

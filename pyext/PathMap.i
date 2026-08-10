@@ -10,6 +10,10 @@ IMP_SWIG_OBJECT(IMP::bff, PathMap, PathMaps);
 %ignore IMP::bff::PathMap::get_xyz_density();
 
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapHeader)
+
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapTile)
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapTileEdge)
 %include "IMP/bff/PathMapHeader.h"
 %include "IMP/bff/PathMap.h"
 %include "IMP/bff/PathMapTile.h"

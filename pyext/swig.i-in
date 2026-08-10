@@ -11,12 +11,6 @@ import numpy as np
 
 %include "BFF.types.i"
 
-/* Chinet */
-//%include "CnMongoObject.i"
-//%include "CnPort.i"
-//%include "CnNode.i"
-//%include "CnSession.i"
-
 /* PathMap & AV */
 %include "PathMap.i"
 %include "AV.i"

@@ -19,6 +19,11 @@
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/PathMapTileEdge.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/map.hpp>
+#include <cereal/types/string.hpp>
+#include <cereal/types/vector.hpp>
+
 IMPBFF_BEGIN_NAMESPACE
 
 const bool  TILE_VISITED_DEFAULT    = false;
@@ -50,6 +55,20 @@ class PathMap;
 class IMPBFFEXPORT PathMapTile{
 
 friend class PathMap;
+friend class cereal::access;
+
+    /* `previous` is deliberately not archived: it points at another tile
+       inside the same map and is transient path-search state, rebuilt by
+       find_path_dijkstra()/find_path_astar(). Archiving a bare intra-container
+       pointer would deep-copy the chain and hand each tile its own duplicate. */
+    template<class Archive> void save(Archive &ar) const {
+        ar(idx, penalty, cost, features, edges, density);
+    }
+
+    template<class Archive> void load(Archive &ar) {
+        ar(idx, penalty, cost, features, edges, density);
+        previous = nullptr;
+    }
 
 private:
 

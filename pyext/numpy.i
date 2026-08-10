@@ -46,10 +46,18 @@
 /* SWIG 4.3 added a third `is_void` argument to SWIG_Python_AppendOutput. The
    typemaps below are written against the older two-argument spelling, so route
    them through a macro that adapts to whichever SWIG generated the wrapper.
-   Passing is_void=0 reproduces the pre-4.3 behaviour exactly. */
+
+   is_void must be 1, not 0. Pre-4.3 SWIG replaced a Py_None result with the
+   first appended output *unconditionally*; 4.3 made that replacement
+   conditional on is_void. These are argout typemaps, and a wrapper whose C++
+   function returns void initialises `resultobj = SWIG_Py_Void()` before
+   appending — so with is_void=0 every such call returns the list
+   [None, array] instead of the array. Passing 1 restores the pre-4.3
+   behaviour. When the C++ function returns a value, resultobj is not Py_None,
+   the flag is not consulted, and outputs pack into a list as before. */
 #if SWIG_VERSION >= 0x040300
 #define IMPBFF_SWIG_AppendOutput(result, obj) \
-        SWIG_Python_AppendOutput(result, obj, 0)
+        SWIG_Python_AppendOutput(result, obj, 1)
 #else
 #define IMPBFF_SWIG_AppendOutput(result, obj) \
         SWIG_Python_AppendOutput(result, obj)

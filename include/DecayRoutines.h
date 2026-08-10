@@ -35,6 +35,9 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+IMPBFF_DEPRECATED_HEADER(
+    2.25, "The fluorescence-decay classes have moved to tttrlib and will be removed from IMP.bff in the next release; IMP.bff keeps only the structure-related features (AV, PathMap, AVNetworkRestraint). Use tttrlib instead.")
+
 /**
  * \brief Compute the modulo of a number with respect to a positive integer.
  *  

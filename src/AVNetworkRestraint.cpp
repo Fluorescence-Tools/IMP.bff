@@ -120,4 +120,6 @@ double AVNetworkRestraint::get_model_distance(
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
 }
 
+IMP_OBJECT_SERIALIZE_IMPL(IMP::bff::AVNetworkRestraint);
+
 IMPBFF_END_NAMESPACE

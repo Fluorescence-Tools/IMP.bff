@@ -5,5 +5,7 @@
 %attribute_np(IMP::bff::DecayCurve, std::vector<double>, y, get_y, set_y);
 %attribute_np(IMP::bff::DecayCurve, std::vector<double>, ey, get_ey, set_ey);
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayCurve)
+
 %include "IMP/bff/DecayCurve.h"
 

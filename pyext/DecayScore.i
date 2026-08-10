@@ -4,4 +4,6 @@
 %attribute_py(IMP::bff::DecayScore, IMP::bff::DecayCurve, data, get_data, set_data);
 %attribute_np(IMP::bff::DecayScore, std::vector<double>, weighted_residuals, get_weighted_residuals);
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayScore)
+
 %include "IMP/bff/DecayScore.h"

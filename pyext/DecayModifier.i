@@ -2,4 +2,6 @@
 %attribute_py(IMP::bff::DecayModifier, IMP::bff::DecayCurve*, data, get_data, set_data);
 %class_callable(IMP::bff::DecayModifier, add);
 
+IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, DecayModifier)
+
 %include "IMP/bff/DecayModifier.h"
