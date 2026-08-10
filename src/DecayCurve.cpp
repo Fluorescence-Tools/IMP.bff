@@ -166,149 +166,149 @@ void DecayCurve::compute_noise(int noise_model){
     }
 }
 
-DecayCurve& DecayCurve::operator+(const DecayCurve& other) const
+DecayCurve DecayCurve::operator+(const DecayCurve& other) const
 {
     size_t n_max = std::min(size(), other.size());
-    auto d = new DecayCurve();
-    d->resize(n_max);
+    DecayCurve d;
+    d.resize(n_max);
 #if IMPBFF_VERBOSE
     std::clog << "DecayCurve::operator+(const DecayCurve& other)" << std::endl;
     std::clog << "-- this->size():" << this->size() << std::endl;
     std::clog << "-- other->size():" << other.size() << std::endl;
-    std::clog << "-- new->size():" << d->size() << std::endl;
+    std::clog << "-- new->size():" << d.size() << std::endl;
 #endif
     for(size_t i=0; i < n_max; i++){
-        d->x[i] = x[i];
-        d->_y[i] = y[i] + other.y[i];
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] + other.y[i];
+        d.y[i] = d._y[i];
 
-        d->ey[i] = std::sqrt(ey[i]*ey[i] + other.ey[i]*other.ey[i]);
+        d.ey[i] = std::sqrt(ey[i]*ey[i] + other.ey[i]*other.ey[i]);
     }
-    d->acquisition_time = acquisition_time + other.acquisition_time;
-    return *d;
+    d.acquisition_time = acquisition_time + other.acquisition_time;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator-(const DecayCurve& other) const
+DecayCurve DecayCurve::operator-(const DecayCurve& other) const
 {
     size_t n_max = std::min(size(), other.size());
-    auto d = new DecayCurve();
-    d->resize(n_max);
+    DecayCurve d;
+    d.resize(n_max);
 #if IMPBFF_VERBOSE
     std::clog << "DecayCurve::operator+(const DecayCurve& other)" << std::endl;
 std::clog << "-- this->size():" << this->size() << std::endl;
 std::clog << "-- other->size():" << other.size() << std::endl;
-std::clog << "-- new->size():" << d->size() << std::endl;
+std::clog << "-- new->size():" << d.size() << std::endl;
 #endif
     for(size_t i=0; i < n_max; i++){
-        d->x[i] = x[i];
-        d->_y[i] = y[i] - other.y[i];
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] - other.y[i];
+        d.y[i] = d._y[i];
 
-        d->ey[i] = std::sqrt(ey[i]*ey[i] + other.ey[i]*other.ey[i]);
+        d.ey[i] = std::sqrt(ey[i]*ey[i] + other.ey[i]*other.ey[i]);
     }
-    d->acquisition_time = acquisition_time + other.acquisition_time;
-    return *d;
+    d.acquisition_time = acquisition_time + other.acquisition_time;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator*(const DecayCurve& other) const
+DecayCurve DecayCurve::operator*(const DecayCurve& other) const
 {
     size_t n_max = std::min(size(), other.size());
-    auto d = new DecayCurve();
-    d->resize(n_max);
+    DecayCurve d;
+    d.resize(n_max);
 #if IMPBFF_VERBOSE
     std::clog << "DecayCurve::operator*(const DecayCurve& other)" << std::endl;
     std::clog << "-- this->size():" << this->size() << std::endl;
     std::clog << "-- other->size():" << other.size() << std::endl;
-    std::clog << "-- new->size():" << d->size() << std::endl;
+    std::clog << "-- new->size():" << d.size() << std::endl;
 #endif
     for(size_t i=0; i < n_max; i++){
-        d->x[i] = x[i];
-        d->_y[i] = y[i] * other.y[i];
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] * other.y[i];
+        d.y[i] = d._y[i];
 
         double f1 = other.y[i]*ey[i];
         double f2 = y[i]*other.ey[i];
-        d->ey[i] = std::sqrt(f1*f1 + f2*f2);
+        d.ey[i] = std::sqrt(f1*f1 + f2*f2);
     }
-    d->acquisition_time = acquisition_time + other.acquisition_time;
-    return *d;
+    d.acquisition_time = acquisition_time + other.acquisition_time;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator/(const DecayCurve& other) const
+DecayCurve DecayCurve::operator/(const DecayCurve& other) const
 {
     size_t n_max = std::min(size(), other.size());
-    auto d = new DecayCurve();
-    d->resize(n_max);
+    DecayCurve d;
+    d.resize(n_max);
 #if IMPBFF_VERBOSE
     std::clog << "DecayCurve::operator*(const DecayCurve& other)" << std::endl;
 std::clog << "-- this->size():" << this->size() << std::endl;
 std::clog << "-- other->size():" << other.size() << std::endl;
-std::clog << "-- new->size():" << d->size() << std::endl;
+std::clog << "-- new->size():" << d.size() << std::endl;
 #endif
     for(size_t i=0; i < n_max; i++){
-        d->x[i] = x[i];
-        d->_y[i] = y[i] / other.y[i];
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] / other.y[i];
+        d.y[i] = d._y[i];
 
         double a_b = y[i] / other.y[i];
         double a_1 = abs(1. + ey[i] / y[i]);
         double b_1 = abs(1. + other.ey[i] / other.y[i]);
-        d->ey[i] = a_b * a_1 / b_1;
+        d.ey[i] = a_b * a_1 / b_1;
     }
-    d->acquisition_time = acquisition_time + other.acquisition_time;
-    return *d;
+    d.acquisition_time = acquisition_time + other.acquisition_time;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator+(const double v) const {
-    auto d = new DecayCurve();
-    d->resize(size());
+DecayCurve DecayCurve::operator+(const double v) const {
+    DecayCurve d;
+    d.resize(size());
     for (size_t i = 0; i < size(); i++) {
-        d->x[i] = x[i];
-        d->_y[i] = y[i] + v;
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] + v;
+        d.y[i] = d._y[i];
 
-        d->ey[i] = ey[i];
+        d.ey[i] = ey[i];
     }
-    return *d;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator-(const double v) const {
-    auto d = new DecayCurve();
-    d->resize(size());
+DecayCurve DecayCurve::operator-(const double v) const {
+    DecayCurve d;
+    d.resize(size());
     for (size_t i = 0; i < size(); i++) {
-        d->x[i] = x[i];
-        d->_y[i] = y[i] - v;
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] - v;
+        d.y[i] = d._y[i];
 
-        d->ey[i] = ey[i];
+        d.ey[i] = ey[i];
     }
-    return *d;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator*(const double v) const {
-    auto d = new DecayCurve();
-    d->resize(size());
+DecayCurve DecayCurve::operator*(const double v) const {
+    DecayCurve d;
+    d.resize(size());
     for (size_t i = 0; i < size(); i++) {
-        d->x[i] = x[i];
-        d->_y[i] = y[i] * v;
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] * v;
+        d.y[i] = d._y[i];
 
-        d->ey[i] = ey[i] * v;
+        d.ey[i] = ey[i] * v;
     }
-    return *d;
+    return d;
 }
 
-DecayCurve& DecayCurve::operator/(const double v) const {
-    auto d = new DecayCurve();
-    d->resize(size());
+DecayCurve DecayCurve::operator/(const double v) const {
+    DecayCurve d;
+    d.resize(size());
     for (size_t i = 0; i < size(); i++) {
-        d->x[i] = x[i];
-        d->_y[i] = y[i] / v;
-        d->y[i] = d->_y[i];
+        d.x[i] = x[i];
+        d._y[i] = y[i] / v;
+        d.y[i] = d._y[i];
 
-        d->ey[i] = ey[i] / v;
+        d.ey[i] = ey[i] / v;
     }
-    return *d;
+    return d;
 }
 
 DecayCurve& DecayCurve::operator+=(const double v) {

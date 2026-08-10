@@ -124,6 +124,33 @@ public:
     /**
      * Destructor.
      */
+    /* Rule of Three. `default_data` is owned and deleted below, so the
+       compiler-generated shallow copy would leave two objects owning one
+       pointer and free it twice -- a double free, and a crash a long way from
+       the copy that caused it. It is deep copied; `data` belongs to the caller
+       and is deliberately shared, matching what serialize() does. */
+    DecayModifier(const DecayModifier &other)
+        : DecayRange(other),
+          _is_active(other._is_active),
+          data(other.data),
+          default_data(other.default_data ? new DecayCurve(*other.default_data)
+                                          : nullptr) {}
+
+    DecayModifier &operator=(const DecayModifier &other) {
+        if (this != &other) {
+            DecayRange::operator=(other);
+            // allocate before freeing, so a throwing copy leaves this intact
+            DecayCurve *fresh = other.default_data
+                                    ? new DecayCurve(*other.default_data)
+                                    : nullptr;
+            delete default_data;
+            default_data = fresh;
+            _is_active = other._is_active;
+            data = other.data;
+        }
+        return *this;
+    }
+
     ~DecayModifier() {
         delete default_data;
     }

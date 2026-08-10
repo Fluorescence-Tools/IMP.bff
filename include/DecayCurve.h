@@ -263,28 +263,28 @@ public:
      * @param v The constant value to be added.
      * @return A new DecayCurve object representing the result of the addition.
      */
-    DecayCurve& operator+(double v) const;
+    DecayCurve operator+(double v) const;
 
     /**
      * @brief Overloads the subtraction operator to subtract a constant value from the decay curve.
      * @param v The constant value to be subtracted.
      * @return A new DecayCurve object representing the result of the subtraction.
      */
-    DecayCurve& operator-(double v) const;
+    DecayCurve operator-(double v) const;
 
     /**
      * @brief Overloads the multiplication operator to multiply the decay curve by a constant value.
      * @param v The constant value to be multiplied by.
      * @return A new DecayCurve object representing the result of the multiplication.
      */
-    DecayCurve& operator*(double v) const;
+    DecayCurve operator*(double v) const;
 
     /**
      * @brief Overloads the division operator to divide the decay curve by a constant value.
      * @param v The constant value to be divided by.
      * @return A new DecayCurve object representing the result of the division.
      */
-    DecayCurve& operator/(double v) const;
+    DecayCurve operator/(double v) const;
 
     /**
      * @brief Adds a value to the decay curve.
@@ -319,28 +319,28 @@ public:
      * @param other The DecayCurve object to be added.
      * @return A new DecayCurve object that is the result of the addition.
      */
-    DecayCurve& operator+(const DecayCurve& other) const;
+    DecayCurve operator+(const DecayCurve& other) const;
 
     /**
      * @brief Overloads the '-' operator to subtract two DecayCurve objects.
      * @param other The DecayCurve object to be subtracted.
      * @return A new DecayCurve object that is the result of the subtraction.
      */
-    DecayCurve& operator-(const DecayCurve& other) const;
+    DecayCurve operator-(const DecayCurve& other) const;
 
     /**
      * @brief Overloads the '*' operator to multiply two DecayCurve objects.
      * @param other The DecayCurve object to be multiplied.
      * @return A new DecayCurve object that is the result of the multiplication.
      */
-    DecayCurve& operator*(const DecayCurve& other) const;
+    DecayCurve operator*(const DecayCurve& other) const;
 
     /**
      * @brief Overloads the '/' operator to divide two DecayCurve objects.
      * @param other The DecayCurve object to be divided.
      * @return A new DecayCurve object that is the result of the division.
      */
-    DecayCurve& operator/(const DecayCurve& other) const;
+    DecayCurve operator/(const DecayCurve& other) const;
 
     /**
      * @brief Assignment operator.

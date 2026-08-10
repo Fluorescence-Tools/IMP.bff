@@ -338,6 +338,35 @@ public:
         );
     }
 
+    /* Rule of Three: `corrected_irf` is owned and deleted below, so a shallow
+       copy would double free it. The cache flag travels with the copy, since
+       the copied curve is as valid as the original. */
+    DecayConvolution(const DecayConvolution &other)
+        : DecayModifier(other),
+          corrected_irf(other.corrected_irf
+                            ? new DecayCurve(*other.corrected_irf) : nullptr),
+          irf_shift_channels(other.irf_shift_channels),
+          irf_background_counts(other.irf_background_counts),
+          convolution_method(other.convolution_method),
+          excitation_period(other.excitation_period),
+          corrected_irf_valid(other.corrected_irf_valid) {}
+
+    DecayConvolution &operator=(const DecayConvolution &other) {
+        if (this != &other) {
+            DecayModifier::operator=(other);
+            DecayCurve *fresh = other.corrected_irf
+                ? new DecayCurve(*other.corrected_irf) : nullptr;
+            delete corrected_irf;
+            corrected_irf = fresh;
+            irf_shift_channels = other.irf_shift_channels;
+            irf_background_counts = other.irf_background_counts;
+            convolution_method = other.convolution_method;
+            excitation_period = other.excitation_period;
+            corrected_irf_valid = other.corrected_irf_valid;
+        }
+        return *this;
+    }
+
     ~DecayConvolution() override {
         delete corrected_irf;
     }

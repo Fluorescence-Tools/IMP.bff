@@ -109,7 +109,7 @@ IMP::bff::PathMap* AV::get_map() const{
         ptr->init_path_map();
         ptr->resample();
     }
-    return av_map_;
+    return av_map_.get();
 }
 
 IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{

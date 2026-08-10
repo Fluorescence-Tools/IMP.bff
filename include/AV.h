@@ -11,6 +11,8 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/Pointer.h>
+
 #include <IMP/showable_macros.h>
 #include <IMP/value_macros.h>
 
@@ -110,7 +112,16 @@ class IMPBFFEXPORT AV : public IMP::core::Gaussian {
 
 private:
 
-    IMP::bff::PathMap* av_map_ = nullptr;
+    /* Ref-counted, not a bare pointer. AV is an IMP *decorator* -- a value
+       handle constructed, copied and discarded freely -- and it was holding a
+       raw `new PathMap` with no destructor on this class at all. Every fresh
+       handle over the same particle built and then abandoned an entire path
+       map: measured at ~1 MB a time, 21 MB for twenty handles. A destructor
+       would have been worse, not better, because two copies of a decorator
+       would then free the same map twice. PathMap derives from IMP::Object and
+       is therefore already ref-counted, so IMP::Pointer gives copies a shared
+       map and frees it when the last handle goes. */
+    IMP::Pointer<IMP::bff::PathMap> av_map_;
 
 protected:
 

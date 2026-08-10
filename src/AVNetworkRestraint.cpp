@@ -48,12 +48,12 @@ IMP::ModelObjectsTemp AVNetworkRestraint::do_get_inputs() const {
     return ret;
 }
 
-std::map<std::string, IMP::bff::AV*> AVNetworkRestraint::create_av_decorated_particles(
+std::map<std::string, std::unique_ptr<IMP::bff::AV> > AVNetworkRestraint::create_av_decorated_particles(
         nlohmann::json used_positions,
         const IMP::core::Hierarchy &hier
 ){
     IMP::Model* model = get_model();
-    std::map<std::string, IMP::bff::AV*> avs{};
+    std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs{};
 
     for(nlohmann::json::iterator it = used_positions.begin();
             it != used_positions.end(); ++it){
@@ -73,10 +73,10 @@ std::map<std::string, IMP::bff::AV*> AVNetworkRestraint::create_av_decorated_par
 
         // Decorate AV particle
         IMP::bff::AV::do_setup_particle(model, av_index, parent_particle_idx);
-        auto av = new IMP::bff::AV(av_particle);
+        auto av = new IMP::bff::AV(av_particle);  // ownership passes to avs below
         av->set_av_parameter(position);
 
-        avs[position_name] = av;
+        avs[position_name].reset(av);
     }
     return avs;
 }
@@ -84,7 +84,7 @@ std::map<std::string, IMP::bff::AV*> AVNetworkRestraint::create_av_decorated_par
 IMP::bff::AV* AVNetworkRestraint::get_av(std::string name) const{
     for (const auto& n : avs_)
         if(n.first == name){
-            return n.second;
+            return n.second.get();
         }
     IMP_WARN("AV not found in AVNetworkRestraint");
     return nullptr;

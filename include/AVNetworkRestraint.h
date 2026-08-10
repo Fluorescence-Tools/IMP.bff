@@ -11,6 +11,8 @@
 #define IMPBFF_AVNETWORKRESTRAINT_H
 
 #include <IMP/bff/bff_config.h>
+
+#include <memory>
 #include <IMP/score_functor/distance_pair_score_macros.h>
 
 #include <IMP/Model.h>
@@ -73,7 +75,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
         if (std::is_base_of<cereal::detail::InputArchiveBase, Archive>::value) {
             avs_.clear();
             for (const auto &kv : av_index) {
-                avs_[kv.first] = new IMP::bff::AV(get_model(), kv.second);
+                avs_[kv.first].reset(new IMP::bff::AV(get_model(), kv.second));
             }
         }
     }
@@ -96,7 +98,10 @@ private:
      * This map stores the AVs used to compute the score. The keys are the names of the AVs,
      * and the values are pointers to the AV objects.
      */
-    std::map<std::string, IMP::bff::AV*> avs_{};
+    /* Owned. These used to be bare `new AV(...)` with no destructor on this
+       class at all, so every restraint leaked one decorator per labelled
+       position for the lifetime of the process. */
+    std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs_{};
     
     /**
      * @brief ParticleIndexes of AVs used to compute the score.
@@ -122,7 +127,7 @@ private:
      *  You only need to call this if you change parameters of
      *  AVs (e.g., the linker length).
      */
-    std::map<std::string, IMP::bff::AV*> create_av_decorated_particles(
+    std::map<std::string, std::unique_ptr<IMP::bff::AV> > create_av_decorated_particles(
             nlohmann::json used_positions,
             const IMP::core::Hierarchy &hier);
 

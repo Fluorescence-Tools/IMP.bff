@@ -134,6 +134,39 @@ public:
     /**
      * @brief Destroys the DecayScore object and frees any allocated memory.
      */
+    /* Rule of Three: `_default_model` and `_default_data` are owned and
+       deleted below, so a shallow copy would double free them. `_model` and
+       `_data` point at curves the caller owns and are shared on purpose. */
+    DecayScore(const DecayScore &other)
+        : DecayRange(other),
+          _model(other._model),
+          _data(other._data),
+          _default_model(other._default_model
+                             ? new DecayCurve(*other._default_model) : nullptr),
+          _default_data(other._default_data
+                            ? new DecayCurve(*other._default_data) : nullptr),
+          _weighted_residuals(other._weighted_residuals),
+          _score_type(other._score_type) {}
+
+    DecayScore &operator=(const DecayScore &other) {
+        if (this != &other) {
+            DecayRange::operator=(other);
+            DecayCurve *fresh_model = other._default_model
+                ? new DecayCurve(*other._default_model) : nullptr;
+            DecayCurve *fresh_data = other._default_data
+                ? new DecayCurve(*other._default_data) : nullptr;
+            delete _default_model;
+            delete _default_data;
+            _default_model = fresh_model;
+            _default_data = fresh_data;
+            _model = other._model;
+            _data = other._data;
+            _weighted_residuals = other._weighted_residuals;
+            _score_type = other._score_type;
+        }
+        return *this;
+    }
+
      ~DecayScore() override {
         delete _default_data;
         delete _default_model;

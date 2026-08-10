@@ -61,8 +61,12 @@ def read_dcd_header(path: str | Path) -> dict:
         ``offset`` at which frame data begins.
     """
     path = Path(path)
+    # The header, title block and atom count sit in the first few hundred
+    # bytes; reading the whole trajectory to parse them made a header-only
+    # call as expensive as a full load, which is what pushed the test suite
+    # past its time budget. 64 KiB is far more than any title block needs.
     with path.open("rb") as fh:
-        raw = fh.read()
+        raw = fh.read(65536)
     return _parse_header(raw, path)
 
 
