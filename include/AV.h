@@ -11,6 +11,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <IMP/decorator_macros.h>
 #include <IMP/Decorator.h>
 #include <IMP/algebra/Vector3D.h>
@@ -81,7 +84,13 @@ public:
     */
     double score_model(double model);
 
+
+    IMP_SHOWABLE_INLINE(AVPairDistanceMeasurement,
+                        out << "AVPairDistanceMeasurement(" << position_1 << "-" << position_2
+                            << ", distance=" << distance << ", R0=" << forster_radius << ")");
 };
+
+IMP_VALUES(AVPairDistanceMeasurement, AVPairDistanceMeasurements);
 
 
 

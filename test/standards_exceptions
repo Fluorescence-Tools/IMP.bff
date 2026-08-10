@@ -9,12 +9,14 @@
 #   * 21 are module-level free functions, most of them the deprecated
 #     decay_* routines that are moving to tttrlib.
 #
-# The value_object_exceptions list is different in kind, and is the one worth
-# revisiting: those classes are neither IMP_SWIG_VALUE nor IMP_SWIG_OBJECT, so
-# Python gets no memory-management contract for them. The decay half is
-# deprecated and will leave with it; the structure half (AVPairDistanceMeasurement,
-# PathMapHeader, PathMapTile, PathMapTileEdge) should get real IMP_SWIG_VALUE
-# declarations rather than stay on this list.
+# The value_object_exceptions list is the one worth revisiting: those classes
+# are neither IMP_SWIG_VALUE nor IMP_SWIG_OBJECT, so Python gets no
+# memory-management contract for them. The decay half is deprecated and leaves
+# with it. Of the structure half, PathMapTile, PathMapTileEdge and
+# AVPairDistanceMeasurement are now real IMP values with show(), and are off
+# this list. PathMapHeader is not: PathMap returns it by pointer and takes it
+# by non-const reference, which IMP's value machinery rejects at compile time,
+# so making it a value is a public API change rather than a declaration.
 
 # Domain vocabulary IMP's spell check does not know.
 spelling_exceptions=[
@@ -93,24 +95,22 @@ function_name_exceptions=[
 
 # Classes that expose no show().
 show_exceptions=[
-    'AVPairDistanceMeasurement', 'DecayConvolution', 'DecayCurve',
+    'DecayConvolution', 'DecayCurve',
     'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
     'DecayPattern', 'DecayPileup', 'DecayRange',
     'DecayScale', 'DecayScore', 'MapStringAVPairDistanceMeasurement',
-    'PairFloatFloat', 'PathMapHeader', 'PathMapTile',
-    'PathMapTileEdge', 'VectorDouble', 'VectorFloat',
+    'PairFloatFloat', 'VectorDouble', 'VectorFloat',
     'VectorInt', 'VectorLong', 'VectorPathMapTile',
     'VectorPathMapTileEdge', 'VectorString',
 ]
 
 # Classes labelled neither value nor object. See the note above.
 value_object_exceptions=[
-    'AVPairDistanceMeasurement', 'DecayConvolution', 'DecayCurve',
+    'DecayConvolution', 'DecayCurve',
     'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
     'DecayPattern', 'DecayPileup', 'DecayRange',
     'DecayScale', 'DecayScore', 'MapStringAVPairDistanceMeasurement',
-    'PairFloatFloat', 'PathMapHeader', 'PathMapTile',
-    'PathMapTileEdge', 'VectorDouble', 'VectorFloat',
+    'PairFloatFloat', 'PathMapHeader', 'VectorDouble', 'VectorFloat',
     'VectorInt', 'VectorLong', 'VectorPathMapTile',
     'VectorPathMapTileEdge', 'VectorString',
 ]

@@ -1,7 +1,21 @@
+"""Deprecated: fluorescence-decay fitting moved to tttrlib.
+
+This is a Python wrapper over the C++ ``DecayCurve``/``DecayConvolution``
+family, which is itself deprecated at IMP 2.25. IMP.bff keeps structure, dye
+simulation, spectroscopy and scoring; decay analysis on measured data belongs
+to tttrlib, the layer below. Both halves leave together in the next release.
+"""
+
 import typing
 import numpy as np
 
+import IMP
 import IMP.bff
+
+IMP.deprecated_module(
+    2.25, __name__,
+    "Fluorescence-decay fitting moved to tttrlib. IMP.bff keeps only the "
+    "structure-related features; use tttrlib for decay analysis.")
 
 from typing import NamedTuple
 

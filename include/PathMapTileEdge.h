@@ -11,6 +11,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <vector>
 
 #include <IMP/bff/PathMap.h>
@@ -57,7 +60,13 @@ public:
             float edge_cost = std::numeric_limits<float>::max()
     ) :
             tile_idx(edge_target), length(edge_cost){}
+
+    IMP_SHOWABLE_INLINE(PathMapTileEdge,
+                        out << "PathMapTileEdge(tile=" << tile_idx
+                            << ", length=" << length << ")");
 };
+
+IMP_VALUES(PathMapTileEdge, PathMapTileEdges);
 
 
 IMPBFF_END_NAMESPACE

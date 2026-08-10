@@ -11,6 +11,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <cmath> /* ceil */
 
 #include <IMP/Particle.h>
@@ -164,9 +167,18 @@ public:
     //! Set origin on the PathMap (the corner of the grid)
     void set_origin(float x, float y, float z);
 
+
+    IMP_SHOWABLE_INLINE(PathMapHeader,
+                        out << "PathMapHeader(grid_spacing=" << grid_spacing_
+                            << ", max_path_length=" << max_path_length_ << ")");
 };
 
-IMP_OBJECTS(PathMapHeader, PathMapHeaders);
+IMP_VALUES(PathMapHeader, PathMapHeaders);
+
+// PathMapHeader is a value, not an IMP::Object -- it derives from nothing and
+// is copied by value everywhere. IMP_OBJECTS declared its plural as a vector
+// of ref-counted pointers, which was never right and collided the moment the
+// class was declared to SWIG as the value it is.
 
 IMPBFF_END_NAMESPACE
 

@@ -11,6 +11,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <cmath>  /* std::sqrt */
 #include <vector>
 #include <utility> /* std::pair */
@@ -204,7 +207,13 @@ public:
      */
     void set_value(int value_type, float value, const std::string &name="");
 
+
+    IMP_SHOWABLE_INLINE(PathMapTile,
+                        out << "PathMapTile(idx=" << idx << ", penalty=" << penalty
+                            << ", cost=" << cost << ", density=" << density << ")");
 };
+
+IMP_VALUES(PathMapTile, PathMapTiles);
 
 
 IMPBFF_END_NAMESPACE
