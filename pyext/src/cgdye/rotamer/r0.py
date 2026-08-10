@@ -13,6 +13,14 @@ import numpy as np
 _DYE_NAME_RE = re.compile(r"^(?P<type>.+?)\s+(?P<number>[A-Za-z0-9]+)$")
 
 
+# numpy 2 removed np.trapz in favour of np.trapezoid, and this module is the
+# Foerster-radius calculation -- so under the numpy the stack actually runs
+# (2.4) calculate_r0 raised AttributeError and R0 could not be computed at all.
+try:  # numpy >= 2
+    _trapezoid = np.trapezoid
+except AttributeError:  # pragma: no cover - numpy < 2
+    _trapezoid = np.trapz
+
 def _package_resource_path(*parts: str) -> Path:
     """Return a path to a bundled resource file.
 
@@ -177,13 +185,13 @@ def calculate_r0(
     if donor_emission.size != wavelengths.size or acceptor_excitation.size != wavelengths.size:
         raise ValueError("Donor and acceptor spectra must share the same wavelength grid")
 
-    emission_integral = np.trapz(donor_emission, x=wavelengths)
+    emission_integral = _trapezoid(donor_emission, x=wavelengths)
     if emission_integral == 0:
         return 0.0
 
     ext_coeff_max = acceptor_data["Ext_coeff"]
     ext_coeff_acceptor = ext_coeff_max * acceptor_excitation
-    overlap = np.trapz(donor_emission * ext_coeff_acceptor * np.power(wavelengths, 4), x=wavelengths)
+    overlap = _trapezoid(donor_emission * ext_coeff_acceptor * np.power(wavelengths, 4), x=wavelengths)
     overlap /= emission_integral
 
     factor = 0.02108
