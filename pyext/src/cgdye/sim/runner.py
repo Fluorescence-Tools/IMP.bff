@@ -8,7 +8,7 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-from .. import _cli as click
+import click
 
 import IMP
 import IMP.algebra

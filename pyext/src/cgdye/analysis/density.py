@@ -5,7 +5,7 @@ import math
 import os
 from pathlib import Path
 
-from .. import _cli as click
+import click
 import numpy as np
 import IMP
 import IMP.algebra

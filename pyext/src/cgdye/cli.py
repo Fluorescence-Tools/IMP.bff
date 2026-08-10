@@ -6,7 +6,7 @@ import random
 import urllib.request
 from pathlib import Path
 
-from . import _cli as click
+import click
 import IMP
 import IMP.atom
 import IMP.core

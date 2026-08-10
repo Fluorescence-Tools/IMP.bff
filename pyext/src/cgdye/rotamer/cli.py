@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .. import _cli as click
+import click
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
 from IMP.bff.cgdye.rotamer.r0 import calculate_r0
 
