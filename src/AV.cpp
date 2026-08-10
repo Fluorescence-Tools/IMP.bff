@@ -160,8 +160,8 @@ void AV::resample(bool shift_xyz){
 
     // Update path_map origin
     IMP::algebra::Vector3D source = get_source_coordinates();
-    auto header = get_map()->get_path_map_header_writable();
-    header->set_path_origin(source);
+    auto &header = get_map()->get_path_map_header_writable();
+    header.set_path_origin(source);
     av_map_->set_origin(source);
 
     // 1.1 Sample obstacles

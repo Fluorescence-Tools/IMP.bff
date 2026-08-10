@@ -10,11 +10,14 @@ IMP_SWIG_OBJECT(IMP::bff, PathMap, PathMaps);
 %ignore IMP::bff::PathMap::get_xyz_density();
 
 
-// PathMapHeader is NOT declared IMP_SWIG_VALUE: PathMap returns it by
-// pointer (get_path_map_header, get_path_map_header_writable) and takes it
-// by non-const reference (set_path_map_header), which IMP's value machinery
-// rejects at compile time. Making it a value is a public API change to
-// PathMap, not a declaration -- see PRD-93.
+// PathMapHeader is a value, and a value may be returned by value or const
+// reference only -- never as a mutable reference, which would let Python edit
+// the map's header behind its back. get_path_map_header_writable() stays in
+// C++ (AV.cpp sets the path origin through it) but is not wrapped; from Python
+// the value-correct pair is get_path_map_header() and set_path_map_header().
+%ignore IMP::bff::PathMap::get_path_map_header_writable;
+
+IMP_SWIG_VALUE(IMP::bff, PathMapHeader, PathMapHeaders)
 IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapHeader)
 
 IMP_SWIG_VALUE(IMP::bff, PathMapTile, PathMapTiles)

@@ -13,10 +13,11 @@
 # are neither IMP_SWIG_VALUE nor IMP_SWIG_OBJECT, so Python gets no
 # memory-management contract for them. The decay half is deprecated and leaves
 # with it. Of the structure half, PathMapTile, PathMapTileEdge and
-# AVPairDistanceMeasurement are now real IMP values with show(), and are off
-# this list. PathMapHeader is not: PathMap returns it by pointer and takes it
-# by non-const reference, which IMP's value machinery rejects at compile time,
-# so making it a value is a public API change rather than a declaration.
+# AVPairDistanceMeasurement and PathMapHeader are now real IMP values with
+# show(), and are off this list. PathMapHeader took the API change IMP's value
+# machinery demands: the accessors return references rather than pointers, the
+# setter takes a const reference, and the writable accessor is not wrapped for
+# Python at all -- a value may never hand out a mutable reference.
 
 # Domain vocabulary IMP's spell check does not know.
 spelling_exceptions=[
@@ -110,7 +111,7 @@ value_object_exceptions=[
     'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
     'DecayPattern', 'DecayPileup', 'DecayRange',
     'DecayScale', 'DecayScore', 'MapStringAVPairDistanceMeasurement',
-    'PairFloatFloat', 'PathMapHeader', 'VectorDouble', 'VectorFloat',
+    'PairFloatFloat', 'VectorDouble', 'VectorFloat',
     'VectorInt', 'VectorLong', 'VectorPathMapTile',
     'VectorPathMapTileEdge', 'VectorString',
 ]

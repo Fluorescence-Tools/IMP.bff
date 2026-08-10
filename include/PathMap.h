@@ -119,8 +119,7 @@ public:
     */
     std::vector<int> get_neighbor_idx_offsets(double neighbor_radius = -1){
         if(neighbor_radius < 0){
-            auto pmh = get_path_map_header();
-            neighbor_radius = pmh->get_neighbor_radius();
+            neighbor_radius = get_path_map_header().get_neighbor_radius();
         }
         const int nn = ceil(neighbor_radius);
         const double nr2 = neighbor_radius * neighbor_radius;
@@ -169,20 +168,20 @@ public:
 
     /**
 
-    @brief Returns a read-only pointer to the header of the map.
+    @brief Returns a read-only reference to the header of the map.
     *
-    @return const PathMapHeader* A read-only pointer to the header of the map.
+    @return A read-only reference to the header of the map.
     */
-    const PathMapHeader *get_path_map_header() const { return &pathMapHeader_; }
+    const PathMapHeader &get_path_map_header() const { return pathMapHeader_; }
 
 
     /**
 
-    @brief Returns a pointer to the header of the map in a writable version.
+    @brief Returns a writable reference to the header of the map.
     *
-    @return A pointer to the header of the map in a writable version.
+    @return A writable reference to the header of the map.
     */
-    PathMapHeader *get_path_map_header_writable() { return &pathMapHeader_; }
+    PathMapHeader &get_path_map_header_writable() { return pathMapHeader_; }
 
 
     /**
@@ -194,7 +193,7 @@ public:
     @param path_map_header The path map header to set.
     @param resolution The resolution of the path map. Default value is -1.0.
     */
-    void set_path_map_header(PathMapHeader &path_map_header, float resolution = -1.0);
+    void set_path_map_header(const PathMapHeader &path_map_header, float resolution = -1.0);
 
 
     /**
@@ -350,7 +349,7 @@ public:
     @param resolution The resolution of the PathMap.
     */
     explicit PathMap(
-            PathMapHeader &header,
+            const PathMapHeader &header,
             std::string name = "PathMap%1%",
             IMP::em::KernelType kt = IMP::em::BINARIZED_SPHERE,
             float resolution = -1.0

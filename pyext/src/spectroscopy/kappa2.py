@@ -760,3 +760,174 @@ def p_isotropic_orientation_factor(
     if normalize:
         r /= max(1.0, r.sum())
     return r
+
+
+# ---------------------------------------------------------------------------
+# Moved here from ChiSurf on 2026-08-10. Kappa-squared is IMP.bff's, whole:
+# its purpose is an R0/distance correction used when scoring a structure, so
+# it follows its consumer rather than its input. See the scope boundaries in
+# chisurf/okf/references/imp-ecosystem.md.
+# ---------------------------------------------------------------------------
+
+def kappa2_to_distance_ratio(k2_amp: np.ndarray, k2_val: np.ndarray, n_bins: int = 32) -> tuple:
+    """Transform κ² distribution to R_app/R_DA distance ratio distribution.
+
+    This transformation is used for FFT-based convolution in static κ² averaging.
+    The relationship is: R_app/R_DA = (⟨κ²⟩/κ²)^(1/6)
+
+    Lower κ² → larger apparent distance (R_app > R_DA)
+    Higher κ² → smaller apparent distance (R_app < R_DA)
+
+    Parameters
+    ----------
+    k2_amp : array-like
+        Amplitudes/weights of the κ² distribution (must be non-negative).
+    k2_val : array-like
+        κ² values (must be strictly positive).
+    n_bins : int
+        Number of bins for output linear axis (default 32).
+
+    Returns
+    -------
+    tuple of (r_ratio, weights, k2_mean)
+        r_ratio : array
+            R_app/R_DA linearly spaced ratio bin centers.
+        weights : array
+            Interpolated weights on linear axis.
+        k2_mean : float
+            Mean κ² value ⟨κ²⟩.
+
+    Raises
+    ------
+    ValueError
+        If inputs are invalid (e.g., κ² ≤ 0 or mismatched shapes).
+    """
+    import numpy as np
+
+    k2_amp = np.asarray(k2_amp, dtype=float)
+    k2_val = np.asarray(k2_val, dtype=float)
+
+    # Input validation
+    if k2_amp.shape != k2_val.shape:
+        raise ValueError("k2_amp and k2_val must have the same shape.")
+    if np.any(k2_val <= 0):
+        raise ValueError("k2_val must be strictly positive (κ² > 0).")
+    if np.any(k2_amp < 0):
+        raise ValueError("k2_amp must be non-negative.")
+
+    # Normalize amplitudes
+    total = np.sum(k2_amp)
+    if total <= 0:
+        raise ValueError("Total amplitude must be positive.")
+    weights = k2_amp / total
+
+    # Compute mean kappa2
+    k2_mean = float(np.sum(weights * k2_val))
+
+    # Transform to R_app/R_DA ratio: r = (<k2>/k2)^(1/6)
+    r_ratio_points = (k2_mean / k2_val) ** (1.0/6.0)
+
+    # Apply Jacobian transformation
+    jacobian = 6.0 * k2_mean / (r_ratio_points**7)
+    weights_jacobian = weights * jacobian
+
+    # Renormalize the weights
+    total_jacobian = np.sum(weights_jacobian)
+    if total_jacobian > 0:
+        weights_jacobian /= total_jacobian
+
+    # Sort points for interpolation (r_ratio_points may not be sorted)
+    sort_idx = np.argsort(r_ratio_points)
+    r_ratio_points_sorted = r_ratio_points[sort_idx]
+    weights_jacobian_sorted = weights_jacobian[sort_idx]
+
+    # Create a linearly spaced axis for R_app/R_DA
+    r_min = np.min(r_ratio_points_sorted)
+    r_max = np.max(r_ratio_points_sorted)
+    r_range = r_max - r_min
+    r_min = max(0.0, r_min - 0.05 * r_range)  # Ensure non-negative
+    r_max = r_max + 0.05 * r_range
+
+    r_ratio = np.linspace(r_min, r_max, n_bins)
+
+    # Interpolate the transformed weights onto the linear axis
+    # np.interp reproduces interp1d(kind="linear", bounds_error=False,
+    # fill_value=0.0): linear inside the sampled range, zero outside.
+    # IMP.bff carries no dependency beyond IMP, numpy and click.
+    interpolated_weights = np.interp(
+        r_ratio, r_ratio_points_sorted, weights_jacobian_sorted,
+        left=0.0, right=0.0,
+    )
+
+    # Renormalize the interpolated weights
+    total_interp = np.sum(interpolated_weights)
+    if total_interp > 0:
+        interpolated_weights /= total_interp
+
+    return r_ratio, interpolated_weights, k2_mean
+
+
+def convolve_distance_with_k2_ratio(
+    r_da: np.ndarray,
+    amp_r_da: np.ndarray,
+    r_ratio: np.ndarray,
+    weights_ratio: np.ndarray,
+    n_bins: int = 256,
+    use_fast: bool = True
+) -> tuple:
+    """Convolve distance distribution with κ² ratio distribution.
+    
+    Computes R_app = R_DA × (R_app/R_DA) via multiplicative convolution.
+    
+    Parameters
+    ----------
+    r_da : array
+        R_DA distance values
+    amp_r_da : array
+        Amplitudes/weights for R_DA distribution
+    r_ratio : array
+        R_app/R_DA ratio values
+    weights_ratio : array
+        Weights for ratio distribution
+    n_bins : int
+        Number of bins for output histogram
+    use_fast : bool
+        Use fast numba-optimized loop vs outer product (exact)
+        
+    Returns
+    -------
+    tuple of (r_app, amp_app)
+        r_app : array
+            Apparent distance values
+        amp_app : array
+            Amplitudes for apparent distance distribution
+    """
+    if use_fast and len(r_da) * len(r_ratio) > 1000:
+        # Fast numba-optimized approach
+        r_min = np.min(r_da) * np.min(r_ratio)
+        r_max = np.max(r_da) * np.max(r_ratio)
+        r_edges = np.linspace(r_min, r_max, n_bins + 1)
+        
+        # Call numba-optimized loop
+        r_app_hist = _fast_convolve_loop(r_da, amp_r_da, r_ratio, weights_ratio, r_edges)
+        
+        r_app_centers = 0.5 * (r_edges[:-1] + r_edges[1:])
+        
+        # Filter non-zero bins
+        mask = r_app_hist > 1e-10 * np.max(r_app_hist)
+        return r_app_centers[mask], r_app_hist[mask]
+    else:
+        # Outer product approach - exact but slower
+        r_app_2d = r_da[:, None] * r_ratio[None, :]
+        amp_2d = amp_r_da[:, None] * weights_ratio[None, :]
+        
+        r_app_flat = r_app_2d.ravel()
+        amp_flat = amp_2d.ravel()
+        
+        # Bin onto uniform grid
+        r_app_hist, r_app_edges = np.histogram(r_app_flat, bins=n_bins, weights=amp_flat)
+        r_app_centers = 0.5 * (r_app_edges[:-1] + r_app_edges[1:])
+        
+        # Filter non-zero bins
+        mask = r_app_hist > 1e-10 * np.max(r_app_hist)
+        return r_app_centers[mask], r_app_hist[mask]

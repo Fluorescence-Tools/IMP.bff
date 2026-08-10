@@ -11,7 +11,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 PathMap::PathMap(
-        PathMapHeader &av_header,
+        const PathMapHeader &av_header,
         std::string name,
         IMP::em::KernelType kt,
         float resolution
@@ -21,7 +21,7 @@ PathMap::PathMap(
     set_path_map_header(av_header, resolution);
 }
 
-void PathMap::set_path_map_header(PathMapHeader &av_header, float resolution)
+void PathMap::set_path_map_header(const PathMapHeader &av_header, float resolution)
 {
     header_ = *av_header.get_density_header();
     header_.compute_xyz_top(true);

@@ -47,7 +47,9 @@ friend class cereal::access;
 
 private:
 
-    double grid_spacing_;
+    // mutable: get_simulation_grid_resolution() is a const getter that
+    // refreshes this cache from density_header_ before returning it.
+    mutable double grid_spacing_;
     double max_path_length_;
     double neighbor_radius_;
     double obstacle_threshold_;
@@ -111,7 +113,7 @@ public:
      * @brief Get the simulation grid resolution.
      * @return The simulation grid resolution as a double.
      */
-    double get_simulation_grid_resolution();
+    double get_simulation_grid_resolution() const;
 
     /**
      * @brief Set the obstacle threshold.

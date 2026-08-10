@@ -28,7 +28,7 @@ PathMapHeader::PathMapHeader(
     update_map_dimensions();
 }
 
-double PathMapHeader::get_simulation_grid_resolution() {
+double PathMapHeader::get_simulation_grid_resolution() const {
     grid_spacing_ = (double) density_header_.get_spacing();
     return grid_spacing_;
 }
