@@ -1,0 +1,339 @@
+data_nmr_restraints
+#
+# ------------------------------------------------------------
+# NMR Restraints using original NMR naming scheme
+# sCX4 atoms mapping   : Ha(1-4)
+# Atto655 atoms mapping: 1-27
+# ------------------------------------------------------------
+#
+loop_
+_ihm_feature_list.feature_id
+_ihm_feature_list.feature_type
+_ihm_feature_list.entity_type
+_ihm_feature_list.details
+1 atom . DYE_H1
+2 atom . DYE_H10
+3 atom . DYE_H11
+4 atom . DYE_H12
+5 atom . DYE_H13
+6 atom . DYE_H14
+7 atom . DYE_H15
+8 atom . DYE_H2
+9 atom . DYE_H25
+10 atom . DYE_H26
+11 atom . DYE_H27
+12 atom . DYE_H28
+13 atom . DYE_H29
+14 atom . DYE_H3
+15 atom . DYE_H30
+16 atom . DYE_H33
+17 atom . DYE_H34
+18 atom . DYE_H35
+19 atom . DYE_H36
+20 atom . DYE_H37
+21 atom . DYE_H38
+22 atom . DYE_H39
+23 atom . DYE_H4
+24 atom . DYE_H5
+25 atom . DYE_H6
+26 atom . DYE_H7
+27 atom . SCX4_H57
+28 atom . SCX4_H58
+29 atom . SCX4_H59
+30 atom . SCX4_H60
+31 atom . SCX4_H61
+32 atom . SCX4_H62
+33 atom . SCX4_H63
+34 atom . SCX4_H64
+#
+#
+loop_
+_ihm_non_poly_feature.ordinal_id
+_ihm_non_poly_feature.feature_id
+_ihm_non_poly_feature.entity_id
+_ihm_non_poly_feature.asym_id
+_ihm_non_poly_feature.comp_id
+_ihm_non_poly_feature.atom_id
+1 1 1 B DDS H1
+2 2 1 B DDS H10
+3 3 1 B DDS H11
+4 4 1 B DDS H12
+5 5 1 B DDS H13
+6 6 1 B DDS H14
+7 7 1 B DDS H15
+8 8 1 B DDS H2
+9 9 1 B DDS H25
+10 10 1 B DDS H26
+11 11 1 B DDS H27
+12 12 1 B DDS H28
+13 13 1 B DDS H29
+14 14 1 B DDS H3
+15 15 1 B DDS H30
+16 16 1 B DDS H33
+17 17 1 B DDS H34
+18 18 1 B DDS H35
+19 19 1 B DDS H36
+20 20 1 B DDS H37
+21 21 1 B DDS H38
+22 22 1 B DDS H39
+23 23 1 B DDS H4
+24 24 1 B DDS H5
+25 25 1 B DDS H6
+26 26 1 B DDS H7
+27 27 2 A CX4 H57
+28 28 2 A CX4 H58
+29 29 2 A CX4 H59
+30 30 2 A CX4 H60
+31 31 2 A CX4 H61
+32 32 2 A CX4 H62
+33 33 2 A CX4 H63
+34 34 2 A CX4 H64
+#
+#
+loop_
+_ihm_derived_distance_restraint.id
+_ihm_derived_distance_restraint.group_id
+_ihm_derived_distance_restraint.dataset_list_id
+_ihm_derived_distance_restraint.feature_id_1
+_ihm_derived_distance_restraint.feature_id_2
+_ihm_derived_distance_restraint.restraint_type
+_ihm_derived_distance_restraint.group_conditionality
+_ihm_derived_distance_restraint.probability
+_ihm_derived_distance_restraint.mic_value
+_ihm_derived_distance_restraint.distance_lower_limit
+_ihm_derived_distance_restraint.distance_upper_limit
+1 1 . 2 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(1)'
+2 1 . 2 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(1)'
+3 1 . 2 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(2)'
+4 1 . 2 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(2)'
+5 1 . 2 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(3)'
+6 1 . 2 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(3)'
+7 1 . 2 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(4)'
+8 1 . 2 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(4)'
+9 1 . 3 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(1)'
+10 1 . 3 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(1)'
+11 1 . 3 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(2)'
+12 1 . 3 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(2)'
+13 1 . 3 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(3)'
+14 1 . 3 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(3)'
+15 1 . 3 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(4)'
+16 1 . 3 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '18' <-/-> sCx4 'Ha(4)'
+17 1 . 9 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+18 1 . 9 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+19 1 . 9 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+20 1 . 9 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+21 1 . 9 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+22 1 . 9 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+23 1 . 9 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+24 1 . 9 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+25 1 . 11 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+26 1 . 11 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+27 1 . 11 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+28 1 . 11 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+29 1 . 11 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+30 1 . 11 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+31 1 . 11 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+32 1 . 11 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+33 1 . 10 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+34 1 . 10 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(1)'
+35 1 . 10 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+36 1 . 10 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(2)'
+37 1 . 10 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+38 1 . 10 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(3)'
+39 1 . 10 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+40 1 . 10 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '20' <-/-> sCx4 'Ha(4)'
+41 1 . 15 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+42 1 . 15 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+43 1 . 15 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+44 1 . 15 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+45 1 . 15 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+46 1 . 15 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+47 1 . 15 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+48 1 . 15 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+49 1 . 12 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+50 1 . 12 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+51 1 . 12 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+52 1 . 12 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+53 1 . 12 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+54 1 . 12 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+55 1 . 12 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+56 1 . 12 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+57 1 . 13 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+58 1 . 13 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(1)'
+59 1 . 13 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+60 1 . 13 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(2)'
+61 1 . 13 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+62 1 . 13 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(3)'
+63 1 . 13 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+64 1 . 13 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '21' <-/-> sCx4 'Ha(4)'
+65 1 . 6 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(1)'
+66 1 . 6 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(1)'
+67 1 . 6 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(2)'
+68 1 . 6 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(2)'
+69 1 . 6 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(3)'
+70 1 . 6 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(3)'
+71 1 . 6 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(4)'
+72 1 . 6 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(4)'
+73 1 . 7 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(1)'
+74 1 . 7 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(1)'
+75 1 . 7 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(2)'
+76 1 . 7 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(2)'
+77 1 . 7 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(3)'
+78 1 . 7 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(3)'
+79 1 . 7 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(4)'
+80 1 . 7 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '3' <-/-> sCx4 'Ha(4)'
+81 1 . 4 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(1)'
+82 1 . 4 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(1)'
+83 1 . 4 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(2)'
+84 1 . 4 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(2)'
+85 1 . 4 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(3)'
+86 1 . 4 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(3)'
+87 1 . 4 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(4)'
+88 1 . 4 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(4)'
+89 1 . 5 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(1)'
+90 1 . 5 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(1)'
+91 1 . 5 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(2)'
+92 1 . 5 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(2)'
+93 1 . 5 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(3)'
+94 1 . 5 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(3)'
+95 1 . 5 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(4)'
+96 1 . 5 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '4' <-/-> sCx4 'Ha(4)'
+97 1 . 26 31 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(1)'
+98 1 . 26 27 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(1)'
+99 1 . 26 28 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(2)'
+100 1 . 26 32 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(2)'
+101 1 . 26 30 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(3)'
+102 1 . 26 34 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(3)'
+103 1 . 26 33 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(4)'
+104 1 . 26 29 'lower bound' ALL 1.000 . 4.000 4.500 # CSP Repulsion: Atto655 '6' <-/-> sCx4 'Ha(4)'
+105 3 . 16 31 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(1)'
+106 3 . 16 27 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(1)'
+107 3 . 16 28 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(2)'
+108 3 . 16 32 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(2)'
+109 3 . 16 30 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(3)'
+110 3 . 16 34 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(3)'
+111 3 . 16 33 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(4)'
+112 3 . 16 29 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '12' <-> sCx4 'Ha(4)'
+113 4 . 17 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(1)'
+114 4 . 17 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(1)'
+115 4 . 17 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(2)'
+116 4 . 17 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(2)'
+117 4 . 17 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(3)'
+118 4 . 17 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(3)'
+119 4 . 17 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(4)'
+120 4 . 17 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(4)'
+121 4 . 18 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(1)'
+122 4 . 18 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(1)'
+123 4 . 18 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(2)'
+124 4 . 18 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(2)'
+125 4 . 18 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(3)'
+126 4 . 18 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(3)'
+127 4 . 18 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(4)'
+128 4 . 18 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '23' <-> sCx4 'Ha(4)'
+129 5 . 20 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(1)'
+130 5 . 20 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(1)'
+131 5 . 20 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(2)'
+132 5 . 20 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(2)'
+133 5 . 20 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(3)'
+134 5 . 20 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(3)'
+135 5 . 20 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(4)'
+136 5 . 20 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(4)'
+137 5 . 19 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(1)'
+138 5 . 19 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(1)'
+139 5 . 19 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(2)'
+140 5 . 19 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(2)'
+141 5 . 19 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(3)'
+142 5 . 19 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(3)'
+143 5 . 19 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(4)'
+144 5 . 19 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '24' <-> sCx4 'Ha(4)'
+145 6 . 22 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(1)'
+146 6 . 22 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(1)'
+147 6 . 22 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(2)'
+148 6 . 22 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(2)'
+149 6 . 22 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(3)'
+150 6 . 22 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(3)'
+151 6 . 22 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(4)'
+152 6 . 22 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(4)'
+153 6 . 21 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(1)'
+154 6 . 21 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(1)'
+155 6 . 21 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(2)'
+156 6 . 21 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(2)'
+157 6 . 21 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(3)'
+158 6 . 21 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(3)'
+159 6 . 21 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(4)'
+160 6 . 21 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '25' <-> sCx4 'Ha(4)'
+161 7 . 24 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(1)'
+162 7 . 24 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(1)'
+163 7 . 24 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(2)'
+164 7 . 24 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(2)'
+165 7 . 24 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(3)'
+166 7 . 24 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(3)'
+167 7 . 24 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(4)'
+168 7 . 24 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(4)'
+169 7 . 23 31 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(1)'
+170 7 . 23 27 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(1)'
+171 7 . 23 28 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(2)'
+172 7 . 23 32 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(2)'
+173 7 . 23 30 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(3)'
+174 7 . 23 34 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(3)'
+175 7 . 23 33 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(4)'
+176 7 . 23 29 'upper bound' ALL 1.000 . 5.000 5.500 # NOESY: Atto655 '26' <-> sCx4 'Ha(4)'
+177 8 . 14 31 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+178 8 . 14 27 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+179 8 . 14 28 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+180 8 . 14 32 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+181 8 . 14 30 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+182 8 . 14 34 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+183 8 . 14 33 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+184 8 . 14 29 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+185 8 . 1 31 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+186 8 . 1 27 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+187 8 . 1 28 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+188 8 . 1 32 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+189 8 . 1 30 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+190 8 . 1 34 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+191 8 . 1 33 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+192 8 . 1 29 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+193 8 . 8 31 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+194 8 . 8 27 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(1)'
+195 8 . 8 28 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+196 8 . 8 32 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(2)'
+197 8 . 8 30 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+198 8 . 8 34 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(3)'
+199 8 . 8 33 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+200 8 . 8 29 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '27' <-> sCx4 'Ha(4)'
+201 9 . 26 31 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(1)'
+202 9 . 26 27 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(1)'
+203 9 . 26 28 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(2)'
+204 9 . 26 32 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(2)'
+205 9 . 26 30 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(3)'
+206 9 . 26 34 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(3)'
+207 9 . 26 33 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(4)'
+208 9 . 26 29 'upper bound' ALL 1.000 . 3.550 4.050 # NOESY: Atto655 '6' <-> sCx4 'Ha(4)'
+209 10 . 25 31 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(1)'
+210 10 . 25 27 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(1)'
+211 10 . 25 28 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(2)'
+212 10 . 25 32 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(2)'
+213 10 . 25 30 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(3)'
+214 10 . 25 34 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(3)'
+215 10 . 25 33 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(4)'
+216 10 . 25 29 'upper bound' ALL 1.000 . 3.500 4.000 # NOESY: Atto655 '9' <-> sCx4 'Ha(4)'
+#
+#
+loop_
+_pdbx_nmr_constraint_file.entry_id
+_pdbx_nmr_constraint_file.constraint_filename
+_pdbx_nmr_constraint_file.constraint_type
+_pdbx_nmr_constraint_file.constraint_subtype
+_pdbx_nmr_constraint_file.constraint_number
+1 common_prefix.tbl distance CSP 104
+2 single_s1_prefix.tbl distance NOE 0
+3 subunit_peak12_prefix.tbl distance NOE 8
+4 subunit_peak23_prefix.tbl distance NOE 16
+5 subunit_peak24_prefix.tbl distance NOE 16
+6 subunit_peak25_prefix.tbl distance NOE 16
+7 subunit_peak26_prefix.tbl distance NOE 16
+8 subunit_peak27_prefix.tbl distance NOE 24
+9 subunit_peak6_prefix.tbl distance NOE 8
+10 subunit_peak9_prefix.tbl distance NOE 8
+#

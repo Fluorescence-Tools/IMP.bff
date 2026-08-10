@@ -1,0 +1,80 @@
+data_atto655
+_cgdye_template.name atto655
+#
+loop_
+_cgdye_feature.feature_id
+_cgdye_feature.feature_type
+_cgdye_feature.rb
+_cgdye_feature.md_fixed
+_cgdye_feature.region_color
+ring_core dof NO NO '.'
+#
+#
+loop_
+_cgdye_feature_atom.feature_id
+_cgdye_feature_atom.atom_name
+_cgdye_feature_atom.occurrence
+ring_core C28 1
+ring_core C27 1
+ring_core C26 1
+ring_core C3 1
+ring_core N1 1
+ring_core C29 1
+ring_core C4 1
+ring_core C5 1
+ring_core C6 1
+ring_core C25 1
+ring_core N2 1
+ring_core C7 1
+ring_core C8 1
+ring_core O1 1
+ring_core C9 1
+ring_core C10 1
+ring_core C11 1
+ring_core C12 1
+ring_core C13 1
+ring_core C14 1
+ring_core C15 1
+ring_core N3 1
+#
+#
+loop_
+_cgdye_improper.center_atom
+_cgdye_improper.type
+C28 ring
+C27 ring
+C26 ring
+C3 ring
+N1 ring
+C29 ring
+C4 ring
+C5 ring
+C6 ring
+C25 ring
+N2 ring
+C7 ring
+C8 ring
+O1 ring
+C9 ring
+C10 ring
+C11 ring
+C12 ring
+C13 ring
+C14 ring
+C15 ring
+N3 ring
+C26 pi
+C3 pi
+N1 pi
+C5 pi
+C6 pi
+C7 pi
+C8 pi
+C10 pi
+C11 pi
+C13 pi
+N3 pi
+C19 pi
+S1 flat
+S1 orient
+#

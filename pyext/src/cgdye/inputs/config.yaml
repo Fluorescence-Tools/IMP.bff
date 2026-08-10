@@ -1,0 +1,70 @@
+paths:
+  inputs_root: inputs
+  output_root: output
+  systems_root: output/meta
+  traj_root: output/meta/trajs
+  python: python
+
+system:
+  components:
+    - name: hgbp1
+      role: fixed
+      mol2: inputs/structures/1DG3.mol2
+    - name: alexa488
+      role: mobile
+      mol2: inputs/structures/alexa488_r48.mol2
+
+build:
+  bond_k: 2000.0
+  angle_k: 400.0
+  pi_dihedral_k: 12.0
+  linker_dihedral_k: 1.5
+  ring_improper_k: 40.0
+  pi_improper_k: 180.0
+  flat_improper_k: 120.0
+  orient_improper_k: 220.0
+
+sampling:
+  n_runs: 50
+  n_restarts: 1000
+  n_steps: 100000
+  write_every: 500
+  sampling_mode: multi_restart
+  mc_steps: 500
+  mc_temperature: 10.0
+  rb_max_translation: 2.5
+  rb_max_rotation_deg: 10.0
+  temperature_k: 300.0
+  friction_ps: 1.0
+  timestep_fs: 1.0
+  sphere_r: 550.0
+  sphere_k: 0.05
+  nmr_cif: inputs/restraints/nmr.restraints.cif
+  nmr_strength: 10.0
+  no_minimum_restraint: False
+  com_pull_k: 25.0
+  convergence_threshold: 100.0
+  init_seed: 20260228
+  seed_stride: 1000
+  init_placement: true
+  init_distance_a: 200.0
+  init_trials: 200
+  mobile_group: alexa488_all
+  fixed_flex_mode: flex
+  freeze_mobile_rings: true
+  restraint_set: ""
+  go_mobile_k: 3.0
+  go_fixed_k: 2.0
+  go_cutoff: 6.0
+
+analysis:
+  regions:
+    - linker
+    - top
+    - middle
+    - bottom
+  resolution: 4.0
+  voxel_size: 1.0
+  bin_width: 0.5
+  max_frames: 0
+  template_dir: cgdye/templates

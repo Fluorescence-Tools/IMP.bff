@@ -1,0 +1,9 @@
+system:
+  name: hGBP1_1DG3_site481
+  protein:
+    pdb: inputs/structures/1DG3.pdb
+    chain: A
+    residue: 481
+  dyes:
+    - name: alexa488_r48
+      mol2: inputs/structures/alexa488_r48.mol2

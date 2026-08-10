@@ -1,0 +1,50 @@
+data_dye_registry
+
+# Registry of all reference dyes for IMP rotamer library system
+# Based on libraries.yml from /Users/tpeulen/dev/FRETpredict/FRETpredict/lib/
+
+loop_
+_dye.id
+_dye.name
+_dye.resname
+_dye.linker_type
+_dye.n_atoms
+_dye.center_atom
+_dye.dipole_atom_1
+_dye.dipole_atom_2
+_dye.positive_atoms
+_dye.negative_atoms
+
+A35_C1R AlexaFluor 350 C1R 66 C5 and resname A35 C2 and resname A35 C9 and resname A35 N1 and resname A35, N2 and resname A35 S1 and resname A35
+A35_L1R AlexaFluor 350 L1R 49 C5 and resname A35 C2 and resname A35 C9 and resname A35 N1 and resname A35, N2 and resname A35 S1 and resname A35
+A48_B1R AlexaFluor 488 B1R 96 C7 and resname A48 C2 and resname A48 C13 and resname A48 N1 and resname A48, N2 and resname A48 S1 and resname A48, S2 and resname A48
+A48_C1R AlexaFluor 488 C1R 83 C7 and resname A48 C2 and resname A48 C13 and resname A48 N1 and resname A48, N2 and resname A48 S1 and resname A48, S2 and resname A48
+A48_L1R AlexaFluor 488 L1R 66 C7 and resname A48 C2 and resname A48 C13 and resname A48 N1 and resname A48, N2 and resname A48 S1 and resname A48, S2 and resname A48
+A53_C1R AlexaFluor 532 C1R 107 C7 and resname A53 C2 and resname A53 C13 and resname A53 N1 and resname A53 S1 and resname A53
+A53_L1R AlexaFluor 532 L1R 90 C7 and resname A53 C2 and resname A53 C13 and resname A53 N1 and resname A53 S1 and resname A53
+A56_C1R AlexaFluor 568 C1R 112 C10 and resname A56 C5 and resname A56 C16 and resname A56 N1 and resname A56, N2 and resname A56 S1 and resname A56
+A56_L1R AlexaFluor 568 L1R 95 C10 and resname A56 C5 and resname A56 C16 and resname A56 N1 and resname A56, N2 and resname A56 S1 and resname A56
+A59_C1R AlexaFluor 594 C1R 118 C10 and resname A59 C5 and resname A59 C16 and resname A59 N1 and resname A59, N2 and resname A59 S1 and resname A59
+A59_L1R AlexaFluor 594 L1R 101 C10 and resname A59 C5 and resname A59 C16 and resname A59 N1 and resname A59, N2 and resname A59 S1 and resname A59
+A64_C2R AlexaFluor 647 C2R 122 C29 and resname A64 C4 and resname A64 C15 and resname A64 N1 and resname A64, N2 and resname A64 S1 and resname A64
+A64_L1R AlexaFluor 647 L1R 114 C29 and resname A64 C4 and resname A64 C15 and resname A64 N1 and resname A64, N2 and resname A64 S1 and resname A64
+C3N_C2R C3N C2R 76 C7 and resname C3N C1 and resname C3N C10 and resname C3N N1 and resname C3N S1 and resname C3N
+C55_C2R Lumiprobe Cy5.5 C2R 113 C39 and resname C55 C5 and resname C55 C16 and resname C55 N1 and resname C55 S1 and resname C55
+C55_L1R Lumiprobe Cy5.5 L1R 105 C39 and resname C55 C5 and resname C55 C16 and resname C55 N1 and resname C55 S1 and resname C55
+C75_L1R Lumiprobe Cy7.5 L1R 116 C43 and resname C75 C5 and resname C75 C16 and resname C75 N1 and resname C75 S1 and resname C75
+CF660R_C2R CF660R C2R 137 C13 and resname CF6 C25 and resname CF6 C30 and resname CF6 N1 and resname CF6, N2 and resname CF6 S1 and resname CF6
+Cy3b_C2R Cy3b C2R 137 C24 and resname CF6 C14 and resname CF6 C31 and resname CF6 N1 and resname CF6, N2 and resname CF6 S1 and resname CF6
+T39_C2R ATTO 390 C2R 76 C7 and resname T39 C1 and resname T39 C10 and resname T39 N1 and resname T39, N2 and resname T39 S1 and resname T39
+T39_L1R ATTO 390 L1R 68 C7 and resname T39 C1 and resname T39 C10 and resname T39 N1 and resname T39, N2 and resname T39 S1 and resname T39
+T42_C2R ATTO 425 C2R 82 C7 and resname T42 C1 and resname T42 C10 and resname T42 N1 and resname T42, N2 and resname T42 S1 and resname T42
+T42_L1R ATTO 425 L1R 74 C7 and resname T42 C1 and resname T42 C10 and resname T42 N1 and resname T42, N2 and resname T42 S1 and resname T42
+T46_C2R ATTO 465 C2R 66 N1 and resname T46 C1 and resname T46 C10 and resname T46 N1 and resname T46, N2 and resname T46 S1 and resname T42
+T46_L1R ATTO 465 L1R 58 N1 and resname T46 C1 and resname T46 C10 and resname T46 N1 and resname T46, N2 and resname T46 S1 and resname T42
+T48_C3R ATTO 488 C3R 88 C15 and resname T48 C1 and resname T48 C9 and resname T48 N1 and resname T48, N2 and resname T48 S1 and resname T48
+T49_C2R ATTO 495 C2R 78 N1 and resname T49 C1 and resname T49 C10 and resname T49 N1 and resname T49, N2 and resname T49 S1 and resname T49
+T49_L1R ATTO 495 L1R 70 N1 and resname T49 C1 and resname T49 C10 and resname T49 N1 and resname T49, N2 and resname T49 S1 and resname T49
+T52_C2R ATTO 520 C2R 80 C7 and resname T52 C4 and resname T52 C11 and resname T52 N1 and resname T52, N2 and resname T52 S1 and resname T52
+T52_L1R ATTO 520 L1R 72 C7 and resname T52 C4 and resname T52 C11 and resname T52 N1 and resname T52, N2 and resname T52 S1 and resname T52
+T61_C2R ATTO 610 C2R 86 C8 and resname T61 C2 and resname T61 C17 and resname T61 N1 and resname T61, N2 and resname T61 S1 and resname T61
+T61_L1R ATTO 610 L1R 78 C8 and resname T61 C2 and resname T61 C17 and resname T61 N1 and resname T61, N2 and resname T61 S1 and resname T61
+Tth_C3R ATTO Thio12 C3R 94 C9 and resname Tth C5 and resname Tth C11 and resname Tth N1 and resname Tth, N2 and resname Tth S1 and resname Tth
