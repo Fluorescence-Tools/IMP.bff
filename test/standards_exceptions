@@ -1,11 +1,20 @@
 # IMP coding-standards deviations for IMP.bff.
 #
-# Consumed by tools/build/setup.py, which bakes these into the generated
-# test/bff/medium_test_standards.py. Entries here are *documented*
-# deviations, not fixes: the names are public API that ChiSurf and
-# imp-tricks call, so renaming them is a breaking change, and most of the
-# list is SWIG-generated STL container boilerplate that cannot be renamed
-# at all (128 of 172 entries).
+# Read by tools/build/setup.py, which bakes these into the generated
+# test/bff/medium_test_standards.py. These are *documented deviations*, not
+# fixes. Renaming any of it is a breaking change for ChiSurf and imp-tricks,
+# and most of it cannot be renamed at all:
+#   * 118 of 193 function entries are SWIG-generated STL container
+#     boilerplate (VectorDouble.begin, MapString....has_key, and so on);
+#   * 21 are module-level free functions, most of them the deprecated
+#     decay_* routines that are moving to tttrlib.
+#
+# The value_object_exceptions list is different in kind, and is the one worth
+# revisiting: those classes are neither IMP_SWIG_VALUE nor IMP_SWIG_OBJECT, so
+# Python gets no memory-management contract for them. The decay half is
+# deprecated and will leave with it; the structure half (AVPairDistanceMeasurement,
+# PathMapHeader, PathMapTile, PathMapTileEdge) should get real IMP_SWIG_VALUE
+# declarations rather than stay on this list.
 
 # Domain vocabulary IMP's spell check does not know.
 spelling_exceptions=[
@@ -13,7 +22,7 @@ spelling_exceptions=[
     'json', 'xy', 'xz', 'yz',
 ]
 
-# Methods that do not begin with one of IMP's approved verbs.
+# Names that do not begin with one of IMP's approved verbs.
 function_name_exceptions=[
     'AV.init_path_map', 'AV.normalize_rotation', 'AV.pull_back_body_member_adjoints',
     'AV.pull_back_member_adjoints', 'AV.pull_back_members_adjoints', 'AV.resample',
@@ -72,10 +81,17 @@ function_name_exceptions=[
     'VectorString.capacity', 'VectorString.empty', 'VectorString.end',
     'VectorString.front', 'VectorString.insert', 'VectorString.iterator',
     'VectorString.rbegin', 'VectorString.rend', 'VectorString.resize',
-    'VectorString.size',
+    'VectorString.size', 'av_distance', 'av_distance_distribution',
+    'av_random_distances', 'av_random_points', 'decay_add_pile_up_to_model',
+    'decay_fconv', 'decay_fconv_avx', 'decay_fconv_cs_time_axis',
+    'decay_fconv_per', 'decay_fconv_per_avx', 'decay_fconv_per_cs',
+    'decay_fconv_per_cs_time_axis', 'decay_fconv_ref', 'decay_rescale',
+    'decay_rescale_w', 'decay_rescale_w_bg', 'decay_sconv',
+    'decay_shift_lamp', 'discriminate_small_amplitudes', 'mod_p',
+    'search_labeling_site',
 ]
 
-# Value-like classes that expose no show().
+# Classes that expose no show().
 show_exceptions=[
     'AVPairDistanceMeasurement', 'DecayConvolution', 'DecayCurve',
     'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
@@ -87,6 +103,17 @@ show_exceptions=[
     'VectorPathMapTileEdge', 'VectorString',
 ]
 
+# Classes labelled neither value nor object. See the note above.
+value_object_exceptions=[
+    'AVPairDistanceMeasurement', 'DecayConvolution', 'DecayCurve',
+    'DecayLifetimeHandler', 'DecayLinearization', 'DecayModifier',
+    'DecayPattern', 'DecayPileup', 'DecayRange',
+    'DecayScale', 'DecayScore', 'MapStringAVPairDistanceMeasurement',
+    'PairFloatFloat', 'PathMapHeader', 'PathMapTile',
+    'PathMapTileEdge', 'VectorDouble', 'VectorFloat',
+    'VectorInt', 'VectorLong', 'VectorPathMapTile',
+    'VectorPathMapTileEdge', 'VectorString',
+]
+
 class_name_exceptions=[]
-value_object_exceptions=[]
 plural_exceptions=[]
