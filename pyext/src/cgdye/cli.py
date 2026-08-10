@@ -6,7 +6,7 @@ import random
 import urllib.request
 from pathlib import Path
 
-import click
+from . import _cli as click
 import IMP
 import IMP.atom
 import IMP.core
@@ -20,6 +20,23 @@ from .sampling.rotamer import apply_rotamer_coords, sample_rotamer_index
 from .sampling.kinetic import reconstruct_trajectory, calculate_rotational_correlation_time, calculate_correlation_times
 from .sampling.library_gen import generate_rotamers
 from .utils import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
+
+def _chain_sequence(hierarchy, chain_id):
+    """One-letter sequence of a chain in an IMP hierarchy.
+
+    Returns None when the chain is not present, matching the caller's
+    "sequence not found" branch.
+    """
+    for ch in IMP.atom.get_by_type(hierarchy, IMP.atom.CHAIN_TYPE):
+        if IMP.atom.Chain(ch).get_id() != chain_id:
+            continue
+        letters = []
+        for res in IMP.atom.get_by_type(ch, IMP.atom.RESIDUE_TYPE):
+            letters.append(IMP.atom.get_one_letter_code(
+                IMP.atom.Residue(res).get_residue_type()))
+        return "".join(letters) or None
+    return None
+
 
 def _rotamer_library_dir():
     """Directory of the bundled rotamer library.
@@ -481,17 +498,13 @@ def label_fp(pdb_id_or_path, site, output):
 def label_fusion(pdb_path, chain, output):
     """Automatically detect and label FPs in a fusion protein."""
     from .sampling.segments import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
-    from Bio import SeqIO
-    
     model = IMP.Model()
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
-    
-    # Extract sequence from the PDB file directly
-    seq = None
-    for rec in SeqIO.parse(pdb_path, "pdb-atom"):
-        if rec.annotations.get("chain") == chain:
-            seq = str(rec.seq)
-            break
+
+    # Sequence comes from the hierarchy IMP just built, rather than from a
+    # second parse by another library: IMP.bff carries no dependency beyond
+    # what IMP itself brings.
+    seq = _chain_sequence(protein, chain)
     
     if not seq:
         click.echo(f"Error: Could not find sequence for chain {chain} in {pdb_path}")

@@ -13,19 +13,20 @@ import IMP.core
 
 def load_reference_rotamers(pdb_path, dcd_path, weights_path=None, max_frames=None):
     """Load a reference rotamer library from PDB+DCD (+ optional weights).
-    
-    Requires MDAnalysis if reading DCD files.
-    """
-    import MDAnalysis as mda
-    u = mda.Universe(str(pdb_path), str(dcd_path))
-    atom_names = [a.name for a in u.atoms]
 
-    frames = []
-    for i, ts in enumerate(u.trajectory):
-        if max_frames is not None and i >= max_frames:
-            break
-        frames.append(np.asarray(ts.positions, dtype=float).copy())
-    coords = np.asarray(frames, dtype=float)
+    Atom names come from the PDB through IMP.atom and coordinates from the DCD
+    through the in-tree reader, so this needs nothing beyond IMP and numpy.
+    """
+    from IMP.bff.cgdye.io.dcd import read_dcd
+
+    model = IMP.Model()
+    hierarchy = IMP.atom.read_pdb(str(pdb_path), model, IMP.atom.AllPDBSelector())
+    atom_names = [
+        IMP.atom.Atom(leaf).get_atom_type().get_string().strip()
+        for leaf in IMP.atom.get_leaves(hierarchy)
+    ]
+
+    coords = read_dcd(dcd_path, max_frames=max_frames)
 
     if coords.shape[0] == 0:
         raise ValueError(f"No frames found in DCD: {dcd_path}")

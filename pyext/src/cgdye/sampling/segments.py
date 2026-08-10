@@ -1,6 +1,8 @@
 """Segmentation and FP detection ported from fpsimp."""
 
 from __future__ import annotations
+
+import numpy as np
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 import logging
@@ -9,29 +11,85 @@ from .fp_lib import load_fp_library
 
 logger = logging.getLogger(__name__)
 
-try:
-    from Bio.Align import PairwiseAligner
-except ImportError:
-    PairwiseAligner = None
+def _smith_waterman(query: str, templ: str,
+                    match: float = 2.0, mismatch: float = -1.0,
+                    gap_open: float = -5.0, gap_extend: float = -1.0):
+    """Local alignment with affine gaps, returning the aligned blocks.
+
+    Replaces Biopython's PairwiseAligner in local mode with the same scoring, so
+    that IMP.bff needs nothing beyond what IMP itself brings. Gotoh's three-matrix
+    formulation: `main` for a residue pair, `gap_q`/`gap_t` for a gap continuing
+    in one sequence, which is what makes an affine penalty exact rather than a
+    per-position approximation.
+
+    Returns
+    -------
+    tuple
+        ``(query_blocks, templ_blocks)``, each a list of ``(start, end)``
+        half-open index pairs, in the spelling Biopython's ``aligned`` uses.
+    """
+    n, m = len(query), len(templ)
+    if n == 0 or m == 0:
+        return [], []
+
+    neg = float("-inf")
+    main = np.zeros((n + 1, m + 1), dtype=np.float64)
+    gap_q = np.full((n + 1, m + 1), neg, dtype=np.float64)   # gap in the template
+    gap_t = np.full((n + 1, m + 1), neg, dtype=np.float64)   # gap in the query
+    # 0 = stop, 1 = diagonal, 2 = up (gap in template), 3 = left (gap in query)
+    trace = np.zeros((n + 1, m + 1), dtype=np.int8)
+
+    best, best_ij = 0.0, (0, 0)
+    for i in range(1, n + 1):
+        qi = query[i - 1]
+        for j in range(1, m + 1):
+            gap_q[i, j] = max(main[i - 1, j] + gap_open, gap_q[i - 1, j] + gap_extend)
+            gap_t[i, j] = max(main[i, j - 1] + gap_open, gap_t[i, j - 1] + gap_extend)
+            diag = main[i - 1, j - 1] + (match if qi == templ[j - 1] else mismatch)
+            cell = max(0.0, diag, gap_q[i, j], gap_t[i, j])
+            main[i, j] = cell
+            if cell == 0.0:
+                trace[i, j] = 0
+            elif cell == diag:
+                trace[i, j] = 1
+            elif cell == gap_q[i, j]:
+                trace[i, j] = 2
+            else:
+                trace[i, j] = 3
+            if cell > best:
+                best, best_ij = cell, (i, j)
+
+    if best <= 0.0:
+        return [], []
+
+    # Walk back to the first zero, collecting runs of diagonal steps as blocks.
+    i, j = best_ij
+    q_blocks, t_blocks = [], []
+    run_q_end, run_t_end = i, j
+    while i > 0 and j > 0 and trace[i, j] != 0:
+        step = trace[i, j]
+        if step == 1:
+            i, j = i - 1, j - 1
+        else:
+            if run_q_end != i or run_t_end != j:
+                q_blocks.append((i, run_q_end))
+                t_blocks.append((j, run_t_end))
+            if step == 2:
+                i -= 1
+            else:
+                j -= 1
+            run_q_end, run_t_end = i, j
+    if run_q_end != i or run_t_end != j:
+        q_blocks.append((i, run_q_end))
+        t_blocks.append((j, run_t_end))
+
+    return q_blocks[::-1], t_blocks[::-1]
+
 
 def _align_best_window(query: str, templ: str) -> tuple[int, int, float]:
     """Local alignment; return (q_start_1based, q_end_1based, identity)."""
-    if PairwiseAligner is None:
-        raise RuntimeError("Biopython (PairwiseAligner) is required for alignment")
-    al = PairwiseAligner()
-    al.mode = "local"
-    al.match_score = 2.0
-    al.mismatch_score = -1.0
-    al.open_gap_score = -5.0
-    al.extend_gap_score = -1.0
-
-    aln = al.align(query, templ)
-    if not aln:
-        return (0, 0, 0.0)
-    a0 = aln[0]
-    q_blocks = a0.aligned[0]
-    t_blocks = a0.aligned[1]
-    if len(q_blocks) == 0:
+    q_blocks, t_blocks = _smith_waterman(query, templ)
+    if not q_blocks:
         return (0, 0, 0.0)
 
     q_start = int(q_blocks[0][0])

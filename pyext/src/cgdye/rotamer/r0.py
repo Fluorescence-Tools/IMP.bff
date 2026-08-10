@@ -10,12 +10,6 @@ from pathlib import Path
 
 import numpy as np
 
-try:
-    import pandas as pd
-except ImportError:  # pragma: no cover
-    pd = None
-
-
 _DYE_NAME_RE = re.compile(r"^(?P<type>.+?)\s+(?P<number>[A-Za-z0-9]+)$")
 
 
@@ -126,10 +120,6 @@ def _read_spectrum(path: Path) -> np.ndarray:
     numpy.ndarray
         Structured array with ``Wavelength``, ``Excitation``, and ``Emission``.
     """
-    if pd is not None:
-        frame = pd.read_csv(path)
-        frame[["Excitation", "Emission"]] = frame[["Excitation", "Emission"]] / 100.0
-        return frame.to_records(index=False)
     data: list[tuple[float, float, float]] = []
     with path.open(newline="") as handle:
         reader = csv.DictReader(handle)

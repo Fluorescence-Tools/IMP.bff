@@ -12,7 +12,7 @@ import IMP.core
 import IMP.rmf
 import numpy as np
 import RMF
-import yaml
+import json
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
 from IMP.bff.cgdye.rotamer.scoring import _selector_resnames
 from IMP.bff.cgdye.utils import get_template_dir
@@ -26,10 +26,10 @@ def _registry_path() -> Path:
     Returns
     -------
     pathlib.Path
-        Path to ``libraries.yml``.
+        Path to ``libraries.json``.
     """
     import IMP.bff
-    return Path(IMP.bff.get_data_path("rotamer_library")) / "libraries.yml"
+    return Path(IMP.bff.get_data_path("rotamer_library")) / "libraries.json"
 
 
 def get_library_registry() -> dict[str, dict[str, Any]]:
@@ -43,7 +43,7 @@ def get_library_registry() -> dict[str, dict[str, Any]]:
     global _LIBRARY_REGISTRY
     if _LIBRARY_REGISTRY is None:
         with _registry_path().open() as handle:
-            _LIBRARY_REGISTRY = yaml.safe_load(handle)
+            _LIBRARY_REGISTRY = json.load(handle)
     return _LIBRARY_REGISTRY
 
 
@@ -75,7 +75,7 @@ def get_library_metadata(library_name: str) -> dict[str, Any]:
     Returns
     -------
     dict
-        Library metadata from ``libraries.yml``.
+        Library metadata from ``libraries.json``.
     """
     key = normalize_library_name(library_name)
     registry = get_library_registry()

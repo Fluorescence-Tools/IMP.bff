@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.cgdye.rotamer.r0 import calculate_r0
 from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score, kappa2_from_vectors
@@ -570,11 +569,14 @@ class RotamerFRET:
         weights = weights / np.sum(weights)
 
         finite = np.isfinite(self.k2_values)
+        labels = ["k2", "Estatic", "Edynamic1", "Edynamic2"]
         if self.k2_values.size == 1:
-            df = pd.Series(
-                [self.k2_values[0], self.estatic_values[0], self.edynamic1_values[0], self.edynamic2_values[0]],
-                index=["k2", "Estatic", "Edynamic1", "Edynamic2"],
-            )
+            rows = [
+                (self.k2_values[0], np.nan, np.nan),
+                (self.estatic_values[0], np.nan, np.nan),
+                (self.edynamic1_values[0], np.nan, np.nan),
+                (self.edynamic2_values[0], np.nan, np.nan),
+            ]
         else:
             rows = [
                 _weighted_average_sd_se(self.k2_values[finite], weights[finite]),
@@ -582,8 +584,16 @@ class RotamerFRET:
                 _weighted_average_sd_se(self.edynamic1_values[finite], weights[finite]),
                 _weighted_average_sd_se(self.edynamic2_values[finite], weights[finite]),
             ]
-            df = pd.DataFrame(rows, columns=["Average", "SD", "SE"], index=["k2", "Estatic", "Edynamic1", "Edynamic2"])
-        df.to_pickle(f"{prefix}-data-{r1}-{r2}.pkl")
+        # Written as a labelled text table rather than a pickled DataFrame: a
+        # .pkl is unreadable without the library that wrote it, and IMP.bff
+        # carries no dependency beyond what IMP itself brings.
+        summary = np.asarray(rows, dtype=np.float64)
+        np.savetxt(
+            f"{prefix}-data-{r1}-{r2}.dat",
+            summary,
+            header="quantity Average SD SE\n" + " ".join(labels),
+            comments="# ",
+        )
 
     def reweight(self, **kwargs: Any) -> None:
         """Reweight saved FRET quantities.
@@ -631,8 +641,12 @@ class RotamerFRET:
             _weighted_average_sd_se(edynamic1[finite], weights[finite]),
             _weighted_average_sd_se(edynamic2[finite], weights[finite]),
         ]
-        df = pd.DataFrame(rows, columns=["Average", "SD", "SE"], index=["k2", "Estatic", "Edynamic1", "Edynamic2"])
-        df.to_pickle(f"{prefix}-data-{r1}-{r2}.pkl")
+        np.savetxt(
+            f"{prefix}-data-{r1}-{r2}.dat",
+            np.asarray(rows, dtype=np.float64),
+            header="quantity Average SD SE\nk2 Estatic Edynamic1 Edynamic2",
+            comments="# ",
+        )
 
     def run(self) -> None:
         """Run trajectory analysis and save output files.

@@ -40,3 +40,6 @@ dbtemp/
 .DS_Store
 .idea/
 */broken/
+
+# Reference-only: read it, mine it, never ship it.
+/junk/

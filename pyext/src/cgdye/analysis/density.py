@@ -5,11 +5,7 @@ import math
 import os
 from pathlib import Path
 
-import click
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+from .. import _cli as click
 import numpy as np
 import IMP
 import IMP.algebra
@@ -137,7 +133,7 @@ def _compute_long_axis(atoms, ref_axis=None):
 
 
 def _write_axis_profile(
-    axis_values_by_region, region_order, out_csv, out_png, bin_width, region_colors
+    axis_values_by_region, region_order, out_csv, bin_width, region_colors
 ):
     all_values = []
     for region in region_order:
@@ -182,21 +178,13 @@ def _write_axis_profile(
                 f"{edges[i]:.4f},{edges[i + 1]:.4f},{centers[i]:.4f},{count_vals},{density_vals}\n"
             )
 
-    plt.figure(figsize=(7.5, 4.5))
-    for region in region_order:
-        color = region_colors.get(region, "black")
-        plt.plot(centers, density[region], label=region, color=color, linewidth=2.0)
-    plt.xlabel("z along fixed-component central axis (A)")
-    plt.ylabel("Probability density")
-    plt.title("Mobile-component region occupancy projected on fixed-component axis")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=180)
-    plt.close()
+    # Rendering deliberately omitted: the CSV above carries every
+    # number the plot showed, and IMP.bff carries no dependency
+    # beyond what IMP itself brings. Plot it in the application.
 
 
 def _write_xy_profile(
-    xy_values_by_region, region_order, out_csv, out_png, bin_width, region_colors
+    xy_values_by_region, region_order, out_csv, bin_width, region_colors
 ):
     all_values = []
     for region in region_order:
@@ -241,20 +229,12 @@ def _write_xy_profile(
                 f"{edges[i]:.4f},{edges[i + 1]:.4f},{centers[i]:.4f},{count_vals},{density_vals}\n"
             )
 
-    plt.figure(figsize=(7.5, 4.5))
-    for region in region_order:
-        color = region_colors.get(region, "black")
-        plt.plot(centers, density[region], label=region, color=color, linewidth=2.0)
-    plt.xlabel("radial distance in fixed-component xy plane (A)")
-    plt.ylabel("Probability density")
-    plt.title("Mobile-component region occupancy projected on fixed-component xy plane")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=180)
-    plt.close()
+    # Rendering deliberately omitted: the CSV above carries every
+    # number the plot showed, and IMP.bff carries no dependency
+    # beyond what IMP itself brings. Plot it in the application.
 
 
-def _write_orientation_profile(frame_rows, out_csv, out_png):
+def _write_orientation_profile(frame_rows, out_csv):
     with open(out_csv, "w") as out:
         out.write("frame_index,angle_deg,abs_cos_theta,cos_theta\n")
         for row in frame_rows:
@@ -268,15 +248,9 @@ def _write_orientation_profile(frame_rows, out_csv, out_png):
     frames = [r["frame_index"] for r in frame_rows]
     angles = [r["angle_deg"] for r in frame_rows]
 
-    plt.figure(figsize=(8.0, 4.5))
-    plt.plot(frames, angles, color="black", linewidth=1.2)
-    plt.ylim(0.0, 90.0)
-    plt.xlabel("Frame index")
-    plt.ylabel("Angle (deg)")
-    plt.title("Mobile long-axis vs fixed-component central-axis orientation")
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=180)
-    plt.close()
+    # Rendering deliberately omitted: the CSV above carries every
+    # number the plot showed, and IMP.bff carries no dependency
+    # beyond what IMP itself brings. Plot it in the application.
 
 
 def resolve_rmf_path(traj_root, system_name):
@@ -637,26 +611,20 @@ def analyze_mobile(
         print(f"  Wrote radial histogram: {hist_out}")
 
     axis_csv = mobile_out / "axis_z_profile_regions.csv"
-    axis_png = mobile_out / "axis_z_profile_regions.png"
     _write_axis_profile(
-        axis_distances, region_order, axis_csv, axis_png, bin_width, region_colors
+        axis_distances, region_order, axis_csv, bin_width, region_colors
     )
     print(f"  Wrote axis profile CSV: {axis_csv}")
-    print(f"  Wrote axis profile plot: {axis_png}")
 
     xy_csv = mobile_out / "axis_xy_profile_regions.csv"
-    xy_png = mobile_out / "axis_xy_profile_regions.png"
     _write_xy_profile(
-        xy_distances, region_order, xy_csv, xy_png, bin_width, region_colors
+        xy_distances, region_order, xy_csv, bin_width, region_colors
     )
     print(f"  Wrote xy profile CSV: {xy_csv}")
-    print(f"  Wrote xy profile plot: {xy_png}")
 
     orientation_csv = mobile_out / "axis_mobile_vs_fixed_orientation.csv"
-    orientation_png = mobile_out / "axis_mobile_vs_fixed_orientation.png"
-    _write_orientation_profile(orientation_rows, orientation_csv, orientation_png)
+    _write_orientation_profile(orientation_rows, orientation_csv)
     print(f"  Wrote orientation CSV: {orientation_csv}")
-    print(f"  Wrote orientation plot: {orientation_png}")
 
     if axis_ref is not None:
         import json
@@ -791,9 +759,9 @@ def main(
         if i < len(tpl_list):
             tpl = Path(tpl_list[i])
         else:
-            # Default: look relative to this file's package templates directory
-            pkg_dir = Path(__file__).resolve().parents[1]
-            tpl = pkg_dir / "templates" / f"{mob}.template.cif"
+            # Default: the bundled template, which is IMP module data
+            from IMP.bff.cgdye.utils import get_template_dir
+            tpl = get_template_dir() / f"{mob}.template.cif"
         template_map[mob] = tpl
 
     for mob in mobiles:
