@@ -2,17 +2,41 @@
 
 Notes for anyone — human or agent — working in this repository.
 
-## The knowledge base lives in ChiSurf
+## Sibling repositories — one stack, one parent directory
 
-This repository has **no OKF bundle of its own**. The durable, agent-readable
-knowledge for the whole fluorescence-modelling stack — this repo, `imp.bff`,
-`imp-tricks`, `chisurf` and how they fit together — lives in one place:
+This repo is one checkout in a multi-repository stack. All of these live as
+**siblings under the same parent directory** (`../` from here):
+
+| Checkout | Also called | Role |
+|---|---|---|
+| `../tttrlib` | — | Photon-level data (TTTR streams, histograms, correlation). Bottom of the stack. |
+| `../imp.bff` | **bff** (this repo) | Coordinate-level fluorescence modelling as an IMP module (AVs, path maps, κ², cgdye). |
+| `../imp` | — | The IMP checkout imp.bff builds against. **Never commit there.** |
+| `../imp-tricks` | — | Downstream IMP experiments; shadows `IMP/bff/` — see PRD-93. |
+| `../chisurf` | — | Fitting-model glue, GUI, data-IO. Top of the stack. Hosts the shared OKF knowledge bundle. |
+| `../fpsimp` | fpsim | Fluorescent-protein sampling; a *consumer* of imp.bff (PRD-96), not a second implementation. |
+| `../quest` | — | Sibling project in the same fluorescence ecosystem. |
+| `../ucfret` | — | Sibling project in the same fluorescence ecosystem. |
+
+The layering is **tttrlib → imp.bff → imp-tricks → chisurf**; the placement
+test is *what is the input* (photons/curves → tttrlib, coordinates → imp.bff,
+neither → chisurf). See `../chisurf/okf/prds/prd-93.md`.
+
+## Two bundles, one scope rule
+
+This repository has a small OKF bundle of its own at [`okf/`](okf/index.md) —
+start at [`okf/index.md`](okf/index.md), read the shared
+[`okf/agent-board.md`](okf/agent-board.md) before starting work, and log
+changes in [`okf/log.md`](okf/log.md). It holds **repo-local knowledge only**:
+build quirks and design decisions specific to this tree.
+
+Everything cross-stack — the ecosystem map, the PRDs, the build workflows, the
+repository-split rules — stays in the shared bundle:
 
     ../chisurf/okf/
 
-Read it before starting work, and **write findings back into it** rather than
-into a new bundle here. A second bundle would fork the knowledge and both
-copies would rot.
+Write cross-stack findings back into it rather than copying pages here. A
+duplicated page forks the knowledge and both copies rot.
 
 Start with:
 
