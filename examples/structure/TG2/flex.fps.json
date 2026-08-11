@@ -615,12 +615,12 @@
     },
     "S1_val_chi2": {
       "distances": [
-        "A173_A659",
-        "A155_A571",
-        "A406_A661",
-        "A425_A646",
-        "A385_A661",
-        "A406_A618"
+        "S1_A173_A659",
+        "S1_A155_A571",
+        "S1_A406_A661",
+        "S1_A425_A646",
+        "S1_A385_A661",
+        "S1_A406_A618"
       ],
       "maximum_NaNs_allowed": 0,
       "penalty_NaN": 0
@@ -731,8 +731,7 @@
           "residue_seq_number": 589
         }
       ],
-      "Bonds": [
-      ]
+      "Bonds": []
     }
   }
 }

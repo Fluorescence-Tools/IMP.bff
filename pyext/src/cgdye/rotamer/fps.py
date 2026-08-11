@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from IMP.bff.fps import read_fps_json
+from IMP.bff.fret.io import read_fps_json
 
 
 @dataclass

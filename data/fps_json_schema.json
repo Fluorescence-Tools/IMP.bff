@@ -1,0 +1,629 @@
+{
+  "$defs": {
+    "distance": {
+      "additionalProperties": true,
+      "properties": {
+        "Forster_radius": {
+          "default": 52.0,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_forster_radius.forster_radius"
+        },
+        "distance": {
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.distance"
+        },
+        "distance_type": {
+          "default": "RDAMean",
+          "enum": [
+            "RDAMean",
+            "RDAMeanE",
+            "Rmp"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.distance_type"
+        },
+        "error_neg": {
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.distance_error_minus"
+        },
+        "error_pos": {
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.distance_error_plus"
+        },
+        "position1_name": {
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.sample_probe_id_1"
+        },
+        "position2_name": {
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_fret_distance_restraint.sample_probe_id_2"
+        }
+      },
+      "required": [
+        "distance",
+        "error_neg",
+        "error_pos",
+        "position1_name",
+        "position2_name"
+      ],
+      "type": "object"
+    },
+    "position": {
+      "additionalProperties": true,
+      "properties": {
+        "allowed_sphere_radius": {
+          "default": 1.5,
+          "type": "number",
+          "x-dialects": [
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_global_parameter.AV_allowed_sphere"
+        },
+        "anchor_atoms": {
+          "default": "",
+          "description": "Explicit anchor atom names overriding the default linker anchor search (comma separated).",
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "atom_name": {
+          "default": "CA",
+          "description": "Atom name the dye linker attaches to (e.g. CA, CB).",
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat"
+          ]
+        },
+        "body_id": {
+          "default": 0,
+          "description": "Index of the rigid body (input PDB) this position labels; docking moves bodies relative to each other.",
+          "type": "integer",
+          "x-dialects": [
+            "network",
+            "csfps"
+          ]
+        },
+        "chain_identifier": {
+          "default": "",
+          "description": "Chain (asym) id of the attachment atom; empty matches any.",
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat"
+          ]
+        },
+        "chain_weighting": {
+          "default": false,
+          "description": "Weight AV grid points by linker-chain statistics instead of uniformly.",
+          "type": "boolean",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "contact_volume_thickness": {
+          "default": 0.0,
+          "description": "Thickness of the contact layer above the molecular surface for accessible-contact-volume (ACV) weighting; 0 disables.",
+          "type": "number",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "contact_volume_trapped_fraction": {
+          "default": -1.0,
+          "description": "Fraction of dye density trapped in the contact volume; negative disables ACV re-weighting.",
+          "type": "number",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "linker_length": {
+          "default": 20.0,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_AV_parameter.linker_length"
+        },
+        "linker_width": {
+          "default": 0.5,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_AV_parameter.linker_width"
+        },
+        "min_sphere_volume_fraction": {
+          "default": 0.0,
+          "description": "Minimum accessible fraction of the free-dye sphere volume below which a position is flagged as buried.",
+          "type": "number",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "radius1": {
+          "default": 3.5,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_1"
+        },
+        "radius2": {
+          "default": 0.0,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_2"
+        },
+        "radius3": {
+          "default": 0.0,
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ],
+          "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_3"
+        },
+        "residue_name": {
+          "default": "",
+          "description": "Residue name of the attachment atom (informational).",
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "residue_seq_number": {
+          "default": 0,
+          "description": "Author residue sequence number of the attachment atom.",
+          "type": "integer",
+          "x-dialects": [
+            "network",
+            "flat"
+          ]
+        },
+        "simulation_grid_resolution": {
+          "default": 1.5,
+          "description": "AV grid spacing in Angstrom. Related to (but not the same item as) _flr_FPS_global_parameter.AV_min_grid_A, which is the *minimum* grid constant of FPS's relative-grid scheme.",
+          "type": "number",
+          "x-dialects": [
+            "network",
+            "flat"
+          ]
+        },
+        "simulation_type": {
+          "default": "AV1",
+          "description": "AV model: AV1 (one radius), AV3 (three radii), or XYZ (fixed mean position, no simulation).",
+          "enum": [
+            "AV1",
+            "AV3",
+            "XYZ"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "network",
+            "flat",
+            "csfps"
+          ]
+        },
+        "strip_mask": {
+          "default": "",
+          "description": "Selection mask of atoms removed as obstacles before the AV simulation (e.g. flexible tags).",
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "x": {
+          "type": "number",
+          "x-dialects": [
+            "csfps"
+          ],
+          "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_xcoord"
+        },
+        "y": {
+          "type": "number",
+          "x-dialects": [
+            "csfps"
+          ],
+          "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_ycoord"
+        },
+        "z": {
+          "type": "number",
+          "x-dialects": [
+            "csfps"
+          ],
+          "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_zcoord"
+        }
+      },
+      "type": "object"
+    },
+    "score_set": {
+      "additionalProperties": true,
+      "properties": {
+        "distances": {
+          "description": "Names of the Distances entries belonging to this set.",
+          "type": "array",
+          "x-dialects": [],
+          "x-flrcif-item": "_flr_fret_distance_restraint.group_id"
+        },
+        "maximum_NaNs_allowed": {
+          "description": "Olga screening: maximum number of NaN model distances tolerated before a structure's score set is rejected.",
+          "type": "integer",
+          "x-dialects": [
+            "network"
+          ]
+        },
+        "penalty_NaN": {
+          "description": "Olga screening: chi-square penalty added per NaN model distance.",
+          "type": "number",
+          "x-dialects": [
+            "network"
+          ]
+        }
+      },
+      "required": [
+        "distances"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://integrativemodeling.org/schemas/bff/fps.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "Distances": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "properties": {
+          "Forster_radius": {
+            "default": 52.0,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_forster_radius.forster_radius"
+          },
+          "distance": {
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.distance"
+          },
+          "distance_type": {
+            "default": "RDAMean",
+            "enum": [
+              "RDAMean",
+              "RDAMeanE",
+              "Rmp"
+            ],
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.distance_type"
+          },
+          "error_neg": {
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.distance_error_minus"
+          },
+          "error_pos": {
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.distance_error_plus"
+          },
+          "position1_name": {
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.sample_probe_id_1"
+          },
+          "position2_name": {
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_fret_distance_restraint.sample_probe_id_2"
+          }
+        },
+        "required": [
+          "distance",
+          "error_neg",
+          "error_pos",
+          "position1_name",
+          "position2_name"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "Evaluators": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "Positions": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "properties": {
+          "allowed_sphere_radius": {
+            "default": 1.5,
+            "type": "number",
+            "x-dialects": [
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_global_parameter.AV_allowed_sphere"
+          },
+          "anchor_atoms": {
+            "default": "",
+            "description": "Explicit anchor atom names overriding the default linker anchor search (comma separated).",
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "atom_name": {
+            "default": "CA",
+            "description": "Atom name the dye linker attaches to (e.g. CA, CB).",
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat"
+            ]
+          },
+          "body_id": {
+            "default": 0,
+            "description": "Index of the rigid body (input PDB) this position labels; docking moves bodies relative to each other.",
+            "type": "integer",
+            "x-dialects": [
+              "network",
+              "csfps"
+            ]
+          },
+          "chain_identifier": {
+            "default": "",
+            "description": "Chain (asym) id of the attachment atom; empty matches any.",
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat"
+            ]
+          },
+          "chain_weighting": {
+            "default": false,
+            "description": "Weight AV grid points by linker-chain statistics instead of uniformly.",
+            "type": "boolean",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "contact_volume_thickness": {
+            "default": 0.0,
+            "description": "Thickness of the contact layer above the molecular surface for accessible-contact-volume (ACV) weighting; 0 disables.",
+            "type": "number",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "contact_volume_trapped_fraction": {
+            "default": -1.0,
+            "description": "Fraction of dye density trapped in the contact volume; negative disables ACV re-weighting.",
+            "type": "number",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "linker_length": {
+            "default": 20.0,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_AV_parameter.linker_length"
+          },
+          "linker_width": {
+            "default": 0.5,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_AV_parameter.linker_width"
+          },
+          "min_sphere_volume_fraction": {
+            "default": 0.0,
+            "description": "Minimum accessible fraction of the free-dye sphere volume below which a position is flagged as buried.",
+            "type": "number",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "radius1": {
+            "default": 3.5,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_1"
+          },
+          "radius2": {
+            "default": 0.0,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_2"
+          },
+          "radius3": {
+            "default": 0.0,
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ],
+            "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_3"
+          },
+          "residue_name": {
+            "default": "",
+            "description": "Residue name of the attachment atom (informational).",
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "residue_seq_number": {
+            "default": 0,
+            "description": "Author residue sequence number of the attachment atom.",
+            "type": "integer",
+            "x-dialects": [
+              "network",
+              "flat"
+            ]
+          },
+          "simulation_grid_resolution": {
+            "default": 1.5,
+            "description": "AV grid spacing in Angstrom. Related to (but not the same item as) _flr_FPS_global_parameter.AV_min_grid_A, which is the *minimum* grid constant of FPS's relative-grid scheme.",
+            "type": "number",
+            "x-dialects": [
+              "network",
+              "flat"
+            ]
+          },
+          "simulation_type": {
+            "default": "AV1",
+            "description": "AV model: AV1 (one radius), AV3 (three radii), or XYZ (fixed mean position, no simulation).",
+            "enum": [
+              "AV1",
+              "AV3",
+              "XYZ"
+            ],
+            "type": "string",
+            "x-dialects": [
+              "network",
+              "flat",
+              "csfps"
+            ]
+          },
+          "strip_mask": {
+            "default": "",
+            "description": "Selection mask of atoms removed as obstacles before the AV simulation (e.g. flexible tags).",
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "x-dialects": [
+              "csfps"
+            ],
+            "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_xcoord"
+          },
+          "y": {
+            "type": "number",
+            "x-dialects": [
+              "csfps"
+            ],
+            "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_ycoord"
+          },
+          "z": {
+            "type": "number",
+            "x-dialects": [
+              "csfps"
+            ],
+            "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_zcoord"
+          }
+        },
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "χ²": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "properties": {
+          "distances": {
+            "description": "Names of the Distances entries belonging to this set.",
+            "type": "array",
+            "x-dialects": [],
+            "x-flrcif-item": "_flr_fret_distance_restraint.group_id"
+          },
+          "maximum_NaNs_allowed": {
+            "description": "Olga screening: maximum number of NaN model distances tolerated before a structure's score set is rejected.",
+            "type": "integer",
+            "x-dialects": [
+              "network"
+            ]
+          },
+          "penalty_NaN": {
+            "description": "Olga screening: chi-square penalty added per NaN model distance.",
+            "type": "number",
+            "x-dialects": [
+              "network"
+            ]
+          }
+        },
+        "required": [
+          "distances"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    }
+  },
+  "title": "fps.json — FRET labelling positions and distances",
+  "type": "object",
+  "x-schema-version": "1.0"
+}

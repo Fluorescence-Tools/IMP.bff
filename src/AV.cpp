@@ -206,8 +206,8 @@ void AV::set_av_parameter(const nlohmann::json &j){
                            j.value("radius2", 0.0),
                            j.value("radius3", 0.0)};
     set_radius1(r[0]);
-    set_radius2(r[0]);
-    set_radius3(r[0]);
+    set_radius2(r[1]);
+    set_radius3(r[2]);
     set_linker_width(j.value("linker_width", 0.5));
     set_allowed_sphere_radius(j.value("allowed_sphere_radius", 1.5));
     set_contact_volume_thickness(j.value("contact_volume_thickness", 0.0));
