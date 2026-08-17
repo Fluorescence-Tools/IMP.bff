@@ -433,6 +433,10 @@ public:
     bool get_has_pending_compute() const { return state_ && state_->pending; }
     //! Build (or refresh) the cached quadrature representation for `k`
     void prepare_quadrature(int k) const;
+    //! Wall time of the last compute phase (scheduling hint)
+    double get_last_compute_seconds() const {
+        return state_ ? state_->last_compute_seconds : 0.0;
+    }
 #endif
 
     //! Diagnostics of the lattice path: {skip, local, full, roll} counts

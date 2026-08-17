@@ -1,6 +1,17 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 second perf pass**: `set_origin` moved into the threaded compute
+  phase, shared rasters refreshed on threads, persistent `internal::ThreadPool`
+  (longest-first dynamic scheduling), and — the big one — the lattice path now
+  runs `PathMap::find_path_dijkstra_bounded` (exact lazy Dijkstra that stops
+  at cost ≥ ll/h; source tile left at default cost as before) on a monotone
+  unit-bucket queue (edges ≥ 1 voxel ⇒ relaxations land in later buckets;
+  each bucket sorted once by (cost, idx) = a heap's pop order). All results
+  bit-identical (scores unchanged to the last digit); T4L default mode
+  **4.2 → 1.8 ms/frame** (pre-PRD 37.7 → 21×). Fixed a 1-in-10 flake in
+  `test_AccessibleVolume.test_distance_distributions` (MC histogram tolerance
+  30000 was ~1.5× the expected 2N; now 60000).
 * **PRD-105 perf pass** (same day, one commit): the AVs' compute phases run
   on threads (`AV::resample_prepare/compute/finish` split; restraint
   `set_number_of_threads`, default hardware concurrency; pair sums threaded

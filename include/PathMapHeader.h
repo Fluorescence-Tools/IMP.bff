@@ -116,7 +116,7 @@ public:
      * @brief Get the maximum linker/path length from origin.
      * @return The maximum linker/path length.
      */
-    double get_max_path_length(){
+    double get_max_path_length() const {
         return max_path_length_;
     }
 

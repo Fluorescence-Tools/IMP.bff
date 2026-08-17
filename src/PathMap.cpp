@@ -270,7 +270,9 @@ void PathMap::find_path_dijkstra(
 
 void PathMap::find_path_dijkstra_exact(
         const long path_begin_idx,
-        const long path_end_idx
+        const long path_end_idx,
+        const float max_cost,
+        const bool keep_source_cost_default
 ){
     long n_voxel = get_number_of_voxels();
     IMP_USAGE_CHECK(
@@ -296,9 +298,21 @@ void PathMap::find_path_dijkstra_exact(
     const int nxy = nx * ny;
     const int box = pathMapHeader_.get_neighbor_box_size();
 
-    // min-heap of (cost, idx); stale entries are skipped on pop
+    // Monotone bucket queue. Every edge is at least one voxel long and
+    // penalties are non-negative, so a relaxation from a tile of cost c
+    // produces a key >= c + 1: it always lands in a later unit bucket than
+    // the one being drained. Each bucket is therefore sorted once, by
+    // (cost, idx), when it becomes active -- the exact pop order of a binary
+    // heap of (cost, idx) pairs, at a fraction of the heap traffic. Stale
+    // entries (improved after being queued) are skipped.
     typedef std::pair<float, long> entry;
-    std::priority_queue<entry, std::vector<entry>, std::greater<entry> > frontier;
+    std::vector<std::vector<entry> > buckets;
+    auto bucket_of = [](float c) -> size_t { return (size_t) c; };
+    auto push = [&](float c, long idx){
+        size_t b = bucket_of(c);
+        if(b >= buckets.size()) buckets.resize(b + 1);
+        buckets[b].emplace_back(c, idx);
+    };
     std::vector<int> reached;
     reached.reserve(1024);
 
@@ -306,15 +320,20 @@ void PathMap::find_path_dijkstra_exact(
     visited[path_begin_idx] = true;
     tiles[path_begin_idx].previous = nullptr;
     reached.push_back((int) path_begin_idx);
-    frontier.push(entry(0.0f, path_begin_idx));
+    push(0.0f, path_begin_idx);
 
-    while(!frontier.empty()){
-        const entry top = frontier.top();
-        frontier.pop();
-        const long cidx = top.second;
-        const float ccost = top.first;
+    bool done = false;
+    for(size_t b = 0; b < buckets.size() && !done; b++){
+        // (index access throughout: push() may reallocate `buckets`; the
+        // active bucket itself never grows)
+        std::sort(buckets[b].begin(), buckets[b].end());
+        const size_t nb = buckets[b].size();
+        for(size_t e = 0; e < nb; e++){
+        const long cidx = buckets[b][e].second;
+        const float ccost = buckets[b][e].first;
         if(ccost > cost[cidx]) continue;   // stale
-        if(cidx == path_end_idx) break;
+        if(ccost >= max_cost){ done = true; break; }   // nothing cheaper is left
+        if(cidx == path_end_idx){ done = true; break; }
         PathMapTile* current = &tiles[cidx];
         const int x0 = (int) (cidx % nx);
         const int y0 = (int) ((cidx / nx) % ny);
@@ -344,12 +363,16 @@ void PathMap::find_path_dijkstra_exact(
                     visited[nidx] = true;
                     reached.push_back((int) nidx);
                 }
-                frontier.push(entry(new_cost, nidx));
+                push(new_cost, nidx);
             }
+        }
         }
     }
     for(int idx : reached){
         tiles[idx].cost = cost[idx];
+    }
+    if(keep_source_cost_default){
+        tiles[path_begin_idx].cost = TILE_COST_DEFAULT;
     }
     reached_valid_ = true;
 }

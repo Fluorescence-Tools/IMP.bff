@@ -8,6 +8,8 @@
  */
 #include <IMP/bff/AV.h>
 
+#include <chrono>
+
 IMPBFF_BEGIN_NAMESPACE
 
 
@@ -390,14 +392,17 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
 
     auto &header = map->get_path_map_header_writable();
     IMP::algebra::Vector3D grid_origin(k0[0] * h, k0[1] * h, k0[2] * h);
+    // The voxel locations (set_origin) are recomputed in the compute phase,
+    // per map and therefore on the threads.
+    bool set_origin_needed = false;
     if(dims_changed || params_changed){
         auto path_map_header = create_path_map_header();
         path_map_header.set_path_origin(source, grid_origin);
         map->set_path_map_header(path_map_header);
-        map->set_origin(grid_origin);
+        set_origin_needed = true;
     } else if(rolled){
         header.set_path_origin(source, grid_origin);
-        map->set_origin(grid_origin);
+        set_origin_needed = true;
     } else {
         // same window; the label may have moved inside its voxel
         header.set_path_origin(source, grid_origin);
@@ -463,6 +468,8 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending_ll = ll;
     st.pending_allowed = get_allowed_sphere_radius();
     st.pending_source = source;
+    st.pending_set_origin = set_origin_needed;
+    st.pending_grid_origin = grid_origin;
     st.pending_occ1 = occ1;
     st.pending_occ2 = occ2;
     st.pending_gen1 = occ1->get_generation();
@@ -475,10 +482,16 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
 void AV::resample_lattice_compute(){
     auto &st = *state_;
     if(!st.pending) return;
+    auto t0 = std::chrono::steady_clock::now();
     PathMap *map = av_map_.get();
     const int *k0 = st.k0;
     const int n = st.n;
     const IMP::algebra::Vector3D &source = st.pending_source;
+
+    if(st.pending_set_origin){
+        map->set_origin(st.pending_grid_origin);
+        st.pending_set_origin = false;
+    }
 
     // 3. Obstacles inflated by half the linker width, from the lattice
     long nvox = map->get_number_of_voxels();
@@ -493,10 +506,20 @@ void AV::resample_lattice_compute(){
     // 5. Unblock voxels in initial sphere
     map->fill_sphere(source, st.pending_allowed, 0, false);
 
-    // 6. Find a path from source to other tiles
+    // 6. Find a path from source to other tiles. Only tiles with
+    //    cost * spacing < linker length carry density, so the exact search
+    //    stops there; the source tile keeps the default cost as the
+    //    historical search left it (its voxel is not part of the cloud).
     map->update_tiles();
     long source_idx = map->get_voxel_by_location(source);
-    map->find_path_dijkstra(source_idx, -1);
+    {
+        const float h = (float) map->get_path_map_header().get_simulation_grid_resolution();
+        const float ll = (float) map->get_path_map_header().get_max_path_length();
+        // smallest float c with c * h >= ll (the density test is c * h < ll)
+        float bound = ll / h;
+        while(bound * h < ll) bound = std::nextafter(bound, std::numeric_limits<float>::infinity());
+        map->find_path_dijkstra_bounded(source_idx, bound, true);
+    }
 
     // 7. Remove tiles closer to obstacles than the dye radius
     st.pending_occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
@@ -526,6 +549,8 @@ void AV::resample_lattice_compute(){
         r[2] += a[2] * a[3];
     }
     st.last_mean = r / sum;
+    st.last_compute_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - t0).count();
 }
 
 void AV::resample_lattice_finish(){

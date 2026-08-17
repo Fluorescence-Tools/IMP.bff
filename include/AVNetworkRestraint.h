@@ -29,6 +29,7 @@
 #include <IMP/UnaryFunction.h>
 
 #include <IMP/bff/AV.h>
+#include <IMP/bff/internal/ThreadPool.h>
 #include <IMP/bff/internal/FPSReaderWriter.h>
 #include <IMP/bff/internal/json.h>
 
@@ -109,6 +110,9 @@ private:
 
     //! Threads for the AVs' compute phases (0 = hardware concurrency)
     int n_threads_ = 0;
+    //! Persistent workers, created on first threaded evaluation
+    mutable std::shared_ptr<internal::ThreadPool> pool_;
+    internal::ThreadPool &get_pool() const;
 
     //! Apply the mode flags to the AV handles (anchoring, registry)
     void configure_avs();

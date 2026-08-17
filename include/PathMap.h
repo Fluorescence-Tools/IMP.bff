@@ -66,7 +66,12 @@ private:
     void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
 
     // Exact label-correcting Dijkstra (lazy deletion), see find_path().
-    void find_path_dijkstra_exact(long path_begin_idx, long path_end_idx);
+    // Stops once the cheapest open tile costs >= max_cost (voxel units);
+    // tiles that stay unsettled keep a cost >= max_cost, so an accessible
+    // density thresholded below max_cost is unaffected.
+    void find_path_dijkstra_exact(long path_begin_idx, long path_end_idx,
+                                  float max_cost = std::numeric_limits<float>::infinity(),
+                                  bool keep_source_cost_default = false);
     bool exact_search_ = false;
 
 protected:
@@ -326,6 +331,23 @@ public:
      */
     void set_exact_search(bool tf) { exact_search_ = tf; }
     bool get_exact_search() const { return exact_search_; }
+
+    /**
+     * @brief Exact Dijkstra from `path_begin_idx`, bounded.
+     *
+     * Textbook lazy Dijkstra that stops once the cheapest open tile costs at
+     * least `max_cost` (voxel units): every tile whose final cost is below
+     * `max_cost` is settled exactly, tiles beyond keep a tentative or default
+     * cost >= max_cost. An accessible density thresholded at
+     * `max_cost * spacing` (the AV's linker length) is therefore identical to
+     * an unbounded search, at a fraction of the pops. With
+     * `keep_source_cost_default` the source tile keeps TILE_COST_DEFAULT,
+     * as the historical search leaves it (it never wrote the source's cost).
+     */
+    void find_path_dijkstra_bounded(long path_begin_idx, float max_cost,
+                                    bool keep_source_cost_default = false) {
+        find_path_dijkstra_exact(path_begin_idx, -1, max_cost, keep_source_cost_default);
+    }
     
     
     /**

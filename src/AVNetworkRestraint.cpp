@@ -149,6 +149,18 @@ double AVNetworkRestraint::unprotected_evaluate(
     for(auto &av: avs_){
         av.second->prepare_lattice_window();
     }
+    // The shared class rasters are independent of each other: refresh them
+    // on threads before the AVs read them (each thread reads particle
+    // coordinates from the Model and writes only its own map).
+    const int nthreads = get_number_of_threads();
+    if(registry_){
+        AVOccupancyMaps maps = registry_->get_maps();
+        if(nthreads > 1 && maps.size() > 1){
+            get_pool().run(maps.size(), [&maps](size_t i){ maps[i]->update(); });
+        } else {
+            for(auto &m : maps) m->update();
+        }
+    }
     // prepare (serial: touches the Model), compute (threads: each AV its own
     // map, occupancy read-only), finish (serial: writes mean positions)
     // Every AV takes part in the compute pass: the ones prepare() left
@@ -165,20 +177,19 @@ double AVNetworkRestraint::unprotected_evaluate(
     }
     const bool quad = (distance_ == "quad");
     const int qk = quad_k_;
+    // Longest-first: pending AVs ordered by their last compute time keep the
+    // dynamic schedule balanced (a 21^3 window and a 23^3 window differ).
+    std::stable_sort(all.begin(), all.end(), [](const IMP::bff::AV *a, const IMP::bff::AV *b){
+        bool pa = a->get_has_pending_compute(), pb = b->get_has_pending_compute();
+        if(pa != pb) return pa;
+        return a->get_last_compute_seconds() > b->get_last_compute_seconds();
+    });
     auto work = [&all, quad, qk](size_t i){
         all[i]->resample_compute();
         if(quad) all[i]->prepare_quadrature(qk);
     };
-    int nt = std::min<int>(get_number_of_threads(), (int) all.size());
-    if(nt > 1 && n_pending > 0){
-        std::vector<std::thread> workers;
-        workers.reserve(nt);
-        for(int t = 0; t < nt; t++){
-            workers.emplace_back([&all, &work, t, nt](){
-                for(size_t i = t; i < all.size(); i += nt) work(i);
-            });
-        }
-        for(auto &w : workers) w.join();
+    if(nthreads > 1 && n_pending > 0){
+        get_pool().run(all.size(), work);
     } else {
         for(size_t i = 0; i < all.size(); i++) work(i);
     }
@@ -195,17 +206,10 @@ double AVNetworkRestraint::unprotected_evaluate(
         model[i] = get_model_distance(pairs[i]->position_1, pairs[i]->position_2,
                                       pairs[i]->forster_radius, pairs[i]->distance_type);
     };
-    int ntd = std::min<int>(get_number_of_threads(), (int) pairs.size());
-    if(distance_ == "quad" && ntd > 1){
+    if(distance_ == "quad" && nthreads > 1 && pairs.size() > 1){
         // MP/XYZ types read the mean position and particle coordinates only;
         // quad types read cached point sets. No writes.
-        std::vector<std::thread> workers;
-        for(int t = 0; t < ntd; t++){
-            workers.emplace_back([&, t](){
-                for(size_t i = t; i < pairs.size(); i += ntd) eval_pair(i);
-            });
-        }
-        for(auto &w : workers) w.join();
+        get_pool().run(pairs.size(), eval_pair);
     } else {
         for(size_t i = 0; i < pairs.size(); i++) eval_pair(i);
     }
@@ -227,6 +231,14 @@ double AVNetworkRestraint::get_model_distance(
         return av_distance_quadrature(*av1, *av2, forster_radius, distance_type, quad_k_);
     }
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
+}
+
+internal::ThreadPool &AVNetworkRestraint::get_pool() const{
+    int n = get_number_of_threads();
+    if(!pool_ || pool_->size() != n){
+        pool_ = std::make_shared<internal::ThreadPool>(n);
+    }
+    return *pool_;
 }
 
 int AVNetworkRestraint::get_number_of_threads() const{

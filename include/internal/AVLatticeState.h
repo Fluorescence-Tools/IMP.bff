@@ -68,9 +68,14 @@ struct AVLatticeState {
     bool pending_shift_xyz = true;
     double pending_ll = 0, pending_allowed = 0;
     IMP::algebra::Vector3D pending_source;
+    bool pending_set_origin = false;     // window moved: recompute voxel locations
+    IMP::algebra::Vector3D pending_grid_origin;
     AVOccupancyMap *pending_occ1 = nullptr;
     AVOccupancyMap *pending_occ2 = nullptr;
     unsigned long pending_gen1 = 0, pending_gen2 = 0;
+
+    // Wall time of the last compute phase (for longest-first scheduling)
+    double last_compute_seconds = 0.0;
 
     // Diagnostics
     long n_skip = 0, n_local = 0, n_full = 0, n_roll = 0;

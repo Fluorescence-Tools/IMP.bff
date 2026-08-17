@@ -218,6 +218,9 @@ class Tests(unittest.TestCase):
                71.,  137.,  243.,  436.,  617.,  908., 1091., 1329., 1386.,
              1330., 1139.,  729.,  391.,  142.,   17.,    0.,    0.,    0.,
                 0.,    0.,    0.,    0.,    0.])
+        # two independent 10k-sample histograms differ by ~2N = 20000 in
+        # summed squared deviation on average; 30000 failed about one run
+        # in ten
         ssdev = np.sum((p_rda_ref - p_rda)**2.)
-        self.assertEqual(ssdev < 30000, True)
+        self.assertEqual(ssdev < 60000, True)
 
