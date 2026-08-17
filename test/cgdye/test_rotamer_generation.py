@@ -70,5 +70,63 @@ class TestRotamerGeneration(unittest.TestCase):
             np.testing.assert_array_almost_equal(read_lib["coords"][1], library["coords"][1])
 
 
+class TestLinkerSamplerPhysics(unittest.TestCase):
+    """The linker LJ score excludes bonded neighbours; a short run is pinned."""
+
+    def test_bonded_pairs_are_excluded_from_the_linker_score(self):
+        from IMP.bff.cgdye.topology.builder import parse_mol2
+        from IMP.bff.cgdye.sampling.scoring import (
+            InternalEnergyEvaluator, compute_exclusions, dye_internal_system)
+        from IMP.bff.cgdye.utils import get_structure_dir
+        atoms, bonds = parse_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
+        system = dye_internal_system(atoms, bonds)
+        self.assertEqual(len(system["sites"]), len(atoms))
+        self.assertEqual(len(system["bonds"]), len(bonds))
+        excluded = compute_exclusions(system)
+        # every bond, angle end pair and dihedral end pair is excluded
+        for a, b, _l, _t in system["bonds"]:
+            self.assertIn(frozenset({a, b}), excluded)
+        for a, _b, c, _th, _t in system["angles"]:
+            self.assertIn(frozenset({a, c}), excluded)
+        for a, _b, _c, d, _t in system["dihedrals"]:
+            self.assertIn(frozenset({a, d}), excluded)
+        with_excl = InternalEnergyEvaluator(system)
+        without = InternalEnergyEvaluator({"sites": system["sites"], "bonds": []})
+        self.assertLess(len(with_excl.pairs), len(without.pairs))
+        # site ids are unique although MOL2 atom names are not (83 atoms, 68 names)
+        self.assertEqual(len({s["id"] for s in system["sites"]}), len(atoms))
+        # the MOL2 geometry scores a few tens of kcal/mol (repulsive-only 12-6
+        # on non-bonded pairs) once bonded pairs are excluded; scored against
+        # bonded neighbours (the old behaviour) it is ~1e6
+        coords = np.array([[a["x"], a["y"], a["z"]] for a in sorted(atoms.values(), key=lambda x: x["serial"])])
+        self.assertLess(with_excl.evaluate(coords), 50.0)
+        self.assertGreater(without.evaluate(coords), 1e5)
+
+    def test_generate_rotamers_pins(self):
+        import hashlib
+        import json
+        from pathlib import Path
+        from IMP.bff.cgdye.sampling.library_gen import generate_rotamers
+        from IMP.bff.cgdye.utils import get_structure_dir
+        pins_path = Path(__file__).resolve().parents[1] / "references" / "cgdye_sampler_pins.json"
+        with open(pins_path) as fh:
+            pins = json.load(fh)
+        lib = generate_rotamers(str(get_structure_dir("alexa488_r48.mol2")),
+                                n_steps=300, write_every=10, cluster_threshold=1.0, seed=42)
+        weights = np.asarray(lib["weight"])
+        self.assertEqual(len(weights), pins["n_clusters"])
+        self.assertAlmostEqual(float(weights.sum()), 1.0, places=12)
+        self.assertTrue((weights > 0).all())
+        np.testing.assert_allclose(weights, pins["weights"], rtol=0, atol=1e-10)
+        transitions = np.asarray(lib["transitions"])
+        self.assertEqual(transitions.shape, (len(weights), len(weights)))
+        self.assertEqual(int(transitions.sum()), int(np.asarray(pins["transitions"]).sum()))
+        np.testing.assert_array_equal(transitions, np.asarray(pins["transitions"]))
+        coords = np.stack([lib["coords"][i + 1] for i in range(len(weights))])
+        self.assertEqual(coords.shape[1], pins["n_atoms"])
+        self.assertEqual(hashlib.sha256(np.round(coords, 6).tobytes()).hexdigest(), pins["centre_coords_sha256"])
+        self.assertEqual(lib["atom_names"][:5], pins["atom_names_first5"])
+
+
 if __name__ == "__main__":
     unittest.main()

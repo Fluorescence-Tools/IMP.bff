@@ -13,7 +13,7 @@ import IMP.atom
 from ..topology.builder import parse_mol2, build_graph
 from .clustering import cluster_leader, cluster_assignment
 from .boltzmann import compute_boltzmann_weights, cluster_weights
-from .scoring import InternalEnergyEvaluator, compute_lj_pair_sites
+from .scoring import InternalEnergyEvaluator, compute_lj_pair_sites, dye_internal_system
 from .mean_field import mean_field_weights
 
 
@@ -128,9 +128,8 @@ class LinkerSampler:
         
         # Setup evaluator for Metropolis
         atoms_dict, bonds = parse_mol2(self.dye_mol2, "dye")
-        sites = [{"id": f"dye:{a['atom_name']}", "atom_name": a["atom_name"]} for a in sorted(atoms_dict.values(), key=lambda x: x["serial"])]
-        system = {"sites": sites, "bonds": []}
-        evaluator = InternalEnergyEvaluator(system)
+        # bonded 1-2/1-3/1-4 pairs excluded from the LJ score
+        evaluator = InternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
         
         self.apply_config(current_cfg)
         current_energy = evaluator.evaluate(self.get_coords())
@@ -232,9 +231,8 @@ def generate_rotamers(
 
     # Setup evaluator for Boltzmann weights
     atoms_dict, bonds = parse_mol2(dye_mol2, "dye")
-    sites = [{"id": f"dye:{a['atom_name']}", "atom_name": a["atom_name"]} for a in sorted(atoms_dict.values(), key=lambda x: x["serial"])]
-    system = {"sites": sites, "bonds": []}  # Simplification for exclusions
-    evaluator = InternalEnergyEvaluator(system)
+    # bonded 1-2/1-3/1-4 pairs excluded from the LJ score (same as the sampler)
+    evaluator = InternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
 
     # Trick 3: vectorized batch scoring (evaluate_batch is now NumPy-based)
     energies = evaluator.evaluate_batch(all_coords)

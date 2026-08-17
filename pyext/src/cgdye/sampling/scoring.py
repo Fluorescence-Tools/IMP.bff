@@ -72,6 +72,35 @@ def compute_exclusions(system):
     return excluded
 
 
+def dye_internal_system(atoms_dict, bonds):
+    """Minimal force-field ``system`` for a lone dye from ``parse_mol2`` output.
+
+    Sites are the MOL2 atoms in serial order (ids ``dye:<atom_name>``, the
+    order ``LinkerSampler.get_coords`` uses); bonds, angles and dihedrals are
+    derived from the MOL2 connectivity so that :func:`compute_exclusions`
+    removes the 1-2, 1-3 and 1-4 pairs from the LJ pair list. Without them the
+    linker sampler scored bonded neighbours with the repulsive LJ, which is
+    unphysical and biases torsion/angle sampling. Site ids are
+    ``dye:<serial>:<atom_name>`` (unique; see below).
+    """
+    from IMP.bff.cgdye.topology.dye import build_angles, build_dihedrals, build_graph
+
+    ordered = sorted(atoms_dict.values(), key=lambda x: x["serial"])
+    # Site ids carry the serial: MOL2 atom names are not unique across the
+    # dye + linker residues (alexa488_r48 has 83 atoms, 68 distinct names), and
+    # name-only ids made same-named atoms one site, i.e. self-pairs at r = 0
+    # with 1e31 energies in every frame.
+    sid = {a["serial"]: f"dye:{a['serial']}:{a['atom_name']}" for a in ordered}
+    sites = [{"id": sid[a["serial"]], "atom_name": a["atom_name"]} for a in ordered]
+    graph = build_graph(bonds)
+    return {
+        "sites": sites,
+        "bonds": [(sid[a], sid[b], 0.0, None) for a, b in sorted(bonds)],
+        "angles": [(sid[a], sid[b], sid[c], 0.0, None) for a, b, c in build_angles(graph)],
+        "dihedrals": [(sid[a], sid[b], sid[c], sid[d], None) for a, b, c, d in build_dihedrals(graph)],
+    }
+
+
 def build_lj_type_table(elements):
     """Build _ff_lj_type entries for a set of elements.
 

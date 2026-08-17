@@ -47,14 +47,16 @@ def compute_exact_efficiency(
         weights = np.real(evecs[:, idx])
         weights /= weights.sum()
         
-    # 4. Solve (k_rad*I + K_fret - M) * G = weights
-    # where G is the integrated population (area under decay curves)
+    # 4. Integrated populations G_j = int_0^inf p_j(t) dt.
+    # With P[i, j] the probability of i -> j (rows sum to 1) the populations
+    # evolve as a row vector, dp/dt = p M - p (k_rad I + K_fret), so
+    # p0 = G (k_rad I + K_fret - M), i.e. G solves the *transposed* system
+    # A^T G = w. Solving A G = w instead is only right for symmetric M; for a
+    # non-symmetric P it gave the wrong fast-exchange limit (test_physics_invariants).
     A = k_rad * np.eye(n) + K_fret - M
-    G = np.linalg.solve(A, weights)
+    G = np.linalg.solve(A.T, weights)
     
-    # 5. Efficiency = 1 - (integrated population / tau0)
-    # Since we didn't include k_rad in the matrix inversion for the FRET-only part:
-    # Actually, E = sum(k_fret_i * G_i)
+    # 5. E = sum_i k_fret_i G_i (the fraction of excitations that leave via FRET)
     efficiency = np.sum(fret_rates * G)
     
     return float(efficiency)
