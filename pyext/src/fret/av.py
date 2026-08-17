@@ -17,6 +17,12 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from . import io
+from .strip import (
+    BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES,
+    default_strip_mask,
+    parse_strip_mask,
+    strip_pdb_lines,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -567,176 +573,17 @@ def _find_attachment_point(
     return atoms[resseq - 1, :3] if resseq > 0 and resseq <= atoms.shape[0] else None
 
 
-def _strip_residue_atoms(
-    atoms: np.ndarray,
-    chain: str,
-    resseq: int,
-    pdb_path: Optional[str] = None,
-) -> np.ndarray:
-    """Remove the attachment residue's atoms from the coordinate array.
-
-    Parameters
-    ----------
-    atoms : (N, 4) ndarray
-        The atoms array (x, y, z, vdw_radius).
-    chain : str
-        The chain identifier of the residue to exclude.
-    resseq : int
-        The residue sequence number of the residue to exclude.
-    pdb_path : str, optional
-        Path to the PDB file for exact matching of residue atoms.
-
-    Returns
-    -------
-    clean_atoms : (M, 4) ndarray
-        The coordinate array with residue atoms removed.
-    """
-    if not pdb_path or not os.path.exists(pdb_path):
-        return atoms
-
-    try:
-        records = _cached_pdb_records(pdb_path)
-    except Exception:
-        return atoms
-
-    if len(records) == atoms.shape[0]:
-        keep_mask = np.asarray(
-            [
-                not (line_resseq == resseq and (not chain or line_chain == chain))
-                for line_chain, line_resseq, _, _, _, _, _ in records
-            ],
-            dtype=bool,
-        )
-        return atoms[keep_mask]
-
-    coords_to_exclude = [
-        [x, y, z]
-        for line_chain, line_resseq, _, x, y, z, _ in records
-        if line_resseq == resseq and (not chain or line_chain == chain)
-    ]
-    if not coords_to_exclude:
-        return atoms
-
-    coords_to_exclude_arr = np.array(coords_to_exclude, dtype=np.float64)
-    distances = np.linalg.norm(
-        atoms[:, None, :3] - coords_to_exclude_arr[None, :, :],
-        axis=2,
-    )
-    return atoms[~np.any(distances < 0.01, axis=1)]
-
-
 # ---------------------------------------------------------------------------
 # The FPS strip: obstacles removed around the attachment site
 # ---------------------------------------------------------------------------
 
-#: The atoms of a peptide backbone. The default strip keeps these plus the
-#: attachment atom and removes the rest of the attachment residue's side
-#: chain -- the FPS convention, which every fps.json ``allowed_sphere_radius``
-#: is calibrated against (FPS computes on a structure with that residue
-#: stripped, so small declared clearances are meaningful, not walled in).
-_BACKBONE_ATOM_NAMES = ("N", "CA", "C", "O")
+#: The strip grammar and the AV default live in :mod:`IMP.bff.fret.strip`
+#: (PRD-106): the AV build keeps the backbone plus the attachment atom
+#: (``default_strip_mask``), imported above.
 
 #: Stripped-PDB cache, keyed like the record cache plus the site and mask.
 #: One file per distinct (structure, site, mask) per process.
 _STRIPPED_PDB_CACHE: Dict[tuple, str] = {}
-
-
-def default_strip_mask(chain: str, resseq: int, atom_name: str) -> str:
-    """The default strip for an attachment site, as an fps ``strip_mask``.
-
-    The attachment residue's side chain minus the attachment atom; the
-    backbone stays. The spelling is the PyMOL selection dialect fps
-    documents use, so a declared mask and the default are the same
-    vocabulary and round-trip through the same evaluation.
-
-    Parameters
-    ----------
-    chain : str
-        Chain identifier; empty matches any chain.
-    resseq : int
-        Residue sequence number of the attachment site.
-    atom_name : str
-        Name of the attachment atom (kept, never stripped).
-
-    Returns
-    -------
-    str
-        The mask expression, e.g.
-        ``chain A and resid 36 and not name N+CA+C+O+CB``.
-    """
-    keep = "+".join(dict.fromkeys(_BACKBONE_ATOM_NAMES + (atom_name,)))
-    parts = []
-    if chain:
-        parts.append(f"chain {chain}")
-    parts.append(f"resid {int(resseq)}")
-    parts.append(f"not name {keep}")
-    return " and ".join(parts)
-
-
-def _parse_strip_mask(mask: str) -> tuple:
-    """Parse an fps ``strip_mask`` into a predicate over PDB records.
-
-    The accepted grammar is the dialect fps documents actually carry: an
-    ``and``-chain of ``chain <id>``, ``resid <n>`` (``resi`` accepted), and
-    one name term, ``name A+B+...`` or ``not name A+B+...``. ``+`` is the
-    list separator (PyMOL's own; space-separated lists are a parse error in
-    PyMOL and here). Anything else -- ``or``, parentheses, other keywords --
-    is refused loudly: a mask this function cannot read must not be
-    silently ignored or approximated.
-
-    Parameters
-    ----------
-    mask : str
-        The strip mask expression.
-
-    Returns
-    -------
-    tuple
-        ``(chain, resids, names, negate)`` -- the chain id (or ``None`` for
-        any chain), the residue numbers (empty for any), the name set (or
-        ``None`` for no name term), and whether the name term was negated.
-    """
-    import re
-
-    chain = None
-    resids: tuple[int, ...] = ()
-    names = None
-    negate = False
-    seen_name_term = False
-    for term in re.split(r"\s+and\s+", mask.strip(), flags=re.IGNORECASE):
-        term = term.strip()
-        m = re.fullmatch(r"chain\s+(\S+)", term, flags=re.IGNORECASE)
-        if m:
-            if chain is not None:
-                raise ValueError(f"strip_mask: repeated 'chain' term in {mask!r}")
-            chain = m.group(1)
-            continue
-        m = re.fullmatch(r"resi(?:d)?\s+(-?\d+)", term, flags=re.IGNORECASE)
-        if m:
-            if resids:
-                raise ValueError(f"strip_mask: repeated 'resid' term in {mask!r}")
-            resids = (int(m.group(1)),)
-            continue
-        m = re.fullmatch(
-            r"(not\s+)?name\s+(\S+(?:\+\S+)*)", term, flags=re.IGNORECASE
-        )
-        if m:
-            if seen_name_term:
-                raise ValueError(f"strip_mask: repeated name term in {mask!r}")
-            seen_name_term = True
-            negate = bool(m.group(1))
-            parts = [p for p in m.group(2).split("+") if p]
-            if not parts:
-                raise ValueError(f"strip_mask: empty name list in {mask!r}")
-            names = frozenset(p.upper() for p in parts)
-            continue
-        raise ValueError(
-            f"strip_mask {mask!r} is outside the fps dialect "
-            "(chain <id> and resid <n> and [not] name A+B+...); "
-            "evaluate the selection externally and hand the stripped "
-            "structure to compute_av"
-        )
-    return chain, resids, names, negate
 
 
 def _stripped_pdb_for(
@@ -789,43 +636,8 @@ def _stripped_pdb_for(
     except OSError:
         return str(pdb_path)
 
-    if mask:
-        sel_chain, sel_resids, sel_names, negate = _parse_strip_mask(mask)
-    else:
-        sel_chain, sel_resids = (chain or None), (int(resseq),)
-        sel_names = frozenset(
-            n.upper() for n in _BACKBONE_ATOM_NAMES + (atom_name,)
-        )
-        negate = True
-
-    kept = []
-    for line in lines:
-        stripped = False
-        if line.startswith(("ATOM  ", "HETATM")):
-            try:
-                line_resseq = int(line[22:26].strip())
-            except ValueError:
-                line_resseq = None
-            line_chain = line[21].strip()
-            line_name = line[12:16].strip().upper()
-            if line_resseq is not None and line_name:
-                selected = (
-                    (sel_chain is None or line_chain == sel_chain)
-                    and (not sel_resids or line_resseq in sel_resids)
-                    and (
-                        sel_names is None
-                        or (line_name not in sel_names)
-                        == negate
-                    )
-                )
-                is_attachment = (
-                    line_name == atom_name.strip().upper()
-                    and line_resseq == int(resseq)
-                    and (not chain or line_chain == chain)
-                )
-                stripped = selected and not is_attachment
-        if not stripped:
-            kept.append(line)
+    strip = mask or default_strip_mask(chain, int(resseq), atom_name)
+    kept = strip_pdb_lines(lines, strip, keep_attachment=(chain, int(resseq), atom_name))
 
     try:
         import tempfile

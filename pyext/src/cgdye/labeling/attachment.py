@@ -53,45 +53,32 @@ def _get_atom_particles(hier):
         yield a
 
 
-def _site_residue_atoms(hierarchy, chain_id, resnum):
-    for a in IMP.atom.get_by_type(hierarchy, IMP.atom.ATOM_TYPE):
-        res_p = a.get_parent()
-        if not IMP.atom.Residue.get_is_setup(res_p):
-            continue
-        res = IMP.atom.Residue(res_p)
-        if res.get_index() != resnum:
-            continue
-        chain_p = res_p.get_parent()
-        if not IMP.atom.Chain.get_is_setup(chain_p):
-            continue
-        chain = IMP.atom.Chain(chain_p)
-        if chain.get_id() != chain_id:
-            continue
-        yield a
+#: cgdye's keep-set at a labelling site: the backbone (and a terminal OXT).
+#: CB is *stripped* -- the explicit dye linker is built off CA and replaces the
+#: whole side chain, so a CB left behind would clash with the linker's first
+#: atom. The AV convention (``IMP.bff.fret.strip.default_strip_mask``) keeps
+#: CB because the AV linker attaches at it; each consumer owns its default,
+#: the engine takes the mask (PRD-106).
+SITE_KEEP_ATOM_NAMES = ("N", "CA", "C", "O", "OXT")
 
 
 def strip_sidechain_at_site(
     protein_hier,
     chain_id,
     resnum,
-    keep_atom_names=("N", "CA", "C", "O", "OXT"),
+    keep_atom_names=SITE_KEEP_ATOM_NAMES,
 ):
-    """Remove side-chain atoms at the labeling residue.
+    """Remove side-chain atoms at the labelling residue, in place.
 
-    Returns the number of removed atoms.
+    Delegates to the shared strip engine (:mod:`IMP.bff.fret.strip`) with the
+    mask ``chain <id> and resid <n> and not name <keep...>``. Returns the
+    number of removed atoms.
     """
-    keep = {name.upper() for name in keep_atom_names}
-    to_remove = []
-    for a in _site_residue_atoms(protein_hier, chain_id, resnum):
-        atom_name = _atom_name(a).upper()
-        if atom_name not in keep:
-            to_remove.append(a)
+    from IMP.bff.fret.strip import site_strip_mask, strip_hierarchy
 
-    for a in to_remove:
-        parent = IMP.atom.Hierarchy(a.get_parent())
-        parent.remove_child(IMP.atom.Hierarchy(a))
-
-    return len(to_remove)
+    mask = site_strip_mask(chain_id, resnum, keep_atom_names)
+    _, n_removed = strip_hierarchy(protein_hier, mask, inplace=True)
+    return n_removed
 
 
 def align_hierarchies(source_hier, source_chain, source_resnum, target_ca, target_n, target_c):
