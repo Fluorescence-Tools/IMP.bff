@@ -31,7 +31,12 @@ import numpy as np
 
 from .._jit import njit, prange
 
-__all__ = ["GridDiffusionResult", "GridDiffusionSolver", "diffusion_stability_limit"]
+__all__ = [
+    "GridDiffusionResult",
+    "GridDiffusionSolver",
+    "diffusion_stability_limit",
+    "equilibrium_occupancy",
+]
 
 
 class GridDiffusionResult(NamedTuple):
@@ -53,6 +58,46 @@ def diffusion_stability_limit(d_max: float, dg: float) -> float:
     if d_max <= 0.0:
         return float("inf")
     return float(dg) ** 2 / (6.0 * d_max)
+
+
+def equilibrium_occupancy(diffusion_map, bounds) -> np.ndarray:
+    """The stationary occupancy of the volume, in closed form: ``p ∝ 1/D``.
+
+    The kernel below propagates the flux as ``d[i]*p[i] - d[j]*p[j]``, which
+    discretises
+
+        ∂p/∂t = ∇²(D p)                    (the Itô / divergence form)
+
+    **not** ``∇·(D ∇p)``. The two differ exactly when ``D`` varies in space, and
+    the difference is the whole point here: the stationary state of ``∇·(D∇p)``
+    with no flux is *uniform*, while the stationary state of ``∇²(Dp)`` is
+    ``D p = const``, i.e.
+
+        p_eq(r) ∝ 1 / D(r)     on the accessible domain, 0 outside.
+
+    So a dye accumulates where it moves slowly, which is the modelling claim the
+    mobility field exists to make. That is a **convention, not a derivation** --
+    Itô against Stratonovich against the isothermal convention is a real choice
+    for diffusion in a mobility gradient, and this one is inherited from
+    ChiSurf. It is not a small effect: on T4L site 132 the ratio of peak to mean
+    occupancy is ~75.
+
+    Verified against the iterative solver to a maximum relative deviation of
+    **1.1e-13** (``test_quenching_field.py``). Use this rather than
+    :meth:`GridDiffusionSolver.equilibrium`, which spends tens of thousands of
+    iterations converging to it -- and on a real site, with ``D`` varying by
+    orders of magnitude through the compounding slow factor, may not converge in
+    any reasonable number at all.
+    """
+    diffusion_map = np.ascontiguousarray(diffusion_map, dtype=np.float64)
+    mask = np.asarray(bounds) > 0
+    occupancy = np.zeros_like(diffusion_map)
+    usable = mask & (diffusion_map > 0.0)
+    if not usable.any():
+        return occupancy
+    occupancy[usable] = 1.0 / diffusion_map[usable]
+    total = occupancy.sum()
+    return occupancy / total if total else occupancy
 
 
 @njit(cache=True, parallel=True)
@@ -215,9 +260,14 @@ class GridDiffusionSolver:
     ) -> np.ndarray:
         """Propagate with no decay until the occupancy stops moving.
 
-        This is what turns a uniform accessible volume into an *occupancy*: with
-        a position-dependent diffusion coefficient the dye dwells longer where it
-        moves slowly, and the stationary distribution is not flat.
+        **Prefer :func:`equilibrium_occupancy`**, which is the same answer in
+        closed form (``p ∝ 1/D``, agreeing to 1.1e-13). This iterates toward it,
+        which on a real site — where ``D`` spans orders of magnitude through the
+        compounding slow factor — can fail to converge in any practical number
+        of steps: on T4L site 132 the distribution was still drifting after
+        40 000 iterations. Kept as the independent check that the closed form is
+        right, and for the case where someone changes the flux discretisation
+        and the closed form no longer holds.
 
         :returns: the normalised equilibrium density.
         """

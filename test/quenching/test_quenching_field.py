@@ -17,6 +17,7 @@ from IMP.bff.quenching import maps
 from IMP.bff.quenching.solver import (
     GridDiffusionSolver,
     diffusion_stability_limit,
+    equilibrium_occupancy,
 )
 
 
@@ -320,6 +321,69 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
         slow = float(equilibrium[:half][self.bounds[:half] > 0].mean())
         fast = float(equilibrium[half:][self.bounds[half:] > 0].mean())
         self.assertGreater(slow, fast)
+
+
+class EquilibriumOccupancyTests(IMP.test.TestCase):
+    """The stationary state has a closed form, and it is `p ∝ 1/D`.
+
+    The flux is discretised as `d[i]*p[i] - d[j]*p[j]`, i.e. `∂p/∂t = ∇²(Dp)`
+    (Itô), whose stationary state is `D p = const` — **not** `∇·(D∇p)`, whose
+    stationary state with no flux is uniform. Getting this wrong is not
+    cosmetic: it is the difference between a dye that accumulates where it moves
+    slowly and one that does not, and accumulating is the claim the mobility
+    field exists to make.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.ng, self.dg = 25, 1.0
+        self.bounds = open_box(self.ng)
+        axis = np.arange(self.ng)[:, None, None]
+        self.d_map = np.where(self.bounds > 0, 2.0 + 1.5 * np.cos(axis * 0.3), 0.0)
+
+    def test_the_closed_form_is_normalised_and_masked(self):
+        occupancy = equilibrium_occupancy(self.d_map, self.bounds)
+        self.assertAlmostEqual(float(occupancy.sum()), 1.0, places=12)
+        self.assertTrue(np.all(occupancy[self.bounds == 0] == 0.0))
+
+    def test_d_times_p_is_constant(self):
+        occupancy = equilibrium_occupancy(self.d_map, self.bounds)
+        inside = self.bounds > 0
+        product = self.d_map[inside] * occupancy[inside]
+        self.assertLess(float(product.std() / product.mean()), 1e-12)
+
+    def test_it_agrees_with_propagating_to_equilibrium(self):
+        """The iterative solver is the independent check on the algebra."""
+        solver = GridDiffusionSolver(
+            self.d_map, self.bounds, self.bounds.copy(),
+            t_step=0.5 * diffusion_stability_limit(self.d_map.max(), self.dg),
+            dg=self.dg,
+        )
+        iterated = solver.equilibrium(n_steps=200000, tolerance=1e-14, n_check=1000)
+        closed = equilibrium_occupancy(self.d_map, self.bounds)
+        inside = self.bounds > 0
+        deviation = np.max(np.abs(iterated[inside] - closed[inside]) / closed[inside])
+        self.assertLess(float(deviation), 1e-10)
+
+    def test_a_uniform_mobility_gives_a_uniform_occupancy(self):
+        uniform = np.where(self.bounds > 0, 3.0, 0.0)
+        occupancy = equilibrium_occupancy(uniform, self.bounds)
+        inside = occupancy[self.bounds > 0]
+        self.assertLess(float(inside.std() / inside.mean()), 1e-12)
+
+    def test_slower_regions_hold_more_of_the_dye(self):
+        """The whole point: occupancy is not the accessible volume."""
+        d_map = np.where(self.bounds > 0, 4.0, 0.0)
+        half = self.ng // 2
+        d_map[:half] = np.where(self.bounds[:half] > 0, 0.25, 0.0)
+        occupancy = equilibrium_occupancy(d_map, self.bounds)
+        slow = occupancy[:half][self.bounds[:half] > 0].mean()
+        fast = occupancy[half:][self.bounds[half:] > 0].mean()
+        self.assertAlmostEqual(float(slow / fast), 16.0, delta=1e-9)
+
+    def test_an_empty_domain_is_not_an_error(self):
+        empty = np.zeros((self.ng,) * 3)
+        self.assertEqual(float(equilibrium_occupancy(empty, empty).sum()), 0.0)
 
 
 class PortedDefectTests(IMP.test.TestCase):

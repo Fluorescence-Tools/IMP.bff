@@ -147,6 +147,7 @@ EXPORTS = {
     "GridDiffusionSolver": "IMP.bff.quenching.solver",
     "GridDiffusionResult": "IMP.bff.quenching.solver",
     "diffusion_stability_limit": "IMP.bff.quenching.solver",
+    "equilibrium_occupancy": "IMP.bff.quenching.solver",
     "DynamicAccessibleVolume": "IMP.bff.quenching.dynamic",
     # --- the particle model, end to end --------------------------------------
     "DyeDiffusionSimulation": "IMP.bff.quenching.model",

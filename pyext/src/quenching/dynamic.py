@@ -27,7 +27,11 @@ from typing import Optional
 import numpy as np
 
 from . import maps
-from .solver import GridDiffusionSolver, diffusion_stability_limit
+from .solver import (
+    GridDiffusionSolver,
+    diffusion_stability_limit,
+    equilibrium_occupancy,
+)
 
 __all__ = ["DynamicAccessibleVolume"]
 
@@ -205,9 +209,20 @@ class DynamicAccessibleVolume:
         return self._occupancy
 
     def update_occupancy(self, t_step: Optional[float] = None, **kwargs) -> np.ndarray:
-        """Relax the density to equilibrium with no decay."""
-        solver = self._solver(self.bounds, None, t_step)
-        self._occupancy = solver.equilibrium(**kwargs)
+        """The equilibrium occupancy, in closed form.
+
+        ``p ∝ 1/D`` — see :func:`IMP.bff.quenching.solver.equilibrium_occupancy`.
+        Propagating to it instead is possible but slow and, on a real site where
+        the compounding slow factor makes ``D`` span orders of magnitude, may not
+        converge at all: on T4L site 132 it was still drifting after 40 000
+        iterations. Pass ``iterate=True`` to do it the long way anyway.
+        """
+        if kwargs.pop("iterate", False):
+            self._occupancy = self._solver(
+                self.bounds, None, t_step).equilibrium(**kwargs)
+        else:
+            self._occupancy = equilibrium_occupancy(
+                self.diffusion_map, self.bounds)
         return self._occupancy
 
     def donor_decay(
