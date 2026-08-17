@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,7 +56,7 @@ class IMPBFFEXPORT AVOccupancyMap : public IMP::Object {
     // Optional coordinate snapshot (x, y, z, r per particle) maintained by
     // the owner (AVOccupancyRegistry::refresh_snapshot): the four class maps
     // of a registry then read the Model once per frame instead of once each.
-    const std::vector<IMP::algebra::Vector4D> *snapshot_ = nullptr;
+    std::shared_ptr<const std::vector<IMP::algebra::Vector4D> > snapshot_;
     IMP::algebra::Vector3D coord(size_t i) const {
         if (snapshot_) {
             const IMP::algebra::Vector4D &v = (*snapshot_)[i];
@@ -140,8 +141,9 @@ public:
     void set_window(int kx, int ky, int kz, int nx, int ny, int nz);
 
     //! Read particle coordinates from `snapshot` (x, y, z, r per particle,
-    //! same order as the particles) instead of the Model; nullptr = Model
-    void set_coordinate_snapshot(const std::vector<IMP::algebra::Vector4D> *snapshot) {
+    //! same order as the particles) instead of the Model; empty = Model.
+    //! Shared ownership: a map handed out to Python may outlive its registry.
+    void set_coordinate_snapshot(std::shared_ptr<const std::vector<IMP::algebra::Vector4D> > snapshot) {
         snapshot_ = snapshot;
     }
 
@@ -237,7 +239,8 @@ IMP_OBJECTS(AVOccupancyMap, AVOccupancyMaps);
 class IMPBFFEXPORT AVOccupancyRegistry : public IMP::Object {
     IMP::ParticlesTemp ps_;
     std::map<std::pair<double, double>, IMP::Pointer<AVOccupancyMap> > maps_;
-    std::vector<IMP::algebra::Vector4D> snapshot_;
+    std::shared_ptr<std::vector<IMP::algebra::Vector4D> > snapshot_ =
+        std::make_shared<std::vector<IMP::algebra::Vector4D> >();
 public:
     AVOccupancyRegistry(const IMP::ParticlesTemp &ps,
                         std::string name = "AVOccupancyRegistry%1%")

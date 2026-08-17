@@ -1,5 +1,6 @@
 %ignore IMP::bff::AVOccupancyMap::read_window;
 %ignore IMP::bff::AVOccupancyMap::read_window_strided;
+%ignore IMP::bff::AVOccupancyMap::set_coordinate_snapshot;
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyMap, AVOccupancyMaps);
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyRegistry, AVOccupancyRegistries);
 IMP_SWIG_DECORATOR(IMP::bff, AV, AVs);

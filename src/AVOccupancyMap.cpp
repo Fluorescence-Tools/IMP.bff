@@ -516,7 +516,7 @@ AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius
     if (it == maps_.end()) {
         IMP::Pointer<AVOccupancyMap> m = new AVOccupancyMap(spacing, extra_radius, ps_);
         m->set_was_used(true);
-        m->set_coordinate_snapshot(&snapshot_);
+        m->set_coordinate_snapshot(snapshot_);
         it = maps_.emplace(key, m).first;
     }
     return it->second.get();
@@ -524,10 +524,11 @@ AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius
 
 void AVOccupancyRegistry::refresh_snapshot() {
     IMP::core::XYZRs xyzr(ps_);
-    snapshot_.resize(xyzr.size());
+    std::vector<IMP::algebra::Vector4D> &snap = *snapshot_;
+    snap.resize(xyzr.size());
     for (size_t i = 0; i < xyzr.size(); i++) {
         IMP::algebra::Vector3D c = xyzr[i].get_coordinates();
-        snapshot_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr[i].get_radius());
+        snap[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr[i].get_radius());
     }
 }
 

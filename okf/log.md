@@ -1,6 +1,24 @@
 # Update Log
 
 ## 2026-08-17
+* **Memory pass, PRD-105 code:** `leaks --atExit` over 14 restraint
+  lifecycles in all modes (incl. async, pickle, forced recompute, coarse
+  mode): no leaks in libimp_bff (only SWIG's one-time registration blocks).
+  Guard Malloc over the full suite, the benchmark (all modes) and the
+  lifecycle script: clean. Two ownership hardenings: an unfinished
+  `evaluate_async()` job is joined by its own destructor and `job_` is the
+  last member of the restraint (destroyed first, before the pool and the
+  AVs it uses); the registry's coordinate snapshot is shared with its maps
+  (`shared_ptr`) so a map handed to Python cannot dangle if it outlives the
+  registry. ASan via `DYLD_INSERT_LIBRARIES` into the conda Python spins in
+  `AsanInitFromRtl` on this macOS — unusable here; Guard Malloc +
+  `MallocCheckHeap` + `leaks` are the tools that work.
+* **Placement (user, 2026-08-17): "split at data level — bff owns structure,
+  tttrlib owns data/algos."** The decay routines in imp.bff are the
+  deprecated 2.25 copies (PRD-93: they leave in the next release; tttrlib is
+  canonical and already carries the same `fconv_per_cs` bounds fix in its
+  wrapper). The bff clamp is a stopgap in code that is going away, not an
+  investment.
 * **Memory: `decay_fconv_per_cs` wrote one past the fit array** — its `stop`
   and `conv_stop` are inclusive (the sibling routines' `stop` is exclusive)
   and the Python wrapper maps `stop=-1` to `n_fit`, so `fit[n_fit]` was

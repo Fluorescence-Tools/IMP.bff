@@ -120,8 +120,6 @@ private:
     //! Threads for the AVs' compute phases (0 = hardware concurrency)
     int n_threads_ = 0;
 
-    //! The evaluation in flight (evaluate_async / wait_score)
-    mutable std::shared_ptr<internal::AVEvalJob> job_;
     //! The three phases of an evaluation: serial begin (Model reads, occupancy
     //! classification, AV prepare), the pool run, serial finish (occupancy
     //! end_update, AV finish, score).
@@ -357,6 +355,13 @@ public:
     void show(std::ostream &out) const {out << "AVNetwork restraint";}
 
     IMP_OBJECT_METHODS(AVNetworkRestraint)
+
+private:
+    /* The evaluation in flight (evaluate_async / wait_score). Declared last
+       on purpose: members are destroyed in reverse order, so an unfinished
+       job -- whose runner thread uses the pool and the AVs -- is joined
+       (AVEvalJob's destructor) before anything it touches goes away. */
+    mutable std::shared_ptr<internal::AVEvalJob> job_;
 
 };
 

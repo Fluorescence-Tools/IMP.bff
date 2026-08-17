@@ -187,6 +187,10 @@ struct AVEvalJob {
     std::unique_ptr<std::thread> runner;   // evaluate_async: the pool's caller thread
     std::chrono::steady_clock::time_point t0;
     double t_registry = 0, t_prepare = 0, t_compute = 0;
+    ~AVEvalJob() {
+        // an abandoned evaluate_async(): let it finish rather than terminate
+        if (runner && runner->joinable()) runner->join();
+    }
 };
 }
 
