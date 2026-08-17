@@ -13,7 +13,10 @@ import IMP.bff.api as api
 _FAMILY = re.compile(
     r"(Rotamer|Dye|Linker|Langevin|AccessibleVolume|CHARMM36|SITE_KEEP"
     r"|rotamer|dye|linker|langevin|fret|fps|forster|kappa2|strip|backbone|_av\b|_avs_|^av_"
-    r"|boltzmann|cluster|rrt|SIMULATION_TYPE|ensemble|torsion|hierarch|mol2|cif|rmf|dcd|protein_frames|nmr|lj_|select_atoms|attach)"
+    r"|boltzmann|cluster|rrt|SIMULATION_TYPE|ensemble|torsion|hierarch|mol2|cif|rmf|dcd|protein_frames|nmr|lj_|select_atoms|attach"
+    # PRD-109, the PET quenching model folded in from QuEst
+    r"|quench|QUENCH|PET|amino_acid|solvent_accessible|sphere_points"
+    r"|grid_center|slow_factor|simulate_|diffusion)"
 )
 
 

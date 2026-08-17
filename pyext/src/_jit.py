@@ -22,7 +22,7 @@ Usage mirrors numba's, so the call sites read unchanged::
 
 from __future__ import annotations
 
-__all__ = ["njit", "jit", "HAS_NUMBA"]
+__all__ = ["njit", "jit", "prange", "get_num_threads", "HAS_NUMBA"]
 
 try:
     import numba as _nb
@@ -30,9 +30,21 @@ try:
     HAS_NUMBA = True
     njit = _nb.njit
     jit = _nb.jit
+    prange = _nb.prange
+    get_num_threads = _nb.get_num_threads
 
 except ImportError:  # pragma: no cover - exercised only where numba is absent
     HAS_NUMBA = False
+
+    #: ``prange`` degrades to ``range``: a ``parallel=True`` kernel that is not
+    #: being compiled is just a loop, and the results are identical because
+    #: every such kernel here is written race-free (each iteration owns its
+    #: output slice).
+    prange = range
+
+    def get_num_threads():
+        """One "thread" without numba -- the RNG-seeding loops then run once."""
+        return 1
 
     def _passthrough(*args, **kwargs):
         """Accept every spelling numba's decorators accept, and do nothing.
