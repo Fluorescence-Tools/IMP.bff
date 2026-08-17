@@ -47,6 +47,10 @@
   exclusions while collapsing same-named MOL2 atoms into one site (self-pairs
   at r = 0, ~1e6–1e31 per frame). `dye_internal_system` fixes both; sampler
   pins recorded. Cheap suite 226 passed / 0 skipped.
+* **PRD-108 stage 1 — fps.json `R1`.** Schema type + fields, C++ `IMP_WARN`
+  on non-AV `simulation_type` (test with an R1 position in the T4L score set),
+  `fps_positions_for_docking`, `write_rotamer_fps` /
+  `distances_from_ensembles` / position payloads; JSON schema regenerated.
 * **PRD-108 stage 0 — `RotamerEnsemble`.** `cgdye/rotamer/ensemble.py`
   (an `AccessibleVolume` with per-rotamer centre + dipole + weight, all atoms
   kept; fps `R1`), pair kernels `fret_pair_geometry/efficiencies/distribution`

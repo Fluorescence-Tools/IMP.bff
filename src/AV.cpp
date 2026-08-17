@@ -800,6 +800,19 @@ void AV::resample_lattice_finish(){
 }
 
 void AV::set_av_parameter(const nlohmann::json &j){
+    // Only AV1/AV3 (and XYZ, which the reader turns into a fixed point) are
+    // AV models. Rotamer-ensemble positions ("R1", PRD-108) are Python-only
+    // today: an fps.json handed to AVNetworkRestraint must be filtered with
+    // IMP.bff.fps_positions_for_docking() first -- warn instead of silently
+    // building an AV1 with default parameters for them.
+    const std::string stype = j.value("simulation_type", std::string("AV1"));
+    if(stype != "AV1" && stype != "AV3" && stype != "XYZ"){
+        IMP_WARN("AV: fps.json position has simulation_type '" << stype
+                 << "', which is not an AV model (AV1/AV3/XYZ); it is scored "
+                 << "as AV1 with its AV parameters. Rotamer-ensemble positions "
+                 << "(R1) are Python-only: filter them with "
+                 << "IMP.bff.fps_positions_for_docking() before docking.\n");
+    }
     set_linker_length(j.value("linker_length", 20.0));
     algebra::Vector3D r = {j.value("radius1", 3.0),
                            j.value("radius2", 0.0),

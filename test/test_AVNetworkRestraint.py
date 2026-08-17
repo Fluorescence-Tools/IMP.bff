@@ -1,5 +1,6 @@
 from __future__ import division
 import unittest
+import os
 
 import tempfile
 
@@ -106,3 +107,53 @@ class Tests(unittest.TestCase):
             experiment.append(d['distance'])
         np.testing.assert_almost_equal(model_ref, model, decimal=0)
         np.testing.assert_almost_equal(experiment_ref, experiment_ref, decimal=0)
+
+
+class R1PositionsTests(unittest.TestCase):
+    """fps.json rotamer-ensemble positions (R1, PRD-108) and the C++ scorer."""
+
+    def test_r1_position_warns_and_the_docking_filter_removes_it(self):
+        import IMP.bff.fret.io as fio
+        payload = json.load(open(IMP.bff.get_example_path("structure/T4L/fret.fps.json")))
+        positions, distances = payload["Positions"], payload["Distances"]
+        first_pos = next(iter(positions))
+        # an R1 position next to the AV ones, and a distance to it
+        positions["r1_probe"] = {
+            "chain_identifier": positions[first_pos]["chain_identifier"],
+            "residue_seq_number": positions[first_pos]["residue_seq_number"],
+            "atom_name": "CA", "simulation_type": "R1",
+            "rotamer_library": "AlexaFluor 488 C1R cutoff30",
+        }
+        distances["r1_probe_dist"] = {
+            "position1_name": "r1_probe", "position2_name": first_pos,
+            "distance": 50.0, "error_neg": 5.0, "error_pos": 5.0,
+            "Forster_radius": 52.0, "distance_type": "RDAMeanE",
+        }
+        score_sets = json.loads(json.dumps(payload.get("χ²", {})))
+        # put the R1 distance into the score set so the restraint decorates it
+        score_sets["chi2_C2_33p"]["distances"].append("r1_probe_dist")
+
+        def _run(fps_path):
+            log_path = fps_path + ".log"
+            IMP.set_log_level(IMP.WARNING)
+            target = IMP.SetLogTarget(IMP.TextOutput(log_path))
+            r = IMP.bff.AVNetworkRestraint(hier, fps_path, score_set="chi2_C2_33p", n_samples=1000)
+            r.unprotected_evaluate(None)
+            del target
+            return open(log_path).read() if os.path.exists(log_path) else ""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mixed = os.path.join(tmp, "mixed.fps.json")
+            json.dump({"Positions": positions, "Distances": distances, "χ²": score_sets}, open(mixed, "w"))
+            # the C++ side warns loudly when it meets a non-AV simulation_type
+            self.assertIn("simulation_type 'R1'", _run(mixed))
+            # the Python filter is what a docking run must apply first
+            kept_p, kept_d = fio.fps_positions_for_docking(positions, distances)
+            self.assertNotIn("r1_probe", kept_p)
+            self.assertNotIn("r1_probe_dist", kept_d)
+            self.assertEqual(set(kept_p), set(positions) - {"r1_probe"})
+            clean = os.path.join(tmp, "clean.fps.json")
+            fio.write_fps_json(clean, kept_p, kept_d, payload.get("χ²", {}), validate=True)
+            self.assertNotIn("simulation_type", _run(clean))
+
+

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from IMP.bff.fret.io import read_fps_json
 
 
@@ -248,3 +250,136 @@ def rotamer_fret_from_fps(
         chains=chains,
         **kwargs,
     )
+
+
+# ---------------------------------------------------------------------------
+# Writing: rotamer ensembles -> fps.json R1 positions and predicted distances
+# ---------------------------------------------------------------------------
+
+def rotamer_position_payload(
+    chain: str | None,
+    residue: int,
+    library: str,
+    *,
+    atom_name: str = "CA",
+    dye: str | None = None,
+    temperature: float | None = None,
+    electrostatic: bool | None = None,
+    potential: str | None = None,
+) -> dict[str, Any]:
+    """The fps.json entry of a rotamer-ensemble position (``simulation_type`` ``R1``)."""
+    payload: dict[str, Any] = {
+        "chain_identifier": chain or "",
+        "residue_seq_number": int(residue),
+        "atom_name": atom_name,
+        "simulation_type": "R1",
+        "rotamer_library": str(library),
+    }
+    if dye:
+        payload["dye_name"] = str(dye)
+    if temperature is not None:
+        payload["temperature"] = float(temperature)
+    if electrostatic is not None:
+        payload["electrostatic"] = bool(electrostatic)
+    if potential is not None:
+        payload["potential"] = str(potential)
+    return payload
+
+
+def rotamer_ensemble_payload(ensemble: Any, atom_name: str = "CA") -> dict[str, Any]:
+    """The fps.json ``R1`` entry describing an existing ``RotamerEnsemble``."""
+    params = dict(getattr(ensemble, "params", {}) or {})
+    return rotamer_position_payload(
+        getattr(ensemble, "chain", params.get("chain")),
+        getattr(ensemble, "residue", params.get("residue")),
+        getattr(ensemble, "library", params.get("library")),
+        atom_name=atom_name,
+        temperature=params.get("temperature"),
+        electrostatic=params.get("electrostatic"),
+        potential=params.get("potential"),
+    )
+
+
+def distances_from_ensembles(
+    ensembles: dict[str, Any],
+    pairs: list[tuple[str, str]],
+    forster_radius: float,
+    *,
+    distance_type: str = "RDAMeanE",
+    error: float | None = None,
+    error_fraction: float = 0.05,
+) -> dict[str, dict[str, Any]]:
+    """Predicted fps.json distance entries between rotamer ensembles.
+
+    ``distance_type`` selects what the ensembles predict: ``RDAMean`` (⟨R_DA⟩),
+    ``RDAMeanE`` (FRET-averaged ⟨R_DA⟩_E) or ``Rmp`` (distance between mean
+    positions), computed from the full pair matrix (no sampling; κ² per pair
+    enters ⟨R_DA⟩_E through the pair efficiencies). ``forster_radius`` in Å
+    for κ² = 2/3. Errors are ``error`` or ``error_fraction`` × distance.
+    """
+    from IMP.bff.fret.distance import fret_pair_geometry, fret_pair_efficiencies
+
+    if distance_type not in ("RDAMean", "RDAMeanE", "Rmp"):
+        raise ValueError(f"unknown distance_type {distance_type!r}")
+    out: dict[str, dict[str, Any]] = {}
+    for name1, name2 in pairs:
+        e1, e2 = ensembles[name1], ensembles[name2]
+        geometry = fret_pair_geometry(e1.points[:, :3], e1.points[:, 3], e2.points[:, :3], e2.points[:, 3],
+                                      getattr(e1, "mu", None), getattr(e2, "mu", None))
+        w = geometry["weight"]
+        if distance_type == "RDAMean":
+            value = float(np.sum(geometry["R"] * w))
+        elif distance_type == "Rmp":
+            value = float(np.linalg.norm(e1.mean_position - e2.mean_position))
+        else:
+            eff = fret_pair_efficiencies(geometry, forster_radius)
+            mean_e = eff["static"]
+            if mean_e <= 0:
+                value = float(np.sum(geometry["R"] * w))
+            elif mean_e >= 1:
+                value = 0.0
+            else:
+                value = float(forster_radius * (1.0 / mean_e - 1.0) ** (1.0 / 6.0))
+        err = float(error) if error is not None else float(error_fraction * value)
+        out[f"{name1}_{name2}"] = {
+            "position1_name": name1,
+            "position2_name": name2,
+            "distance_type": distance_type,
+            "distance": value,
+            "error_neg": err,
+            "error_pos": err,
+            "Forster_radius": float(forster_radius),
+        }
+    return out
+
+
+def write_rotamer_fps(
+    path: str | Path,
+    positions: dict[str, dict[str, Any]],
+    distances: dict[str, dict[str, Any]] | None = None,
+    *,
+    merge_into: str | Path | None = None,
+    validate: bool = True,
+) -> None:
+    """Write (or merge into) an fps.json with rotamer (``R1``) positions.
+
+    ``positions``/``distances`` are fps.json entries (see
+    :func:`rotamer_position_payload`, :func:`distances_from_ensembles`). With
+    ``merge_into`` the existing file's positions and distances are kept and
+    the new ones added (same names overwrite). The payload is validated
+    against the fps.json schema before writing.
+    """
+    from IMP.bff.fret.io import read_fps_json, write_fps_json
+
+    all_positions: dict[str, Any] = {}
+    all_distances: dict[str, Any] = {}
+    score_sets: dict[str, Any] = {}
+    extra: dict[str, Any] = {}
+    if merge_into is not None:
+        p0, d0, score_sets, extra = read_fps_json(merge_into)
+        all_positions.update(p0)
+        all_distances.update(d0)
+    all_positions.update(positions)
+    all_distances.update(distances or {})
+    write_fps_json(path, all_positions, all_distances, score_sets or None, extra or None, validate=validate)
+

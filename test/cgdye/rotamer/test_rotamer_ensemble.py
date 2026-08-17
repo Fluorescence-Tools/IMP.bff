@@ -19,11 +19,15 @@ _HERE = Path(__file__).resolve().parent
 _PINS = _HERE.parents[1] / "references" / "cgdye_fretpredict_pins.json"
 
 
+_HSP90_PATH: dict = {}
+
+
 @pytest.fixture(scope="module")
 def hsp90(tmp_path_factory):
     dst = tmp_path_factory.mktemp("hsp90") / "openHsp90.pdb"
     with gzip.open(_HERE / "data" / "openHsp90.pdb.gz", "rb") as fin, open(dst, "wb") as fout:
         shutil.copyfileobj(fin, fout)
+    _HSP90_PATH["path"] = dst
     return dst
 
 
@@ -106,6 +110,68 @@ def test_from_fps_positions(hsp90, tmp_path):
     ens = rotamer_ensembles_from_fps(fps, hsp90, library_map={"a1": "AlexaFluor 568 C1R cutoff30"},
                                      temperature=293, electrostatic=True)
     assert set(ens) == {"d1", "a1"} and ens["a1"].n_rotamers == 7 and ens["a1"].position_name == "a1"
+
+
+def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
+    """R1 entries write, validate, read back; the docking filter drops them."""
+    from IMP.bff.cgdye.rotamer.fps import (
+        distances_from_ensembles, rotamer_ensemble_payload, write_rotamer_fps)
+    from IMP.bff.fret import fps_schema
+    from IMP.bff.fret.io import fps_positions_for_docking, read_fps_json
+
+    d, a = pair
+    positions = {"d1": rotamer_ensemble_payload(d), "a1": rotamer_ensemble_payload(a)}
+    assert positions["d1"]["simulation_type"] == "R1"
+    assert positions["d1"]["rotamer_library"] == "AlexaFluor 594 C1R cutoff30"
+    for dtype in ("RDAMean", "RDAMeanE", "Rmp"):
+        distances = distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4, distance_type=dtype)
+        entry = distances["d1_a1"]
+        assert entry["distance_type"] == dtype and 20 < entry["distance"] < 90
+    distances = distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4)
+    # <R_DA>_E from the pair matrix reproduces the static efficiency
+    eff = d.fret_efficiencies(a, forster_radius=50.4)
+    r_e = 50.4 * (1.0 / eff["static"] - 1.0) ** (1.0 / 6.0)
+    assert distances["d1_a1"]["distance"] == pytest.approx(r_e, rel=1e-9)
+
+    out = tmp_path / "rotamer.fps.json"
+    write_rotamer_fps(out, positions, distances)                    # validated on write
+    p, dist, _s, _e = read_fps_json(out)
+    assert set(p) == {"d1", "a1"} and set(dist) == {"d1_a1"}
+    errors, warnings = fps_schema.validate({"Positions": p, "Distances": dist})
+    assert errors == []
+    # what the C++ scorer may see: no R1 positions, no dangling distances
+    kept_p, kept_d = fps_positions_for_docking(p, dist)
+    assert kept_p == {} and kept_d == {}
+    # merge into an AV-style file keeps the AV positions and adds R1
+    av_file = tmp_path / "av.fps.json"
+    av_file.write_text(json.dumps({
+        "Positions": {"p1": {"chain_identifier": "A", "residue_seq_number": 10, "atom_name": "CB",
+                             "simulation_type": "AV1", "linker_length": 20.0, "linker_width": 4.5, "radius1": 3.5}},
+        "Distances": {}}))
+    write_rotamer_fps(out, positions, distances, merge_into=av_file)
+    p, dist, _s, _e = read_fps_json(out)
+    assert set(p) == {"p1", "d1", "a1"}
+    kept_p, kept_d = fps_positions_for_docking(p, dist)
+    assert set(kept_p) == {"p1"} and kept_d == {}
+    # the ensembles come back from the file
+    ens = rotamer_ensembles_from_fps(out, hsp90_path(pair), temperature=293, electrostatic=True)
+    assert set(ens) == {"d1", "a1"} and ens["d1"].n_rotamers == 37
+
+
+def test_r1_requires_a_library():
+    from IMP.bff.fret import fps_schema
+    errors, _ = fps_schema.validate_position({"chain_identifier": "A", "residue_seq_number": 1,
+                                              "atom_name": "CA", "simulation_type": "R1"}, "x")
+    assert any("rotamer_library" in e for e in errors)
+    errors, warnings = fps_schema.validate_position(
+        {"chain_identifier": "A", "residue_seq_number": 1, "atom_name": "CA", "simulation_type": "R1",
+         "rotamer_library": "AlexaFluor 488 C1R cutoff30", "linker_length": 20.0}, "x")
+    assert errors == [] and any("AV parameter" in w for w in warnings)
+
+
+def hsp90_path(pair):
+    """The PDB the module fixture unpacked (kept in the ensembles' params? no: re-derive)."""
+    return _HSP90_PATH["path"]
 
 
 if __name__ == "__main__":

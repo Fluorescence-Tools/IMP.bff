@@ -146,6 +146,22 @@
             "flat"
           ]
         },
+        "dye_name": {
+          "default": "",
+          "description": "Dye name for R0 from spectra (e.g. 'AlexaFluor 488').",
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "electrostatic": {
+          "default": false,
+          "description": "Add Debye-Hueckel electrostatics to the R1 screening.",
+          "type": "boolean",
+          "x-dialects": [
+            "flat"
+          ]
+        },
         "linker_length": {
           "default": 20.0,
           "type": "number",
@@ -168,6 +184,18 @@
           "default": 0.0,
           "description": "Minimum accessible fraction of the free-dye sphere volume below which a position is flagged as buried.",
           "type": "number",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "potential": {
+          "default": "lj",
+          "description": "Screening potential of an R1 ensemble: 'lj' or 'gauss'.",
+          "enum": [
+            "lj",
+            "gauss"
+          ],
+          "type": "string",
           "x-dialects": [
             "flat"
           ]
@@ -216,6 +244,14 @@
             "flat"
           ]
         },
+        "rotamer_library": {
+          "default": "",
+          "description": "Rotamer library name (IMP.bff registry / FRETpredict spelling, e.g. 'AlexaFluor 488 C1R cutoff30'). Required for simulation_type R1.",
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
         "simulation_grid_resolution": {
           "default": 1.5,
           "description": "AV grid spacing in Angstrom. Related to (but not the same item as) _flr_FPS_global_parameter.AV_min_grid_A, which is the *minimum* grid constant of FPS's relative-grid scheme.",
@@ -227,11 +263,12 @@
         },
         "simulation_type": {
           "default": "AV1",
-          "description": "AV model: AV1 (one radius), AV3 (three radii), or XYZ (fixed mean position, no simulation).",
+          "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), or R1 (rotamer ensemble: screened rotamer library, Python-only).",
           "enum": [
             "AV1",
             "AV3",
-            "XYZ"
+            "XYZ",
+            "R1"
           ],
           "type": "string",
           "x-dialects": [
@@ -244,6 +281,14 @@
           "default": "",
           "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
           "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
+        "temperature": {
+          "default": 298.15,
+          "description": "Screening temperature (K) of an R1 ensemble.",
+          "type": "number",
           "x-dialects": [
             "flat"
           ]
@@ -462,6 +507,22 @@
               "flat"
             ]
           },
+          "dye_name": {
+            "default": "",
+            "description": "Dye name for R0 from spectra (e.g. 'AlexaFluor 488').",
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "electrostatic": {
+            "default": false,
+            "description": "Add Debye-Hueckel electrostatics to the R1 screening.",
+            "type": "boolean",
+            "x-dialects": [
+              "flat"
+            ]
+          },
           "linker_length": {
             "default": 20.0,
             "type": "number",
@@ -484,6 +545,18 @@
             "default": 0.0,
             "description": "Minimum accessible fraction of the free-dye sphere volume below which a position is flagged as buried.",
             "type": "number",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "potential": {
+            "default": "lj",
+            "description": "Screening potential of an R1 ensemble: 'lj' or 'gauss'.",
+            "enum": [
+              "lj",
+              "gauss"
+            ],
+            "type": "string",
             "x-dialects": [
               "flat"
             ]
@@ -532,6 +605,14 @@
               "flat"
             ]
           },
+          "rotamer_library": {
+            "default": "",
+            "description": "Rotamer library name (IMP.bff registry / FRETpredict spelling, e.g. 'AlexaFluor 488 C1R cutoff30'). Required for simulation_type R1.",
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
           "simulation_grid_resolution": {
             "default": 1.5,
             "description": "AV grid spacing in Angstrom. Related to (but not the same item as) _flr_FPS_global_parameter.AV_min_grid_A, which is the *minimum* grid constant of FPS's relative-grid scheme.",
@@ -543,11 +624,12 @@
           },
           "simulation_type": {
             "default": "AV1",
-            "description": "AV model: AV1 (one radius), AV3 (three radii), or XYZ (fixed mean position, no simulation).",
+            "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), or R1 (rotamer ensemble: screened rotamer library, Python-only).",
             "enum": [
               "AV1",
               "AV3",
-              "XYZ"
+              "XYZ",
+              "R1"
             ],
             "type": "string",
             "x-dialects": [
@@ -560,6 +642,14 @@
             "default": "",
             "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
             "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
+          "temperature": {
+            "default": 298.15,
+            "description": "Screening temperature (K) of an R1 ensemble.",
+            "type": "number",
             "x-dialects": [
               "flat"
             ]

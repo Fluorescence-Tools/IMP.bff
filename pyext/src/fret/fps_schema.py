@@ -58,8 +58,15 @@ __all__ = [
 SCHEMA_VERSION = "1.0"
 
 #: ``simulation_type`` values. AV1: one dye radius; AV3: three; XYZ: a fixed
-#: mean position (no volume simulation), carried by legacy C# FPS conversions.
-SIMULATION_TYPES = ("AV1", "AV3", "XYZ")
+#: mean position (no volume simulation), carried by legacy C# FPS conversions;
+#: R1: a rotamer ensemble (PRD-108) -- a FRETpredict-style 1:1 rotamer
+#: library placed in the residue's backbone frame and Boltzmann-screened
+#: against the structure, per rotamer centre + dipole + weight (R2 = sampled
+#: library, R3 = mixture are reserved). R1 positions are Python-only:
+#: ``IMP::bff::AVNetworkRestraint`` never reads ``simulation_type`` and would
+#: score such a position as an AV1 with its AV parameters (the C++ side warns);
+#: filter with :func:`IMP.bff.fret.io.fps_positions_for_docking` first.
+SIMULATION_TYPES = ("AV1", "AV3", "XYZ", "R1")
 
 #: ``distance_type`` values and their flrCIF ``distance_type`` spellings.
 #: RDAMean = mean inter-dye distance <R_DA>; RDAMeanE = FRET-averaged distance
@@ -126,9 +133,33 @@ POSITION_FIELDS: Dict[str, Dict[str, Any]] = {
         dialects=("network", "flat")),
     "simulation_type": dict(
         type=_S, default="AV1", flrcif=None, enum=SIMULATION_TYPES,
-        authored="AV model: AV1 (one radius), AV3 (three radii), or XYZ "
-                 "(fixed mean position, no simulation).",
+        authored="Label model: AV1 (one radius), AV3 (three radii), XYZ "
+                 "(fixed mean position, no simulation), or R1 (rotamer "
+                 "ensemble: screened rotamer library, Python-only).",
         dialects=("network", "flat", "csfps")),
+    # --- rotamer-ensemble positions (R1, imp.bff dialect, PRD-108) --------
+    "rotamer_library": dict(
+        type=_S, default="", flrcif=None,
+        authored="Rotamer library name (IMP.bff registry / FRETpredict "
+                 "spelling, e.g. 'AlexaFluor 488 C1R cutoff30'). Required "
+                 "for simulation_type R1.",
+        dialects=("flat",)),
+    "dye_name": dict(
+        type=_S, default="", flrcif=None,
+        authored="Dye name for R0 from spectra (e.g. 'AlexaFluor 488').",
+        dialects=("flat",)),
+    "temperature": dict(
+        type=_F, default=298.15, flrcif=None,
+        authored="Screening temperature (K) of an R1 ensemble.",
+        dialects=("flat",)),
+    "electrostatic": dict(
+        type=_B, default=False, flrcif=None,
+        authored="Add Debye-Hueckel electrostatics to the R1 screening.",
+        dialects=("flat",)),
+    "potential": dict(
+        type=_S, default="lj", flrcif=None, enum=("lj", "gauss"),
+        authored="Screening potential of an R1 ensemble: 'lj' or 'gauss'.",
+        dialects=("flat",)),
     "simulation_grid_resolution": dict(
         type=_F, default=1.5, flrcif=None,
         authored="AV grid spacing in Angstrom. Related to (but not the same "
@@ -371,6 +402,16 @@ def validate_position(
     _check_fields(position, POSITION_FIELDS, name, errors, warnings)
     if isinstance(position, dict):
         stype = position.get("simulation_type", "AV1")
+        if stype == "R1":
+            if not str(position.get("rotamer_library", "") or "").strip():
+                errors.append(
+                    f"{name}: simulation_type R1 requires 'rotamer_library'")
+            for k in ("linker_length", "linker_width", "radius1"):
+                if k in position:
+                    warnings.append(
+                        f"{name}: '{k}' is an AV parameter; an R1 position "
+                        "ignores it (Python side) or is scored as AV1 by "
+                        "AVNetworkRestraint -- filter with fps_positions_for_docking()")
         if stype == "XYZ":
             for k in ("x", "y", "z"):
                 if k not in position:

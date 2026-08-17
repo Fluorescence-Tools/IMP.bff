@@ -25,6 +25,8 @@ from . import fps_schema
 __all__ = [
     "read_fps_json",
     "write_fps_json",
+    "fps_positions_for_docking",
+    "AV_SIMULATION_TYPES",
     "read_evaluators_json",
     "write_evaluators_json",
     "read_old_lps_txt",
@@ -147,6 +149,34 @@ def write_fps_json(
                 + "\n  ".join(errors))
     with open(path, "w") as f:
         json.dump(payload, f, indent=2, **kwargs)
+
+
+#: simulation types the C++ AVNetworkRestraint can score
+AV_SIMULATION_TYPES = ("AV1", "AV3", "XYZ")
+
+
+def fps_positions_for_docking(
+    positions: Dict,
+    distances: Optional[Dict] = None,
+) -> Tuple[Dict, Dict]:
+    """Keep only the positions (and distances between them) the C++ AV scorer understands.
+
+    Rotamer-ensemble positions (``simulation_type == "R1"``, PRD-108) are
+    Python-only; ``IMP::bff::AVNetworkRestraint`` would score them as AV1
+    with default parameters. Returns ``(positions, distances)`` restricted to
+    AV1/AV3/XYZ positions and to distances whose two ends survive.
+    """
+    kept = {
+        name: pos for name, pos in positions.items()
+        if str((pos or {}).get("simulation_type", "AV1")) in AV_SIMULATION_TYPES
+    }
+    if distances is None:
+        return kept, {}
+    kept_d = {
+        name: d for name, d in distances.items()
+        if d.get("position1_name") in kept and d.get("position2_name") in kept
+    }
+    return kept, kept_d
 
 
 # ---------------------------------------------------------------------------
