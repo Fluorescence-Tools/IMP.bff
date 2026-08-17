@@ -367,8 +367,9 @@ public:
      * Under `space_fixed` (the default) the path map is anchored on the
      * global lattice: voxel centres at integer multiples of the grid
      * spacing, window centred on the lattice-quantised source and rolled by
-     * whole voxels only; occupancy is maintained on the lattice by exact
-     * subtract/add deltas; the search is skipped altogether when
+     * whole voxels only; occupancy is read from a shared per-class raster
+     * when a registry is set (see set_occupancy_registry) or maintained
+     * privately by exact deltas; the search is skipped altogether when
      * nothing that feeds it changed. With `space_fixed` off the legacy
      * source-anchored path runs unchanged.
      *
@@ -392,8 +393,25 @@ public:
     //! IntKey holding the space_fixed flag (absent = default, true)
     static IntKey get_space_fixed_key();
 
+    /**
+     * @brief Read occupancy from a shared per-class raster registry.
+     *
+     * Requires `space_fixed`. Pass nullptr to return to a private raster.
+     */
+    void set_occupancy_registry(AVOccupancyRegistry *registry);
+    AVOccupancyRegistry *get_occupancy_registry() const;
+
     //! The lattice window: {kx, ky, kz, n} (lattice index of voxel 0, edge)
     std::vector<int> get_lattice_window() const;
+
+    /**
+     * @brief Announce this AV's window to the shared occupancy maps.
+     *
+     * Lets a registry grow once to the union of all windows before the
+     * first map is rasterised, instead of once per AV. No-op without a
+     * registry or under legacy anchoring.
+     */
+    void prepare_lattice_window();
 
     //! Diagnostics of the lattice path: {skip, local, full, roll} counts
     long get_number_of_skips() const;

@@ -63,7 +63,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
     template<class Archive> void serialize(Archive &ar) {
         ar(cereal::base_class<IMP::Restraint>(this),
            n_samples, av_pi_, model_ps_, distances_,
-           space_fixed_);
+           space_fixed_, shared_map_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -78,6 +78,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
             for (const auto &kv : av_index) {
                 avs_[kv.first].reset(new IMP::bff::AV(get_model(), kv.second));
             }
+            registry_ = nullptr;
             configure_avs();
         }
     }
@@ -96,11 +97,15 @@ private:
 
     /* PRD-105 evaluation modes. */
     bool space_fixed_ = true;      //!< lattice-anchored windows (else legacy)
+    bool shared_map_ = true;       //!< one occupancy raster per (spacing, extra) class
+
+    //! Shared occupancy rasters (only under space_fixed && shared_map)
+    IMP::Pointer<AVOccupancyRegistry> registry_;
 
     //! Number of unprotected_evaluate() calls
     mutable long n_evaluations_ = 0;
 
-    //! Apply the mode flags to the AV handles (anchoring)
+    //! Apply the mode flags to the AV handles (anchoring, registry)
     void configure_avs();
 
     /**
@@ -169,6 +174,8 @@ public:
      * @param[in] n_samples Random samples for the distance computation.
      * @param[in] space_fixed Anchor every AV grid on the global lattice
      *   (default). `false` selects the deprecated legacy anchoring.
+     * @param[in] shared_map One occupancy raster per (spacing, extra-radius)
+     *   class shared by all AVs (default). Requires `space_fixed`.
      */
     AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
@@ -176,16 +183,23 @@ public:
         std::string name = "AVNetworkRestraint%1%",
         std::string score_set = "",
         int n_samples = 50000,
-        bool space_fixed = true
+        bool space_fixed = true,
+        bool shared_map = true
     );
 
     bool get_space_fixed() const { return space_fixed_; }
+    bool get_shared_map() const { return shared_map_; }
     int get_n_samples() const { return n_samples; }
+
+    //! The shared occupancy registry (nullptr unless shared_map)
+    AVOccupancyRegistry *get_occupancy_registry() const { return registry_; }
 
     /**
      * @brief Diagnostics of the last run as JSON.
      *
-     * Per AV: skip / local / full / roll counts, plus the mode flags and the number of evaluations.
+     * Per AV: skip / local / full / roll counts; per shared occupancy map:
+     * skip / local / full / grow counts, moved beads (last, total), extent;
+     * plus the mode flags and the number of evaluations.
      */
     std::string get_diagnostics_json() const;
 

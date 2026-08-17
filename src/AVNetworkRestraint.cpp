@@ -16,9 +16,15 @@ AVNetworkRestraint::AVNetworkRestraint(
         std::string name,
         std::string score_set,
         int n_samples,
-        bool space_fixed
+        bool space_fixed,
+        bool shared_map
 ) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples),
-    space_fixed_(space_fixed){
+    space_fixed_(space_fixed), shared_map_(shared_map){
+    if(shared_map && !space_fixed){
+        IMP_THROW("AVNetworkRestraint: shared_map=True requires space_fixed=True "
+                  "(sharing needs commensurate lattice windows)",
+                  IMP::ValueException);
+    }
     if(!space_fixed){
         IMP_WARN("AVNetworkRestraint: space_fixed=False (legacy source-anchored "
                  "grids) is deprecated and will be removed after the PRD-105 "
@@ -41,8 +47,20 @@ AVNetworkRestraint::AVNetworkRestraint(
 }
 
 void AVNetworkRestraint::configure_avs(){
+    if(space_fixed_ && shared_map_ && !registry_ && !avs_.empty()){
+        // The obstacle set every AV rasterises: all leaves of the root of
+        // the first source (identical for every AV of one hierarchy).
+        IMP::bff::AV *first = avs_.begin()->second.get();
+        IMP::Particle* parent = first->get_source();
+        auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
+        auto root = IMP::atom::get_root(h);
+        registry_ = new AVOccupancyRegistry(IMP::atom::get_leaves(root));
+        registry_->set_was_used(true);
+    }
     for(auto &av: avs_){
         av.second->set_space_fixed(space_fixed_);
+        av.second->set_occupancy_registry(
+            (space_fixed_ && shared_map_) ? registry_.get() : nullptr);
     }
 }
 
@@ -115,6 +133,9 @@ double AVNetworkRestraint::unprotected_evaluate(
     double score = 0.0;
     n_evaluations_++;
     for(auto &av: avs_){
+        av.second->prepare_lattice_window();
+    }
+    for(auto &av: avs_){
         av.second->resample();
     }
     for(const auto & it : distances_){
@@ -144,6 +165,7 @@ double AVNetworkRestraint::get_model_distance(
 std::string AVNetworkRestraint::get_diagnostics_json() const{
     nlohmann::json j;
     j["space_fixed"] = space_fixed_;
+    j["shared_map"] = shared_map_;
     j["n_samples"] = n_samples;
     j["evaluations"] = n_evaluations_;
     nlohmann::json avs = nlohmann::json::object();
@@ -164,6 +186,27 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     }
     j["avs"] = avs;
     j["av_totals"] = {{"skip", skip}, {"local", local}, {"full", full}, {"rolls", rolls}};
+    nlohmann::json maps = nlohmann::json::array();
+    auto add_map = [&](const AVOccupancyMap *m){
+        nlohmann::json o;
+        o["spacing"] = m->get_spacing();
+        o["extra_radius"] = m->get_extra_radius();
+        o["skip"] = m->get_number_of_skips();
+        o["local"] = m->get_number_of_local_updates();
+        o["full"] = m->get_number_of_full_updates();
+        o["grow"] = m->get_number_of_grows();
+        o["rolls"] = m->get_number_of_rolls();
+        o["moved_last"] = m->get_number_of_moved_last();
+        o["moved_total"] = m->get_number_of_moved_total();
+        o["extent"] = m->get_extent();
+        o["voxels"] = m->get_number_of_voxels();
+        maps.push_back(o);
+    };
+    if(registry_){
+        for(const auto &m : registry_->get_maps()) add_map(m.get());
+    }
+    j["shared_maps"] = maps;
+    j["shared_map_classes"] = maps.size();
     return j.dump();
 }
 

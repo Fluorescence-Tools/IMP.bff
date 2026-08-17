@@ -157,6 +157,32 @@ public:
 IMP_OBJECTS(AVOccupancyMap, AVOccupancyMaps);
 
 
+//! One AVOccupancyMap per (spacing, extra-radius) class, created on demand.
+/** Shared by all AVs of an AVNetworkRestraint under `shared_map=True`.
+    Occupancy is a function of (atoms, lattice, extra radius) only -- the
+    linker length merely masks -- so AVs with the same spacing and the same
+    inflation radius read the same raster.
+ */
+class IMPBFFEXPORT AVOccupancyRegistry : public IMP::Object {
+    IMP::ParticlesTemp ps_;
+    std::map<std::pair<double, double>, IMP::Pointer<AVOccupancyMap> > maps_;
+public:
+    AVOccupancyRegistry(const IMP::ParticlesTemp &ps,
+                        std::string name = "AVOccupancyRegistry%1%")
+        : IMP::Object(name), ps_(ps) {}
+
+    //! The map of the (spacing, extra_radius) class, created on first use
+    AVOccupancyMap *get_map(double spacing, double extra_radius);
+
+    //! All maps created so far
+    AVOccupancyMaps get_maps() const;
+
+    //! Force a full raster of every map on its next update
+    void update_all(bool force_full = false);
+
+    IMP_OBJECT_METHODS(AVOccupancyRegistry);
+};
+
 IMPBFF_END_NAMESPACE
 
 #endif /* IMPBFF_AVOCCUPANCYMAP_H */

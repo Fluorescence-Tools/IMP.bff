@@ -338,4 +338,25 @@ void AVOccupancyMap::read_window(int kx, int ky, int kz,
 }
 
 
+AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius) {
+    auto key = std::make_pair(spacing, extra_radius);
+    auto it = maps_.find(key);
+    if (it == maps_.end()) {
+        IMP::Pointer<AVOccupancyMap> m = new AVOccupancyMap(spacing, extra_radius, ps_);
+        m->set_was_used(true);
+        it = maps_.emplace(key, m).first;
+    }
+    return it->second.get();
+}
+
+AVOccupancyMaps AVOccupancyRegistry::get_maps() const {
+    AVOccupancyMaps out;
+    for (const auto &kv : maps_) out.push_back(kv.second.get());
+    return out;
+}
+
+void AVOccupancyRegistry::update_all(bool force_full) {
+    for (auto &kv : maps_) kv.second->update(force_full);
+}
+
 IMPBFF_END_NAMESPACE

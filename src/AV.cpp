@@ -199,12 +199,33 @@ void AV::set_space_fixed(bool tf){
                      "and will be removed after the PRD-105 transition period.\n");
             warned = true;
         }
+        if(state_ && state_->registry){
+            IMP_THROW("AV: a shared occupancy registry requires space_fixed",
+                      IMP::ValueException);
+        }
     }
     // The map was built for the other anchoring; rebuild it lazily.
     if(av_map_){
         av_map_ = nullptr;
         state_.reset();
     }
+}
+
+void AV::set_occupancy_registry(AVOccupancyRegistry *registry){
+    if(registry && !get_space_fixed()){
+        IMP_THROW("AV: a shared occupancy registry requires space_fixed",
+                  IMP::ValueException);
+    }
+    auto &st = get_state();
+    st.registry = registry;
+    st.have_result = false;
+    st.private1 = nullptr;
+    st.private2 = nullptr;
+}
+
+AVOccupancyRegistry *AV::get_occupancy_registry() const{
+    if(!state_) return nullptr;
+    return state_->registry.get();
 }
 
 std::vector<int> AV::get_lattice_window() const{
@@ -218,6 +239,18 @@ long AV::get_number_of_full_updates() const{ return state_ ? state_->n_full : 0;
 long AV::get_number_of_rolls() const{ return state_ ? state_->n_roll : 0; }
 unsigned long AV::get_result_generation() const{
     return state_ ? state_->result_generation : 0;
+}
+
+void AV::prepare_lattice_window(){
+    if(!get_space_fixed() || !state_ || !state_->registry) return;
+    const double h = get_simulation_grid_resolution();
+    int k0[3]; int n;
+    lattice_window(get_source_coordinates(), get_linker_length(), h, k0, n);
+    auto &st = get_state();
+    st.registry->get_map(h, get_linker_width() * 0.5)
+        ->request_window(k0[0], k0[1], k0[2], n, n, n);
+    st.registry->get_map(h, get_radius1())
+        ->request_window(k0[0], k0[1], k0[2], n, n, n);
 }
 
 void AV::init_path_map(){
@@ -346,11 +379,16 @@ void AV::resample_lattice(bool shift_xyz, bool force_full){
     st.n = n;
     st.have_window = true;
 
-    // 1. Occupancy sources for the two passes (private lattice rasters)
+    // 1. Occupancy sources for the two passes
     const double extra1 = get_linker_width() * 0.5;
     const double extra2 = get_radius1();
     AVOccupancyMap *occ1; AVOccupancyMap *occ2;
-    {
+    if(st.registry){
+        occ1 = st.registry->get_map(h, extra1);
+        occ2 = st.registry->get_map(h, extra2);
+        occ1->request_window(k0[0], k0[1], k0[2], n, n, n);
+        occ2->request_window(k0[0], k0[1], k0[2], n, n, n);
+    } else {
         IMP::ParticlesTemp ps(map->ps_.begin(), map->ps_.end());
         if(!st.private1 || st.private1->get_extra_radius() != extra1
                         || st.private1->get_spacing() != h){

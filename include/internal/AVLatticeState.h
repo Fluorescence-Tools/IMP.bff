@@ -45,7 +45,8 @@ struct AVLatticeState {
     unsigned long cloud_generation = 0;
     bool cloud_valid = false;
 
-    // Occupancy sources: private windows, one per pass.
+    // Occupancy sources. `registry` set: shared maps; else private windows.
+    IMP::Pointer<AVOccupancyRegistry> registry;
     IMP::Pointer<AVOccupancyMap> private1;
     IMP::Pointer<AVOccupancyMap> private2;
 
