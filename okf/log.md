@@ -47,6 +47,11 @@
   exclusions while collapsing same-named MOL2 atoms into one site (self-pairs
   at r = 0, ~1e6–1e31 per frame). `dye_internal_system` fixes both; sampler
   pins recorded. Cheap suite 226 passed / 0 skipped.
+* **PRD-108 stage 0 — `RotamerEnsemble`.** `cgdye/rotamer/ensemble.py`
+  (an `AccessibleVolume` with per-rotamer centre + dipole + weight, all atoms
+  kept; fps `R1`), pair kernels `fret_pair_geometry/efficiencies/distribution`
+  in `fret/distance.py`; `RotamerFRET._frame_fret` refactored on top with the
+  FRETpredict pins unchanged. Tests + exports. PRD-108 page written.
 * **PRD-107 stage 5 — flat `IMP.bff` API, docs; PRD-107 implemented.**
   `pyext/src/api.py` + a `%pythoncode` hook in `pyext/swig.i-in` expose 82
   cgdye/fret names lazily as `IMP.bff.<Name>` (the SWIG module never included

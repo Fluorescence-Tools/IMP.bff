@@ -51,6 +51,9 @@ EXPORTS = {
     "write_dye_template_cif": "IMP.bff.cgdye.io.template_cif",
     # --- rotamer libraries and rotamer FRET ----------------------------------
     "RotamerFRET": "IMP.bff.cgdye.rotamer.fret",
+    "RotamerEnsemble": "IMP.bff.cgdye.rotamer.ensemble",
+    "rotamer_ensembles_from_fps": "IMP.bff.cgdye.rotamer.ensemble",
+    "SIMULATION_TYPE_R1": "IMP.bff.cgdye.rotamer.ensemble",
     "RotamerPosition": "IMP.bff.cgdye.rotamer.fps",
     "RotamerDistance": "IMP.bff.cgdye.rotamer.fps",
     "read_rotamer_fps": "IMP.bff.cgdye.rotamer.fps",
@@ -98,6 +101,9 @@ EXPORTS = {
     "write_fps_json": "IMP.bff.fret.io",
     "fps_schema_validate": "IMP.bff.fret.fps_schema",
     "av_pair_statistics": "IMP.bff.fret.distance",
+    "fret_pair_geometry": "IMP.bff.fret.distance",
+    "fret_pair_efficiencies": "IMP.bff.fret.distance",
+    "fret_pair_distribution": "IMP.bff.fret.distance",
     "fret_efficiency": "IMP.bff.fret.distance",
     "distance_from_fret_efficiency": "IMP.bff.fret.distance",
     # --- strip engine (fret) ----------------------------------------------------

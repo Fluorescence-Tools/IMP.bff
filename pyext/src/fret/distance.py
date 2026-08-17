@@ -5,6 +5,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 
 from .av import AccessibleVolume
+from .kappa2 import kappa2_from_dipoles
 
 N_DISTANCE_SAMPLES: int = 50000
 
@@ -398,3 +399,116 @@ def distance_from_fret_efficiency(
 ) -> float:
     """Convert FRET efficiency back to distance."""
     return forster_radius * (1.0 / efficiency - 1.0) ** (1.0 / 6.0)
+
+
+# ---------------------------------------------------------------------------
+# Pair distributions over two weighted point sets with dipoles (rotamer
+# ensembles, AV clouds): the full N1 x N2 matrix, no sampling.
+# ---------------------------------------------------------------------------
+
+def fret_pair_geometry(
+    points1: np.ndarray,
+    weights1: np.ndarray,
+    points2: np.ndarray,
+    weights2: np.ndarray,
+    mu1: Optional[np.ndarray] = None,
+    mu2: Optional[np.ndarray] = None,
+) -> dict:
+    """Distances, κ² and pair weights over all (i, j) of two weighted point sets.
+
+    ``points`` are (N, 3) centres (Å), ``weights`` (N,) normalised or not,
+    ``mu`` optional (N, 3) transition-dipole vectors. Without dipoles κ² is
+    the isotropic 2/3 everywhere (an AV cloud). Returns a dict with ``R``
+    (N1, N2), ``kappa2`` (N1, N2), ``weight`` (N1, N2, normalised to 1),
+    ``r_vectors`` (N1, N2, 3) and ``kappa2_avg``.
+    """
+    p1 = np.asarray(points1, dtype=np.float64)[:, :3]
+    p2 = np.asarray(points2, dtype=np.float64)[:, :3]
+    w1 = np.asarray(weights1, dtype=np.float64)
+    w2 = np.asarray(weights2, dtype=np.float64)
+    weight = np.outer(w1, w2)
+    total = weight.sum()
+    if total > 0:
+        weight = weight / total
+    r_vectors = p1[:, None, :] - p2[None, :, :]
+    r = np.linalg.norm(r_vectors, axis=2)
+    if mu1 is None or mu2 is None:
+        kappa2 = np.full(r.shape, 2.0 / 3.0)
+    else:
+        m1 = np.asarray(mu1, dtype=np.float64)
+        m2 = np.asarray(mu2, dtype=np.float64)
+        m1 = m1 / np.linalg.norm(m1, axis=1, keepdims=True)
+        m2 = m2 / np.linalg.norm(m2, axis=1, keepdims=True)
+        kappa2 = kappa2_from_dipoles(m1, m2, r_vectors)
+    return {
+        "R": r,
+        "kappa2": kappa2,
+        "weight": weight,
+        "r_vectors": r_vectors,
+        "kappa2_avg": float(np.sum(kappa2 * weight)),
+    }
+
+
+def fret_pair_efficiencies(
+    geometry: dict,
+    forster_radius: float,
+    tau0: Optional[float] = None,
+) -> dict:
+    """FRET efficiencies of a pair geometry (see :func:`fret_pair_geometry`).
+
+    ``forster_radius`` is R0 for κ² = 2/3 in the units of the geometry (Å);
+    the κ² dependence is applied per pair (rate ∝ (3/2)κ² (R0/R)^6). Returns
+    ``static`` (⟨E_ij⟩), ``dynamic1`` (E with ⟨κ²⟩, then averaged),
+    ``dynamic2`` (rate-averaged), ``kappa2_avg``, the per-pair ``E`` and
+    ``rate_ratio`` (k_FRET/k_rad) matrices and, with ``tau0`` (ns), the
+    per-pair FRET rates ``k_fret`` (1/ns).
+    """
+    r = geometry["R"]
+    kappa2 = geometry["kappa2"]
+    weight = geometry["weight"]
+    kappa2_avg = geometry["kappa2_avg"]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio6 = np.power(r / float(forster_radius), 6)
+        rate_ratio = 1.5 * kappa2 / ratio6                # k_FRET / k_rad
+        e_pair = 1.0 / (1.0 + 2.0 / 3.0 * ratio6 / kappa2)
+        e_dyn1 = 1.0 / (1.0 + 2.0 / 3.0 / kappa2_avg * ratio6)
+    e_pair = np.nan_to_num(e_pair, nan=1.0, posinf=1.0)
+    e_dyn1 = np.nan_to_num(e_dyn1, nan=1.0, posinf=1.0)
+    rate_avg = float(np.sum(np.nan_to_num(rate_ratio, posinf=0.0) * weight))
+    out = {
+        "static": float(np.sum(e_pair * weight)),
+        "dynamic1": float(np.sum(e_dyn1 * weight)),
+        "dynamic2": rate_avg / (rate_avg + 1.0),
+        "kappa2_avg": kappa2_avg,
+        "E": e_pair,
+        "rate_ratio": rate_ratio,
+        "weight": weight,
+        "R": r,
+    }
+    if tau0 is not None:
+        out["k_fret"] = rate_ratio / float(tau0)
+    return out
+
+
+def fret_pair_distribution(
+    points1: np.ndarray,
+    weights1: np.ndarray,
+    points2: np.ndarray,
+    weights2: np.ndarray,
+    *,
+    forster_radius: float,
+    mu1: Optional[np.ndarray] = None,
+    mu2: Optional[np.ndarray] = None,
+    tau0: Optional[float] = None,
+) -> dict:
+    """:func:`fret_pair_geometry` followed by :func:`fret_pair_efficiencies` (one call).
+
+    The result carries the flattened per-pair ``R``, ``kappa2``, ``weight``,
+    ``E`` (and ``k_fret`` with ``tau0``) plus the ``static``/``dynamic1``/
+    ``dynamic2`` averages -- the FRET rate distribution of the pair.
+    """
+    geometry = fret_pair_geometry(points1, weights1, points2, weights2, mu1, mu2)
+    out = fret_pair_efficiencies(geometry, forster_radius, tau0)
+    out["kappa2"] = geometry["kappa2"]
+    return out
+

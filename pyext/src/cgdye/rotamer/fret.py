@@ -11,7 +11,8 @@ from typing import Any
 import numpy as np
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.fret.forster import forster_radius_from_spectra
-from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score, kappa2_from_dipoles
+from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble, resolve_backbone_site, transform_library_to_site
+from IMP.bff.fret.distance import fret_pair_efficiencies
 
 _log = logging.getLogger(__name__)
 
@@ -39,142 +40,6 @@ class FRETFrameResult:
     estatic: float
     edynamic1: float
     edynamic2: float
-
-
-def _resolve_backbone_site(
-    frame: dict[str, Any],
-    chain: str | None,
-    residue: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Resolve CA, N, and C coordinates from a protein frame.
-
-    Parameters
-    ----------
-    frame : dict
-        Frame dictionary from ``load_protein_frames``.
-    chain : str or None
-        Chain ID.
-    residue : int
-        Residue number.
-
-    Returns
-    -------
-    tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]
-        CA, N, and C coordinates.
-    """
-    coords = np.asarray(frame["coords"], dtype=np.float64)
-    atom_names = [str(name).upper() for name in frame["atom_names"]]
-    chain_id = (chain or "").upper()
-    chain_ids = [str(value).upper() for value in frame.get("chain_ids", [""] * len(atom_names))]
-    residue_indices = [int(value) for value in frame.get("residue_indices", [-1] * len(atom_names))]
-    matches: dict[str, np.ndarray] = {}
-    for coord, atom_name, frame_chain, frame_residue in zip(coords, atom_names, chain_ids, residue_indices):
-        if atom_name not in {"CA", "N", "C"} or atom_name in matches:
-            continue
-        if chain_id and frame_chain and frame_chain != chain_id:
-            continue
-        if frame_residue != -1 and frame_residue != residue:
-            continue
-        matches[atom_name] = coord
-    missing = [name for name in ["CA", "N", "C"] if name not in matches]
-    if missing:
-        raise ValueError(f"Missing backbone atoms {missing} for chain {chain or 'A'} residue {residue}")
-    return matches["CA"], matches["N"], matches["C"]
-
-
-def _to_vector(value: Any):
-    """Convert a coordinate-like value to an IMP vector.
-
-    Parameters
-    ----------
-    value : object
-        Coordinate-like object.
-
-    Returns
-    -------
-    object
-        IMP vector-compatible value.
-    """
-    return value
-
-
-def _transform_coords(coords: np.ndarray, ca: Any, n: Any, c: Any) -> np.ndarray:
-    """Transform rotamer coordinates into a protein backbone frame.
-
-    Parameters
-    ----------
-    coords : numpy.ndarray
-        Rotamer coordinates with shape ``(n_rotamers, n_atoms, 3)``.
-    ca, n, c
-        Backbone CA, N, and C coordinates.
-
-    Returns
-    -------
-    numpy.ndarray
-        Transformed coordinates.
-    """
-    ca_v = np.asarray([float(ca[0]), float(ca[1]), float(ca[2])], dtype=np.float64)
-    n_v = np.asarray([float(n[0]), float(n[1]), float(n[2])], dtype=np.float64)
-    c_v = np.asarray([float(c[0]), float(c[1]), float(c[2])], dtype=np.float64)
-
-    x_vector = n_v - ca_v
-    x_vector /= np.linalg.norm(x_vector)
-    yt_vector = c_v - ca_v
-    yt_vector /= np.linalg.norm(yt_vector)
-    z_vector = np.cross(x_vector, yt_vector)
-    z_vector /= np.linalg.norm(z_vector)
-    y_vector = np.cross(z_vector, x_vector)
-    rotation = np.vstack([x_vector, y_vector, z_vector])
-    return np.tensordot(coords, rotation, axes=([2], [0])) + ca_v
-
-
-def _selector_atom_indices(atom_names: list[str], selector: str | list[str]) -> list[int]:
-    """Find rotamer atom indices from a FRETpredict selector.
-
-    Parameters
-    ----------
-    atom_names : list of str
-        Rotamer atom names.
-    selector : str or list of str
-        FRETpredict atom selector.
-
-    Returns
-    -------
-    list of int
-        Atom indices.
-    """
-    if isinstance(selector, str):
-        names = [selector]
-    else:
-        names = list(selector)
-    indices: list[int] = []
-    for item in names:
-        wanted = str(item).split(" and ")[0].strip().upper()
-        for i, name in enumerate(atom_names):
-            if name.upper() == wanted:
-                indices.append(i)
-                break
-    if not indices:
-        raise ValueError(f"Atom selector {selector!r} not found in rotamer library")
-    return indices
-
-
-def _selector_atom_index(atom_names: list[str], selector: str | list[str]) -> int:
-    """Find a rotamer atom index from a FRETpredict selector.
-
-    Parameters
-    ----------
-    atom_names : list of str
-        Rotamer atom names.
-    selector : str or list of str
-        FRETpredict atom selector.
-
-    Returns
-    -------
-    int
-        Atom index.
-    """
-    return _selector_atom_indices(atom_names, selector)[0]
 
 
 def _weighted_average_sd_se(values: np.ndarray, weights: np.ndarray) -> tuple[float, float, float]:
@@ -351,157 +216,45 @@ class RotamerFRET:
         self.distance_distributions: np.ndarray | None = None
 
     def _resolve_site(self, frame: dict[str, Any], chain: str | None, residue: int) -> dict[str, np.ndarray]:
-        """Resolve a protein labeling site in one frame.
-
-        Parameters
-        ----------
-        frame : dict
-            Frame dictionary from ``load_protein_frames``.
-        chain : str or None
-            Chain ID.
-        residue : int
-            Residue number.
-
-        Returns
-        -------
-        dict
-            Mapping with keys ``CA``, ``N``, and ``C``.
-        """
-        ca, n, c = _resolve_backbone_site(frame, chain, residue)
+        """CA/N/C of the site (see ``ensemble.resolve_backbone_site``)."""
+        ca, n, c = resolve_backbone_site(frame, chain, residue)
         return {"CA": ca, "N": n, "C": c}
 
     def _transform_library(self, library: dict[str, Any], frame: dict[str, Any], chain: str | None, residue: int) -> np.ndarray:
-        """Transform a rotamer library onto a protein site.
+        """Library coordinates in the site's backbone frame (``ensemble.transform_library_to_site``)."""
+        ca, n, c = resolve_backbone_site(frame, chain, residue)
+        return transform_library_to_site(library["coords"], ca, n, c)
 
-        Parameters
-        ----------
-        library : dict
-            Rotamer library.
-        frame : dict
-            Protein frame.
-        chain : str or None
-            Chain ID.
-        residue : int
-            Residue number.
+    def _ensemble(self, library: dict[str, Any], frame: dict[str, Any], chain: str | None, residue: int) -> RotamerEnsemble:
+        """The screened :class:`RotamerEnsemble` of one library at one site of one frame."""
+        return RotamerEnsemble.from_site(
+            frame, chain, residue, library,
+            temperature=self.temperature, electrostatic=self.electrostatic,
+            potential=self.potential, ignore_h=self.ignore_h,
+            sigma_scaling=self.sigma_scaling, epsilon_scaling=self.epsilon_scaling)
 
-        Returns
-        -------
-        numpy.ndarray
-            Transformed rotamer coordinates.
+    def _frame_fret(self, frame: dict[str, Any]) -> FRETFrameResult:
+        """FRET quantities of one protein frame from the two screened ensembles.
+
+        Static / dynamic1 / dynamic2 come from ``fret.distance.fret_pair_efficiencies``
+        with R0 either fixed or computed from the spectra at this frame's ⟨κ²⟩
+        (FRETpredict's convention).
         """
-        site = self._resolve_site(frame, chain, residue)
-        ca, n, c = [site[key] for key in ["CA", "N", "C"]]
-        return _transform_coords(library["coords"], ca, n, c)
-
-    def _frame_fret(
-        self,
-        frame: dict[str, Any],
-        rotamers_1: np.ndarray,
-        rotamers_2: np.ndarray,
-    ) -> FRETFrameResult:
-        """Calculate FRET quantities for one protein frame.
-
-        Parameters
-        ----------
-        frame : dict
-            Protein frame.
-        rotamers_1 : numpy.ndarray
-            Donor rotamer coordinates.
-        rotamers_2 : numpy.ndarray
-            Acceptor rotamer coordinates.
-
-        Returns
-        -------
-        FRETFrameResult
-            Per-frame FRET result.
-        """
-        score_1 = compute_rotamer_score(
-            rotamers_1,
-            frame["coords"],
-            frame["atom_names"],
-            frame["resnames"],
-            self.lib_1["atom_names"],
-            self.lib_1.get("metadata", {}),
-            self.lib_1.get("resnames"),
-            protein_residue_indices=frame.get("residue_indices"),
-            protein_chain_ids=frame.get("chain_ids"),
-            site_residue=self.residues[0],
-            site_chain=self.chains[0],
-            rotamer_weights=self.lib_1.get("weights"),
-            temperature=self.temperature,
-            ignore_h=self.ignore_h,
-            electrostatic=self.electrostatic,
-            potential=self.potential,
-            sigma_scaling=self.sigma_scaling,
-            epsilon_scaling=self.epsilon_scaling,
-        )
-        score_2 = compute_rotamer_score(
-            rotamers_2,
-            frame["coords"],
-            frame["atom_names"],
-            frame["resnames"],
-            self.lib_2["atom_names"],
-            self.lib_2.get("metadata", {}),
-            self.lib_2.get("resnames"),
-            protein_residue_indices=frame.get("residue_indices"),
-            protein_chain_ids=frame.get("chain_ids"),
-            site_residue=self.residues[1],
-            site_chain=self.chains[1],
-            rotamer_weights=self.lib_2.get("weights"),
-            temperature=self.temperature,
-            ignore_h=self.ignore_h,
-            electrostatic=self.electrostatic,
-            potential=self.potential,
-            sigma_scaling=self.sigma_scaling,
-            epsilon_scaling=self.epsilon_scaling,
-        )
-        weights_1 = score_1.weights
-        weights_2 = score_2.weights
-        combined_matrix = np.outer(weights_1, weights_2)
-
-        metadata_1 = dict(self.lib_1.get("metadata", {}) or {})
-        metadata_2 = dict(self.lib_2.get("metadata", {}) or {})
-        metadata_1.setdefault("weights", self.lib_1.get("weights", self.lib_1.get("weight")))
-        metadata_2.setdefault("weights", self.lib_2.get("weights", self.lib_2.get("weight")))
-        mu_1_sel = metadata_1.get("mu", [])
-        mu_2_sel = metadata_2.get("mu", [])
-        center_1_sel = metadata_1.get("r", [])
-        center_2_sel = metadata_2.get("r", [])
-        mu_1_indices = _selector_atom_indices(self.lib_1["atom_names"], mu_1_sel)
-        mu_2_indices = _selector_atom_indices(self.lib_2["atom_names"], mu_2_sel)
-        center_1_idx = _selector_atom_index(self.lib_1["atom_names"], center_1_sel)
-        center_2_idx = _selector_atom_index(self.lib_2["atom_names"], center_2_sel)
-
-        centers_1 = rotamers_1[:, center_1_idx, :]
-        centers_2 = rotamers_2[:, center_2_idx, :]
-        r_vectors = centers_1[:, None, :] - centers_2[None, :, :]
-        distances_angstrom = np.linalg.norm(r_vectors, axis=2)
-        distances_nm = distances_angstrom / 10.0
-
-        mu_1 = rotamers_1[:, mu_1_indices[1], :] - rotamers_1[:, mu_1_indices[0], :] if len(mu_1_indices) >= 2 else rotamers_1[:, 1, :] - rotamers_1[:, 0, :]
-        mu_2 = rotamers_2[:, mu_2_indices[0], :] - rotamers_2[:, mu_2_indices[1], :] if len(mu_2_indices) >= 2 else rotamers_2[:, 0, :] - rotamers_2[:, 1, :]
-        mu_1 = mu_1 / np.linalg.norm(mu_1, axis=1, keepdims=True)
-        mu_2 = mu_2 / np.linalg.norm(mu_2, axis=1, keepdims=True)
-        k2 = kappa2_from_dipoles(mu_1, mu_2, r_vectors)
-        k2_avg = float(np.sum(k2 * combined_matrix))
-
+        donor = self._ensemble(self.lib_1, frame, self.chains[0], self.residues[0])
+        acceptor = self._ensemble(self.lib_2, frame, self.chains[1], self.residues[1])
+        geometry = donor.pair_geometry(acceptor)
+        k2_avg = geometry["kappa2_avg"]
         if not self.fixed_R0:
             self.r0 = forster_radius_from_spectra(self.donor, self.acceptor, k2_avg, r0_dir=self.r0lib)
             if self.r0 == 0:
-                return FRETFrameResult((float(score_1.partition), float(score_2.partition)), float("nan"), float("nan"), float("nan"), float("nan"))
-
-        ratio6 = np.power(distances_nm / self.r0, 6)
-        estatic = 1.0 / (1.0 + 2.0 / 3.0 * np.divide(ratio6, k2))
-        edynamic1 = 1.0 / (1.0 + 2.0 / 3.0 / k2_avg * ratio6)
-        a_avg = np.sum(3.0 / 2.0 * k2 / ratio6 * combined_matrix)
-        edynamic2 = a_avg / (a_avg + 1.0)
-
+                return FRETFrameResult((donor.partition, acceptor.partition), float("nan"), float("nan"), float("nan"), float("nan"))
+        eff = fret_pair_efficiencies(geometry, float(self.r0) * 10.0)   # r0 in nm, geometry in A
         return FRETFrameResult(
-            (float(score_1.partition), float(score_2.partition)),
+            (donor.partition, acceptor.partition),
             k2_avg,
-            float(np.sum(estatic * combined_matrix)),
-            float(np.sum(edynamic1 * combined_matrix)),
-            float(edynamic2),
+            eff["static"],
+            eff["dynamic1"],
+            eff["dynamic2"],
         )
 
     def trajectory_analysis(self) -> None:
@@ -520,9 +273,7 @@ class RotamerFRET:
         distance_distributions = np.zeros((n_frames, self.nr), dtype=np.float64) if self.calc_distr else None
 
         for frame_index, frame in enumerate(self.frames):
-            rotamers_1 = self._transform_library(self.lib_1, frame, self.chains[0], self.residues[0])
-            rotamers_2 = self._transform_library(self.lib_2, frame, self.chains[1], self.residues[1])
-            result = self._frame_fret(frame, rotamers_1, rotamers_2)
+            result = self._frame_fret(frame)
             z_values[frame_index] = result.z
             if result.z[0] <= self.z_cutoff or result.z[1] <= self.z_cutoff:
                 continue
