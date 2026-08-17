@@ -53,6 +53,8 @@ EXPORTS = {
     "RotamerFRET": "IMP.bff.cgdye.rotamer.fret",
     "RotamerEnsemble": "IMP.bff.cgdye.rotamer.ensemble",
     "rotamer_ensembles_from_fps": "IMP.bff.cgdye.rotamer.ensemble",
+    "compare_av_and_rotamer_positions": "IMP.bff.cgdye.rotamer.compare_av",
+    "compare_av_and_rotamer_pairs": "IMP.bff.cgdye.rotamer.compare_av",
     "SIMULATION_TYPE_R1": "IMP.bff.cgdye.rotamer.ensemble",
     "RotamerPosition": "IMP.bff.cgdye.rotamer.fps",
     "RotamerDistance": "IMP.bff.cgdye.rotamer.fps",
@@ -128,6 +130,8 @@ EXPORTS = {
 #: a few exports are attributes with a different name in their module
 _SOURCE_NAME = {
     "fps_schema_validate": "validate",
+    "compare_av_and_rotamer_positions": "compare_positions",
+    "compare_av_and_rotamer_pairs": "compare_pairs",
 }
 
 

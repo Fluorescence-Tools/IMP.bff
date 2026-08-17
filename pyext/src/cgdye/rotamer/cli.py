@@ -85,3 +85,18 @@ def r0(donor: str, acceptor: str, k2: float) -> None:
 
 if __name__ == "__main__":
     rotamer()
+
+
+@rotamer.command("compare-av")
+@click.option("--system", type=click.Choice(["hgbp1", "t4l", "both"]), default="both", show_default=True)
+@click.option("--okf-dir", default=None, help="Write av_vs_rotamer.md here (default: the repo's okf/validation when run from a checkout).")
+@click.option("--pins", default=None, help="Write the pin JSON here (default: the repo's test/references).")
+@click.option("--n-samples", default=50000, show_default=True, type=int)
+@click.option("--temperature", default=298.15, show_default=True, type=float)
+@click.option("--cutoffs", default="30,10", show_default=True)
+@click.pass_context
+def compare_av(ctx, **kwargs) -> None:
+    """AV ↔ rotamer-ensemble comparison on the bundled hGBP1 and T4L systems (PRD-108)."""
+    from IMP.bff.cgdye.scripts.compare_av_rotamer import main as _main
+    ctx.invoke(_main, **kwargs)
+

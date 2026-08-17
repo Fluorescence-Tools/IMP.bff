@@ -47,6 +47,14 @@
   exclusions while collapsing same-named MOL2 atoms into one site (self-pairs
   at r = 0, ~1e6–1e31 per frame). `dye_internal_system` fixes both; sampler
   pins recorded. Cheap suite 226 passed / 0 skipped.
+* **PRD-108 stage 2 — AV↔rotamer table.** `dye rotamer compare-av` /
+  `cgdye/rotamer/compare_av.py` write `okf/validation/av_vs_rotamer.md` and
+  drift pins; medium test with loose sanity bounds. Result: rotamer
+  ensembles differ from AVs by 3–12 Å in ⟨R_DA⟩ and fit the 99 T4L distances
+  worse (Σχ² 257 vs 155); FRETpredict's soft screening leaves most weight on
+  rotamers 1.3–2.5 Å from the protein. C++ `R1` in AVNetworkRestraint is not
+  motivated by the data; AV-parameter calibration is the follow-on. Also:
+  the `dye` CLI's `main()` never existed (now defined; `rotamer` group attached).
 * **PRD-108 stage 1 — fps.json `R1`.** Schema type + fields, C++ `IMP_WARN`
   on non-AV `simulation_type` (test with an R1 position in the T4L score set),
   `fps_positions_for_docking`, `write_rotamer_fps` /

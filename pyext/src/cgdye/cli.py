@@ -577,5 +577,16 @@ def label_fusion(pdb_path, chain, output):
     click.echo(f"Wrote labeled fusion system to {output}")
 
 
+# rotamer tools live in their own group (rotamer/cli.py): `dye rotamer predict|r0|compare-av`
+from .rotamer.cli import rotamer as _rotamer_group  # noqa: E402
+
+dye.add_command(_rotamer_group, "rotamer")
+
+
+def main():
+    """Entry point: ``python -m IMP.bff.cgdye.cli`` (the ``dye`` command group)."""
+    dye()
+
+
 if __name__ == "__main__":
     main()
