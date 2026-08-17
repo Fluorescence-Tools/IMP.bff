@@ -20,9 +20,6 @@ from .._jit import njit, prange, get_num_threads
 
 __all__ = ["simulate_photon_trace", "simulate_quenched_decay"]
 
-_EPS = 2.4414062e-4  # matches the former C constant
-
-
 @njit(cache=True)
 def _ranf() -> float:
     return np.random.random()
@@ -30,8 +27,24 @@ def _ranf() -> float:
 
 @njit(cache=True)
 def _log_exp_wait(tau0: float) -> float:
-    """Exponential waiting time."""
-    return np.log(1.0 / (_ranf() + _EPS)) * tau0
+    """An exponentially distributed waiting time with mean *tau0*.
+
+    Inverse-transform sampling: ``-tau0 * ln(u)`` for ``u`` uniform on (0, 1].
+    ``np.random.random()`` is uniform on **[0, 1)**, so the draw is ``1 - u``,
+    which lands in (0, 1] -- never 0, so the log is finite, and never above 1,
+    so the result is never negative.
+
+    QuEst computed ``log(1 / (u + EPS)) * tau0`` with ``EPS = 2.4414062e-4``,
+    inherited from a C ancestor where the epsilon guarded ``log(1/0)``. But it
+    also pushed the argument **below 1** whenever ``u > 1 - EPS``, making the
+    logarithm negative: a photon emitted before it was excited. That happened to
+    2.4e-4 of all photons -- 8 in a 40 000-photon trace, measured -- and each
+    one was then silently dropped by any histogram starting at 0, so the decay
+    curve quietly held fewer photons than the trace said were emitted. Fixed on
+    the move (PRD-109); the epsilon is gone because the reformulation does not
+    need it.
+    """
+    return -np.log(1.0 - _ranf()) * tau0
 
 
 @njit(cache=True, nogil=True)

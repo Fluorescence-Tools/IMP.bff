@@ -36,14 +36,41 @@ class PhotonTraceTests(IMP.test.TestCase):
         self.k_quench = np.abs(rng.normal(0.5, 0.4, 5000)).astype(np.float32)
 
     def test_frozen_reference(self):
-        """Bit-for-bit QuEst's trace at this seed."""
+        """Pinned after the waiting-time fix; QuEst gave 6271 / 1.263997559.
+
+        The move itself was bit-for-bit against QuEst at this seed. The numbers
+        then moved by design when `_log_exp_wait` was corrected -- see
+        :meth:`test_waiting_times_are_never_negative`.
+        """
         dts, emitted = photon.simulate_photon_trace(
             20000, self.k_quench, t_step=0.01, tau0=4.0, random_seed=5
         )
-        self.assertEqual(int(emitted.sum()), 6271)
+        self.assertEqual(int(emitted.sum()), 6297)
         self.assertAlmostEqual(
-            float(dts[emitted > 0].mean()), 1.263997559476009, delta=1e-9
+            float(dts[emitted > 0].mean()), 1.266492156326010, delta=1e-9
         )
+
+    def test_waiting_times_are_never_negative(self):
+        """QuEst emitted photons *before* they were excited, 2.4e-4 of the time.
+
+        `log(1 / (u + EPS))` goes negative once `u > 1 - EPS`, and every such
+        photon was then dropped by a histogram starting at 0 -- so the decay
+        curve held fewer photons than the trace reported as emitted. At 40 000
+        photons that was 8 of them.
+        """
+        for seed in (1, 2, 3):
+            dts, emitted = photon.simulate_photon_trace(
+                50000, self.k_quench, t_step=0.01, tau0=4.0, random_seed=seed
+            )
+            self.assertGreater(float(dts[emitted > 0].min()), 0.0)
+
+    def test_the_whole_emitted_trace_lands_in_a_wide_histogram(self):
+        """The consequence of the above, stated as the property that matters."""
+        dts, emitted = photon.simulate_photon_trace(
+            50000, self.k_quench, t_step=0.01, tau0=4.0, random_seed=4
+        )
+        counts, _edges = np.histogram(dts[emitted > 0], range=(0.0, 400.0), bins=512)
+        self.assertEqual(int(counts.sum()), int(emitted.sum()))
 
     def test_a_seed_pins_the_trace(self):
         first = photon.simulate_photon_trace(2000, self.k_quench, random_seed=5)

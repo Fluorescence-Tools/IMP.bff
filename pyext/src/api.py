@@ -148,6 +148,14 @@ EXPORTS = {
     "GridDiffusionResult": "IMP.bff.quenching.solver",
     "diffusion_stability_limit": "IMP.bff.quenching.solver",
     "DynamicAccessibleVolume": "IMP.bff.quenching.dynamic",
+    # --- the particle model, end to end --------------------------------------
+    "DyeDiffusionSimulation": "IMP.bff.quenching.model",
+    "QuenchedDonorDecay": "IMP.bff.quenching.model",
+    "ResidueSites": "IMP.bff.quenching.sites",
+    "residue_sites": "IMP.bff.quenching.sites",
+    "slow_factors_for_residues": "IMP.bff.quenching.sites",
+    "quenching_rates_for_residues": "IMP.bff.quenching.sites",
+    "quench_radii_for_residues": "IMP.bff.quenching.sites",
     # --- strip engine (fret) ----------------------------------------------------
     "parse_strip_mask": "IMP.bff.fret.strip",
     "default_strip_mask": "IMP.bff.fret.strip",
