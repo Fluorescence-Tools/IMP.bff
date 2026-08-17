@@ -433,6 +433,21 @@ public:
     static IntKey get_search_stencil_key();
 
     /**
+     * @brief Search algorithm of the lattice path.
+     *
+     * "dijkstra" (default): the path search -- a tile is reached when a
+     * path through free space of length <= linker length exists.
+     * "euclidean": the linker is straight -- a tile is reached when the
+     * source voxel sees it (straight voxel path free of obstacles) and it
+     * lies within the linker length; no path search at all. Tiles in the
+     * shadow of the protein are dropped. Faster by the search's share of
+     * the frame; a different, more restrictive model.
+     */
+    std::string get_search_mode() const;
+    void set_search_mode(std::string mode);
+    static IntKey get_search_mode_key();
+
+    /**
      * @brief Read occupancy from a shared per-class raster registry.
      *
      * Requires `space_fixed`. Pass nullptr to return to a private raster.

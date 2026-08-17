@@ -500,12 +500,98 @@ void PathMap::search_lattice(long source_idx, float max_cost,
     }
     normalized_ = false;
     rms_calculated_ = false;
-    dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+    if(!euclidean_search_){
+        dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+    } else {
+        // Exact voxel visibility: the segment from the source point to the
+        // tile centre is traversed voxel by voxel (Amanatides-Woo DDA);
+        // the tile is reached iff every voxel on the way is free. Its cost
+        // is the Euclidean distance to the source. Tiles are taken from
+        // the ball around the source voxel; the traversal stops at the
+        // first obstacle, so shadowed tiles are cheap.
+        const std::vector<int> &order = get_ball_order(source_idx, block_radius);
+        cost.assign(n_voxel, TILE_COST_DEFAULT);
+        visited.assign(n_voxel, 0);
+        const int nx = header_.get_nx(), ny = header_.get_ny(), nz = header_.get_nz();
+        const long nxy = (long) nx * ny;
+        const double sp = header_.get_spacing();
+        const double ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
+        const float *pen = penalty_soa_.data();
+        // source voxel indices and the source point's position inside the grid
+        int si = (int) (source_idx % nx), sj = (int) ((source_idx / nx) % ny), sk = (int) (source_idx / nxy);
+        visited[source_idx] = 1;
+        cost[source_idx] = 0.0f;
+        for(int v : order){
+            if(v == source_idx) continue;
+            if(pen[v] != 0.0f) continue;
+            const int ti = (int) (v % nx), tj = (int) ((v / nx) % ny), tk = (int) (v / nxy);
+            const double ex = (double) xl[v] - x0, ey = (double) yl[v] - y0, ez = (double) zl[v] - z0;
+            const double dist = std::sqrt(ex*ex + ey*ey + ez*ez);
+            const float c = (float) (dist / sp);
+            if(c >= max_cost) continue;
+            // DDA from the source point (x0,y0,z0) towards the tile centre.
+            // Voxel boundaries lie at origin + (i +- 1/2) * spacing.
+            int i = si, j = sj, k = sk;
+            const int stepi = (ex > 0) - (ex < 0), stepj = (ey > 0) - (ey < 0), stepk = (ez > 0) - (ez < 0);
+            const double inf = std::numeric_limits<double>::infinity();
+            // parametric distance (0..1 along the segment) to the next boundary
+            auto first = [&](double p0, double d, int idx, double o, int step) -> double {
+                if(step == 0) return inf;
+                double boundary = o + (idx + (step > 0 ? 0.5 : -0.5)) * sp;
+                return (boundary - p0) / d;
+            };
+            double tmx = first(x0, ex, i, ox, stepi), tmy = first(y0, ey, j, oy, stepj), tmz = first(z0, ez, k, oz, stepk);
+            const double tdx = stepi ? sp / std::fabs(ex) : inf, tdy = stepj ? sp / std::fabs(ey) : inf, tdz = stepk ? sp / std::fabs(ez) : inf;
+            bool clear = true;
+            while(i != ti || j != tj || k != tk){
+                if(tmx <= tmy && tmx <= tmz){ i += stepi; tmx += tdx; }
+                else if(tmy <= tmz){ j += stepj; tmy += tdy; }
+                else { k += stepk; tmz += tdz; }
+                if(pen[(long) k * nxy + (long) j * nx + i] != 0.0f){ clear = false; break; }
+            }
+            if(!clear) continue;
+            cost[v] = c;
+            visited[v] = 1;
+        }
+        reached_valid_ = true;
+    }
     cost[source_idx] = TILE_COST_DEFAULT;
     if(density_soa_.size() != (size_t) n_voxel){
         density_soa_.assign(n_voxel, 1.0f);
     }
     soa_valid_ = true;
+}
+
+const std::vector<int> &PathMap::get_ball_order(long source_idx, double radius){
+    const int nx = header_.get_nx(), ny = header_.get_ny(), nz = header_.get_nz();
+    if(source_idx == ball_source_ && radius == ball_radius_ &&
+       nx == ball_nx_ && ny == ball_ny_ && nz == ball_nz_){
+        return ball_order_;
+    }
+    const double h = header_.get_spacing();
+    const int sx = (int) (source_idx % nx), sy = (int) ((source_idx / nx) % ny), sz = (int) (source_idx / ((long) nx * ny));
+    const double reach = radius / h + std::sqrt(3.0) / 2.0 + 1e-9;
+    const double reach2 = reach * reach;
+    std::vector<std::pair<double, int> > cand;
+    for(int z = 0; z < nz; z++){
+        double dz = z - sz;
+        for(int y = 0; y < ny; y++){
+            double dy = y - sy;
+            for(int x = 0; x < nx; x++){
+                double dx = x - sx;
+                double d2 = dx*dx + dy*dy + dz*dz;
+                if(d2 <= reach2){
+                    cand.emplace_back(d2, (int) (((long) z * ny + y) * nx + x));
+                }
+            }
+        }
+    }
+    std::sort(cand.begin(), cand.end());
+    ball_order_.resize(cand.size());
+    for(size_t i = 0; i < cand.size(); i++) ball_order_[i] = cand[i].second;
+    ball_source_ = source_idx; ball_radius_ = radius;
+    ball_nx_ = nx; ball_ny_ = ny; ball_nz_ = nz;
+    return ball_order_;
 }
 
 void PathMap::carve_lattice(const int32_t *occupancy){
@@ -824,6 +910,7 @@ void PathMap::get_tile_values(
 void PathMap::resize(unsigned int nvox){
     data_.reset(new double[nvox]);
     reached_valid_ = false;
+    ball_source_ = -1;
     soa_valid_ = false;
     penalty_soa_.clear();
     density_soa_.clear();

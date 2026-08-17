@@ -73,6 +73,16 @@ private:
     int interior_nx_ = -1, interior_ny_ = -1, interior_nz_ = -1, interior_box_ = -1;
     const char *get_interior_flags();
 
+    // Euclidean ("visible") search support: tiles of the block ball in order
+    // of increasing distance from the source voxel centre, cached per
+    // shape/source/radius; visibility scratch array; mode flag.
+    std::vector<int> ball_order_;
+    long ball_source_ = -1; double ball_radius_ = -1;
+    int ball_nx_ = -1, ball_ny_ = -1, ball_nz_ = -1;
+    const std::vector<int> &get_ball_order(long source_idx, double radius);
+    std::vector<char> visible_;
+    bool euclidean_search_ = false;
+
     // Compact per-tile arrays (structure-of-arrays) the lattice path works
     // on: PathMapTile is ~100 bytes and streaming 12k of them per AV per
     // frame for three floats dominated the O(window) phases. While
@@ -400,6 +410,20 @@ public:
                                     bool keep_source_cost_default = false) {
         find_path_dijkstra_exact(path_begin_idx, -1, max_cost, keep_source_cost_default);
     }
+
+    /**
+     * @brief Euclidean ("visible") search instead of the path search.
+     *
+     * A free tile is reached iff the source voxel sees it along a straight
+     * voxel path -- a 3D Bresenham chain of 26-neighbour steps towards the
+     * source in which every diagonal step also requires the face neighbours
+     * it passes to be free (no corner cutting) -- and its cost is the exact
+     * Euclidean distance to the source. Tiles in the shadow of the protein
+     * are not reached: the linker is modelled as straight. Off by default;
+     * AV::set_search_mode("euclidean") turns it on.
+     */
+    void set_euclidean_search(bool tf) { euclidean_search_ = tf; }
+    bool get_euclidean_search() const { return euclidean_search_; }
 
     /**
      * @brief The lattice evaluation of one AV in compact arrays.

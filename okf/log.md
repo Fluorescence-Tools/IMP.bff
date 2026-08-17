@@ -1,6 +1,12 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105: `search_mode="euclidean"` added** (straight-linker AV: exact
+  voxel visibility by DDA, Euclidean cost, no path search; option on
+  `AVNetworkRestraint`/`AV`, default stays `dijkstra`). Model, not speed:
+  ~40 % of the path-search voxels, 5.6 Å rms distance change, 0.82 vs 0.77
+  ms/frame. Approximate visibility chains were tried and rejected (leak or
+  over-conservative).
 * **PRD-105: hybrid Euclidean/geodesic search and obstacle distance
   transform evaluated and rejected** (details in the PRD): visibility-seeded
   Dijkstra was slower with safe (face-step) visibility and tunnelled with

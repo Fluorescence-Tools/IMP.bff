@@ -264,6 +264,36 @@ void AV::set_search_stencil(int stencil){
     }
 }
 
+IntKey AV::get_search_mode_key(){
+    static const IntKey k("av_search_mode");
+    return k;
+}
+
+std::string AV::get_search_mode() const{
+    if(get_model()->get_has_attribute(get_search_mode_key(), get_particle_index())){
+        return get_model()->get_attribute(get_search_mode_key(), get_particle_index()) == 1
+               ? "euclidean" : "dijkstra";
+    }
+    return "dijkstra";
+}
+
+void AV::set_search_mode(std::string mode){
+    int v;
+    if(mode == "dijkstra") v = 0;
+    else if(mode == "euclidean") v = 1;
+    else IMP_THROW("AV: search mode must be \"dijkstra\" or \"euclidean\"", IMP::ValueException);
+    if(get_model()->get_has_attribute(get_search_mode_key(), get_particle_index())){
+        get_model()->set_attribute(get_search_mode_key(), get_particle_index(), v);
+    } else {
+        get_model()->add_attribute(get_search_mode_key(), get_particle_index(), v);
+    }
+    if(av_map_) av_map_->set_euclidean_search(v == 1);
+    if(state_){
+        state_->have_result = false;
+        if(state_->coarse_map) state_->coarse_map->set_euclidean_search(v == 1);
+    }
+}
+
 void AV::set_occupancy_registry(AVOccupancyRegistry *registry){
     if(registry && !get_space_fixed()){
         IMP_THROW("AV: a shared occupancy registry requires space_fixed",
@@ -310,6 +340,7 @@ void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
     if(get_space_fixed() && get_search_stencil() == 26) av_map_->set_symmetric_stencil(true);
+    if(get_space_fixed()) av_map_->set_euclidean_search(get_search_mode() == "euclidean");
     IMP::Particle* parent = get_model()->get_particle(get_particle_index(0));
 
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());

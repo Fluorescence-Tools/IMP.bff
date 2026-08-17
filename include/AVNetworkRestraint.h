@@ -65,7 +65,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
         ar(cereal::base_class<IMP::Restraint>(this),
            n_samples, av_pi_, model_ps_, distances_,
            space_fixed_, shared_map_, distance_, quad_k_, search_grid_factor_,
-           search_stencil_);
+           search_stencil_, search_mode_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -104,6 +104,7 @@ private:
     int quad_k_ = 50;              //!< representative points per cloud
     int search_grid_factor_ = 1;   //!< AV::set_search_grid_factor for every AV
     int search_stencil_ = 26;      //!< AV::set_search_stencil for every AV
+    std::string search_mode_ = "dijkstra";  //!< AV::set_search_mode for every AV
 
     //! Shared occupancy rasters (only under space_fixed && shared_map)
     IMP::Pointer<AVOccupancyRegistry> registry_;
@@ -198,6 +199,8 @@ public:
      *   (AV::set_search_grid_factor); 1 = exact on the AV grid.
      * @param[in] search_stencil 26 (symmetric, default) or 30 (historical,
      *   asymmetric); see AV::set_search_stencil.
+     * @param[in] search_mode "dijkstra" (default, path search) or
+     *   "euclidean" (straight linker, visibility only); see AV::set_search_mode.
      */
     AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
@@ -210,7 +213,8 @@ public:
         std::string distance = "quad",
         int quad_k = 50,
         int search_grid_factor = 1,
-        int search_stencil = 26
+        int search_stencil = 26,
+        std::string search_mode = "dijkstra"
     );
 
     bool get_space_fixed() const { return space_fixed_; }
@@ -219,6 +223,7 @@ public:
     int get_quad_k() const { return quad_k_; }
     int get_search_grid_factor() const { return search_grid_factor_; }
     int get_search_stencil() const { return search_stencil_; }
+    std::string get_search_mode() const { return search_mode_; }
     int get_n_samples() const { return n_samples; }
 
     //! The shared occupancy registry (nullptr unless shared_map)

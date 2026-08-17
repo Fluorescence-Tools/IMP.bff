@@ -27,11 +27,20 @@ AVNetworkRestraint::AVNetworkRestraint(
         std::string distance,
         int quad_k,
         int search_grid_factor,
-        int search_stencil
+        int search_stencil,
+        std::string search_mode
 ) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples),
     space_fixed_(space_fixed), shared_map_(shared_map),
     distance_(distance), quad_k_(quad_k), search_grid_factor_(search_grid_factor),
-    search_stencil_(search_stencil){
+    search_stencil_(search_stencil), search_mode_(search_mode){
+    if(search_mode != "dijkstra" && search_mode != "euclidean"){
+        IMP_THROW("AVNetworkRestraint: search_mode must be \"dijkstra\" or \"euclidean\"",
+                  IMP::ValueException);
+    }
+    if(search_mode == "euclidean" && !space_fixed){
+        IMP_THROW("AVNetworkRestraint: search_mode=\"euclidean\" requires space_fixed=True",
+                  IMP::ValueException);
+    }
     if(search_stencil != 26 && search_stencil != 30){
         IMP_THROW("AVNetworkRestraint: search_stencil must be 26 or 30", IMP::ValueException);
     }
@@ -90,6 +99,7 @@ void AVNetworkRestraint::configure_avs(){
         av.second->set_space_fixed(space_fixed_);
         av.second->set_search_grid_factor(search_grid_factor_);
         av.second->set_search_stencil(search_stencil_);
+        av.second->set_search_mode(search_mode_);
         av.second->set_occupancy_registry(
             (space_fixed_ && shared_map_) ? registry_.get() : nullptr);
     }
@@ -336,6 +346,7 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     j["quad_k"] = quad_k_;
     j["search_grid_factor"] = search_grid_factor_;
     j["search_stencil"] = search_stencil_;
+    j["search_mode"] = search_mode_;
     j["n_samples"] = n_samples;
     j["evaluations"] = n_evaluations_;
     j["threads"] = get_number_of_threads();

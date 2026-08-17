@@ -816,6 +816,37 @@ class TestAVHandle(unittest.TestCase):
                                        space_fixed=False, shared_map=False,
                                        search_grid_factor=2)
 
+    def test_euclidean_search_mode(self):
+        # straight-linker model: a tile is reached iff the source sees it;
+        # a subset of the path-search AV, deterministic, exact vs full
+        rd = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p")
+        re_ = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                         search_mode="euclidean")
+        self.assertEqual(rd.get_search_mode(), "dijkstra")
+        self.assertEqual(re_.get_search_mode(), "euclidean")
+        vd = rd.unprotected_evaluate(None)
+        ve = re_.unprotected_evaluate(None)
+        self.assertEqual(ve, re_.unprotected_evaluate(None))
+        self.assertNotEqual(vd, ve)
+        for name in av_names(rd):
+            cd = np.array(rd.get_used_av(name).get_map().get_xyz_density())
+            ce = np.array(re_.get_used_av(name).get_map().get_xyz_density())
+            if len(ce) == 0:
+                continue
+            # nearly every Euclidean tile is a path-search tile (the few
+            # exceptions sit where the straight distance is within the
+            # linker length but the chamfer path length is not)
+            keyd = {tuple(np.round(p[:3], 3)) for p in cd}
+            keye = {tuple(np.round(p[:3], 3)) for p in ce}
+            self.assertGreater(len(keye & keyd), 0.7 * len(keye), name)
+            self.assertLess(len(ce), len(cd), name)
+            av = re_.get_used_av(name)
+            av.resample(True, True)
+            self.assertTrue(np.array_equal(ce, np.array(av.get_map().get_xyz_density())))
+        with self.assertRaises(Exception):
+            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                       search_mode="fft")
+
     def test_used_av_shares_the_restraint_map(self):
         r = make_restraint("default", self.hier, score_set="chi2_C2_33p")
         r.unprotected_evaluate(None)
