@@ -9,6 +9,9 @@
 #include <IMP/bff/PathMap.h>
 
 #include <cstring>
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -422,6 +425,33 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
     const int nz = header_.get_nz();
     const int nxy = nx * ny;
     const char *interior_flags = get_interior_flags();
+#ifdef __ARM_NEON
+    // Row form of the symmetric 26 stencil for interior tiles: the three
+    // neighbours dx = -1, 0, 1 of each of the 9 (dz, dy) rows are consecutive
+    // in memory, so one 4-lane load covers them (lane 3 is masked with an
+    // infinite edge length; the tile itself in the centre row has length 0
+    // and never improves on itself). Same edge lengths and float arithmetic
+    // as the offset table; relaxation order does not change costs.
+    const bool rows26 = symmetric_stencil_ && nnb == 26;
+    long row_base[9];
+    float32x4_t row_len[9];
+    if(rows26){
+        int r = 0;
+        for(int dz = -1; dz <= 1; dz++){
+            for(int dy = -1; dy <= 1; dy++, r++){
+                row_base[r] = (long) dz * nxy + (long) dy * nx - 1;
+                float l[4];
+                for(int k = 0; k < 3; k++){
+                    int dx = k - 1;
+                    l[k] = std::sqrt((float) (dx*dx + dy*dy + dz*dz));
+                }
+                l[3] = std::numeric_limits<float>::infinity();
+                row_len[r] = vld1q_f32(l);
+            }
+        }
+    }
+    const float32x4_t vmax = vdupq_n_f32(max_cost);
+#endif
     std::vector<std::vector<int> > &buckets = bucket_scratch_;
     for(auto &b : buckets) b.clear();
     if(queued_scratch_.size() != (size_t) n_voxel) queued_scratch_.assign(n_voxel, -1);
@@ -447,6 +477,28 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
             if((size_t) ccost != b) continue;   // stale: moved to a lower bucket
             if(ccost >= max_cost){ done = true; break; }
             const bool interior = interior_flags[cidx] != 0;
+#ifdef __ARM_NEON
+            if(interior && rows26){
+                const float32x4_t vc = vdupq_n_f32(ccost);
+                for(int r = 0; r < 9; r++){
+                    const long base = cidx + row_base[r];
+                    const float32x4_t cur = vld1q_f32(cost_ptr + base);
+                    const float32x4_t nw = vaddq_f32(vc, row_len[r]);
+                    const uint32x4_t better = vandq_u32(vcltq_f32(nw, cur), vcltq_f32(nw, vmax));
+                    if(vmaxvq_u32(better) == 0) continue;
+                    float nwv[4]; vst1q_f32(nwv, nw);
+                    uint32_t bv[4]; vst1q_u32(bv, better);
+                    for(int k = 0; k < 3; k++){
+                        if(bv[k]){
+                            const long nidx = base + k;
+                            cost_ptr[nidx] = nwv[k];
+                            push(nwv[k], nidx);
+                        }
+                    }
+                }
+                continue;
+            }
+#endif
             int x0 = 0, y0 = 0, z0 = 0;
             if(!interior){
                 x0 = (int) (cidx % nx);
@@ -587,18 +639,26 @@ void PathMap::search_lattice(long source_idx, float max_cost,
         const float sp = header_.get_spacing();
         const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
         float *cost_ptr = cost.data();
-        for(const BallCandidate &c : cand){
-            double value;
-            if(c.kind == 1){
-                value = (double) occupancy[c.idx];   // inside block, outside open: data decides
-            } else {
-                const float xf = c.ix * sp + ox, yf = c.iy * sp + oy, zf = c.iz * sp + oz;
-                double dx = (double) xf - x0, dy = (double) yf - y0, dz = (double) zf - z0;
-                double d2 = dx*dx + dy*dy + dz*dz;
-                if(d2 < osq) value = 0.0;
-                else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
-                else value = (double) occupancy[c.idx];
+        // pass 1, all candidates as if the occupancy alone decided (contiguous
+        // runs, vectorisable: a count above the threshold blocks)
+        for(const BallRun &run : ball_runs_){
+            const int32_t *oc = occupancy + run.idx0;
+            float *cc = cost_ptr + run.idx0;
+            const int len = run.len;
+            for(int k = 0; k < len; k++){
+                cc[k] = ((double) oc[k] > obstacle_threshold) ? BLOCKED_COST : TILE_COST_DEFAULT;
             }
+        }
+        // pass 2, the shell tiles get the exact sphere tests
+        for(const BallCandidate &c : cand){
+            if(c.kind == 1) continue;
+            const float xf = c.ix * sp + ox, yf = c.iy * sp + oy, zf = c.iz * sp + oz;
+            double dx = (double) xf - x0, dy = (double) yf - y0, dz = (double) zf - z0;
+            double d2 = dx*dx + dy*dy + dz*dz;
+            double value;
+            if(d2 < osq) value = 0.0;
+            else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
+            else value = (double) occupancy[c.idx];
             cost_ptr[c.idx] = (value > obstacle_threshold) ? BLOCKED_COST : TILE_COST_DEFAULT;
         }
         penalty_soa_.clear();   // derived from cost on sync
@@ -715,6 +775,17 @@ const std::vector<PathMap::BallCandidate> &PathMap::get_ball_candidates(long sou
                 }
             }
         }
+    }
+    // runs of consecutive candidates along x
+    ball_runs_.clear();
+    for(size_t i = 0; i < ball_cand_.size();){
+        const BallCandidate &c = ball_cand_[i];
+        size_t j = i + 1;
+        while(j < ball_cand_.size() && ball_cand_[j].iy == c.iy && ball_cand_[j].iz == c.iz &&
+              ball_cand_[j].ix == ball_cand_[j-1].ix + 1) j++;
+        BallRun r; r.idx0 = c.idx; r.ix0 = c.ix; r.iy = c.iy; r.iz = c.iz; r.len = (int16_t) (j - i);
+        ball_runs_.push_back(r);
+        i = j;
     }
     ballc_source_ = source_idx; ballc_radius_ = radius; ballc_open_ = open_radius;
     ballc_nx_ = nx; ballc_ny_ = ny; ballc_nz_ = nz;
@@ -930,15 +1001,42 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
                                ballc_ny_ == header_.get_ny() && ballc_nz_ == header_.get_nz();
         if(have_cand){
             v.reserve(ball_cand_.size() / 4 + 16);
-            for(const BallCandidate &bc : ball_cand_){
-                const long i = bc.idx;
-                if(!(cost[i] >= 0.0f && cost[i] < TILE_COST_DEFAULT)) continue;
-                float c = cost[i] * grid_spacing;
-                float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-                density *= density_soa_[i];
-                if(density > 0){
-                    const float xf = bc.ix * sp + ox, yf = bc.iy * sp + oy, zf = bc.iz * sp + oz;
-                    v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
+            const float *cp = cost.data();
+            for(const BallRun &run : ball_runs_){
+                // contiguous run: a reached tile has 0 <= cost < default
+                const float *rc = cp + run.idx0;
+                const int len = run.len;
+                int k = 0;
+#ifdef __ARM_NEON
+                const float32x4_t zero = vdupq_n_f32(0.0f);
+                const float32x4_t dflt = vdupq_n_f32(TILE_COST_DEFAULT);
+                for(; k + 4 <= len; k += 4){
+                    const float32x4_t cc = vld1q_f32(rc + k);
+                    const uint32x4_t reached = vandq_u32(vcgeq_f32(cc, zero), vcltq_f32(cc, dflt));
+                    if(vmaxvq_u32(reached) == 0) continue;
+                    for(int q = k; q < k + 4; q++){
+                        const long i = run.idx0 + q;
+                        if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
+                        float c = cp[i] * grid_spacing;
+                        float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+                        density *= density_soa_[i];
+                        if(density > 0){
+                            const float xf = (run.ix0 + q) * sp + ox, yf = run.iy * sp + oy, zf = run.iz * sp + oz;
+                            v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
+                        }
+                    }
+                }
+#endif
+                for(; k < len; k++){
+                    const long i = run.idx0 + k;
+                    if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
+                    float c = cp[i] * grid_spacing;
+                    float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+                    density *= density_soa_[i];
+                    if(density > 0){
+                        const float xf = (run.ix0 + k) * sp + ox, yf = run.iy * sp + oy, zf = run.iz * sp + oz;
+                        v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
+                    }
                 }
             }
             return v;

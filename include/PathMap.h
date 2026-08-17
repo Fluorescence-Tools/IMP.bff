@@ -92,6 +92,10 @@ private:
     // occupancy decides; kind 0: on one of the two shells, needs the test.
     struct BallCandidate { int idx; int16_t ix, iy, iz; int16_t kind; };
     std::vector<BallCandidate> ball_cand_;
+    // Runs of consecutive candidates along x (idx0, ix0, iy, iz, length):
+    // contiguous in memory, so the passes over them vectorise.
+    struct BallRun { int idx0; int16_t ix0, iy, iz, len; };
+    std::vector<BallRun> ball_runs_;
     std::vector<float> ball_cost_template_;
     long ballc_source_ = -1; double ballc_radius_ = -1, ballc_open_ = -1;
     int ballc_nx_ = -1, ballc_ny_ = -1, ballc_nz_ = -1;

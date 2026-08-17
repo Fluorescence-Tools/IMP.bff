@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 SIMD:** NEON row-form relaxation for interior tiles (~3 %),
+  run-based vectorised cloud/penalty passes (noise). Serial per-AV sum ~2.0
+  ms/frame; the kernel is bookkeeping/cache-bound, not arithmetic-bound.
 * **PRD-105 pass 6 (search kernel):** obstacles encoded in the cost array
   (`BLOCKED_COST`), reused bucket/queue scratch, per-shape candidate list with
   shell/interior classification (occupancy-only tiles skip the sphere test),
