@@ -73,6 +73,15 @@ class IMPBFFEXPORT AVOccupancyMap : public IMP::Object {
 
     unsigned long generation_ = 0;
 
+    // Bounding boxes (lattice indices, inclusive) of the counts changed by
+    // each generation, most recent last; lets a window that no change
+    // touched skip its search. Capped: older history reads as "everything".
+    struct ChangeBox { unsigned long generation; int lo[3]; int hi[3]; };
+    std::vector<ChangeBox> changes_;
+    unsigned long oldest_tracked_ = 1;
+    void record_change(const int lo[3], const int hi[3]);
+    void record_change_all();
+
     // Diagnostics
     long n_skip_ = 0, n_local_ = 0, n_full_ = 0, n_grow_ = 0, n_roll_ = 0;
     long moved_last_ = 0, moved_total_ = 0;
@@ -134,6 +143,12 @@ public:
 
     //! Increments on every update that changed at least one count
     unsigned long get_generation() const { return generation_; }
+
+    //! Did any count inside the window [k0, k0 + n) change after `generation`?
+    /** Conservative: true when the history no longer reaches back to
+        `generation`. */
+    bool get_changed_since(unsigned long generation,
+                           int kx, int ky, int kz, int nx, int ny, int nz) const;
 
     //! Diagnostics
     long get_number_of_skips() const { return n_skip_; }

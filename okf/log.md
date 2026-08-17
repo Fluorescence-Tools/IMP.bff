@@ -1,6 +1,20 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 perf pass** (same day, one commit): the AVs' compute phases run
+  on threads (`AV::resample_prepare/compute/finish` split; restraint
+  `set_number_of_threads`, default hardware concurrency; pair sums threaded
+  too), neighbours enumerated inline in the search (no per-tile edge vectors,
+  index heap, penalty mirror), `fill_sphere` without per-voxel Vector3D,
+  cloud from reached tiles, locality-aware skip via per-generation change
+  boxes on `AVOccupancyMap` (`get_changed_since`), `PathMap::set_exact_search`
+  (lazy Dijkstra; agrees with the historical search on every reached tile
+  except the source tile, not faster, off by default). T4L default mode
+  18.9 → **4.2 ms/frame**, repeats 0.3 ms; all modes bit-identical to before
+  (legacy pins unchanged; new thread-equivalence, local-move and exact-search
+  tests). One race found and fixed on the way: with legacy anchoring the quad
+  caches were not pre-built, so threaded pair sums wrote them concurrently —
+  every AV now refreshes its cache in the compute pass before the pair loop.
 * **PRD-105 implemented** (`okf/prds/prd-105.md`, status `implemented`;
   implementation record appended to the PRD). New: `AVOccupancyMap` /
   `AVOccupancyRegistry` (integer occupancy counts on the absolute lattice,

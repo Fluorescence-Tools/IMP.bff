@@ -107,6 +107,9 @@ private:
     //! Number of unprotected_evaluate() calls
     mutable long n_evaluations_ = 0;
 
+    //! Threads for the AVs' compute phases (0 = hardware concurrency)
+    int n_threads_ = 0;
+
     //! Apply the mode flags to the AV handles (anchoring, registry)
     void configure_avs();
 
@@ -202,6 +205,17 @@ public:
 
     //! The shared occupancy registry (nullptr unless shared_map)
     AVOccupancyRegistry *get_occupancy_registry() const { return registry_; }
+
+    /**
+     * @brief Threads used for the AVs' searches under `space_fixed`.
+     *
+     * The AVs of one evaluation are independent once their occupancy
+     * sources are up to date, so their compute phases (obstacle spheres,
+     * Dijkstra, carve, cloud) run on threads; results are identical to the
+     * serial evaluation. 0 (default) = hardware concurrency, 1 = serial.
+     */
+    void set_number_of_threads(int n) { n_threads_ = n; }
+    int get_number_of_threads() const;
 
     /**
      * @brief Diagnostics of the last run as JSON.

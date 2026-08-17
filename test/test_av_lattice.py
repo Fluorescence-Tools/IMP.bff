@@ -385,6 +385,30 @@ class TestDeterminism(unittest.TestCase):
             with self.subTest(mode=mode):
                 self._check_order_independent(mode)
 
+    def test_threads_do_not_change_results(self):
+        # the compute phases run on threads; results are bit-identical to
+        # a serial evaluation, in every mode
+        for mode in MODES:
+            with self.subTest(mode=mode):
+                m1, f1, h1 = open_trajectory()
+                m2, f2, h2 = open_trajectory()
+                r_par = make_restraint(mode, h1)
+                r_ser = make_restraint(mode, h2)
+                r_ser.set_number_of_threads(1)
+                self.assertGreaterEqual(r_par.get_number_of_threads(), 1)
+                self.assertEqual(r_ser.get_number_of_threads(), 1)
+                for fr in list(f1.get_root_frames())[:3]:
+                    IMP.rmf.load_frame(f1, fr)
+                    IMP.rmf.load_frame(f2, fr)
+                    v1 = r_par.unprotected_evaluate(None)
+                    v2 = r_ser.unprotected_evaluate(None)
+                    if mode in QUAD_MODES:
+                        self.assertEqual(v1, v2)
+                    d1 = densities(r_par)
+                    d2 = densities(r_ser)
+                    for name in d1:
+                        self.assertTrue(np.array_equal(d1[name], d2[name]), name)
+
     def test_repeat_evaluation_is_identical_in_quad_modes(self):
         for mode in QUAD_MODES:
             with self.subTest(mode=mode):
@@ -524,6 +548,42 @@ class TestDiagnostics(unittest.TestCase):
                     self.assertEqual(sm["local"], 0)
                     self.assertGreaterEqual(sm["skip"], 5)
                     self.assertEqual(sm["moved_last"], 159)
+
+    def test_local_move_skips_distant_avs(self):
+        # Refinement-style workload: one atom moves, AVs whose windows the
+        # move does not touch skip; the ones it touches recompute -- exactly.
+        for mode in ("default", "lattice-private"):
+            with self.subTest(mode=mode):
+                mdl = IMP.Model()
+                hier = IMP.atom.read_pdb(PDB, mdl)
+                r = make_restraint(mode, hier, score_set="chi2_C2_33p")
+                r.unprotected_evaluate(None)
+                # the CA of residue 55 (an AV site) moves by 1 A
+                sel = IMP.atom.Selection(hier, residue_index=55,
+                                         atom_type=IMP.atom.AT_CA)
+                p = sel.get_selected_particles()[0]
+                x = IMP.core.XYZ(p)
+                x.set_coordinates(x.get_coordinates() + IMP.algebra.Vector3D(1, 0, 0))
+                r.unprotected_evaluate(None)
+                d = json.loads(r.get_diagnostics_json())
+                skipped = [n for n, a in d["avs"].items() if a["skip"] == 1]
+                redone = [n for n, a in d["avs"].items() if a["skip"] == 0]
+                # windows span +-linker length (40-46 A on a ~50 A protein),
+                # so only the sites on the far side are untouched
+                self.assertGreater(len(skipped), 0, skipped)
+                self.assertGreater(len(redone), 0, redone)
+                self.assertIn("55D", redone)
+                self.assertNotIn("55D", skipped)
+                for sm in d["shared_maps"]:
+                    self.assertEqual(sm["local"], 1)
+                    self.assertEqual(sm["moved_last"], 1)
+                # every AV -- skipped or not -- equals a forced full recompute
+                for name in av_names(r):
+                    av = r.get_used_av(name)
+                    d_fast = np.array(av.get_map().get_xyz_density())
+                    av.resample(True, True)
+                    d_full = np.array(av.get_map().get_xyz_density())
+                    self.assertTrue(np.array_equal(d_fast, d_full), name)
 
     def test_trajectory_rolls_and_moves(self):
         m, f, hier = open_trajectory()
@@ -685,6 +745,29 @@ class TestAVHandle(unittest.TestCase):
         # a fresh handle on the same particle rebuilds and agrees
         av2 = IMP.bff.AV(self.mdl, av.get_particle())
         self.assertTrue(np.array_equal(d0, np.array(av2.get_map().get_xyz_density())))
+
+    def test_exact_search_matches_legacy_search(self):
+        # The historical search pushes each tile once into a heap keyed by
+        # the live cost; the exact variant is textbook lazy Dijkstra. On the
+        # AV grids they agree on every reached tile -- except that the
+        # historical one leaves the source tile at the default cost.
+        av = make_av(self.mdl, self.hier, 55, dict(AV_PARAMETER,
+                                                   simulation_grid_resolution=1.5))
+        av.resample()
+        mp = av.get_map()
+        src = mp.get_voxel_by_location(av.get_source_coordinates())
+        self.assertFalse(mp.get_exact_search())
+        mp.find_path_dijkstra(src, -1)
+        c0 = np.array(mp.get_tile_values(IMP.bff.PM_TILE_COST, (0.0, 1e9), "")).ravel()
+        mp.set_exact_search(True)
+        mp.find_path_dijkstra(src, -1)
+        c1 = np.array(mp.get_tile_values(IMP.bff.PM_TILE_COST, (0.0, 1e9), "")).ravel()
+        mp.set_exact_search(False)
+        reached = c1 < 1e5
+        self.assertGreater(reached.sum(), 100)
+        diff = np.flatnonzero((c0 != c1) & reached)
+        self.assertEqual(list(diff), [src])
+        self.assertEqual(c1[src], 0.0)
 
     def test_used_av_shares_the_restraint_map(self):
         r = make_restraint("default", self.hier, score_set="chi2_C2_33p")

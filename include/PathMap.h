@@ -53,11 +53,21 @@ private:
     std::vector<bool>  edge_computed;
     std::vector<float> cost;
 
+    // True while `visited` marks the tiles reached by the last search on the
+    // current tiles; only they can carry an accessible density, so
+    // get_xyz_density() skips the rest (invalidated by
+    // update_tiles/set_data/resize).
+    bool reached_valid_ = false;
+
     // The search loop of find_path(), generic over the frontier comparator so
     // that plain Dijkstra does not pay for a std::function heuristic call in
     // every heap comparison.
     template<class Cmp>
     void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
+
+    // Exact label-correcting Dijkstra (lazy deletion), see find_path().
+    void find_path_dijkstra_exact(long path_begin_idx, long path_end_idx);
+    bool exact_search_ = false;
 
 protected:
 
@@ -300,6 +310,22 @@ public:
     @param path_end_idx The index of the ending node (optional).
     */    
     void find_path_dijkstra(long path_begin_idx, long path_end_idx = -1);
+
+    /**
+     * @brief Select the Dijkstra variant used by find_path_dijkstra().
+     *
+     * The historical search pushes every tile once, at discovery, into a
+     * heap ordered by the *live* cost array; a tile whose cost improves after
+     * it was pushed is not re-ordered, so it can be settled early and its
+     * neighbours relaxed from a non-final cost -- path lengths can come out
+     * longer than the true shortest path. The exact variant re-pushes on
+     * every improvement and skips stale entries (textbook lazy Dijkstra):
+     * true shortest paths, and cheaper per operation. Off by default so the
+     * legacy anchoring stays byte-identical; the lattice path of AV turns
+     * it on.
+     */
+    void set_exact_search(bool tf) { exact_search_ = tf; }
+    bool get_exact_search() const { return exact_search_; }
     
     
     /**

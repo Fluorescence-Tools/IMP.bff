@@ -60,6 +60,18 @@ struct AVLatticeState {
     unsigned long quad_generation = 0;
     bool quad_valid = false;
 
+    // A prepared-but-not-yet-computed evaluation (AV::resample_lattice is
+    // split into a serial prepare phase that touches the Model and a compute
+    // phase that only touches this AV's own map, so a restraint can run the
+    // compute phases of its AVs on threads).
+    bool pending = false;
+    bool pending_shift_xyz = true;
+    double pending_ll = 0, pending_allowed = 0;
+    IMP::algebra::Vector3D pending_source;
+    AVOccupancyMap *pending_occ1 = nullptr;
+    AVOccupancyMap *pending_occ2 = nullptr;
+    unsigned long pending_gen1 = 0, pending_gen2 = 0;
+
     // Diagnostics
     long n_skip = 0, n_local = 0, n_full = 0, n_roll = 0;
 };

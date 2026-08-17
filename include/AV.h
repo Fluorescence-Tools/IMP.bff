@@ -87,7 +87,7 @@ public:
     @param model The model distance to be scored.
     @return The score of the model distance.
     */
-    double score_model(double model);
+    double score_model(double model) const;
 
 
     IMP_SHOWABLE_INLINE(AVPairDistanceMeasurement,
@@ -134,6 +134,10 @@ private:
 
     void resample_legacy(bool shift_xyz);
     void resample_lattice(bool shift_xyz, bool force_full);
+    // the three phases of resample_lattice (see AVLatticeState::pending)
+    void resample_lattice_prepare(bool shift_xyz, bool force_full);
+    void resample_lattice_compute();
+    void resample_lattice_finish();
 
 protected:
 
@@ -412,6 +416,24 @@ public:
      * registry or under legacy anchoring.
      */
     void prepare_lattice_window();
+
+#ifndef SWIG
+    /**
+     * @brief The lattice evaluation split for a caller that runs several AVs
+     * concurrently: prepare (touches the Model: coordinates, parameters,
+     * occupancy updates -- serial), compute (this AV's map only -- safe on a
+     * thread), finish (writes the mean position -- serial).
+     * resample() is prepare + compute + finish; the split is a no-op for
+     * legacy anchoring, where prepare() runs the whole legacy path.
+     */
+    void resample_prepare(bool shift_xyz=true, bool force_full=false);
+    void resample_compute();
+    void resample_finish();
+    //! True between a prepare() that decided to recompute and its compute()
+    bool get_has_pending_compute() const { return state_ && state_->pending; }
+    //! Build (or refresh) the cached quadrature representation for `k`
+    void prepare_quadrature(int k) const;
+#endif
 
     //! Diagnostics of the lattice path: {skip, local, full, roll} counts
     long get_number_of_skips() const;

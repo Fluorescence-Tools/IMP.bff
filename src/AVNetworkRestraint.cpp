@@ -8,6 +8,10 @@
  */
  #include <IMP/bff/AVNetworkRestraint.h>
 
+#include <algorithm>
+#include <thread>
+#include <vector>
+
 IMPBFF_BEGIN_NAMESPACE
 
 AVNetworkRestraint::AVNetworkRestraint(
@@ -145,18 +149,68 @@ double AVNetworkRestraint::unprotected_evaluate(
     for(auto &av: avs_){
         av.second->prepare_lattice_window();
     }
+    // prepare (serial: touches the Model), compute (threads: each AV its own
+    // map, occupancy read-only), finish (serial: writes mean positions)
+    // Every AV takes part in the compute pass: the ones prepare() left
+    // pending run their search, and under "quad" every AV refreshes its
+    // quadrature cache (a no-op when it is current) -- so that the pair loop
+    // below is read-only. Threads are only spawned when a search is pending.
+    std::vector<IMP::bff::AV*> all;
+    all.reserve(avs_.size());
+    size_t n_pending = 0;
     for(auto &av: avs_){
-        av.second->resample();
+        av.second->resample_prepare();
+        all.push_back(av.second.get());
+        if(av.second->get_has_pending_compute()) n_pending++;
     }
-    for(const auto & it : distances_){
-        auto distance = it.second;
-        double model = get_model_distance(
-                distance.position_1,
-                distance.position_2,
-                distance.forster_radius,
-                distance.distance_type
-        );
-        score += distance.score_model(model);
+    const bool quad = (distance_ == "quad");
+    const int qk = quad_k_;
+    auto work = [&all, quad, qk](size_t i){
+        all[i]->resample_compute();
+        if(quad) all[i]->prepare_quadrature(qk);
+    };
+    int nt = std::min<int>(get_number_of_threads(), (int) all.size());
+    if(nt > 1 && n_pending > 0){
+        std::vector<std::thread> workers;
+        workers.reserve(nt);
+        for(int t = 0; t < nt; t++){
+            workers.emplace_back([&all, &work, t, nt](){
+                for(size_t i = t; i < all.size(); i += nt) work(i);
+            });
+        }
+        for(auto &w : workers) w.join();
+    } else {
+        for(size_t i = 0; i < all.size(); i++) work(i);
+    }
+    for(auto *av : all) av->resample_finish();
+
+    // Model distances: with "quad" every AV's representation is cached by
+    // now, so the pair sums are pure reads and run on threads too; the score
+    // is accumulated serially in map order, so the sum is the same as before.
+    std::vector<const AVPairDistanceMeasurement*> pairs;
+    pairs.reserve(distances_.size());
+    for(const auto &it : distances_) pairs.push_back(&it.second);
+    std::vector<double> model(pairs.size());
+    auto eval_pair = [&](size_t i){
+        model[i] = get_model_distance(pairs[i]->position_1, pairs[i]->position_2,
+                                      pairs[i]->forster_radius, pairs[i]->distance_type);
+    };
+    int ntd = std::min<int>(get_number_of_threads(), (int) pairs.size());
+    if(distance_ == "quad" && ntd > 1){
+        // MP/XYZ types read the mean position and particle coordinates only;
+        // quad types read cached point sets. No writes.
+        std::vector<std::thread> workers;
+        for(int t = 0; t < ntd; t++){
+            workers.emplace_back([&, t](){
+                for(size_t i = t; i < pairs.size(); i += ntd) eval_pair(i);
+            });
+        }
+        for(auto &w : workers) w.join();
+    } else {
+        for(size_t i = 0; i < pairs.size(); i++) eval_pair(i);
+    }
+    for(size_t i = 0; i < pairs.size(); i++){
+        score += pairs[i]->score_model(model[i]);
     }
     return score;
 }
@@ -175,6 +229,12 @@ double AVNetworkRestraint::get_model_distance(
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
 }
 
+int AVNetworkRestraint::get_number_of_threads() const{
+    if(n_threads_ > 0) return n_threads_;
+    unsigned hw = std::thread::hardware_concurrency();
+    return hw > 0 ? (int) hw : 1;
+}
+
 std::string AVNetworkRestraint::get_diagnostics_json() const{
     nlohmann::json j;
     j["space_fixed"] = space_fixed_;
@@ -183,6 +243,7 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     j["quad_k"] = quad_k_;
     j["n_samples"] = n_samples;
     j["evaluations"] = n_evaluations_;
+    j["threads"] = get_number_of_threads();
     nlohmann::json avs = nlohmann::json::object();
     long skip = 0, local = 0, full = 0, rolls = 0;
     for(const auto &kv : avs_){

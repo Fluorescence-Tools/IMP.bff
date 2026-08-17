@@ -30,7 +30,7 @@ std::string AVPairDistanceMeasurement::get_json(){
 }
 
 
-double AVPairDistanceMeasurement::score_model(double model){
+double AVPairDistanceMeasurement::score_model(double model) const{
     auto ev = [](double f, double m, double en, double ep){
         double dev = m - f;
         double w = (dev < 0) ? 1. / en : 1. / ep;
@@ -339,9 +339,35 @@ void AV::resample_legacy(bool shift_xyz){
     st.n_full++;
 }
 
+void AV::resample_prepare(bool shift_xyz, bool force_full){
+    if(av_map_ == nullptr){
+        init_path_map();
+    }
+    if(get_space_fixed()){
+        resample_lattice_prepare(shift_xyz, force_full);
+    } else {
+        resample_legacy(shift_xyz);
+    }
+}
+
+void AV::resample_compute(){
+    if(state_ && state_->pending) resample_lattice_compute();
+}
+
+void AV::resample_finish(){
+    if(state_ && state_->pending) resample_lattice_finish();
+}
+
 void AV::resample_lattice(bool shift_xyz, bool force_full){
+    resample_lattice_prepare(shift_xyz, force_full);
+    resample_lattice_compute();
+    resample_lattice_finish();
+}
+
+void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     auto map = get_map();
     auto &st = get_state();
+    st.pending = false;
 
     const double h = get_simulation_grid_resolution();
     const double ll = get_linker_length();
@@ -410,13 +436,18 @@ void AV::resample_lattice(bool shift_xyz, bool force_full){
     occ2->update(force_full);
 
     // 2. Nothing that feeds the search changed: keep the tiles
+    // Nothing that feeds the search changed *inside this window*: a moved
+    // atom whose footprint (old and new) misses the window leaves this AV
+    // alone, so refinement moves elsewhere in the structure cost nothing here.
     bool can_skip = !force_full && st.have_result && !rolled &&
         !dims_changed && !params_changed &&
         same_vec(st.last_source, source) &&
-        st.generation1 == occ1->get_generation() &&
-        st.generation2 == occ2->get_generation();
+        !occ1->get_changed_since(st.generation1, k0[0], k0[1], k0[2], n, n, n) &&
+        !occ2->get_changed_since(st.generation2, k0[0], k0[1], k0[2], n, n, n);
     if(can_skip){
         st.n_skip++;
+        st.generation1 = occ1->get_generation();
+        st.generation2 = occ2->get_generation();
         if(shift_xyz) set_coordinates(st.last_mean);
         return;
     }
@@ -426,18 +457,41 @@ void AV::resample_lattice(bool shift_xyz, bool force_full){
         st.n_local++;
     }
 
+    // Everything compute() needs, gathered while we may still touch the Model
+    st.pending = true;
+    st.pending_shift_xyz = shift_xyz;
+    st.pending_ll = ll;
+    st.pending_allowed = get_allowed_sphere_radius();
+    st.pending_source = source;
+    st.pending_occ1 = occ1;
+    st.pending_occ2 = occ2;
+    st.pending_gen1 = occ1->get_generation();
+    st.pending_gen2 = occ2->get_generation();
+    st.last_parameter = parameter;
+}
+
+// Touches only this AV's map and lattice state: safe to run concurrently
+// with other AVs' compute phases (their occupancy sources are read-only now).
+void AV::resample_lattice_compute(){
+    auto &st = *state_;
+    if(!st.pending) return;
+    PathMap *map = av_map_.get();
+    const int *k0 = st.k0;
+    const int n = st.n;
+    const IMP::algebra::Vector3D &source = st.pending_source;
+
     // 3. Obstacles inflated by half the linker width, from the lattice
     long nvox = map->get_number_of_voxels();
     double *data = map->get_data();
-    occ1->read_window(k0[0], k0[1], k0[2], n, n, n, data);
+    st.pending_occ1->read_window(k0[0], k0[1], k0[2], n, n, n, data);
     map->normalized_ = false;
     map->rms_calculated_ = false;
 
     // 4. Block voxels further away from source than linker length
-    map->fill_sphere(source, ll, TILE_PENALTY_THRESHOLD, true);
+    map->fill_sphere(source, st.pending_ll, TILE_PENALTY_THRESHOLD, true);
 
     // 5. Unblock voxels in initial sphere
-    map->fill_sphere(source, get_allowed_sphere_radius(), 0, false);
+    map->fill_sphere(source, st.pending_allowed, 0, false);
 
     // 6. Find a path from source to other tiles
     map->update_tiles();
@@ -445,7 +499,7 @@ void AV::resample_lattice(bool shift_xyz, bool force_full){
     map->find_path_dijkstra(source_idx, -1);
 
     // 7. Remove tiles closer to obstacles than the dye radius
-    occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
+    st.pending_occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
     for(long i=0; i<nvox; i++){
         map->tiles[i].density = (data[i] > TILE_OBSTACLE_THRESHOLD)
             ? 0.0f : 1.0f;
@@ -453,13 +507,32 @@ void AV::resample_lattice(bool shift_xyz, bool force_full){
 
     st.have_result = true;
     st.last_source = source;
-    st.last_parameter = parameter;
-    st.generation1 = occ1->get_generation();
-    st.generation2 = occ2->get_generation();
+    st.generation1 = st.pending_gen1;
+    st.generation2 = st.pending_gen2;
     st.result_generation++;
     st.quad_valid = false;
-    st.last_mean = get_mean_position();
-    if(shift_xyz){
+
+    // the cloud and the mean position, from the map and the cached source
+    st.cloud = map->get_xyz_density();
+    st.cloud_generation = st.result_generation;
+    st.cloud_valid = true;
+    IMP::algebra::Vector3D r = source;
+    double sum = 2.0;
+    for(auto &a: st.cloud){
+        if(a[3] <= 0.0f) continue;
+        sum += a[3];
+        r[0] += a[0] * a[3];
+        r[1] += a[1] * a[3];
+        r[2] += a[2] * a[3];
+    }
+    st.last_mean = r / sum;
+}
+
+void AV::resample_lattice_finish(){
+    auto &st = *state_;
+    if(!st.pending) return;
+    st.pending = false;
+    if(st.pending_shift_xyz){
         set_coordinates(st.last_mean);
     }
 }
@@ -598,6 +671,12 @@ void quadrature_points(
     moments = &st.quad_moments;
 }
 
+}
+
+void AV::prepare_quadrature(int k) const{
+    const std::vector<IMP::algebra::Vector4D> *pts;
+    const std::vector<std::array<double, 6> > *mom;
+    quadrature_points(*this, k, pts, mom);
 }
 
 std::vector<double> AV::get_quadrature_points(int k) const{

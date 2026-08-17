@@ -8,6 +8,8 @@
  */
 #include <IMP/bff/PathMap.h>
 
+#include <cstring>
+
 IMPBFF_BEGIN_NAMESPACE
 
 PathMap::PathMap(
@@ -62,36 +64,80 @@ void PathMap::find_path_impl(
     std::vector<int> visited_idx;
     visited_idx.reserve(1024);
 
+    // A compact copy of the tile penalties: the relaxation reads it per
+    // neighbour, and PathMapTile is far too large to stream through cache.
+    std::vector<float> penalty(n_voxel);
+    for(long i = 0; i < n_voxel; i++) penalty[i] = tiles[i].penalty;
+
     // Get start and end tile
     PathMapTile* start = &tiles[path_begin_idx];
     PathMapTile* end = nullptr;
     if (path_end_idx > 0) end = &tiles[path_end_idx];
 
-    // priority_queue stores the elements in the frontier
-    std::priority_queue<PathMapTile*, std::vector<PathMapTile*>, Cmp> frontier(cmp);
+    // priority_queue stores the tile indices in the frontier
+    std::priority_queue<long, std::vector<long>, Cmp> frontier(cmp);
+
+    // Neighbours are enumerated straight from the offset table instead of
+    // materialising a per-tile edge vector every frame (get_edges() still
+    // does that for callers that want the vectors). Same order, same bounds
+    // and the same penalty test as PathMapTile::update_edges_2, so the
+    // relaxation sequence -- and the result -- is unchanged.
+    if(offsets_.empty()){
+        offsets_ = get_neighbor_idx_offsets();
+    }
+    const std::vector<int> &off = offsets_;
+    const size_t noff = off.size();
+    const float penalty_threshold = pathMapHeader_.get_obstacle_threshold();
+    const int nx = header_.get_nx();
+    const int ny = header_.get_ny();
+    const int nz = header_.get_nz();
+    const int nxy = nx * ny;
+    // Cheap interior test: a tile whose position is at least the neighbour
+    // box away from every face needs no bounds check.
+    const int box = pathMapHeader_.get_neighbor_box_size();
 
     // perform the search
     cost[path_begin_idx] = 0.0;
     visited[start->idx] = true;
     start->previous = nullptr;
-    frontier.push(start);
+    frontier.push(path_begin_idx);
 
     while(!frontier.empty()){
-        PathMapTile* current = frontier.top();
+        const long cidx = frontier.top();
         frontier.pop();
+        PathMapTile* current = &tiles[cidx];
         if (current == end)
             break;
-        for(auto &edge : get_edges(current->idx)) {
-            PathMapTile* neighbor = &tiles[edge.tile_idx];
-            auto new_neighbor_cost = cost[current->idx] + edge.length + neighbor->penalty;
-            if (new_neighbor_cost < cost[neighbor->idx]) {
-                cost[neighbor->idx] = new_neighbor_cost;
-                neighbor->previous = current;
+        const int x0 = (int) (cidx % nx);
+        const int y0 = (int) ((cidx / nx) % ny);
+        const int z0 = (int) (cidx / nxy);
+        const bool interior = x0 >= box && x0 < nx - box &&
+                              y0 >= box && y0 < ny - box &&
+                              z0 >= box && z0 < nz - box;
+        const float ccost = cost[cidx];
+        for(size_t i = 0; i < noff; i += 5){
+            if(!interior){
+                int iz = z0 + off[i + 0];
+                int iy = y0 + off[i + 1];
+                int ix = x0 + off[i + 2];
+                if(iz >= nz || iz < 0) continue;
+                if(iy >= ny || iy < 0) continue;
+                if(ix >= nx || ix < 0) continue;
             }
-            if(!visited[neighbor->idx]){
-                visited[neighbor->idx] = true;
-                visited_idx.emplace_back(neighbor->idx);
-                frontier.push(neighbor);
+            const long nidx = cidx + off[i + 3];
+            const float npen = penalty[nidx];
+            if(!(npen < penalty_threshold)) continue;
+            float edge_length;
+            std::memcpy(&edge_length, &off[i + 4], sizeof(float));
+            float new_neighbor_cost = ccost + edge_length + npen;
+            if (new_neighbor_cost < cost[nidx]) {
+                cost[nidx] = new_neighbor_cost;
+                tiles[nidx].previous = current;
+            }
+            if(!visited[nidx]){
+                visited[nidx] = true;
+                visited_idx.emplace_back(nidx);
+                frontier.push(nidx);
             }
         }
     }
@@ -99,6 +145,8 @@ void PathMap::find_path_impl(
     for(int &idx : visited_idx){
         tiles[idx].cost = cost[idx];
     }
+    // `visited` now marks every reached tile (the source included)
+    reached_valid_ = true;
 }
 
 void PathMap::find_path(
@@ -123,8 +171,8 @@ void PathMap::find_path(
         if (heuristic_mode != 0) {
             std::cout << "PathMap::find_path: Invalid heuristic_mode. Defaulting to Dijkstra.\n";
         }
-        auto cmp = [this](PathMapTile* left, PathMapTile* right) {
-            return cost[right->idx] < cost[left->idx];
+        auto cmp = [this](long left, long right) {
+            return cost[right] < cost[left];
         };
         find_path_impl(path_begin_idx, path_end_idx, cmp);
         return;
@@ -148,9 +196,7 @@ void PathMap::find_path(
             return ax + ay + az;
         };
     }
-    auto cmp = [&](PathMapTile* left, PathMapTile* right) {
-        long left_idx = left->idx;
-        long right_idx = right->idx;
+    auto cmp = [&](long left_idx, long right_idx) {
         float lhs_cost = cost[left_idx]  + heuristic(left_idx,  path_end_idx);
         float rhs_cost = cost[right_idx] + heuristic(right_idx, path_end_idx);
         return rhs_cost < lhs_cost;
@@ -182,6 +228,7 @@ void PathMap::update_tiles(
 
     normalized_ = false;
     rms_calculated_ = false;
+    reached_valid_ = false;
     for(int idx = 0; idx < nvox; idx++){
         auto value = data_[idx];
         if(binarize){
@@ -214,7 +261,97 @@ void PathMap::find_path_dijkstra(
         const long begin_idx, 
         const long end_idx
 ){
-    find_path(begin_idx, end_idx, 0);
+    if(exact_search_){
+        find_path_dijkstra_exact(begin_idx, end_idx);
+    } else {
+        find_path(begin_idx, end_idx, 0);
+    }
+}
+
+void PathMap::find_path_dijkstra_exact(
+        const long path_begin_idx,
+        const long path_end_idx
+){
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(
+        path_begin_idx >= 0 &&
+        path_begin_idx < n_voxel &&
+        path_end_idx < n_voxel,
+        "PathMap::find_path_dijkstra_exact: invalid start/stop index"
+    );
+    cost.assign(n_voxel, TILE_COST_DEFAULT);
+    visited.assign(n_voxel, false);
+    std::vector<float> penalty(n_voxel);
+    for(long i = 0; i < n_voxel; i++) penalty[i] = tiles[i].penalty;
+
+    if(offsets_.empty()){
+        offsets_ = get_neighbor_idx_offsets();
+    }
+    const std::vector<int> &off = offsets_;
+    const size_t noff = off.size();
+    const float penalty_threshold = pathMapHeader_.get_obstacle_threshold();
+    const int nx = header_.get_nx();
+    const int ny = header_.get_ny();
+    const int nz = header_.get_nz();
+    const int nxy = nx * ny;
+    const int box = pathMapHeader_.get_neighbor_box_size();
+
+    // min-heap of (cost, idx); stale entries are skipped on pop
+    typedef std::pair<float, long> entry;
+    std::priority_queue<entry, std::vector<entry>, std::greater<entry> > frontier;
+    std::vector<int> reached;
+    reached.reserve(1024);
+
+    cost[path_begin_idx] = 0.0f;
+    visited[path_begin_idx] = true;
+    tiles[path_begin_idx].previous = nullptr;
+    reached.push_back((int) path_begin_idx);
+    frontier.push(entry(0.0f, path_begin_idx));
+
+    while(!frontier.empty()){
+        const entry top = frontier.top();
+        frontier.pop();
+        const long cidx = top.second;
+        const float ccost = top.first;
+        if(ccost > cost[cidx]) continue;   // stale
+        if(cidx == path_end_idx) break;
+        PathMapTile* current = &tiles[cidx];
+        const int x0 = (int) (cidx % nx);
+        const int y0 = (int) ((cidx / nx) % ny);
+        const int z0 = (int) (cidx / nxy);
+        const bool interior = x0 >= box && x0 < nx - box &&
+                              y0 >= box && y0 < ny - box &&
+                              z0 >= box && z0 < nz - box;
+        for(size_t i = 0; i < noff; i += 5){
+            if(!interior){
+                int iz = z0 + off[i + 0];
+                int iy = y0 + off[i + 1];
+                int ix = x0 + off[i + 2];
+                if(iz >= nz || iz < 0) continue;
+                if(iy >= ny || iy < 0) continue;
+                if(ix >= nx || ix < 0) continue;
+            }
+            const long nidx = cidx + off[i + 3];
+            const float npen = penalty[nidx];
+            if(!(npen < penalty_threshold)) continue;
+            float edge_length;
+            std::memcpy(&edge_length, &off[i + 4], sizeof(float));
+            const float new_cost = ccost + edge_length + npen;
+            if(new_cost < cost[nidx]){
+                cost[nidx] = new_cost;
+                tiles[nidx].previous = current;
+                if(!visited[nidx]){
+                    visited[nidx] = true;
+                    reached.push_back((int) nidx);
+                }
+                frontier.push(entry(new_cost, nidx));
+            }
+        }
+    }
+    for(int idx : reached){
+        tiles[idx].cost = cost[idx];
+    }
+    reached_valid_ = true;
 }
 
 void PathMap::find_path_astar(
@@ -245,16 +382,28 @@ void PathMap::fill_sphere(
         double value, bool inverse
 ){
     double dsq = radius * radius;
-    IMP::algebra::Vector3D vox_cent;
     long n_vox = get_number_of_voxels();
+    calc_all_voxel2loc();
+    // The same arithmetic as get_squared_distance(get_location_by_voxel(v), r0)
+    // -- float voxel centres widened to double -- without a Vector3D per voxel
+    // and without the per-call usage checks.
+    const float *xl = x_loc_.get();
+    const float *yl = y_loc_.get();
+    const float *zl = z_loc_.get();
+    const double x0 = r0[0], y0 = r0[1], z0 = r0[2];
     // Loop over all voxels
-    for (long v=0; v<n_vox; ++v) {
-        vox_cent = get_location_by_voxel(v);
-        double vox_dist = IMP::algebra::get_squared_distance(vox_cent, r0);
-        if(!inverse)
-            if(vox_dist < dsq) data_[v] = value;
-        if(inverse)
+    if(inverse){
+        for (long v=0; v<n_vox; ++v) {
+            double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
+            double vox_dist = dx*dx + dy*dy + dz*dz;
             if(vox_dist >= dsq) data_[v] = value;
+        }
+    } else {
+        for (long v=0; v<n_vox; ++v) {
+            double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
+            double vox_dist = dx*dx + dy*dy + dz*dz;
+            if(vox_dist < dsq) data_[v] = value;
+        }
     }
 }
 
@@ -305,8 +454,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
     float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
 
     std::vector<IMP::algebra::Vector4D> v;
-    for(int i = 0; i < n_voxel; i++){
-        IMP::algebra::Vector3D r = get_location_by_voxel(i);
+    auto emit = [&](long i){
         float density = tiles[i].get_value(
                 PM_TILE_ACCESSIBLE_DENSITY,
                 std::pair<float, float>({0.0f, linker_length}), "",
@@ -317,6 +465,12 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
             auto n = IMP::algebra::Vector4D({r[0], r[1], r[2], density});
             v.emplace_back(n);
         }
+    };
+    if(reached_valid_){
+        // unreached tiles keep TILE_COST_DEFAULT and contribute nothing
+        for(long i = 0; i < n_voxel; i++) if(visited[i]) emit(i);
+    } else {
+        for(long i = 0; i < n_voxel; i++) emit(i);
     }
 
     return v;
@@ -330,7 +484,7 @@ void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
     int n_dim = 4;
     int n = 0;
     auto* t = (double*) calloc(n_voxel * n_dim, sizeof(double)); 
-    for(int i = 0; i < n_voxel; i++){
+    auto emit = [&](long i){
         double density = tiles[i].get_value(
                 PM_TILE_ACCESSIBLE_DENSITY,
                 std::pair<float, float>({0.0f, linker_length}), "",
@@ -344,6 +498,11 @@ void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
             t[n * n_dim + 3] = density;
             n += 1;
         }
+    };
+    if(reached_valid_){
+        for(long i = 0; i < n_voxel; i++) if(visited[i]) emit(i);
+    } else {
+        for(long i = 0; i < n_voxel; i++) emit(i);
     }
     *n_output1 = (int) n;
     *n_output2 = (int) n_dim;
@@ -416,6 +575,7 @@ void PathMap::get_tile_values(
 
 void PathMap::resize(unsigned int nvox){
     data_.reset(new double[nvox]);
+    reached_valid_ = false;
 
     edge_computed.resize(0);
     edge_computed.resize(nvox, false);

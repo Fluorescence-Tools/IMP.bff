@@ -206,6 +206,42 @@ void AVOccupancyMap::add_sphere(
     }
 }
 
+void AVOccupancyMap::record_change(const int lo[3], const int hi[3]) {
+    const size_t cap = 256;
+    if (changes_.size() >= cap) {
+        changes_.erase(changes_.begin(), changes_.begin() + cap / 2);
+        oldest_tracked_ = changes_.front().generation;
+    }
+    ChangeBox b;
+    b.generation = generation_;
+    for (int d = 0; d < 3; d++) { b.lo[d] = lo[d]; b.hi[d] = hi[d]; }
+    changes_.push_back(b);
+}
+
+void AVOccupancyMap::record_change_all() {
+    int lo[3] = {k0_[0], k0_[1], k0_[2]};
+    int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
+    record_change(lo, hi);
+}
+
+bool AVOccupancyMap::get_changed_since(
+        unsigned long generation,
+        int kx, int ky, int kz, int nx, int ny, int nz) const {
+    if (generation >= generation_) return false;
+    if (generation + 1 < oldest_tracked_) return true;   // history lost
+    const int lo[3] = {kx, ky, kz};
+    const int hi[3] = {kx + nx - 1, ky + ny - 1, kz + nz - 1};
+    for (auto it = changes_.rbegin(); it != changes_.rend(); ++it) {
+        if (it->generation <= generation) break;
+        bool overlap = true;
+        for (int d = 0; d < 3; d++) {
+            if (it->hi[d] < lo[d] || it->lo[d] > hi[d]) { overlap = false; break; }
+        }
+        if (overlap) return true;
+    }
+    return false;
+}
+
 void AVOccupancyMap::full_raster() {
     std::fill(counts_.begin(), counts_.end(), 0);
     int lo[3] = {k0_[0], k0_[1], k0_[2]};
@@ -269,6 +305,7 @@ bool AVOccupancyMap::update(bool force_full) {
         moved_last_ = (long) xyzr_.size();
         moved_total_ += moved_last_;
         generation_++;
+        record_change_all();
         return true;
     }
 
@@ -288,15 +325,37 @@ bool AVOccupancyMap::update(bool force_full) {
     }
     moved_last_ = (long) moved.size();
     moved_total_ += moved_last_;
+    // The box the change is confined to: old and new footprints of every
+    // moved atom, clipped to the extent. Recorded whichever way the counts
+    // are refreshed below -- a full raster changes nothing outside it.
+    int clo[3], chi[3];
+    for (int d = 0; d < 3; d++) {
+        clo[d] = std::numeric_limits<int>::max();
+        chi[d] = std::numeric_limits<int>::min();
+    }
+    for (size_t i : moved) {
+        const IMP::algebra::Vector4D &l = last_[i];
+        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
+        double R_old = l[3] + extra_radius_, R_new = xyzr_[i].get_radius() + extra_radius_;
+        for (int d = 0; d < 3; d++) {
+            clo[d] = std::min(clo[d], (int) std::ceil((std::min(l[d] - R_old, c[d] - R_new)) / spacing_));
+            chi[d] = std::max(chi[d], (int) std::floor((std::max(l[d] + R_old, c[d] + R_new)) / spacing_));
+        }
+    }
+    int lo[3] = {k0_[0], k0_[1], k0_[2]};
+    int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
+    for (int d = 0; d < 3; d++) {
+        clo[d] = std::max(clo[d], lo[d]);
+        chi[d] = std::min(chi[d], hi[d]);
+    }
     // A delta costs two spheres per moved atom, a full raster one per atom.
     if (2 * moved.size() >= xyzr_.size()) {
         full_raster();
         n_full_++;
         generation_++;
+        record_change(clo, chi);
         return true;
     }
-    int lo[3] = {k0_[0], k0_[1], k0_[2]};
-    int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
     for (size_t i : moved) {
         const IMP::algebra::Vector4D &l = last_[i];
         add_sphere(IMP::algebra::Vector3D(l[0], l[1], l[2]),
@@ -308,6 +367,7 @@ bool AVOccupancyMap::update(bool force_full) {
     }
     n_local_++;
     generation_++;
+    record_change(clo, chi);
     return true;
 }
 
