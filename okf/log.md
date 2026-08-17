@@ -1,6 +1,15 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 fourth pass ("all tricks", exact):** reach-only re-centring
+  shared extents, one coordinate snapshot per frame, chord-run sphere raster,
+  one pipelined pool run per evaluation (rasters → searches → carves →
+  pairs with dependency waits; prepare reads the pending classification),
+  spinning workers, integer occupancy into penalty/carve, interior flags,
+  byte visited, in-place origin. Quiet-machine best 0.69–0.71 ms/frame
+  (pre-PRD 37.7, ~53×); run-to-run variance on the shared box (0.7–1.0) now
+  exceeds the remaining gains. Grid-spacing sweep recorded (2.5 Å: 0.51 ms at
+  1.8 Å rms change; not applied — user parameter).
 * **PRD-105 third perf pass (objective < 1 ms/frame): reached — 0.81 ms
   median quiet, 0.94–0.99 loaded (pre-PRD 37.7).** Exact: SoA tile arrays for
   the lattice path (`search_lattice`/`carve_lattice`, lazy `tiles` sync),

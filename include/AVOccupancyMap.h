@@ -52,6 +52,21 @@ class IMPBFFEXPORT AVOccupancyMap : public IMP::Object {
     double extra_radius_;
     IMP::core::XYZRs xyzr_;
 
+    // Optional coordinate snapshot (x, y, z, r per particle) maintained by
+    // the owner (AVOccupancyRegistry::refresh_snapshot): the four class maps
+    // of a registry then read the Model once per frame instead of once each.
+    const std::vector<IMP::algebra::Vector4D> *snapshot_ = nullptr;
+    IMP::algebra::Vector3D coord(size_t i) const {
+        if (snapshot_) {
+            const IMP::algebra::Vector4D &v = (*snapshot_)[i];
+            return IMP::algebra::Vector3D(v[0], v[1], v[2]);
+        }
+        return xyzr_[i].get_coordinates();
+    }
+    double radius(size_t i) const {
+        return snapshot_ ? (*snapshot_)[i][3] : xyzr_[i].get_radius();
+    }
+
     // (x, y, z, radius) of every particle as last rasterised; empty until the
     // first full raster.
     std::vector<IMP::algebra::Vector4D> last_;
@@ -124,6 +139,12 @@ public:
      */
     void set_window(int kx, int ky, int kz, int nx, int ny, int nz);
 
+    //! Read particle coordinates from `snapshot` (x, y, z, r per particle,
+    //! same order as the particles) instead of the Model; nullptr = Model
+    void set_coordinate_snapshot(const std::vector<IMP::algebra::Vector4D> *snapshot) {
+        snapshot_ = snapshot;
+    }
+
     //! Include the reach of all atoms in the extent (shared maps, default on)
     void set_include_atom_reach(bool tf) { include_atom_reach_ = tf; }
 
@@ -152,6 +173,10 @@ public:
     void read_window(int kx, int ky, int kz, int nx, int ny, int nz,
                      double *out) const;
 
+    //! read_window() into an int32 buffer (no double conversion)
+    void read_window_counts(int kx, int ky, int kz, int nx, int ny, int nz,
+                            int32_t *out) const;
+
     //! Like read_window(), but sampling every `stride`-th lattice point:
     //! out[(z*ny + y)*nx + x] = count at (kx + stride*x, ky + stride*y, kz + stride*z)
     void read_window_strided(int kx, int ky, int kz, int nx, int ny, int nz,
@@ -170,9 +195,16 @@ public:
 
     //! Did any count inside the window [k0, k0 + n) change after `generation`?
     /** Conservative: true when the history no longer reaches back to
-        `generation`. */
+        `generation`. Between begin_update() and end_update() the pending
+        change counts as well, and get_generation_after_pending() is the
+        generation the window will see once end_update() ran. */
     bool get_changed_since(unsigned long generation,
                            int kx, int ky, int kz, int nx, int ny, int nz) const;
+    unsigned long get_generation_after_pending() const {
+        return generation_ + (pending_action_ != 0 ? 1 : 0);
+    }
+    //! True between a begin_update() that found work and its end_update()
+    bool get_has_pending_update() const { return pending_action_ != 0; }
 
     //! Diagnostics
     long get_number_of_skips() const { return n_skip_; }
@@ -205,6 +237,7 @@ IMP_OBJECTS(AVOccupancyMap, AVOccupancyMaps);
 class IMPBFFEXPORT AVOccupancyRegistry : public IMP::Object {
     IMP::ParticlesTemp ps_;
     std::map<std::pair<double, double>, IMP::Pointer<AVOccupancyMap> > maps_;
+    std::vector<IMP::algebra::Vector4D> snapshot_;
 public:
     AVOccupancyRegistry(const IMP::ParticlesTemp &ps,
                         std::string name = "AVOccupancyRegistry%1%")
@@ -218,6 +251,10 @@ public:
 
     //! Force a full raster of every map on its next update
     void update_all(bool force_full = false);
+
+    //! Read every particle's (x, y, z, r) from the Model once, for all maps.
+    //! Call before begin_update()/update() of the maps in a frame.
+    void refresh_snapshot();
 
     IMP_OBJECT_METHODS(AVOccupancyRegistry);
 };

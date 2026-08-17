@@ -497,8 +497,10 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         occ1->set_window(k0[0], k0[1], k0[2], n, n, n);
         occ2->set_window(k0[0], k0[1], k0[2], n, n, n);
     }
-    occ1->update(force_full);
-    occ2->update(force_full);
+    if(!(st.registry && st.registry_driven_externally)){
+        occ1->update(force_full);
+        occ2->update(force_full);
+    }
 
     // 2. Nothing that feeds the search changed: keep the tiles
     // Nothing that feeds the search changed *inside this window*: a moved
@@ -511,8 +513,8 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         !occ2->get_changed_since(st.generation2, k0[0], k0[1], k0[2], n, n, n);
     if(can_skip){
         st.n_skip++;
-        st.generation1 = occ1->get_generation();
-        st.generation2 = occ2->get_generation();
+        st.generation1 = occ1->get_generation_after_pending();
+        st.generation2 = occ2->get_generation_after_pending();
         if(shift_xyz) set_coordinates(st.last_mean);
         return;
     }
@@ -573,8 +575,8 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending_grid_origin = grid_origin;
     st.pending_occ1 = occ1;
     st.pending_occ2 = occ2;
-    st.pending_gen1 = occ1->get_generation();
-    st.pending_gen2 = occ2->get_generation();
+    st.pending_gen1 = occ1->get_generation_after_pending();
+    st.pending_gen2 = occ2->get_generation_after_pending();
     st.last_parameter = parameter;
 }
 
@@ -595,11 +597,12 @@ void AV::resample_lattice_compute(bool split_stages){
     }
 
     // 3. Obstacles inflated by half the linker width, from the lattice
+    //    (integer counts straight into the penalty pass)
     long nvox = map->get_number_of_voxels();
     double *data = map->get_data();
-    st.pending_occ1->read_window(k0[0], k0[1], k0[2], n, n, n, data);
-    map->normalized_ = false;
-    map->rms_calculated_ = false;
+    if(st.window_counts.size() != (size_t) nvox) st.window_counts.resize(nvox);
+    int32_t *counts = st.window_counts.data();
+    st.pending_occ1->read_window_counts(k0[0], k0[1], k0[2], n, n, n, counts);
 
     // 4./5./6. Block voxels further away from the source than the linker
     //    length, open the allowed sphere, and search -- in one pass over
@@ -614,8 +617,10 @@ void AV::resample_lattice_compute(bool split_stages){
     float bound = ll / h;
     while(bound * h < ll) bound = std::nextafter(bound, std::numeric_limits<float>::infinity());
     if(st.pending_factor <= 1){
-        map->search_lattice(source_idx, bound, source, st.pending_ll, st.pending_allowed);
+        map->search_lattice(source_idx, bound, source, st.pending_ll, st.pending_allowed, counts);
     } else {
+        // the coarse branch reads the fine occupancy from the map data
+        for(long i = 0; i < nvox; i++) data[i] = (double) counts[i];
         // Coarse search on the points with fine index = multiple of f, then
         // every fine tile takes min over its (up to 8) surrounding coarse
         // points of (coarse cost * f + straight hop), in fine voxel units.
@@ -701,8 +706,12 @@ void AV::resample_lattice_compute_carve(){
     double *data = map->get_data();
 
     // 7. Remove tiles closer to obstacles than the dye radius
-    st.pending_occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
-    map->carve_lattice();
+    long nvox = map->get_number_of_voxels();
+    if(st.window_counts.size() != (size_t) nvox) st.window_counts.resize(nvox);
+    int32_t *counts = st.window_counts.data();
+    st.pending_occ2->read_window_counts(k0[0], k0[1], k0[2], n, n, n, counts);
+    map->carve_lattice(counts);
+    (void) data;
 
     st.have_result = true;
     st.last_source = source;

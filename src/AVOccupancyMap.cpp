@@ -27,9 +27,9 @@ void AVOccupancyMap::atom_reach(int lo[3], int hi[3]) const {
         lo[d] = std::numeric_limits<int>::max();
         hi[d] = std::numeric_limits<int>::min();
     }
-    for (const auto &p : xyzr_) {
-        IMP::algebra::Vector3D c = p.get_coordinates();
-        double R = p.get_radius() + extra_radius_;
+    for (size_t i = 0; i < xyzr_.size(); i++) {
+        IMP::algebra::Vector3D c = coord(i);
+        double R = radius(i) + extra_radius_;
         for (int d = 0; d < 3; d++) {
             int a = (int) std::floor((c[d] - R) / spacing_);
             int b = (int) std::ceil((c[d] + R) / spacing_);
@@ -189,19 +189,33 @@ void AVOccupancyMap::add_sphere(
         if (b[d] < a[d]) return;
     }
     const long nx = n_[0], nxy = (long) n_[0] * n_[1];
+    auto inside = [&](int x, double dz2dy2) {
+        double dx = x * spacing_ - c[0];
+        return dz2dy2 + dx * dx < R2;
+    };
     for (int z = a[2]; z <= b[2]; z++) {
         double dz = z * spacing_ - c[2];
         double dz2 = dz * dz;
         for (int y = a[1]; y <= b[1]; y++) {
             double dy = y * spacing_ - c[1];
             double dz2dy2 = dz2 + dy * dy;
+            double rem = R2 - dz2dy2;
+            if (rem <= 0) continue;
+            // The x-run inside the sphere on this row: estimated from the
+            // chord half-width, then pinned down with the exact per-voxel
+            // test at both ends, so the covered set is the same as testing
+            // every voxel.
+            double half = std::sqrt(rem);
+            int xa = std::max(a[0], (int) std::ceil((c[0] - half) / spacing_));
+            int xb = std::min(b[0], (int) std::floor((c[0] + half) / spacing_));
+            while (xa > a[0] && inside(xa - 1, dz2dy2)) xa--;
+            while (xa <= xb && !inside(xa, dz2dy2)) xa++;
+            while (xb < b[0] && inside(xb + 1, dz2dy2)) xb++;
+            while (xb >= xa && !inside(xb, dz2dy2)) xb--;
+            if (xb < xa) continue;
             long row = (z - k0_[2]) * nxy + (y - k0_[1]) * nx - k0_[0];
-            for (int x = a[0]; x <= b[0]; x++) {
-                double dx = x * spacing_ - c[0];
-                if (dz2dy2 + dx * dx < R2) {
-                    counts_[row + x] += sign;
-                }
-            }
+            int32_t *p = counts_.data() + row + xa;
+            for (int x = xa; x <= xb; x++) *p++ += sign;
         }
     }
 }
@@ -227,6 +241,17 @@ void AVOccupancyMap::record_change_all() {
 bool AVOccupancyMap::get_changed_since(
         unsigned long generation,
         int kx, int ky, int kz, int nx, int ny, int nz) const {
+    if (pending_action_ != 0 && generation <= generation_) {
+        // the update classified but not yet applied
+        if (pending_box_all_) return true;
+        const int lo[3] = {kx, ky, kz};
+        const int hi[3] = {kx + nx - 1, ky + ny - 1, kz + nz - 1};
+        bool overlap = true;
+        for (int d = 0; d < 3; d++) {
+            if (pending_hi_[d] < lo[d] || pending_lo_[d] > hi[d]) { overlap = false; break; }
+        }
+        if (overlap) return true;
+    }
     if (generation >= generation_) return false;
     if (generation + 1 < oldest_tracked_) return true;   // history lost
     const int lo[3] = {kx, ky, kz};
@@ -248,8 +273,8 @@ void AVOccupancyMap::full_raster() {
     int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
     last_.resize(xyzr_.size());
     for (size_t i = 0; i < xyzr_.size(); i++) {
-        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-        double r = xyzr_[i].get_radius();
+        IMP::algebra::Vector3D c = coord(i);
+        double r = radius(i);
         last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], r);
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
@@ -262,37 +287,30 @@ int AVOccupancyMap::begin_update(bool force_full) {
     // 1. Extent: grow on demand to the union of requested windows and,
     //    for shared maps, the reach of all atoms.
     if (!fixed_extent_) {
+        // The extent only has to cover the atoms' reach: lattice points
+        // beyond it hold no count and read_window() returns zero for them,
+        // which is the exact occupancy there. Requested windows are honoured
+        // only when no atom reach is included (a map without particles).
         int lo[3], hi[3];
         bool have = false;
-        if (have_request_) {
+        if (include_atom_reach_ && !xyzr_.empty()) {
+            atom_reach(lo, hi);
+            have = true;
+        } else if (have_request_) {
             for (int d = 0; d < 3; d++) {
                 lo[d] = req_lo_[d];
                 hi[d] = req_hi_[d];
             }
             have = true;
         }
-        if (include_atom_reach_ && !xyzr_.empty()) {
-            int alo[3], ahi[3];
-            atom_reach(alo, ahi);
-            if (!have) {
-                for (int d = 0; d < 3; d++) { lo[d] = alo[d]; hi[d] = ahi[d]; }
-                have = true;
-            } else {
-                for (int d = 0; d < 3; d++) {
-                    lo[d] = std::min(lo[d], alo[d]);
-                    hi[d] = std::max(hi[d], ahi[d]);
-                }
-            }
-        }
         have_request_ = false;
         if (have && !covers(lo, hi)) {
+            // Re-centre on the current reach (a full raster follows anyway),
+            // rather than growing the union forever as a structure drifts.
             int k0[3], n[3];
             for (int d = 0; d < 3; d++) {
-                // never shrink: keep what is covered already
-                int cur_lo = have_extent_ ? std::min(lo[d], k0_[d]) : lo[d];
-                int cur_hi = have_extent_ ? std::max(hi[d], k0_[d] + n_[d] - 1) : hi[d];
-                k0[d] = cur_lo - grow_margin_;
-                n[d] = cur_hi - cur_lo + 1 + 2 * grow_margin_;
+                k0[d] = lo[d] - grow_margin_;
+                n[d] = hi[d] - lo[d] + 1 + 2 * grow_margin_;
             }
             set_extent(k0, n);
             n_grow_++;
@@ -311,8 +329,8 @@ int AVOccupancyMap::begin_update(bool force_full) {
 
     // 3. Otherwise classify by the moved set
     for (size_t i = 0; i < xyzr_.size(); i++) {
-        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-        double r = xyzr_[i].get_radius();
+        IMP::algebra::Vector3D c = coord(i);
+        double r = radius(i);
         const IMP::algebra::Vector4D &l = last_[i];
         if (c[0] != l[0] || c[1] != l[1] || c[2] != l[2] || r != l[3]) {
             pending_moved_.push_back(i);
@@ -333,8 +351,8 @@ int AVOccupancyMap::begin_update(bool force_full) {
     }
     for (size_t i : pending_moved_) {
         const IMP::algebra::Vector4D &l = last_[i];
-        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-        double R_old = l[3] + extra_radius_, R_new = xyzr_[i].get_radius() + extra_radius_;
+        IMP::algebra::Vector3D c = coord(i);
+        double R_old = l[3] + extra_radius_, R_new = radius(i) + extra_radius_;
         for (int d = 0; d < 3; d++) {
             pending_lo_[d] = std::min(pending_lo_[d], (int) std::ceil((std::min(l[d] - R_old, c[d] - R_new)) / spacing_));
             pending_hi_[d] = std::max(pending_hi_[d], (int) std::floor((std::max(l[d] + R_old, c[d] + R_new)) / spacing_));
@@ -360,8 +378,8 @@ void AVOccupancyMap::raster_slab(int z_lo, int z_hi) {
     int lo[3] = {k0_[0], k0_[1], z_lo};
     int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, z_hi};
     for (size_t i = 0; i < xyzr_.size(); i++) {
-        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-        double r = xyzr_[i].get_radius();
+        IMP::algebra::Vector3D c = coord(i);
+        double r = radius(i);
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
 }
@@ -373,8 +391,8 @@ void AVOccupancyMap::apply_local() {
         const IMP::algebra::Vector4D &l = last_[i];
         add_sphere(IMP::algebra::Vector3D(l[0], l[1], l[2]),
                    l[3] + extra_radius_, -1, lo, hi);
-        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-        double r = xyzr_[i].get_radius();
+        IMP::algebra::Vector3D c = coord(i);
+        double r = radius(i);
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
 }
@@ -384,15 +402,15 @@ void AVOccupancyMap::end_update() {
     if (pending_action_ == 2) {
         last_.resize(xyzr_.size());
         for (size_t i = 0; i < xyzr_.size(); i++) {
-            IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr_[i].get_radius());
+            IMP::algebra::Vector3D c = coord(i);
+            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], radius(i));
         }
         force_full_ = false;
         n_full_++;
     } else {
         for (size_t i : pending_moved_) {
-            IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
-            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr_[i].get_radius());
+            IMP::algebra::Vector3D c = coord(i);
+            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], radius(i));
         }
         n_local_++;
     }
@@ -442,6 +460,33 @@ void AVOccupancyMap::read_window(int kx, int ky, int kz,
 }
 
 
+void AVOccupancyMap::read_window_counts(int kx, int ky, int kz,
+                                        int nx, int ny, int nz, int32_t *out) const {
+    const long wnx = nx, wnxy = (long) nx * ny;
+    const long enx = n_[0], enxy = (long) n_[0] * n_[1];
+    for (int z = 0; z < nz; z++) {
+        int gz = kz + z;
+        bool zin = have_extent_ && gz >= k0_[2] && gz < k0_[2] + n_[2];
+        for (int y = 0; y < ny; y++) {
+            int gy = ky + y;
+            bool yin = zin && gy >= k0_[1] && gy < k0_[1] + n_[1];
+            int32_t *row = out + z * wnxy + y * wnx;
+            if (!yin) {
+                std::fill(row, row + nx, 0);
+                continue;
+            }
+            const int32_t *src = counts_.data() + (gz - k0_[2]) * enxy + (gy - k0_[1]) * enx;
+            // the in-extent x-run, copied; the rest zero
+            int x0 = std::max(0, k0_[0] - kx);
+            int x1 = std::min(nx, k0_[0] + n_[0] - kx);
+            if (x1 <= x0) { std::fill(row, row + nx, 0); continue; }
+            std::fill(row, row + x0, 0);
+            std::copy(src + (kx + x0 - k0_[0]), src + (kx + x1 - k0_[0]), row + x0);
+            std::fill(row + x1, row + nx, 0);
+        }
+    }
+}
+
 void AVOccupancyMap::read_window_strided(int kx, int ky, int kz,
                                          int nx, int ny, int nz, int stride,
                                          double *out) const {
@@ -471,9 +516,19 @@ AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius
     if (it == maps_.end()) {
         IMP::Pointer<AVOccupancyMap> m = new AVOccupancyMap(spacing, extra_radius, ps_);
         m->set_was_used(true);
+        m->set_coordinate_snapshot(&snapshot_);
         it = maps_.emplace(key, m).first;
     }
     return it->second.get();
+}
+
+void AVOccupancyRegistry::refresh_snapshot() {
+    IMP::core::XYZRs xyzr(ps_);
+    snapshot_.resize(xyzr.size());
+    for (size_t i = 0; i < xyzr.size(); i++) {
+        IMP::algebra::Vector3D c = xyzr[i].get_coordinates();
+        snapshot_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr[i].get_radius());
+    }
 }
 
 AVOccupancyMaps AVOccupancyRegistry::get_maps() const {
@@ -483,6 +538,7 @@ AVOccupancyMaps AVOccupancyRegistry::get_maps() const {
 }
 
 void AVOccupancyRegistry::update_all(bool force_full) {
+    refresh_snapshot();
     for (auto &kv : maps_) kv.second->update(force_full);
 }
 

@@ -302,7 +302,7 @@ std::vector<int> PathMap::dijkstra_bounded_core(
     const int ny = header_.get_ny();
     const int nz = header_.get_nz();
     const int nxy = nx * ny;
-    const int box = pathMapHeader_.get_neighbor_box_size();
+    const char *interior_flags = get_interior_flags();
 
     // Monotone bucket queue. Every edge is at least one voxel long and
     // penalties are non-negative, so a relaxation from a tile of cost c
@@ -352,12 +352,13 @@ std::vector<int> PathMap::dijkstra_bounded_core(
             if((size_t) ccost != b) continue;   // stale: moved to a lower bucket
             if(ccost >= max_cost){ done = true; break; }   // nothing cheaper is left
             if(cidx == path_end_idx){ done = true; break; }
-            const int x0 = (int) (cidx % nx);
-            const int y0 = (int) ((cidx / nx) % ny);
-            const int z0 = (int) (cidx / nxy);
-            const bool interior = x0 >= box && x0 < nx - box &&
-                                  y0 >= box && y0 < ny - box &&
-                                  z0 >= box && z0 < nz - box;
+            const bool interior = interior_flags[cidx] != 0;
+            int x0 = 0, y0 = 0, z0 = 0;
+            if(!interior){
+                x0 = (int) (cidx % nx);
+                y0 = (int) ((cidx / nx) % ny);
+                z0 = (int) (cidx / nxy);
+            }
             const float *cost_ptr = cost.data();
             for(size_t j = 0; j < nnb; j++){
                 if(!interior){
@@ -472,11 +473,100 @@ void PathMap::search_lattice(long source_idx, float max_cost,
     soa_valid_ = true;
 }
 
+void PathMap::search_lattice(long source_idx, float max_cost,
+                             const IMP::algebra::Vector3D &r0,
+                             double block_radius, double open_radius,
+                             const int32_t *occupancy){
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(source_idx >= 0 && source_idx < n_voxel,
+                    "PathMap::search_lattice: invalid source index");
+    calc_all_voxel2loc();
+    const float obstacle_threshold = pathMapHeader_.get_obstacle_threshold();
+    const double bsq = block_radius * block_radius;
+    const double osq = open_radius * open_radius;
+    const float *xl = x_loc_.get();
+    const float *yl = y_loc_.get();
+    const float *zl = z_loc_.get();
+    const double x0 = r0[0], y0 = r0[1], z0 = r0[2];
+    penalty_soa_.resize(n_voxel);
+    for(long v = 0; v < n_voxel; v++){
+        double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
+        double d2 = dx*dx + dy*dy + dz*dz;
+        double value;
+        if(d2 < osq) value = 0.0;
+        else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
+        else value = (double) occupancy[v];
+        penalty_soa_[v] = (value > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
+    }
+    normalized_ = false;
+    rms_calculated_ = false;
+    dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+    cost[source_idx] = TILE_COST_DEFAULT;
+    if(density_soa_.size() != (size_t) n_voxel){
+        density_soa_.assign(n_voxel, 1.0f);
+    }
+    soa_valid_ = true;
+}
+
+void PathMap::carve_lattice(const int32_t *occupancy){
+    long n_voxel = get_number_of_voxels();
+    density_soa_.resize(n_voxel);
+    for(long i = 0; i < n_voxel; i++){
+        double d = (double) occupancy[i];
+        data_[i] = d;
+        density_soa_[i] = (d > TILE_OBSTACLE_THRESHOLD) ? 0.0f : 1.0f;
+    }
+    normalized_ = false;
+    rms_calculated_ = false;
+}
+
 void PathMap::carve_lattice(){
     long n_voxel = get_number_of_voxels();
     density_soa_.resize(n_voxel);
     for(long i = 0; i < n_voxel; i++){
         density_soa_[i] = (data_[i] > TILE_OBSTACLE_THRESHOLD) ? 0.0f : 1.0f;
+    }
+}
+
+const char *PathMap::get_interior_flags(){
+    const int nx = header_.get_nx();
+    const int ny = header_.get_ny();
+    const int nz = header_.get_nz();
+    const int box = pathMapHeader_.get_neighbor_box_size();
+    if(nx != interior_nx_ || ny != interior_ny_ || nz != interior_nz_ || box != interior_box_){
+        interior_.assign((size_t) nx * ny * nz, 0);
+        for(int z = box; z < nz - box; z++)
+            for(int y = box; y < ny - box; y++)
+                for(int x = box; x < nx - box; x++)
+                    interior_[((long) z * ny + y) * nx + x] = 1;
+        interior_nx_ = nx; interior_ny_ = ny; interior_nz_ = nz; interior_box_ = box;
+    }
+    return interior_.data();
+}
+
+void PathMap::set_origin_fast(const IMP::algebra::Vector3D &origin){
+    header_.set_xorigin(origin[0]);
+    header_.set_yorigin(origin[1]);
+    header_.set_zorigin(origin[2]);
+    header_.compute_xyz_top();
+    long nvox = get_number_of_voxels();
+    if(!loc_calculated_ || !x_loc_){
+        reset_all_voxel2loc();
+        calc_all_voxel2loc();
+        return;
+    }
+    // same formula as DensityMap::calc_all_voxel2loc, in place
+    const float sp = header_.get_spacing();
+    const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
+    const int nx = header_.get_nx(), ny = header_.get_ny();
+    float *xl = x_loc_.get(); float *yl = y_loc_.get(); float *zl = z_loc_.get();
+    int ix = 0, iy = 0, iz = 0;
+    for(long ii = 0; ii < nvox; ii++){
+        xl[ii] = ix * sp + ox;
+        yl[ii] = iy * sp + oy;
+        zl[ii] = iz * sp + oz;
+        ix++;
+        if(ix == nx){ ix = 0; ++iy; if(iy == ny){ iy = 0; ++iz; } }
     }
 }
 

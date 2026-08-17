@@ -695,23 +695,35 @@ class TestOccupancyMap(unittest.TestCase):
         self.assertEqual(occ.get_number_of_local_updates(), 4)
         self.assertEqual(occ.get_number_of_full_updates(), 1)
 
-    def test_grow_on_demand(self):
+    def test_extent_follows_the_atoms(self):
         m, ps = self._system()
         occ = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
         occ.update()
         e0 = occ.get_extent()
         self.assertEqual(occ.get_number_of_grows(), 1)
+        # a window beyond the atoms' reach is served as zeros; the extent
+        # does not grow for it
         occ.request_window(20, 20, 20, 5, 5, 5)
+        occ.update()
+        self.assertEqual(occ.get_extent(), e0)
+        self.assertEqual(occ.get_number_of_grows(), 1)
+        self.assertEqual(sum(occ.get_window(20, 20, 20, 5, 5, 5)), 0.0)
+        self.assertEqual(occ.get_number_of_skips(), 1)
+        # the structure drifts: the extent re-centres on it (full raster)
+        for p in ps:
+            x = IMP.core.XYZ(p)
+            x.set_coordinates(x.get_coordinates() + IMP.algebra.Vector3D(30, 0, 0))
         occ.update()
         e1 = occ.get_extent()
         self.assertEqual(occ.get_number_of_grows(), 2)
-        self.assertGreaterEqual(e1[0] + e1[3], 25)
-        self.assertLessEqual(e1[0], e0[0])
-        # covered request: no regrow, and nothing moved: skip
-        occ.request_window(0, 0, 0, 3, 3, 3)
-        occ.update()
-        self.assertEqual(occ.get_number_of_grows(), 2)
-        self.assertEqual(occ.get_number_of_skips(), 1)
+        self.assertGreater(e1[0], e0[0] + 20)
+        self.assertLessEqual(e1[3], e0[3] + 2)
+        ref = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        ref.update()
+        k = e1[:3]
+        self.assertTrue(np.array_equal(
+            np.array(occ.get_window(k[0], k[1], k[2], e1[3], e1[4], e1[5])),
+            np.array(ref.get_window(k[0], k[1], k[2], e1[3], e1[4], e1[5]))))
 
 
 class TestAVHandle(unittest.TestCase):

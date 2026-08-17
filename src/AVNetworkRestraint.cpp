@@ -173,17 +173,22 @@ double AVNetworkRestraint::unprotected_evaluate(
     // on threads before the AVs read them (each thread reads particle
     // coordinates from the Model and writes only its own map).
     const int nthreads = get_number_of_threads();
+    const bool quad = (distance_ == "quad");
+    const int qk = quad_k_;
+    struct RasterTask { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
+    std::vector<RasterTask> rtasks;
+    AVOccupancyMaps maps;
+    const bool pipelined = (nthreads > 1);
     if(registry_){
-        AVOccupancyMaps maps = registry_->get_maps();
-        if(nthreads > 1 && !maps.empty()){
-            // classify serially (Model reads), then spread the rasters:
-            // a full raster becomes `nthreads` z-slabs, a local delta one task
-            struct Task { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
-            std::vector<Task> tasks;
+        registry_->refresh_snapshot();
+        maps = registry_->get_maps();
+        if(pipelined){
+            // classify serially (Model reads); the rasters run in the pool
+            // below, a full raster as `nthreads` z-slabs
             for(auto &mp : maps){
                 int action = mp->begin_update();
                 if(action == 1){
-                    tasks.push_back({mp.get(), 0, 0, true});
+                    rtasks.push_back({mp.get(), 0, 0, true});
                 } else if(action == 2){
                     std::vector<int> ext = mp->get_extent();
                     int z0 = ext[2], nz = ext[5];
@@ -191,91 +196,102 @@ double AVNetworkRestraint::unprotected_evaluate(
                     for(int sIdx = 0; sIdx < nslab; sIdx++){
                         int a = z0 + (int)((long) nz * sIdx / nslab);
                         int b = z0 + (int)((long) nz * (sIdx + 1) / nslab) - 1;
-                        if(b >= a) tasks.push_back({mp.get(), a, b, false});
+                        if(b >= a) rtasks.push_back({mp.get(), a, b, false});
                     }
                 }
             }
-            if(!tasks.empty()){
-                get_pool().run(tasks.size(), [&tasks](size_t i){
-                    if(tasks[i].local) tasks[i].m->apply_local();
-                    else tasks[i].m->raster_slab(tasks[i].z_lo, tasks[i].z_hi);
-                });
-            }
-            for(auto &mp : maps) mp->end_update();
         } else {
             for(auto &m : maps) m->update();
         }
     }
     t_registry_ += lap(t);
-    // prepare (serial: touches the Model), compute (threads: each AV its own
-    // map, occupancy read-only), finish (serial: writes mean positions)
-    // Every AV takes part in the compute pass: the ones prepare() left
-    // pending run their search, and under "quad" every AV refreshes its
-    // quadrature cache (a no-op when it is current) -- so that the pair loop
-    // below is read-only. Threads are only spawned when a search is pending.
+    // prepare (serial: touches the Model; with a pipelined registry it only
+    // reads the pending classification), then one pool run for everything
+    // else: rasters, searches (after the rasters), carves (after their own
+    // search) and pair sums (after both carves), then finish (serial).
     std::vector<IMP::bff::AV*> all;
     all.reserve(avs_.size());
     size_t n_pending = 0;
     for(auto &av: avs_){
+        av.second->set_registry_driven_externally(pipelined && registry_);
         av.second->resample_prepare();
         all.push_back(av.second.get());
         if(av.second->get_has_pending_compute()) n_pending++;
     }
     t_prepare_ += lap(t);
-    const bool quad = (distance_ == "quad");
-    const int qk = quad_k_;
-    // Longest-first: pending AVs ordered by their last compute time keep the
-    // dynamic schedule balanced (a 21^3 window and a 23^3 window differ).
     std::stable_sort(all.begin(), all.end(), [](const IMP::bff::AV *a, const IMP::bff::AV *b){
         bool pa = a->get_has_pending_compute(), pb = b->get_has_pending_compute();
         if(pa != pb) return pa;
         return a->get_last_compute_seconds() > b->get_last_compute_seconds();
     });
-    if(nthreads > 1 && n_pending > 0){
-        // Two tasks per AV -- the search, then the carve/cloud/quadrature --
-        // pulled in order: all searches first, then the second halves, each
-        // waiting (briefly, they were started first) for its own search.
-        const size_t na = all.size();
-        std::vector<std::atomic<int> > searched(na);
-        for(auto &f : searched) f.store(0);
+    // pair list and AV index for the pair tasks
+    std::vector<const AVPairDistanceMeasurement*> pairs;
+    pairs.reserve(distances_.size());
+    for(const auto &it : distances_) pairs.push_back(&it.second);
+    std::vector<double> model(pairs.size());
+    std::map<const IMP::bff::AV*, size_t> av_slot;
+    for(size_t i = 0; i < all.size(); i++) av_slot[all[i]] = i;
+    std::vector<std::pair<size_t, size_t> > pair_slots(pairs.size());
+    for(size_t j = 0; j < pairs.size(); j++){
+        pair_slots[j] = std::make_pair(av_slot[get_av(pairs[j]->position_1)],
+                                       av_slot[get_av(pairs[j]->position_2)]);
+    }
+    auto eval_pair = [&](size_t j){
+        model[j] = get_model_distance(pairs[j]->position_1, pairs[j]->position_2,
+                                      pairs[j]->forster_radius, pairs[j]->distance_type);
+    };
+
+    if(pipelined){
+        const size_t nr = rtasks.size(), na = all.size(), np = pairs.size();
+        std::atomic<size_t> rasters_left(nr);
+        std::vector<std::atomic<int> > stage(na);   // 0 none, 1 searched, 2 ready
+        for(auto &f : stage) f.store(0);
+        auto spin_until = [](const std::function<bool()> &ok){
+            while(!ok()) std::this_thread::yield();
+        };
         auto work = [&](size_t t){
-            if(t < na){
-                all[t]->resample_compute_search();
-                searched[t].store(1, std::memory_order_release);
-            } else {
-                size_t i = t - na;
-                while(!searched[i].load(std::memory_order_acquire)) std::this_thread::yield();
+            if(t < nr){
+                const RasterTask &rt = rtasks[t];
+                if(rt.local) rt.m->apply_local(); else rt.m->raster_slab(rt.z_lo, rt.z_hi);
+                rasters_left.fetch_sub(1, std::memory_order_acq_rel);
+            } else if(t < nr + na){
+                size_t i = t - nr;
+                spin_until([&]{ return rasters_left.load(std::memory_order_acquire) == 0; });
+                all[i]->resample_compute_search();
+                stage[i].store(1, std::memory_order_release);
+            } else if(t < nr + 2 * na){
+                size_t i = t - nr - na;
+                spin_until([&]{ return stage[i].load(std::memory_order_acquire) >= 1; });
                 all[i]->resample_compute_carve();
                 if(quad) all[i]->prepare_quadrature(qk);
+                stage[i].store(2, std::memory_order_release);
+            } else {
+                size_t j = t - nr - 2 * na;
+                size_t a = pair_slots[j].first, b = pair_slots[j].second;
+                spin_until([&]{ return stage[a].load(std::memory_order_acquire) == 2 &&
+                                       stage[b].load(std::memory_order_acquire) == 2; });
+                if(quad) eval_pair(j);
             }
         };
-        get_pool().run(2 * na, work);
+        // Order matters: rasters, searches, carves, pairs -- so no worker
+        // waits on a task that has not been started by an earlier worker.
+        // (Even a single-worker pool would complete: every wait is on an
+        // earlier task in the queue.)
+        get_pool().run(nr + 2 * na + (quad ? np : 0), work);
+        for(auto &mp : maps) mp->end_update();
+        for(auto *av : all) av->resample_finish();
+        t_compute_ += lap(t);
+        if(!quad){
+            for(size_t j = 0; j < np; j++) eval_pair(j);
+        }
     } else {
         for(size_t i = 0; i < all.size(); i++){
             all[i]->resample_compute();
             if(quad) all[i]->prepare_quadrature(qk);
         }
-    }
-    for(auto *av : all) av->resample_finish();
-    t_compute_ += lap(t);
-
-    // Model distances: with "quad" every AV's representation is cached by
-    // now, so the pair sums are pure reads and run on threads too; the score
-    // is accumulated serially in map order, so the sum is the same as before.
-    std::vector<const AVPairDistanceMeasurement*> pairs;
-    pairs.reserve(distances_.size());
-    for(const auto &it : distances_) pairs.push_back(&it.second);
-    std::vector<double> model(pairs.size());
-    auto eval_pair = [&](size_t i){
-        model[i] = get_model_distance(pairs[i]->position_1, pairs[i]->position_2,
-                                      pairs[i]->forster_radius, pairs[i]->distance_type);
-    };
-    if(distance_ == "quad" && nthreads > 1 && pairs.size() > 1){
-        // MP/XYZ types read the mean position and particle coordinates only;
-        // quad types read cached point sets. No writes.
-        get_pool().run(pairs.size(), eval_pair);
-    } else {
-        for(size_t i = 0; i < pairs.size(); i++) eval_pair(i);
+        for(auto *av : all) av->resample_finish();
+        t_compute_ += lap(t);
+        for(size_t j = 0; j < pairs.size(); j++) eval_pair(j);
     }
     for(size_t i = 0; i < pairs.size(); i++){
         score += pairs[i]->score_model(model[i]);

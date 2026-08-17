@@ -13,6 +13,7 @@
 
 #include <stdlib.h>     /* malloc, free, rand */
 #include <limits>
+#include <cstdint>
 
 #include <cmath>
 #include <algorithm>
@@ -49,7 +50,7 @@ friend class AV;
 private:
 
     // used in path search
-    std::vector<bool>  visited;
+    std::vector<char>  visited;   // byte per tile: a scan is a byte load, not a bit test
     std::vector<bool>  edge_computed;
     std::vector<float> cost;
 
@@ -64,6 +65,13 @@ private:
     // every heap comparison.
     template<class Cmp>
     void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
+
+    // Per-tile "interior" flags for the current shape: an interior tile is
+    // at least the neighbour box away from every face and needs no bounds
+    // check in the search. Rebuilt when the shape or the box changes.
+    std::vector<char> interior_;
+    int interior_nx_ = -1, interior_ny_ = -1, interior_nz_ = -1, interior_box_ = -1;
+    const char *get_interior_flags();
 
     // Compact per-tile arrays (structure-of-arrays) the lattice path works
     // on: PathMapTile is ~100 bytes and streaming 12k of them per AV per
@@ -416,6 +424,22 @@ public:
     void search_lattice(long source_idx, float max_cost,
                         const IMP::algebra::Vector3D &r0,
                         double block_radius, double open_radius);
+
+    //! As above, with the obstacle occupancy taken from an integer covering
+    //! count per voxel (`occupancy`, window order) instead of the map data:
+    //! a count above the obstacle threshold is an obstacle, exactly as a
+    //! data value would be. The map data is left untouched.
+    void search_lattice(long source_idx, float max_cost,
+                        const IMP::algebra::Vector3D &r0,
+                        double block_radius, double open_radius,
+                        const int32_t *occupancy);
+
+    //! carve_lattice() from integer counts; the counts are also stored as
+    //! the map data (like the second raster of the historical path)
+    void carve_lattice(const int32_t *occupancy);
+
+    //! set_origin() without reallocating the location arrays (same values)
+    void set_origin_fast(const IMP::algebra::Vector3D &origin);
 
     /**
      * @brief Set the tile density from the current data: 0 where the data

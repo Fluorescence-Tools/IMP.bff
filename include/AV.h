@@ -472,6 +472,8 @@ public:
     bool get_has_pending_compute() const { return state_ && state_->pending; }
     //! Build (or refresh) the cached quadrature representation for `k`
     void prepare_quadrature(int k) const;
+    //! Tell prepare() that the caller updates the registry maps itself
+    void set_registry_driven_externally(bool tf) { get_state().registry_driven_externally = tf; }
 
 #endif
 

@@ -17,6 +17,7 @@
 #include <IMP/bff/PathMap.h>
 
 #include <array>
+#include <cstdint>
 #include <chrono>
 #include <vector>
 
@@ -47,6 +48,11 @@ struct AVLatticeState {
     std::vector<IMP::algebra::Vector4D> cloud;
     unsigned long cloud_generation = 0;
     bool cloud_valid = false;
+
+    // Set by a restraint that drives the registry maps' updates itself
+    // (begin_update before, end_update after the AV prepare phase); prepare
+    // then neither updates them nor assumes their counts are current yet.
+    bool registry_driven_externally = false;
 
     // Occupancy sources. `registry` set: shared maps; else private windows.
     IMP::Pointer<AVOccupancyRegistry> registry;
@@ -85,6 +91,9 @@ struct AVLatticeState {
     int coarse_n[3] = {0, 0, 0};
     int pending_factor = 1;
     std::vector<double> coarse_data;
+
+    // Scratch: the window's occupancy counts (integer), reused per frame
+    std::vector<int32_t> window_counts;
 
     // Wall time of the last compute phase (for longest-first scheduling)
     double last_compute_seconds = 0.0;
