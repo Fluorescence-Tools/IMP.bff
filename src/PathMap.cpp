@@ -422,7 +422,6 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
     const int nz = header_.get_nz();
     const int nxy = nx * ny;
     const char *interior_flags = get_interior_flags();
-
     std::vector<std::vector<int> > &buckets = bucket_scratch_;
     for(auto &b : buckets) b.clear();
     if(queued_scratch_.size() != (size_t) n_voxel) queued_scratch_.assign(n_voxel, -1);
@@ -465,7 +464,10 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
                 }
                 const long nidx = cidx + nb_delta[j];
                 const float new_cost = ccost + nb_len[j];   // open tile: penalty 0
-                if(new_cost < cost_ptr[nidx]){              // false for blocked (< 0)
+                // Tiles that would settle at or beyond the bound never carry
+                // density; they are neither written nor queued (their cost
+                // stays at the default).
+                if(new_cost < cost_ptr[nidx] && new_cost < max_cost){   // false for blocked (< 0)
                     cost_ptr[nidx] = new_cost;
                     push(new_cost, nidx);
                 }
