@@ -18,6 +18,10 @@
 #include <mutex>
 #include <thread>
 #include <vector>
+#ifdef __APPLE__
+#include <pthread.h>
+#include <sys/qos.h>
+#endif
 
 IMPBFF_BEGIN_INTERNAL_NAMESPACE
 
@@ -82,7 +86,14 @@ class ThreadPool {
 public:
     explicit ThreadPool(int n_workers) {
         for (int i = 1; i < n_workers; i++) {   // the caller is worker 0
-            workers_.emplace_back([this] { loop(); });
+            workers_.emplace_back([this] {
+#ifdef __APPLE__
+                // Ask for performance cores: the evaluation is latency-bound
+                // and an efficiency core doubles a task's time.
+                pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
+                loop();
+            });
         }
     }
     ~ThreadPool() {
