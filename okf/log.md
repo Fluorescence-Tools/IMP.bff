@@ -1,6 +1,12 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 pass 6 (search kernel):** obstacles encoded in the cost array
+  (`BLOCKED_COST`), reused bucket/queue scratch, per-shape candidate list with
+  shell/interior classification (occupancy-only tiles skip the sphere test),
+  inline locations, `set_origin_fast` wired. Serial per-AV compute 4.1 → 2.25
+  ms/frame; threaded frame ~0.7 ms best-of-8 on a loaded box, now with the
+  correct 26-neighbour metric. All results bit-identical.
 * **PRD-105 correction + memory pass:** the pass-3 "26-neighbour" stencil
   was 18 (`sqrt(3.0)` radius with `d² <= r²` excludes d²=3) — that, not
   tunnelling, caused the 15–25 % smaller AVs and the search halving; fixed

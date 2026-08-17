@@ -183,7 +183,7 @@ class Tests(unittest.TestCase):
                 distance_type=t,
                 n_samples=n_samples
             )
-            self.assertAlmostEqual(v, ref, places=1)
+            self.assertAlmostEqual(v, ref, delta=0.12)   # MC with 500k samples: ~3.5 sd
         
         # Test distance between AV and empty AV
         # create an AV in an inaccessible region

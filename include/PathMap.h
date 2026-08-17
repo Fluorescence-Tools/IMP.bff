@@ -73,6 +73,30 @@ private:
     int interior_nx_ = -1, interior_ny_ = -1, interior_nz_ = -1, interior_box_ = -1;
     const char *get_interior_flags();
 
+    // The lattice search proper on the compact arrays: obstacles are
+    // encoded in `cost` (BLOCKED_COST for blocked tiles, TILE_COST_DEFAULT
+    // for open ones) so the relaxation reads one array; penalties are
+    // binary there. Buckets and the queued stamps are reused across calls.
+    static constexpr float BLOCKED_COST = -1.0f;
+    std::vector<std::vector<int> > bucket_scratch_;
+    std::vector<int16_t> queued_scratch_;
+    void dijkstra_lattice(long source_idx, float max_cost);
+
+    // Candidate tiles of the lattice search: those that can lie inside the
+    // block sphere around any point of the source voxel, in index order,
+    // with their (ix, iy, iz); every other tile is blocked by the cost
+    // template. Cached per shape / source voxel / radius (the AV window is
+    // centred on the source voxel, so this is one build per AV).
+    // kind 1: the tile is inside the block sphere and outside the open sphere
+    // for every source position within the source voxel -- only the
+    // occupancy decides; kind 0: on one of the two shells, needs the test.
+    struct BallCandidate { int idx; int16_t ix, iy, iz; int16_t kind; };
+    std::vector<BallCandidate> ball_cand_;
+    std::vector<float> ball_cost_template_;
+    long ballc_source_ = -1; double ballc_radius_ = -1, ballc_open_ = -1;
+    int ballc_nx_ = -1, ballc_ny_ = -1, ballc_nz_ = -1;
+    const std::vector<BallCandidate> &get_ball_candidates(long source_idx, double radius, double open_radius);
+
     // Euclidean ("visible") search support: tiles of the block ball in order
     // of increasing distance from the source voxel centre, cached per
     // shape/source/radius; visibility scratch array; mode flag.

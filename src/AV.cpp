@@ -623,7 +623,7 @@ void AV::resample_lattice_compute(bool split_stages){
     const IMP::algebra::Vector3D &source = st.pending_source;
 
     if(st.pending_set_origin){
-        map->set_origin(st.pending_grid_origin);
+        map->set_origin_fast(st.pending_grid_origin);
         st.pending_set_origin = false;
     }
 

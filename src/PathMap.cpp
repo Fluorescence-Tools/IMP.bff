@@ -12,6 +12,8 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+constexpr float PathMap::BLOCKED_COST;
+
 PathMap::PathMap(
         const PathMapHeader &av_header,
         std::string name,
@@ -161,6 +163,7 @@ void PathMap::find_path(
 ) {
     // std::cout << "void PathMap::find_path(" << std::endl;
     sync_tiles_from_soa();
+    calc_all_voxel2loc();
     long n_voxel = get_number_of_voxels();
     IMP_USAGE_CHECK(
         path_begin_idx >= 0 && 
@@ -394,6 +397,84 @@ std::vector<int> PathMap::dijkstra_bounded_core(
     return reached;
 }
 
+void PathMap::dijkstra_lattice(long source_idx, float max_cost){
+    // `cost` holds BLOCKED_COST for blocked tiles and TILE_COST_DEFAULT for
+    // open ones; the source is open. Same relaxation order and arithmetic as
+    // dijkstra_bounded_core with binary penalties (open = 0), so costs are
+    // identical; blocked tiles are skipped by the cost comparison itself
+    // (new_cost >= 0 > BLOCKED_COST).
+    long n_voxel = get_number_of_voxels();
+    if(offsets_.empty()){
+        offsets_ = get_neighbor_idx_offsets();
+    }
+    const std::vector<int> &off = offsets_;
+    const size_t nnb = off.size() / 5;
+    std::vector<long> nb_delta(nnb);
+    std::vector<float> nb_len(nnb);
+    std::vector<int> nb_dz(nnb), nb_dy(nnb), nb_dx(nnb);
+    for(size_t j = 0; j < nnb; j++){
+        nb_dz[j] = off[5*j + 0]; nb_dy[j] = off[5*j + 1]; nb_dx[j] = off[5*j + 2];
+        nb_delta[j] = off[5*j + 3];
+        std::memcpy(&nb_len[j], &off[5*j + 4], sizeof(float));
+    }
+    const int nx = header_.get_nx();
+    const int ny = header_.get_ny();
+    const int nz = header_.get_nz();
+    const int nxy = nx * ny;
+    const char *interior_flags = get_interior_flags();
+
+    std::vector<std::vector<int> > &buckets = bucket_scratch_;
+    for(auto &b : buckets) b.clear();
+    if(queued_scratch_.size() != (size_t) n_voxel) queued_scratch_.assign(n_voxel, -1);
+    else std::fill(queued_scratch_.begin(), queued_scratch_.end(), (int16_t) -1);
+    int16_t *queued_in = queued_scratch_.data();
+    auto push = [&](float c, long idx){
+        int b = (int) c;
+        if(queued_in[idx] == (int16_t) b) return;
+        queued_in[idx] = (int16_t) b;
+        if((size_t) b >= buckets.size()) buckets.resize(b + 1);
+        buckets[b].push_back((int) idx);
+    };
+    float *cost_ptr = cost.data();
+    cost_ptr[source_idx] = 0.0f;
+    push(0.0f, source_idx);
+
+    bool done = false;
+    for(size_t b = 0; b < buckets.size() && !done; b++){
+        const size_t nb = buckets[b].size();
+        for(size_t e = 0; e < nb; e++){
+            const long cidx = buckets[b][e];
+            const float ccost = cost_ptr[cidx];
+            if((size_t) ccost != b) continue;   // stale: moved to a lower bucket
+            if(ccost >= max_cost){ done = true; break; }
+            const bool interior = interior_flags[cidx] != 0;
+            int x0 = 0, y0 = 0, z0 = 0;
+            if(!interior){
+                x0 = (int) (cidx % nx);
+                y0 = (int) ((cidx / nx) % ny);
+                z0 = (int) (cidx / nxy);
+            }
+            for(size_t j = 0; j < nnb; j++){
+                if(!interior){
+                    int iz = z0 + nb_dz[j];
+                    int iy = y0 + nb_dy[j];
+                    int ix = x0 + nb_dx[j];
+                    if(iz >= nz || iz < 0) continue;
+                    if(iy >= ny || iy < 0) continue;
+                    if(ix >= nx || ix < 0) continue;
+                }
+                const long nidx = cidx + nb_delta[j];
+                const float new_cost = ccost + nb_len[j];   // open tile: penalty 0
+                if(new_cost < cost_ptr[nidx]){              // false for blocked (< 0)
+                    cost_ptr[nidx] = new_cost;
+                    push(new_cost, nidx);
+                }
+            }
+        }
+    }
+    reached_valid_ = true;
+}
+
 void PathMap::find_path_dijkstra_exact(
         const long path_begin_idx,
         const long path_end_idx,
@@ -485,29 +566,59 @@ void PathMap::search_lattice(long source_idx, float max_cost,
     long n_voxel = get_number_of_voxels();
     IMP_USAGE_CHECK(source_idx >= 0 && source_idx < n_voxel,
                     "PathMap::search_lattice: invalid source index");
-    calc_all_voxel2loc();
     const float obstacle_threshold = pathMapHeader_.get_obstacle_threshold();
     const double bsq = block_radius * block_radius;
     const double osq = open_radius * open_radius;
-    const float *xl = x_loc_.get();
-    const float *yl = y_loc_.get();
-    const float *zl = z_loc_.get();
     const double x0 = r0[0], y0 = r0[1], z0 = r0[2];
-    penalty_soa_.resize(n_voxel);
-    for(long v = 0; v < n_voxel; v++){
-        double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
-        double d2 = dx*dx + dy*dy + dz*dz;
-        double value;
-        if(d2 < osq) value = 0.0;
-        else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
-        else value = (double) occupancy[v];
-        penalty_soa_[v] = (value > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
-    }
     normalized_ = false;
     rms_calculated_ = false;
     if(!euclidean_search_){
-        dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+        // Obstacles straight into `cost`: fill_sphere(block, inverse) then
+        // fill_sphere(open) then binarise -- inside the open sphere wins,
+        // then beyond the block radius, then the data. Only the tiles that
+        // can be inside the block sphere are tested; the template blocks the
+        // rest. Locations are the same float formula as the location arrays
+        // (ix * spacing + origin), computed inline. penalty_soa_ is derived
+        // from `cost` when the tiles API asks (sync_tiles_from_soa).
+        const std::vector<BallCandidate> &cand = get_ball_candidates(source_idx, block_radius, open_radius);
+        cost = ball_cost_template_;
+        const float sp = header_.get_spacing();
+        const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
+        float *cost_ptr = cost.data();
+        for(const BallCandidate &c : cand){
+            double value;
+            if(c.kind == 1){
+                value = (double) occupancy[c.idx];   // inside block, outside open: data decides
+            } else {
+                const float xf = c.ix * sp + ox, yf = c.iy * sp + oy, zf = c.iz * sp + oz;
+                double dx = (double) xf - x0, dy = (double) yf - y0, dz = (double) zf - z0;
+                double d2 = dx*dx + dy*dy + dz*dz;
+                if(d2 < osq) value = 0.0;
+                else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
+                else value = (double) occupancy[c.idx];
+            }
+            cost_ptr[c.idx] = (value > obstacle_threshold) ? BLOCKED_COST : TILE_COST_DEFAULT;
+        }
+        penalty_soa_.clear();   // derived from cost on sync
+        dijkstra_lattice(source_idx, max_cost);
     } else {
+        calc_all_voxel2loc();
+        const float *xl = x_loc_.get();
+        const float *yl = y_loc_.get();
+        const float *zl = z_loc_.get();
+        penalty_soa_.resize(n_voxel);
+        cost.resize(n_voxel);
+        for(long v = 0; v < n_voxel; v++){
+            double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
+            double d2 = dx*dx + dy*dy + dz*dz;
+            double value;
+            if(d2 < osq) value = 0.0;
+            else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
+            else value = (double) occupancy[v];
+            const bool blocked = value > obstacle_threshold;
+            penalty_soa_[v] = blocked ? TILE_PENALTY_DEFAULT : 0.0f;
+            cost[v] = blocked ? BLOCKED_COST : TILE_COST_DEFAULT;
+        }
         // Exact voxel visibility: the segment from the source point to the
         // tile centre is traversed voxel by voxel (Amanatides-Woo DDA);
         // the tile is reached iff every voxel on the way is free. Its cost
@@ -565,6 +676,47 @@ void PathMap::search_lattice(long source_idx, float max_cost,
         density_soa_.assign(n_voxel, 1.0f);
     }
     soa_valid_ = true;
+}
+
+const std::vector<PathMap::BallCandidate> &PathMap::get_ball_candidates(long source_idx, double radius, double open_radius){
+    const int nx = header_.get_nx(), ny = header_.get_ny(), nz = header_.get_nz();
+    if(source_idx == ballc_source_ && radius == ballc_radius_ && open_radius == ballc_open_ &&
+       nx == ballc_nx_ && ny == ballc_ny_ && nz == ballc_nz_){
+        return ball_cand_;
+    }
+    const double h = header_.get_spacing();
+    const int sx = (int) (source_idx % nx), sy = (int) ((source_idx / nx) % ny), sz = (int) (source_idx / ((long) nx * ny));
+    // A tile at lattice offset o from the source voxel is between
+    // (|o| - sqrt(3)/2) h and (|o| + sqrt(3)/2) h from any point inside
+    // that voxel (the source itself is anywhere in the voxel).
+    const double half_diag = std::sqrt(3.0) / 2.0 + 1e-9;
+    const double reach = radius / h + half_diag;
+    const double reach2 = reach * reach;
+    const double inner_block = radius / h - half_diag;     // |o| below: always inside block sphere
+    const double outer_open = open_radius / h + half_diag;  // |o| above: never inside open sphere
+    ball_cand_.clear();
+    ball_cost_template_.assign((size_t) nx * ny * nz, BLOCKED_COST);
+    for(int z = 0; z < nz; z++){
+        double dz = z - sz;
+        for(int y = 0; y < ny; y++){
+            double dy = y - sy;
+            for(int x = 0; x < nx; x++){
+                double dx = x - sx;
+                double o2 = dx*dx + dy*dy + dz*dz;
+                if(o2 <= reach2){
+                    BallCandidate c;
+                    c.idx = (int) (((long) z * ny + y) * nx + x);
+                    c.ix = (int16_t) x; c.iy = (int16_t) y; c.iz = (int16_t) z;
+                    double o = std::sqrt(o2);
+                    c.kind = (o < inner_block && o > outer_open) ? 1 : 0;
+                    ball_cand_.push_back(c);
+                }
+            }
+        }
+    }
+    ballc_source_ = source_idx; ballc_radius_ = radius; ballc_open_ = open_radius;
+    ballc_nx_ = nx; ballc_ny_ = ny; ballc_nz_ = nz;
+    return ball_cand_;
 }
 
 const std::vector<int> &PathMap::get_ball_order(long source_idx, double radius){
@@ -640,36 +792,28 @@ void PathMap::set_origin_fast(const IMP::algebra::Vector3D &origin){
     header_.set_yorigin(origin[1]);
     header_.set_zorigin(origin[2]);
     header_.compute_xyz_top();
-    long nvox = get_number_of_voxels();
-    if(!loc_calculated_ || !x_loc_ || loc_size_ != nvox){
-        reset_all_voxel2loc();
-        calc_all_voxel2loc();
-        loc_size_ = nvox;
-        return;
-    }
-    // same formula as DensityMap::calc_all_voxel2loc, in place
-    const float sp = header_.get_spacing();
-    const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
-    const int nx = header_.get_nx(), ny = header_.get_ny();
-    float *xl = x_loc_.get(); float *yl = y_loc_.get(); float *zl = z_loc_.get();
-    int ix = 0, iy = 0, iz = 0;
-    for(long ii = 0; ii < nvox; ii++){
-        xl[ii] = ix * sp + ox;
-        yl[ii] = iy * sp + oy;
-        zl[ii] = iz * sp + oz;
-        ix++;
-        if(ix == nx){ ix = 0; ++iy; if(iy == ny){ iy = 0; ++iz; } }
-    }
+    // The location arrays are dropped and recomputed by whoever needs them
+    // (calc_all_voxel2loc); the lattice path computes locations inline.
+    reset_all_voxel2loc();
+    loc_size_ = -1;
 }
 
 void PathMap::sync_tiles_from_soa(){
     if(!soa_valid_) return;
     long n_voxel = get_number_of_voxels();
+    calc_all_voxel2loc();
+    const bool have_pen = penalty_soa_.size() == (size_t) n_voxel;
     for(long i = 0; i < n_voxel; i++){
-        tiles[i].penalty = penalty_soa_[i];
-        tiles[i].cost = cost[i];
+        tiles[i].penalty = have_pen ? penalty_soa_[i]
+                                    : ((cost[i] < 0.0f) ? TILE_PENALTY_DEFAULT : 0.0f);
+        tiles[i].cost = (cost[i] < 0.0f) ? TILE_COST_DEFAULT : cost[i];
         tiles[i].density = density_soa_[i];
         tiles[i].previous = nullptr;
+    }
+    // `visited` mirrors the reached set for the tile-based readers
+    visited.assign(n_voxel, 0);
+    for(long i = 0; i < n_voxel; i++){
+        if(cost[i] >= 0.0f && cost[i] < TILE_COST_DEFAULT) visited[i] = 1;
     }
     soa_valid_ = false;
 }
@@ -775,18 +919,39 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
 
     std::vector<IMP::algebra::Vector4D> v;
     if(soa_valid_){
-        // same arithmetic as PathMapTile::get_value(PM_TILE_ACCESSIBLE_DENSITY)
+        // same arithmetic as PathMapTile::get_value(PM_TILE_ACCESSIBLE_DENSITY);
+        // reached tiles carry a real cost (blocked ones BLOCKED_COST, open
+        // unreached ones TILE_COST_DEFAULT) and lie among the ball candidates
+        const float sp = header_.get_spacing();
+        const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
+        const bool have_cand = ballc_source_ >= 0 && ballc_nx_ == header_.get_nx() &&
+                               ballc_ny_ == header_.get_ny() && ballc_nz_ == header_.get_nz();
+        if(have_cand){
+            v.reserve(ball_cand_.size() / 4 + 16);
+            for(const BallCandidate &bc : ball_cand_){
+                const long i = bc.idx;
+                if(!(cost[i] >= 0.0f && cost[i] < TILE_COST_DEFAULT)) continue;
+                float c = cost[i] * grid_spacing;
+                float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+                density *= density_soa_[i];
+                if(density > 0){
+                    const float xf = bc.ix * sp + ox, yf = bc.iy * sp + oy, zf = bc.iz * sp + oz;
+                    v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
+                }
+            }
+            return v;
+        }
         calc_all_voxel2loc();
         const float *xl = x_loc_.get();
         const float *yl = y_loc_.get();
         const float *zl = z_loc_.get();
         for(long i = 0; i < n_voxel; i++){
-            if(!visited[i]) continue;
+            if(!(cost[i] >= 0.0f && cost[i] < TILE_COST_DEFAULT)) continue;
             float c = cost[i] * grid_spacing;
             float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
             density *= density_soa_[i];
             if(density > 0){
-                v.emplace_back(IMP::algebra::Vector4D({(double) xl[i], (double) yl[i], (double) zl[i], (double) density}));
+                v.emplace_back((double) xl[i], (double) yl[i], (double) zl[i], (double) density);
             }
         }
         return v;
@@ -799,8 +964,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
         );
         if(density > 0){
             IMP::algebra::Vector3D r = get_location_by_voxel(i);
-            auto n = IMP::algebra::Vector4D({r[0], r[1], r[2], density});
-            v.emplace_back(n);
+            v.emplace_back(r[0], r[1], r[2], (double) density);
         }
     };
     if(reached_valid_){
@@ -917,6 +1081,7 @@ void PathMap::resize(unsigned int nvox){
     data_.reset(new double[nvox]);
     reached_valid_ = false;
     ball_source_ = -1;
+    ballc_source_ = -1;
     soa_valid_ = false;
     penalty_soa_.clear();
     density_soa_.clear();
