@@ -32,7 +32,10 @@ from collections import OrderedDict
 
 import numpy as np
 
+from .._jit import njit, prange
+
 __all__ = [
+    "quenching_rate_per_frame",
     "STANDARD_AMINO_ACID_RESIDUES",
     "QUENCHER_ATOMS",
     "PET_QUENCHING_REFERENCE",
@@ -270,3 +273,50 @@ def quencher_centers(atoms, selection):
     return OrderedDict(
         (residue, coord[indices[residue]]) for residue in selection
     )
+
+
+@njit(cache=True, parallel=True)
+def _rate_per_frame(collided, k_quench):
+    n_frames, n_atoms = collided.shape
+    out = np.zeros(n_frames, dtype=np.float64)
+    for frame in prange(n_frames):
+        total = 0.0
+        for atom in range(n_atoms):
+            if collided[frame, atom]:
+                total += k_quench[atom]
+        out[frame] = total
+    return out
+
+
+def quenching_rate_per_frame(collided, k_quench) -> np.ndarray:
+    """Sum the rates of the quenching atoms the dye touched, frame by frame.
+
+    The **per-atom** route to a quenching trace, as against sampling a stamped
+    rate grid along the trajectory (:meth:`IMP.bff.DyeDiffusionSimulation.k_quench`).
+    Use it when the contact flags are what you have -- from a distance
+    calculation against explicit atoms rather than from a voxel map.
+
+    Frames are independent, so each row reduces on its own thread and the
+    ``(n_frames, n_atoms)`` product is never materialised -- for a long
+    trajectory against a whole protein's quenching atoms that would be the
+    largest array in the calculation.
+
+    Moved here from ChiSurf (``chisurf/core/structure/av/dynamic.py``) by
+    PRD-109, where it was a plain Python double loop whose docstring already
+    claimed the threading it did not have.
+
+    :param collided: ``(n_frames, n_atoms)`` flags, non-zero where the dye was
+        within the critical distance of that atom in that frame.
+    :param k_quench: ``(n_atoms,)`` quenching rate per atom, in 1/ns.
+    :returns: ``(n_frames,)`` total quenching rate.
+    """
+    collided = np.ascontiguousarray(collided)
+    k_quench = np.ascontiguousarray(k_quench, dtype=np.float64)
+    if collided.ndim != 2:
+        raise ValueError("`collided` must be (n_frames, n_atoms).")
+    if collided.shape[1] != k_quench.shape[0]:
+        raise ValueError(
+            f"`collided` has {collided.shape[1]} atoms but `k_quench` has "
+            f"{k_quench.shape[0]}."
+        )
+    return _rate_per_frame(collided.astype(np.uint8), k_quench)
