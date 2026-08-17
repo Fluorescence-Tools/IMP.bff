@@ -121,9 +121,12 @@ def _library_filename(metadata: dict[str, Any], cutoff: int | None = None) -> st
         File stem without extension.
     """
     base = str(metadata["filename"])
-    if cutoff is not None and "cutoff" not in base:
-        base = f"{base}cutoff{cutoff}"
-    return base
+    if cutoff is None:
+        return base
+    # The registry's filename carries FRETpredict's default cutoff
+    # (``A48_C1R_cutoff30``); a name that asks for another cutoff replaces it.
+    stem = re.sub(r"_?cutoff\d+$", "", base)
+    return f"{stem}_cutoff{int(cutoff)}"
 
 
 def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None = None) -> Path:
@@ -149,17 +152,34 @@ def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None =
     cutoff = metadata.get("cutoff")
     filename = _library_filename(metadata, cutoff)
     stem = filename.split("_cutoff")[0]
+
+    # The FRETpredict library files (module data, data/rotamer_library) are the
+    # canonical libraries: <stem>.pdb + <stem>_cutoff<N>.dcd (+ weights) for
+    # each cutoff. They are tried first so that the *requested cutoff* is the
+    # one loaded. The RMF templates under templates/rotamer hold only the
+    # cutoff-30 clustering, so resolving every name to <stem>.rmf3 silently
+    # returned the wrong library for cutoff10/cutoff20 names.
+    if lib_dir is None:
+        dcd = _registry_path().parent / f"{filename}.dcd"
+        if dcd.exists() and dcd.with_name(f"{stem}.pdb").exists():
+            return dcd
+
     template_dir = Path(lib_dir) if lib_dir is not None else get_template_dir("rotamer")
     candidates = [
-        template_dir / f"{stem}.rmf3",
+        template_dir / f"{filename}.dcd",
         template_dir / f"{filename}.rmf3",
+        template_dir / f"{stem}.rmf3",
         template_dir / f"{stem}.pdb",
         template_dir / f"{filename}.pdb",
     ]
     for path in candidates:
         if path.exists():
+            if path.suffix.lower() == ".rmf3" and cutoff not in (None, 30) and path.stem == stem:
+                raise FileNotFoundError(
+                    f"{library_name!r}: only the cutoff-30 RMF template {path.name} is available; "
+                    f"the cutoff-{cutoff} library needs {filename}.dcd next to {stem}.pdb")
             return path
-    raise FileNotFoundError(f"No IMP-native rotamer library found for {library_name!r}")
+    raise FileNotFoundError(f"No rotamer library found for {library_name!r}")
 
 
 def _coords_to_array(library: dict[str, Any]) -> np.ndarray:
@@ -321,20 +341,38 @@ def load_rotamer_library(
         ``metadata``.
     """
     path = resolve_rotamer_library_path(library_name, lib_dir=lib_dir)
-    if path.suffix.lower() != ".rmf3":
-        raise ValueError(f"Only IMP-native RMF rotamer libraries are supported: {path}")
-    library = read_rotamer_library_rmf(str(path))
-    weights = np.asarray(library["weight"], dtype=np.float64)
-    if weights.size == 0 or np.sum(weights) <= 0:
-        weights = np.ones(library["coords"][1].shape[0], dtype=np.float64)
-    weights = weights / np.sum(weights)
     explicit_path = Path(str(library_name)).exists()
     metadata = get_library_metadata(library_name) if not explicit_path else _metadata_from_path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".dcd":
+        # FRETpredict library set: <stem>.pdb (names, residues) + DCD frames +
+        # per-rotamer weights, read with the in-tree DCD reader.
+        from IMP.bff.cgdye.sampling.rotamer import load_reference_rotamers
+        stem = path.stem.split("_cutoff")[0]
+        pdb_path = path.with_name(f"{stem}.pdb")
+        weights_path = path.with_name(f"{path.stem}_weights.txt")
+        ref = load_reference_rotamers(pdb_path, path, weights_path if weights_path.exists() else None)
+        coords = np.asarray(ref["coords"], dtype=np.float64)
+        weights = np.asarray(ref["weights"], dtype=np.float64)
+        library = {
+            "id": list(range(1, coords.shape[0] + 1)),
+            "atom_names": [str(n) for n in ref["atom_names"]],
+            "transitions": None,
+        }
+    elif suffix == ".rmf3":
+        library = read_rotamer_library_rmf(str(path))
+        weights = np.asarray(library["weight"], dtype=np.float64)
+        if weights.size == 0 or np.sum(weights) <= 0:
+            weights = np.ones(library["coords"][1].shape[0], dtype=np.float64)
+        weights = weights / np.sum(weights)
+        coords = _coords_to_array(library)
+        pdb_path = path.with_suffix(".pdb")
+    else:
+        raise ValueError(f"Unsupported rotamer library file: {path}")
     library["path"] = str(path)
-    library["coords"] = _coords_to_array(library)
+    library["coords"] = coords
     library["weight"] = weights
     library["weights"] = weights
-    pdb_path = path.with_suffix(".pdb")
     pdb_resnames = _resnames_from_pdb(pdb_path) if pdb_path.exists() else None
     if pdb_resnames is None:
         bundled_pdb = _pdb_path_for_metadata(metadata)
@@ -433,9 +471,16 @@ def load_protein_frames(
     suffix = path.suffix.lower()
     if suffix in {".pdb", ".ent"}:
         model = IMP.Model()
-        hierarchy = IMP.atom.read_pdb(str(path), model, IMP.atom.NonWaterPDBSelector())
-        coords, atom_names, atom_types, resnames, chain_ids, residue_indices = _collect_frame(hierarchy)
-        return [{"coords": coords, "atom_names": atom_names, "atom_types": atom_types, "resnames": resnames, "chain_ids": chain_ids, "residue_indices": residue_indices}]
+        # A multi-MODEL PDB (a trajectory written as models) yields one frame
+        # per model; a plain PDB yields one frame.
+        hierarchies = IMP.atom.read_multimodel_pdb(str(path), model, IMP.atom.NonWaterPDBSelector())
+        if max_frames is not None:
+            hierarchies = hierarchies[:max_frames]
+        frames = []
+        for hierarchy in hierarchies:
+            coords, atom_names, atom_types, resnames, chain_ids, residue_indices = _collect_frame(hierarchy)
+            frames.append({"coords": coords, "atom_names": atom_names, "atom_types": atom_types, "resnames": resnames, "chain_ids": chain_ids, "residue_indices": residue_indices})
+        return frames
 
     if suffix in {".rmf", ".rmf3"}:
         model = IMP.Model()

@@ -198,11 +198,16 @@ def _base_fretpredict_kwargs(*, fixed_r0: bool, electrostatic: bool, temperature
 
 
 def _hsp90_pdb() -> Path:
-    """Return the bundled Hsp90 test PDB path."""
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "src").exists():
-            return parent / "src" / "IMP" / "bff" / "cgdye" / "thirdparty" / "FRETpredict" / "tests" / "test_systems" / "Hsp90" / "openHsp90.pdb"
-    return Path(__file__).resolve().parents[1]
+    """Unpack the bundled Hsp90 fixture (test/cgdye/rotamer/data) once per process."""
+    import gzip
+    import shutil
+    import tempfile
+    src = Path(__file__).resolve().parent / "data" / "openHsp90.pdb.gz"
+    dst = Path(tempfile.gettempdir()) / "imp_bff_cgdye_openHsp90.pdb"
+    if not dst.exists():
+        with gzip.open(src, "rb") as fin, open(dst, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+    return dst
 
 
 def _assert_output_files_match(fp_prefix: Path, imp_prefix: Path, residues: tuple[int, int] | list[int] = (452, 637)) -> None:
