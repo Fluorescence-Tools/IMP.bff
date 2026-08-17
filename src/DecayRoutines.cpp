@@ -339,6 +339,12 @@ void decay_fconv_per_cs(double *fit, double *x, double *lamp, int numexp, int st
             stop1, period_n = (int)ceil(period/dt-0.5);
     double fitcurr, expcurr, tail_a, deltathalf = dt*0.5;
 
+    // `stop` and `conv_stop` are inclusive here (unlike the exclusive `stop`
+    // of the sibling routines): clamp them to the last channel. The Python
+    // wrapper maps stop = -1 to n_points, which used to write fit[n_points].
+    if (stop > n_points - 1) stop = n_points - 1;
+    if (conv_stop > n_points - 1) conv_stop = n_points - 1;
+
     for (i=0; i<=stop; i++) fit[i]=0;
     stop1 = (period_n > n_points-1) ? n_points-1 : period_n;
 

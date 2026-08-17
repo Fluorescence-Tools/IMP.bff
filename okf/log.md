@@ -1,6 +1,13 @@
 # Update Log
 
 ## 2026-08-17
+* **Memory: `decay_fconv_per_cs` wrote one past the fit array** — its `stop`
+  and `conv_stop` are inclusive (the sibling routines' `stop` is exclusive)
+  and the Python wrapper maps `stop=-1` to `n_fit`, so `fit[n_fit]` was
+  written and the tail added there: heap corruption that surfaced as random
+  aborts later in the same process (Guard Malloc pinned it to
+  `test_DecayRoutines.test_fconv_per_cs`). Clamped to the last channel;
+  results unchanged. Full suite now clean under Guard Malloc.
 * **PRD-105: compilation/locality/arrangement pass.** PGO and branch hints:
   no gain; blocked layout not pursued (working set is cache-resident).
   `AVNetworkRestraint::evaluate_async()`/`wait_score()` added: the pool run
