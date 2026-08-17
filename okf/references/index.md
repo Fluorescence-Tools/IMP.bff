@@ -27,7 +27,10 @@ their content here.
   (AV Gaussian moments), [PRD-95](../../../chisurf/okf/prds/prd-95.md)
   (cereal/JSON serialization), [PRD-96](../../../chisurf/okf/prds/prd-96.md)
   (fpsimp as a consumer), [PRD-97](../../../chisurf/okf/prds/prd-97.md)
-  (FRET docking moves here).
+  (FRET docking moves here). bff-local PRDs live in
+  [../prds/index.md](../prds/index.md): [PRD-105](../prds/prd-105.md) (AV
+  evaluation on the semi space-fixed lattice — implemented 2026-08-17),
+  [PRD-106](../prds/prd-106.md) (strip mech).
 
 # The tttrlib bundle (`../../tttrlib/okf/`)
 

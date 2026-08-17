@@ -63,7 +63,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
     template<class Archive> void serialize(Archive &ar) {
         ar(cereal::base_class<IMP::Restraint>(this),
            n_samples, av_pi_, model_ps_, distances_,
-           space_fixed_, shared_map_);
+           space_fixed_, shared_map_, distance_, quad_k_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -98,6 +98,8 @@ private:
     /* PRD-105 evaluation modes. */
     bool space_fixed_ = true;      //!< lattice-anchored windows (else legacy)
     bool shared_map_ = true;       //!< one occupancy raster per (spacing, extra) class
+    std::string distance_ = "quad";//!< "quad" (lattice quadrature) or "mc"
+    int quad_k_ = 100;             //!< representative points per cloud
 
     //! Shared occupancy rasters (only under space_fixed && shared_map)
     IMP::Pointer<AVOccupancyRegistry> registry_;
@@ -171,11 +173,14 @@ public:
      * @param[in] score_set The name of the score in the fps.json file. If not provided, all distances are used for scoring.
      */
     /**
-     * @param[in] n_samples Random samples for the distance computation.
+     * @param[in] n_samples Random samples for `distance="mc"`.
      * @param[in] space_fixed Anchor every AV grid on the global lattice
      *   (default). `false` selects the deprecated legacy anchoring.
      * @param[in] shared_map One occupancy raster per (spacing, extra-radius)
      *   class shared by all AVs (default). Requires `space_fixed`.
+     * @param[in] distance `"quad"` (deterministic lattice quadrature, default)
+     *   or `"mc"` (random sampling, order-dependent).
+     * @param[in] quad_k Representative points per cloud for `"quad"`.
      */
     AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
@@ -184,11 +189,15 @@ public:
         std::string score_set = "",
         int n_samples = 50000,
         bool space_fixed = true,
-        bool shared_map = true
+        bool shared_map = true,
+        std::string distance = "quad",
+        int quad_k = 100
     );
 
     bool get_space_fixed() const { return space_fixed_; }
     bool get_shared_map() const { return shared_map_; }
+    std::string get_distance_method() const { return distance_; }
+    int get_quad_k() const { return quad_k_; }
     int get_n_samples() const { return n_samples; }
 
     //! The shared occupancy registry (nullptr unless shared_map)
@@ -202,6 +211,15 @@ public:
      * plus the mode flags and the number of evaluations.
      */
     std::string get_diagnostics_json() const;
+
+    /**
+     * @brief Estimate of the quadrature error of the model distances.
+     *
+     * Largest absolute difference, over the used distances, between the
+     * distance at `quad_k` and at `reference_k` representative points
+     * (both from the current maps). Costs O(reference_k^2) per pair.
+     */
+    double get_quad_error_estimate(int reference_k = 1000) const;
 
     //! Default constructor, needed to deserialize the restraint.
     AVNetworkRestraint() {}

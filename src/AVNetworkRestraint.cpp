@@ -17,13 +17,23 @@ AVNetworkRestraint::AVNetworkRestraint(
         std::string score_set,
         int n_samples,
         bool space_fixed,
-        bool shared_map
+        bool shared_map,
+        std::string distance,
+        int quad_k
 ) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples),
-    space_fixed_(space_fixed), shared_map_(shared_map){
+    space_fixed_(space_fixed), shared_map_(shared_map),
+    distance_(distance), quad_k_(quad_k){
     if(shared_map && !space_fixed){
         IMP_THROW("AVNetworkRestraint: shared_map=True requires space_fixed=True "
                   "(sharing needs commensurate lattice windows)",
                   IMP::ValueException);
+    }
+    if(distance != "quad" && distance != "mc"){
+        IMP_THROW("AVNetworkRestraint: distance must be \"quad\" or \"mc\", got \""
+                  << distance << "\"", IMP::ValueException);
+    }
+    if(quad_k < 1){
+        IMP_THROW("AVNetworkRestraint: quad_k must be >= 1", IMP::ValueException);
     }
     if(!space_fixed){
         IMP_WARN("AVNetworkRestraint: space_fixed=False (legacy source-anchored "
@@ -159,6 +169,9 @@ double AVNetworkRestraint::get_model_distance(
 ) const {
     auto av1 = get_av(position1_name);
     auto av2 = get_av(position2_name);
+    if(distance_ == "quad"){
+        return av_distance_quadrature(*av1, *av2, forster_radius, distance_type, quad_k_);
+    }
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
 }
 
@@ -166,6 +179,8 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     nlohmann::json j;
     j["space_fixed"] = space_fixed_;
     j["shared_map"] = shared_map_;
+    j["distance"] = distance_;
+    j["quad_k"] = quad_k_;
     j["n_samples"] = n_samples;
     j["evaluations"] = n_evaluations_;
     nlohmann::json avs = nlohmann::json::object();
@@ -208,6 +223,22 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     j["shared_maps"] = maps;
     j["shared_map_classes"] = maps.size();
     return j.dump();
+}
+
+double AVNetworkRestraint::get_quad_error_estimate(int reference_k) const{
+    double worst = 0.0;
+    for(const auto &it : distances_){
+        const auto &d = it.second;
+        auto av1 = get_av(d.position_1);
+        auto av2 = get_av(d.position_2);
+        double a = av_distance_quadrature(*av1, *av2, d.forster_radius,
+                                          d.distance_type, quad_k_);
+        double b = av_distance_quadrature(*av1, *av2, d.forster_radius,
+                                          d.distance_type, reference_k);
+        if(std::isnan(a) || std::isnan(b)) continue;
+        worst = std::max(worst, std::fabs(a - b));
+    }
+    return worst;
 }
 
 IMP_OBJECT_SERIALIZE_IMPL(IMP::bff::AVNetworkRestraint);

@@ -14,9 +14,10 @@ def __init__(self, *args, **kwargs):
         _IMP_bff.AVNetworkRestraint_swiginit(self, _IMP_bff.new_AVNetworkRestraint())
         return
     names = ("hier", "fps_json_fn", "name", "score_set", "n_samples",
-             "space_fixed", "shared_map")
+             "space_fixed", "shared_map", "distance", "quad_k")
     defaults = {"name": "AVNetworkRestraint%1%", "score_set": "",
-                "n_samples": 50000, "space_fixed": True, "shared_map": True}
+                "n_samples": 50000, "space_fixed": True, "shared_map": True,
+                "distance": "quad", "quad_k": 100}
     if len(args) > len(names):
         raise TypeError("AVNetworkRestraint() takes at most %d positional "
                         "arguments (%d given)" % (len(names), len(args)))

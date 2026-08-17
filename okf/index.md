@@ -8,12 +8,15 @@ An [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-cata
 bundle for **repo-local** knowledge about `imp.bff` — the coordinate-level
 fluorescence-modelling IMP module (accessible volumes, path maps, κ², cgdye).
 
-**Scope rule:** only knowledge that is local to this repository lives here.
-Cross-stack knowledge — the ecosystem map, the PRDs, the build workflows, the
-repository-split rules — stays in [`../../chisurf/okf/`](../../chisurf/okf/index.md)
-and is *linked from* here, never copied. A duplicated page forks the knowledge
-and both copies rot. Photon-level concerns live in
-[`../../tttrlib/okf/`](../../tttrlib/okf/index.md).
+**Scope rule:** repo-local knowledge plus **the PRDs that drive imp.bff work**
+live here ([`prds/`](prds/index.md)). Cross-stack knowledge — the ecosystem
+map, the build workflows, the repository-split rules — stays in
+[`../../chisurf/okf/`](../../chisurf/okf/index.md) and is *linked from* here,
+never copied. A duplicated page forks the knowledge and both copies rot.
+Photon-level concerns live in
+[`../../tttrlib/okf/`](../../tttrlib/okf/index.md). A bff feature PRD is
+authored in `okf/prds/` of this repo; it is linked (not copied) into the
+shared index.
 
 # Agent message board
 

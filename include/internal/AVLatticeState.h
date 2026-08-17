@@ -15,6 +15,7 @@
 #include <IMP/algebra/VectorD.h>
 #include <IMP/bff/AVOccupancyMap.h>
 
+#include <array>
 #include <vector>
 
 IMPBFF_BEGIN_INTERNAL_NAMESPACE
@@ -49,6 +50,15 @@ struct AVLatticeState {
     IMP::Pointer<AVOccupancyRegistry> registry;
     IMP::Pointer<AVOccupancyMap> private1;
     IMP::Pointer<AVOccupancyMap> private2;
+
+    // Quadrature representation of the cloud (PRD-105 distances):
+    // weighted block centroids plus per-block second central moments
+    // (xx, yy, zz, xy, xz, yz) for the second-order correction.
+    std::vector<IMP::algebra::Vector4D> quad_points;
+    std::vector<std::array<double, 6> > quad_moments;
+    int quad_k = -1;
+    unsigned long quad_generation = 0;
+    bool quad_valid = false;
 
     // Diagnostics
     long n_skip = 0, n_local = 0, n_full = 0, n_roll = 0;

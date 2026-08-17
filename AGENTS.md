@@ -27,15 +27,20 @@ neither → chisurf). See `../chisurf/okf/prds/prd-93.md`.
 This repository has a small OKF bundle of its own at [`okf/`](okf/index.md) —
 start at [`okf/index.md`](okf/index.md), read the shared
 [`okf/agent-board.md`](okf/agent-board.md) before starting work, and log
-changes in [`okf/log.md`](okf/log.md). It holds **repo-local knowledge only**:
-build quirks and design decisions specific to this tree.
+changes in [`okf/log.md`](okf/log.md). It holds **repo-local knowledge**:
+build quirks, design decisions specific to this tree, and — as of
+2026-08-16 — **the feature PRDs that drive imp.bff work**, authored in
+[`okf/prds/`](okf/prds/index.md).
 
-Everything cross-stack — the ecosystem map, the PRDs, the build workflows, the
+Everything cross-stack — the ecosystem map, cross-repo PRDs (the repository
+split, build discipline, ecosystem-wide decisions), the build workflows, the
 repository-split rules — stays in the shared bundle:
 
     ../chisurf/okf/
 
-Write cross-stack findings back into it rather than copying pages here. A
+The split is *what the PRD decides about*: a decision that is about
+`IMP.bff` alone lives here in `okf/prds/`; a decision that spans repositories
+lives in `../chisurf/okf/prds/`. Link across bundles rather than copying. A
 duplicated page forks the knowledge and both copies rot.
 
 Start with:
@@ -54,6 +59,7 @@ Start with:
 * [`../chisurf/okf/workflows/change-tracking.md`](../chisurf/okf/workflows/change-tracking.md) —
   the loop every material change follows: update the matching concept, append a
   dated bullet to `okf/log.md`, leave a resume point, commit locally.
+* [`okf/prds/index.md`](okf/prds/index.md) — the PRDs driving imp.bff work:
 
 `tttrlib` keeps its own bundle at `../tttrlib/okf/` for photon-level concerns,
 and the two share one agent message board.

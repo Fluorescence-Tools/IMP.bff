@@ -67,10 +67,12 @@ class Tests(unittest.TestCase):
             n_samples=500000
         )
 
-        # Lattice-anchored grids (PRD-105), MC distances with 500k samples.
-        # The legacy (source-anchored) value was 11.918.
+        # Default mode (PRD-105): lattice-anchored grids, quadrature
+        # distances -- deterministic, so the pin is tight. The legacy value
+        # (11.918, MC) is pinned in test_av_lattice.py.
         v = fret_restraint.unprotected_evaluate(None)
-        self.assertAlmostEqual(12.7, v, places=0)
+        self.assertAlmostEqual(13.079781979252157, v, places=6)
+        self.assertEqual(v, fret_restraint.unprotected_evaluate(None))
 
         model_ref = np.array(
             [
