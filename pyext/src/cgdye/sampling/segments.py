@@ -1,4 +1,9 @@
-"""Segmentation and FP detection ported from fpsimp."""
+"""Segmentation and FP detection ported from fpsim (Biopython-free copy).
+
+This is a copy of fpsim's segmenter kept for ``dye label-fusion``; the
+duplication and its drift are tracked in chisurf PRD-96 (fpsim <-> imp.bff).
+Do not extend it here -- fpsim is the home of the algorithm.
+"""
 
 from __future__ import annotations
 

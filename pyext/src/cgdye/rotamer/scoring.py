@@ -7,13 +7,7 @@ from typing import Any
 
 import numpy as np
 
-LJ_PARAMETERS: dict[str, dict[str, float]] = {
-    "C": {"p_Rmin2": 2.02446316, "eps": -0.06394724},
-    "N": {"p_Rmin2": 1.89285714, "eps": -0.15428571},
-    "O": {"p_Rmin2": 1.693, "eps": -0.12642017},
-    "S": {"p_Rmin2": 2.1, "eps": -0.47},
-    "H": {"p_Rmin2": 0.98357778, "eps": -0.03466645},
-}
+from IMP.bff.cgdye.topology.dye import lj_energy, lj_parameter_arrays
 
 _GAS_CONSTANT = 1.9858775e-3
 
@@ -193,7 +187,7 @@ def _site_mask(
     mask = np.zeros(len(atom_names), dtype=bool)
     if residue_indices is None:
         residue_indices = [-1] * len(atom_names)
-    wanted = set(residue_indices) if isinstance(site_residue, list) else {site_residue}
+    wanted = set(site_residue) if isinstance(site_residue, (list, tuple, set)) else {site_residue}
     for i, (name, residue_index) in enumerate(zip(atom_names, residue_indices)):
         frame_chain = chain_ids[i] if chain_ids is not None and i < len(chain_ids) else None
         same_chain = site_chain is None or frame_chain is None or str(frame_chain).upper() == str(site_chain).upper()
@@ -314,11 +308,7 @@ def _scaled_parameters(
     tuple[numpy.ndarray, numpy.ndarray]
         Scaled ``Rmin2`` and ``epsilon`` arrays.
     """
-    eps = np.array([LJ_PARAMETERS.get(_atom_type(name), LJ_PARAMETERS["C"])["eps"] for name in atom_names], dtype=float)
-    rmin2 = np.array(
-        [LJ_PARAMETERS.get(_atom_type(name), LJ_PARAMETERS["C"])["p_Rmin2"] for name in atom_names],
-        dtype=float,
-    )
+    rmin2, eps = lj_parameter_arrays(_atom_type(name) for name in atom_names)
     return rmin2 * sigma_scaling, eps * epsilon_scaling
 
 
@@ -452,8 +442,7 @@ def compute_rotamer_score(
         if potential == "lj":
             mask = distances < 10.0
             if np.any(mask):
-                ratio = np.power(rmin_ij[mask] / distances[mask], 6)
-                pot_energy[i] += np.sum(eps_ij[mask] * (ratio * ratio - 2.0 * ratio))
+                pot_energy[i] += np.sum(lj_energy(distances[mask], rmin_ij[mask], eps_ij[mask], r_floor=0.0))
         elif potential == "gauss":
             mask = distances < 10.0
             if np.any(mask):

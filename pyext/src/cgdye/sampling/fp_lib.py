@@ -1,4 +1,8 @@
-"""Fluorescent Protein (FP) library management."""
+"""Fluorescent Protein (FP) library accessor (``data/cgdye/fp_library.json``).
+
+Copy of fpsim's FP registry (imp.bff has 4 FPs, fpsim has drifted); tracked in
+chisurf PRD-96. Do not extend it here.
+"""
 
 import json
 from pathlib import Path

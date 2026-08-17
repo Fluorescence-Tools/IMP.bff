@@ -13,9 +13,10 @@ Algorithmic tricks ported from IMP RotamerCalculator.cpp:
     tensor operation.
 """
 
-import math
 
 import numpy as np
+
+from IMP.bff.cgdye.topology.dye import CHARMM36_LJ, lj_cross, lj_energy
 
 
 # ---------------------------------------------------------------------------
@@ -23,19 +24,15 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def lj_score(r, rmin, epsilon):
-    """Lennard-Jones energy for distance r, given combined rmin and epsilon.
+    """Repulsive-only Lennard-Jones energy for one pair (scalar).
 
-    Uses a soft repulsive form: if r < rmin, return epsilon * ((rmin/r)**12 - 2*(rmin/r)**6).
-    If r >= rmin, return 0 (no attractive tail in coarse-grained).
+    ``epsilon * ((rmin/r)**12 - 2*(rmin/r)**6)`` for ``r < rmin``, 0 beyond
+    (no attractive tail in the coarse-grained linker sampler); ``r`` is clamped
+    to 0.01 A. Thin scalar front to :func:`IMP.bff.cgdye.topology.dye.lj_energy`.
     """
     if rmin == 0 or epsilon == 0:
         return 0.0
-    if r >= rmin:
-        return 0.0
-    if r < 0.01:  # Avoid division by zero and extreme energies
-        r = 0.01
-    ratio = rmin / r
-    return epsilon * (ratio**12 - 2.0 * ratio**6)
+    return lj_energy(r, rmin, epsilon, repulsive_only=True)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +77,6 @@ def build_lj_type_table(elements):
 
     Returns dict {type_id: {element, rmin_half, epsilon}}.
     """
-    from IMP.bff.cgdye.topology.dye import CHARMM36_LJ
 
     lj_types = {}
     for elem in sorted(elements):
@@ -115,8 +111,6 @@ def lj_cross_params(elem_i, elem_j):
 
     Returns (rmin_ij, epsilon_ij).
     """
-    from IMP.bff.cgdye.topology.dye import lj_cross
-
     return lj_cross(elem_i, elem_j)
 
 
@@ -298,18 +292,9 @@ class InternalEnergyEvaluator:
         Args:
             coords: Array of shape (n_atoms, 3)
         """
-        energy = 0.0
-        for sid_a, sid_b, rmin, eps in self.pairs:
-            idx_a = self.id_to_idx[sid_a]
-            idx_b = self.id_to_idx[sid_b]
-
-            dx = coords[idx_a, 0] - coords[idx_b, 0]
-            dy = coords[idx_a, 1] - coords[idx_b, 1]
-            dz = coords[idx_a, 2] - coords[idx_b, 2]
-            r = math.sqrt(dx * dx + dy * dy + dz * dz)
-
-            energy += lj_score(r, rmin, eps)
-        return energy
+        # One frame through the vectorised kernel: the same arithmetic as
+        # evaluate_batch (regression-tested equal to 1e-10), no Python pair loop.
+        return float(self.evaluate_batch(np.asarray(coords, dtype=np.float64)[None, :, :])[0])
 
     # ------------------------------------------------------------------
     # Trick 3 — vectorized batch LJ evaluation
@@ -337,14 +322,8 @@ class InternalEnergyEvaluator:
         delta = pos_a - pos_b
         r = np.linalg.norm(delta, axis=-1)        # (F, P)
 
-        # Vectorized LJ: repulsive-only, r clamped away from zero
-        r_safe = np.maximum(r, 0.01)
-        ratio = self._rmin[None, :] / r_safe      # broadcast (F, P)
-        lj_val = self._eps[None, :] * (ratio**12 - 2.0 * ratio**6)
-
-        # Zero out attractive tail (r >= rmin)
-        lj_val = np.where(r < self._rmin[None, :], lj_val, 0.0)
-
+        # Repulsive-only LJ through the shared kernel (r clamped away from zero)
+        lj_val = lj_energy(r, self._rmin[None, :], self._eps[None, :], repulsive_only=True)
         return lj_val.sum(axis=-1)                # (F,)
 
     # ------------------------------------------------------------------

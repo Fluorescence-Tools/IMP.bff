@@ -5,7 +5,7 @@ import os
 
 import click
 
-from IMP.bff.cgdye.sampling.rrt_imp import make_transform, run_imp_rrt
+from IMP.bff.cgdye.sampling.rrt import make_transform, run_imp_rrt
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})

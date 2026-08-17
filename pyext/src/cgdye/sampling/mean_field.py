@@ -39,6 +39,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from IMP.bff.cgdye.topology.dye import lj_cross, lj_energy
+
 
 # ---------------------------------------------------------------------------
 # LJ helpers (mirror IMP's PairScore, but in NumPy)
@@ -64,11 +66,8 @@ def _lj_energy_pairs(
     if rmin is None or eps is None:
         return 0.0
 
-    r_safe = np.maximum(r_flat, 0.01)
-    ratio = rmin / r_safe
-    lj = eps * (ratio**12 - 2.0 * ratio**6)
-    # Repulsive-only mask (r < rmin) + distance cutoff
-    lj = np.where((r_flat < rmin) & (r_flat < r_cutoff), lj, 0.0)
+    # Repulsive-only LJ within the cutoff, through the shared kernel
+    lj = lj_energy(r_flat, rmin, eps, repulsive_only=True, cutoff=r_cutoff)
     return float(lj.sum())
 
 
@@ -80,8 +79,6 @@ def _build_cross_lj_params(
 
     Returns (rmin, eps) arrays of shape (n_dye * n_ref,).
     """
-    from IMP.bff.cgdye.topology.dye import lj_cross
-
     n_d = len(dye_elements)
     n_r = len(ref_elements)
     rmin_arr = np.zeros(n_d * n_r, dtype=np.float64)

@@ -1,9 +1,20 @@
-"""Dye topology builder utilities."""
+"""Dye topology builder utilities and the one CHARMM36 Lennard-Jones source.
+
+``CHARMM36_LJ`` / ``lj_cross`` / ``lj_energy`` are the single LJ table and
+kernel of cgdye. Every scorer (``sampling.scoring``, ``sampling.mean_field``,
+``rotamer.scoring``) derives its parameters and energies from here so the two
+tables that used to live side by side (``rmin_half``/``epsilon`` here,
+``p_Rmin2``/``eps`` in ``rotamer.scoring``) cannot drift apart again.
+"""
 
 import math
 from collections import defaultdict
 
+import numpy as np
 
+
+#: CHARMM36 per-element LJ parameters: ``rmin_half`` (Rmin/2, Angstrom) and
+#: ``epsilon`` (kcal/mol, negative as in the CHARMM parameter files).
 CHARMM36_LJ = {
     "C": {"rmin_half": 2.02446316, "epsilon": -0.06394724},
     "N": {"rmin_half": 1.89285714, "epsilon": -0.15428571},
@@ -18,11 +29,50 @@ def lj_params(element):
 
 
 def lj_cross(elem_i, elem_j):
+    """Lorentz-Berthelot cross parameters ``(rmin, eps)`` for two elements.
+
+    ``rmin = rmin_half_i + rmin_half_j`` (Angstrom), ``eps = sqrt(eps_i eps_j)``
+    (kcal/mol, positive well depth).
+    """
     pi = lj_params(elem_i)
     pj = lj_params(elem_j)
     rmin = pi["rmin_half"] + pj["rmin_half"]
     eps = (pi["epsilon"] * pj["epsilon"]) ** 0.5
     return rmin, eps
+
+
+def lj_parameter_arrays(elements):
+    """``(rmin_half, epsilon)`` arrays for a sequence of element symbols.
+
+    Unknown elements fall back to carbon, as ``lj_params`` does.
+    """
+    params = [lj_params(e) for e in elements]
+    rmin_half = np.array([p["rmin_half"] for p in params], dtype=np.float64)
+    epsilon = np.array([p["epsilon"] for p in params], dtype=np.float64)
+    return rmin_half, epsilon
+
+
+def lj_energy(r, rmin, eps, *, repulsive_only=False, cutoff=None, r_floor=0.01):
+    """12-6 Lennard-Jones energy ``eps * ((rmin/r)^12 - 2 (rmin/r)^6)``.
+
+    Vectorised over numpy arrays (``r``, ``rmin``, ``eps`` broadcast against
+    each other); scalars work too. ``r`` is clamped to ``r_floor`` to keep the
+    energy finite. ``repulsive_only=True`` zeroes the attractive tail
+    (``r >= rmin``), ``cutoff`` zeroes pairs beyond that distance. With
+    positive ``eps`` (the ``lj_cross`` convention) the well depth at ``rmin``
+    is ``-eps``.
+    """
+    r_arr = np.asarray(r, dtype=np.float64)
+    r_safe = np.maximum(r_arr, r_floor)
+    ratio6 = np.power(np.asarray(rmin, dtype=np.float64) / r_safe, 6)
+    energy = np.asarray(eps, dtype=np.float64) * (ratio6 * ratio6 - 2.0 * ratio6)
+    if repulsive_only:
+        energy = np.where(r_arr < rmin, energy, 0.0)
+    if cutoff is not None:
+        energy = np.where(r_arr < cutoff, energy, 0.0)
+    if np.ndim(energy) == 0:
+        return float(energy)
+    return energy
 
 
 def build_graph(bonds):

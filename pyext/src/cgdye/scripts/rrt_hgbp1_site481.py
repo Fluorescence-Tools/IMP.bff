@@ -19,7 +19,7 @@ import RMF
 
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes
-from IMP.bff.cgdye.sampling.rrt_imp import run_torsion_rrt
+from IMP.bff.cgdye.sampling.rrt import run_torsion_rrt
 from IMP.bff.cgdye.topology.builder import parse_mol2
 
 def _structure(name):
