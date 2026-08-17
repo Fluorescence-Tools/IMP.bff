@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 pass 7:** structure-of-arrays cloud shared by mean and
+  quadrature (serial per-AV compute 2.02 → 1.84 ms/frame, bit-identical),
+  scratch/capacity reuse, pair tasks queued in start-ready order.
 * **Memory pass, PRD-105 code:** `leaks --atExit` over 14 restraint
   lifecycles in all modes (incl. async, pickle, forced recompute, coarse
   mode): no leaks in libimp_bff (only SWIG's one-time registration blocks).

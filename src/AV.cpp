@@ -138,13 +138,28 @@ internal::AVLatticeState &AV::get_state(){
     return *state_;
 }
 
-const std::vector<IMP::algebra::Vector4D> &AV::get_cloud() const{
+void AV::refresh_cloud_soa() const{
     auto map = get_map();   // builds and resamples on first use
     auto &st = const_cast<AV*>(this)->get_state();
     if(!st.cloud_valid || st.cloud_generation != st.result_generation){
-        st.cloud = map->get_xyz_density();
+        map->get_xyz_density_soa(st.cloud_x, st.cloud_y, st.cloud_z, st.cloud_w);
         st.cloud_generation = st.result_generation;
         st.cloud_valid = true;
+    }
+}
+
+const std::vector<IMP::algebra::Vector4D> &AV::get_cloud() const{
+    refresh_cloud_soa();
+    auto &st = const_cast<AV*>(this)->get_state();
+    if(!st.cloud_aos_valid || st.cloud_aos_generation != st.cloud_generation){
+        st.cloud.clear();
+        st.cloud.reserve(st.cloud_x.size());
+        for(size_t i = 0; i < st.cloud_x.size(); i++){
+            st.cloud.emplace_back((double) st.cloud_x[i], (double) st.cloud_y[i],
+                                  (double) st.cloud_z[i], (double) st.cloud_w[i]);
+        }
+        st.cloud_aos_generation = st.cloud_generation;
+        st.cloud_aos_valid = true;
     }
     return st.cloud;
 }
@@ -156,13 +171,17 @@ IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
         r += get_source_coordinates();
         sum += 1.0;
     }
-    const auto &xyzd = get_cloud();
-    for(auto &a: xyzd){
-        if(a[3] <= 0.0f) continue;
-        sum += a[3];
-        r[0] += a[0] * a[3];
-        r[1] += a[1] * a[3];
-        r[2] += a[2] * a[3];
+    refresh_cloud_soa();
+    const auto &st = *state_;
+    // the same double arithmetic as over Vector4D entries (float values
+    // widened on read)
+    for(size_t i = 0; i < st.cloud_x.size(); i++){
+        const double w = st.cloud_w[i];
+        if(w <= 0.0f) continue;
+        sum += w;
+        r[0] += (double) st.cloud_x[i] * w;
+        r[1] += (double) st.cloud_y[i] * w;
+        r[2] += (double) st.cloud_z[i] * w;
     }
     return r /= sum;
 }
@@ -752,17 +771,18 @@ void AV::resample_lattice_compute_carve(){
     st.quad_valid = false;
 
     // the cloud and the mean position, from the map and the cached source
-    st.cloud = map->get_xyz_density();
+    map->get_xyz_density_soa(st.cloud_x, st.cloud_y, st.cloud_z, st.cloud_w);
     st.cloud_generation = st.result_generation;
     st.cloud_valid = true;
     IMP::algebra::Vector3D r = source;
     double sum = 2.0;
-    for(auto &a: st.cloud){
-        if(a[3] <= 0.0f) continue;
-        sum += a[3];
-        r[0] += a[0] * a[3];
-        r[1] += a[1] * a[3];
-        r[2] += a[2] * a[3];
+    for(size_t i = 0; i < st.cloud_x.size(); i++){
+        const double w = st.cloud_w[i];
+        if(w <= 0.0f) continue;
+        sum += w;
+        r[0] += (double) st.cloud_x[i] * w;
+        r[1] += (double) st.cloud_y[i] * w;
+        r[2] += (double) st.cloud_z[i] * w;
     }
     st.last_mean = r / sum;
     st.last_compute_seconds = std::chrono::duration<double>(
@@ -820,32 +840,36 @@ namespace {
 // moments (xx, yy, zz, xy, xz, yz). Deterministic: blocks are keyed by
 // integer lattice index and emitted in key order.
 void coarsen_cloud(
-        const std::vector<IMP::algebra::Vector4D> &cloud,
+        const std::vector<float> &cx, const std::vector<float> &cy,
+        const std::vector<float> &cz, const std::vector<float> &cw,
         double spacing, int k,
         std::vector<IMP::algebra::Vector4D> &points,
         std::vector<std::array<double, 6> > &moments){
     points.clear();
     moments.clear();
-    if(cloud.empty() || k <= 0) return;
-    const size_t np = cloud.size();
+    if(cx.empty() || k <= 0) return;
+    const size_t np = cx.size();
     if((int) np <= k){
-        points = cloud;
+        points.reserve(np);
+        for(size_t i = 0; i < np; i++){
+            points.emplace_back((double) cx[i], (double) cy[i], (double) cz[i], (double) cw[i]);
+        }
         moments.assign(np, {0, 0, 0, 0, 0, 0});
         return;
     }
     // integer lattice indices relative to the cloud minimum
     std::vector<int> ix(np), iy(np), iz(np);
-    double minx = cloud[0][0], miny = cloud[0][1], minz = cloud[0][2];
-    for(const auto &p : cloud){
-        minx = std::min(minx, (double) p[0]);
-        miny = std::min(miny, (double) p[1]);
-        minz = std::min(minz, (double) p[2]);
+    double minx = cx[0], miny = cy[0], minz = cz[0];
+    for(size_t i = 0; i < np; i++){
+        minx = std::min(minx, (double) cx[i]);
+        miny = std::min(miny, (double) cy[i]);
+        minz = std::min(minz, (double) cz[i]);
     }
     int ex = 0, ey = 0, ez = 0;   // extents in voxels
     for(size_t i = 0; i < np; i++){
-        ix[i] = (int) std::floor((cloud[i][0] - minx) / spacing + 0.5);
-        iy[i] = (int) std::floor((cloud[i][1] - miny) / spacing + 0.5);
-        iz[i] = (int) std::floor((cloud[i][2] - minz) / spacing + 0.5);
+        ix[i] = (int) std::floor(((double) cx[i] - minx) / spacing + 0.5);
+        iy[i] = (int) std::floor(((double) cy[i] - miny) / spacing + 0.5);
+        iz[i] = (int) std::floor(((double) cz[i] - minz) / spacing + 0.5);
         ex = std::max(ex, ix[i]); ey = std::max(ey, iy[i]); ez = std::max(ez, iz[i]);
     }
     // Each block holds at most m^3 points, so m >= cbrt(n/k) is required;
@@ -876,8 +900,8 @@ void coarsen_cloud(
     std::vector<double> sw(nb, 0), sx(nb, 0), sy(nb, 0), sz(nb, 0);
     for(size_t i = 0; i < np; i++){
         int b = slot[cell[i]];
-        double w = cloud[i][3];
-        sw[b] += w; sx[b] += w * cloud[i][0]; sy[b] += w * cloud[i][1]; sz[b] += w * cloud[i][2];
+        double w = cw[i];
+        sw[b] += w; sx[b] += w * (double) cx[i]; sy[b] += w * (double) cy[i]; sz[b] += w * (double) cz[i];
     }
     points.resize(nb);
     for(int b = 0; b < nb; b++){
@@ -886,9 +910,8 @@ void coarsen_cloud(
     moments.assign(nb, {0, 0, 0, 0, 0, 0});
     for(size_t i = 0; i < np; i++){
         int b = slot[cell[i]];
-        const auto &p = cloud[i];
-        double w = p[3];
-        double dx = p[0] - points[b][0], dy = p[1] - points[b][1], dz = p[2] - points[b][2];
+        double w = cw[i];
+        double dx = (double) cx[i] - points[b][0], dy = (double) cy[i] - points[b][1], dz = (double) cz[i] - points[b][2];
         auto &mom = moments[b];
         mom[0] += w * dx * dx; mom[1] += w * dy * dy; mom[2] += w * dz * dz;
         mom[3] += w * dx * dy; mom[4] += w * dx * dz; mom[5] += w * dy * dz;
@@ -907,9 +930,9 @@ void quadrature_points(
     // resample() may have advanced the result generation
     if(!st.quad_valid || st.quad_k != k ||
        st.quad_generation != st.result_generation){
-        const auto &cloud = av.get_cloud();
+        av.refresh_cloud_soa();
         double h = map->get_path_map_header().get_simulation_grid_resolution();
-        coarsen_cloud(cloud, h, k, st.quad_points, st.quad_moments);
+        coarsen_cloud(st.cloud_x, st.cloud_y, st.cloud_z, st.cloud_w, h, k, st.quad_points, st.quad_moments);
         st.quad_k = k;
         st.quad_generation = st.result_generation;
         st.quad_valid = true;

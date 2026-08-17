@@ -80,6 +80,10 @@ private:
     static constexpr float BLOCKED_COST = -1.0f;
     std::vector<std::vector<int> > bucket_scratch_;
     std::vector<int16_t> queued_scratch_;
+    // the stencil in the form the relaxation loop reads (built with offsets_)
+    std::vector<long> nb_delta_;
+    std::vector<float> nb_len_;
+    std::vector<int> nb_dz_, nb_dy_, nb_dx_;
     void dijkstra_lattice(long source_idx, float max_cost);
 
     // Candidate tiles of the lattice search: those that can lie inside the
@@ -417,7 +421,7 @@ public:
      * edge and corner neighbours -- no length-2 jumps at all.
      */
     void set_symmetric_stencil(bool tf) {
-        if(tf != symmetric_stencil_) offsets_.clear();
+        if(tf != symmetric_stencil_){ offsets_.clear(); nb_delta_.clear(); }
         symmetric_stencil_ = tf;
     }
     bool get_symmetric_stencil() const { return symmetric_stencil_; }
@@ -489,6 +493,11 @@ public:
     //! carve_lattice() from integer counts; the counts are also stored as
     //! the map data (like the second raster of the historical path)
     void carve_lattice(const int32_t *occupancy);
+
+    //! get_xyz_density() as four arrays (x, y, z, density), appended to the
+    //! given vectors after clearing them; same tiles, same order, same values.
+    void get_xyz_density_soa(std::vector<float> &x, std::vector<float> &y,
+                             std::vector<float> &z, std::vector<float> &w);
 
     //! set_origin() without reallocating the location arrays (same values)
     void set_origin_fast(const IMP::algebra::Vector3D &origin);

@@ -35,6 +35,7 @@ void PathMap::set_path_map_header(const PathMapHeader &av_header, float resoluti
        || nh->get_nz() != header_.get_nz()){
         // neighbour offsets are linear-index deltas of the old shape
         offsets_.clear();
+        nb_delta_.clear();
     }
     pathMapHeader_ = av_header;
     header_ = *av_header.get_density_header();
@@ -407,19 +408,20 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
     // identical; blocked tiles are skipped by the cost comparison itself
     // (new_cost >= 0 > BLOCKED_COST).
     long n_voxel = get_number_of_voxels();
-    if(offsets_.empty()){
-        offsets_ = get_neighbor_idx_offsets();
+    if(offsets_.empty() || nb_delta_.size() != offsets_.size() / 5){
+        if(offsets_.empty()) offsets_ = get_neighbor_idx_offsets();
+        const size_t n = offsets_.size() / 5;
+        nb_delta_.resize(n); nb_len_.resize(n); nb_dz_.resize(n); nb_dy_.resize(n); nb_dx_.resize(n);
+        for(size_t j = 0; j < n; j++){
+            nb_dz_[j] = offsets_[5*j + 0]; nb_dy_[j] = offsets_[5*j + 1]; nb_dx_[j] = offsets_[5*j + 2];
+            nb_delta_[j] = offsets_[5*j + 3];
+            std::memcpy(&nb_len_[j], &offsets_[5*j + 4], sizeof(float));
+        }
     }
-    const std::vector<int> &off = offsets_;
-    const size_t nnb = off.size() / 5;
-    std::vector<long> nb_delta(nnb);
-    std::vector<float> nb_len(nnb);
-    std::vector<int> nb_dz(nnb), nb_dy(nnb), nb_dx(nnb);
-    for(size_t j = 0; j < nnb; j++){
-        nb_dz[j] = off[5*j + 0]; nb_dy[j] = off[5*j + 1]; nb_dx[j] = off[5*j + 2];
-        nb_delta[j] = off[5*j + 3];
-        std::memcpy(&nb_len[j], &off[5*j + 4], sizeof(float));
-    }
+    const size_t nnb = nb_delta_.size();
+    const std::vector<long> &nb_delta = nb_delta_;
+    const std::vector<float> &nb_len = nb_len_;
+    const std::vector<int> &nb_dz = nb_dz_, &nb_dy = nb_dy_, &nb_dx = nb_dx_;
     const int nx = header_.get_nx();
     const int ny = header_.get_ny();
     const int nz = header_.get_nz();
@@ -1075,6 +1077,66 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
     }
 
     return v;
+}
+
+void PathMap::get_xyz_density_soa(std::vector<float> &vx, std::vector<float> &vy,
+                                  std::vector<float> &vz, std::vector<float> &vw){
+    vx.clear(); vy.clear(); vz.clear(); vw.clear();
+    long n_voxel = get_number_of_voxels();
+    float linker_length = pathMapHeader_.get_max_path_length();
+    float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
+    const bool have_cand = soa_valid_ && ballc_source_ >= 0 && ballc_nx_ == header_.get_nx() &&
+                           ballc_ny_ == header_.get_ny() && ballc_nz_ == header_.get_nz();
+    if(have_cand){
+        // same tiles, order and arithmetic as get_xyz_density()
+        const float sp = header_.get_spacing();
+        const float ox = header_.get_xorigin(), oy = header_.get_yorigin(), oz = header_.get_zorigin();
+        const float *cp = cost.data();
+        for(const BallRun &run : ball_runs_){
+            const float *rc = cp + run.idx0;
+            const int len = run.len;
+            int k = 0;
+#ifdef __ARM_NEON
+            const float32x4_t zero = vdupq_n_f32(0.0f);
+            const float32x4_t dflt = vdupq_n_f32(TILE_COST_DEFAULT);
+            for(; k + 4 <= len; k += 4){
+                const float32x4_t cc = vld1q_f32(rc + k);
+                const uint32x4_t reached = vandq_u32(vcgeq_f32(cc, zero), vcltq_f32(cc, dflt));
+                if(vmaxvq_u32(reached) == 0) continue;
+                for(int q = k; q < k + 4; q++){
+                    const long i = run.idx0 + q;
+                    if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
+                    float c = cp[i] * grid_spacing;
+                    float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+                    density *= density_soa_[i];
+                    if(density > 0){
+                        vx.push_back((run.ix0 + q) * sp + ox); vy.push_back(run.iy * sp + oy);
+                        vz.push_back(run.iz * sp + oz); vw.push_back(density);
+                    }
+                }
+            }
+#endif
+            for(; k < len; k++){
+                const long i = run.idx0 + k;
+                if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
+                float c = cp[i] * grid_spacing;
+                float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+                density *= density_soa_[i];
+                if(density > 0){
+                    vx.push_back((run.ix0 + k) * sp + ox); vy.push_back(run.iy * sp + oy);
+                    vz.push_back(run.iz * sp + oz); vw.push_back(density);
+                }
+            }
+        }
+        return;
+    }
+    (void) n_voxel;
+    std::vector<IMP::algebra::Vector4D> v = get_xyz_density();
+    vx.reserve(v.size()); vy.reserve(v.size()); vz.reserve(v.size()); vw.reserve(v.size());
+    for(const auto &p : v){
+        vx.push_back((float) p[0]); vy.push_back((float) p[1]);
+        vz.push_back((float) p[2]); vw.push_back((float) p[3]);
+    }
 }
 
 void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){

@@ -44,10 +44,17 @@ struct AVLatticeState {
     unsigned long result_generation = 0;
 
     // The (x, y, z, density) cloud of the current tiles, computed once per
-    // result and shared by the mean position and the quadrature.
+    // result and shared by the mean position and the quadrature -- as four
+    // float arrays (structure of arrays; the values are the float voxel
+    // locations and the float density, widened to double where they are
+    // used, so sums are bit-identical to the Vector4D form). `cloud` is the
+    // Vector4D form, built on demand for external readers.
+    std::vector<float> cloud_x, cloud_y, cloud_z, cloud_w;
     std::vector<IMP::algebra::Vector4D> cloud;
     unsigned long cloud_generation = 0;
-    bool cloud_valid = false;
+    bool cloud_valid = false;          // the SoA arrays are current
+    unsigned long cloud_aos_generation = 0;
+    bool cloud_aos_valid = false;      // `cloud` (Vector4D) is current
 
     // Set by a restraint that drives the registry maps' updates itself
     // (begin_update before, end_update after the AV prepare phase); prepare

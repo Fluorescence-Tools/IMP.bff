@@ -180,6 +180,7 @@ struct AVEvalJob {
     std::vector<const AVPairDistanceMeasurement*> pairs;
     std::vector<double> model;
     std::vector<std::pair<size_t, size_t> > pair_slots;
+    std::vector<size_t> pair_order;      // pair tasks in start-ready order
     bool pipelined = false;
     bool quad = true;
     int qk = 50;
@@ -263,6 +264,16 @@ std::shared_ptr<internal::AVEvalJob> AVNetworkRestraint::begin_evaluation() cons
         job->pair_slots[j] = std::make_pair(av_slot[get_av(job->pairs[j]->position_1)],
                                             av_slot[get_av(job->pairs[j]->position_2)]);
     }
+    // Pair tasks in the order they can start: by the later of their two AVs
+    // (AVs are queued longest-first), so a worker never idles on a pair whose
+    // AVs are still searching while ready pairs wait behind it. The score is
+    // summed in the original (map) order regardless.
+    job->pair_order.resize(job->pairs.size());
+    for(size_t j = 0; j < job->pairs.size(); j++) job->pair_order[j] = j;
+    std::stable_sort(job->pair_order.begin(), job->pair_order.end(), [&](size_t a, size_t b){
+        return std::max(job->pair_slots[a].first, job->pair_slots[a].second) <
+               std::max(job->pair_slots[b].first, job->pair_slots[b].second);
+    });
     job->t0 = t;
     return job;
 }
@@ -302,7 +313,7 @@ void AVNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
                 if(quad) job.all[i]->prepare_quadrature(qk);
                 stage[i].store(2, std::memory_order_release);
             } else {
-                size_t j = t - nr - 2 * na;
+                size_t j = job.pair_order[t - nr - 2 * na];
                 size_t a = job.pair_slots[j].first, b = job.pair_slots[j].second;
                 spin_until([&]{ return stage[a].load(std::memory_order_acquire) == 2 &&
                                        stage[b].load(std::memory_order_acquire) == 2; });

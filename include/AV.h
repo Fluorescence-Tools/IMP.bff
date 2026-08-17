@@ -513,6 +513,8 @@ public:
 
     //! The (x, y, z, density) cloud of the current map, cached per result
     const std::vector<IMP::algebra::Vector4D> &get_cloud() const;
+    //! Refresh the structure-of-arrays cloud in the state (mean, quadrature)
+    void refresh_cloud_soa() const;
 #endif
 
     /**
