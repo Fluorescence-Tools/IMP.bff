@@ -13,6 +13,8 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <memory>
+#include <functional>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -169,9 +171,27 @@ IMP::bff::AV* AVNetworkRestraint::get_av(std::string name) const{
     return nullptr;
 }
 
-double AVNetworkRestraint::unprotected_evaluate(
-        IMP::DerivativeAccumulator *accum) const {
-    double score = 0.0;
+namespace internal {
+struct AVEvalJob {
+    struct RasterTask { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
+    std::vector<RasterTask> rtasks;
+    AVOccupancyMaps maps;
+    std::vector<IMP::bff::AV*> all;
+    std::vector<const AVPairDistanceMeasurement*> pairs;
+    std::vector<double> model;
+    std::vector<std::pair<size_t, size_t> > pair_slots;
+    bool pipelined = false;
+    bool quad = true;
+    int qk = 50;
+    bool has_model_reading_pairs = false;
+    std::unique_ptr<std::thread> runner;   // evaluate_async: the pool's caller thread
+    std::chrono::steady_clock::time_point t0;
+    double t_registry = 0, t_prepare = 0, t_compute = 0;
+};
+}
+
+std::shared_ptr<internal::AVEvalJob> AVNetworkRestraint::begin_evaluation() const {
+    auto job = std::make_shared<internal::AVEvalJob>();
     n_evaluations_++;
     typedef std::chrono::steady_clock clk;
     auto lap = [](clk::time_point &t){ auto n = clk::now(); double d = std::chrono::duration<double>(n - t).count(); t = n; return d; };
@@ -179,26 +199,20 @@ double AVNetworkRestraint::unprotected_evaluate(
     for(auto &av: avs_){
         av.second->prepare_lattice_window();
     }
-    // The shared class rasters are independent of each other: refresh them
-    // on threads before the AVs read them (each thread reads particle
-    // coordinates from the Model and writes only its own map).
+    // The shared class rasters are independent of each other: they are
+    // classified here (Model reads) and rasterised in the pool run.
     const int nthreads = get_number_of_threads();
-    const bool quad = (distance_ == "quad");
-    const int qk = quad_k_;
-    struct RasterTask { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
-    std::vector<RasterTask> rtasks;
-    AVOccupancyMaps maps;
-    const bool pipelined = (nthreads > 1);
+    job->quad = (distance_ == "quad");
+    job->qk = quad_k_;
+    job->pipelined = (nthreads > 1);
     if(registry_){
         registry_->refresh_snapshot();
-        maps = registry_->get_maps();
-        if(pipelined){
-            // classify serially (Model reads); the rasters run in the pool
-            // below, a full raster as `nthreads` z-slabs
-            for(auto &mp : maps){
+        job->maps = registry_->get_maps();
+        if(job->pipelined){
+            for(auto &mp : job->maps){
                 int action = mp->begin_update();
                 if(action == 1){
-                    rtasks.push_back({mp.get(), 0, 0, true});
+                    job->rtasks.push_back({mp.get(), 0, 0, true});
                 } else if(action == 2){
                     std::vector<int> ext = mp->get_extent();
                     int z0 = ext[2], nz = ext[5];
@@ -206,53 +220,61 @@ double AVNetworkRestraint::unprotected_evaluate(
                     for(int sIdx = 0; sIdx < nslab; sIdx++){
                         int a = z0 + (int)((long) nz * sIdx / nslab);
                         int b = z0 + (int)((long) nz * (sIdx + 1) / nslab) - 1;
-                        if(b >= a) rtasks.push_back({mp.get(), a, b, false});
+                        if(b >= a) job->rtasks.push_back({mp.get(), a, b, false});
                     }
                 }
             }
         } else {
-            for(auto &m : maps) m->update();
+            for(auto &m : job->maps) m->update();
         }
     }
-    t_registry_ += lap(t);
+    job->t_registry = lap(t);
     // prepare (serial: touches the Model; with a pipelined registry it only
-    // reads the pending classification), then one pool run for everything
-    // else: rasters, searches (after the rasters), carves (after their own
-    // search) and pair sums (after both carves), then finish (serial).
-    std::vector<IMP::bff::AV*> all;
-    all.reserve(avs_.size());
-    size_t n_pending = 0;
+    // reads the pending classification)
+    job->all.reserve(avs_.size());
     for(auto &av: avs_){
-        av.second->set_registry_driven_externally(pipelined && registry_);
+        av.second->set_registry_driven_externally(job->pipelined && registry_);
         av.second->resample_prepare();
-        all.push_back(av.second.get());
-        if(av.second->get_has_pending_compute()) n_pending++;
+        job->all.push_back(av.second.get());
     }
-    t_prepare_ += lap(t);
-    std::stable_sort(all.begin(), all.end(), [](const IMP::bff::AV *a, const IMP::bff::AV *b){
+    job->t_prepare = lap(t);
+    std::stable_sort(job->all.begin(), job->all.end(), [](const IMP::bff::AV *a, const IMP::bff::AV *b){
         bool pa = a->get_has_pending_compute(), pb = b->get_has_pending_compute();
         if(pa != pb) return pa;
         return a->get_last_compute_seconds() > b->get_last_compute_seconds();
     });
-    // pair list and AV index for the pair tasks
-    std::vector<const AVPairDistanceMeasurement*> pairs;
-    pairs.reserve(distances_.size());
-    for(const auto &it : distances_) pairs.push_back(&it.second);
-    std::vector<double> model(pairs.size());
-    std::map<const IMP::bff::AV*, size_t> av_slot;
-    for(size_t i = 0; i < all.size(); i++) av_slot[all[i]] = i;
-    std::vector<std::pair<size_t, size_t> > pair_slots(pairs.size());
-    for(size_t j = 0; j < pairs.size(); j++){
-        pair_slots[j] = std::make_pair(av_slot[get_av(pairs[j]->position_1)],
-                                       av_slot[get_av(pairs[j]->position_2)]);
+    job->pairs.reserve(distances_.size());
+    for(const auto &it : distances_){
+        job->pairs.push_back(&it.second);
+        if(it.second.distance_type == DYE_PAIR_DISTANCE_MP ||
+           it.second.distance_type == DYE_PAIR_XYZ_DISTANCE){
+            job->has_model_reading_pairs = true;
+        }
     }
-    auto eval_pair = [&](size_t j){
-        model[j] = get_model_distance(pairs[j]->position_1, pairs[j]->position_2,
-                                      pairs[j]->forster_radius, pairs[j]->distance_type);
-    };
+    job->model.assign(job->pairs.size(), 0.0);
+    std::map<const IMP::bff::AV*, size_t> av_slot;
+    for(size_t i = 0; i < job->all.size(); i++) av_slot[job->all[i]] = i;
+    job->pair_slots.resize(job->pairs.size());
+    for(size_t j = 0; j < job->pairs.size(); j++){
+        job->pair_slots[j] = std::make_pair(av_slot[get_av(job->pairs[j]->position_1)],
+                                            av_slot[get_av(job->pairs[j]->position_2)]);
+    }
+    job->t0 = t;
+    return job;
+}
 
-    if(pipelined){
-        const size_t nr = rtasks.size(), na = all.size(), np = pairs.size();
+void AVNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
+    // Rasters, searches (after all rasters), carves + quadrature (after the
+    // own search), pair sums (after both AVs) -- one pool run with explicit
+    // dependencies; nothing here reads the Model.
+    const bool quad = job.quad;
+    const int qk = job.qk;
+    auto eval_pair = [&](size_t j){
+        job.model[j] = get_model_distance(job.pairs[j]->position_1, job.pairs[j]->position_2,
+                                          job.pairs[j]->forster_radius, job.pairs[j]->distance_type);
+    };
+    if(job.pipelined){
+        const size_t nr = job.rtasks.size(), na = job.all.size(), np = job.pairs.size();
         std::atomic<size_t> rasters_left(nr);
         std::vector<std::atomic<int> > stage(na);   // 0 none, 1 searched, 2 ready
         for(auto &f : stage) f.store(0);
@@ -261,52 +283,93 @@ double AVNetworkRestraint::unprotected_evaluate(
         };
         auto work = [&](size_t t){
             if(t < nr){
-                const RasterTask &rt = rtasks[t];
+                const internal::AVEvalJob::RasterTask &rt = job.rtasks[t];
                 if(rt.local) rt.m->apply_local(); else rt.m->raster_slab(rt.z_lo, rt.z_hi);
                 rasters_left.fetch_sub(1, std::memory_order_acq_rel);
             } else if(t < nr + na){
                 size_t i = t - nr;
                 spin_until([&]{ return rasters_left.load(std::memory_order_acquire) == 0; });
-                all[i]->resample_compute_search();
+                job.all[i]->resample_compute_search();
                 stage[i].store(1, std::memory_order_release);
             } else if(t < nr + 2 * na){
                 size_t i = t - nr - na;
                 spin_until([&]{ return stage[i].load(std::memory_order_acquire) >= 1; });
-                all[i]->resample_compute_carve();
-                if(quad) all[i]->prepare_quadrature(qk);
+                job.all[i]->resample_compute_carve();
+                if(quad) job.all[i]->prepare_quadrature(qk);
                 stage[i].store(2, std::memory_order_release);
             } else {
                 size_t j = t - nr - 2 * na;
-                size_t a = pair_slots[j].first, b = pair_slots[j].second;
+                size_t a = job.pair_slots[j].first, b = job.pair_slots[j].second;
                 spin_until([&]{ return stage[a].load(std::memory_order_acquire) == 2 &&
                                        stage[b].load(std::memory_order_acquire) == 2; });
                 if(quad) eval_pair(j);
             }
         };
-        // Order matters: rasters, searches, carves, pairs -- so no worker
-        // waits on a task that has not been started by an earlier worker.
-        // (Even a single-worker pool would complete: every wait is on an
-        // earlier task in the queue.)
+        // Order matters: rasters, searches, carves, pairs -- no worker waits
+        // on a task that an earlier worker has not started.
         get_pool().run(nr + 2 * na + (quad ? np : 0), work);
-        for(auto &mp : maps) mp->end_update();
-        for(auto *av : all) av->resample_finish();
-        t_compute_ += lap(t);
         if(!quad){
             for(size_t j = 0; j < np; j++) eval_pair(j);
         }
     } else {
-        for(size_t i = 0; i < all.size(); i++){
-            all[i]->resample_compute();
-            if(quad) all[i]->prepare_quadrature(qk);
+        for(size_t i = 0; i < job.all.size(); i++){
+            job.all[i]->resample_compute();
+            if(quad) job.all[i]->prepare_quadrature(qk);
         }
-        for(auto *av : all) av->resample_finish();
-        t_compute_ += lap(t);
-        for(size_t j = 0; j < pairs.size(); j++) eval_pair(j);
+        for(size_t j = 0; j < job.pairs.size(); j++) eval_pair(j);
     }
-    for(size_t i = 0; i < pairs.size(); i++){
-        score += pairs[i]->score_model(model[i]);
+}
+
+double AVNetworkRestraint::finish_evaluation(internal::AVEvalJob &job) const {
+    typedef std::chrono::steady_clock clk;
+    for(auto &mp : job.maps) mp->end_update();
+    for(auto *av : job.all) av->resample_finish();
+    double score = 0.0;
+    for(size_t i = 0; i < job.pairs.size(); i++){
+        score += job.pairs[i]->score_model(job.model[i]);
     }
-    t_pairs_ += lap(t);
+    t_registry_ += job.t_registry;
+    t_prepare_ += job.t_prepare;
+    t_compute_ += std::chrono::duration<double>(clk::now() - job.t0).count();
+    return score;
+}
+
+double AVNetworkRestraint::unprotected_evaluate(
+        IMP::DerivativeAccumulator *accum) const {
+    if(job_){
+        // an evaluate_async() nobody waited for: finish it first
+        wait_score();
+    }
+    std::shared_ptr<internal::AVEvalJob> job = begin_evaluation();
+    run_evaluation(*job);
+    return finish_evaluation(*job);
+}
+
+void AVNetworkRestraint::evaluate_async() const {
+    if(job_) wait_score();
+    std::shared_ptr<internal::AVEvalJob> job = begin_evaluation();
+    // Pairs that read the Model at pair time (MP / XYZ types) cannot overlap a
+    // Model change: run those synchronously here. The pool's caller must be
+    // a thread of its own for the overlap; the workers are the pool's.
+    if(!job->pipelined || job->has_model_reading_pairs){
+        run_evaluation(*job);
+        job_ = job;
+        return;
+    }
+    internal::AVEvalJob *raw = job.get();
+    job->runner.reset(new std::thread([this, raw](){ run_evaluation(*raw); }));
+    job_ = job;
+}
+
+double AVNetworkRestraint::wait_score() const {
+    IMP_USAGE_CHECK(job_, "AVNetworkRestraint::wait_score without evaluate_async");
+    std::shared_ptr<internal::AVEvalJob> job = job_;
+    if(job->runner){
+        job->runner->join();
+        job->runner.reset();
+    }
+    double score = finish_evaluation(*job);
+    job_.reset();
     return score;
 }
 

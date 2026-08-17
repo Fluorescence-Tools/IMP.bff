@@ -1,6 +1,13 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105: compilation/locality/arrangement pass.** PGO and branch hints:
+  no gain; blocked layout not pursued (working set is cache-resident).
+  `AVNetworkRestraint::evaluate_async()`/`wait_score()` added: the pool run
+  proceeds on its own thread after the serial Model-reading phase, so the
+  caller can load the next frame / evaluate other restraints meanwhile;
+  bit-identical, tested; ~1 % on T4L (frame load is 0.04 ms), meant for
+  callers with heavier per-frame work.
 * **PRD-105 SIMD:** NEON row-form relaxation for interior tiles (~3 %),
   run-based vectorised cloud/penalty passes (noise). Serial per-AV sum ~2.0
   ms/frame; the kernel is bookkeeping/cache-bound, not arithmetic-bound.

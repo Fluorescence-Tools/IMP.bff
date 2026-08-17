@@ -485,7 +485,7 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
                     const float32x4_t cur = vld1q_f32(cost_ptr + base);
                     const float32x4_t nw = vaddq_f32(vc, row_len[r]);
                     const uint32x4_t better = vandq_u32(vcltq_f32(nw, cur), vcltq_f32(nw, vmax));
-                    if(vmaxvq_u32(better) == 0) continue;
+                    if(__builtin_expect(vmaxvq_u32(better) == 0, 1)) continue;
                     float nwv[4]; vst1q_f32(nwv, nw);
                     uint32_t bv[4]; vst1q_u32(bv, better);
                     for(int k = 0; k < 3; k++){
@@ -519,7 +519,7 @@ void PathMap::dijkstra_lattice(long source_idx, float max_cost){
                 // Tiles that would settle at or beyond the bound never carry
                 // density; they are neither written nor queued (their cost
                 // stays at the default).
-                if(new_cost < cost_ptr[nidx] && new_cost < max_cost){   // false for blocked (< 0)
+                if(__builtin_expect(new_cost < cost_ptr[nidx] && new_cost < max_cost, 0)){   // false for blocked (< 0)
                     cost_ptr[nidx] = new_cost;
                     push(new_cost, nidx);
                 }

@@ -38,6 +38,8 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+namespace internal { struct AVEvalJob; }
+
 
 
 /**
@@ -117,6 +119,15 @@ private:
 
     //! Threads for the AVs' compute phases (0 = hardware concurrency)
     int n_threads_ = 0;
+
+    //! The evaluation in flight (evaluate_async / wait_score)
+    mutable std::shared_ptr<internal::AVEvalJob> job_;
+    //! The three phases of an evaluation: serial begin (Model reads, occupancy
+    //! classification, AV prepare), the pool run, serial finish (occupancy
+    //! end_update, AV finish, score).
+    std::shared_ptr<internal::AVEvalJob> begin_evaluation() const;
+    void run_evaluation(internal::AVEvalJob &job) const;
+    double finish_evaluation(internal::AVEvalJob &job) const;
     //! Persistent workers, created on first threaded evaluation
     mutable std::shared_ptr<internal::ThreadPool> pool_;
     internal::ThreadPool &get_pool() const;
@@ -239,6 +250,25 @@ public:
      */
     void set_number_of_threads(int n) { n_threads_ = n; }
     int get_number_of_threads() const;
+
+    /**
+     * @brief Start an evaluation and return before it finishes.
+     *
+     * Everything that reads the Model (coordinates, parameters, occupancy
+     * classification) is done before this returns; the searches, carves and
+     * pair sums then run on the pool while the caller does something else --
+     * typically loading the next frame -- and wait_score() collects the
+     * score and writes the AV mean positions. Between the two calls the
+     * caller may change the Model freely. Bit-identical to
+     * unprotected_evaluate(). Distance sets that use DYE_PAIR_DISTANCE_MP or
+     * DYE_PAIR_XYZ_DISTANCE read the Model at pair time and are therefore
+     * evaluated synchronously inside evaluate_async().
+     */
+    void evaluate_async() const;
+    //! Finish the evaluation started by evaluate_async() and return its score
+    double wait_score() const;
+    //! True between evaluate_async() and wait_score()
+    bool get_has_pending_evaluation() const { return (bool) job_; }
 
     /**
      * @brief Diagnostics of the last run as JSON.

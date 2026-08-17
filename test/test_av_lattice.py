@@ -409,6 +409,41 @@ class TestDeterminism(unittest.TestCase):
                     for name in d1:
                         self.assertTrue(np.array_equal(d1[name], d2[name]), name)
 
+    def test_async_evaluation_matches_sync(self):
+        # evaluate_async() / wait_score(): the next frame may be loaded while
+        # this one computes; scores and clouds are identical to the
+        # synchronous evaluation
+        for mode in ("default", "lattice-private"):
+            with self.subTest(mode=mode):
+                m1, f1, h1 = open_trajectory()
+                m2, f2, h2 = open_trajectory()
+                r_sync = make_restraint(mode, h1)
+                r_async = make_restraint(mode, h2)
+                frames = list(f1.get_root_frames())[:6]
+                sync_scores = []
+                for fr in frames:
+                    IMP.rmf.load_frame(f1, fr)
+                    sync_scores.append(r_sync.unprotected_evaluate(None))
+                async_scores = []
+                IMP.rmf.load_frame(f2, frames[0])
+                r_async.evaluate_async()
+                self.assertTrue(r_async.get_has_pending_evaluation())
+                for fr in frames[1:]:
+                    IMP.rmf.load_frame(f2, fr)      # while the previous frame computes
+                    async_scores.append(r_async.wait_score())
+                    r_async.evaluate_async()
+                async_scores.append(r_async.wait_score())
+                self.assertFalse(r_async.get_has_pending_evaluation())
+                self.assertEqual(sync_scores, async_scores)
+                d1 = densities(r_sync)
+                d2 = densities(r_async)
+                for name in d1:
+                    self.assertTrue(np.array_equal(d1[name], d2[name]), name)
+                # an unwaited async evaluation is finished by the next evaluate
+                r_async.evaluate_async()
+                v = r_async.unprotected_evaluate(None)
+                self.assertEqual(v, sync_scores[-1])
+
     def test_repeat_evaluation_is_identical_in_quad_modes(self):
         for mode in QUAD_MODES:
             with self.subTest(mode=mode):
