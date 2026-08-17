@@ -41,7 +41,12 @@ void PathMap::set_path_map_header(const PathMapHeader &av_header, float resoluti
     long nvox = get_number_of_voxels();
     resize(nvox);
     kernel_params_ = IMP::em::KernelParameters(header_.get_resolution());
+    // The location arrays must match the new shape: calc_all_voxel2loc()
+    // alone is a no-op when locations were computed for the old shape (and
+    // the lattice path then wrote nvox entries into arrays of the old size).
+    reset_all_voxel2loc();
     calc_all_voxel2loc();
+    loc_size_ = nvox;
 }
 
 template<class Cmp>
@@ -636,9 +641,10 @@ void PathMap::set_origin_fast(const IMP::algebra::Vector3D &origin){
     header_.set_zorigin(origin[2]);
     header_.compute_xyz_top();
     long nvox = get_number_of_voxels();
-    if(!loc_calculated_ || !x_loc_){
+    if(!loc_calculated_ || !x_loc_ || loc_size_ != nvox){
         reset_all_voxel2loc();
         calc_all_voxel2loc();
+        loc_size_ = nvox;
         return;
     }
     // same formula as DensityMap::calc_all_voxel2loc, in place

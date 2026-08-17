@@ -6,6 +6,8 @@ required) and use the Numba kernels directly.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
@@ -257,7 +259,15 @@ class TestComputeAvBackends:
         found = []
         if compute._HAS_IMP_BFF:
             found.append("imp_bff")
-        if compute._HAS_LABELLIB:
+        # The LabelLib backend is deliberately not exercised here. Under
+        # Guard Malloc the pip LabelLib (2.x, cpython-312) dies with
+        # EXC_BAD_ACCESS inside Grid3DExt::excludeConcentricSpheres -- it
+        # reads past a buffer -- and with the normal allocator that read
+        # corrupts the heap silently: the rest of the session then crashes
+        # at random (seen as 1-in-4 aborts of the full suite during garbage
+        # collection, 2026-08-17). Run the backend on purpose with
+        # IMP_BFF_TEST_LABELLIB=1 if you need to look at it.
+        if compute._HAS_LABELLIB and os.environ.get("IMP_BFF_TEST_LABELLIB"):
             found.append("labellib")
         return found
 

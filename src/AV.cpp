@@ -576,7 +576,7 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         if(rebuild || params_changed){
             IMP::bff::PathMapHeader ch(ll, h * factor);
             ch.update_map_dimensions(cn[0], cn[1], cn[2]);
-            if(get_search_stencil() == 26) ch.set_neighbor_radius(std::sqrt(3.0));
+            if(get_search_stencil() == 26) ch.set_neighbor_radius(std::sqrt(3.0) + 1e-6);
             ch.set_path_origin(source, IMP::algebra::Vector3D(
                 c0[0] * factor * h, c0[1] * factor * h, c0[2] * factor * h));
             if(!st.coarse_map){
@@ -806,7 +806,7 @@ IMP::bff::PathMapHeader AV::create_path_map_header(){
         if(get_search_stencil() == 26){
             // face, edge, corner neighbours: no length-2 axis jumps, so a
             // path cannot tunnel through a one-voxel wall
-            path_map_header.set_neighbor_radius(std::sqrt(3.0));
+            path_map_header.set_neighbor_radius(std::sqrt(3.0) + 1e-6);
         }
     }
     return path_map_header;

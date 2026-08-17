@@ -1,6 +1,20 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 correction + memory pass:** the pass-3 "26-neighbour" stencil
+  was 18 (`sqrt(3.0)` radius with `d² <= r²` excludes d²=3) — that, not
+  tunnelling, caused the 15–25 % smaller AVs and the search halving; fixed
+  (`sqrt(3.0)+1e-6`, test asserts 26/30 offsets), pins regenerated; the honest
+  26-vs-30 change is 0.42 Å rms (max 3 Å). Speed is back to ~1.0 ms/frame
+  quiet. `search_mode="euclidean"` (exact DDA visibility, straight linker;
+  0.82 vs 0.77 ms — a model option, not a speed one) added; the cross-check
+  it enabled found the stencil bug. Memory: `set_path_map_header` now rebuilds
+  the location arrays on shape change (in-place origin refresh wrote the new
+  size into old arrays); the full-suite 1-in-4 abort traced to an
+  out-of-bounds read inside pip LabelLib (`Grid3DExt::excludeConcentricSpheres`,
+  Guard Malloc) — `medium_test_av.py` skips the LabelLib backend unless
+  `IMP_BFF_TEST_LABELLIB=1`; 0/8 crashes since. AV lattice suite clean under
+  Guard Malloc / MallocCheckHeap.
 * **PRD-105: `search_mode="euclidean"` added** (straight-linker AV: exact
   voxel visibility by DDA, Euclidean cost, no path search; option on
   `AVNetworkRestraint`/`AV`, default stays `dijkstra`). Model, not speed:

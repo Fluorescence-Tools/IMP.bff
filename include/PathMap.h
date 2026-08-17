@@ -464,6 +464,7 @@ public:
 
     //! set_origin() without reallocating the location arrays (same values)
     void set_origin_fast(const IMP::algebra::Vector3D &origin);
+    long loc_size_ = -1;   //!< voxels the location arrays were computed for
 
     /**
      * @brief Set the tile density from the current data: 0 where the data
