@@ -14,8 +14,10 @@
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/VectorD.h>
 #include <IMP/bff/AVOccupancyMap.h>
+#include <IMP/bff/PathMap.h>
 
 #include <array>
+#include <chrono>
 #include <vector>
 
 IMPBFF_BEGIN_INTERNAL_NAMESPACE
@@ -65,6 +67,8 @@ struct AVLatticeState {
     // phase that only touches this AV's own map, so a restraint can run the
     // compute phases of its AVs on threads).
     bool pending = false;
+    int pending_stage = 0;               // 0: search due, 1: carve due, 2: done
+    std::chrono::steady_clock::time_point compute_t0;
     bool pending_shift_xyz = true;
     double pending_ll = 0, pending_allowed = 0;
     IMP::algebra::Vector3D pending_source;
@@ -73,6 +77,14 @@ struct AVLatticeState {
     AVOccupancyMap *pending_occ1 = nullptr;
     AVOccupancyMap *pending_occ2 = nullptr;
     unsigned long pending_gen1 = 0, pending_gen2 = 0;
+
+    // Coarse search grid (search_grid_factor > 1): a small PathMap on the
+    // lattice points whose fine index is a multiple of the factor.
+    IMP::Pointer<IMP::bff::PathMap> coarse_map;
+    int coarse_k0[3] = {0, 0, 0};    // coarse-lattice index of its voxel 0
+    int coarse_n[3] = {0, 0, 0};
+    int pending_factor = 1;
+    std::vector<double> coarse_data;
 
     // Wall time of the last compute phase (for longest-first scheduling)
     double last_compute_seconds = 0.0;

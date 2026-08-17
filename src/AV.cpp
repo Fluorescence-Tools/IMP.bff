@@ -213,6 +213,57 @@ void AV::set_space_fixed(bool tf){
     }
 }
 
+IntKey AV::get_search_grid_factor_key(){
+    static const IntKey k("av_search_grid_factor");
+    return k;
+}
+
+int AV::get_search_grid_factor() const{
+    if(get_model()->get_has_attribute(get_search_grid_factor_key(), get_particle_index())){
+        return std::max(1, get_model()->get_attribute(get_search_grid_factor_key(), get_particle_index()));
+    }
+    return 1;
+}
+
+void AV::set_search_grid_factor(int f){
+    IMP_USAGE_CHECK(f >= 1, "AV: search_grid_factor must be >= 1");
+    if(get_model()->get_has_attribute(get_search_grid_factor_key(), get_particle_index())){
+        get_model()->set_attribute(get_search_grid_factor_key(), get_particle_index(), f);
+    } else {
+        get_model()->add_attribute(get_search_grid_factor_key(), get_particle_index(), f);
+    }
+    if(state_){
+        state_->have_result = false;   // the factor is part of the result
+        state_->coarse_map = nullptr;
+    }
+}
+
+IntKey AV::get_search_stencil_key(){
+    static const IntKey k("av_search_stencil");
+    return k;
+}
+
+int AV::get_search_stencil() const{
+    if(get_model()->get_has_attribute(get_search_stencil_key(), get_particle_index())){
+        return get_model()->get_attribute(get_search_stencil_key(), get_particle_index());
+    }
+    return 26;
+}
+
+void AV::set_search_stencil(int stencil){
+    IMP_USAGE_CHECK(stencil == 26 || stencil == 30,
+                    "AV: search stencil must be 26 (symmetric) or 30 (historical)");
+    if(get_model()->get_has_attribute(get_search_stencil_key(), get_particle_index())){
+        get_model()->set_attribute(get_search_stencil_key(), get_particle_index(), stencil);
+    } else {
+        get_model()->add_attribute(get_search_stencil_key(), get_particle_index(), stencil);
+    }
+    if(av_map_){
+        av_map_ = nullptr;      // header radius and offsets change: rebuild
+        if(state_){ state_->have_result = false; state_->coarse_map = nullptr; }
+    }
+}
+
 void AV::set_occupancy_registry(AVOccupancyRegistry *registry){
     if(registry && !get_space_fixed()){
         IMP_THROW("AV: a shared occupancy registry requires space_fixed",
@@ -258,6 +309,7 @@ void AV::prepare_lattice_window(){
 void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
+    if(get_space_fixed() && get_search_stencil() == 26) av_map_->set_symmetric_stencil(true);
     IMP::Particle* parent = get_model()->get_particle(get_particle_index(0));
 
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
@@ -353,7 +405,15 @@ void AV::resample_prepare(bool shift_xyz, bool force_full){
 }
 
 void AV::resample_compute(){
-    if(state_ && state_->pending) resample_lattice_compute();
+    if(state_ && state_->pending) resample_lattice_compute(false);
+}
+
+void AV::resample_compute_search(){
+    if(state_ && state_->pending) resample_lattice_compute(true);
+}
+
+void AV::resample_compute_carve(){
+    if(state_ && state_->pending) resample_lattice_compute_carve();
 }
 
 void AV::resample_finish(){
@@ -362,7 +422,7 @@ void AV::resample_finish(){
 
 void AV::resample_lattice(bool shift_xyz, bool force_full){
     resample_lattice_prepare(shift_xyz, force_full);
-    resample_lattice_compute();
+    resample_lattice_compute(false);
     resample_lattice_finish();
 }
 
@@ -462,8 +522,49 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         st.n_local++;
     }
 
+    // Coarse search grid: lattice points with index = multiple of f, covering
+    // the fine window. Built here (Model access: none, but the header/resize
+    // are cheap and serial keeps it simple); the coarse occupancy is read in
+    // compute().
+    const int factor = get_search_grid_factor();
+    st.pending_factor = factor;
+    if(factor > 1){
+        auto floor_div = [](int a, int b){ return (a >= 0) ? a / b : -((-a + b - 1) / b); };
+        int c0[3], cn[3];
+        for(int d = 0; d < 3; d++){
+            c0[d] = floor_div(k0[d], factor);
+            int c1 = floor_div(k0[d] + n - 1, factor);
+            cn[d] = c1 - c0[d] + 1;
+        }
+        bool rebuild = !st.coarse_map ||
+            cn[0] != st.coarse_n[0] || cn[1] != st.coarse_n[1] || cn[2] != st.coarse_n[2];
+        bool moved = !rebuild &&
+            (c0[0] != st.coarse_k0[0] || c0[1] != st.coarse_k0[1] || c0[2] != st.coarse_k0[2]);
+        if(rebuild || params_changed){
+            IMP::bff::PathMapHeader ch(ll, h * factor);
+            ch.update_map_dimensions(cn[0], cn[1], cn[2]);
+            if(get_search_stencil() == 26) ch.set_neighbor_radius(std::sqrt(3.0));
+            ch.set_path_origin(source, IMP::algebra::Vector3D(
+                c0[0] * factor * h, c0[1] * factor * h, c0[2] * factor * h));
+            if(!st.coarse_map){
+                st.coarse_map = new IMP::bff::PathMap(ch, "AVCoarsePathMap%1%");
+                st.coarse_map->set_was_used(true);
+                if(get_search_stencil() == 26) st.coarse_map->set_symmetric_stencil(true);
+            } else {
+                st.coarse_map->set_path_map_header(ch);
+            }
+            moved = true;
+        }
+        for(int d = 0; d < 3; d++){ st.coarse_k0[d] = c0[d]; st.coarse_n[d] = cn[d]; }
+        if(moved){
+            st.coarse_map->set_origin(IMP::algebra::Vector3D(
+                c0[0] * factor * h, c0[1] * factor * h, c0[2] * factor * h));
+        }
+    }
+
     // Everything compute() needs, gathered while we may still touch the Model
     st.pending = true;
+    st.pending_stage = 0;
     st.pending_shift_xyz = shift_xyz;
     st.pending_ll = ll;
     st.pending_allowed = get_allowed_sphere_radius();
@@ -479,10 +580,10 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
 
 // Touches only this AV's map and lattice state: safe to run concurrently
 // with other AVs' compute phases (their occupancy sources are read-only now).
-void AV::resample_lattice_compute(){
+void AV::resample_lattice_compute(bool split_stages){
     auto &st = *state_;
-    if(!st.pending) return;
-    auto t0 = std::chrono::steady_clock::now();
+    if(!st.pending || st.pending_stage != 0) return;
+    st.compute_t0 = std::chrono::steady_clock::now();
     PathMap *map = av_map_.get();
     const int *k0 = st.k0;
     const int n = st.n;
@@ -500,33 +601,108 @@ void AV::resample_lattice_compute(){
     map->normalized_ = false;
     map->rms_calculated_ = false;
 
-    // 4. Block voxels further away from source than linker length
-    map->fill_sphere(source, st.pending_ll, TILE_PENALTY_THRESHOLD, true);
-
-    // 5. Unblock voxels in initial sphere
-    map->fill_sphere(source, st.pending_allowed, 0, false);
-
-    // 6. Find a path from source to other tiles. Only tiles with
+    // 4./5./6. Block voxels further away from the source than the linker
+    //    length, open the allowed sphere, and search -- in one pass over
+    //    the window (search_lattice with spheres). Only tiles with
     //    cost * spacing < linker length carry density, so the exact search
     //    stops there; the source tile keeps the default cost as the
     //    historical search left it (its voxel is not part of the cloud).
-    map->update_tiles();
     long source_idx = map->get_voxel_by_location(source);
-    {
-        const float h = (float) map->get_path_map_header().get_simulation_grid_resolution();
-        const float ll = (float) map->get_path_map_header().get_max_path_length();
-        // smallest float c with c * h >= ll (the density test is c * h < ll)
-        float bound = ll / h;
-        while(bound * h < ll) bound = std::nextafter(bound, std::numeric_limits<float>::infinity());
-        map->find_path_dijkstra_bounded(source_idx, bound, true);
+    const float h = (float) map->get_path_map_header().get_simulation_grid_resolution();
+    const float ll = (float) map->get_path_map_header().get_max_path_length();
+    // smallest float c with c * h >= ll (the density test is c * h < ll)
+    float bound = ll / h;
+    while(bound * h < ll) bound = std::nextafter(bound, std::numeric_limits<float>::infinity());
+    if(st.pending_factor <= 1){
+        map->search_lattice(source_idx, bound, source, st.pending_ll, st.pending_allowed);
+    } else {
+        // Coarse search on the points with fine index = multiple of f, then
+        // every fine tile takes min over its (up to 8) surrounding coarse
+        // points of (coarse cost * f + straight hop), in fine voxel units.
+        const int f = st.pending_factor;
+        PathMap *cm = st.coarse_map.get();
+        const int *c0 = st.coarse_k0;
+        const int *cn = st.coarse_n;
+        const long cnvox = (long) cn[0] * cn[1] * cn[2];
+        double *cdata = cm->get_data();
+        st.pending_occ1->read_window_strided(c0[0] * f, c0[1] * f, c0[2] * f,
+                                             cn[0], cn[1], cn[2], f, cdata);
+        cm->fill_sphere(source, st.pending_ll, TILE_PENALTY_THRESHOLD, true);
+        cm->fill_sphere(source, st.pending_allowed, 0, false);
+        long csrc = cm->get_voxel_by_location(source);
+        cdata[csrc] = 0.0;   // the source's coarse tile is always open
+        cm->search_lattice(csrc, bound / f);
+        cm->cost[csrc] = 0.0f;   // its own cost is real here (extension below)
+        // extend to the fine grid
+        const long nxy = (long) n * n;
+        const long cnx = cn[0], cnxy = (long) cn[0] * cn[1];
+        map->cost.assign(nvox, TILE_COST_DEFAULT);
+        map->visited.assign(nvox, false);
+        map->penalty_soa_.assign(nvox, 0.0f);
+        for(int iz = 0; iz < n; iz++){
+            const int gz = k0[2] + iz;                 // fine global index
+            const int czf = (gz >= 0) ? gz / f : -((-gz + f - 1) / f);   // floor(gz/f)
+            const int cz_lo = czf - c0[2];
+            for(int iy = 0; iy < n; iy++){
+                const int gy = k0[1] + iy;
+                const int cyf = (gy >= 0) ? gy / f : -((-gy + f - 1) / f);
+                const int cy_lo = cyf - c0[1];
+                for(int ix = 0; ix < n; ix++){
+                    const int gx = k0[0] + ix;
+                    const int cxf = (gx >= 0) ? gx / f : -((-gx + f - 1) / f);
+                    const int cx_lo = cxf - c0[0];
+                    float best = TILE_COST_DEFAULT;
+                    for(int dz = 0; dz < 2; dz++){
+                        int cz = cz_lo + dz; if(cz < 0 || cz >= cn[2]) continue;
+                        float fz = (float) (gz - (c0[2] + cz) * f);
+                        for(int dy = 0; dy < 2; dy++){
+                            int cy = cy_lo + dy; if(cy < 0 || cy >= cn[1]) continue;
+                            float fy = (float) (gy - (c0[1] + cy) * f);
+                            for(int dx = 0; dx < 2; dx++){
+                                int cx = cx_lo + dx; if(cx < 0 || cx >= cn[0]) continue;
+                                long ci = cz * cnxy + cy * cnx + cx;
+                                float cc = cm->cost[ci];
+                                if(!(cc < TILE_COST_DEFAULT)) continue;
+                                float fx = (float) (gx - (c0[0] + cx) * f);
+                                float hop = std::sqrt(fx*fx + fy*fy + fz*fz);
+                                float c = cc * (float) f + hop;
+                                if(c < best) best = c;
+                            }
+                        }
+                    }
+                    if(best < TILE_COST_DEFAULT){
+                        long i = iz * nxy + iy * n + ix;
+                        map->cost[i] = best;
+                        map->visited[i] = true;
+                    }
+                }
+            }
+        }
+        // the fine source tile keeps the default cost, as in the fine path
+        map->cost[source_idx] = TILE_COST_DEFAULT;
+        map->reached_valid_ = true;
+        map->soa_valid_ = true;
+        (void) cnvox;
     }
+
+    st.pending_stage = 1;
+    if(!split_stages) resample_lattice_compute_carve();
+}
+
+// Second half of the compute phase: the dye-radius carve, the cloud and the
+// mean. Separate so a scheduler can interleave it with other AVs' searches.
+void AV::resample_lattice_compute_carve(){
+    auto &st = *state_;
+    if(!st.pending || st.pending_stage != 1) return;
+    PathMap *map = av_map_.get();
+    const int *k0 = st.k0;
+    const int n = st.n;
+    const IMP::algebra::Vector3D &source = st.pending_source;
+    double *data = map->get_data();
 
     // 7. Remove tiles closer to obstacles than the dye radius
     st.pending_occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
-    for(long i=0; i<nvox; i++){
-        map->tiles[i].density = (data[i] > TILE_OBSTACLE_THRESHOLD)
-            ? 0.0f : 1.0f;
-    }
+    map->carve_lattice();
 
     st.have_result = true;
     st.last_source = source;
@@ -550,7 +726,8 @@ void AV::resample_lattice_compute(){
     }
     st.last_mean = r / sum;
     st.last_compute_seconds = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - t0).count();
+        std::chrono::steady_clock::now() - st.compute_t0).count();
+    st.pending_stage = 2;
 }
 
 void AV::resample_lattice_finish(){
@@ -586,6 +763,11 @@ IMP::bff::PathMapHeader AV::create_path_map_header(){
         int k0[3]; int n;
         lattice_window(get_source_coordinates(), ll, dg, k0, n);
         path_map_header.update_map_dimensions(n, n, n);
+        if(get_search_stencil() == 26){
+            // face, edge, corner neighbours: no length-2 axis jumps, so a
+            // path cannot tunnel through a one-voxel wall
+            path_map_header.set_neighbor_radius(std::sqrt(3.0));
+        }
     }
     return path_map_header;
 }
@@ -772,7 +954,9 @@ double av_distance_quadrature(
             }
             double f;
             if(efficiency){
-                double t = std::pow(d / forster_radius, 6.0);
+                double x = d / forster_radius;
+                double x2 = x * x;
+                double t = x2 * x2 * x2;
                 double u = 1.0 + t;
                 f = 1.0 / u;
                 if(d > 0){

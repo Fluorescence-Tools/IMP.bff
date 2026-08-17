@@ -71,14 +71,14 @@ class Tests(unittest.TestCase):
         # distances -- deterministic, so the pin is tight. The legacy value
         # (11.918, MC) is pinned in test_av_lattice.py.
         v = fret_restraint.unprotected_evaluate(None)
-        self.assertAlmostEqual(13.079781979252157, v, places=6)
+        self.assertAlmostEqual(12.342343272372853, v, places=6)
         self.assertEqual(v, fret_restraint.unprotected_evaluate(None))
 
         model_ref = np.array(
             [
-                49.6, 38.6, 42.0, 52.9, 40.1, 41.1, 46.0, 53.6, 61.4, 52.1, 53.6,
-                29.3, 50.7, 46.5, 46.7, 62.0, 56.7, 51.7, 35.8, 57.3, 53.6, 42.5,
-                52.6, 43.2, 47.4, 47.2, 35.6, 37.9, 41.0, 51.1, 46.6, 33.8, 47.5
+                49.2, 38.9, 41.6, 52.8, 39.8, 40.3, 44.9, 52.9, 61.5, 51.7, 53.5,
+                28.9, 50.6, 47.1, 46.4, 61.5, 56.8, 51.6, 35.5, 56.9, 53.9, 41.8,
+                52.5, 42.3, 46.7, 46.5, 35.2, 36.8, 39.5, 50.8, 47.2, 33.5, 47.5
             ]
         )
         experiment_ref = np.array(

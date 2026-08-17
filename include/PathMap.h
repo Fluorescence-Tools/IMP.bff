@@ -65,6 +65,24 @@ private:
     template<class Cmp>
     void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
 
+    // Compact per-tile arrays (structure-of-arrays) the lattice path works
+    // on: PathMapTile is ~100 bytes and streaming 12k of them per AV per
+    // frame for three floats dominated the O(window) phases. While
+    // soa_valid_, `cost` (the search's cost array), penalty_soa_ and
+    // density_soa_ are the truth and `tiles` is stale; sync_tiles_from_soa()
+    // brings the tiles up to date before any API that reads them.
+    std::vector<float> penalty_soa_;
+    std::vector<float> density_soa_;
+    bool soa_valid_ = false;
+    void sync_tiles_from_soa();
+
+    // The bounded exact search proper: penalties from `penalty`, results
+    // into `cost`/`visited`; returns the reached tiles. `record_previous`
+    // writes PathMapTile::previous (the tiles-backed variant only).
+    std::vector<int> dijkstra_bounded_core(long source_idx, long end_idx,
+                                           float max_cost, const float *penalty,
+                                           bool record_previous);
+
     // Exact label-correcting Dijkstra (lazy deletion), see find_path().
     // Stops once the cheapest open tile costs >= max_cost (voxel units);
     // tiles that stay unsettled keep a cost >= max_cost, so an accessible
@@ -73,6 +91,7 @@ private:
                                   float max_cost = std::numeric_limits<float>::infinity(),
                                   bool keep_source_cost_default = false);
     bool exact_search_ = false;
+    bool symmetric_stencil_ = false;
 
 protected:
 
@@ -150,16 +169,22 @@ public:
         int ny = header->get_ny();
         int nx_ny = nx * ny;
 
+        // Historical stencil: the loops run -nn <= z < nn, so the +nn face is
+        // missing (a length-2 jump exists towards -x/-y/-z only) and the
+        // tile itself is included. The symmetric stencil (see
+        // set_symmetric_stencil) runs -nn..nn and drops the self offset.
+        const int hi = symmetric_stencil_ ? nn : nn - 1;
         std::vector<int> offsets;
-        for(int z = -nn; z < nn; z += 1) {
+        for(int z = -nn; z <= hi; z += 1) {
             double dz2 = z * z;
             int oz = z * nx_ny;
-            for(int y = -nn; y < nn; y++) {
+            for(int y = -nn; y <= hi; y++) {
                 int oy = y * nx;
                 double dz2_dy2 = dz2 + y * y;
-                for(int x = -nn; x < nn; x++) {
+                for(int x = -nn; x <= hi; x++) {
                     int ox = x;
                     int dz2_dy2_dx2 = dz2_dy2 + x * x;
+                    if(symmetric_stencil_ && dz2_dy2_dx2 == 0) continue;
                     if(dz2_dy2_dx2 <= nr2){
                         int d;                  // edge_cost is a float stored in an 32bit int
                         float *p = (float*) &d; // Make a float pointer point at the integer
@@ -333,6 +358,25 @@ public:
     bool get_exact_search() const { return exact_search_; }
 
     /**
+     * @brief Use a symmetric neighbour stencil.
+     *
+     * The historical stencil is built by loops running -nn <= d < nn: the
+     * +nn face is missing (with the default radius 2 a length-2 axis jump
+     * exists towards -x/-y/-z but not +x/+y/+z -- a path could tunnel
+     * through a one-voxel wall in the negative directions only) and the
+     * tile itself is included as a zero-length neighbour. The symmetric
+     * stencil runs -nn..nn and drops the self offset. Off by default (the
+     * legacy anchoring keeps its stencil); the lattice path of AV turns it
+     * on together with a neighbour radius of sqrt(3), i.e. the 26 face,
+     * edge and corner neighbours -- no length-2 jumps at all.
+     */
+    void set_symmetric_stencil(bool tf) {
+        if(tf != symmetric_stencil_) offsets_.clear();
+        symmetric_stencil_ = tf;
+    }
+    bool get_symmetric_stencil() const { return symmetric_stencil_; }
+
+    /**
      * @brief Exact Dijkstra from `path_begin_idx`, bounded.
      *
      * Textbook lazy Dijkstra that stops once the cheapest open tile costs at
@@ -348,6 +392,37 @@ public:
                                     bool keep_source_cost_default = false) {
         find_path_dijkstra_exact(path_begin_idx, -1, max_cost, keep_source_cost_default);
     }
+
+    /**
+     * @brief The lattice evaluation of one AV in compact arrays.
+     *
+     * Equivalent to update_tiles() + find_path_dijkstra_bounded(source,
+     * max_cost, true) but on structure-of-arrays storage: penalties are
+     * binarised from the current data, the bounded exact search runs, and the
+     * tiles are left stale until an API reads them (get_tiles,
+     * get_tile_values, the tiles-backed searches). get_xyz_density() reads
+     * the arrays directly.
+     */
+    void search_lattice(long source_idx, float max_cost);
+
+    /**
+     * @brief search_lattice() with the two source spheres folded in.
+     *
+     * Same result as fill_sphere(r0, block_radius, TILE_PENALTY_THRESHOLD,
+     * true); fill_sphere(r0, open_radius, 0, false); search_lattice(...),
+     * but the penalties are formed in one pass straight from the data (the
+     * data itself is left untouched).
+     */
+    void search_lattice(long source_idx, float max_cost,
+                        const IMP::algebra::Vector3D &r0,
+                        double block_radius, double open_radius);
+
+    /**
+     * @brief Set the tile density from the current data: 0 where the data
+     * exceeds TILE_OBSTACLE_THRESHOLD, 1 elsewhere (the dye-radius carve).
+     * Structure-of-arrays like search_lattice(); the pair belongs together.
+     */
+    void carve_lattice();
     
     
     /**

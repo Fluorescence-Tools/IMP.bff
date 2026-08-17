@@ -136,7 +136,8 @@ private:
     void resample_lattice(bool shift_xyz, bool force_full);
     // the three phases of resample_lattice (see AVLatticeState::pending)
     void resample_lattice_prepare(bool shift_xyz, bool force_full);
-    void resample_lattice_compute();
+    void resample_lattice_compute(bool split_stages);
+    void resample_lattice_compute_carve();
     void resample_lattice_finish();
 
 protected:
@@ -398,6 +399,40 @@ public:
     static IntKey get_space_fixed_key();
 
     /**
+     * @brief Coarsening factor of the path search (lattice path only).
+     *
+     * 1 (default): the search runs on the AV's own grid. f > 1: the search
+     * runs on the lattice points whose index is a multiple of f (spacing
+     * f*h; the same absolute lattice, so windows still roll by whole
+     * voxels), and every fine tile takes the cost of the cheapest
+     * neighbouring coarse point plus the straight hop to it; the obstacle
+     * carve, the cloud and the mean stay on the fine grid. About f^3 fewer
+     * search nodes; the AV changes at the coarse-voxel level (narrow
+     * channels below f*h are lost, path lengths are quantised coarser).
+     * An approximation -- not covered by the bit-exact contract across
+     * factors, but exact and deterministic for a given factor.
+     */
+    int get_search_grid_factor() const;
+    void set_search_grid_factor(int f);
+    static IntKey get_search_grid_factor_key();
+
+    /**
+     * @brief Neighbour stencil of the path search (lattice path only).
+     *
+     * 26 (default): face, edge and corner neighbours (radius sqrt 3), no
+     * length-2 jumps, so a path cannot tunnel through a one-voxel wall.
+     * 30: the historical stencil -- radius 2 built by loops running
+     * -2 <= d < 2, i.e. the +2 axis face missing and the tile itself
+     * included; a path could cross a one-voxel wall towards -x/-y/-z only.
+     * The legacy anchoring always uses 30. On T4L @2 A the 30-stencil AVs
+     * are 15-25 % larger (they leak through the inflated surface layer) and
+     * their means sit up to 2.5 A away from the 26-stencil ones.
+     */
+    int get_search_stencil() const;
+    void set_search_stencil(int stencil);
+    static IntKey get_search_stencil_key();
+
+    /**
      * @brief Read occupancy from a shared per-class raster registry.
      *
      * Requires `space_fixed`. Pass nullptr to return to a private raster.
@@ -429,14 +464,15 @@ public:
     void resample_prepare(bool shift_xyz=true, bool force_full=false);
     void resample_compute();
     void resample_finish();
+    //! compute() in two halves -- the search, then the carve/cloud/mean --
+    //! so a scheduler can interleave the halves of different AVs
+    void resample_compute_search();
+    void resample_compute_carve();
     //! True between a prepare() that decided to recompute and its compute()
     bool get_has_pending_compute() const { return state_ && state_->pending; }
     //! Build (or refresh) the cached quadrature representation for `k`
     void prepare_quadrature(int k) const;
-    //! Wall time of the last compute phase (scheduling hint)
-    double get_last_compute_seconds() const {
-        return state_ ? state_->last_compute_seconds : 0.0;
-    }
+
 #endif
 
     //! Diagnostics of the lattice path: {skip, local, full, roll} counts
@@ -447,6 +483,12 @@ public:
 
     //! Bumped whenever resample() changed the tiles
     unsigned long get_result_generation() const;
+
+    //! Wall time of the last compute phase in seconds (scheduling hint,
+    //! diagnostics)
+    double get_last_compute_seconds() const {
+        return state_ ? state_->last_compute_seconds : 0.0;
+    }
 
 #ifndef SWIG
     //! Lattice bookkeeping (created on first use); C++ only
@@ -467,7 +509,7 @@ public:
      * a second-order correction.) Cached per resample() result.
      * @return flat (x, y, z, w) per point
      */
-    std::vector<double> get_quadrature_points(int k = 100) const;
+    std::vector<double> get_quadrature_points(int k = 50) const;
 
     /**
      * @brief Get the mean position of the AV object.
@@ -500,7 +542,10 @@ IMP_DECORATORS(AV, AVs, ParticlesTemp);
  */
 template<typename T>
 T inline fret_efficiency(T distance, double forster_radius){
-    double rda_r0_6 = std::pow(distance / forster_radius, 6.0);
+    // (r/R0)^6 by three multiplications; std::pow(x, 6.0) costs ~20x more
+    double x = distance / forster_radius;
+    double x2 = x * x;
+    double rda_r0_6 = x2 * x2 * x2;
     return 1. / (1. + rda_r0_6);
 }
 
@@ -551,7 +596,7 @@ IMPBFFEXPORT double av_distance_quadrature(
         const AV& b,
         double forster_radius = 52.0,
         int distance_type = DYE_PAIR_DISTANCE_MEAN,
-        int quad_k = 100
+        int quad_k = 50
 );
 
 // Draw random points in AV. Returns (x,y,z,d) vector

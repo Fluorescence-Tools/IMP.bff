@@ -64,7 +64,8 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
     template<class Archive> void serialize(Archive &ar) {
         ar(cereal::base_class<IMP::Restraint>(this),
            n_samples, av_pi_, model_ps_, distances_,
-           space_fixed_, shared_map_, distance_, quad_k_);
+           space_fixed_, shared_map_, distance_, quad_k_, search_grid_factor_,
+           search_stencil_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -100,13 +101,18 @@ private:
     bool space_fixed_ = true;      //!< lattice-anchored windows (else legacy)
     bool shared_map_ = true;       //!< one occupancy raster per (spacing, extra) class
     std::string distance_ = "quad";//!< "quad" (lattice quadrature) or "mc"
-    int quad_k_ = 100;             //!< representative points per cloud
+    int quad_k_ = 50;              //!< representative points per cloud
+    int search_grid_factor_ = 1;   //!< AV::set_search_grid_factor for every AV
+    int search_stencil_ = 26;      //!< AV::set_search_stencil for every AV
 
     //! Shared occupancy rasters (only under space_fixed && shared_map)
     IMP::Pointer<AVOccupancyRegistry> registry_;
 
     //! Number of unprotected_evaluate() calls
     mutable long n_evaluations_ = 0;
+
+    //! Cumulative wall time of the evaluation phases (seconds), diagnostics
+    mutable double t_registry_ = 0, t_prepare_ = 0, t_compute_ = 0, t_pairs_ = 0;
 
     //! Threads for the AVs' compute phases (0 = hardware concurrency)
     int n_threads_ = 0;
@@ -188,6 +194,10 @@ public:
      * @param[in] distance `"quad"` (deterministic lattice quadrature, default)
      *   or `"mc"` (random sampling, order-dependent).
      * @param[in] quad_k Representative points per cloud for `"quad"`.
+     * @param[in] search_grid_factor Coarsening of the path search
+     *   (AV::set_search_grid_factor); 1 = exact on the AV grid.
+     * @param[in] search_stencil 26 (symmetric, default) or 30 (historical,
+     *   asymmetric); see AV::set_search_stencil.
      */
     AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
@@ -198,13 +208,17 @@ public:
         bool space_fixed = true,
         bool shared_map = true,
         std::string distance = "quad",
-        int quad_k = 100
+        int quad_k = 50,
+        int search_grid_factor = 1,
+        int search_stencil = 26
     );
 
     bool get_space_fixed() const { return space_fixed_; }
     bool get_shared_map() const { return shared_map_; }
     std::string get_distance_method() const { return distance_; }
     int get_quad_k() const { return quad_k_; }
+    int get_search_grid_factor() const { return search_grid_factor_; }
+    int get_search_stencil() const { return search_stencil_; }
     int get_n_samples() const { return n_samples; }
 
     //! The shared occupancy registry (nullptr unless shared_map)

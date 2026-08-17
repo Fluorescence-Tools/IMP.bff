@@ -1,4 +1,5 @@
 %ignore IMP::bff::AVOccupancyMap::read_window;
+%ignore IMP::bff::AVOccupancyMap::read_window_strided;
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyMap, AVOccupancyMaps);
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyRegistry, AVOccupancyRegistries);
 IMP_SWIG_DECORATOR(IMP::bff, AV, AVs);
@@ -14,10 +15,12 @@ def __init__(self, *args, **kwargs):
         _IMP_bff.AVNetworkRestraint_swiginit(self, _IMP_bff.new_AVNetworkRestraint())
         return
     names = ("hier", "fps_json_fn", "name", "score_set", "n_samples",
-             "space_fixed", "shared_map", "distance", "quad_k")
+             "space_fixed", "shared_map", "distance", "quad_k",
+             "search_grid_factor", "search_stencil")
     defaults = {"name": "AVNetworkRestraint%1%", "score_set": "",
                 "n_samples": 50000, "space_fixed": True, "shared_map": True,
-                "distance": "quad", "quad_k": 100}
+                "distance": "quad", "quad_k": 50, "search_grid_factor": 1,
+                "search_stencil": 26}
     if len(args) > len(names):
         raise TypeError("AVNetworkRestraint() takes at most %d positional "
                         "arguments (%d given)" % (len(names), len(args)))

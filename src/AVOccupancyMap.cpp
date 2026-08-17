@@ -256,7 +256,9 @@ void AVOccupancyMap::full_raster() {
     force_full_ = false;
 }
 
-bool AVOccupancyMap::update(bool force_full) {
+int AVOccupancyMap::begin_update(bool force_full) {
+    pending_action_ = 0;
+    pending_moved_.clear();
     // 1. Extent: grow on demand to the union of requested windows and,
     //    for shared maps, the reach of all atoms.
     if (!fixed_extent_) {
@@ -296,78 +298,120 @@ bool AVOccupancyMap::update(bool force_full) {
             n_grow_++;
         }
     }
-    if (!have_extent_) return false;
+    if (!have_extent_) return 0;
 
     // 2. Full raster when required
     if (force_full || force_full_ || last_.size() != xyzr_.size()) {
-        full_raster();
-        n_full_++;
+        pending_action_ = 2;
+        pending_box_all_ = true;
         moved_last_ = (long) xyzr_.size();
         moved_total_ += moved_last_;
-        generation_++;
-        record_change_all();
-        return true;
+        return 2;
     }
 
     // 3. Otherwise classify by the moved set
-    std::vector<size_t> moved;
     for (size_t i = 0; i < xyzr_.size(); i++) {
         IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
         double r = xyzr_[i].get_radius();
         const IMP::algebra::Vector4D &l = last_[i];
         if (c[0] != l[0] || c[1] != l[1] || c[2] != l[2] || r != l[3]) {
-            moved.push_back(i);
+            pending_moved_.push_back(i);
         }
     }
-    if (moved.empty()) {
+    if (pending_moved_.empty()) {
         n_skip_++;
-        return false;
+        return 0;
     }
-    moved_last_ = (long) moved.size();
+    moved_last_ = (long) pending_moved_.size();
     moved_total_ += moved_last_;
     // The box the change is confined to: old and new footprints of every
     // moved atom, clipped to the extent. Recorded whichever way the counts
-    // are refreshed below -- a full raster changes nothing outside it.
-    int clo[3], chi[3];
+    // are refreshed -- a full raster changes nothing outside it.
     for (int d = 0; d < 3; d++) {
-        clo[d] = std::numeric_limits<int>::max();
-        chi[d] = std::numeric_limits<int>::min();
+        pending_lo_[d] = std::numeric_limits<int>::max();
+        pending_hi_[d] = std::numeric_limits<int>::min();
     }
-    for (size_t i : moved) {
+    for (size_t i : pending_moved_) {
         const IMP::algebra::Vector4D &l = last_[i];
         IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
         double R_old = l[3] + extra_radius_, R_new = xyzr_[i].get_radius() + extra_radius_;
         for (int d = 0; d < 3; d++) {
-            clo[d] = std::min(clo[d], (int) std::ceil((std::min(l[d] - R_old, c[d] - R_new)) / spacing_));
-            chi[d] = std::max(chi[d], (int) std::floor((std::max(l[d] + R_old, c[d] + R_new)) / spacing_));
+            pending_lo_[d] = std::min(pending_lo_[d], (int) std::ceil((std::min(l[d] - R_old, c[d] - R_new)) / spacing_));
+            pending_hi_[d] = std::max(pending_hi_[d], (int) std::floor((std::max(l[d] + R_old, c[d] + R_new)) / spacing_));
         }
     }
+    for (int d = 0; d < 3; d++) {
+        pending_lo_[d] = std::max(pending_lo_[d], k0_[d]);
+        pending_hi_[d] = std::min(pending_hi_[d], k0_[d] + n_[d] - 1);
+    }
+    pending_box_all_ = false;
+    // A delta costs two spheres per moved atom, a full raster one per atom.
+    pending_action_ = (2 * pending_moved_.size() >= xyzr_.size()) ? 2 : 1;
+    return pending_action_;
+}
+
+void AVOccupancyMap::raster_slab(int z_lo, int z_hi) {
+    // clear the slab, then add every atom clipped to it: bit-identical to
+    // full_raster() slab by slab (integer counts, order-free)
+    if (z_hi < z_lo) return;
+    const long nxy = (long) n_[0] * n_[1];
+    std::fill(counts_.begin() + (z_lo - k0_[2]) * nxy,
+              counts_.begin() + (z_hi - k0_[2] + 1) * nxy, 0);
+    int lo[3] = {k0_[0], k0_[1], z_lo};
+    int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, z_hi};
+    for (size_t i = 0; i < xyzr_.size(); i++) {
+        IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
+        double r = xyzr_[i].get_radius();
+        add_sphere(c, r + extra_radius_, +1, lo, hi);
+    }
+}
+
+void AVOccupancyMap::apply_local() {
     int lo[3] = {k0_[0], k0_[1], k0_[2]};
     int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
-    for (int d = 0; d < 3; d++) {
-        clo[d] = std::max(clo[d], lo[d]);
-        chi[d] = std::min(chi[d], hi[d]);
-    }
-    // A delta costs two spheres per moved atom, a full raster one per atom.
-    if (2 * moved.size() >= xyzr_.size()) {
-        full_raster();
-        n_full_++;
-        generation_++;
-        record_change(clo, chi);
-        return true;
-    }
-    for (size_t i : moved) {
+    for (size_t i : pending_moved_) {
         const IMP::algebra::Vector4D &l = last_[i];
         add_sphere(IMP::algebra::Vector3D(l[0], l[1], l[2]),
                    l[3] + extra_radius_, -1, lo, hi);
         IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
         double r = xyzr_[i].get_radius();
         add_sphere(c, r + extra_radius_, +1, lo, hi);
-        last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], r);
     }
-    n_local_++;
+}
+
+void AVOccupancyMap::end_update() {
+    if (pending_action_ == 0) return;
+    if (pending_action_ == 2) {
+        last_.resize(xyzr_.size());
+        for (size_t i = 0; i < xyzr_.size(); i++) {
+            IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
+            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr_[i].get_radius());
+        }
+        force_full_ = false;
+        n_full_++;
+    } else {
+        for (size_t i : pending_moved_) {
+            IMP::algebra::Vector3D c = xyzr_[i].get_coordinates();
+            last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], xyzr_[i].get_radius());
+        }
+        n_local_++;
+    }
     generation_++;
-    record_change(clo, chi);
+    if (pending_box_all_) record_change_all();
+    else record_change(pending_lo_, pending_hi_);
+    pending_action_ = 0;
+    pending_moved_.clear();
+}
+
+bool AVOccupancyMap::update(bool force_full) {
+    int action = begin_update(force_full);
+    if (action == 0) return false;
+    if (action == 2) {
+        raster_slab(k0_[2], k0_[2] + n_[2] - 1);
+    } else {
+        apply_local();
+    }
+    end_update();
     return true;
 }
 
@@ -397,6 +441,29 @@ void AVOccupancyMap::read_window(int kx, int ky, int kz,
     }
 }
 
+
+void AVOccupancyMap::read_window_strided(int kx, int ky, int kz,
+                                         int nx, int ny, int nz, int stride,
+                                         double *out) const {
+    const long enx = n_[0], enxy = (long) n_[0] * n_[1];
+    long o = 0;
+    for (int z = 0; z < nz; z++) {
+        int gz = kz + z * stride;
+        bool zin = have_extent_ && gz >= k0_[2] && gz < k0_[2] + n_[2];
+        for (int y = 0; y < ny; y++) {
+            int gy = ky + y * stride;
+            bool yin = zin && gy >= k0_[1] && gy < k0_[1] + n_[1];
+            for (int x = 0; x < nx; x++, o++) {
+                int gx = kx + x * stride;
+                if (yin && gx >= k0_[0] && gx < k0_[0] + n_[0]) {
+                    out[o] = (double) counts_[(gz - k0_[2]) * enxy + (gy - k0_[1]) * enx + (gx - k0_[0])];
+                } else {
+                    out[o] = 0.0;
+                }
+            }
+        }
+    }
+}
 
 AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius) {
     auto key = std::make_pair(spacing, extra_radius);

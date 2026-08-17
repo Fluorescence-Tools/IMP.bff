@@ -73,6 +73,12 @@ class IMPBFFEXPORT AVOccupancyMap : public IMP::Object {
 
     unsigned long generation_ = 0;
 
+    // begin_update() .. end_update() bookkeeping
+    int pending_action_ = 0;
+    std::vector<size_t> pending_moved_;
+    int pending_lo_[3] = {0, 0, 0}, pending_hi_[3] = {0, 0, 0};
+    bool pending_box_all_ = false;
+
     // Bounding boxes (lattice indices, inclusive) of the counts changed by
     // each generation, most recent last; lets a window that no change
     // touched skip its search. Capped: older history reads as "everything".
@@ -128,10 +134,28 @@ public:
     /** Returns true if anything changed (generation advanced). */
     bool update(bool force_full = false);
 
+    /**
+     * @brief update() in three steps, so a caller can spread the raster
+     * over threads: begin_update() classifies (0 = nothing to do, 1 = local
+     * delta, 2 = full raster) and grows the extent; then either
+     * apply_local() once, or raster_slab(z_lo, z_hi) for disjoint z-ranges
+     * (lattice indices, inclusive) covering the extent, from any threads;
+     * then end_update() from one thread. Equivalent to update().
+     */
+    int begin_update(bool force_full = false);
+    void raster_slab(int z_lo, int z_hi);
+    void apply_local();
+    void end_update();
+
     //! Copy the window [k0, k0 + n) into `out` (row-major x fastest, like
     //! IMP::em::DensityMap). Lattice points outside the extent read as 0.
     void read_window(int kx, int ky, int kz, int nx, int ny, int nz,
                      double *out) const;
+
+    //! Like read_window(), but sampling every `stride`-th lattice point:
+    //! out[(z*ny + y)*nx + x] = count at (kx + stride*x, ky + stride*y, kz + stride*z)
+    void read_window_strided(int kx, int ky, int kz, int nx, int ny, int nz,
+                             int stride, double *out) const;
 
     //! read_window() into a fresh vector (Python-friendly)
     std::vector<double> get_window(int kx, int ky, int kz,

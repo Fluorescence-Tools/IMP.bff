@@ -155,6 +155,7 @@ void PathMap::find_path(
         const int heuristic_mode
 ) {
     // std::cout << "void PathMap::find_path(" << std::endl;
+    sync_tiles_from_soa();
     long n_voxel = get_number_of_voxels();
     IMP_USAGE_CHECK(
         path_begin_idx >= 0 && 
@@ -229,6 +230,7 @@ void PathMap::update_tiles(
     normalized_ = false;
     rms_calculated_ = false;
     reached_valid_ = false;
+    soa_valid_ = false;
     for(int idx = 0; idx < nvox; idx++){
         auto value = data_[idx];
         if(binarize){
@@ -268,29 +270,33 @@ void PathMap::find_path_dijkstra(
     }
 }
 
-void PathMap::find_path_dijkstra_exact(
+std::vector<int> PathMap::dijkstra_bounded_core(
         const long path_begin_idx,
         const long path_end_idx,
         const float max_cost,
-        const bool keep_source_cost_default
+        const float *penalty,
+        const bool record_previous
 ){
     long n_voxel = get_number_of_voxels();
-    IMP_USAGE_CHECK(
-        path_begin_idx >= 0 &&
-        path_begin_idx < n_voxel &&
-        path_end_idx < n_voxel,
-        "PathMap::find_path_dijkstra_exact: invalid start/stop index"
-    );
     cost.assign(n_voxel, TILE_COST_DEFAULT);
     visited.assign(n_voxel, false);
-    std::vector<float> penalty(n_voxel);
-    for(long i = 0; i < n_voxel; i++) penalty[i] = tiles[i].penalty;
 
     if(offsets_.empty()){
         offsets_ = get_neighbor_idx_offsets();
     }
     const std::vector<int> &off = offsets_;
-    const size_t noff = off.size();
+    const size_t nnb = off.size() / 5;
+    // Compact copies of the stencil for the inner loop: linear index deltas
+    // and edge lengths as floats (the offset table stores lengths bit-cast
+    // into ints), plus the per-axis deltas for the boundary check.
+    std::vector<long> nb_delta(nnb);
+    std::vector<float> nb_len(nnb);
+    std::vector<int> nb_dz(nnb), nb_dy(nnb), nb_dx(nnb);
+    for(size_t j = 0; j < nnb; j++){
+        nb_dz[j] = off[5*j + 0]; nb_dy[j] = off[5*j + 1]; nb_dx[j] = off[5*j + 2];
+        nb_delta[j] = off[5*j + 3];
+        std::memcpy(&nb_len[j], &off[5*j + 4], sizeof(float));
+    }
     const float penalty_threshold = pathMapHeader_.get_obstacle_threshold();
     const int nx = header_.get_nx();
     const int ny = header_.get_ny();
@@ -305,20 +311,28 @@ void PathMap::find_path_dijkstra_exact(
     // (cost, idx), when it becomes active -- the exact pop order of a binary
     // heap of (cost, idx) pairs, at a fraction of the heap traffic. Stale
     // entries (improved after being queued) are skipped.
-    typedef std::pair<float, long> entry;
-    std::vector<std::vector<entry> > buckets;
-    auto bucket_of = [](float c) -> size_t { return (size_t) c; };
+    // Consequently, once bucket b becomes active every tile in it already has
+    // its final cost (an improvement would have to come from a settled tile of
+    // cost < b, i.e. from a bucket drained before), so the pop order inside a
+    // bucket does not affect the costs. A tile is queued at most once per
+    // bucket (`queued_in`); an entry whose current cost has moved to a lower
+    // bucket is stale. The bucket is sorted by (cost, idx) only when
+    // predecessors are recorded, to make them deterministic.
+    std::vector<std::vector<long> > buckets;
+    std::vector<int> queued_in(n_voxel, -1);
     auto push = [&](float c, long idx){
-        size_t b = bucket_of(c);
-        if(b >= buckets.size()) buckets.resize(b + 1);
-        buckets[b].emplace_back(c, idx);
+        int b = (int) c;
+        if(queued_in[idx] == b) return;
+        queued_in[idx] = b;
+        if((size_t) b >= buckets.size()) buckets.resize(b + 1);
+        buckets[b].push_back(idx);
     };
     std::vector<int> reached;
     reached.reserve(1024);
 
     cost[path_begin_idx] = 0.0f;
     visited[path_begin_idx] = true;
-    tiles[path_begin_idx].previous = nullptr;
+    if(record_previous) tiles[path_begin_idx].previous = nullptr;
     reached.push_back((int) path_begin_idx);
     push(0.0f, path_begin_idx);
 
@@ -326,55 +340,156 @@ void PathMap::find_path_dijkstra_exact(
     for(size_t b = 0; b < buckets.size() && !done; b++){
         // (index access throughout: push() may reallocate `buckets`; the
         // active bucket itself never grows)
-        std::sort(buckets[b].begin(), buckets[b].end());
+        if(record_previous){
+            std::sort(buckets[b].begin(), buckets[b].end(), [&](long l, long r){
+                return cost[l] < cost[r] || (cost[l] == cost[r] && l < r);
+            });
+        }
         const size_t nb = buckets[b].size();
         for(size_t e = 0; e < nb; e++){
-        const long cidx = buckets[b][e].second;
-        const float ccost = buckets[b][e].first;
-        if(ccost > cost[cidx]) continue;   // stale
-        if(ccost >= max_cost){ done = true; break; }   // nothing cheaper is left
-        if(cidx == path_end_idx){ done = true; break; }
-        PathMapTile* current = &tiles[cidx];
-        const int x0 = (int) (cidx % nx);
-        const int y0 = (int) ((cidx / nx) % ny);
-        const int z0 = (int) (cidx / nxy);
-        const bool interior = x0 >= box && x0 < nx - box &&
-                              y0 >= box && y0 < ny - box &&
-                              z0 >= box && z0 < nz - box;
-        for(size_t i = 0; i < noff; i += 5){
-            if(!interior){
-                int iz = z0 + off[i + 0];
-                int iy = y0 + off[i + 1];
-                int ix = x0 + off[i + 2];
-                if(iz >= nz || iz < 0) continue;
-                if(iy >= ny || iy < 0) continue;
-                if(ix >= nx || ix < 0) continue;
-            }
-            const long nidx = cidx + off[i + 3];
-            const float npen = penalty[nidx];
-            if(!(npen < penalty_threshold)) continue;
-            float edge_length;
-            std::memcpy(&edge_length, &off[i + 4], sizeof(float));
-            const float new_cost = ccost + edge_length + npen;
-            if(new_cost < cost[nidx]){
-                cost[nidx] = new_cost;
-                tiles[nidx].previous = current;
-                if(!visited[nidx]){
-                    visited[nidx] = true;
-                    reached.push_back((int) nidx);
+            const long cidx = buckets[b][e];
+            const float ccost = cost[cidx];
+            if((size_t) ccost != b) continue;   // stale: moved to a lower bucket
+            if(ccost >= max_cost){ done = true; break; }   // nothing cheaper is left
+            if(cidx == path_end_idx){ done = true; break; }
+            const int x0 = (int) (cidx % nx);
+            const int y0 = (int) ((cidx / nx) % ny);
+            const int z0 = (int) (cidx / nxy);
+            const bool interior = x0 >= box && x0 < nx - box &&
+                                  y0 >= box && y0 < ny - box &&
+                                  z0 >= box && z0 < nz - box;
+            const float *cost_ptr = cost.data();
+            for(size_t j = 0; j < nnb; j++){
+                if(!interior){
+                    int iz = z0 + nb_dz[j];
+                    int iy = y0 + nb_dy[j];
+                    int ix = x0 + nb_dx[j];
+                    if(iz >= nz || iz < 0) continue;
+                    if(iy >= ny || iy < 0) continue;
+                    if(ix >= nx || ix < 0) continue;
                 }
-                push(new_cost, nidx);
+                const long nidx = cidx + nb_delta[j];
+                const float npen = penalty[nidx];
+                if(!(npen < penalty_threshold)) continue;
+                const float new_cost = ccost + nb_len[j] + npen;
+                if(new_cost < cost_ptr[nidx]){
+                    cost[nidx] = new_cost;
+                    if(record_previous) tiles[nidx].previous = &tiles[cidx];
+                    if(!visited[nidx]){
+                        visited[nidx] = true;
+                        reached.push_back((int) nidx);
+                    }
+                    push(new_cost, nidx);
+                }
             }
-        }
         }
     }
+    reached_valid_ = true;
+    return reached;
+}
+
+void PathMap::find_path_dijkstra_exact(
+        const long path_begin_idx,
+        const long path_end_idx,
+        const float max_cost,
+        const bool keep_source_cost_default
+){
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(
+        path_begin_idx >= 0 &&
+        path_begin_idx < n_voxel &&
+        path_end_idx < n_voxel,
+        "PathMap::find_path_dijkstra_exact: invalid start/stop index"
+    );
+    sync_tiles_from_soa();
+    std::vector<float> penalty(n_voxel);
+    for(long i = 0; i < n_voxel; i++) penalty[i] = tiles[i].penalty;
+    std::vector<int> reached = dijkstra_bounded_core(
+        path_begin_idx, path_end_idx, max_cost, penalty.data(), true);
     for(int idx : reached){
         tiles[idx].cost = cost[idx];
     }
     if(keep_source_cost_default){
         tiles[path_begin_idx].cost = TILE_COST_DEFAULT;
     }
-    reached_valid_ = true;
+}
+
+void PathMap::search_lattice(long source_idx, float max_cost){
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(source_idx >= 0 && source_idx < n_voxel,
+                    "PathMap::search_lattice: invalid source index");
+    // penalties, binarised exactly as update_tiles() does
+    const float obstacle_threshold = pathMapHeader_.get_obstacle_threshold();
+    penalty_soa_.resize(n_voxel);
+    for(long i = 0; i < n_voxel; i++){
+        penalty_soa_[i] = (data_[i] > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
+    }
+    normalized_ = false;
+    rms_calculated_ = false;
+    dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+    // the historical search never wrote the source tile's cost
+    cost[source_idx] = TILE_COST_DEFAULT;
+    if(density_soa_.size() != (size_t) n_voxel){
+        density_soa_.assign(n_voxel, 1.0f);
+    }
+    soa_valid_ = true;
+}
+
+void PathMap::search_lattice(long source_idx, float max_cost,
+                             const IMP::algebra::Vector3D &r0,
+                             double block_radius, double open_radius){
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(source_idx >= 0 && source_idx < n_voxel,
+                    "PathMap::search_lattice: invalid source index");
+    calc_all_voxel2loc();
+    const float obstacle_threshold = pathMapHeader_.get_obstacle_threshold();
+    const double bsq = block_radius * block_radius;
+    const double osq = open_radius * open_radius;
+    const float *xl = x_loc_.get();
+    const float *yl = y_loc_.get();
+    const float *zl = z_loc_.get();
+    const double x0 = r0[0], y0 = r0[1], z0 = r0[2];
+    penalty_soa_.resize(n_voxel);
+    for(long v = 0; v < n_voxel; v++){
+        // fill_sphere(block, inverse) then fill_sphere(open) then binarise:
+        // inside the open sphere wins, then beyond the block radius, then
+        // the data
+        double dx = (double) xl[v] - x0, dy = (double) yl[v] - y0, dz = (double) zl[v] - z0;
+        double d2 = dx*dx + dy*dy + dz*dz;
+        double value;
+        if(d2 < osq) value = 0.0;
+        else if(d2 >= bsq) value = TILE_PENALTY_THRESHOLD;
+        else value = data_[v];
+        penalty_soa_[v] = (value > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
+    }
+    normalized_ = false;
+    rms_calculated_ = false;
+    dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
+    cost[source_idx] = TILE_COST_DEFAULT;
+    if(density_soa_.size() != (size_t) n_voxel){
+        density_soa_.assign(n_voxel, 1.0f);
+    }
+    soa_valid_ = true;
+}
+
+void PathMap::carve_lattice(){
+    long n_voxel = get_number_of_voxels();
+    density_soa_.resize(n_voxel);
+    for(long i = 0; i < n_voxel; i++){
+        density_soa_[i] = (data_[i] > TILE_OBSTACLE_THRESHOLD) ? 0.0f : 1.0f;
+    }
+}
+
+void PathMap::sync_tiles_from_soa(){
+    if(!soa_valid_) return;
+    long n_voxel = get_number_of_voxels();
+    for(long i = 0; i < n_voxel; i++){
+        tiles[i].penalty = penalty_soa_[i];
+        tiles[i].cost = cost[i];
+        tiles[i].density = density_soa_[i];
+        tiles[i].previous = nullptr;
+    }
+    soa_valid_ = false;
 }
 
 void PathMap::find_path_astar(
@@ -477,6 +592,23 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
     float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
 
     std::vector<IMP::algebra::Vector4D> v;
+    if(soa_valid_){
+        // same arithmetic as PathMapTile::get_value(PM_TILE_ACCESSIBLE_DENSITY)
+        calc_all_voxel2loc();
+        const float *xl = x_loc_.get();
+        const float *yl = y_loc_.get();
+        const float *zl = z_loc_.get();
+        for(long i = 0; i < n_voxel; i++){
+            if(!visited[i]) continue;
+            float c = cost[i] * grid_spacing;
+            float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
+            density *= density_soa_[i];
+            if(density > 0){
+                v.emplace_back(IMP::algebra::Vector4D({(double) xl[i], (double) yl[i], (double) zl[i], (double) density}));
+            }
+        }
+        return v;
+    }
     auto emit = [&](long i){
         float density = tiles[i].get_value(
                 PM_TILE_ACCESSIBLE_DENSITY,
@@ -500,6 +632,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
 }
 
 void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
+    sync_tiles_from_soa();
     long n_voxel = get_number_of_voxels();
     float linker_length = pathMapHeader_.get_max_path_length();
     float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
@@ -565,6 +698,7 @@ std::vector<float> PathMap::get_tile_values(
         std::pair<float, float> bounds,
         const std::string &feature_name
 ){
+    sync_tiles_from_soa();
     size_t size = tiles.size();
     std::vector<float> data;
     data.reserve(size);
@@ -584,6 +718,7 @@ void PathMap::get_tile_values(
         int value_type,
         std::pair<float, float> bounds,
         const std::string &feature_name){
+    sync_tiles_from_soa();
     int n_voxel = get_number_of_voxels();
     float grid_spacing = get_spacing();
     *nx = header_.get_nx();
@@ -599,6 +734,9 @@ void PathMap::get_tile_values(
 void PathMap::resize(unsigned int nvox){
     data_.reset(new double[nvox]);
     reached_valid_ = false;
+    soa_valid_ = false;
+    penalty_soa_.clear();
+    density_soa_.clear();
 
     edge_computed.resize(0);
     edge_computed.resize(nvox, false);
@@ -612,6 +750,7 @@ void PathMap::resize(unsigned int nvox){
 }
 
 std::vector<PathMapTile>& PathMap::get_tiles(){
+    sync_tiles_from_soa();
     return tiles;
 }
 

@@ -9,6 +9,8 @@
  #include <IMP/bff/AVNetworkRestraint.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -23,10 +25,23 @@ AVNetworkRestraint::AVNetworkRestraint(
         bool space_fixed,
         bool shared_map,
         std::string distance,
-        int quad_k
+        int quad_k,
+        int search_grid_factor,
+        int search_stencil
 ) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples),
     space_fixed_(space_fixed), shared_map_(shared_map),
-    distance_(distance), quad_k_(quad_k){
+    distance_(distance), quad_k_(quad_k), search_grid_factor_(search_grid_factor),
+    search_stencil_(search_stencil){
+    if(search_stencil != 26 && search_stencil != 30){
+        IMP_THROW("AVNetworkRestraint: search_stencil must be 26 or 30", IMP::ValueException);
+    }
+    if(search_grid_factor < 1){
+        IMP_THROW("AVNetworkRestraint: search_grid_factor must be >= 1", IMP::ValueException);
+    }
+    if(search_grid_factor > 1 && !space_fixed){
+        IMP_THROW("AVNetworkRestraint: search_grid_factor > 1 requires space_fixed=True",
+                  IMP::ValueException);
+    }
     if(shared_map && !space_fixed){
         IMP_THROW("AVNetworkRestraint: shared_map=True requires space_fixed=True "
                   "(sharing needs commensurate lattice windows)",
@@ -73,6 +88,8 @@ void AVNetworkRestraint::configure_avs(){
     }
     for(auto &av: avs_){
         av.second->set_space_fixed(space_fixed_);
+        av.second->set_search_grid_factor(search_grid_factor_);
+        av.second->set_search_stencil(search_stencil_);
         av.second->set_occupancy_registry(
             (space_fixed_ && shared_map_) ? registry_.get() : nullptr);
     }
@@ -146,6 +163,9 @@ double AVNetworkRestraint::unprotected_evaluate(
         IMP::DerivativeAccumulator *accum) const {
     double score = 0.0;
     n_evaluations_++;
+    typedef std::chrono::steady_clock clk;
+    auto lap = [](clk::time_point &t){ auto n = clk::now(); double d = std::chrono::duration<double>(n - t).count(); t = n; return d; };
+    clk::time_point t = clk::now();
     for(auto &av: avs_){
         av.second->prepare_lattice_window();
     }
@@ -155,12 +175,38 @@ double AVNetworkRestraint::unprotected_evaluate(
     const int nthreads = get_number_of_threads();
     if(registry_){
         AVOccupancyMaps maps = registry_->get_maps();
-        if(nthreads > 1 && maps.size() > 1){
-            get_pool().run(maps.size(), [&maps](size_t i){ maps[i]->update(); });
+        if(nthreads > 1 && !maps.empty()){
+            // classify serially (Model reads), then spread the rasters:
+            // a full raster becomes `nthreads` z-slabs, a local delta one task
+            struct Task { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
+            std::vector<Task> tasks;
+            for(auto &mp : maps){
+                int action = mp->begin_update();
+                if(action == 1){
+                    tasks.push_back({mp.get(), 0, 0, true});
+                } else if(action == 2){
+                    std::vector<int> ext = mp->get_extent();
+                    int z0 = ext[2], nz = ext[5];
+                    int nslab = std::max(1, std::min(nthreads, nz));
+                    for(int sIdx = 0; sIdx < nslab; sIdx++){
+                        int a = z0 + (int)((long) nz * sIdx / nslab);
+                        int b = z0 + (int)((long) nz * (sIdx + 1) / nslab) - 1;
+                        if(b >= a) tasks.push_back({mp.get(), a, b, false});
+                    }
+                }
+            }
+            if(!tasks.empty()){
+                get_pool().run(tasks.size(), [&tasks](size_t i){
+                    if(tasks[i].local) tasks[i].m->apply_local();
+                    else tasks[i].m->raster_slab(tasks[i].z_lo, tasks[i].z_hi);
+                });
+            }
+            for(auto &mp : maps) mp->end_update();
         } else {
             for(auto &m : maps) m->update();
         }
     }
+    t_registry_ += lap(t);
     // prepare (serial: touches the Model), compute (threads: each AV its own
     // map, occupancy read-only), finish (serial: writes mean positions)
     // Every AV takes part in the compute pass: the ones prepare() left
@@ -175,6 +221,7 @@ double AVNetworkRestraint::unprotected_evaluate(
         all.push_back(av.second.get());
         if(av.second->get_has_pending_compute()) n_pending++;
     }
+    t_prepare_ += lap(t);
     const bool quad = (distance_ == "quad");
     const int qk = quad_k_;
     // Longest-first: pending AVs ordered by their last compute time keep the
@@ -184,16 +231,33 @@ double AVNetworkRestraint::unprotected_evaluate(
         if(pa != pb) return pa;
         return a->get_last_compute_seconds() > b->get_last_compute_seconds();
     });
-    auto work = [&all, quad, qk](size_t i){
-        all[i]->resample_compute();
-        if(quad) all[i]->prepare_quadrature(qk);
-    };
     if(nthreads > 1 && n_pending > 0){
-        get_pool().run(all.size(), work);
+        // Two tasks per AV -- the search, then the carve/cloud/quadrature --
+        // pulled in order: all searches first, then the second halves, each
+        // waiting (briefly, they were started first) for its own search.
+        const size_t na = all.size();
+        std::vector<std::atomic<int> > searched(na);
+        for(auto &f : searched) f.store(0);
+        auto work = [&](size_t t){
+            if(t < na){
+                all[t]->resample_compute_search();
+                searched[t].store(1, std::memory_order_release);
+            } else {
+                size_t i = t - na;
+                while(!searched[i].load(std::memory_order_acquire)) std::this_thread::yield();
+                all[i]->resample_compute_carve();
+                if(quad) all[i]->prepare_quadrature(qk);
+            }
+        };
+        get_pool().run(2 * na, work);
     } else {
-        for(size_t i = 0; i < all.size(); i++) work(i);
+        for(size_t i = 0; i < all.size(); i++){
+            all[i]->resample_compute();
+            if(quad) all[i]->prepare_quadrature(qk);
+        }
     }
     for(auto *av : all) av->resample_finish();
+    t_compute_ += lap(t);
 
     // Model distances: with "quad" every AV's representation is cached by
     // now, so the pair sums are pure reads and run on threads too; the score
@@ -216,6 +280,7 @@ double AVNetworkRestraint::unprotected_evaluate(
     for(size_t i = 0; i < pairs.size(); i++){
         score += pairs[i]->score_model(model[i]);
     }
+    t_pairs_ += lap(t);
     return score;
 }
 
@@ -253,9 +318,13 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     j["shared_map"] = shared_map_;
     j["distance"] = distance_;
     j["quad_k"] = quad_k_;
+    j["search_grid_factor"] = search_grid_factor_;
+    j["search_stencil"] = search_stencil_;
     j["n_samples"] = n_samples;
     j["evaluations"] = n_evaluations_;
     j["threads"] = get_number_of_threads();
+    j["timing_ms_total"] = {{"registry", t_registry_ * 1e3}, {"prepare", t_prepare_ * 1e3},
+                            {"compute", t_compute_ * 1e3}, {"pairs", t_pairs_ * 1e3}};
     nlohmann::json avs = nlohmann::json::object();
     long skip = 0, local = 0, full = 0, rolls = 0;
     for(const auto &kv : avs_){

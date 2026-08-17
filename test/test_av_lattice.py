@@ -186,7 +186,7 @@ class TestModeMatrix(unittest.TestCase):
         self.assertTrue(r.get_space_fixed())
         self.assertTrue(r.get_shared_map())
         self.assertEqual(r.get_distance_method(), "quad")
-        self.assertEqual(r.get_quad_k(), 100)
+        self.assertEqual(r.get_quad_k(), 50)
 
     def test_keyword_arguments(self):
         # positional and keyword spellings agree (the constructor is
@@ -768,6 +768,41 @@ class TestAVHandle(unittest.TestCase):
         diff = np.flatnonzero((c0 != c1) & reached)
         self.assertEqual(list(diff), [src])
         self.assertEqual(c1[src], 0.0)
+
+    def test_search_stencil_and_grid_factor_options(self):
+        # The historical 30-offset stencil is still selectable; with it and
+        # K=100 the restraint reproduces the value pinned before the stencil
+        # became symmetric (2026-08-17: 26 neighbours by default).
+        r30 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                         quad_k=100, search_stencil=30)
+        self.assertEqual(r30.get_search_stencil(), 30)
+        self.assertAlmostEqual(r30.unprotected_evaluate(None), 13.079781979252157, places=6)
+        r26 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                         quad_k=100)
+        self.assertEqual(r26.get_search_stencil(), 26)
+        self.assertAlmostEqual(r26.unprotected_evaluate(None), 12.344446273725225, places=6)
+        # the 30-stencil AVs leak through one-voxel walls: larger clouds
+        n30 = sum(len(r30.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r30))
+        n26 = sum(len(r26.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r26))
+        self.assertGreater(n30, n26 * 1.05)
+        with self.assertRaises(Exception):
+            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                       search_stencil=27)
+        # coarse search grid: an approximation, deterministic, opt-in
+        rc = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                        search_grid_factor=2)
+        self.assertEqual(rc.get_search_grid_factor(), 2)
+        v1 = rc.unprotected_evaluate(None)
+        v2 = rc.unprotected_evaluate(None)
+        self.assertTrue(np.isfinite(v1))
+        self.assertEqual(v1, v2)
+        self.assertNotEqual(v1, r26.unprotected_evaluate(None))
+        d = json.loads(rc.get_diagnostics_json())
+        self.assertEqual(d["search_grid_factor"], 2)
+        with self.assertRaises(Exception):
+            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+                                       space_fixed=False, shared_map=False,
+                                       search_grid_factor=2)
 
     def test_used_av_shares_the_restraint_map(self):
         r = make_restraint("default", self.hier, score_set="chi2_C2_33p")

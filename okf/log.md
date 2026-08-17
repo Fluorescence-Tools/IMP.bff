@@ -1,6 +1,22 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105 third perf pass (objective < 1 ms/frame): reached — 0.81 ms
+  median quiet, 0.94–0.99 loaded (pre-PRD 37.7).** Exact: SoA tile arrays for
+  the lattice path (`search_lattice`/`carve_lattice`, lazy `tiles` sync),
+  bucket queue without duplicates or per-bucket sort (all tiles in an active
+  unit bucket are final), fused source spheres, raw-location cloud, two pool
+  tasks per AV + z-slab rasters, `timing_ms_total` diagnostics. **Model
+  change:** the lattice path now uses a symmetric 26-neighbour stencil
+  (`search_stencil=26`, `30` = historical): the historical offset loops ran
+  `-2 ≤ d < 2`, so paths could cross a one-voxel wall towards −x/−y/−z only;
+  the leak made T4L AVs 15–25 % larger and shifted means by up to 2.5 Å
+  (distances 1.1 Å rms, max 10 Å) — pins regenerated, 30-stencil value kept
+  as a regression pin, legacy anchoring unchanged. `quad_k` default 100 → 50
+  (0.025 Å max error with moments). `search_grid_factor` (coarse search,
+  fine carve) implemented and measured: 2.4 Å rms error for only 20 % speed
+  → kept opt-in, default 1. Hardware note: 4P+4E cores make per-task CPU sum
+  ~2× the serial CPU; compute wall is ~4–5× over serial.
 * **PRD-105 second perf pass**: `set_origin` moved into the threaded compute
   phase, shared rasters refreshed on threads, persistent `internal::ThreadPool`
   (longest-first dynamic scheduling), and — the big one — the lattice path now
