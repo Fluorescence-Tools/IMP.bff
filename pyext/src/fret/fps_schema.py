@@ -163,7 +163,10 @@ POSITION_FIELDS: Dict[str, Dict[str, Any]] = {
     "strip_mask": dict(
         type=_S, default="", flrcif=None,
         authored="Selection mask of atoms removed as obstacles before the AV "
-                 "simulation (e.g. flexible tags).",
+                 "simulation, in the PyMOL dialect 'chain <id> and resid <n> "
+                 "and [not] name A+B+...' ('+'-separated lists, as in PyMOL "
+                 "itself). Empty means the default strip: the attachment "
+                 "residue's side chain minus the attachment atom.",
         dialects=("flat",)),
     "chain_weighting": dict(
         type=_B, default=False, flrcif=None,

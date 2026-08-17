@@ -242,7 +242,7 @@
         },
         "strip_mask": {
           "default": "",
-          "description": "Selection mask of atoms removed as obstacles before the AV simulation (e.g. flexible tags).",
+          "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
           "type": "string",
           "x-dialects": [
             "flat"
@@ -558,7 +558,7 @@
           },
           "strip_mask": {
             "default": "",
-            "description": "Selection mask of atoms removed as obstacles before the AV simulation (e.g. flexible tags).",
+            "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
             "type": "string",
             "x-dialects": [
               "flat"
@@ -590,7 +590,7 @@
       },
       "type": "object"
     },
-    "χ²": {
+    "\u03c7\u00b2": {
       "additionalProperties": {
         "additionalProperties": true,
         "properties": {
@@ -623,7 +623,7 @@
       "type": "object"
     }
   },
-  "title": "fps.json — FRET labelling positions and distances",
+  "title": "fps.json \u2014 FRET labelling positions and distances",
   "type": "object",
   "x-schema-version": "1.0"
 }

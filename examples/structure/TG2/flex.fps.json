@@ -317,7 +317,7 @@
       "residue_seq_number": 173,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 173 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 173 and not name CA+CB+C+N+O"
     },
     "A571": {
       "atom_name": "CA",
@@ -328,7 +328,7 @@
       "residue_seq_number": 571,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 571 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 571 and not name CA+CB+C+N+O"
     },
     "A646": {
       "atom_name": "CA",
@@ -339,7 +339,7 @@
       "residue_seq_number": 646,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 646 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 646 and not name CA+CB+C+N+O"
     },
     "A385": {
       "atom_name": "CA",
@@ -350,7 +350,7 @@
       "residue_seq_number": 385,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 385 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 385 and not name CA+CB+C+N+O"
     },
     "A618": {
       "atom_name": "CA",
@@ -361,7 +361,7 @@
       "residue_seq_number": 618,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 618 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 618 and not name CA+CB+C+N+O"
     },
     "A15": {
       "atom_name": "CA",
@@ -372,7 +372,7 @@
       "residue_seq_number": 15,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 15 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 15 and not name CA+CB+C+N+O"
     },
     "A52": {
       "atom_name": "CA",
@@ -383,7 +383,7 @@
       "residue_seq_number": 52,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 52 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 52 and not name CA+CB+C+N+O"
     },
     "A155": {
       "atom_name": "CA",
@@ -394,7 +394,7 @@
       "residue_seq_number": 155,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 155 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 155 and not name CA+CB+C+N+O"
     },
     "A363": {
       "atom_name": "CA",
@@ -405,7 +405,7 @@
       "residue_seq_number": 363,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 363 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 363 and not name CA+CB+C+N+O"
     },
     "A366": {
       "atom_name": "CA",
@@ -416,7 +416,7 @@
       "residue_seq_number": 366,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 366 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 366 and not name CA+CB+C+N+O"
     },
     "A388": {
       "atom_name": "CA",
@@ -427,7 +427,7 @@
       "residue_seq_number": 388,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 388 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 388 and not name CA+CB+C+N+O"
     },
     "A406": {
       "atom_name": "CA",
@@ -438,7 +438,7 @@
       "residue_seq_number": 406,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 406 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 406 and not name CA+CB+C+N+O"
     },
     "A425": {
       "atom_name": "CA",
@@ -449,7 +449,7 @@
       "residue_seq_number": 425,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 425 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 425 and not name CA+CB+C+N+O"
     },
     "A457": {
       "atom_name": "CA",
@@ -460,7 +460,7 @@
       "residue_seq_number": 457,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 457 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 457 and not name CA+CB+C+N+O"
     },
     "A498": {
       "atom_name": "CA",
@@ -471,7 +471,7 @@
       "residue_seq_number": 498,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 498 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 498 and not name CA+CB+C+N+O"
     },
     "A502": {
       "atom_name": "CA",
@@ -482,7 +482,7 @@
       "residue_seq_number": 502,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 502 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 502 and not name CA+CB+C+N+O"
     },
     "A519": {
       "atom_name": "CA",
@@ -493,7 +493,7 @@
       "residue_seq_number": 519,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 519 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 519 and not name CA+CB+C+N+O"
     },
     "A523": {
       "atom_name": "CA",
@@ -504,7 +504,7 @@
       "residue_seq_number": 523,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 523 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 523 and not name CA+CB+C+N+O"
     },
     "A540": {
       "atom_name": "CA",
@@ -515,7 +515,7 @@
       "residue_seq_number": 540,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 540 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 540 and not name CA+CB+C+N+O"
     },
     "A550": {
       "atom_name": "CA",
@@ -526,7 +526,7 @@
       "residue_seq_number": 550,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 550 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 550 and not name CA+CB+C+N+O"
     },
     "A588": {
       "atom_name": "CA",
@@ -537,7 +537,7 @@
       "residue_seq_number": 588,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 588 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 588 and not name CA+CB+C+N+O"
     },
     "A592": {
       "atom_name": "CA",
@@ -548,7 +548,7 @@
       "residue_seq_number": 592,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 592 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 592 and not name CA+CB+C+N+O"
     },
     "A610": {
       "atom_name": "CA",
@@ -559,7 +559,7 @@
       "residue_seq_number": 610,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 610 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 610 and not name CA+CB+C+N+O"
     },
     "A659": {
       "atom_name": "CA",
@@ -570,7 +570,7 @@
       "residue_seq_number": 659,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 659 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 659 and not name CA+CB+C+N+O"
     },
     "A661": {
       "atom_name": "CA",
@@ -581,7 +581,7 @@
       "residue_seq_number": 661,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 661 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 661 and not name CA+CB+C+N+O"
     },
     "A680": {
       "atom_name": "CA",
@@ -592,7 +592,7 @@
       "residue_seq_number": 680,
       "simulation_grid_resolution": 2.0,
       "simulation_type": "AV1",
-      "strip_mask": "chain A and resid 680 and not name CA CB C N O"
+      "strip_mask": "chain A and resid 680 and not name CA+CB+C+N+O"
     }
   },
   "χ²": {
