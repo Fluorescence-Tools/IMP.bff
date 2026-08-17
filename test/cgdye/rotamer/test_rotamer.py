@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from click.testing import CliRunner
 from IMP.bff.fret import io as fps
@@ -158,17 +159,37 @@ def test_rotamer_cli_help_and_r0() -> None:
     assert float(result.output.split()[0]) == pytest.approx(5.712982, abs=1e-5)
 
 
-def test_load_protein_frames_from_rmf_trajectory() -> None:
+def test_load_protein_frames_from_rmf_trajectory(tmp_path: Path) -> None:
     """RMF protein trajectories load multiple frames."""
-    root = _repo_root()
-    rmf = root / "examples" / "cgdye" / "hgbp1_alexa488_langevin.rmf3"
-    if not rmf.exists():
-        pytest.skip("RMF trajectory fixture is not available")
+    import IMP
+    import IMP.atom
+    import IMP.core
+    import IMP.algebra
+    import IMP.rmf
+    import RMF
+    from IMP.bff.cgdye.utils import get_structure_dir
+
+    # Two-frame RMF written on the fly from 148L: frame 1 is frame 0
+    # translated by 1 Angstrom along x.
+    model = IMP.Model()
+    hier = IMP.atom.read_pdb(str(get_structure_dir("148L.pdb")), model,
+                             IMP.atom.NonWaterPDBSelector())
+    rmf = tmp_path / "two_frames.rmf3"
+    fh = RMF.create_rmf_file(str(rmf))
+    IMP.rmf.add_hierarchies(fh, [hier])
+    IMP.rmf.save_frame(fh, "0")
+    for a in IMP.atom.get_by_type(hier, IMP.atom.ATOM_TYPE):
+        xyz = IMP.core.XYZ(a)
+        xyz.set_coordinates(xyz.get_coordinates() + IMP.algebra.Vector3D(1.0, 0.0, 0.0))
+    IMP.rmf.save_frame(fh, "1")
+    del fh
+
     frames = load_protein_frames(rmf, max_frames=2)
     assert len(frames) == 2
     assert frames[0]["coords"].ndim == 2
     assert frames[0]["residue_indices"]
     assert frames[1]["coords"].shape == frames[0]["coords"].shape
+    assert np.allclose(frames[1]["coords"] - frames[0]["coords"], [1.0, 0.0, 0.0])
 
 
 def _repo_root() -> Path:

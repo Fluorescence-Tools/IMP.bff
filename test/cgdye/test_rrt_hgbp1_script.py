@@ -32,7 +32,7 @@ class TestHGBP1RRTScript(unittest.TestCase):
 
         required_inputs = [
             str(get_structure_dir("1DG3.pdb")),
-            str(Path(__file__).resolve().parents[2] / "thirdparty" / "FRETpredict" / "FRETpredict" / "lib" / "A48_C1R.pdb"),
+            str(get_structure_dir("alexa488_r48.pdb")),
             str(get_structure_dir("alexa488_r48.mol2")),
         ]
         missing = [p for p in required_inputs if not os.path.exists(p)]
@@ -63,7 +63,7 @@ class TestHGBP1RRTScript(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("RRT(IMP.kinematics", result.stdout)
+            self.assertIn("RRT(linker torsions only) finished", result.stdout)
             self.assertTrue(os.path.exists(out_rmf))
 
             fh = RMF.open_rmf_file_read_only(out_rmf)

@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Collision-gated Metropolis walk over a dye linker's internal DOFs (hGBP1 site 481).
+
+A proposal (random torsion/angle perturbation) is accepted whenever the dye
+does not clash with the protein: no forces, friction or temperature are
+involved, so this is *not* Langevin dynamics. Real Langevin/Brownian dynamics
+lives in ``IMP.bff.cgdye.sampling.langevin`` (``dye sample-langevin``).
+"""
 
 import math
 import os
@@ -218,7 +225,7 @@ def _pdb_linker_indices(dye_pdb):
 @click.option("--interaction-sphere", default=35.0, show_default=True, type=float)
 @click.option(
     "--output-rmf",
-    default="output/test_runs/hgbp1_1dg3_site481/langevin/trajectory.rmf3",
+    default="output/test_runs/hgbp1_1dg3_site481/dof_walk/trajectory.rmf3",
     show_default=True,
 )
 def main(
@@ -238,7 +245,7 @@ def main(
     interaction_sphere,
     output_rmf,
 ):
-    """Stochastic sampling of linker (Internal-DOF walk)."""
+    """Collision-gated Metropolis walk over the linker's internal DOFs."""
     random.seed(seed)
     model = IMP.Model()
     protein = IMP.atom.read_pdb(protein_pdb, model, IMP.atom.NonWaterPDBSelector())
@@ -463,7 +470,7 @@ def main(
             IMP.rmf.save_frame(fh, str((step + 1) // write_every))
 
     click.echo(
-        f"Langevin (Internal-DOF stochastic walk) finished:\n"
+        f"Internal-DOF Metropolis walk finished:\n"
         f"  Steps: {n_steps}, Frames: {n_frames + 1}\n"
         f"  Accepted: {accepted} ({100.0 * accepted / n_steps:.1f}%)\n"
         f"  Internal DOFs (linker torsions): {len(rot_bonds)}\n"

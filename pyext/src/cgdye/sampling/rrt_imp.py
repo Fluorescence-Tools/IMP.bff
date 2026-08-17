@@ -145,3 +145,88 @@ def run_imp_rrt(
                 break
 
     return tree, goal_node_id
+
+
+# ---------------------------------------------------------------------------
+# RRT over a vector of periodic torsion angles (internal linker DOFs)
+# ---------------------------------------------------------------------------
+
+def _wrap_angle(a):
+    """Wrap an angle into [-pi, pi)."""
+    return (a + math.pi) % (2.0 * math.pi) - math.pi
+
+
+def torsion_distance(a, b):
+    """Euclidean distance between two torsion vectors on the torus."""
+    return math.sqrt(sum(_wrap_angle(x - y) ** 2 for x, y in zip(a, b)))
+
+
+def steer_torsions(from_cfg, to_cfg, step_size):
+    """Move from ``from_cfg`` towards ``to_cfg`` by at most ``step_size`` (rad)."""
+    d = torsion_distance(from_cfg, to_cfg)
+    if d == 0.0:
+        return list(from_cfg)
+    alpha = min(1.0, step_size / d)
+    return [_wrap_angle(f + alpha * _wrap_angle(t - f)) for f, t in zip(from_cfg, to_cfg)]
+
+
+class TorsionRRTTree:
+    """RRT tree whose nodes are torsion vectors (list of angles in rad)."""
+
+    def __init__(self, root_cfg):
+        self.configs = [list(root_cfg)]
+        self.parents = [None]
+
+    def add_node(self, cfg, parent_id):
+        self.configs.append(list(cfg))
+        self.parents.append(parent_id)
+        return len(self.configs) - 1
+
+    def nearest(self, cfg):
+        best_id, best_d = 0, float("inf")
+        for i, c in enumerate(self.configs):
+            d = torsion_distance(c, cfg)
+            if d < best_d:
+                best_id, best_d = i, d
+        return best_id
+
+    def __len__(self):
+        return len(self.configs)
+
+
+def run_torsion_rrt(
+    n_dofs,
+    n_iter,
+    step_size,
+    collision_fn,
+    *,
+    start_cfg=None,
+    goal_cfg=None,
+    goal_bias=0.1,
+    goal_tolerance=0.1,
+    seed=0,
+):
+    """Grow an RRT over ``n_dofs`` periodic torsions.
+
+    ``collision_fn(cfg) -> bool`` returns True when the configuration clashes
+    (it is expected to apply ``cfg`` to the molecule as a side effect if the
+    caller needs the coordinates). Returns ``(tree, goal_node_id)``.
+    """
+    rng = random.Random(seed)
+    root = list(start_cfg) if start_cfg is not None else [0.0] * n_dofs
+    tree = TorsionRRTTree(root)
+    goal_node_id = None
+    for _ in range(n_iter):
+        if goal_cfg is not None and rng.random() < goal_bias:
+            target = list(goal_cfg)
+        else:
+            target = [rng.uniform(-math.pi, math.pi) for _ in range(n_dofs)]
+        near_id = tree.nearest(target)
+        new_cfg = steer_torsions(tree.configs[near_id], target, step_size)
+        if collision_fn(new_cfg):
+            continue
+        new_id = tree.add_node(new_cfg, near_id)
+        if goal_cfg is not None and torsion_distance(new_cfg, goal_cfg) <= goal_tolerance:
+            goal_node_id = new_id
+            break
+    return tree, goal_node_id

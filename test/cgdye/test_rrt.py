@@ -103,6 +103,28 @@ def test_run_rrt_respects_collision():
         assert n.transform.get_translation()[0] <= 0.2 + 1e-9
 
 
+def test_run_torsion_rrt_grows_collision_free_tree():
+    from IMP.bff.cgdye.sampling.rrt_imp import run_torsion_rrt, torsion_distance
+    import math
+
+    # forbid the half-space where the first torsion is > pi/2 (a "wall")
+    def collides(cfg):
+        return cfg[0] > math.pi / 2
+
+    tree, goal_id = run_torsion_rrt(3, 200, 0.3, collides, seed=1)
+    assert len(tree) > 1
+    assert all(c[0] <= math.pi / 2 for c in tree.configs)
+    # every non-root node is within one step of its parent
+    for i in range(1, len(tree)):
+        assert torsion_distance(tree.configs[i], tree.configs[tree.parents[i]]) <= 0.3 + 1e-9
+
+    tree, goal_id = run_torsion_rrt(2, 500, 0.5, lambda c: False,
+                                    goal_cfg=[1.0, -1.0], goal_bias=0.5, seed=2)
+    assert goal_id is not None
+    assert torsion_distance(tree.configs[goal_id], [1.0, -1.0]) <= 0.1
+
+
+
 # IMP runs every .py under test/ as a standalone script, and a file of bare
 # pytest functions would import cleanly and exit 0 -- reporting success without
 # running a single assertion. Hand the file to pytest explicitly so a failure

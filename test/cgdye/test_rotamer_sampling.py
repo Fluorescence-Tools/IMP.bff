@@ -22,10 +22,9 @@ from IMP.bff.cgdye.sampling.rotamer import (
 class TestRotamerSampling(unittest.TestCase):
     def test_load_reference_rotamers(self):
         """Verify that we can load rotamers from PDB+DCD."""
-        # Find some reference files in the thirdparty submodule
-        lib_dir = "FRETpredict/FRETpredict/lib"
-        if not os.path.exists(lib_dir):
-            self.skipTest(f"{lib_dir} not found")
+        # The reference libraries are IMP.bff module data (data/rotamer_library).
+        import IMP.bff
+        lib_dir = IMP.bff.get_data_path("rotamer_library")
 
         pdb, dcd, weights = find_reference_rotamer_files(
             lib_dir, "A48_C1R", cutoff=10

@@ -297,7 +297,7 @@ def sample_rotamer(protein_pdb, chain, residue, dye, n_samples, output_rmf):
     click.echo(f"Wrote {n_samples} frames to {output_rmf}")
 
 
-# --- sample-langevin ---
+# --- sample-dof-walk ---
 
 def _protein_residue_groups(protein_hier):
     groups = {}
@@ -330,7 +330,7 @@ def _protein_atom_obstacles(protein_hier, site_ca, interaction_sphere, ignore_ke
                 obstacles.append((coord[0], coord[1], coord[2], 1.0))
     return obstacles
 
-@dye.command("sample-langevin")
+@dye.command("sample-dof-walk")
 @click.option("--protein-pdb", required=True)
 @click.option("--chain", default="A")
 @click.option("--residue", required=True, type=int)
@@ -339,8 +339,13 @@ def _protein_atom_obstacles(protein_hier, site_ca, interaction_sphere, ignore_ke
 @click.option("--n-steps", default=1000, type=int)
 @click.option("--output-rmf", required=True)
 @click.option("--seed", default=42, type=int)
-def sample_langevin(protein_pdb, chain, residue, dye, linker, n_steps, output_rmf, seed):
-    """Internal-DOF stochastic walk sampling."""
+def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rmf, seed):
+    """Collision-gated Metropolis walk over the linker's internal DOFs.
+
+    Not Langevin dynamics: no forces, friction or temperature -- a proposal is
+    accepted whenever the dye does not clash. Real Langevin/Brownian dynamics
+    is ``sample-langevin`` (IMP.bff.cgdye.sampling.langevin).
+    """
     from .sampling.library_gen import LinkerSampler
     random.seed(seed); np.random.seed(seed)
     protein_path = resolve_protein_pdb(protein_pdb)

@@ -13,6 +13,8 @@ from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.cgdye.rotamer.r0 import calculate_r0
 from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score, kappa2_from_vectors
 
+_log = logging.getLogger(__name__)
+
 
 @dataclass
 class FRETFrameResult:
@@ -327,12 +329,16 @@ class RotamerFRET:
         self.nr = int(round((self.rmax - self.rmin) / self.dr, 0) + 1)
         self.rax = np.linspace(self.rmin, self.rmax, self.nr)
 
-        if self.verbose:
-            logging.basicConfig(filename=kwargs.get("log_file", "log"), level=logging.DEBUG)
-            logging.root.setLevel(logging.DEBUG)
-        else:
-            logging.basicConfig(filename=kwargs.get("log_file", "log"), level=logging.INFO)
-            logging.root.setLevel(logging.INFO)
+        # Module logger; nothing is written unless the caller asks for a
+        # log file (``log_file=``). The previous ``logging.basicConfig(filename="log")``
+        # silently created a ``log`` file in the working directory on every
+        # construction and reconfigured the root logger of the host process.
+        log_file = kwargs.get("log_file", None)
+        _log.setLevel(logging.DEBUG if self.verbose else logging.INFO)
+        if log_file:
+            handler = logging.FileHandler(str(log_file))
+            handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+            _log.addHandler(handler)
 
         self.lib_1 = load_rotamer_library(self.libname_1)
         self.lib_2 = load_rotamer_library(self.libname_2)
@@ -657,4 +663,4 @@ class RotamerFRET:
         """
         self.trajectory_analysis()
         self.save()
-        logging.debug("Done")
+        _log.debug("Done")

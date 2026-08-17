@@ -5,7 +5,6 @@ import math
 import os
 from pathlib import Path
 
-import click
 import numpy as np
 import IMP
 import IMP.algebra
@@ -17,6 +16,9 @@ import RMF
 
 from ..io.cif import read_ff_system
 from ..io.template_cif import read_cgdye_template, region_features
+from IMP.bff.cgdye.utils import import_click
+
+click = import_click()  # optional: only the CLI entry point needs it
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent

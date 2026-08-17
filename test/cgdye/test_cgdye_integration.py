@@ -21,14 +21,33 @@ def _cgdye_file(*parts):
 
 
 class TestIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Build the CX4+atto655 force-field system into a temporary directory
+        # instead of expecting a pre-built output/systems/*.system.cif: the
+        # test used to skip everywhere the build-system task had not run.
+        from IMP.bff.cgdye.io.cif import write_ff_system
+        from IMP.bff.cgdye.topology.combined import build_combined_system
+        from IMP.bff.cgdye.utils import get_template_dir
+        cls._tmp = tempfile.TemporaryDirectory()
+        system = build_combined_system(
+            str(get_structure_dir("cx4.mol2")),
+            str(get_structure_dir("atto655.mol2")),
+            "CX4",
+            "atto655",
+            protein_template=str(get_template_dir("cx4.template.cif")),
+            dye_template=str(get_template_dir("atto655.template.cif")),
+        )
+        cls.system_cif = os.path.join(cls._tmp.name, "cx4_atto655.system.cif")
+        write_ff_system(cls.system_cif, system)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
     def setUp(self):
-        self.system_cif = str(get_output_dir("systems", "cx4_atto655.system.cif"))
         self.nmr_cif = str(Path(__import__("IMP.bff", fromlist=["x"]).get_data_path("cgdye")) / "inputs" / "restraints" / "nmr.restraints.cif")
         self.script = _cgdye_file("sim", "runner.py")
-        
-        # Ensure dependencies exist
-        if not os.path.exists(self.system_cif):
-            self.skipTest(f"{self.system_cif} not found. Run pixi run build-system first.")
 
     def run_sim(self, args):
         env = os.environ.copy()
@@ -36,7 +55,8 @@ class TestIntegration(unittest.TestCase):
         # everything the parent had, so the child could not import IMP.bff.
         env["PYTHONPATH"] = os.pathsep.join(
             [p for p in (".", env.get("PYTHONPATH", "")) if p])
-        cmd = [sys.executable, self.script] + args
+        # runner.py uses package-relative imports, so it must run as a module.
+        cmd = [sys.executable, "-m", "IMP.bff.cgdye.sim.runner"] + args
         # Use a reasonable timeout for integration tests
         return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
 

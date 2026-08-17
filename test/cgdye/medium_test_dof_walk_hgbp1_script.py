@@ -27,9 +27,9 @@ def _cgdye_file(*parts):
 
 
 
-class TestLangevinHGBP1Script(unittest.TestCase):
-    def test_langevin_run_writes_dynamic_rmf(self):
-        script = _cgdye_file("scripts", "langevin_hgbp1_site481.py")
+class TestDofWalkHGBP1Script(unittest.TestCase):
+    def test_dof_walk_run_writes_dynamic_rmf(self):
+        script = _cgdye_file("scripts", "dof_walk_hgbp1_site481.py")
         if not script.exists():
             self.skipTest(f"{script} not found")
 
@@ -60,7 +60,7 @@ class TestLangevinHGBP1Script(unittest.TestCase):
                 timeout=300,
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("Langevin (Internal-DOF stochastic walk) finished:", result.stdout)
+            self.assertIn("Internal-DOF Metropolis walk finished:", result.stdout)
 
             fh = RMF.open_rmf_file_read_only(out_rmf)
             # 100/20 = 5 frames + init = 6 frames

@@ -17,7 +17,11 @@ import RMF
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
 from IMP.bff.cgdye.labeling.attachment import attach_dyes, place_dye_from_coords
 from IMP.bff.cgdye.sampling.rotamer import (
-from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
+    apply_rotamer_coords,
+    sample_rotamer_index,
+)
+from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir
+
 
 def _structure(name):
     """A bundled input structure, wherever IMP.bff is installed.
@@ -26,12 +30,7 @@ def _structure(name):
     ran from one place -- and stopped running at all once the data became IMP
     module data under data/cgdye.
     """
-    from IMP.bff.cgdye.utils import get_structure_dir
     return str(get_structure_dir(name))
-
-    apply_rotamer_coords,
-    sample_rotamer_index,
-)
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -39,7 +38,7 @@ def _structure(name):
 @click.option("--chain", default="A", show_default=True)
 @click.option("--residue", default=481, show_default=True, type=int)
 @click.option("--dye-name", default="A48_C1R", show_default=True)
-@click.option("--rotamer-lib-dir", default="cgdye/templates/rotamer", show_default=True)
+@click.option("--rotamer-lib-dir", default=str(get_template_dir("rotamer")), show_default=True)
 @click.option("--n-samples", default=200, show_default=True, type=int)
 @click.option("--seed", default=481, show_default=True, type=int)
 @click.option(

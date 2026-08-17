@@ -13,13 +13,13 @@ import IMP.algebra
 import IMP.atom
 import IMP.container
 import IMP.core
-import IMP.kinematics
 import IMP.rmf
 import RMF
 
 
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes
+from IMP.bff.cgdye.sampling.rrt_imp import run_torsion_rrt
 from IMP.bff.cgdye.topology.builder import parse_mol2
 
 def _structure(name):
@@ -32,18 +32,6 @@ def _structure(name):
     from IMP.bff.cgdye.utils import get_structure_dir
     return str(get_structure_dir(name))
 
-
-
-class LinkerDOFsSampler(IMP.kinematics.Sampler):
-    """Samples linker internal torsions for RRT."""
-
-    def __init__(self, n_dofs):
-        IMP.kinematics.Sampler.__init__(self)
-        self.n_dofs = n_dofs
-
-    def get_sample(self):
-        # Sample each dihedral in [-pi, pi]
-        return [random.uniform(-math.pi, math.pi) for _ in range(self.n_dofs)]
 
 
 def _protein_residue_groups(protein_hier):
@@ -200,6 +188,18 @@ def _pdb_linker_indices(dye_pdb):
 @click.option("--n-iter", default=100, show_default=True, type=int)
 @click.option("--step-size", default=0.5, show_default=True, type=float)
 @click.option("--seed", default=481, show_default=True, type=int)
+@click.option(
+    "--goal-bias",
+    default=0.1,
+    show_default=True,
+    type=float,
+    help="Probability of steering towards --goal-config (ignored without a goal).",
+)
+@click.option(
+    "--goal-config",
+    default=None,
+    help="Comma-separated torsion goal (rad), one value per rotatable linker bond.",
+)
 @click.option("--collision-cutoff", default=1.2, show_default=True, type=float)
 @click.option(
     "--vdw-scale",
@@ -224,13 +224,15 @@ def main(
     n_iter,
     step_size,
     seed,
+    goal_bias,
+    goal_config,
     collision_cutoff,
     vdw_scale,
     protein_resolution,
     interaction_sphere,
     output_rmf,
 ):
-    """RRT sampling of linker torsions using IMP.kinematics."""
+    """RRT sampling of linker torsions (collision-gated, torsion-space RRT)."""
     random.seed(seed)
     model = IMP.Model()
     protein = IMP.atom.read_pdb(protein_pdb, model, IMP.atom.NonWaterPDBSelector())
@@ -348,27 +350,29 @@ def main(
                     return True
         return False
 
-    # Setup RRT
+    # Torsion-space RRT: nodes are torsion vectors, edges are collision-free
+    # steps of at most --step-size radians.
     n_dofs = len(rot_bonds)
-    rrt = IMP.kinematics.RRT()
-    sampler = LinkerDOFsSampler(n_dofs)
-    rrt.set_sampler(sampler)
+    goal_cfg = None
+    if goal_config:
+        goal_cfg = [float(v) for v in goal_config.split(",")]
+        if len(goal_cfg) != n_dofs:
+            raise click.BadParameter(
+                f"--goal-config has {len(goal_cfg)} values, the linker has {n_dofs} rotatable bonds")
 
-    # Use a custom ConfigurationSpace-like mapping
-    def setup_config(cfg):
+    def collides(cfg):
         apply_config(cfg)
-        return not has_collision()
+        return has_collision()
 
-    rrt.set_check_configuration_function(setup_config)
-    rrt.set_step_size(step_size)
-
-    # Root config (all zeros = attached baseline)
-    root_cfg = [0.0] * n_dofs
-    rrt.add_node(root_cfg)
-
-    # Run sampling
-    for _ in range(n_iter):
-        rrt.iterate()
+    tree, goal_node_id = run_torsion_rrt(
+        n_dofs,
+        n_iter,
+        step_size,
+        collides,
+        goal_cfg=goal_cfg,
+        goal_bias=goal_bias,
+        seed=seed,
+    )
 
     # Extract all configurations and save to RMF
     out_dir = os.path.dirname(os.path.abspath(output_rmf))
@@ -381,13 +385,13 @@ def main(
     fh = RMF.create_rmf_file(output_rmf)
     IMP.rmf.add_hierarchies(fh, [root_hier])
 
-    n_nodes = rrt.get_number_of_nodes()
-    for i in range(n_nodes):
-        cfg = rrt.get_node(i)
+    n_nodes = len(tree)
+    for i, cfg in enumerate(tree.configs):
         apply_config(cfg)
         IMP.rmf.save_frame(fh, f"node_{i}")
 
-    click.echo(f"RRT(IMP.kinematics, linker torsions only) finished: ndof={n_dofs} nodes={n_nodes} frames={n_nodes}")
+    click.echo(f"RRT(linker torsions only) finished: ndof={n_dofs} nodes={n_nodes} frames={n_nodes}"
+               + (f" goal_node={goal_node_id}" if goal_node_id is not None else ""))
     click.echo(f"Collision effective cutoff: {eff_cutoff:.3f} A (base={collision_cutoff}, scale={vdw_scale})")
     click.echo(f"Protein obstacles: resolution={protein_resolution} sphere={interaction_sphere}A kept={len(prot_obstacles)}")
     click.echo(f"Wrote RMF: {output_rmf}")

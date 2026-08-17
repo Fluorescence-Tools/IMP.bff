@@ -45,8 +45,8 @@ def test_rotamer_sampling_all_dyes(dye_name):
     "atto655.mol2",
     "cx4.mol2"
 ])
-def test_langevin_sampling_available_mol2(dye_mol2):
-    """Test Langevin (LinkerSampler) for available MOL2 files."""
+def test_linker_sampling_available_mol2(dye_mol2):
+    """LinkerSampler (Metropolis over linker torsions) runs for available MOL2 files."""
     mol2_path = os.path.join(STRUCTURES_DIR, dye_mol2)
     sampler = LinkerSampler(mol2_path)
     

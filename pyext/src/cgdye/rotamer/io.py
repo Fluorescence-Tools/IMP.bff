@@ -445,7 +445,7 @@ def load_protein_frames(
         n_frames = fh.get_number_of_frames()
         limit = n_frames if max_frames is None else min(n_frames, max_frames)
         for frame_id in range(limit):
-            RMF.SetCurrentFrame(fh, RMF.FrameID(frame_id))
+            IMP.rmf.load_frame(fh, RMF.FrameID(frame_id))
             coords, atom_names, atom_types, resnames, chain_ids, residue_indices = _collect_frame(hierarchies[0])
             frames.append(
                 {

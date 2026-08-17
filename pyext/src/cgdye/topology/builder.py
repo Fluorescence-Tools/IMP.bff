@@ -17,7 +17,6 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-import click
 import IMP
 import IMP.algebra
 import IMP.atom
@@ -25,6 +24,9 @@ import IMP.core
 
 from ..io.cif import write_ff_system
 from ..io.template_cif import read_cgdye_template
+from IMP.bff.cgdye.utils import import_click
+
+click = import_click()  # optional: only the CLI entry point needs it
 
 
 def _atom_name_from_type(atom_type_string):

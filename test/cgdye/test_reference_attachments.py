@@ -12,22 +12,24 @@ import pytest
 from IMP.bff.cgdye.labeling.attachment import attach_dyes, place_dye_from_coords
 from IMP.bff.cgdye.utils import get_structure_dir, get_output_dir
 
-# Reference data from thirdparty submodule
-REF_DIR = Path(__file__).resolve().parents[2] / "thirdparty" / "FRETpredict" / "FRETpredict" / "lib"
-OUT_DIR = get_output_dir("test_systems", "reference_attachments")
+# The FRETpredict reference libraries are IMP.bff module data
+# (data/rotamer_library): one <dye>_<linker>.pdb per dye/linker combination,
+# authored in the residue's backbone frame (CA at the origin, x along CA->N,
+# y in the N-CA-C plane).
+def _reference_lib_dir():
+    import IMP.bff
+    return Path(IMP.bff.get_data_path("rotamer_library"))
 
 
 def _supported_reference_combinations():
     """Return list of (dye_name, pdb_path) for available reference dyes."""
-    if not REF_DIR.exists():
+    ref_dir = _reference_lib_dir()
+    if not ref_dir.exists():
         return []
-    out = []
-    for pdb in REF_DIR.glob("*.pdb"):
-        out.append((pdb.stem, pdb))
-    return out
+    return sorted((pdb.stem, pdb) for pdb in ref_dir.glob("*.pdb"))
 
 
-def _reference_transform(ca, n, c, point):
+def _reference_transform(ca, n, c, points):
     """Reference-compatible backbone frame transformation (numpy)."""
     origin = ca
     v1 = n - origin
@@ -37,45 +39,41 @@ def _reference_transform(ca, n, c, point):
     v2 /= np.linalg.norm(v2)
     v3 = np.cross(v1, v2)
     R = np.vstack([v1, v2, v3]).T
-    return np.dot(point, R.T) + origin
+    return np.dot(points, R.T) + origin
+
+
+def _coords(hier):
+    return np.array([IMP.core.XYZ(a).get_coordinates()
+                     for a in IMP.atom.get_by_type(hier, IMP.atom.ATOM_TYPE)])
+
+
+@pytest.fixture(scope="module")
+def hgbp1_site481():
+    model = IMP.Model()
+    protein = IMP.atom.read_pdb(str(get_structure_dir("1DG3.pdb")), model, IMP.atom.NonWaterPDBSelector())
+    xyz = {}
+    for name in ("CA", "N", "C"):
+        p = IMP.atom.Selection(protein, chain_id="A", residue_index=481,
+                               atom_type=IMP.atom.AtomType(name)).get_selected_particles()[0]
+        xyz[name] = np.array(IMP.core.XYZ(p).get_coordinates())
+    return model, protein, xyz
 
 
 @pytest.mark.parametrize("combo_name,pdb_path", _supported_reference_combinations())
-def test_attach_all_reference_dyes_to_hgbp1_site481(combo_name, pdb_path):
-    """Verify that cgdye placement matches the reference transform for all supported dyes."""
-    model = IMP.Model()
-    protein = IMP.atom.read_pdb(str(get_structure_dir("1DG3.pdb")), model, IMP.atom.NonWaterPDBSelector())
+def test_attach_all_reference_dyes_to_hgbp1_site481(combo_name, pdb_path, hgbp1_site481):
+    """cgdye placement equals the reference backbone-frame transform for every library."""
+    model, protein, xyz = hgbp1_site481
     dye = IMP.atom.read_pdb(str(pdb_path), model, IMP.atom.AllPDBSelector())
+    base = _coords(dye)
+    assert base.shape[0] > 0
 
-    # Get CA, N, C coordinates for hGBP1 residue 481
-    sel = IMP.atom.Selection(protein, chain_id="A", residue_index=481)
-    ca_p = IMP.atom.Selection(sel, atom_type=IMP.atom.AtomType("CA")).get_selected_particles()[0]
-    n_p = IMP.atom.Selection(sel, atom_type=IMP.atom.AtomType("N")).get_selected_particles()[0]
-    c_p = IMP.atom.Selection(sel, atom_type=IMP.atom.AtomType("C")).get_selected_particles()[0]
-
-    ca_v = IMP.core.XYZ(ca_p).get_coordinates()
-    n_v = IMP.core.XYZ(n_p).get_coordinates()
-    c_v = IMP.core.XYZ(c_p).get_coordinates()
-
-    # Perform attachment using cgdye
-    attach_dyes(protein, [(dye, "A", 481)], strip_site_sidechain=True)
-
-    # Pick a few sample atoms to check
-    dye_atoms = IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE)
-    for a in dye_atoms[:10]:
-        pos_imp = np.array(IMP.core.XYZ(a).get_coordinates())
-        # We need the "base" coords (relative to origin)
-        # In this test, attach_dyes moves them. 
-        # But we want to verify they match the reference math.
-        pass
-
-    assert len(dye_atoms) > 0
-
-
-def test_stage2_correctness_benchmark():
-    """Stage 2 benchmark: correctness vs reference frame transform."""
-    # This is a placeholder for the full cross-validation report
-    pass
+    # attach_dyes moves the dye in place; the protein is not modified here
+    # (strip_site_sidechain=False) so the module-scoped protein stays reusable.
+    attach_dyes(protein, [(dye, "A", 481)], strip_site_sidechain=False)
+    placed = _coords(dye)
+    expected = _reference_transform(xyz["CA"], xyz["N"], xyz["C"], base)
+    np.testing.assert_allclose(placed, expected, atol=1e-6)
+    IMP.atom.destroy(dye)
 
 
 # IMP runs every .py under test/ as a standalone script, and a file of bare

@@ -1,4 +1,4 @@
-"""Expensive FRETpredict parity tests for IMP rotamer FRET."""
+"""FRETpredict parity tests (expensive: need FRETpredict + MDAnalysis installed)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import pytest
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
 
 
-@pytest.mark.expensive
 @pytest.mark.parametrize("fixed_r0", [False, True])
 @pytest.mark.parametrize("electrostatic", [False, True])
 @pytest.mark.parametrize("temperature", [293, 300])
@@ -45,7 +44,6 @@ def test_rotamer_fretpredict_parity_parameter_matrix(
     _assert_summary_files_match(fp_prefix, imp_prefix, residues=kwargs["residues"])
 
 
-@pytest.mark.expensive
 @pytest.mark.parametrize("fixed_r0", [False, True])
 def test_rotamer_fretpredict_parity_user_reweight(tmp_path: Path, fixed_r0: bool) -> None:
     """Compare user-weighted IMP rotamer FRET against FRETpredict."""
@@ -83,7 +81,6 @@ def test_rotamer_fretpredict_parity_user_reweight(tmp_path: Path, fixed_r0: bool
     _assert_reweighted_pkl_match(fp_prefix, imp_prefix)
 
 
-@pytest.mark.expensive
 def test_rotamer_fretpredict_parity_boltzmann_reweight(tmp_path: Path) -> None:
     """Compare partition-weighted IMP rotamer FRET against FRETpredict."""
     FRETpredict = pytest.importorskip("FRETpredict")
@@ -111,7 +108,6 @@ def test_rotamer_fretpredict_parity_boltzmann_reweight(tmp_path: Path) -> None:
     _assert_summary_files_match(fp_prefix, imp_prefix)
 
 
-@pytest.mark.expensive
 def test_rotamer_fretpredict_parity_swapped_sites(tmp_path: Path) -> None:
     """Compare swapped donor/acceptor sites against FRETpredict."""
     FRETpredict = pytest.importorskip("FRETpredict")
@@ -149,7 +145,6 @@ def test_rotamer_fretpredict_parity_swapped_sites(tmp_path: Path) -> None:
     _assert_summary_files_match(fp_prefix, imp_prefix, residues=kwargs["residues"])
 
 
-@pytest.mark.expensive
 def test_rotamer_fretpredict_parity_two_frame_rmf(tmp_path: Path) -> None:
     """Compare a two-frame IMP RMF trajectory against FRETpredict memory frames."""
     FRETpredict = pytest.importorskip("FRETpredict")

@@ -8,7 +8,6 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-import click
 
 import IMP
 import IMP.algebra
@@ -24,6 +23,9 @@ import RMF
 from ..io.cif import read_ff_system, write_ff_system
 from ..io.nmr_cif import read_nmr_restraints
 from ..system import fixed_components, mobile_components
+from IMP.bff.cgdye.utils import import_click
+
+click = import_click()  # optional: only the CLI entry point needs it
 
 
 def _read_mol2_quiet(path, model):
