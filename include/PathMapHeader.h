@@ -96,6 +96,17 @@ public:
      */
     void set_path_origin(const IMP::algebra::Vector3D &v);
 
+    /**
+     * @brief Sets the labeling-site position and the grid origin separately.
+     *
+     * The lattice (space-fixed) path of the AV anchors the grid corner on
+     * the global lattice rather than at `v - edge/2`.
+     * @param v The labeling site
+     * @param grid_origin The location of voxel (0, 0, 0)
+     */
+    void set_path_origin(const IMP::algebra::Vector3D &v,
+                         const IMP::algebra::Vector3D &grid_origin);
+
     //! Returns position of the labeling site
     IMP::algebra::Vector3D get_path_origin() const {
         return path_origin_;

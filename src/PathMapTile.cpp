@@ -70,7 +70,7 @@ void PathMapTile::update_edges(
 void PathMapTile::update_edges_2(
     int nx, int ny, int nz,
     std::vector<PathMapTile> &tiles,
-    std::vector<int> neighbor_idxs,
+    const std::vector<int> &neighbor_idxs,
     float tile_penalty_threshold
 ){
 

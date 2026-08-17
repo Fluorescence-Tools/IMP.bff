@@ -67,14 +67,16 @@ class Tests(unittest.TestCase):
             n_samples=500000
         )
 
+        # Lattice-anchored grids (PRD-105), MC distances with 500k samples.
+        # The legacy (source-anchored) value was 11.918.
         v = fret_restraint.unprotected_evaluate(None)
-        self.assertAlmostEqual(11.917975852594935, v, places=0)
+        self.assertAlmostEqual(12.7, v, places=0)
 
         model_ref = np.array(
             [
-                49.0, 38.0, 41.7, 52.6, 38.8, 38.7, 44.3, 52.0, 60.3, 50.3, 52.7,
-                30.0, 49.7, 46.0, 46.7, 61.5, 56.2, 51.6, 35.4, 57.2, 53.5, 43.2,
-                52.2, 43.4, 47.5, 47.4, 35.3, 37.9, 41.3, 50.8, 45.9, 33.1, 47.4
+                49.6, 38.6, 42.0, 52.9, 40.1, 41.1, 46.0, 53.6, 61.4, 52.1, 53.6,
+                29.3, 50.7, 46.5, 46.7, 62.0, 56.7, 51.7, 35.8, 57.3, 53.6, 42.5,
+                52.6, 43.2, 47.4, 47.2, 35.6, 37.9, 41.0, 51.1, 46.6, 33.8, 47.5
             ]
         )
         experiment_ref = np.array(

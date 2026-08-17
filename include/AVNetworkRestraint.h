@@ -62,7 +62,8 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
        model on load, rather than archived as pointers. */
     template<class Archive> void serialize(Archive &ar) {
         ar(cereal::base_class<IMP::Restraint>(this),
-           n_samples, av_pi_, model_ps_, distances_);
+           n_samples, av_pi_, model_ps_, distances_,
+           space_fixed_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -77,6 +78,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
             for (const auto &kv : av_index) {
                 avs_[kv.first].reset(new IMP::bff::AV(get_model(), kv.second));
             }
+            configure_avs();
         }
     }
 
@@ -91,6 +93,15 @@ private:
      * larger numbers increase the precision of the distance computation.
      */
     int n_samples = 50000;
+
+    /* PRD-105 evaluation modes. */
+    bool space_fixed_ = true;      //!< lattice-anchored windows (else legacy)
+
+    //! Number of unprotected_evaluate() calls
+    mutable long n_evaluations_ = 0;
+
+    //! Apply the mode flags to the AV handles (anchoring)
+    void configure_avs();
 
     /**
      * @brief Map of AVs used to compute the score.
@@ -141,19 +152,42 @@ private:
 public:
 
     /**
+     * @brief The AV handle of a labeled position, sharing this restraint's
+     * path map and lattice state (a copy of the handle, not a fresh one).
+     * @param name The name of the labeled position (fps.json key)
+     */
+    IMP::bff::AV get_used_av(std::string name) const;
+
+    /**
      * @brief Constructs an AVNetworkRestraint object.
      * @param[in] hier The hierarchy used to obtain particles.
      * @param[in] fps_json_fn The filename of the fps.json file.
      * @param[in] name The name of this restraint. Default is "AVNetworkRestraint%1%".
      * @param[in] score_set The name of the score in the fps.json file. If not provided, all distances are used for scoring.
      */
+    /**
+     * @param[in] n_samples Random samples for the distance computation.
+     * @param[in] space_fixed Anchor every AV grid on the global lattice
+     *   (default). `false` selects the deprecated legacy anchoring.
+     */
     AVNetworkRestraint(
         const IMP::core::Hierarchy &hier,
         std::string fps_json_fn,
         std::string name = "AVNetworkRestraint%1%",
         std::string score_set = "",
-        int n_samples = 50000
+        int n_samples = 50000,
+        bool space_fixed = true
     );
+
+    bool get_space_fixed() const { return space_fixed_; }
+    int get_n_samples() const { return n_samples; }
+
+    /**
+     * @brief Diagnostics of the last run as JSON.
+     *
+     * Per AV: skip / local / full / roll counts, plus the mode flags and the number of evaluations.
+     */
+    std::string get_diagnostics_json() const;
 
     //! Default constructor, needed to deserialize the restraint.
     AVNetworkRestraint() {}

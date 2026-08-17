@@ -25,7 +25,10 @@
 
 
 #include <IMP/bff/PathMap.h>
+#include <IMP/bff/AVOccupancyMap.h>
+#include <IMP/bff/internal/AVLatticeState.h>
 
+#include <memory>
 #include <string>
 #include <cmath>
 #include <vector>
@@ -122,6 +125,15 @@ private:
        is therefore already ref-counted, so IMP::Pointer gives copies a shared
        map and frees it when the last handle goes. */
     IMP::Pointer<IMP::bff::PathMap> av_map_;
+
+    /* Bookkeeping of the lattice (space-fixed) evaluation path -- window,
+       occupancy sources, what the tiles were computed from, quadrature cache,
+       counters. Shared between copies of a handle like the map is; created
+       together with the map in init_path_map(). */
+    std::shared_ptr<internal::AVLatticeState> state_;
+
+    void resample_legacy(bool shift_xyz);
+    void resample_lattice(bool shift_xyz, bool force_full);
 
 protected:
 
@@ -351,9 +363,54 @@ public:
 
     /**
      * @brief Resample the AV object.
+     *
+     * Under `space_fixed` (the default) the path map is anchored on the
+     * global lattice: voxel centres at integer multiples of the grid
+     * spacing, window centred on the lattice-quantised source and rolled by
+     * whole voxels only; occupancy is maintained on the lattice by exact
+     * subtract/add deltas; the search is skipped altogether when
+     * nothing that feeds it changed. With `space_fixed` off the legacy
+     * source-anchored path runs unchanged.
+     *
      * @param shift_xyz Flag indicating whether to shift the XYZ coordinates.
+     * @param force_full Recompute everything from scratch (full raster of
+     *        every occupancy source, no skip). The result is bit-identical
+     *        to the incremental path; used to prove it.
      */
-    void resample(bool shift_xyz=true);
+    void resample(bool shift_xyz=true, bool force_full=false);
+
+    /**
+     * @brief Whether the path map is anchored on the global lattice.
+     *
+     * Default true. `false` selects the legacy anchoring of the grid to the
+     * source sub-voxel, byte-for-byte as before PRD-105; it is deprecated
+     * and kept for one transition period.
+     */
+    bool get_space_fixed() const;
+    void set_space_fixed(bool tf);
+
+    //! IntKey holding the space_fixed flag (absent = default, true)
+    static IntKey get_space_fixed_key();
+
+    //! The lattice window: {kx, ky, kz, n} (lattice index of voxel 0, edge)
+    std::vector<int> get_lattice_window() const;
+
+    //! Diagnostics of the lattice path: {skip, local, full, roll} counts
+    long get_number_of_skips() const;
+    long get_number_of_local_updates() const;
+    long get_number_of_full_updates() const;
+    long get_number_of_rolls() const;
+
+    //! Bumped whenever resample() changed the tiles
+    unsigned long get_result_generation() const;
+
+#ifndef SWIG
+    //! Lattice bookkeeping (created on first use); C++ only
+    internal::AVLatticeState &get_state();
+
+    //! The (x, y, z, density) cloud of the current map, cached per result
+    const std::vector<IMP::algebra::Vector4D> &get_cloud() const;
+#endif
 
     /**
      * @brief Get the mean position of the AV object.

@@ -15,8 +15,15 @@ AVNetworkRestraint::AVNetworkRestraint(
         std::string fps_json_fn,
         std::string name,
         std::string score_set,
-        int n_samples
-) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples){
+        int n_samples,
+        bool space_fixed
+) : IMP::Restraint(hier.get_model(), name), n_samples(n_samples),
+    space_fixed_(space_fixed){
+    if(!space_fixed){
+        IMP_WARN("AVNetworkRestraint: space_fixed=False (legacy source-anchored "
+                 "grids) is deprecated and will be removed after the PRD-105 "
+                 "transition period.\n");
+    }
     auto fps_reader = IMP::bff::FPSReaderWriter(fps_json_fn, score_set);
 
     distances_ = fps_reader.get_distances();
@@ -29,6 +36,13 @@ AVNetworkRestraint::AVNetworkRestraint(
 
     for(IMP::core::Hierarchy &h : IMP::core::get_leaves(hier)){
         model_ps_.emplace_back(h.get_particle_index());
+    }
+    configure_avs();
+}
+
+void AVNetworkRestraint::configure_avs(){
+    for(auto &av: avs_){
+        av.second->set_space_fixed(space_fixed_);
     }
 }
 
@@ -81,6 +95,12 @@ std::map<std::string, std::unique_ptr<IMP::bff::AV> > AVNetworkRestraint::create
     return avs;
 }
 
+IMP::bff::AV AVNetworkRestraint::get_used_av(std::string name) const{
+    IMP::bff::AV* av = get_av(name);
+    IMP_USAGE_CHECK(av != nullptr, "AVNetworkRestraint: no AV named " << name);
+    return *av;
+}
+
 IMP::bff::AV* AVNetworkRestraint::get_av(std::string name) const{
     for (const auto& n : avs_)
         if(n.first == name){
@@ -93,6 +113,7 @@ IMP::bff::AV* AVNetworkRestraint::get_av(std::string name) const{
 double AVNetworkRestraint::unprotected_evaluate(
         IMP::DerivativeAccumulator *accum) const {
     double score = 0.0;
+    n_evaluations_++;
     for(auto &av: avs_){
         av.second->resample();
     }
@@ -118,6 +139,32 @@ double AVNetworkRestraint::get_model_distance(
     auto av1 = get_av(position1_name);
     auto av2 = get_av(position2_name);
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
+}
+
+std::string AVNetworkRestraint::get_diagnostics_json() const{
+    nlohmann::json j;
+    j["space_fixed"] = space_fixed_;
+    j["n_samples"] = n_samples;
+    j["evaluations"] = n_evaluations_;
+    nlohmann::json avs = nlohmann::json::object();
+    long skip = 0, local = 0, full = 0, rolls = 0;
+    for(const auto &kv : avs_){
+        const IMP::bff::AV &av = *kv.second;
+        nlohmann::json a;
+        a["skip"] = av.get_number_of_skips();
+        a["local"] = av.get_number_of_local_updates();
+        a["full"] = av.get_number_of_full_updates();
+        a["rolls"] = av.get_number_of_rolls();
+        a["window"] = av.get_lattice_window();
+        skip += av.get_number_of_skips();
+        local += av.get_number_of_local_updates();
+        full += av.get_number_of_full_updates();
+        rolls += av.get_number_of_rolls();
+        avs[kv.first] = a;
+    }
+    j["avs"] = avs;
+    j["av_totals"] = {{"skip", skip}, {"local", local}, {"full", full}, {"rolls", rolls}};
+    return j.dump();
 }
 
 IMP_OBJECT_SERIALIZE_IMPL(IMP::bff::AVNetworkRestraint);

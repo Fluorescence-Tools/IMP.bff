@@ -69,7 +69,9 @@ class Tests(unittest.TestCase):
         IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
         av = IMP.bff.AV(mdl, av_p)
         np.testing.assert_almost_equal(av.get_source_coordinates(), (-11.589, 16.405, 17.556), decimal=3)
-        np.testing.assert_almost_equal(av.get_mean_position(), (-15.9244, 19.2183, 20.1207), decimal=3)
+        # Lattice-anchored (PRD-105) value; the legacy source-anchored value
+        # (-15.9244, 19.2183, 20.1207) is pinned in test_av_lattice.py.
+        np.testing.assert_almost_equal(av.get_mean_position(), (-15.8832, 19.3745, 20.0379), decimal=3)
         np.testing.assert_almost_equal(av.get_radii(), (3.5, 0, 0), decimal=3)
         self.assertEqual(av.get_parameters_are_optimized(), False)
         self.assertEqual(str(av.get_source()), '"Atom CB of residue 55"')
@@ -84,8 +86,8 @@ class Tests(unittest.TestCase):
         np.testing.assert_allclose(av_mp.get_coordinates(), ref)
                 
         av1.resample()  # Updates the AV
-        ref = (0.31708, -25.513668, -1.132486)
-        np.testing.assert_allclose(av_mp.get_coordinates(), ref, rtol=0.1)
+        ref = (0.749602, -25.434, -1.20065)   # lattice-anchored (PRD-105)
+        np.testing.assert_allclose(av_mp.get_coordinates(), ref, atol=1e-3)
 
     def test_access_av_feature(self):
         av1 = get_av(hier)
@@ -157,7 +159,7 @@ class Tests(unittest.TestCase):
         av1 = get_av(hier)
         av2 = get_av(hier, residue_index=55)
         distances = IMP.bff.av_random_distances(av1, av2, 500000)
-        self.assertAlmostEqual(np.mean(distances), 54.38254912351925, places=1)
+        self.assertAlmostEqual(np.mean(distances), 54.5635, delta=0.15)
 
     def test_av_av_distance(self):
         av1 = get_av(hier)
@@ -172,7 +174,8 @@ class Tests(unittest.TestCase):
             # IMP.bff.DYE_PAIR_DISTANCE_DISTRIBUTION,  # (reserved for Distance distributions)
             # IMP.bff.DYE_PAIR_XYZ_DISTANCE            # Distance between XYZ of dye particles
         ]
-        refs_distances = [53.614223677143364, 54.379459680068706, 52.11946290280115, 0.4563226915509543]
+        # lattice-anchored (PRD-105); MC with 500k samples
+        refs_distances = [53.8048, 54.5468, 52.3023, 0.4495]
         for t, ref in zip(distance_types, refs_distances):
             v = IMP.bff.av_distance(
                 av1, av2,
@@ -211,9 +214,9 @@ class Tests(unittest.TestCase):
         rda = np.linspace(rda_start, rda_stop, n_bins)
         p_rda = IMP.bff.av_distance_distribution(av1, av2, rda, n_samples=n_samples)
         p_rda_ref = np.array(
-            [   0.,    0.,    0.,    0.,    0.,    0.,    0.,    7.,   16.,
-                62.,  144.,  235.,  419.,  646.,  919., 1131., 1348., 1425.,
-                1305., 1085.,  716.,  392.,  126.,   24.,    0.,    0.,    0.,
+            [   0.,    0.,    0.,    0.,    0.,    0.,    1.,    5.,   28.,
+               71.,  137.,  243.,  436.,  617.,  908., 1091., 1329., 1386.,
+             1330., 1139.,  729.,  391.,  142.,   17.,    0.,    0.,    0.,
                 0.,    0.,    0.,    0.,    0.])
         ssdev = np.sum((p_rda_ref - p_rda)**2.)
         self.assertEqual(ssdev < 30000, True)

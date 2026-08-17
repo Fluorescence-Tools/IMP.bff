@@ -53,6 +53,12 @@ private:
     std::vector<bool>  edge_computed;
     std::vector<float> cost;
 
+    // The search loop of find_path(), generic over the frontier comparator so
+    // that plain Dijkstra does not pay for a std::function heuristic call in
+    // every heap comparison.
+    template<class Cmp>
+    void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
+
 protected:
 
     std::vector<PathMapTile> tiles;

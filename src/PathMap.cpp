@@ -23,6 +23,13 @@ PathMap::PathMap(
 
 void PathMap::set_path_map_header(const PathMapHeader &av_header, float resolution)
 {
+    const IMP::em::DensityHeader *nh = av_header.get_density_header();
+    if(nh->get_nx() != header_.get_nx() || nh->get_ny() != header_.get_ny()
+       || nh->get_nz() != header_.get_nz()){
+        // neighbour offsets are linear-index deltas of the old shape
+        offsets_.clear();
+    }
+    pathMapHeader_ = av_header;
     header_ = *av_header.get_density_header();
     header_.compute_xyz_top(true);
     if(resolution < 0)
@@ -35,28 +42,22 @@ void PathMap::set_path_map_header(const PathMapHeader &av_header, float resoluti
     calc_all_voxel2loc();
 }
 
-void PathMap::find_path(
-        const long path_begin_idx, 
+template<class Cmp>
+void PathMap::find_path_impl(
+        const long path_begin_idx,
         const long path_end_idx,
-        const int heuristic_mode
+        Cmp cmp
 ) {
-    // std::cout << "void PathMap::find_path(" << std::endl;
     long n_voxel = get_number_of_voxels();
-    IMP_USAGE_CHECK(
-        path_begin_idx >= 0 && 
-        path_begin_idx < n_voxel && 
-        path_end_idx < n_voxel,
-        "PathMap::find_path: invalid start/stop index"
-    );
 
     // Set default initial values for path search
     cost.resize(0);
     cost.resize(n_voxel, TILE_COST_DEFAULT);
-    
+
     // fast lookup which idx was visited
     visited.resize(0);
     visited.resize(n_voxel, false);
-    
+
     // Store which idx were visited
     std::vector<int> visited_idx;
     visited_idx.reserve(1024);
@@ -67,39 +68,7 @@ void PathMap::find_path(
     if (path_end_idx > 0) end = &tiles[path_end_idx];
 
     // priority_queue stores the elements in the frontier
-    // define distance heuristic to target for priority_queue
-    std::function<double(long, long)> heuristic;
-    if (heuristic_mode == 0) { // dijkstra
-        heuristic = [&](long left, long right){
-            return 0.0;
-        };
-    } else if (heuristic_mode == 1) { // A* (euclidian)
-        heuristic = [&](long left, long right){
-            auto dx = (x_loc_[left] - x_loc_[right]);
-            auto dy = (y_loc_[left] - y_loc_[right]);
-            auto dz = (z_loc_[left] - z_loc_[right]);
-            auto d2 = dx*dx + dy*dy + dz*dz;
-            return sqrt(d2);
-        };
-    } else if (heuristic_mode == 2) { // A* (manhattan)
-        heuristic = [&](long left, long right){
-            auto ax = abs(x_loc_[left] - x_loc_[right]);
-            auto ay = abs(y_loc_[left] - y_loc_[right]);
-            auto az = abs(z_loc_[left] - z_loc_[right]);
-            return ax + ay + az;
-        };
-    } else {
-        std::cout << "PathMap::find_path: Invalid heuristic_mode. Defaulting to Dijkstra.\n";
-        heuristic = [&](long left, long right){return 0.0;};
-    }
-    auto cmp = [&](PathMapTile* left, PathMapTile* right) {
-        long left_idx = left->idx;
-        long right_idx = right->idx;
-        float lhs_cost = cost[left_idx]  + heuristic(left_idx,  path_end_idx);
-        float rhs_cost = cost[right_idx] + heuristic(right_idx, path_end_idx);
-        return rhs_cost < lhs_cost;
-    };
-    std::priority_queue<PathMapTile*, std::vector<PathMapTile*>, decltype(cmp)> frontier(cmp);
+    std::priority_queue<PathMapTile*, std::vector<PathMapTile*>, Cmp> frontier(cmp);
 
     // perform the search
     cost[path_begin_idx] = 0.0;
@@ -130,7 +99,63 @@ void PathMap::find_path(
     for(int &idx : visited_idx){
         tiles[idx].cost = cost[idx];
     }
+}
 
+void PathMap::find_path(
+        const long path_begin_idx, 
+        const long path_end_idx,
+        const int heuristic_mode
+) {
+    // std::cout << "void PathMap::find_path(" << std::endl;
+    long n_voxel = get_number_of_voxels();
+    IMP_USAGE_CHECK(
+        path_begin_idx >= 0 && 
+        path_begin_idx < n_voxel && 
+        path_end_idx < n_voxel,
+        "PathMap::find_path: invalid start/stop index"
+    );
+
+    if (heuristic_mode == 0 || (heuristic_mode != 1 && heuristic_mode != 2)) {
+        // dijkstra: the frontier is ordered by the live cost alone. This is
+        // the same comparison as the generic one below with a zero heuristic
+        // (float + 0.0 converted back to float is the float), without the
+        // std::function call.
+        if (heuristic_mode != 0) {
+            std::cout << "PathMap::find_path: Invalid heuristic_mode. Defaulting to Dijkstra.\n";
+        }
+        auto cmp = [this](PathMapTile* left, PathMapTile* right) {
+            return cost[right->idx] < cost[left->idx];
+        };
+        find_path_impl(path_begin_idx, path_end_idx, cmp);
+        return;
+    }
+
+    // define distance heuristic to target for priority_queue
+    std::function<double(long, long)> heuristic;
+    if (heuristic_mode == 1) { // A* (euclidian)
+        heuristic = [&](long left, long right){
+            auto dx = (x_loc_[left] - x_loc_[right]);
+            auto dy = (y_loc_[left] - y_loc_[right]);
+            auto dz = (z_loc_[left] - z_loc_[right]);
+            auto d2 = dx*dx + dy*dy + dz*dz;
+            return sqrt(d2);
+        };
+    } else { // A* (manhattan)
+        heuristic = [&](long left, long right){
+            auto ax = abs(x_loc_[left] - x_loc_[right]);
+            auto ay = abs(y_loc_[left] - y_loc_[right]);
+            auto az = abs(z_loc_[left] - z_loc_[right]);
+            return ax + ay + az;
+        };
+    }
+    auto cmp = [&](PathMapTile* left, PathMapTile* right) {
+        long left_idx = left->idx;
+        long right_idx = right->idx;
+        float lhs_cost = cost[left_idx]  + heuristic(left_idx,  path_end_idx);
+        float rhs_cost = cost[right_idx] + heuristic(right_idx, path_end_idx);
+        return rhs_cost < lhs_cost;
+    };
+    find_path_impl(path_begin_idx, path_end_idx, cmp);
 }
 
 void PathMap::update_tiles(
@@ -148,8 +173,11 @@ void PathMap::update_tiles(
         obstacle_threshold = pathMapHeader_.get_obstacle_threshold();    
 
     if(reset_tile_edges){
-        edge_computed.resize(0);
-        edge_computed.resize(false, nvox);
+        // Was `resize(false, nvox)` -- arguments swapped, which resized the
+        // flags to zero and left get_edges() reading the previous frame's
+        // (freed, still-set) bits: after the first evaluation edges were never
+        // recomputed and a moved structure kept the old connectivity.
+        edge_computed.assign(nvox, false);
     }
 
     normalized_ = false;

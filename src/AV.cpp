@@ -101,6 +101,23 @@ double av_distance(
     }
 }
 
+namespace {
+
+// The lattice window of an AV: cubic, centred on the lattice-quantised source,
+// large enough that every voxel centre within the linker length of the source
+// lies inside. With q = round(s/h) and |s/h - q| <= 1/2, |k - q| <= ll/h + 1/2.
+void lattice_window(const IMP::algebra::Vector3D &source, double ll, double h,
+                    int k0[3], int &n){
+    int half = (int) std::floor(ll / h + 0.5);
+    n = 2 * half + 1;
+    for(int d = 0; d < 3; d++){
+        int q = (int) std::floor(source[d] / h + 0.5);
+        k0[d] = q - half;
+    }
+}
+
+}
+
 IMP::bff::PathMap* AV::get_map() const{
     // get_map needs to be const
     if(av_map_ == nullptr){
@@ -112,6 +129,24 @@ IMP::bff::PathMap* AV::get_map() const{
     return av_map_.get();
 }
 
+internal::AVLatticeState &AV::get_state(){
+    if(!state_){
+        state_ = std::make_shared<internal::AVLatticeState>();
+    }
+    return *state_;
+}
+
+const std::vector<IMP::algebra::Vector4D> &AV::get_cloud() const{
+    auto map = get_map();   // builds and resamples on first use
+    auto &st = const_cast<AV*>(this)->get_state();
+    if(!st.cloud_valid || st.cloud_generation != st.result_generation){
+        st.cloud = map->get_xyz_density();
+        st.cloud_generation = st.result_generation;
+        st.cloud_valid = true;
+    }
+    return st.cloud;
+}
+
 IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
     IMP::algebra::Vector3D r = {0.0, 0.0, 0.0};
     double sum = 1.0;
@@ -119,7 +154,7 @@ IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
         r += get_source_coordinates();
         sum += 1.0;
     }
-    auto xyzd = get_map()->get_xyz_density();
+    const auto &xyzd = get_cloud();
     for(auto &a: xyzd){
         if(a[3] <= 0.0f) continue;
         sum += a[3];
@@ -139,6 +174,52 @@ IMP::algebra::Vector3D AV::get_source_coordinates() const{
     return xyz.get_coordinates();
 }
 
+IntKey AV::get_space_fixed_key(){
+    static const IntKey k("av_space_fixed");
+    return k;
+}
+
+bool AV::get_space_fixed() const{
+    if(get_model()->get_has_attribute(get_space_fixed_key(), get_particle_index())){
+        return get_model()->get_attribute(get_space_fixed_key(), get_particle_index()) != 0;
+    }
+    return true;
+}
+
+void AV::set_space_fixed(bool tf){
+    if(get_model()->get_has_attribute(get_space_fixed_key(), get_particle_index())){
+        get_model()->set_attribute(get_space_fixed_key(), get_particle_index(), tf ? 1 : 0);
+    } else {
+        get_model()->add_attribute(get_space_fixed_key(), get_particle_index(), tf ? 1 : 0);
+    }
+    if(!tf){
+        static bool warned = false;
+        if(!warned){
+            IMP_WARN("AV: space_fixed=False (legacy source-anchored grid) is deprecated "
+                     "and will be removed after the PRD-105 transition period.\n");
+            warned = true;
+        }
+    }
+    // The map was built for the other anchoring; rebuild it lazily.
+    if(av_map_){
+        av_map_ = nullptr;
+        state_.reset();
+    }
+}
+
+std::vector<int> AV::get_lattice_window() const{
+    if(!state_ || !state_->have_window) return {};
+    return {state_->k0[0], state_->k0[1], state_->k0[2], state_->n};
+}
+
+long AV::get_number_of_skips() const{ return state_ ? state_->n_skip : 0; }
+long AV::get_number_of_local_updates() const{ return state_ ? state_->n_local : 0; }
+long AV::get_number_of_full_updates() const{ return state_ ? state_->n_full : 0; }
+long AV::get_number_of_rolls() const{ return state_ ? state_->n_roll : 0; }
+unsigned long AV::get_result_generation() const{
+    return state_ ? state_->result_generation : 0;
+}
+
 void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
@@ -147,9 +228,29 @@ void AV::init_path_map(){
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
     auto root = IMP::atom::get_root(h);
     av_map_->set_particles(get_leaves(root));
+    // A fresh map: whatever the state remembers about tiles is stale.
+    auto &st = get_state();
+    st.have_result = false;
+    st.have_window = false;
+    st.private1 = nullptr;
+    st.private2 = nullptr;
 }
 
-void AV::resample(bool shift_xyz){
+void AV::resample(bool shift_xyz, bool force_full){
+    if(av_map_ == nullptr){
+        // get_map() would resample once itself; build the map here so the
+        // first evaluation is one full update, not a full one and a skip.
+        init_path_map();
+    }
+    if(get_space_fixed()){
+        resample_lattice(shift_xyz, force_full);
+    } else {
+        resample_legacy(shift_xyz);
+    }
+}
+
+// The pre-PRD-105 evaluation, kept byte-for-byte for `space_fixed=False`.
+void AV::resample_legacy(bool shift_xyz){
     auto map = get_map();
 
     // Update parameters of path map
@@ -187,16 +288,139 @@ void AV::resample(bool shift_xyz){
     auto obstacle = map->get_data();
     long nvox = map->get_number_of_voxels();
     for(long i=0; i<nvox; i++){
-        if(obstacle[i] > TILE_OBSTACLE_THRESHOLD){
-            // Tile density is by default 1 (or another user specified number)
-            // Setting the tile density to zeros effectively removes the tile.
-            map->tiles[i].density *= 0.0;
-        }
+        // Tile density is by default 1. Setting it to zero removes the tile.
+        // (Was `*= 0.0` on obstacle tiles only, which never restored a tile
+        // once removed: repeated resamples of a moving structure shrank the
+        // AV frame after frame.)
+        map->tiles[i].density = (obstacle[i] > TILE_OBSTACLE_THRESHOLD)
+            ? 0.0f : 1.0f;
     }
 
     // Shift XYZ to mean AV position
     if(shift_xyz){
         set_coordinates(get_mean_position());
+    }
+    auto &st = get_state();
+    st.result_generation++;
+    st.n_full++;
+}
+
+void AV::resample_lattice(bool shift_xyz, bool force_full){
+    auto map = get_map();
+    auto &st = get_state();
+
+    const double h = get_simulation_grid_resolution();
+    const double ll = get_linker_length();
+    const IMP::algebra::Vector3D source = get_source_coordinates();
+    const IMP::algebra::VectorD<9> parameter = get_parameter();
+
+    // 0. Window on the lattice; roll when it moved by whole voxels
+    int k0[3]; int n;
+    lattice_window(source, ll, h, k0, n);
+    auto same_vec = [](const auto &a, const auto &b){
+        for(unsigned i = 0; i < a.get_dimension(); i++) if(a[i] != b[i]) return false;
+        return true;
+    };
+    bool params_changed = !st.have_result ||
+        !same_vec(st.last_parameter, parameter);
+    bool dims_changed = !st.have_window || n != st.n;
+    bool rolled = st.have_window && !dims_changed &&
+        (k0[0] != st.k0[0] || k0[1] != st.k0[1] || k0[2] != st.k0[2]);
+    if(rolled) st.n_roll++;
+
+    auto &header = map->get_path_map_header_writable();
+    IMP::algebra::Vector3D grid_origin(k0[0] * h, k0[1] * h, k0[2] * h);
+    if(dims_changed || params_changed){
+        auto path_map_header = create_path_map_header();
+        path_map_header.set_path_origin(source, grid_origin);
+        map->set_path_map_header(path_map_header);
+        map->set_origin(grid_origin);
+    } else if(rolled){
+        header.set_path_origin(source, grid_origin);
+        map->set_origin(grid_origin);
+    } else {
+        // same window; the label may have moved inside its voxel
+        header.set_path_origin(source, grid_origin);
+    }
+    for(int d = 0; d < 3; d++) st.k0[d] = k0[d];
+    st.n = n;
+    st.have_window = true;
+
+    // 1. Occupancy sources for the two passes (private lattice rasters)
+    const double extra1 = get_linker_width() * 0.5;
+    const double extra2 = get_radius1();
+    AVOccupancyMap *occ1; AVOccupancyMap *occ2;
+    {
+        IMP::ParticlesTemp ps(map->ps_.begin(), map->ps_.end());
+        if(!st.private1 || st.private1->get_extra_radius() != extra1
+                        || st.private1->get_spacing() != h){
+            st.private1 = new AVOccupancyMap(h, extra1, ps);
+            st.private1->set_was_used(true);
+        }
+        if(!st.private2 || st.private2->get_extra_radius() != extra2
+                        || st.private2->get_spacing() != h){
+            st.private2 = new AVOccupancyMap(h, extra2, ps);
+            st.private2->set_was_used(true);
+        }
+        occ1 = st.private1.get();
+        occ2 = st.private2.get();
+        occ1->set_window(k0[0], k0[1], k0[2], n, n, n);
+        occ2->set_window(k0[0], k0[1], k0[2], n, n, n);
+    }
+    occ1->update(force_full);
+    occ2->update(force_full);
+
+    // 2. Nothing that feeds the search changed: keep the tiles
+    bool can_skip = !force_full && st.have_result && !rolled &&
+        !dims_changed && !params_changed &&
+        same_vec(st.last_source, source) &&
+        st.generation1 == occ1->get_generation() &&
+        st.generation2 == occ2->get_generation();
+    if(can_skip){
+        st.n_skip++;
+        if(shift_xyz) set_coordinates(st.last_mean);
+        return;
+    }
+    if(rolled || dims_changed || params_changed || !st.have_result){
+        st.n_full++;
+    } else {
+        st.n_local++;
+    }
+
+    // 3. Obstacles inflated by half the linker width, from the lattice
+    long nvox = map->get_number_of_voxels();
+    double *data = map->get_data();
+    occ1->read_window(k0[0], k0[1], k0[2], n, n, n, data);
+    map->normalized_ = false;
+    map->rms_calculated_ = false;
+
+    // 4. Block voxels further away from source than linker length
+    map->fill_sphere(source, ll, TILE_PENALTY_THRESHOLD, true);
+
+    // 5. Unblock voxels in initial sphere
+    map->fill_sphere(source, get_allowed_sphere_radius(), 0, false);
+
+    // 6. Find a path from source to other tiles
+    map->update_tiles();
+    long source_idx = map->get_voxel_by_location(source);
+    map->find_path_dijkstra(source_idx, -1);
+
+    // 7. Remove tiles closer to obstacles than the dye radius
+    occ2->read_window(k0[0], k0[1], k0[2], n, n, n, data);
+    for(long i=0; i<nvox; i++){
+        map->tiles[i].density = (data[i] > TILE_OBSTACLE_THRESHOLD)
+            ? 0.0f : 1.0f;
+    }
+
+    st.have_result = true;
+    st.last_source = source;
+    st.last_parameter = parameter;
+    st.generation1 = occ1->get_generation();
+    st.generation2 = occ2->get_generation();
+    st.result_generation++;
+    st.last_mean = get_mean_position();
+    if(shift_xyz){
+        set_coordinates(st.last_mean);
     }
 }
 
@@ -220,6 +444,11 @@ IMP::bff::PathMapHeader AV::create_path_map_header(){
     double ll = get_linker_length();
     double dg = get_simulation_grid_resolution();
     IMP::bff::PathMapHeader path_map_header(ll, dg);
+    if(get_space_fixed()){
+        int k0[3]; int n;
+        lattice_window(get_source_coordinates(), ll, dg, k0, n);
+        path_map_header.update_map_dimensions(n, n, n);
+    }
     return path_map_header;
 }
 

@@ -60,6 +60,14 @@ void PathMapHeader::set_path_origin(const IMP::algebra::Vector3D &v){
     density_header_.set_zorigin(v[2] - lr);
 }
 
+void PathMapHeader::set_path_origin(const IMP::algebra::Vector3D &v,
+                                    const IMP::algebra::Vector3D &grid_origin){
+    path_origin_ = v;
+    density_header_.set_xorigin(grid_origin[0]);
+    density_header_.set_yorigin(grid_origin[1]);
+    density_header_.set_zorigin(grid_origin[2]);
+}
+
 IMP::algebra::Vector3D PathMapHeader::get_origin() const {
     return algebra::Vector3D(
             (double) density_header_.get_xorigin(),
