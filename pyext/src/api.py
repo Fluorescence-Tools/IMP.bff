@@ -137,6 +137,17 @@ EXPORTS = {
     "simulate_quenched_decay": "IMP.bff.quenching.photon",
     "fret_rate_trace": "IMP.bff.quenching.fret_trace",
     "fret_rate_pair_trace": "IMP.bff.quenching.fret_trace",
+    # --- the field formulation: rate/mobility maps and a grid solver ----------
+    "atomic_quenching_parameters": "IMP.bff.quenching.maps",
+    "diffusion_coefficient_map": "IMP.bff.quenching.maps",
+    "radial_diffusion_map": "IMP.bff.quenching.maps",
+    "slow_diffusion_near_atoms": "IMP.bff.quenching.maps",
+    "quenching_rate_map": "IMP.bff.quenching.maps",
+    "fret_rate_map": "IMP.bff.quenching.maps",
+    "GridDiffusionSolver": "IMP.bff.quenching.solver",
+    "GridDiffusionResult": "IMP.bff.quenching.solver",
+    "diffusion_stability_limit": "IMP.bff.quenching.solver",
+    "DynamicAccessibleVolume": "IMP.bff.quenching.dynamic",
     # --- strip engine (fret) ----------------------------------------------------
     "parse_strip_mask": "IMP.bff.fret.strip",
     "default_strip_mask": "IMP.bff.fret.strip",
