@@ -197,3 +197,59 @@ def build_dye_protein_system(
         "nonbonded": {"enabled": True, "k": 5.0, "cutoff_A": 6.0},
         "sampling": {"n_steps": 500000, "write_every": 1000, "minimize_steps": 200},
     }
+
+
+def dye_forcefield_system(dye_mol2, dye_name="dye", dye_template=None, default_radius=1.7, default_mass=12.0):
+    """A force-field system dict for one dye alone (no protein component).
+
+    The same bonded/non-bonded terms and types as :func:`build_dye_protein_system`
+    gives the dye; the dye's backbone-anchor atoms (``N``, ``CA``, ``C``, ``O``)
+    are collected in ``fixed_groups`` so a sampler can hold them on the
+    labelled residue. Site ids are ``<dye_name>:<atom_name>`` (unique via
+    ``_serial_to_site_atom_names``).
+    """
+    d_atoms, d_bonds = parse_dye_mol2(dye_mol2, dye_name)
+    d_names = _serial_to_site_atom_names(d_atoms)
+    d_graph = build_graph(d_bonds)
+    d_template = read_component_template_cif(dye_template) if dye_template else {}
+    sites = []
+    for serial in sorted(d_atoms):
+        aname = d_names[serial]
+        elem = d_atoms[serial].get("element", "C") or "C"
+        sites.append({"id": sid(dye_name, aname), "component": dye_name, "atom_name": aname,
+                      "site_serial": serial, "radius": default_radius, "mass": _ELEMENT_MASS.get(elem, default_mass),
+                      "element": elem})
+    bonds = [[sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), distance(d_atoms[a], d_atoms[b]), "B1"]
+             for a, b in sorted(d_bonds)]
+    angles = [[sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), sid(dye_name, d_names[c]),
+               angle_value(d_atoms[a], d_atoms[b], d_atoms[c]), "A1"] for a, b, c in build_angles(d_graph)]
+    dihedrals = []
+    for a, b, c, d in build_dihedrals(d_graph):
+        eb = d_atoms.get(b, {}).get("element", "")
+        ec = d_atoms.get(c, {}).get("element", "")
+        tt = "T_PI" if eb in {"C", "N"} and ec in {"C", "N"} else "T_LINK"
+        dihedrals.append([sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), sid(dye_name, d_names[c]), sid(dye_name, d_names[d]), tt])
+    anchor = [sid(dye_name, d_names[k]) for k in sorted(d_atoms) if d_names[k].upper() in {"N", "CA", "C", "O"}]
+    elements = {s["element"] for s in sites}
+    return {
+        "name": dye_name,
+        "components": {dye_name: {"mol2": dye_mol2, "role": "mobile"}},
+        "sites": sites,
+        "groups": {f"{dye_name}_all": [s["id"] for s in sites], f"{dye_name}_anchor": anchor},
+        "rb_groups": {}, "md_fixed_groups": {},
+        "fixed_groups": [f"{dye_name}_anchor"],
+        "bond_types": {"B1": {"k": 2000.0}},
+        "angle_types": {"A1": {"k": 400.0}},
+        "torsion_types": {
+            "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
+            "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
+        },
+        "improper_types": {},
+        "lj_types": build_lj_type_table(elements),
+        "bonds": bonds, "angles": angles, "dihedrals": dihedrals, "impropers": [],
+    }
+
+
+#: atomic masses (Da) of the elements a dye MOL2 carries
+_ELEMENT_MASS = {"H": 1.008, "C": 12.011, "N": 14.007, "O": 15.999, "S": 32.06, "P": 30.974, "F": 18.998, "CL": 35.45, "BR": 79.904}
+

@@ -298,5 +298,40 @@ class TestLJScoring:
         assert emap["dye/N1"] == "N"
 
 
+
+def _assert_close(a, b, places=9):
+    assert abs(a - b) < 10 ** (-places), (a, b)
+
+
+class TestTorsionConvention:
+    """torsion_types are CHARMM V = k(1+cos(n phi - delta)); IMP.core.Cosine has the opposite sign."""
+
+    def _score_at(self, ttype, phi_deg):
+        import math
+        import IMP
+        import IMP.algebra
+        import IMP.core
+        from IMP.bff.cgdye.topology.dye import torsion_cosine
+        m = IMP.Model()
+        def P(x):
+            p = IMP.Particle(m)
+            IMP.core.XYZ.setup_particle(p, IMP.algebra.Vector3D(*x))
+            return p
+        phi = math.radians(phi_deg)
+        ps = [P((-1.5, 1, 0)), P((0, 0, 0)), P((1.5, 0, 0)), P((3.0, math.cos(phi), math.sin(phi)))]
+        r = IMP.core.DihedralRestraint(m, torsion_cosine(ttype), *ps)
+        return r.evaluate(False)
+
+    def test_pi_torsion_is_planar_and_linker_staggered(self):
+        import math
+        t_pi = {"periodicity": 2, "phase_rad": math.pi, "k": 12.0}
+        t_link = {"periodicity": 3, "phase_rad": 0.0, "k": 1.5}
+        _assert_close(self._score_at(t_pi, 0.0), 0.0, places=9)
+        _assert_close(self._score_at(t_pi, 180.0), 0.0, places=9)
+        _assert_close(self._score_at(t_pi, 90.0), 24.0, places=9)
+        _assert_close(self._score_at(t_link, 60.0), 0.0, places=9)
+        _assert_close(self._score_at(t_link, 180.0), 0.0, places=9)
+        _assert_close(self._score_at(t_link, 0.0), 3.0, places=9)
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

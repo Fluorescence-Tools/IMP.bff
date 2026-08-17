@@ -47,6 +47,14 @@
   exclusions while collapsing same-named MOL2 atoms into one site (self-pairs
   at r = 0, ~1e6–1e31 per frame). `dye_internal_system` fixes both; sampler
   pins recorded. Cheap suite 226 passed / 0 skipped.
+* **PRD-108 stage 3 — Langevin/Brownian dye samplers; PRD-108 implemented.**
+  `LangevinDyeSampler` (md: MD + Langevin thermostat; bd: Brownian dynamics,
+  dt ≤ 0.5 fs with the stiff bonds), `dye sample-langevin`, hGBP1 script;
+  thermodynamic pins (equipartition, MSD = 6Dt, torsion Boltzmann histogram,
+  md ⇄ bd, attached dye at 481). Found and fixed a physics bug: torsion types
+  in CHARMM convention were passed to `IMP.core.Cosine` (opposite sign) — planar
+  π torsions were minimal at 90°, linkers eclipsed — in `dye_restraints.py` and
+  `sim/runner.py` (`topology.dye.torsion_cosine`). Cheap suite 347 passed.
 * **PRD-108 stage 2 — AV↔rotamer table.** `dye rotamer compare-av` /
   `cgdye/rotamer/compare_av.py` write `okf/validation/av_vs_rotamer.md` and
   drift pins; medium test with loose sanity bounds. Result: rotamer

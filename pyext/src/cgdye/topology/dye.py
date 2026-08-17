@@ -239,3 +239,20 @@ def _angle_value(a, b, c):
         return 0.0
     cos_theta = max(-1.0, min(1.0, dot / (mag_ba * mag_bc)))
     return math.acos(cos_theta)
+
+
+def torsion_cosine(torsion_type):
+    """The ``IMP.core.Cosine`` for a torsion type stored in the CHARMM convention.
+
+    cgdye's ``torsion_types`` (``k``, ``periodicity`` n, ``phase_rad`` δ) mean
+    the CHARMM/AMBER form ``V = k (1 + cos(n φ − δ))``: ``T_PI`` (n = 2,
+    δ = π) is minimal at the planar 0°/180°, ``T_LINK`` (n = 3, δ = 0) at
+    the staggered ±60°/180°. ``IMP.core.Cosine(k, n, δ')`` scores
+    ``k (1 − cos(n φ − δ'))`` — the *opposite* sign — so δ' = δ + π. Passing
+    δ straight through (as the code did) put every conjugated torsion's
+    minimum at 90° and every linker torsion's at the eclipsed 0°/±120°.
+    """
+    import IMP.core
+    return IMP.core.Cosine(float(torsion_type["k"]), int(torsion_type["periodicity"]),
+                           float(torsion_type["phase_rad"]) + math.pi)
+

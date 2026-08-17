@@ -89,6 +89,11 @@ EXPORTS = {
     "cluster_frames_leader": "IMP.bff.cgdye.sampling.clustering",
     "assign_frames_to_clusters": "IMP.bff.cgdye.sampling.clustering",
     "run_rigid_body_rrt": "IMP.bff.cgdye.sampling.rrt",
+    "LangevinDyeSampler": "IMP.bff.cgdye.sampling.langevin",
+    "LangevinTrajectory": "IMP.bff.cgdye.sampling.langevin",
+    "make_langevin_simulator": "IMP.bff.cgdye.sampling.langevin",
+    "dye_forcefield_system": "IMP.bff.cgdye.topology.combined",
+    "torsion_cosine": "IMP.bff.cgdye.topology.dye",
     "run_torsion_rrt": "IMP.bff.cgdye.sampling.rrt",
     # --- FRET efficiencies from ensembles and kinetics ------------------------
     "fret_efficiency_regimes": "IMP.bff.cgdye.analysis.fret",
@@ -132,6 +137,7 @@ _SOURCE_NAME = {
     "fps_schema_validate": "validate",
     "compare_av_and_rotamer_positions": "compare_positions",
     "compare_av_and_rotamer_pairs": "compare_pairs",
+    "make_langevin_simulator": "make_simulator",
 }
 
 

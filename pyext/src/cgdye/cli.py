@@ -416,6 +416,55 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
     click.echo(f"Finished: {accepted}/{n_steps} accepted. Saved to {output_rmf}")
 
 
+# --- sample-langevin ---
+
+@dye.command("sample-langevin")
+@click.option("--protein-pdb", required=True)
+@click.option("--chain", default="A")
+@click.option("--residue", required=True, type=int)
+@click.option("--dye", default="alexa488", show_default=True, help="Dye name or MOL2 path.")
+@click.option("--integrator", type=click.Choice(["md", "bd"]), default="md", show_default=True,
+              help="md: Langevin-thermostat molecular dynamics; bd: Brownian dynamics.")
+@click.option("--temperature", default=300.0, show_default=True, type=float)
+@click.option("--timestep-fs", default=None, type=float, help="2 fs (md) / 0.5 fs (bd) by default.")
+@click.option("--friction-ps", default=10.0, show_default=True, type=float, help="Langevin friction (1/ps), md only.")
+@click.option("--n-steps", default=20000, show_default=True, type=int)
+@click.option("--write-every", default=100, show_default=True, type=int)
+@click.option("--minimize-steps", default=200, show_default=True, type=int)
+@click.option("--interaction-sphere", default=25.0, show_default=True, type=float)
+@click.option("--output-rmf", required=True)
+@click.option("--seed", default=42, type=int)
+def sample_langevin(protein_pdb, chain, residue, dye, integrator, temperature, timestep_fs, friction_ps,
+                    n_steps, write_every, minimize_steps, interaction_sphere, output_rmf, seed):
+    """Langevin (md) or Brownian (bd) dynamics of an explicit dye attached at a residue.
+
+    Real stochastic dynamics on the dye force field (bonds, angles, dihedrals,
+    repulsive LJ) with a soft-sphere repulsion against the protein around the
+    site; the dye's backbone anchor stays on the residue. Thermodynamic pins:
+    test/cgdye/test_langevin_sampler.py.
+    """
+    from .sampling.langevin import LangevinDyeSampler
+    protein_path = resolve_protein_pdb(protein_pdb)
+    mol2 = Path(dye) if Path(dye).exists() else find_dye_mol2(dye)
+    model = IMP.Model()
+    protein = IMP.atom.read_pdb(str(protein_path), model, IMP.atom.NonWaterPDBSelector())
+    dye_hier = IMP.atom.read_mol2(str(mol2), model)
+    attach_dyes(protein, [(dye_hier, chain, residue)], strip_site_sidechain=True)
+    sampler = LangevinDyeSampler(protein, dye_hier, str(mol2), chain, residue, integrator=integrator,
+                                 temperature=temperature, timestep_fs=timestep_fs, friction_ps=friction_ps,
+                                 interaction_sphere=interaction_sphere, seed=seed)
+    if minimize_steps > 0:
+        sampler.minimize(minimize_steps)
+    out_dir = os.path.dirname(os.path.abspath(output_rmf))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    traj = sampler.run(n_steps, write_every=write_every, out_rmf=output_rmf)
+    t_kin = np.nanmean([sampler.kinetic_temperature(k) for k in traj.kinetic_energy]) if integrator == "md" else float("nan")
+    click.echo(f"{integrator} dynamics finished: {traj.n_frames} frames, {n_steps} steps x {sampler.timestep_fs} fs, "
+               f"<E_pot> {np.mean(traj.potential_energy):.1f} kcal/mol"
+               + (f", <T_kin> {t_kin:.0f} K" if integrator == "md" else "") + f". Wrote RMF: {output_rmf}")
+
+
 # --- label-fp ---
 
 def get_residue_range(hier):

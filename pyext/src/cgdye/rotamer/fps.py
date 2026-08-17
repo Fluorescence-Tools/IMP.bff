@@ -308,15 +308,22 @@ def distances_from_ensembles(
     distance_type: str = "RDAMeanE",
     error: float | None = None,
     error_fraction: float = 0.05,
+    kappa2: str = "isotropic",
 ) -> dict[str, dict[str, Any]]:
     """Predicted fps.json distance entries between rotamer ensembles.
 
     ``distance_type`` selects what the ensembles predict: ``RDAMean`` (⟨R_DA⟩),
     ``RDAMeanE`` (FRET-averaged ⟨R_DA⟩_E) or ``Rmp`` (distance between mean
-    positions), computed from the full pair matrix (no sampling; κ² per pair
-    enters ⟨R_DA⟩_E through the pair efficiencies). ``forster_radius`` in Å
-    for κ² = 2/3. Errors are ``error`` or ``error_fraction`` × distance.
+    positions), computed from the full pair matrix (no sampling).
+    ``forster_radius`` in Å for κ² = 2/3. ⟨R_DA⟩_E follows the fps.json /
+    AVNetworkRestraint convention -- κ² = 2/3 for every pair
+    (``kappa2="isotropic"``), so the number is comparable with an AV's;
+    ``kappa2="dipoles"`` uses the ensembles' per-pair κ² instead (the
+    orientation-resolved efficiency ``RotamerEnsemble.fret_efficiencies``
+    reports). Errors are ``error`` or ``error_fraction`` × distance.
     """
+    if kappa2 not in ("isotropic", "dipoles"):
+        raise ValueError("kappa2 must be 'isotropic' or 'dipoles'")
     from IMP.bff.fret.distance import fret_pair_geometry, fret_pair_efficiencies
 
     if distance_type not in ("RDAMean", "RDAMeanE", "Rmp"):
@@ -324,8 +331,9 @@ def distances_from_ensembles(
     out: dict[str, dict[str, Any]] = {}
     for name1, name2 in pairs:
         e1, e2 = ensembles[name1], ensembles[name2]
-        geometry = fret_pair_geometry(e1.points[:, :3], e1.points[:, 3], e2.points[:, :3], e2.points[:, 3],
-                                      getattr(e1, "mu", None), getattr(e2, "mu", None))
+        mu1 = getattr(e1, "mu", None) if kappa2 == "dipoles" else None
+        mu2 = getattr(e2, "mu", None) if kappa2 == "dipoles" else None
+        geometry = fret_pair_geometry(e1.points[:, :3], e1.points[:, 3], e2.points[:, :3], e2.points[:, 3], mu1, mu2)
         w = geometry["weight"]
         if distance_type == "RDAMean":
             value = float(np.sum(geometry["R"] * w))

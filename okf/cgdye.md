@@ -58,6 +58,9 @@ declared, Bio/MDAnalysis/numba gone), PRD-96 (`sampling/segments.py`,
 live in bff; chisurf `forster.py`/`kappa2.py` are the DUP side). quest
 `dye_diffusion` overlap: out of scope.
 
-**PRDs.** [PRD-107](prds/prd-107.md) (consolidation, parity, flat API);
-PRD-108 (rotamer ensembles for docking, fps.json `R1`, Langevin/Brownian
-samplers) follows.
+**PRDs.** [PRD-107](prds/prd-107.md) (consolidation, parity, flat API) and
+[PRD-108](prds/prd-108.md) (`RotamerEnsemble` / fps.json `R1`, the AV↔rotamer
+table `validation/av_vs_rotamer.md`, `LangevinDyeSampler`). Follow-ons: C++
+`R1` in `AVNetworkRestraint` (not motivated by the table), per-dye AV-parameter
+calibration, harder rotamer screening (σ-scaling 1), folding
+`spectroscopy/kappa2.py` into `fret/kappa2.py` (PRD-47).

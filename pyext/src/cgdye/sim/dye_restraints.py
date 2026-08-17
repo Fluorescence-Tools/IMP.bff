@@ -5,6 +5,7 @@ import IMP.container
 import IMP.core
 
 from IMP.bff.cgdye.sampling.scoring import compute_exclusions, compute_lj_pair_sites
+from IMP.bff.cgdye.topology.dye import torsion_cosine
 
 
 def build_dye_restraints(model, system, site_particles):
@@ -53,11 +54,8 @@ def build_dye_restraints(model, system, site_particles):
             site_particles[c],
             site_particles[d],
         )
-        t = tt[tid]
-        fun = IMP.core.Cosine(
-            float(t["k"]), int(t["periodicity"]), float(t["phase_rad"])
-        )
-        restraints.append(IMP.core.DihedralRestraint(model, fun, p1, p2, p3, p4))
+        # CHARMM-convention type -> IMP.core.Cosine (sign flip, see torsion_cosine)
+        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[tid]), p1, p2, p3, p4))
 
     for a, b, c, d, tid in system.get("impropers", []):
         if any(x not in site_particles for x in (a, b, c, d)):

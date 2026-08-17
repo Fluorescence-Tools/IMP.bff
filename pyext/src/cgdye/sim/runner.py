@@ -23,6 +23,7 @@ import RMF
 from ..io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from ..io.nmr_cif import read_nmr_restraints
 from ..system import fixed_components, mobile_components
+from IMP.bff.cgdye.topology.dye import torsion_cosine
 from IMP.bff.cgdye.utils import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
@@ -309,11 +310,8 @@ def _build_restraints(model, system, site_particles):
         if a not in sp or b not in sp or c not in sp or d not in sp:
             continue
         p1, p2, p3, p4 = sp[a], sp[b], sp[c], sp[d]
-        t = tt[tid]
-        fun = IMP.core.Cosine(
-            float(t["k"]), int(t["periodicity"]), float(t["phase_rad"])
-        )
-        restraints.append(IMP.core.DihedralRestraint(model, fun, p1, p2, p3, p4))
+        # CHARMM-convention type -> IMP.core.Cosine (sign flip, see topology.dye.torsion_cosine)
+        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[tid]), p1, p2, p3, p4))
 
     for a, b, c, d, tid in system.get("impropers", []):
         if a not in sp or b not in sp or c not in sp or d not in sp:

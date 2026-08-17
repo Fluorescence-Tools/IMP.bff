@@ -128,10 +128,14 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
         entry = distances["d1_a1"]
         assert entry["distance_type"] == dtype and 20 < entry["distance"] < 90
     distances = distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4)
-    # <R_DA>_E from the pair matrix reproduces the static efficiency
+    # <R_DA>_E (kappa2 = 2/3, the fps.json convention) is what av_pair_statistics gives
+    _rmp, _rda, rda_e_av, _sig = av_pair_statistics(d, a, forster_radius=50.4, n_samples=200000)
+    assert distances["d1_a1"]["distance"] == pytest.approx(rda_e_av, abs=0.3)
+    # with the ensembles' dipoles it reproduces the orientation-resolved static efficiency
+    dip = distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4, kappa2="dipoles")
     eff = d.fret_efficiencies(a, forster_radius=50.4)
     r_e = 50.4 * (1.0 / eff["static"] - 1.0) ** (1.0 / 6.0)
-    assert distances["d1_a1"]["distance"] == pytest.approx(r_e, rel=1e-9)
+    assert dip["d1_a1"]["distance"] == pytest.approx(r_e, rel=1e-9)
 
     out = tmp_path / "rotamer.fps.json"
     write_rotamer_fps(out, positions, distances)                    # validated on write
