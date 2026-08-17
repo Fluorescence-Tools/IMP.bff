@@ -14,8 +14,8 @@ import IMP.em
 import IMP.rmf
 import RMF
 
-from ..io.cif import read_ff_system
-from ..io.template_cif import read_cgdye_template, region_features
+from ..io.cif import read_dye_forcefield_cif
+from ..io.template_cif import read_component_template_cif, region_features
 from IMP.bff.cgdye.utils import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
@@ -287,7 +287,7 @@ def load_site_name_lookup(traj_root, system_name, component):
     if not system_cif.exists():
         return {}
 
-    system = read_ff_system(str(system_cif))
+    system = read_dye_forcefield_cif(str(system_cif))
     lookup = {}
     for site in system.get("sites", []):
         if site.get("component") == component:
@@ -304,7 +304,7 @@ def _load_regions_from_template(template_cif_path):
     region_colors_dict : {region_name: color_str}
     region_order : list of region names in template definition order
     """
-    template = read_cgdye_template(str(template_cif_path))
+    template = read_component_template_cif(str(template_cif_path))
     rf = region_features(template)  # {feature_id: color}
     features = template.get("features", {})
 
@@ -419,7 +419,7 @@ def write_radial_histogram(distances, out_csv, bin_width):
             out.write(f"{lo:.3f},{hi:.3f},{c}\n")
 
 
-def analyze_mobile(
+def analyze_dye_density(
     traj_roots,
     output_dir,
     mobile,
@@ -773,7 +773,7 @@ def main(
                 f"Template CIF not found for mobile component '{mob}': {tpl}\n"
                 "Pass --mobile-template-cif explicitly."
             )
-        analyze_mobile(
+        analyze_dye_density(
             traj_roots=roots,
             output_dir=output_dir,
             mobile=mob,

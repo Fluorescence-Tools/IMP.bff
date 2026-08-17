@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
-from IMP.bff.cgdye.rotamer.r0 import calculate_r0
+from IMP.bff.fret.forster import forster_radius_from_spectra
 
 
 @click.group()
@@ -79,7 +79,7 @@ def predict(
 @click.option("--k2", required=True, type=float, help="Orientation factor.")
 def r0(donor: str, acceptor: str, k2: float) -> None:
     """Calculate a Förster radius."""
-    value = calculate_r0(donor, acceptor, k2)
+    value = forster_radius_from_spectra(donor, acceptor, k2)
     click.echo(f"{value:.6f} nm")
 
 

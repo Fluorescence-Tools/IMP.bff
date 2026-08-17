@@ -32,7 +32,7 @@ def _registry_path() -> Path:
     return Path(IMP.bff.get_data_path("rotamer_library")) / "libraries.json"
 
 
-def get_library_registry() -> dict[str, dict[str, Any]]:
+def rotamer_library_registry() -> dict[str, dict[str, Any]]:
     """Load the bundled FRETpredict rotamer-library registry.
 
     Returns
@@ -64,7 +64,7 @@ def normalize_library_name(library_name: str) -> str:
     return re.sub(r"\s+cutoff\d+$", "", str(library_name).strip())
 
 
-def get_library_metadata(library_name: str) -> dict[str, Any]:
+def rotamer_library_metadata(library_name: str) -> dict[str, Any]:
     """Return metadata for a FRETpredict-style rotamer library.
 
     Parameters
@@ -78,7 +78,7 @@ def get_library_metadata(library_name: str) -> dict[str, Any]:
         Library metadata from ``libraries.json``.
     """
     key = normalize_library_name(library_name)
-    registry = get_library_registry()
+    registry = rotamer_library_registry()
     if key not in registry:
         raise ValueError(f"Unknown rotamer library {library_name!r}")
     metadata = dict(registry[key])
@@ -148,7 +148,7 @@ def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None =
     if candidate.exists():
         return candidate
 
-    metadata = get_library_metadata(library_name)
+    metadata = rotamer_library_metadata(library_name)
     cutoff = metadata.get("cutoff")
     filename = _library_filename(metadata, cutoff)
     stem = filename.split("_cutoff")[0]
@@ -213,7 +213,7 @@ def _metadata_from_path(path: Path) -> dict[str, Any]:
         Metadata dictionary.
     """
     stem = path.stem
-    for key, metadata in get_library_registry().items():
+    for key, metadata in rotamer_library_registry().items():
         base = str(metadata["filename"]).split("_cutoff")[0]
         if stem == base:
             result = dict(metadata)
@@ -342,16 +342,16 @@ def load_rotamer_library(
     """
     path = resolve_rotamer_library_path(library_name, lib_dir=lib_dir)
     explicit_path = Path(str(library_name)).exists()
-    metadata = get_library_metadata(library_name) if not explicit_path else _metadata_from_path(path)
+    metadata = rotamer_library_metadata(library_name) if not explicit_path else _metadata_from_path(path)
     suffix = path.suffix.lower()
     if suffix == ".dcd":
         # FRETpredict library set: <stem>.pdb (names, residues) + DCD frames +
         # per-rotamer weights, read with the in-tree DCD reader.
-        from IMP.bff.cgdye.sampling.rotamer import load_reference_rotamers
+        from IMP.bff.cgdye.sampling.rotamer import load_rotamer_library_dcd
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")
         weights_path = path.with_name(f"{path.stem}_weights.txt")
-        ref = load_reference_rotamers(pdb_path, path, weights_path if weights_path.exists() else None)
+        ref = load_rotamer_library_dcd(pdb_path, path, weights_path if weights_path.exists() else None)
         coords = np.asarray(ref["coords"], dtype=np.float64)
         weights = np.asarray(ref["weights"], dtype=np.float64)
         library = {

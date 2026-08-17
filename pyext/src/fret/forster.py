@@ -1,4 +1,12 @@
-"""Förster radius calculations for rotamer FRET."""
+"""Förster radius from donor emission / acceptor excitation spectra.
+
+``forster_radius_from_spectra(donor, acceptor, kappa2)`` integrates the
+bundled dye spectra (module data ``data/rotamer_library/R0``, the FRETpredict
+tables) into the overlap integral and returns R0 in nm. Lives in ``fret``
+because R0 is a property of the label pair, not of a coordinate model; cgdye
+imports it (never the reverse). Resolves the PRD-47 R0 placement question on
+the bff side: R0 lives in imp.bff.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +23,7 @@ _DYE_NAME_RE = re.compile(r"^(?P<type>.+?)\s+(?P<number>[A-Za-z0-9]+)$")
 
 # numpy 2 removed np.trapz in favour of np.trapezoid, and this module is the
 # Foerster-radius calculation -- so under the numpy the stack actually runs
-# (2.4) calculate_r0 raised AttributeError and R0 could not be computed at all.
+# (2.4) forster_radius_from_spectra raised AttributeError and R0 could not be computed at all.
 try:  # numpy >= 2
     _trapezoid = np.trapezoid
 except AttributeError:  # pragma: no cover - numpy < 2
@@ -142,7 +150,7 @@ def _read_spectrum(path: Path) -> np.ndarray:
     return np.array(data, dtype=[("Wavelength", float), ("Excitation", float), ("Emission", float)])
 
 
-def calculate_r0(
+def forster_radius_from_spectra(
     donor: str,
     acceptor: str,
     k2: float,

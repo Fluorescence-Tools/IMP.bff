@@ -1,5 +1,5 @@
 import numpy as np
-from IMP.bff.cgdye.sampling.scoring import BoundingBoxFilter, InternalEnergyEvaluator, lj_score
+from IMP.bff.cgdye.sampling.scoring import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
 
 def test_bounding_box_filter():
     bbf = BoundingBoxFilter(pad=3.5)
@@ -29,7 +29,7 @@ def test_internal_energy_evaluator_vectorized():
         ],
         'bonds': []
     }
-    evaluator = InternalEnergyEvaluator(system)
+    evaluator = DyeInternalEnergyEvaluator(system)
     
     # 2 frames, 2 atoms
     coords = np.array([
@@ -56,7 +56,7 @@ def test_evaluate_batch_filtered():
         ],
         'bonds': []
     }
-    evaluator = InternalEnergyEvaluator(system)
+    evaluator = DyeInternalEnergyEvaluator(system)
     
     # Frame 0 is close, Frame 1 is far
     coords = np.array([

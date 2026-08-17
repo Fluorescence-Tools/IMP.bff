@@ -29,7 +29,7 @@ from IMP.bff.cgdye.labeling.backbone_frame import (
 log = logging.getLogger(__name__)
 
 
-def resolve_site(hierarchy, chain_id, resnum):
+def resolve_dye_site(hierarchy, chain_id, resnum):
     """Map a residue selection to its backbone particles.
 
     Returns dict with keys 'CA', 'N', 'C' mapping to IMP particles.
@@ -91,7 +91,7 @@ def align_hierarchies(source_hier, source_chain, source_resnum, target_ca, targe
         target_ca, target_n, target_c: Target backbone coordinates.
     """
     # 1. Get source backbone coordinates
-    s_site = resolve_site(source_hier, source_chain, source_resnum)
+    s_site = resolve_dye_site(source_hier, source_chain, source_resnum)
     s_ca, s_n, s_c = [
         IMP.core.XYZ(s_site[k]).get_coordinates() for k in ["CA", "N", "C"]
     ]
@@ -160,7 +160,7 @@ def attach_dyes(protein_hier, dye_hiers_and_sites, strip_site_sidechain=False):
     """
     results = []
     for dye_hier, chain_id, resnum in dye_hiers_and_sites:
-        site = resolve_site(protein_hier, chain_id, resnum)
+        site = resolve_dye_site(protein_hier, chain_id, resnum)
         if strip_site_sidechain:
             strip_sidechain_at_site(protein_hier, chain_id, resnum)
         frame = backbone_frame(protein_hier, chain_id, resnum)
@@ -306,7 +306,7 @@ def place_dye_from_rotamer_cb(
         rl_path:      Optional Dunbrack rotamer library file path.
         prob_threshold: Probability threshold for RotamerCalculator.
     """
-    site = resolve_site(protein_hier, chain_id, resnum)
+    site = resolve_dye_site(protein_hier, chain_id, resnum)
     ca = IMP.core.XYZ(site["CA"]).get_coordinates()
     n  = IMP.core.XYZ(site["N"]).get_coordinates()
     c  = IMP.core.XYZ(site["C"]).get_coordinates()

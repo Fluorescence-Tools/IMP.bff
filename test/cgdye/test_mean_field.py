@@ -1,5 +1,5 @@
 import numpy as np
-from IMP.bff.cgdye.sampling.mean_field import mean_field_weights, mean_field_weights_multi_dye
+from IMP.bff.cgdye.sampling.mean_field import rotamer_mean_field_weights, rotamer_mean_field_weights_multi_dye
 
 def test_mean_field_weights_single():
     n_clusters = 5
@@ -14,7 +14,7 @@ def test_mean_field_weights_single():
     dye_elems = ['C'] * n_dye_atoms
     prot_elems = ['C'] * n_prot
     
-    w = mean_field_weights(
+    w = rotamer_mean_field_weights(
         rotamer_coords, initial_weights, protein_coords,
         dye_elems, prot_elems, K=1.0, n_iter=5
     )
@@ -42,7 +42,7 @@ def test_mean_field_weights_multi():
     dye2_elems = ['C'] * n_dye_atoms_2
     prot_elems = ['C'] * n_prot
     
-    w_list = mean_field_weights_multi_dye(
+    w_list = rotamer_mean_field_weights_multi_dye(
         [rot_1, rot_2],
         [w1_init, w2_init],
         protein_coords,

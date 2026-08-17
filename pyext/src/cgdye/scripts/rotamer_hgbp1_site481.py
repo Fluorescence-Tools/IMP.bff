@@ -17,7 +17,7 @@ import RMF
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
 from IMP.bff.cgdye.labeling.attachment import attach_dyes, place_dye_from_coords
 from IMP.bff.cgdye.sampling.rotamer import (
-    apply_rotamer_coords,
+    apply_rotamer_coordinates,
     sample_rotamer_index,
 )
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir
@@ -105,13 +105,13 @@ def main(
 
     # Initial frame
     idx0 = sample_rotamer_index(lib["weight"], rng=rng)
-    apply_rotamer_coords(dye, lib["coords"][idx0 + 1])
+    apply_rotamer_coordinates(dye, lib["coords"][idx0 + 1])
     place_dye_from_coords(dye, ca, n, c)
     IMP.rmf.save_frame(fh, f"init_rotamer_{idx0 + 1}")
 
     for i in range(n_samples):
         ridx = sample_rotamer_index(lib["weight"], rng=rng)
-        apply_rotamer_coords(dye, lib["coords"][ridx + 1])
+        apply_rotamer_coordinates(dye, lib["coords"][ridx + 1])
         place_dye_from_coords(dye, ca, n, c)
         IMP.rmf.save_frame(fh, f"rotamer_{ridx + 1}")
 

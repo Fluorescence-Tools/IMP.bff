@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_exact_efficiency(
+def fret_efficiency_exact_kinetic(
     p_matrix: np.ndarray, 
     fret_rates: np.ndarray, 
     tau0: float, 
@@ -62,7 +62,7 @@ def compute_exact_efficiency(
     return float(efficiency)
 
 
-def calculate_fret_exact(
+def fret_efficiency_exact_kinetic_pair(
     dist_matrix: np.ndarray,
     kappa2_matrix: np.ndarray,
     p_d: np.ndarray,
@@ -100,10 +100,10 @@ def calculate_fret_exact(
     rate_ratios = (R0 / dist_matrix)**6 * (1.5 * kappa2_matrix)
     fret_rates = (k_rad * rate_ratios).flatten()
     
-    return compute_exact_efficiency(P_total, fret_rates, tau0, dt, weights=w_total)
+    return fret_efficiency_exact_kinetic(P_total, fret_rates, tau0, dt, weights=w_total)
 
 
-def calculate_fret_regimes(
+def fret_efficiency_regimes(
     dist_matrix: np.ndarray,
     kappa2_matrix: np.ndarray,
     weights_d: np.ndarray,

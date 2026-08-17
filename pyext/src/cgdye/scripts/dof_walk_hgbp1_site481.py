@@ -26,7 +26,7 @@ import RMF
 
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes
-from IMP.bff.cgdye.topology.builder import parse_mol2
+from IMP.bff.cgdye.topology.builder import parse_dye_mol2
 
 def _structure(name):
     """A bundled input structure, wherever IMP.bff is installed.
@@ -277,7 +277,7 @@ def main(
         idx_to_xyz0[i] = IMP.algebra.Vector3D(c[0], c[1], c[2])
 
     # Mol2 graph for internal connectivity.
-    mol2_atoms, mol2_bonds = parse_mol2(dye_mol2, "dye")
+    mol2_atoms, mol2_bonds = parse_dye_mol2(dye_mol2, "dye")
     idx_to_name = {i: a["atom_name"] for i, a in mol2_atoms.items()}
 
     # Add dye bonds to model for visualization

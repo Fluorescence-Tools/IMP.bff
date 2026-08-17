@@ -33,7 +33,7 @@ import IMP.core
 import IMP.algebra
 
 from IMP.bff.cgdye.utils import get_structure_dir
-from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_site
+from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_dye_site
 
 # sys.argv, not []: IMP.setup_from_argv reads argv[0] without checking, so an
 # empty list segfaults the interpreter rather than raising. Reported as a trap
@@ -52,10 +52,10 @@ n_dye_atoms = len(IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE))
 print("hGBP1 atoms:", n_protein_atoms, " dye atoms:", n_dye_atoms)
 
 # --- 2. resolve the labelling site ------------------------------------------
-# resolve_site returns the backbone frame the dye is attached against. If the
+# resolve_dye_site returns the backbone frame the dye is attached against. If the
 # residue is missing from the model this raises rather than silently labelling
 # somewhere else, which is the behaviour you want from a labelling step.
-site = resolve_site(protein, "A", 481)
+site = resolve_dye_site(protein, "A", 481)
 print("site 481 backbone atoms:", sorted(site))
 assert {"N", "CA", "C"} <= set(site)
 

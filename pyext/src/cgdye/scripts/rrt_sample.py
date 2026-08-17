@@ -5,7 +5,7 @@ import os
 
 import click
 
-from IMP.bff.cgdye.sampling.rrt import make_transform, run_imp_rrt
+from IMP.bff.cgdye.sampling.rrt import make_transform, run_rigid_body_rrt
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -26,7 +26,7 @@ def main(n_iter, step_size, goal_bias, seed, output):
         (-3.14, 3.14),
     ]
 
-    tree, goal_id = run_imp_rrt(
+    tree, goal_id = run_rigid_body_rrt(
         start,
         bounds,
         n_iter=n_iter,

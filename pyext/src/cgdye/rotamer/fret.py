@@ -10,8 +10,8 @@ from typing import Any
 
 import numpy as np
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.cgdye.rotamer.r0 import calculate_r0
-from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score, kappa2_from_vectors
+from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score, kappa2_from_dipoles
 
 _log = logging.getLogger(__name__)
 
@@ -482,11 +482,11 @@ class RotamerFRET:
         mu_2 = rotamers_2[:, mu_2_indices[0], :] - rotamers_2[:, mu_2_indices[1], :] if len(mu_2_indices) >= 2 else rotamers_2[:, 0, :] - rotamers_2[:, 1, :]
         mu_1 = mu_1 / np.linalg.norm(mu_1, axis=1, keepdims=True)
         mu_2 = mu_2 / np.linalg.norm(mu_2, axis=1, keepdims=True)
-        k2 = kappa2_from_vectors(mu_1, mu_2, r_vectors)
+        k2 = kappa2_from_dipoles(mu_1, mu_2, r_vectors)
         k2_avg = float(np.sum(k2 * combined_matrix))
 
         if not self.fixed_R0:
-            self.r0 = calculate_r0(self.donor, self.acceptor, k2_avg, r0_dir=self.r0lib)
+            self.r0 = forster_radius_from_spectra(self.donor, self.acceptor, k2_avg, r0_dir=self.r0lib)
             if self.r0 == 0:
                 return FRETFrameResult((float(score_1.partition), float(score_2.partition)), float("nan"), float("nan"), float("nan"), float("nan"))
 

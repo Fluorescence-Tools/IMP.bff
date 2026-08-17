@@ -1,25 +1,28 @@
-"""Coarse-Grained Dye Simulations for IMP."""
+"""Explicit (coarse-grained) dye modelling for IMP.bff -- the *source* tree.
 
-from .rotamer import RotamerFRET
-from .system import System
-from .labeling import attach_dyes, resolve_site, align_hierarchies, backbone_frame, place_dye_from_coords
-from .sampling.rotamer import apply_rotamer_coords, sample_rotamer_index
-from .analysis.fret import compute_exact_efficiency, calculate_fret_exact
-from .io import read_ff_system, write_ff_system, read_cgdye_template
+Users reach every public name flat as ``IMP.bff.<Name>`` (see
+``IMP.bff.api``); the sub-packages here (``labeling``, ``topology``,
+``sampling``, ``rotamer``, ``io``, ``analysis``, ``sim``, ``scripts``) are how
+the code is organised. Importing this package is cheap and needs no click.
+"""
 
-__all__ = [
-    "RotamerFRET",
-    "System",
-    "attach_dyes",
-    "resolve_site",
-    "align_hierarchies",
-    "backbone_frame",
-    "place_dye_from_coords",
-    "apply_rotamer_coords",
-    "sample_rotamer_index",
-    "compute_exact_efficiency",
-    "calculate_fret_exact",
-    "read_ff_system",
-    "write_ff_system",
-    "read_cgdye_template",
-]
+from __future__ import annotations
+
+from IMP.bff.api import EXPORTS as _EXPORTS
+
+#: the flat public names that live in cgdye (subset of IMP.bff.api.EXPORTS)
+__all__ = sorted(n for n, m in _EXPORTS.items() if m.startswith("IMP.bff.cgdye."))
+
+
+def __getattr__(name):
+    """Resolve a flat public name lazily (PEP 562)."""
+    if name in __all__:
+        from IMP.bff.api import resolve
+        value = resolve(name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'IMP.bff.cgdye' has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

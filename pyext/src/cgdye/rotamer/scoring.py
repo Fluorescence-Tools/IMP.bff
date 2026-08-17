@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from IMP.bff.cgdye.topology.dye import lj_energy, lj_parameter_arrays
+from IMP.bff.fret.kappa2 import kappa2_from_dipoles  # re-export: κ² lives in fret
 
 _GAS_CONSTANT = 1.9858775e-3
 
@@ -463,29 +464,3 @@ def compute_rotamer_score(
         return RotamerScoreResult(weights=weights, partition=0.0, energies=pot_energy + dh_energy)
     weights = boltzmann / partition
     return RotamerScoreResult(weights=weights, partition=partition, energies=pot_energy + dh_energy)
-
-
-def kappa2_from_vectors(mu_donor: np.ndarray, mu_acceptor: np.ndarray, r_vectors: np.ndarray) -> np.ndarray:
-    """Compute orientation factors from dipole and distance vectors.
-
-    Parameters
-    ----------
-    mu_donor : numpy.ndarray
-        Donor transition-dipole vectors with shape ``(n_donor, 3)``.
-    mu_acceptor : numpy.ndarray
-        Acceptor transition-dipole vectors with shape ``(n_acceptor, 3)``.
-    r_vectors : numpy.ndarray
-        Donor-to-acceptor vectors with shape ``(n_donor, n_acceptor, 3)``.
-
-    Returns
-    -------
-    numpy.ndarray
-        ``kappa^2`` matrix.
-    """
-    r_vectors = np.asarray(r_vectors, dtype=np.float64)
-    r_norm = np.linalg.norm(r_vectors, axis=2, keepdims=True)
-    r_unit = np.divide(r_vectors, r_norm, out=np.zeros_like(r_vectors), where=r_norm > 0.0)
-    cos_da = np.einsum("ik,jk->ij", mu_donor, mu_acceptor)
-    cos_dr = np.einsum("ik,ijk->ij", mu_donor, r_unit)
-    cos_ar = np.einsum("jk,ijk->ij", mu_acceptor, r_unit)
-    return np.power(cos_da - 3.0 * cos_dr * cos_ar, 2)

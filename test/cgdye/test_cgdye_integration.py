@@ -26,11 +26,11 @@ class TestIntegration(unittest.TestCase):
         # Build the CX4+atto655 force-field system into a temporary directory
         # instead of expecting a pre-built output/systems/*.system.cif: the
         # test used to skip everywhere the build-system task had not run.
-        from IMP.bff.cgdye.io.cif import write_ff_system
-        from IMP.bff.cgdye.topology.combined import build_combined_system
+        from IMP.bff.cgdye.io.cif import write_dye_forcefield_cif
+        from IMP.bff.cgdye.topology.combined import build_dye_protein_system
         from IMP.bff.cgdye.utils import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()
-        system = build_combined_system(
+        system = build_dye_protein_system(
             str(get_structure_dir("cx4.mol2")),
             str(get_structure_dir("atto655.mol2")),
             "CX4",
@@ -39,7 +39,7 @@ class TestIntegration(unittest.TestCase):
             dye_template=str(get_template_dir("atto655.template.cif")),
         )
         cls.system_cif = os.path.join(cls._tmp.name, "cx4_atto655.system.cif")
-        write_ff_system(cls.system_cif, system)
+        write_dye_forcefield_cif(cls.system_cif, system)
 
     @classmethod
     def tearDownClass(cls):

@@ -131,9 +131,9 @@ class TestAttachmentResolver:
             m = IMP.Model()
             hier = IMP.atom.read_pdb(pdb_path, m, IMP.atom.AllPDBSelector())
 
-            from IMP.bff.cgdye.labeling.attachment import resolve_site
+            from IMP.bff.cgdye.labeling.attachment import resolve_dye_site
 
-            site = resolve_site(hier, "A", 1)
+            site = resolve_dye_site(hier, "A", 1)
             assert "CA" in site
             assert "N" in site
             assert "C" in site

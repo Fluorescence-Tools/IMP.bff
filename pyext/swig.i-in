@@ -27,3 +27,11 @@ import numpy as np
 %include "DecayLinearization.i"
 %include "DecayScale.i"
 %include "DecayScore.i"
+
+// The flat user-facing Python surface (PRD-107): IMP.bff.<Name> resolves the
+// cgdye/fret names lazily; the mapping and the naming rule live in
+// pyext/src/api.py. Installed here because pyext/src/__init__.py is not part
+// of a SWIG module's __init__ (only python-only modules use it).
+%pythoncode %{
+from .api import module_getattr as __getattr__, module_dir as __dir__
+%}

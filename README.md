@@ -10,6 +10,16 @@ by experimental data by  simulating fluorophore distributions
 around attachment sites and  by comparing simulated observables 
 to experimental data.
 
+Labels are modelled two ways: as **accessible volumes** (`IMP.bff.AV`,
+`AVNetworkRestraint`, the `fret` docking layer) or as **explicit dyes** — an
+atomistic dye + linker placed on a residue from a rotamer library (the
+FRETpredict libraries ship as module data) or sampled over its linker degrees
+of freedom, screened against the protein and turned into R0/κ²/FRET
+efficiencies (`IMP.bff.RotamerFRET`, `IMP.bff.attach_dyes`, ...). Every public
+name is reachable flat as `IMP.bff.<Name>`; the manual page
+`doc/manual/structure/structure_cgdye.ipynb` walks the explicit route, and
+`okf/cgdye.md` records how the code is organised.
+
 
 ## Inter-label distance score usage:
 

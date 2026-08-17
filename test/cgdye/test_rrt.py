@@ -11,7 +11,7 @@ from IMP.bff.cgdye.sampling.rrt import (
     transform_distance,
     is_collision_sphere,
     rrt_grow_step,
-    run_imp_rrt,
+    run_rigid_body_rrt,
     sample_transform,
     steer_transform,
 )
@@ -65,7 +65,7 @@ def test_run_rrt_reaches_goal_in_empty_space():
     start = make_transform(0, 0, 0, 0, 0, 0)
     goal = make_transform(1, 0, 0, 0, 0, 0)
     bounds = [(-2, 2), (-2, 2), (-2, 2), (-1, 1), (-1, 1), (-1, 1)]
-    tree, goal_id = run_imp_rrt(
+    tree, goal_id = run_rigid_body_rrt(
         start,
         bounds,
         n_iter=200,
@@ -88,7 +88,7 @@ def test_run_rrt_respects_collision():
     def coll(cfg):
         return cfg.get_translation()[0] > 0.2
 
-    tree, _goal_id = run_imp_rrt(
+    tree, _goal_id = run_rigid_body_rrt(
         start,
         bounds,
         n_iter=100,

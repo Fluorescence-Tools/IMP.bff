@@ -9,7 +9,7 @@ import click
 
 
 
-from IMP.bff.cgdye.sampling.library_gen import generate_rotamers
+from IMP.bff.cgdye.sampling.library_gen import generate_linker_rotamers
 from IMP.bff.cgdye.io.rotamer_rmf import write_rotamer_library_rmf
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
 
@@ -34,7 +34,7 @@ def main(n_steps, cluster_threshold, output_dir):
         click.echo(f"Generating library for {dye_name}...")
         
         try:
-            library = generate_rotamers(
+            library = generate_linker_rotamers(
                 str(mol2),
                 n_steps=n_steps,
                 cluster_threshold=cluster_threshold

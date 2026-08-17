@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_rmsd_no_align(coords1: np.ndarray, coords2: np.ndarray) -> float:
+def rmsd_no_align(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """Compute RMSD between two sets of coordinates without alignment.
     
     Assumes atoms are in the same order.
@@ -14,7 +14,7 @@ def compute_rmsd_no_align(coords1: np.ndarray, coords2: np.ndarray) -> float:
     return np.sqrt(np.mean(np.sum(diff**2, axis=-1)))
 
 
-def cluster_leader(coords: np.ndarray, threshold: float) -> list[int]:
+def cluster_frames_leader(coords: np.ndarray, threshold: float) -> list[int]:
     """Greedy leader clustering algorithm.
     
     Returns a list of cluster center indices.
@@ -35,7 +35,7 @@ def cluster_leader(coords: np.ndarray, threshold: float) -> list[int]:
         # Compute RMSD to all existing centers
         is_new = True
         for c_idx in centers:
-            rmsd = compute_rmsd_no_align(coords[i], coords[c_idx])
+            rmsd = rmsd_no_align(coords[i], coords[c_idx])
             if rmsd < threshold:
                 is_new = False
                 break
@@ -45,7 +45,7 @@ def cluster_leader(coords: np.ndarray, threshold: float) -> list[int]:
     return centers
 
 
-def cluster_assignment(coords: np.ndarray, centers: list[int]) -> np.ndarray:
+def assign_frames_to_clusters(coords: np.ndarray, centers: list[int]) -> np.ndarray:
     """Assign each frame to the nearest cluster center.
     
     Returns array of shape (n_frames,) containing center indices.

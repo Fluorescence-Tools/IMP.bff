@@ -14,7 +14,7 @@ import click
 
 
 
-from IMP.bff.cgdye.io.template_cif import read_cgdye_template, region_features
+from IMP.bff.cgdye.io.template_cif import read_component_template_cif, region_features
 
 
 def parse_mol2_serials_by_name(mol2_path: Path) -> dict[str, list[int]]:
@@ -113,7 +113,7 @@ def main(
     output_pml.parent.mkdir(parents=True, exist_ok=True)
 
     # Load region definitions and colors from template CIF
-    template = read_cgdye_template(str(mobile_template_cif))
+    template = read_component_template_cif(str(mobile_template_cif))
     rf = region_features(template)  # {feature_id: color}
     features = template.get("features", {})
     region_order = [fid for fid in features if fid in rf]

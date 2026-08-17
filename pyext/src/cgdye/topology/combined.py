@@ -3,7 +3,7 @@
 import math
 import re
 
-from IMP.bff.cgdye.io.template_cif import read_cgdye_template
+from IMP.bff.cgdye.io.template_cif import read_component_template_cif
 from IMP.bff.cgdye.sampling.scoring import build_lj_type_table
 from IMP.bff.cgdye.topology.builder import (
     _serial_to_site_atom_names,
@@ -12,7 +12,7 @@ from IMP.bff.cgdye.topology.builder import (
     build_dihedrals,
     build_graph,
     distance,
-    parse_mol2,
+    parse_dye_mol2,
     sid,
 )
 
@@ -33,7 +33,7 @@ def _resolve_feature_ids(template, feature_id, comp_name, atoms, serial_to_site_
     return sorted(set(out))
 
 
-def build_combined_system(
+def build_dye_protein_system(
     protein_mol2,
     dye_mol2,
     protein_name,
@@ -43,15 +43,21 @@ def build_combined_system(
     default_radius=1.7,
     default_mass=12.0,
 ):
-    p_atoms, p_bonds = parse_mol2(protein_mol2, protein_name)
-    d_atoms, d_bonds = parse_mol2(dye_mol2, dye_name)
+    """Build one force-field system for a protein and a dye from their MOL2 files.
+
+    Bonded terms come from the MOL2 connectivity (and the optional templates),
+    non-bonded LJ types from the CHARMM36 table; the result is the dict
+    ``write_dye_forcefield_cif`` writes and ``sim.runner`` simulates.
+    """
+    p_atoms, p_bonds = parse_dye_mol2(protein_mol2, protein_name)
+    d_atoms, d_bonds = parse_dye_mol2(dye_mol2, dye_name)
     p_names = _serial_to_site_atom_names(p_atoms)
     d_names = _serial_to_site_atom_names(d_atoms)
     p_graph = build_graph(p_bonds)
     d_graph = build_graph(d_bonds)
 
-    p_template = read_cgdye_template(protein_template) if protein_template else {}
-    d_template = read_cgdye_template(dye_template) if dye_template else {}
+    p_template = read_component_template_cif(protein_template) if protein_template else {}
+    d_template = read_component_template_cif(dye_template) if dye_template else {}
 
     sites = []
     for serial in sorted(p_atoms):

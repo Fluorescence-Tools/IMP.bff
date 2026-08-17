@@ -10,11 +10,11 @@ import IMP
 import IMP.algebra
 import IMP.atom
 
-from ..topology.builder import parse_mol2, build_graph
-from .clustering import cluster_leader, cluster_assignment
-from .boltzmann import compute_boltzmann_weights, cluster_weights
-from .scoring import InternalEnergyEvaluator, compute_lj_pair_sites, dye_internal_system
-from .mean_field import mean_field_weights
+from ..topology.builder import parse_dye_mol2, build_graph
+from .clustering import cluster_frames_leader, assign_frames_to_clusters
+from .boltzmann import boltzmann_weights, rotamer_cluster_weights
+from .scoring import DyeInternalEnergyEvaluator, compute_lj_pair_sites, dye_internal_system
+from .mean_field import rotamer_mean_field_weights
 
 
 class LinkerSampler:
@@ -39,7 +39,7 @@ class LinkerSampler:
             self.serial_to_pos0[serial] = np.array([c[0], c[1], c[2]])
             
         # Parse topology
-        self.mol2_atoms, self.mol2_bonds = parse_mol2(dye_mol2, "dye")
+        self.mol2_atoms, self.mol2_bonds = parse_dye_mol2(dye_mol2, "dye")
         self.idx_to_name = {i: a["atom_name"] for i, a in self.mol2_atoms.items()}
         self.graph = build_graph(self.mol2_bonds)
         
@@ -127,9 +127,9 @@ class LinkerSampler:
         current_cfg = [0.0] * (n_dih + n_ang)
         
         # Setup evaluator for Metropolis
-        atoms_dict, bonds = parse_mol2(self.dye_mol2, "dye")
+        atoms_dict, bonds = parse_dye_mol2(self.dye_mol2, "dye")
         # bonded 1-2/1-3/1-4 pairs excluded from the LJ score
-        evaluator = InternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
+        evaluator = DyeInternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
         
         self.apply_config(current_cfg)
         current_energy = evaluator.evaluate(self.get_coords())
@@ -183,7 +183,7 @@ class LinkerSampler:
         return coords
 
 
-def generate_rotamers(
+def generate_linker_rotamers(
     dye_mol2: str,
     n_steps: int = 10000,
     write_every: int = 10,
@@ -230,20 +230,20 @@ def generate_rotamers(
     )
 
     # Setup evaluator for Boltzmann weights
-    atoms_dict, bonds = parse_mol2(dye_mol2, "dye")
+    atoms_dict, bonds = parse_dye_mol2(dye_mol2, "dye")
     # bonded 1-2/1-3/1-4 pairs excluded from the LJ score (same as the sampler)
-    evaluator = InternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
+    evaluator = DyeInternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
 
     # Trick 3: vectorized batch scoring (evaluate_batch is now NumPy-based)
     energies = evaluator.evaluate_batch(all_coords)
 
     # Clustering
-    centers = cluster_leader(all_coords, cluster_threshold)
-    assignments = cluster_assignment(all_coords, centers)
+    centers = cluster_frames_leader(all_coords, cluster_threshold)
+    assignments = assign_frames_to_clusters(all_coords, centers)
 
     # Initial Boltzmann weights from internal (self) energy
-    frame_weights = compute_boltzmann_weights(energies, temperature)
-    c_weights = cluster_weights(assignments, frame_weights, len(centers))
+    frame_weights = boltzmann_weights(energies, temperature)
+    c_weights = rotamer_cluster_weights(assignments, frame_weights, len(centers))
     c_weights_arr = np.asarray(c_weights, dtype=np.float64)
 
     # Trick 2: mean-field reweighting by protein–dye interaction energies
@@ -262,7 +262,7 @@ def generate_rotamers(
             [all_coords[c_idx] for c_idx in centers], dtype=np.float64
         )
 
-        c_weights_arr = mean_field_weights(
+        c_weights_arr = rotamer_mean_field_weights(
             rotamer_coords=cluster_center_coords,
             initial_weights=c_weights_arr,
             protein_coords=np.asarray(protein_coords, dtype=np.float64),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_boltzmann_weights(energies: np.ndarray, temperature: float = 298.15) -> np.ndarray:
+def boltzmann_weights(energies: np.ndarray, temperature: float = 298.15) -> np.ndarray:
     """Compute normalized Boltzmann weights from energies.
     
     Args:
@@ -27,7 +27,7 @@ def compute_boltzmann_weights(energies: np.ndarray, temperature: float = 298.15)
     return unnormalized_weights / np.sum(unnormalized_weights)
 
 
-def cluster_weights(assignments: np.ndarray, frame_weights: np.ndarray, n_clusters: int) -> np.ndarray:
+def rotamer_cluster_weights(assignments: np.ndarray, frame_weights: np.ndarray, n_clusters: int) -> np.ndarray:
     """Aggregate frame weights into cluster weights.
     
     Args:

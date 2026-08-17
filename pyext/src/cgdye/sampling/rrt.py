@@ -109,7 +109,7 @@ def rrt_grow_step(tree, target_t, step_size, collision_fn, rot_weight=0.25):
     return tree.add_node(new_t, near_id)
 
 
-def run_imp_rrt(
+def run_rigid_body_rrt(
     start_transform,
     bounds,
     n_iter,
@@ -121,6 +121,11 @@ def run_imp_rrt(
     rot_weight=0.25,
     seed=0,
 ):
+    """Grow an RRT over rigid-body transforms (``IMP.algebra.Transformation3D``).
+
+    ``bounds`` are six (lo, hi) pairs for (tx, ty, tz, rx, ry, rz);
+    ``collision_fn(transform) -> bool`` gates growth. Returns ``(tree, goal_node_id)``.
+    """
     rng = random.Random(seed)
     tree = IMPRRTTree(start_transform)
     goal_node_id = None

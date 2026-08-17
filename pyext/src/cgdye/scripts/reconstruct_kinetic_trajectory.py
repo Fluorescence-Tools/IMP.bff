@@ -14,8 +14,8 @@ import RMF
 
 
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.cgdye.sampling.rotamer import apply_rotamer_coords
-from IMP.bff.cgdye.sampling.kinetic import reconstruct_trajectory
+from IMP.bff.cgdye.sampling.rotamer import apply_rotamer_coordinates
+from IMP.bff.cgdye.sampling.kinetic import reconstruct_rotamer_trajectory
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -32,7 +32,7 @@ def main(lib_rmf, n_frames, output_rmf, seed):
         return
 
     click.echo(f"Reconstructing {n_frames} frame trajectory...")
-    indices = reconstruct_trajectory(lib, n_frames, seed=seed)
+    indices = reconstruct_rotamer_trajectory(lib, n_frames, seed=seed)
     
     # Setup IMP model for output
     model = IMP.Model()
@@ -60,7 +60,7 @@ def main(lib_rmf, n_frames, output_rmf, seed):
     IMP.rmf.add_hierarchies(fh, [root])
     
     for i, ridx in enumerate(indices):
-        # apply_rotamer_coords expect 0-based list/array for coords
+        # apply_rotamer_coordinates expect 0-based list/array for coords
         # but lib["coords"] is 1-based dict in my reader
         coords = lib["coords"][ridx + 1]
         for p, c in zip(particles, coords):

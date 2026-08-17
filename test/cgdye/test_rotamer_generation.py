@@ -5,8 +5,8 @@ import numpy as np
 import os
 import tempfile
 
-from IMP.bff.cgdye.sampling.clustering import cluster_leader, cluster_assignment
-from IMP.bff.cgdye.sampling.boltzmann import compute_boltzmann_weights, cluster_weights
+from IMP.bff.cgdye.sampling.clustering import cluster_frames_leader, assign_frames_to_clusters
+from IMP.bff.cgdye.sampling.boltzmann import boltzmann_weights, rotamer_cluster_weights
 from IMP.bff.cgdye.io.rotamer_cif import write_rotamer_library, read_rotamer_library
 
 
@@ -25,10 +25,10 @@ class TestRotamerGeneration(unittest.TestCase):
         coords += np.random.normal(0, 0.1, coords.shape)
         
         # Clustering
-        centers = cluster_leader(coords, threshold=1.0)
+        centers = cluster_frames_leader(coords, threshold=1.0)
         self.assertEqual(len(centers), 2)
         
-        assignments = cluster_assignment(coords, centers)
+        assignments = assign_frames_to_clusters(coords, centers)
         self.assertEqual(len(np.unique(assignments)), 2)
         
         # Boltzmann scoring
@@ -37,11 +37,11 @@ class TestRotamerGeneration(unittest.TestCase):
         energies[:50] = 0.0
         energies[50:] = 10.0 # High energy group
         
-        weights = compute_boltzmann_weights(energies, temperature=298.15)
+        weights = boltzmann_weights(energies, temperature=298.15)
         self.assertAlmostEqual(np.sum(weights), 1.0)
         self.assertGreater(weights[0], weights[50])
         
-        c_weights = cluster_weights(assignments, weights, len(centers))
+        c_weights = rotamer_cluster_weights(assignments, weights, len(centers))
         self.assertAlmostEqual(np.sum(c_weights), 1.0)
         self.assertGreater(c_weights[0], c_weights[1])
 
@@ -74,11 +74,11 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
     """The linker LJ score excludes bonded neighbours; a short run is pinned."""
 
     def test_bonded_pairs_are_excluded_from_the_linker_score(self):
-        from IMP.bff.cgdye.topology.builder import parse_mol2
+        from IMP.bff.cgdye.topology.builder import parse_dye_mol2
         from IMP.bff.cgdye.sampling.scoring import (
-            InternalEnergyEvaluator, compute_exclusions, dye_internal_system)
+            DyeInternalEnergyEvaluator, compute_exclusions, dye_internal_system)
         from IMP.bff.cgdye.utils import get_structure_dir
-        atoms, bonds = parse_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
+        atoms, bonds = parse_dye_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
         system = dye_internal_system(atoms, bonds)
         self.assertEqual(len(system["sites"]), len(atoms))
         self.assertEqual(len(system["bonds"]), len(bonds))
@@ -90,8 +90,8 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
             self.assertIn(frozenset({a, c}), excluded)
         for a, _b, _c, d, _t in system["dihedrals"]:
             self.assertIn(frozenset({a, d}), excluded)
-        with_excl = InternalEnergyEvaluator(system)
-        without = InternalEnergyEvaluator({"sites": system["sites"], "bonds": []})
+        with_excl = DyeInternalEnergyEvaluator(system)
+        without = DyeInternalEnergyEvaluator({"sites": system["sites"], "bonds": []})
         self.assertLess(len(with_excl.pairs), len(without.pairs))
         # site ids are unique although MOL2 atom names are not (83 atoms, 68 names)
         self.assertEqual(len({s["id"] for s in system["sites"]}), len(atoms))
@@ -106,12 +106,12 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         import hashlib
         import json
         from pathlib import Path
-        from IMP.bff.cgdye.sampling.library_gen import generate_rotamers
+        from IMP.bff.cgdye.sampling.library_gen import generate_linker_rotamers
         from IMP.bff.cgdye.utils import get_structure_dir
         pins_path = Path(__file__).resolve().parents[1] / "references" / "cgdye_sampler_pins.json"
         with open(pins_path) as fh:
             pins = json.load(fh)
-        lib = generate_rotamers(str(get_structure_dir("alexa488_r48.mol2")),
+        lib = generate_linker_rotamers(str(get_structure_dir("alexa488_r48.mol2")),
                                 n_steps=300, write_every=10, cluster_threshold=1.0, seed=42)
         weights = np.asarray(lib["weight"])
         self.assertEqual(len(weights), pins["n_clusters"])

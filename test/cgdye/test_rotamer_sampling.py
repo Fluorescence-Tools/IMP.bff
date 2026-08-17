@@ -12,9 +12,9 @@ import IMP.core
 import numpy as np
 
 from IMP.bff.cgdye.sampling.rotamer import (
-    apply_rotamer_coords,
+    apply_rotamer_coordinates,
     find_reference_rotamer_files,
-    load_reference_rotamers,
+    load_rotamer_library_dcd,
     sample_rotamer_index,
 )
 
@@ -29,7 +29,7 @@ class TestRotamerSampling(unittest.TestCase):
         pdb, dcd, weights = find_reference_rotamer_files(
             lib_dir, "A48_C1R", cutoff=10
         )
-        data = load_reference_rotamers(pdb, dcd, weights, max_frames=8)
+        data = load_rotamer_library_dcd(pdb, dcd, weights, max_frames=8)
 
         self.assertEqual(data["coords"].shape[0], 8)
         self.assertEqual(len(data["weights"]), 8)
@@ -44,7 +44,7 @@ class TestRotamerSampling(unittest.TestCase):
         h = IMP.atom.Hierarchy.setup_particle(p1)
 
         new_coords = np.array([[10.0, 20.0, 30.0]])
-        apply_rotamer_coords(h, new_coords)
+        apply_rotamer_coordinates(h, new_coords)
 
         xyz = IMP.core.XYZ(p1).get_coordinates()
         self.assertAlmostEqual(xyz[0], 10.0)

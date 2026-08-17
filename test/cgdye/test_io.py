@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from IMP.bff.cgdye.io.cif import read_ff_system, write_ff_system
+from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 
 class TestIO(unittest.TestCase):
     def test_read_write_ff_system(self):
@@ -40,7 +40,7 @@ class TestIO(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cif_path = os.path.join(tmpdir, "test.cif")
             
-            # Note: write_ff_system expects mol2 files to exist if it's going to write _atom_site
+            # Note: write_dye_forcefield_cif expects mol2 files to exist if it's going to write _atom_site
             # But we can test the basic round-trip of topology categories.
             # We'll mock the _parse_struct_atom_site_rows to avoid file dependency
             import IMP.bff.cgdye.io.cif as cif_mod
@@ -48,10 +48,10 @@ class TestIO(unittest.TestCase):
             cif_mod._parse_struct_atom_site_rows = lambda path, asym, ent: []
             
             try:
-                write_ff_system(cif_path, system)
+                write_dye_forcefield_cif(cif_path, system)
                 self.assertTrue(os.path.exists(cif_path))
                 
-                read_system = read_ff_system(cif_path)
+                read_system = read_dye_forcefield_cif(cif_path)
                 self.assertEqual(read_system["name"], system["name"])
                 self.assertEqual(len(read_system["sites"]), len(system["sites"]))
                 self.assertEqual(read_system["sampling"]["n_steps"], system["sampling"]["n_steps"])

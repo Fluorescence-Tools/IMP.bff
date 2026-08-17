@@ -9,7 +9,7 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_site
+from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_dye_site
 
 
 def _site_atoms(hier, chain_id, resnum):
@@ -36,7 +36,7 @@ def test_hgbp1_site_481_exists_and_is_attachable():
     protein = IMP.atom.read_pdb(
         str(get_structure_dir("1DG3.pdb")), model, IMP.atom.NonWaterPDBSelector()
     )
-    site = resolve_site(protein, "A", 481)
+    site = resolve_dye_site(protein, "A", 481)
     assert "CA" in site and "N" in site and "C" in site
 
 

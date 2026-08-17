@@ -11,13 +11,13 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff.cgdye.io.cif import read_ff_system, write_ff_system
+from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.cgdye.sim.dye_restraints import build_dye_restraints
-from IMP.bff.cgdye.topology.combined import build_combined_system
+from IMP.bff.cgdye.topology.combined import build_dye_protein_system
 
 
 def test_build_combined_system_basic():
-    system = build_combined_system(
+    system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",
@@ -37,7 +37,7 @@ def test_build_combined_system_basic():
 
 
 def test_combined_system_cif_roundtrip(tmp_path):
-    system = build_combined_system(
+    system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",
@@ -46,15 +46,15 @@ def test_combined_system_cif_roundtrip(tmp_path):
         dye_template=str(get_template_dir("atto655.template.cif")),
     )
     out = tmp_path / "combined.system.cif"
-    write_ff_system(str(out), system)
-    loaded = read_ff_system(str(out))
+    write_dye_forcefield_cif(str(out), system)
+    loaded = read_dye_forcefield_cif(str(out))
     assert loaded["name"] == "CX4_atto655"
     assert len(loaded["sites"]) == len(system["sites"])
     assert "LJ_C" in loaded.get("lj_types", {})
 
 
 def test_build_dye_restraints_smoke():
-    system = build_combined_system(
+    system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",

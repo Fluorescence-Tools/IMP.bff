@@ -214,7 +214,8 @@ def _parse_pdb_atom_site_rows(pdb_path, asym_id, entity_id):
     return rows
 
 
-def read_ff_system(path):
+def read_dye_forcefield_cif(path):
+    """Read a compact force-field system (sites, bonds, angles, dihedrals, LJ types, ...) from mmCIF."""
     system = {
         "name": os.path.splitext(os.path.basename(path))[0],
         "components": {},
@@ -684,7 +685,8 @@ def read_ff_system(path):
     return system
 
 
-def write_ff_system(path, system):
+def write_dye_forcefield_cif(path, system):
+    """Write a compact force-field system dict (see :func:`read_dye_forcefield_cif`) to mmCIF."""
     with open(path, "w") as out:
         w = ihm.format.CifWriter(out)
         w.start_block(system.get("name", "ff_system"))

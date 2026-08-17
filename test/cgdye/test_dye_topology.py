@@ -21,7 +21,7 @@ from IMP.bff.cgdye.topology.dye import (
     lj_cross,
     lj_params,
 )
-from IMP.bff.cgdye.io.cif import read_ff_system, write_ff_system
+from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.cgdye.sampling.scoring import (
     build_lj_type_table,
     compute_exclusions,
@@ -182,8 +182,8 @@ class TestLJTypeCifRoundtrip:
         with tempfile.NamedTemporaryFile(suffix=".cif", delete=False) as f:
             path = f.name
         try:
-            write_ff_system(path, system)
-            loaded = read_ff_system(path)
+            write_dye_forcefield_cif(path, system)
+            loaded = read_dye_forcefield_cif(path)
             assert "LJ_C" in loaded["lj_types"]
             assert loaded["lj_types"]["LJ_C"]["element"] == "C"
             assert abs(loaded["lj_types"]["LJ_C"]["rmin_half"] - 2.024) < 1e-3

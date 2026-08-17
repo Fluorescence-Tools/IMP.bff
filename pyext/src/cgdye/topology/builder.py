@@ -22,8 +22,8 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from ..io.cif import write_ff_system
-from ..io.template_cif import read_cgdye_template
+from ..io.cif import write_dye_forcefield_cif
+from ..io.template_cif import read_component_template_cif
 from IMP.bff.cgdye.utils import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
@@ -66,7 +66,12 @@ def _read_mol2_atom_names(path) -> dict:
     return names
 
 
-def parse_mol2(path, component):
+def parse_dye_mol2(path, component):
+    """Read a MOL2 file into ``(atoms, bonds)``.
+
+    ``atoms`` maps the MOL2 serial to a dict (serial, component, atom_name,
+    resname, element, x, y, z); ``bonds`` is a set of sorted serial pairs.
+    """
     model = IMP.Model()
     old_level = IMP.get_log_level()
     try:
@@ -483,13 +488,13 @@ def main(
     fixed_mol2 = fixed_comps[0]["mol2"]
     fixed_template_path = fixed_comps[0].get("template")
 
-    fixed_atoms, fixed_bonds = parse_mol2(fixed_mol2, fixed_name)
+    fixed_atoms, fixed_bonds = parse_dye_mol2(fixed_mol2, fixed_name)
     fixed_site_names = _serial_to_site_atom_names(fixed_atoms)
     print(f"Fixed ({fixed_name}): {len(fixed_atoms)} atoms, {len(fixed_bonds)} bonds")
 
     templates = {}
     if fixed_template_path:
-        templates[fixed_name] = read_cgdye_template(fixed_template_path)
+        templates[fixed_name] = read_component_template_cif(fixed_template_path)
 
     all_atoms = {(fixed_name, k): v for k, v in fixed_atoms.items()}
     all_site_names = {fixed_name: fixed_site_names}
@@ -500,7 +505,7 @@ def main(
         mol2 = comp["mol2"]
         template_path = comp.get("template")
 
-        atoms, bonds = parse_mol2(mol2, name)
+        atoms, bonds = parse_dye_mol2(mol2, name)
         site_names = _serial_to_site_atom_names(atoms)
 
         print(f"Mobile ({name}): {len(atoms)} atoms, {len(bonds)} bonds")
@@ -510,14 +515,14 @@ def main(
         all_graphs[name] = build_graph(bonds)
 
         if template_path:
-            templates[name] = read_cgdye_template(template_path)
+            templates[name] = read_component_template_cif(template_path)
 
     system_name_parts = [c["name"] for c in parsed_components]
     system_name = "_".join(system_name_parts)
 
     sites = []
     for comp_name, comp_atoms in [(fixed_name, fixed_atoms)] + [
-        (c["name"], parse_mol2(c["mol2"], c["name"])[0]) for c in mobile_comps
+        (c["name"], parse_dye_mol2(c["mol2"], c["name"])[0]) for c in mobile_comps
     ]:
         for serial in sorted(comp_atoms.keys()):
             atom_name = all_site_names[comp_name][serial]
@@ -547,7 +552,7 @@ def main(
     bonds = []
     for comp in parsed_components:
         comp_name = comp["name"]
-        comp_bonds = parse_mol2(comp["mol2"], comp_name)[1]
+        comp_bonds = parse_dye_mol2(comp["mol2"], comp_name)[1]
         for a, b in sorted(comp_bonds):
             bonds.append(
                 [
@@ -561,8 +566,8 @@ def main(
     angles = []
     for comp in parsed_components:
         comp_name = comp["name"]
-        comp_atoms = parse_mol2(comp["mol2"], comp_name)[0]
-        g = build_graph(parse_mol2(comp["mol2"], comp_name)[1])
+        comp_atoms = parse_dye_mol2(comp["mol2"], comp_name)[0]
+        g = build_graph(parse_dye_mol2(comp["mol2"], comp_name)[1])
         for a, b, c in build_angles(g):
             angles.append(
                 [
@@ -581,7 +586,7 @@ def main(
     dihedrals = []
     for comp in mobile_comps:
         comp_name = comp["name"]
-        comp_atoms = parse_mol2(comp["mol2"], comp_name)[0]
+        comp_atoms = parse_dye_mol2(comp["mol2"], comp_name)[0]
         g = all_graphs[comp_name]
 
         pi_dihedrals = []
@@ -617,7 +622,7 @@ def main(
     impropers = []
     for comp in parsed_components:
         comp_name = comp["name"]
-        comp_atoms = parse_mol2(comp["mol2"], comp_name)[0]
+        comp_atoms = parse_dye_mol2(comp["mol2"], comp_name)[0]
         g = all_graphs[comp_name]
         template = templates.get(comp_name)
 
@@ -693,7 +698,7 @@ def main(
 
     for comp in parsed_components:
         comp_name = comp["name"]
-        comp_atoms = parse_mol2(comp["mol2"], comp_name)[0]
+        comp_atoms = parse_dye_mol2(comp["mol2"], comp_name)[0]
         template = templates.get(comp_name)
 
         groups[f"{comp_name}_all"] = [
@@ -812,7 +817,7 @@ def main(
     }
 
     os.makedirs(os.path.dirname(os.path.abspath(output_cif)), exist_ok=True)
-    write_ff_system(output_cif, system)
+    write_dye_forcefield_cif(output_cif, system)
     print(f"Wrote {output_cif}")
     print(
         f"sites={len(sites)} bonds={len(bonds)} angles={len(angles)} "

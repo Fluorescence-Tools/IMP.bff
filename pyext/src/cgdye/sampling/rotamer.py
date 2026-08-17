@@ -11,7 +11,7 @@ import IMP.atom
 import IMP.core
 
 
-def load_reference_rotamers(pdb_path, dcd_path, weights_path=None, max_frames=None):
+def load_rotamer_library_dcd(pdb_path, dcd_path, weights_path=None, max_frames=None):
     """Load a reference rotamer library from PDB+DCD (+ optional weights).
 
     Atom names come from the PDB through IMP.atom and coordinates from the DCD
@@ -73,7 +73,7 @@ def find_reference_rotamer_files(lib_dir, dye_name, cutoff=30):
     return pdb, dcd, weights if weights.exists() else None
 
 
-def apply_rotamer_coords(dye_hier, coords):
+def apply_rotamer_coordinates(dye_hier, coords):
     """Apply one rotamer coordinate set to an IMP dye hierarchy in-place."""
     atoms = list(IMP.atom.get_by_type(dye_hier, IMP.atom.ATOM_TYPE))
     arr = np.asarray(coords, dtype=float)

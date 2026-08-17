@@ -12,7 +12,7 @@ from IMP.bff.fret import io as fps
 from IMP.bff.cgdye.rotamer.fps import read_rotamer_fps, rotamer_fret_from_fps
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.cgdye.rotamer.r0 import calculate_r0
+from IMP.bff.fret.forster import forster_radius_from_spectra
 # The rotamer CLI ships with cgdye now; invoking it through imp-tricks'
 # aggregator would make an imp.bff test depend on the layer above it.
 from IMP.bff.cgdye.rotamer.cli import rotamer as _rotamer_cli
@@ -30,7 +30,7 @@ def _fixture_pdb(name: str, tmp_path: Path) -> Path:
 
 def test_calculate_r0_matches_fretpredict_pp11_reference() -> None:
     """R0 calculation matches the pp11 tutorial reference."""
-    r0 = calculate_r0("AlexaFluor 488", "AlexaFluor 594", 0.684587)
+    r0 = forster_radius_from_spectra("AlexaFluor 488", "AlexaFluor 594", 0.684587)
     assert r0 == pytest.approx(5.712982, abs=1e-5)
 
 

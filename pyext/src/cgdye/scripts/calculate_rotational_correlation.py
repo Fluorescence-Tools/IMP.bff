@@ -4,7 +4,7 @@
 import click
 import numpy as np
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.cgdye.sampling.kinetic import calculate_correlation_times, calculate_rotational_correlation_time
+from IMP.bff.cgdye.sampling.kinetic import rotamer_correlation_times, rotamer_rotational_correlation_time
 
 
 @click.command()
@@ -18,11 +18,11 @@ def main(input_rmf, dt, show_all):
         print(f"Error: {input_rmf} does not contain a transition matrix.")
         return
 
-    tc = calculate_rotational_correlation_time(lib["transitions"], dt)
+    tc = rotamer_rotational_correlation_time(lib["transitions"], dt)
     print(f"Rotational Correlation Time (slowest): {tc:.2f} ps")
     
     if show_all:
-        times = calculate_correlation_times(lib["transitions"], dt)
+        times = rotamer_correlation_times(lib["transitions"], dt)
         print("\nRelaxation Times (ps):")
         for i, t in enumerate(times):
             if t > 0:

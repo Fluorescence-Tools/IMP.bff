@@ -114,7 +114,7 @@ def _aabb_overlap(
 # Main public function — single-dye mean-field reweighting (Eq. 39 + 42)
 # ---------------------------------------------------------------------------
 
-def mean_field_weights(
+def rotamer_mean_field_weights(
     rotamer_coords: np.ndarray,         # (n_clusters, n_dye_atoms, 3)
     initial_weights: np.ndarray,        # (n_clusters,)  Boltzmann prior
     protein_coords: np.ndarray,         # (n_prot_atoms, 3)
@@ -206,7 +206,7 @@ def mean_field_weights(
 # Multi-dye extension — Eq. 40/41/42 with dye–dye SC cross term
 # ---------------------------------------------------------------------------
 
-def mean_field_weights_multi_dye(
+def rotamer_mean_field_weights_multi_dye(
     rotamer_coords_list: list[np.ndarray],    # list of (n_i, n_atoms_i, 3)
     initial_weights_list: list[np.ndarray],   # list of (n_i,)
     protein_coords: np.ndarray,               # (n_prot_atoms, 3)

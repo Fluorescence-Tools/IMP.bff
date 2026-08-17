@@ -20,7 +20,7 @@ import IMP.pmi.tools
 import IMP.rmf
 import RMF
 
-from ..io.cif import read_ff_system, write_ff_system
+from ..io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from ..io.nmr_cif import read_nmr_restraints
 from ..system import fixed_components, mobile_components
 from IMP.bff.cgdye.utils import import_click
@@ -856,7 +856,7 @@ def _write_system_copy(system, system_cif, out_dir, output_root):
 
     out_path = Path(out_dir)
     copy_path = out_path / "system.cif"
-    write_ff_system(str(copy_path), sys_out)
+    write_dye_forcefield_cif(str(copy_path), sys_out)
 
     out_root = Path(output_root)
     trajs_anchor = None
@@ -871,7 +871,7 @@ def _write_system_copy(system, system_cif, out_dir, output_root):
     )
     systems_dir.mkdir(parents=True, exist_ok=True)
     root_copy_path = systems_dir / f"{system.get('name', 'ff_system')}.system.cif"
-    write_ff_system(str(root_copy_path), sys_out)
+    write_dye_forcefield_cif(str(root_copy_path), sys_out)
 
 
 def _run_simple_md(
@@ -1813,7 +1813,7 @@ def main(
     nmr_file = nmr_cif or nmr_json
 
     for path in _parse_paths(system_cif, systems_dir):
-        system = read_ff_system(path)
+        system = read_dye_forcefield_cif(path)
         _validate_system(system)
         # CLI overrides for sampling params not settable per system CIF
         if friction_ps is not None:

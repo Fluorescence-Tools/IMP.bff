@@ -6,7 +6,7 @@ import random
 import numpy as np
 
 
-def build_transition_probability_matrix(transition_counts: list[list[int]]) -> np.ndarray:
+def rotamer_transition_matrix(transition_counts: list[list[int]]) -> np.ndarray:
     """Convert raw transition counts to probabilities.
     
     Returns matrix P where P[i,j] is the probability of jumping from state i to j.
@@ -25,7 +25,7 @@ def build_transition_probability_matrix(transition_counts: list[list[int]]) -> n
     return counts / row_sums[:, np.newaxis]
 
 
-def calculate_correlation_times(transition_counts: list[list[int]], timestep: float) -> np.ndarray:
+def rotamer_correlation_times(transition_counts: list[list[int]], timestep: float) -> np.ndarray:
     """Calculate relaxation times from the transition matrix.
     
     Args:
@@ -35,7 +35,7 @@ def calculate_correlation_times(transition_counts: list[list[int]], timestep: fl
     Returns:
         Array of relaxation times.
     """
-    p = build_transition_probability_matrix(transition_counts)
+    p = rotamer_transition_matrix(transition_counts)
     vals, _ = np.linalg.eig(p.T)
     # Sort eigenvalues by magnitude
     vals = np.sort(np.abs(vals))[::-1]
@@ -51,7 +51,7 @@ def calculate_correlation_times(transition_counts: list[list[int]], timestep: fl
     return np.array(times)
 
 
-def calculate_rotational_correlation_time(transition_counts: list[list[int]], timestep: float) -> float:
+def rotamer_rotational_correlation_time(transition_counts: list[list[int]], timestep: float) -> float:
     """Estimate the slowest rotational correlation time.
     
     Args:
@@ -61,13 +61,13 @@ def calculate_rotational_correlation_time(transition_counts: list[list[int]], ti
     Returns:
         The slowest correlation time.
     """
-    times = calculate_correlation_times(transition_counts, timestep)
+    times = rotamer_correlation_times(transition_counts, timestep)
     if len(times) > 0:
         return float(np.max(times))
     return 0.0
 
 
-def reconstruct_trajectory(
+def reconstruct_rotamer_trajectory(
     lib: dict, 
     n_frames: int, 
     start_index: int | None = None,
@@ -90,7 +90,7 @@ def reconstruct_trajectory(
         random.seed(seed)
         np.random.seed(seed)
         
-    p_matrix = build_transition_probability_matrix(lib["transitions"])
+    p_matrix = rotamer_transition_matrix(lib["transitions"])
     n_states = p_matrix.shape[0]
     
     weights = np.array(lib["weight"], dtype=float)

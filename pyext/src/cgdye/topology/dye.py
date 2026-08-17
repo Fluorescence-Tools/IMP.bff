@@ -137,6 +137,11 @@ def find_cycles(graph, max_len=7):
 
 
 def build_dye_topology(atoms, bonds, template):
+    """Bonds, angles, dihedrals and template-driven impropers of a dye from its MOL2 graph.
+
+    ``atoms``/``bonds`` as returned by ``parse_dye_mol2``; ``template`` a dye
+    template dict (``impropers`` entries with ``center_atom`` and ``type``).
+    """
     graph = build_graph(bonds)
     result = {"bonds": [], "angles": [], "dihedrals": [], "impropers": []}
 

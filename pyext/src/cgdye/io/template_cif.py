@@ -30,7 +30,13 @@ def _as_bool(v, h):
     return s.upper() in {"1", "YES", "TRUE"}
 
 
-def read_cgdye_template(path):
+def read_component_template_cif(path):
+    """Read a component feature template (regions/features per component) from mmCIF.
+
+    The generic cgdye template: named regions and per-atom features used by the
+    topology builder and the density analysis. Dye-specific templates with
+    dipole/charge metadata are read by :func:`read_dye_template_cif`.
+    """
     template = {
         "name": os.path.splitext(os.path.basename(path))[0],
         "features": {},
@@ -147,7 +153,8 @@ def _write_cif_safe(path, template_name, write_fn):
         out.write("\n".join(fixed))
 
 
-def write_cgdye_template(path, template):
+def write_component_template_cif(path, template):
+    """Write a component feature template (see :func:`read_component_template_cif`) to mmCIF."""
     def _write(w):
         _write_header(w, template)
         _write_features(w, template)
@@ -232,7 +239,7 @@ def flex_features(template):
 # ============================================================================
 
 
-def read_dye_template(path):
+def read_dye_template_cif(path):
     """Read a dye template with additional metadata fields.
 
     Returns dict with: name, features, impropers, center_atom, dipole_atom_1,
@@ -357,7 +364,7 @@ def read_dye_template(path):
     return template
 
 
-def write_dye_template(path, template):
+def write_dye_template_cif(path, template):
     """Write a dye template to mmCIF format."""
 
     def _write(w):

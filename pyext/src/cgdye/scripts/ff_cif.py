@@ -6,6 +6,6 @@ from pathlib import Path
 
 
 
-from IMP.bff.cgdye.io.cif import read_ff_system, write_ff_system
+from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 
-__all__ = ["read_ff_system", "write_ff_system"]
+__all__ = ["read_dye_forcefield_cif", "write_dye_forcefield_cif"]

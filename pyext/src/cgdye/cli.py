@@ -14,11 +14,11 @@ import IMP.rmf
 import RMF
 import numpy as np
 
-from .labeling.attachment import attach_dyes, place_dye_from_coords, resolve_site
+from .labeling.attachment import attach_dyes, place_dye_from_coords, resolve_dye_site
 from .io.rotamer_rmf import read_rotamer_library_rmf, write_rotamer_library_rmf
-from .sampling.rotamer import apply_rotamer_coords, sample_rotamer_index
-from .sampling.kinetic import reconstruct_trajectory, calculate_rotational_correlation_time, calculate_correlation_times
-from .sampling.library_gen import generate_rotamers
+from .sampling.rotamer import apply_rotamer_coordinates, sample_rotamer_index
+from .sampling.kinetic import reconstruct_rotamer_trajectory, rotamer_rotational_correlation_time, rotamer_correlation_times
+from .sampling.library_gen import generate_linker_rotamers
 from .utils import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
 
 def _chain_sequence(hierarchy, chain_id):
@@ -162,7 +162,7 @@ def label(pdb_id_or_path, chain, residue, dye, linker, output):
             dye_hier = IMP.atom.read_pdb(str(base_pdb), model, IMP.atom.AllPDBSelector())
         else:
             dye_hier = IMP.atom.read_mol2(str(get_structure_dir("alexa488_r48.mol2")), model)
-        apply_rotamer_coords(dye_hier, lib["coords"][1])
+        apply_rotamer_coordinates(dye_hier, lib["coords"][1])
     elif struct_type == "pdb":
         dye_hier = IMP.atom.read_pdb(str(struct_path), model, IMP.atom.AllPDBSelector())
     else:
@@ -191,7 +191,7 @@ def build_lib(n_steps, cluster_threshold, output_dir):
     for mol2 in mol2_files:
         dye_name = mol2.stem.replace("_r48", "")
         try:
-            lib = generate_rotamers(str(mol2), n_steps=n_steps, cluster_threshold=cluster_threshold)
+            lib = generate_linker_rotamers(str(mol2), n_steps=n_steps, cluster_threshold=cluster_threshold)
             out = os.path.join(output_dir, f"{dye_name}.rmf3")
             write_rotamer_library_rmf(out, lib)
             click.echo(f"Built {dye_name} ({len(lib['weight'])} rotamers)")
@@ -211,10 +211,10 @@ def analyze_tc(input_rmf, dt, show_all):
     if not lib.get("transitions"):
         click.echo("No transition matrix found.")
         return
-    tc = calculate_rotational_correlation_time(lib["transitions"], dt)
+    tc = rotamer_rotational_correlation_time(lib["transitions"], dt)
     click.echo(f"Slowest TC: {tc:.2f} ps")
     if show_all:
-        times = calculate_correlation_times(lib["transitions"], dt)
+        times = rotamer_correlation_times(lib["transitions"], dt)
         for i, t in enumerate(times):
             if t > 0: click.echo(f"  tau_{i+2}: {t:.2f}")
 
@@ -229,7 +229,7 @@ def analyze_tc(input_rmf, dt, show_all):
 def reconstruct(lib_rmf, n_frames, output_rmf, seed):
     """Reconstruct trajectory from kinetic library."""
     lib = read_rotamer_library_rmf(lib_rmf)
-    indices = reconstruct_trajectory(lib, n_frames, seed=seed)
+    indices = reconstruct_rotamer_trajectory(lib, n_frames, seed=seed)
     model = IMP.Model()
     root = IMP.atom.Hierarchy.setup_particle(IMP.Particle(model, "reconstructed"))
     res = IMP.atom.Residue.setup_particle(IMP.Particle(model, "DYE"), IMP.atom.ResidueType("DYE"), 1)
@@ -291,7 +291,7 @@ def sample_rotamer(protein_pdb, chain, residue, dye, n_samples, output_rmf):
     rng = random.Random(42)
     for i in range(n_samples):
         ridx = sample_rotamer_index(lib["weight"], rng=rng)
-        apply_rotamer_coords(dye_hier, lib["coords"][ridx + 1])
+        apply_rotamer_coordinates(dye_hier, lib["coords"][ridx + 1])
         place_dye_from_coords(dye_hier, ca, n, c)
         IMP.rmf.save_frame(fh, str(i))
     click.echo(f"Wrote {n_samples} frames to {output_rmf}")
@@ -379,7 +379,7 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
             d_res.add_child(a)
             
     sampler = LinkerSampler(str(mol2_path))
-    site = resolve_site(protein, chain, residue)
+    site = resolve_dye_site(protein, chain, residue)
     ca, n, c = [IMP.core.XYZ(site[k]).get_coordinates() for k in ["CA", "N", "C"]]
     site_ca = np.array(ca)
         
@@ -476,8 +476,8 @@ def label_fp(pdb_id_or_path, site, output):
         
         # Get target backbone coords
         try:
-            from .labeling.attachment import resolve_site
-            t_site = resolve_site(protein, chain_id, res_num)
+            from .labeling.attachment import resolve_dye_site
+            t_site = resolve_dye_site(protein, chain_id, res_num)
             t_ca, t_n, t_c = [IMP.core.XYZ(t_site[k]).get_coordinates() for k in ["CA", "N", "C"]]
             
             # Align FP's anchor residue to target site

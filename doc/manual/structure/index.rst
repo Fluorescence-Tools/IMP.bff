@@ -15,5 +15,6 @@ Structural modeling
    structure_accessible_volumes
    _structure_surface_distance
    structure_distance_restraints
+   structure_cgdye
 
 |

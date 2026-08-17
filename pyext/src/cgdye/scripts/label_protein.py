@@ -16,7 +16,7 @@ import numpy as np
 
 from IMP.bff.cgdye.labeling.attachment import attach_dyes, place_dye_from_coords
 from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.cgdye.sampling.rotamer import apply_rotamer_coords
+from IMP.bff.cgdye.sampling.rotamer import apply_rotamer_coordinates
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
 
 def _structure(name):
@@ -180,7 +180,7 @@ def main(pdb_id_or_path, chain, residue, dye, linker, output, strip_sidechain):
             dye_hier = IMP.atom.read_mol2(_structure("alexa488_r48.mol2"), model)
             
         try:
-            apply_rotamer_coords(dye_hier, lib["coords"][1])
+            apply_rotamer_coordinates(dye_hier, lib["coords"][1])
         except Exception as e:
             click.echo(f"Warning: Could not apply rotamer coords ({e}). Using base structure.")
     elif struct_type == "pdb":

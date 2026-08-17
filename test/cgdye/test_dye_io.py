@@ -46,7 +46,7 @@ class TestDyeTemplateRead:
 
     def test_read_dye_template(self):
         """Read A48_C1R template and verify structure."""
-        from IMP.bff.cgdye.io.template_cif import read_dye_template
+        from IMP.bff.cgdye.io.template_cif import read_dye_template_cif
 
         template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
 
@@ -54,7 +54,7 @@ class TestDyeTemplateRead:
             pytest.skip("Template file not found")
 
         try:
-            template = read_dye_template(template_path)
+            template = read_dye_template_cif(template_path)
         except Exception as e:
             pytest.fail(f"Failed to read dye template: {e}")
 
@@ -73,7 +73,7 @@ class TestDyeTemplateWrite:
 
     def test_write_dye_template_roundtrip(self):
         """Write and read back a dye template, verify consistency."""
-        from IMP.bff.cgdye.io.template_cif import read_dye_template, write_dye_template
+        from IMP.bff.cgdye.io.template_cif import read_dye_template_cif, write_dye_template_cif
 
         template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
 
@@ -81,7 +81,7 @@ class TestDyeTemplateWrite:
             pytest.skip("Template file not found")
 
         try:
-            original = read_dye_template(template_path)
+            original = read_dye_template_cif(template_path)
         except Exception as e:
             pytest.fail(f"Failed to read template for write test: {e}")
 
@@ -89,7 +89,7 @@ class TestDyeTemplateWrite:
             output_cif = os.path.join(tmpdir, "test_write.cif")
 
             try:
-                write_dye_template(output_cif, original)
+                write_dye_template_cif(output_cif, original)
             except Exception as e:
                 pytest.fail(f"Failed to write dye template: {e}")
 
@@ -97,7 +97,7 @@ class TestDyeTemplateWrite:
 
             # Read back and compare
             try:
-                reloaded = read_dye_template(output_cif)
+                reloaded = read_dye_template_cif(output_cif)
             except Exception as e:
                 pytest.fail(f"Failed to reload template: {e}")
 

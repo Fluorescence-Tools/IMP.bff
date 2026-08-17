@@ -11,7 +11,7 @@ import click
 from IMP.bff.cgdye.io.rotamer_cif import write_rotamer_library
 from IMP.bff.cgdye.sampling.rotamer import (
     find_reference_rotamer_files,
-    load_reference_rotamers,
+    load_rotamer_library_dcd,
 )
 
 
@@ -31,7 +31,7 @@ def main(dye_name, ref_lib, cutoff, max_frames, output_base):
     pdb, dcd, weights = find_reference_rotamer_files(
         ref_lib, dye_name, cutoff=cutoff
     )
-    rot = load_reference_rotamers(pdb, dcd, weights, max_frames=max_frames)
+    rot = load_rotamer_library_dcd(pdb, dcd, weights, max_frames=max_frames)
 
     lib = {
         "weight": [float(x) for x in rot["weights"]],

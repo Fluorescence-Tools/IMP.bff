@@ -24,10 +24,10 @@ import IMP.algebra
 
 
 from IMP.bff.cgdye.sampling.library_gen import LinkerSampler
-from IMP.bff.cgdye.sampling.clustering import cluster_leader, cluster_assignment
-from IMP.bff.cgdye.sampling.boltzmann import cluster_weights
-from IMP.bff.cgdye.sampling.kinetic import build_transition_probability_matrix
-from IMP.bff.cgdye.analysis.fret import calculate_fret_exact
+from IMP.bff.cgdye.sampling.clustering import cluster_frames_leader, assign_frames_to_clusters
+from IMP.bff.cgdye.sampling.boltzmann import rotamer_cluster_weights
+from IMP.bff.cgdye.sampling.kinetic import rotamer_transition_matrix
+from IMP.bff.cgdye.analysis.fret import fret_efficiency_exact_kinetic_pair
 from IMP.bff.cgdye.utils import get_structure_dir, get_template_dir, _data_root
 
 def _structure(name):
@@ -86,8 +86,8 @@ def main(n_steps, threshold, r0, tau0, dt):
     
     # 2. Site-Specific Clustering
     def cluster_and_track(coords):
-        centers = cluster_leader(coords, threshold)
-        assignments = cluster_assignment(coords, centers)
+        centers = cluster_frames_leader(coords, threshold)
+        assignments = assign_frames_to_clusters(coords, centers)
         
         # Build transition matrix
         n_c = len(centers)
@@ -95,11 +95,11 @@ def main(n_steps, threshold, r0, tau0, dt):
         for i in range(len(assignments) - 1):
             trans_counts[assignments[i], assignments[i+1]] += 1
         
-        p_matrix = build_transition_probability_matrix(trans_counts.tolist())
+        p_matrix = rotamer_transition_matrix(trans_counts.tolist())
         
         # Simple uniform prior weight for stochastic walk segments
         weights = np.ones(len(coords)) / len(coords)
-        c_weights = cluster_weights(assignments, weights, n_c)
+        c_weights = rotamer_cluster_weights(assignments, weights, n_c)
         
         return coords[centers], p_matrix, c_weights
 
@@ -129,10 +129,10 @@ def main(n_steps, threshold, r0, tau0, dt):
             k2_mat[i, j] = compute_kappa2(mu_d, mu_a, r_vec)
 
     # 4. Solve FRET using all approaches
-    from IMP.bff.cgdye.analysis.fret import calculate_fret_regimes
+    from IMP.bff.cgdye.analysis.fret import fret_efficiency_regimes
     
-    e_exact = calculate_fret_exact(dist_mat, k2_mat, p_d, p_a, w_d, w_a, R0=r0, tau0=tau0, dt=dt)
-    regimes = calculate_fret_regimes(dist_mat, k2_mat, w_d, w_a, R0=r0)
+    e_exact = fret_efficiency_exact_kinetic_pair(dist_mat, k2_mat, p_d, p_a, w_d, w_a, R0=r0, tau0=tau0, dt=dt)
+    regimes = fret_efficiency_regimes(dist_mat, k2_mat, w_d, w_a, R0=r0)
     
     click.echo("\n--- FRET Efficiency Comparison ---")
     click.echo(f"Physically Exact (Master Eq): {e_exact:.4f}")

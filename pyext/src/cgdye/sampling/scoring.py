@@ -73,7 +73,7 @@ def compute_exclusions(system):
 
 
 def dye_internal_system(atoms_dict, bonds):
-    """Minimal force-field ``system`` for a lone dye from ``parse_mol2`` output.
+    """Minimal force-field ``system`` for a lone dye from ``parse_dye_mol2`` output.
 
     Sites are the MOL2 atoms in serial order (ids ``dye:<atom_name>``, the
     order ``LinkerSampler.get_coords`` uses); bonds, angles and dihedrals are
@@ -286,7 +286,7 @@ class BoundingBoxFilter:
 # (n_frames, n_pairs) broadcasting — O(1) Python loops.
 # ---------------------------------------------------------------------------
 
-class InternalEnergyEvaluator:
+class DyeInternalEnergyEvaluator:
     """Evaluates the internal LJ energy of dye conformations.
 
     evaluate()       — scalar, used inside Metropolis loop (unchanged API).

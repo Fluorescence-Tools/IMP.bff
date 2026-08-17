@@ -29,6 +29,9 @@ shared index.
 
 * [Overview](overview.md) - What imp.bff is, the sibling-repository stack it
   sits in, and where each kind of knowledge lives.
+* [cgdye](cgdye.md) - The explicit-dye layer: what it does, where the physics
+  lives (R0/κ² in `fret`), the flat `IMP.bff.*` surface, conventions (CB
+  strip), tests and pins.
 
 # Subdirectories
 

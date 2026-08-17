@@ -1,11 +1,11 @@
-"""System-level helpers for cgdye N-component pipelines."""
+"""DyeForceFieldSystem-level helpers for cgdye N-component pipelines."""
 
 import os
 from pathlib import Path
-from .io.cif import read_ff_system, write_ff_system
+from .io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 
 
-class System:
+class DyeForceFieldSystem:
     """Wrapper for the cgdye system dictionary (mmCIF backed)."""
 
     def __init__(self, data=None):
@@ -14,12 +14,12 @@ class System:
     @classmethod
     def from_cif(cls, path):
         """Load a system from an mmCIF file."""
-        data = read_ff_system(path)
+        data = read_dye_forcefield_cif(path)
         return cls(data)
 
     def write_cif(self, path):
         """Write the system to an mmCIF file."""
-        write_ff_system(path, self.data)
+        write_dye_forcefield_cif(path, self.data)
 
     def get_fixed_components(self):
         """Return list of component names with role 'fixed'."""
@@ -67,7 +67,7 @@ class System:
 
 def fixed_components(system):
     """Return list of component names with role 'fixed'."""
-    if isinstance(system, System):
+    if isinstance(system, DyeForceFieldSystem):
         return system.get_fixed_components()
     comps = system.get("components", {})
     return [name for name, spec in comps.items() if spec.get("role") == "fixed"]
@@ -75,7 +75,7 @@ def fixed_components(system):
 
 def mobile_components(system):
     """Return list of component names with role 'mobile'."""
-    if isinstance(system, System):
+    if isinstance(system, DyeForceFieldSystem):
         return system.get_mobile_components()
     comps = system.get("components", {})
     return [name for name, spec in comps.items() if spec.get("role") == "mobile"]
@@ -83,7 +83,7 @@ def mobile_components(system):
 
 def component_role(system, name):
     """Return role ('fixed' or 'mobile') for a component, or None if not found."""
-    if isinstance(system, System):
+    if isinstance(system, DyeForceFieldSystem):
         return system.get_component_role(name)
     spec = system.get("components", {}).get(name, {})
     return spec.get("role")
@@ -100,7 +100,7 @@ def derive_system_name(*mol2_paths):
 
 def fixed_component(system):
     """Return the single fixed component name, or None if not uniquely defined."""
-    if isinstance(system, System):
+    if isinstance(system, DyeForceFieldSystem):
         return system.get_fixed_component()
     fixed = fixed_components(system)
     if len(fixed) == 1:
@@ -113,7 +113,7 @@ def find_group_for_component(system, component_name, group_suffix):
 
     Returns the group name if found, None otherwise.
     """
-    if isinstance(system, System):
+    if isinstance(system, DyeForceFieldSystem):
         return system.find_group_for_component(component_name, group_suffix)
     groups = system.get("groups", {})
     target = f"{component_name}_{group_suffix}"
