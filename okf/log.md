@@ -1,6 +1,11 @@
 # Update Log
 
 ## 2026-08-17
+* **PRD-105: hybrid Euclidean/geodesic search and obstacle distance
+  transform evaluated and rejected** (details in the PRD): visibility-seeded
+  Dijkstra was slower with safe (face-step) visibility and tunnelled with
+  26-step visibility; the obstacle D-field is worth ~0.03 ms wall and breaks
+  local deltas. Tree left at 97cca77.
 * **PRD-105 fourth pass ("all tricks", exact):** reach-only re-centring
   shared extents, one coordinate snapshot per frame, chord-run sphere raster,
   one pipelined pool run per evaluation (rasters → searches → carves →
