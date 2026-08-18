@@ -94,6 +94,15 @@
 %apply(short* IN_ARRAY1, int DIM1) {(short* input, int n_input)}
 %apply(unsigned short* IN_ARRAY1, int DIM1) {(unsigned short* input, int n_input)}
 %apply(int* IN_ARRAY1, int DIM1) {(int* input, int n_input)}
+
+// Zero-copy inputs for the kernels whose arrays are grids. Converting a numpy
+// array into a std::vector costs about 34 ns per element -- on a 101^3
+// occupancy grid that is 34 ms of pure marshalling per call, which for a short
+// walk is the entire wall clock. These typemaps hand the kernel numpy's own
+// buffer instead. The parameter names below must match the C++ exactly.
+%apply(int* IN_ARRAY1, int DIM1) {(int* occupancy, int n_occupancy)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* mobility, int n_mobility)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* rate_map, int n_rate_map)}
 %apply(long long* IN_ARRAY1, int DIM1) {(long long *input, int n_input)}
 %apply(unsigned long long* IN_ARRAY1, int DIM1) {(unsigned long long *input, int n_input)}
 

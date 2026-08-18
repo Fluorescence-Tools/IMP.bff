@@ -117,6 +117,10 @@ def simulate_dye_diffusion(
         mobility = np.where(mask, float(slow), 1.0)
 
     counts = IMP.bff.VectorInt()
+    # The grids go through numpy's own buffer: the SWIG typemap takes
+    # (pointer, length) from the array, so nothing is copied or converted. The
+    # dtypes below are therefore load-bearing -- int32 and float64 are what the
+    # typemaps accept, and anything else would force a conversion right back.
     flat = IMP.bff.brownian_walk_in_volume(
         occupancy.ravel(), mobility.ravel(), ng, float(dg), float(t_max),
         float(t_step), float(D), seed, counts)

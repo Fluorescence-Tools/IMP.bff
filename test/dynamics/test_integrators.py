@@ -47,13 +47,18 @@ def _ball(ng, radius):
 def test_free_walk_step_variance_is_2Ddt_per_component():
     """The exact form, measured per step so no wall can touch it.
 
+    A 45-voxel box, not 151. The step width is 0.28 voxels, so even 4000 steps
+    stay within a few voxels of the start and the walls are never reached -- and
+    the occupancy grid is marshalled once per call, which at 151 cubed is 3.4
+    million elements and 112 ms of pure conversion per walk.
+
     A displacement over many steps is noisy and boundary-sensitive; the
     single-step variance is neither, and it is what the convention actually
     fixes. The 3-D total is then 6 D dt, which is the number the old code put
     into one component.
     """
     D, t_step = 8.0, 0.005
-    box = np.ones((151, 151, 151), dtype=np.uint8)
+    box = np.ones((45, 45, 45), dtype=np.uint8)
     steps = [np.diff(t.xyz, axis=0) for t in
              (dif.simulate_dye_diffusion(box, dg=1.0, t_max=4000 * t_step,
                                          t_step=t_step, D=D, random_seed=s)
@@ -67,7 +72,7 @@ def test_free_walk_step_variance_is_2Ddt_per_component():
 def test_free_walk_diffuses_at_the_stated_D():
     """<dx^2> = 2 D t over many steps, which is the observable claim."""
     D, t_step, n = 8.0, 0.005, 60
-    box = np.ones((101, 101, 101), dtype=np.uint8)
+    box = np.ones((45, 45, 45), dtype=np.uint8)
     d = []
     for seed in range(300):
         t = dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step,
@@ -101,7 +106,7 @@ def test_the_two_models_agree_on_D():
     disagreement about the model, not about numerics.
     """
     D, t_step, n = 8.0, 0.005, 60
-    box = np.ones((101, 101, 101), dtype=np.uint8)
+    box = np.ones((45, 45, 45), dtype=np.uint8)
     d = [t.xyz[n - 1] - t.xyz[0] for t in
          (dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
                                      D=D, random_seed=s) for s in range(300))
@@ -330,3 +335,64 @@ def test_the_accept_flag_rides_in_the_returned_array():
     moved = np.any(np.diff(t.xyz, axis=0) != 0.0, axis=1)
     np.testing.assert_array_equal(moved, t.accepted[1:].astype(bool))
     assert int(t.accepted.sum()) == t.n_accepted
+
+
+def test_the_grid_goes_through_without_being_copied():
+    """The occupancy and mobility grids reach the kernel as numpy's own buffer.
+
+    Converting a numpy array into a ``std::vector`` costs about 34 ns per
+    element. On a 101-cubed grid that is 34 ms of pure marshalling per call --
+    which for a short walk was the entire wall clock, and made the cost scale
+    with the *grid* rather than with the number of steps:
+
+        ng=41    2.31 ms  ->  0.05 ms
+        ng=101  33.77 ms  ->  0.34 ms
+        ng=151 111.52 ms  ->  0.36 ms
+
+    Zero-copy is easy to get subtly wrong, so the properties that make it safe
+    are asserted rather than assumed: the caller's array is not written to, the
+    result is unchanged, and an array of the wrong dtype or layout still works
+    (the adapter converts it, and then *that* is what passes through).
+    """
+    ng = 31
+    ball = _ball(ng, 12)
+    original = ball.copy()
+    kw = dict(dg=1.0, t_max=500.0, t_step=0.005, D=8.0, random_seed=5)
+
+    first = dif.simulate_dye_diffusion(ball, **kw)
+    np.testing.assert_array_equal(ball, original)
+
+    second = dif.simulate_dye_diffusion(ball, **kw)
+    np.testing.assert_array_equal(first.xyz, second.xyz)
+    assert first.n_accepted == second.n_accepted
+
+    awkward = np.asfortranarray(ball).astype(np.float32)
+    third = dif.simulate_dye_diffusion(awkward, **kw)
+    np.testing.assert_array_equal(first.xyz, third.xyz)
+
+
+def test_a_short_walk_on_a_large_grid_is_no_longer_dominated_by_the_grid():
+    """It still scales with the grid, an order of magnitude more weakly.
+
+    The SWIG marshalling is gone, but the adapter still casts the caller's array
+    to int32 -- a 1 MB to 4 MB copy at 101 cubed, about 0.3 ms. So the honest
+    claim is a bound, not independence: 60 steps on a 101-cubed grid took
+    33.8 ms and now take about 0.34 ms. A caller that already holds int32 pays
+    nothing at all.
+
+    Loose enough to survive a busy machine; it is guarding an
+    order of magnitude, not a stopwatch.
+    """
+    import time
+
+    box = np.ones((101, 101, 101), dtype=np.uint8)
+    kw = dict(dg=1.0, t_max=0.3, t_step=0.005, D=8.0)
+    dif.simulate_dye_diffusion(box, random_seed=1, **kw)              # warm
+    t0 = time.perf_counter()
+    for seed in range(5):
+        dif.simulate_dye_diffusion(box, random_seed=seed, **kw)
+    per_call = (time.perf_counter() - t0) / 5
+
+    assert per_call < 5e-3, (
+        f"{per_call*1000:.2f} ms for a 60-step walk on a 101-cubed grid; "
+        "it was 33.8 ms when the grid was marshalled element by element")

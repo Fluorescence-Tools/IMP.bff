@@ -13,7 +13,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 std::vector<double> brownian_walk_in_volume(
-        const std::vector<int>& occupancy, const std::vector<double>& mobility,
+        int* occupancy, int n_occupancy, double* mobility, int n_mobility,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient, int seed, std::vector<int>& counts) {
     counts.assign(2, 0);
@@ -29,8 +29,9 @@ std::vector<double> brownian_walk_in_volume(
     const double half = (ng - 1) / 2;
     int n_acc = 0, n_rej = 0;
     const bool ok = internal::run_walk(
-            occupancy, mobility, ng, t_step, diffusion_coefficient, dg, seed,
-            n_steps, n_acc, n_rej,
+            occupancy, static_cast<std::size_t>(n_occupancy),
+            mobility, static_cast<std::size_t>(n_mobility),
+            ng, t_step, diffusion_coefficient, dg, seed, n_steps, n_acc, n_rej,
             [&](int i, double px, double py, double pz, bool accepted,
                 std::size_t /*voxel*/) {
                 xyz[4 * i + 0] = (px - half) * dg;

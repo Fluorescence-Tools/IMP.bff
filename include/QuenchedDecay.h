@@ -45,9 +45,13 @@ IMPBFF_BEGIN_NAMESPACE
     `floor((xyz - x0)/dg + (ng-1)//2)`: the attachment point cancels, and the
     walk's own occupancy test already resolved the index.
 
-    \param[in] occupancy flat ng^3, nonzero where the dye may be
-    \param[in] mobility flat ng^3 step-variance scaling, or empty
-    \param[in] rate_map flat ng^3 quenching rate, 1/ns
+    \param[in] occupancy,n_occupancy flat ng^3, nonzero where the dye may be
+    \param[in] mobility,n_mobility flat ng^3 step-variance scaling, or length 0
+    \param[in] rate_map,n_rate_map flat ng^3 quenching rate, 1/ns
+
+    The three grids are taken as raw buffers so numpy's arrays pass straight
+    through; converting them into `std::vector`s costs ~34 ns per element, and
+    there are three of them.
     \param[in] ng,dg grid size and voxel edge
     \param[in] t_max,t_step walk duration and step, ns
     \param[in] diffusion_coefficient A^2/ns, per-component variance 2 D dt
@@ -62,9 +66,9 @@ IMPBFF_BEGIN_NAMESPACE
             for emitted. Empty if no walk found a starting voxel.
 */
 IMPBFFEXPORT std::vector<double> quenched_donor_photons(
-        const std::vector<int>& occupancy,
-        const std::vector<double>& mobility,
-        const std::vector<double>& rate_map,
+        int* occupancy, int n_occupancy,
+        double* mobility, int n_mobility,
+        double* rate_map, int n_rate_map,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient,
         const std::vector<int>& walk_seeds,

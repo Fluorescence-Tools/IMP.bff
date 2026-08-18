@@ -15,9 +15,9 @@
 IMPBFF_BEGIN_NAMESPACE
 
 std::vector<double> quenched_donor_photons(
-        const std::vector<int>& occupancy,
-        const std::vector<double>& mobility,
-        const std::vector<double>& rate_map,
+        int* occupancy, int n_occupancy,
+        double* mobility, int n_mobility,
+        double* rate_map, int n_rate_map,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient,
         const std::vector<int>& walk_seeds,
@@ -26,7 +26,7 @@ std::vector<double> quenched_donor_photons(
     stats.assign(5, 0.0);
     const int n_steps = static_cast<int>(t_max / t_step);
     const std::size_t n = static_cast<std::size_t>(ng);
-    const bool has_rates = rate_map.size() == n * n * n;
+    const bool has_rates = static_cast<std::size_t>(n_rate_map) == n * n * n;
 
     // The whole point: this vector is the only large thing allocated, it is one
     // value per step rather than four, and it never crosses into Python.
@@ -47,7 +47,9 @@ std::vector<double> quenched_donor_photons(
         int acc = 0, rej = 0;
         const std::size_t before = k_quench.size();
         const bool ok = internal::run_walk(
-                occupancy, mobility, ng, t_step, diffusion_coefficient, dg,
+                occupancy, static_cast<std::size_t>(n_occupancy),
+                mobility, static_cast<std::size_t>(n_mobility),
+                ng, t_step, diffusion_coefficient, dg,
                 walk_seeds[s], n_steps, acc, rej,
                 [&](int /*i*/, double /*px*/, double /*py*/, double /*pz*/,
                     bool /*accepted*/, std::size_t voxel) {

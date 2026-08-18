@@ -42,8 +42,12 @@ IMPBFF_BEGIN_NAMESPACE
     The starting voxel is drawn uniformly from the grid and retried up to 1000
     times until it lands inside the accessible region.
 
-    \param[in] occupancy flat ng^3; nonzero marks accessible
-    \param[in] mobility flat ng^3 scaling of the step variance, or empty for a
+    \param[in] occupancy,n_occupancy flat ng^3; nonzero marks accessible.
+               Taken as a raw buffer so numpy's array is handed straight through
+               -- converting it into a `std::vector` costs ~34 ns per element,
+               which on a 101^3 grid is 34 ms of marshalling per call.
+    \param[in] mobility,n_mobility flat ng^3 scaling of the step variance, or
+               length 0 for a
                uniform medium. Applied unconditionally -- a value above 1 speeds
                the particle up rather than being ignored, which the two Python
                kernels this replaces disagreed about.
@@ -69,8 +73,8 @@ IMPBFF_BEGIN_NAMESPACE
     a bit per step.
 */
 IMPBFFEXPORT std::vector<double> brownian_walk_in_volume(
-        const std::vector<int>& occupancy,
-        const std::vector<double>& mobility,
+        int* occupancy, int n_occupancy,
+        double* mobility, int n_mobility,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient, int seed,
         std::vector<int>& counts);

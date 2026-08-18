@@ -32,8 +32,8 @@ IMPBFF_BEGIN_INTERNAL_NAMESPACE
     \return true if a starting voxel was found
 */
 template <class Sink>
-inline bool run_walk(const std::vector<int>& occupancy,
-                     const std::vector<double>& mobility,
+inline bool run_walk(const int* occupancy, std::size_t n_occupancy,
+                     const double* mobility, std::size_t n_mobility,
                      int ng, double t_step, double diffusion_coefficient,
                      double dg, int seed, int n_steps,
                      int& n_accepted, int& n_rejected, Sink&& sink) {
@@ -49,7 +49,8 @@ inline bool run_walk(const std::vector<int>& occupancy,
     std::uniform_int_distribution<int> pick(0, ng - 1);
 
     const std::size_t n = static_cast<std::size_t>(ng);
-    const bool has_mobility = mobility.size() == n * n * n;
+    const bool has_mobility = n_mobility == n * n * n;
+    (void)n_occupancy;
 
     double px = 0.0, py = 0.0, pz = 0.0;
     std::size_t voxel = 0;
