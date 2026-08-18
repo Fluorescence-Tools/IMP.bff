@@ -1,5 +1,60 @@
 # Update Log
 
+## 2026-08-19 (overnight: seven kernels to C++, and the marshalling that was the real cost)
+
+Seven ports, each gated as equality against the Python it replaced. **The suite
+went from 374 s to 91 s.**
+
+| what | before | after | |
+|---|---|---|---|
+| rotamer interaction energies | 621 ms | 78 ms | 7.9× |
+| mean-field pair energies | 267 ms | 6 ms | 47× |
+| greedy Olga candidate scoring | 4111 ms | 1311 ms | 3.1× |
+| explicit-dye LJ energy | 323 ms | 65 ms | 5.0× |
+| hierarchy frame read (rotamer suite) | ~44 s | 6 s | 7× |
+| dye library parse (repeat) | 58.7 ms | 0.21 ms | 281× |
+| walk on a 101³ grid, 60 steps | 33.8 ms | 0.34 ms | 99× |
+
+**Profiling beat guessing, twice.** I was about to port the rotamer pair
+matrices and profiled first: the cost was CIF parsing (`read_dye_library` called
+21 times for one file) and SWIG traffic (`_collect_frame`, a dozen crossings per
+atom), neither of which the intended port would have touched.
+
+**Marshalling turned out to be the dominant cost**, not arithmetic. Converting a
+numpy array into a `std::vector` runs ~34 ns per element; a *returned* vector
+becomes a Python tuple and converts at C speed, while an **out-parameter** stays
+a wrapper walked one `__getitem__` at a time at ~340 ns. Three consequences,
+now applied consistently: flags ride in the returned array rather than in
+out-parameters; large inputs take `(pointer, length)` through numpy.i's
+`IN_ARRAY1`; small ones stay `std::vector`.
+
+**Defects the ports found**, all pre-existing and all invisible to a gate that
+compares against the previous implementation:
+
+* **`_fast_convolve_loop` was called but defined nowhere.** It arrived in the
+  κ² migration as a call to something that stayed in ChiSurf, so `use_fast=True`
+  — the default — raised `NameError` for every input over 1000 products.
+* **The mean-field cross term used transposed parameters** whenever `d1 > d2`:
+  an `(n₁, n₂)` distance matrix against `(n₂, n₁)` parameters. Flattened lengths
+  match, so numpy broadcast it silently. **98.9 % wrong** on dyes whose elements
+  differ in radius.
+* **The dye-library cache exposed a test writing through a frozen dataclass**
+  with `object.__setattr__`, which had been harmless only because every call
+  re-parsed.
+* **`compute_rotamer_score` validated its `potential` argument after an early
+  return**, so a misspelling was accepted whenever the atom selection was empty.
+* **No `#pragma omp` in this module has ever run.** IMP's CMake leaves
+  `OpenMP_CXX_FLAGS` empty, so every figure above is single-threaded against
+  single-threaded numpy — and a lower bound.
+  (`okf/validation/openmp_is_not_enabled.md`.)
+
+**And `pyext/` itself**: 21 entries to 6. Fourteen single-line `.i` files folded
+into `swig.i-in`, which is IMP's own convention (`core` `%include`s 101 headers
+directly); the three with real content renamed `IMP_bff.*.i` so they are
+distinguishable from the vendored `numpy.i`. Two name collisions removed —
+`fret/kappa2.py`, a 17-line re-export shim, and `distribution.py` beside
+`distributions.py` in one directory meaning unrelated things.
+
 ## 2026-08-18 (PRD-113 stages 6-7: the output contract, io/, and the public surface)
 
 * **`observables/`** — `LifetimeSpectrum`, `(amplitude, rate)` pairs. The
