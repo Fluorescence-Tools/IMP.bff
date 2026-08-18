@@ -69,6 +69,33 @@ IMPBFFEXPORT std::vector<double> lifetime_spectrum_coarse_grain(
         int n_bins,
         std::vector<double>& out_rates);
 
+//! Weighted histogram of the outer product of two distributions.
+/*!
+    The distribution of \f$a_i b_j\f$ with weight \f$w_i v_j\f$ -- what you
+    need when one quantity multiplies another and you want the result's
+    histogram. Convolving a distance distribution with a \f$\kappa^2\f$
+    distance-ratio distribution is exactly this: every \f$R_{DA}\f$ times every
+    ratio, weighted by both.
+
+    Done without forming the outer product. That matters at the sizes this is
+    reached with: the array version allocates \f$n \times m\f$ twice, once for
+    the products and once for the weights, purely to hand them to a histogram.
+
+    Bin edges are uniform from \p lo to \p hi. Values outside are dropped; the
+    top edge is closed, so a value exactly at \p hi lands in the last bin rather
+    than nowhere.
+
+    \param[in] a,weights_a the first distribution and its weights
+    \param[in] b,weights_b the second
+    \param[in] n_bins bins between \p lo and \p hi
+    \param[in] lo,hi histogram range
+    \return \p n_bins accumulated weights
+*/
+IMPBFFEXPORT std::vector<double> outer_product_histogram(
+        const std::vector<double>& a, const std::vector<double>& weights_a,
+        const std::vector<double>& b, const std::vector<double>& weights_b,
+        int n_bins, double lo, double hi);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_LIFETIMESPECTRUM_H

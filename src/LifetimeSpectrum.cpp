@@ -70,4 +70,26 @@ std::vector<double> lifetime_spectrum_coarse_grain(
     return out_amplitudes;
 }
 
+std::vector<double> outer_product_histogram(
+        const std::vector<double>& a, const std::vector<double>& weights_a,
+        const std::vector<double>& b, const std::vector<double>& weights_b,
+        int n_bins, double lo, double hi) {
+    std::vector<double> hist(n_bins > 0 ? n_bins : 0, 0.0);
+    if (n_bins <= 0 || !(hi > lo)) return hist;
+    const std::size_t na = std::min(a.size(), weights_a.size());
+    const std::size_t nb = std::min(b.size(), weights_b.size());
+    const double inv_width = n_bins / (hi - lo);
+    for (std::size_t i = 0; i < na; ++i) {
+        const double ai = a[i], wi = weights_a[i];
+        for (std::size_t j = 0; j < nb; ++j) {
+            const double v = ai * b[j];
+            if (v < lo || v > hi) continue;
+            std::size_t k = static_cast<std::size_t>((v - lo) * inv_width);
+            if (k >= hist.size()) k = hist.size() - 1;   // the closed top edge
+            hist[k] += wi * weights_b[j];
+        }
+    }
+    return hist;
+}
+
 IMPBFF_END_NAMESPACE

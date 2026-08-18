@@ -145,3 +145,76 @@ def test_no_numba_left_in_orientation():
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+# --- the kappa^2 distance-ratio convolution ---------------------------------
+
+def test_the_convolution_matches_the_outer_product_it_replaced():
+    """One path now, and it agrees with the array form to machine precision.
+
+    ``convolve_distance_with_k2_ratio`` had two branches. The fast one called
+    ``_fast_convolve_loop``, which **was never defined in this package** -- it
+    came across in the kappa-squared migration as a call to something that
+    stayed behind, so ``use_fast=True`` raised NameError for every input large
+    enough to reach it. Nothing noticed, because the module had no consumers.
+
+    The slow branch built the full outer product: ``n x m`` twice over, once for
+    the products and once for the weights, purely to hand them to
+    ``np.histogram``. The kernel bins without forming either, so there is
+    nothing left for a flag to choose between and the flag is gone.
+    """
+    rng = np.random.default_rng(1)
+    for n, m in ((40, 40), (200, 150)):
+        r_da = np.linspace(30.0, 70.0, n)
+        amp = rng.random(n); amp /= amp.sum()
+        ratio = np.linspace(0.7, 1.4, m)
+        w = rng.random(m); w /= w.sum()
+
+        products = (r_da[:, None] * ratio[None, :]).ravel()
+        weights = (amp[:, None] * w[None, :]).ravel()
+        lo, hi = products.min(), products.max()
+        want, edges = np.histogram(products, bins=32, range=(lo, hi), weights=weights)
+        keep = want > 1e-10 * want.max()
+
+        centres, hist = o.convolve_distance_with_k2_ratio(r_da, amp, ratio, w, n_bins=32)
+        np.testing.assert_allclose(hist, want[keep], rtol=0, atol=1e-15)
+        np.testing.assert_allclose(centres, (0.5 * (edges[:-1] + edges[1:]))[keep])
+
+
+def test_the_convolution_conserves_weight():
+    """Every product lies inside [min*min, max*max] by construction, so none may
+    fall outside the histogram -- including the one exactly at the top edge."""
+    r_da = np.linspace(30.0, 70.0, 60)
+    ratio = np.linspace(0.7, 1.4, 60)
+    amp = np.full(60, 1 / 60)
+    w = np.full(60, 1 / 60)
+    _, hist = o.convolve_distance_with_k2_ratio(r_da, amp, ratio, w, n_bins=64)
+    assert hist.sum() == pytest.approx(1.0, rel=1e-12)
+
+
+def test_the_dead_fast_flag_is_gone():
+    import inspect
+    assert "use_fast" not in inspect.signature(o.convolve_distance_with_k2_ratio).parameters
+
+
+def test_a_single_point_convolution_is_a_single_bin():
+    """One product value is a delta, and its range has zero width.
+
+    numpy widens ``(a, a)`` to ``(a - 0.5, a + 0.5)`` rather than returning
+    nothing, and that is the contract here too. The weight lands in one bin;
+    its centre can only be within half a bin width of the value, which is what
+    a histogram is.
+    """
+    n_bins = 8
+    c, h = o.convolve_distance_with_k2_ratio(
+        np.array([50.0]), np.array([1.0]), np.array([1.1]), np.array([1.0]),
+        n_bins=n_bins)
+    assert h.sum() == pytest.approx(1.0)
+    assert h.size == 1, "a delta occupies exactly one bin"
+    assert abs(c[0] - 55.0) <= 1.0 / n_bins
+
+
+def test_empty_input_returns_empty():
+    c, h = o.convolve_distance_with_k2_ratio(
+        np.empty(0), np.empty(0), np.array([1.0]), np.array([1.0]))
+    assert c.size == 0 and h.size == 0

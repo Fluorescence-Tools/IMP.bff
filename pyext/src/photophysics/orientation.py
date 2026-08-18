@@ -792,7 +792,6 @@ def convolve_distance_with_k2_ratio(
     r_ratio: np.ndarray,
     weights_ratio: np.ndarray,
     n_bins: int = 256,
-    use_fast: bool = True
 ) -> tuple:
     """Convolve distance distribution with κ² ratio distribution.
     
@@ -810,9 +809,6 @@ def convolve_distance_with_k2_ratio(
         Weights for ratio distribution
     n_bins : int
         Number of bins for output histogram
-    use_fast : bool
-        Use fast numba-optimized loop vs outer product (exact)
-        
     Returns
     -------
     tuple of (r_app, amp_app)
@@ -821,32 +817,38 @@ def convolve_distance_with_k2_ratio(
         amp_app : array
             Amplitudes for apparent distance distribution
     """
-    if use_fast and len(r_da) * len(r_ratio) > 1000:
-        # Fast numba-optimized approach
-        r_min = np.min(r_da) * np.min(r_ratio)
-        r_max = np.max(r_da) * np.max(r_ratio)
-        r_edges = np.linspace(r_min, r_max, n_bins + 1)
-        
-        # Call numba-optimized loop
-        r_app_hist = _fast_convolve_loop(r_da, amp_r_da, r_ratio, weights_ratio, r_edges)
-        
-        r_app_centers = 0.5 * (r_edges[:-1] + r_edges[1:])
-        
-        # Filter non-zero bins
-        mask = r_app_hist > 1e-10 * np.max(r_app_hist)
-        return r_app_centers[mask], r_app_hist[mask]
-    else:
-        # Outer product approach - exact but slower
-        r_app_2d = r_da[:, None] * r_ratio[None, :]
-        amp_2d = amp_r_da[:, None] * weights_ratio[None, :]
-        
-        r_app_flat = r_app_2d.ravel()
-        amp_flat = amp_2d.ravel()
-        
-        # Bin onto uniform grid
-        r_app_hist, r_app_edges = np.histogram(r_app_flat, bins=n_bins, weights=amp_flat)
-        r_app_centers = 0.5 * (r_app_edges[:-1] + r_app_edges[1:])
-        
-        # Filter non-zero bins
-        mask = r_app_hist > 1e-10 * np.max(r_app_hist)
-        return r_app_centers[mask], r_app_hist[mask]
+    r_da = np.asarray(r_da, dtype=np.float64).ravel()
+    amp_r_da = np.asarray(amp_r_da, dtype=np.float64).ravel()
+    r_ratio = np.asarray(r_ratio, dtype=np.float64).ravel()
+    weights_ratio = np.asarray(weights_ratio, dtype=np.float64).ravel()
+    if r_da.size == 0 or r_ratio.size == 0:
+        return np.empty(0), np.empty(0)
+
+    # One path, not two, and no flag to pick between them. There used to be a
+    # `use_fast` branch calling
+    # `_fast_convolve_loop`, which **was never defined in this package** -- it
+    # came across in the kappa-squared migration as a call to something that
+    # stayed behind, so `use_fast=True` raised NameError for every input large
+    # enough to take it. The slow branch built the full outer product instead:
+    # n x m twice over, once for the products and once for the weights, purely
+    # to hand them to np.histogram.
+    #
+    # The kernel does the binning without forming either array, so there is
+    # nothing left for a flag to choose between.
+    lo = float(r_da.min() * r_ratio.min())
+    hi = float(r_da.max() * r_ratio.max())
+    if not hi > lo:
+        # Every product identical -- a delta. numpy widens a zero-width range to
+        # (a - 0.5, a + 0.5) rather than returning nothing, and the contract
+        # here is the one numpy set, so it is matched rather than reinvented.
+        lo, hi = lo - 0.5, hi + 0.5
+    hist = np.asarray(IMP.bff.outer_product_histogram(
+        np.ascontiguousarray(r_da), np.ascontiguousarray(amp_r_da),
+        np.ascontiguousarray(r_ratio), np.ascontiguousarray(weights_ratio),
+        int(n_bins), lo, hi), dtype=np.float64)
+
+    edges = np.linspace(lo, hi, n_bins + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    peak = hist.max() if hist.size else 0.0
+    mask = hist > 1e-10 * peak
+    return centers[mask], hist[mask]
