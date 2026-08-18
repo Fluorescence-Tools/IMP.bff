@@ -1,5 +1,43 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stages 6-7: the output contract, io/, and the public surface)
+
+* **`observables/`** — `LifetimeSpectrum`, `(amplitude, rate)` pairs. The
+  contract is stated once and *tested*: no convolution, IRF, pileup, counting
+  noise or binning anywhere in the package. C++ for the two real loops —
+  evaluating the unconvolved decay, and coarse-graining 30 000 species to 128
+  while preserving `sum(a)` and `sum(a·k)` exactly (population and initial
+  slope) to 1e-12, max decay deviation 5.3e-5. The claimed error scaling is
+  measured, not asserted in prose: halving the bin width quarters the error.
+* The `exact` flag is a **checked** claim. A constant quenching rate — nothing
+  to average over — must reproduce the spectrum's lifetime, and an alternating
+  rate must visibly not. Without the second test the first proves nothing.
+* **`io/`** — `fret/io.py` was 682 lines of three unrelated formats. Split on
+  AST boundaries into `fps_schema`/`fps`/`fps_legacy`/`structure`. A first pass
+  extracting only *function* spans silently dropped `AV_SIMULATION_TYPES`, a
+  module-level constant in the gap between two functions; caught by diffing the
+  set of top-level names before against after, which is now how the split is
+  verified. A second check for unresolved names found the one real coupling —
+  `read_fps_json` dispatches into the legacy reader by file extension.
+* **`api.py` inverted** — `BY_DOMAIN` authored, `EXPORTS` derived, and the
+  naming-families regex deleted. It matched export *names* against a token list
+  that grew with every feature and could not tell a misfiled name from a
+  well-filed one. Replaced by checks that do not grow: every export's module
+  must lie inside its declared domain, no name in two domains, every domain
+  importable.
+* **The import-discipline test paid for itself on its first run**: a
+  cross-domain relative import written to look local, an invalid escape
+  sequence nothing surfaced, and a test-module **basename collision**
+  (`test/io/test_io.py` vs `test/cgdye/test_io.py`) — pytest imports by
+  basename, so one file was reported as a single ERROR line at the bottom of a
+  780-test run and its assertions simply did not run. Basename uniqueness is
+  now a test, because the failure mode is silent.
+* The runtime domain graph is acyclic and reads as a layering:
+  `photophysics ← representation ← av ← restraints`, `fret → {photophysics,
+  representation, restraints}`, `quenching → fret`, `cgdye → {dye, fret,
+  representation}`.
+* Suite **799 passing**, one pre-existing `IMP.em` MRC failure.
+
 ## 2026-08-18 (PRD-113 stages 3-5, tranches 7-10: **numba reaches zero**)
 
 * `AVDistance.h`, `DistanceCalibration.h`, `OrientationFactor.h`,
