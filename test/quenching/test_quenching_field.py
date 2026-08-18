@@ -553,11 +553,16 @@ class RateStabilityTests(IMP.test.TestCase):
     """The rate term constrains the step too, and it used to be ignored.
 
     ``diffusion_stability_limit`` validated only ``dt <= dg^2/(6D)``. On a real
-    site the quenching term is far larger: T4L site 19 at 2.5 A contributes 2.01
-    to the update coefficient against diffusion's 0.16, so a step the solver
-    called safe diverged to 7e36. Site 124 broke the criterion by the same margin
-    and returned a smooth, finite, entirely plausible decay -- which is why this
-    is pinned rather than left to inspection.
+    site the quenching term is far larger: T4L site 19 at 2.5 A, with a 25 A^2/ns
+    ceiling on ``D`` setting the step, contributes 2.01 to the update coefficient
+    against diffusion's 0.16. Their sum of 2.17 is past the divergence threshold
+    of 2 and the decay reached 7e36, while the solver called the step safe. Site
+    124, at 2.10, returned a smooth, finite, entirely plausible decay that was
+    2.6 % wrong -- which is why this is pinned rather than left to inspection.
+
+    Note the two thresholds: the coefficient goes negative at a sum of 1 and the
+    scheme diverges at 2. PRD-111 stages 0-1 ran at sums of 0.92-0.98, inside
+    both, and re-measuring after this fix reproduced them to about 1 %.
 
     The fix is to integrate the rate exactly, ``exp(-k dt)`` rather than
     ``1 - k dt``, so it contributes no stability constraint at all.

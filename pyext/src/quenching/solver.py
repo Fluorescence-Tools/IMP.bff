@@ -57,16 +57,27 @@ def diffusion_stability_limit(d_max: float, dg: float, k_max: float = 0.0) -> fl
 
     With ``k_max = 0`` this is the familiar ``dt <= dg^2 / (6 D)``.
 
-    **The rate term used to be left out, and it dominates.** On T4L site 19 at
-    2.5 A the diffusion term contributes 0.16 to that coefficient and the
-    quenching term 2.01 -- twelve times more -- so a step this function called
-    safe diverged. Worse, the divergence is not always visible: site 124 broke
-    the criterion by the same margin and still returned a smooth, finite,
-    entirely plausible decay. Since :class:`GridDiffusionSolver` now integrates
-    the rate term exponentially it is unconditionally stable in ``k`` and only
-    the diffusion term binds, but the honest criterion is kept here for callers
-    sizing a step for the plain scheme, and because a caller who asks with a
-    ``k_max`` deserves the answer that accounts for it.
+    **Two thresholds, and they differ by a factor of two.** The amplification of
+    the most oscillatory mode is ``|1 - 6 D dt/dg^2 - k dt|``, so the scheme
+    *diverges* only once that sum exceeds **2**. This function returns the
+    stronger bound, where the sum reaches **1** and the coefficient first goes
+    negative: between the two the answer stays bounded but the density can go
+    negative, which for a probability density is not an acceptable answer either.
+    The old ``dg^2/(6 D)`` was the same positivity bound for pure diffusion.
+
+    **The rate term used to be left out, and it dominates.** Measured on T4L
+    site 19 at 2.5 A with ``t_step = 0.5 / (6*25/dg^2)`` (a 25 A^2/ns ceiling on
+    ``D``): diffusion contributes 0.16 to that coefficient and quenching 2.01 --
+    twelve times more -- and the sum of 2.17 is past the divergence threshold,
+    so the decay reached 7e36 while this function called the step safe. Worse,
+    the divergence need not look like one: site 124, at 2.10, returned a smooth,
+    finite, entirely plausible decay that was 2.6 % wrong at 25 ns.
+
+    Since :class:`GridDiffusionSolver` now integrates the rate term
+    exponentially it is unconditionally stable in ``k`` and only the diffusion
+    term binds. The criterion is kept honest here for callers sizing a step for
+    the plain scheme, and because a caller who passes ``k_max`` deserves an
+    answer that accounts for it.
     """
     d_max = float(d_max)
     k_max = float(k_max)
