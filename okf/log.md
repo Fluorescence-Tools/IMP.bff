@@ -1,5 +1,53 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stages 3-5, tranches 7-10: **numba reaches zero**)
+
+* `AVDistance.h`, `DistanceCalibration.h`, `OrientationFactor.h`,
+  `BrownianWalk.h`, `PhotonSimulation.h` — the last **23** kernels.
+  `_jit.py` deleted; `test/test_no_numba.py` parses every source file so it
+  stays deleted. Suite **741 passed**, and it now runs in **134 s** against 614 s.
+* **The gate had to be split three ways**, because "identical output to numba"
+  is achievable for some kernels and impossible for others:
+  * integer/index arithmetic — **bit-exact** (`split_contact_volume`, voxel for
+    voxel over 8 random grids).
+  * float reductions — **≤ 7.1e-15**, and the residual is *FMA contraction*:
+    clang fuses `dg * i + r0`, numba's LLVM does not. Chasing it would be
+    chasing codegen, so the tolerance says so.
+  * RNG-carrying — **closed forms and distributions only**. No C++ generator
+    reproduces numba's stream. Two `test_frozen_reference` tests asserted that
+    stream (`n_accepted == 94567`; 6297 photons to 1e-9) and were replaced by
+    the distributions they came from, with both spreads recorded in the
+    docstrings.
+* **Gating on closed forms found two defects that gating on the old numbers
+  had preserved for years.**
+  * **`kappasq_all` returned half the orientation factor.** `np.random.random(3)`
+    normalised fills the cube's positive octant, not the sphere: `⟨κ²⟩ = 0.333`
+    where the rigid isotropic limit is `2/3`. C++ gives 0.6663. **Fixed**;
+    no callers, so nothing downstream carried it.
+  * **The particle walk diffuses at 3D.** Per-component step variance is
+    `6 D dt` (the total 3-D MSD used as one component's width) where the
+    convention is `2 D dt`. `GridDiffusionSolver` gives `⟨x²⟩ = 2Dt` exactly.
+    **Not fixed** — the `D = 40 Å²/ns` default may have absorbed it. Owner
+    decision: `okf/validation/particle_vs_field_diffusion.md`.
+* **`import IMP.bff.av` as a first import had been raising ImportError** at
+  every prior commit — `representation/__init__` → `distribution` → `av` →
+  `representation`. Nothing in 676 tests caught it because every test imports
+  `IMP.bff` first. Fixed by deferring the `av` import in `distribution.py`,
+  which sits above the builder; all eight subpackages now import standalone.
+* **De-duplication the port forced**: one `distance_sample_statistics` behind
+  three reductions that disagreed at the limits; one Horner evaluator behind two
+  `polynomial_transfer`s that read coefficients in opposite orders (the
+  ascending caller now reverses and delegates); one `brownian_walk_in_volume`
+  behind two near-identical walks, with mobility as a *field* rather than a
+  scalar-and-mask pair. `chi2_score` is now literally one object.
+* **Still an owner decision**: `gaussian_rmp_to_rda_mean` is `Rmp + s²/Rmp` in
+  one module and `Rmp + s²/(2Rmp)` in the other, 45.8 against 45.4. A test
+  asserts they still differ, so it cannot be closed by accident.
+* **Two improvements the C++ made possible**: `photon_trace` is parallel *and*
+  reproducible (each photon's generator seeded from `(seed, index)`, so the
+  result does not depend on the scheduler — numba had to choose one or the
+  other), and `quenched_decay` takes a seed at all, which the numba never did.
+
 ## 2026-08-18 (PRD-113 stage 5, tranches 5-6: maps, FRET traces, the solver — and a 40× regression, found and fixed)
 
 * `QuenchingMap.h`, `FRETRateTrace.h`, `DiffusionSolver.h` — 7 more kernels.
