@@ -18,6 +18,7 @@ import numpy as np
 /* numerical kernels ported from Python (PRD-113) */
 %include "Distributions.i"
 %include "PolymerChain.i"
+%include "SolventAccessibleSurface.i"
 
 /* Fluorescence decays */
 

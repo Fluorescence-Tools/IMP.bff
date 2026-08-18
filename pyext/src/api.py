@@ -120,7 +120,7 @@ EXPORTS = {
     "PETTerm": "IMP.bff.photophysics.terms",
     "FRETTerm": "IMP.bff.photophysics.terms",
     "total_rate": "IMP.bff.photophysics.terms",
-    # Not listed here on purpose: poisson_0toN, normal_distribution,
+    # Not listed here on purpose: sphere_points, poisson_0toN, normal_distribution,
     # generalized_normal_distribution and distance_between_gaussian are C++
     # (`Distributions.h`) and SWIG binds them into `IMP.bff` directly, so the
     # flat name is already taken and the lazy hook below would never fire.
@@ -161,7 +161,6 @@ EXPORTS = {
     "normalize_amino_acid_quenching": "IMP.bff.quenching.pet",
     "quencher_atom_indices": "IMP.bff.quenching.pet",
     "quencher_centers": "IMP.bff.quenching.pet",
-    "sphere_points": "IMP.bff.quenching.asa",
     "solvent_accessible_surface": "IMP.bff.quenching.asa",
     "grid_center_index": "IMP.bff.quenching.grids",
     "slow_factor_grid": "IMP.bff.quenching.grids",

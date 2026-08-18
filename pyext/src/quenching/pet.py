@@ -32,7 +32,8 @@ from collections import OrderedDict
 
 import numpy as np
 
-from .._jit import njit, prange
+import IMP.bff
+
 
 __all__ = [
     "quenching_rate_per_frame",
@@ -275,17 +276,20 @@ def quencher_centers(atoms, selection):
     )
 
 
-@njit(cache=True, parallel=True)
 def _rate_per_frame(collided, k_quench):
-    n_frames, n_atoms = collided.shape
-    out = np.zeros(n_frames, dtype=np.float64)
-    for frame in prange(n_frames):
-        total = 0.0
-        for atom in range(n_atoms):
-            if collided[frame, atom]:
-                total += k_quench[atom]
-        out[frame] = total
-    return out
+    """Total quenching rate per frame. **C++.**
+
+    Sums the rate constants of the quenchers in contact at each frame -- rates
+    add, because the channels are parallel.
+    """
+    collided = np.ascontiguousarray(collided)
+    n_frames = int(collided.shape[0])
+    return np.asarray(
+        IMP.bff.quenching_rate_per_frame(
+            [int(v) for v in collided.astype(np.int32).ravel()],
+            n_frames,
+            np.ascontiguousarray(k_quench, dtype=np.float64).ravel()),
+        dtype=np.float64)
 
 
 def quenching_rate_per_frame(collided, k_quench) -> np.ndarray:

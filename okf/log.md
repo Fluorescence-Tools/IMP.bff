@@ -1,5 +1,29 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 5, tranche 3: ASA and the PET rate to C++)
+
+* `SolventAccessibleSurface.h` / `.cpp` — `sphere_points`,
+  `solvent_accessible_surface_area` (Shrake–Rupley), `quenching_rate_per_frame`.
+* **Gate**: `quenching_rate_per_frame` bit-exact. The other two differ by up to
+  2.4e-6 — **and that is the Python being wrong, not the port.** It built the
+  golden spiral in `float32`; the C++ agrees with an independent `float64`
+  construction to **1e-15**, where the old one was off by 2.4e-6. So the port is
+  the more accurate of the two, and the difference is not a tolerance to relax
+  later.
+* **Another uncovered function, found the same way as the last one.** `pet.py`
+  was missing `import IMP` after the delegation, and **139 quenching tests
+  passed anyway** — nothing calls `quenching_rate_per_frame`. That is the second
+  time in two tranches that a green suite has vouched for a function it never
+  runs (`worm_like_chain_linker` was the first).
+  `test/quenching/test_ported_kernels.py` now covers all three, including the
+  neighbour-cutoff bug the ASA kernel was ported with: an occluder at 5 Å must
+  be seen, which the old 2.45 Å cutoff would have missed.
+* **The SWIG name collision recurs by construction.** Any C++ function SWIG
+  binds into `IMP.bff` takes that flat name, so `api.py` must not also claim it
+  — `sphere_points` hit this exactly as `normal_distribution` did. Worth
+  expecting for every remaining tranche rather than rediscovering.
+* numba: **35 → 33**. Suite **676 passed**.
+
 ## 2026-08-18 (PRD-113 stage 5, tranche 2: polymer chains to C++ — and a live breakage found)
 
 * `PolymerChain.h` / `.cpp` — `gaussian_chain_ree`, `gaussian_chain`,
