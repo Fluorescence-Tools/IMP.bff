@@ -1,5 +1,46 @@
 # Update Log
 
+## 2026-08-18 (PRD-111 stage 2 scoped; the acceptor observable)
+
+* **Stage 2 rewritten around the acceptor decay, on the owner's physics
+  (2026-08-18): quenching and FRET are spatially uncorrelated and
+  non-homogeneous.** Quenching is set by contact with the residues immediately
+  around the dye; FRET by `1/R⁶` to an acceptor elsewhere. Both are modulated by
+  the same `r(t)` through unrelated geometry. So the acceptor decay is a second,
+  **independent** projection of `p(r, t)` — which is what stage 0 showed the
+  parameters need — and **nothing is separable**: the decay is not a quenching
+  decay times a FRET decay, and neither rate may be averaged over the volume
+  before the other is applied. Both must be evaluated along the *same*
+  trajectory. That makes `fret_rate_trace` (acceptor averaged over its AV) the
+  fast-acceptor approximation and `fret_rate_pair_trace` the general case; the
+  known ~7 % gap between them on 148l E15→E90 is this effect, not a numerical
+  detail.
+* **The acceptor decay carries a rise**, its rate being the donor's *total*
+  depopulation — radiative plus quenching plus transfer — seen on a channel free
+  of the donor's own detection artefacts, with the amplitude ratio carrying the
+  transfer efficiency.
+* **It costs parameters as well as adding data.** The acceptor is a different
+  dye at a different site with its own local quenchers, so it does **not** share
+  the donor's θ. Whether it is a net gain for identifiability is measurable by
+  the same Fisher construction as stage 0, and that is the stage-2 work; the gate
+  is that it must reduce the joint condition number *after* its own parameters
+  are counted.
+* **A quenched sub-population is not the FRET-active sub-population**, so
+  stage 1's free-fraction nuisance and the transfer efficiency interact — the
+  free fraction cannot be assumed FRET-inactive.
+* **No experimental data exists at the moment (owner), so "fit real decays" is
+  blocked rather than pending.** Until data exists every result in PRD-111 is a
+  statement about the model, not about a dye on a protein, and model-perturbation
+  (stage 1) is the only validation available. Recorded as a standing caveat on
+  the PRD, not a to-do.
+* **`fret_rate_pair_trace`'s mismatch error named the wrong lever.** It asked for
+  the same `t_max` and `t_step`, which are already shared; the number of **walks**
+  is what has to agree. Unequal lengths are the normal case — the two dyes are
+  quenched differently because they sit at different sites — so the message now
+  says so, and says why truncating is refused (a trajectory concatenates one walk
+  per excitation, so an arbitrary cut splits a walk). Matching the counts is
+  QuEst-side work, recorded in `../quest/okf/log.md`.
+
 ## 2026-08-18 (PRD-111, quenching identifiability across sites)
 * **PRD-111 stage 0 measured; the gate passes** (`okf/prds/prd-111.md`,
   `okf/validation/quenching_multisite.md`,

@@ -174,9 +174,18 @@ def fret_rate_pair_trace(
 
     The two walks are independent, so pairing frame *i* with frame *i* samples
     the joint distribution correctly **provided both were simulated on the same
-    time base** -- same ``t_step`` and same number of frames. A mismatch raises
-    rather than truncating, because truncating would silently change the sampled
-    time window.
+    time base** -- same ``t_step`` and the same number of frames. A mismatch
+    raises rather than truncating: a trajectory is a *concatenation of one walk
+    per excitation*, so cutting it at an arbitrary frame splits a walk and pairs
+    the tail of one excitation against the head of another.
+
+    **Unequal lengths are the normal case, not an error case.** The acceptor sits
+    at a different site with different residues around it and is therefore
+    quenched differently, so the two dyes do not need the same number of
+    excitations to collect the same number of photons. Matching them is the
+    *caller's* job and the lever is the **number of walks**, not ``t_max`` or
+    ``t_step`` -- those are usually already shared and changing them will not
+    help.
 
     :param donor_trajectory: ``(n_frames, 3)`` donor centres in Angstrom.
     :param acceptor_trajectory: ``(n_frames, 3)`` acceptor centres, frame-aligned.
@@ -194,8 +203,14 @@ def fret_rate_pair_trace(
     if donor.shape[0] != acceptor.shape[0]:
         raise ValueError(
             "Donor and acceptor trajectories must have the same number of "
-            f"frames to pair ({donor.shape[0]} vs {acceptor.shape[0]}); "
-            "simulate both dyes with the same t_max and t_step."
+            f"frames to pair ({donor.shape[0]} vs {acceptor.shape[0]}). This is "
+            "expected whenever the two dyes are quenched differently -- they sit "
+            "at different sites -- so they need different numbers of excitations "
+            "for the same photon count. Simulate the same number of *walks* for "
+            "both dyes; t_max and t_step are usually already shared and are not "
+            "the lever. Truncating here is refused because a trajectory "
+            "concatenates one walk per excitation, so an arbitrary cut splits a "
+            "walk and pairs one excitation's tail against another's head."
         )
     r_min = max(float(r_min), 1e-6)
     return _rate_pair_trace(
