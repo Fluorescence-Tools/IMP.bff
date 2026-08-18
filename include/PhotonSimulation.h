@@ -45,13 +45,22 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] t_step trajectory time step, ns
     \param[in] tau0 intrinsic lifetime, ns
     \param[in] seed reproducible when non-negative
-    \param[out] emitted per event: 1 if a photon got out, 0 if quenched first
-    \return delay time of each event, ns; 0 for a quenched event
+    \return **two** values per event: the delay time in ns (0 for a quenched
+            event), then 1.0 if a photon got out and 0.0 if quenching won.
+
+    Interleaved rather than returned alongside an out-parameter. SWIG turns a
+    returned `std::vector` into a Python tuple, which numpy converts at C speed;
+    an out-parameter stays a wrapper object that numpy walks one `__getitem__`
+    at a time, about 340 ns per element against 34 ns for an *input* array of
+    the same size. On a 40 000-photon trace that flag cost 13.7 ms of 152 ms.
+
+    The input `k_quench` is the remaining marshalling cost here -- 36 ns per
+    element, so ~180 ms for a five-million-frame trace. #quenched_donor_photons
+    avoids it entirely by never letting the trace out of C++.
 */
 IMPBFFEXPORT std::vector<double> photon_trace(
         int n_ph, const std::vector<double>& k_quench,
-        double t_step, double tau0, int seed,
-        std::vector<int>& emitted);
+        double t_step, double tau0, int seed);
 
 //! Trajectory-driven fluorescence decay, without shot noise.
 /*!

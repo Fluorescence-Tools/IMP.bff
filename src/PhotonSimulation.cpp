@@ -21,20 +21,20 @@ IMPBFF_BEGIN_NAMESPACE
 
 std::vector<double> photon_trace(
         int n_ph, const std::vector<double>& k_quench,
-        double t_step, double tau0, int seed, std::vector<int>& emitted) {
+        double t_step, double tau0, int seed) {
     const int n = n_ph > 0 ? n_ph : 0;
-    std::vector<double> dts(n, 0.0);
-    emitted.assign(n, 0);
-    const long long n_frames = static_cast<long long>(k_quench.size());
-    if (n_frames == 0 || n == 0) return dts;
+    // Two per photon: delay, emitted. See the header on why not an out-param.
+    std::vector<double> out(static_cast<std::size_t>(n) * 2, 0.0);
+    if (k_quench.empty() || n == 0) return out;
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; ++i) {
         bool got = false;
-        dts[i] = internal::race_one_photon(k_quench, t_step, tau0, seed, i, got);
-        emitted[i] = got ? 1 : 0;
+        out[2 * i + 0] =
+                internal::race_one_photon(k_quench, t_step, tau0, seed, i, got);
+        out[2 * i + 1] = got ? 1.0 : 0.0;
     }
-    return dts;
+    return out;
 }
 
 std::vector<double> quenched_decay(

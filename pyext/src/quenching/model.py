@@ -178,6 +178,24 @@ class DyeDiffusionSimulation:
         * the conversion is ``floor``, not ``trunc``: ``trunc`` maps ``[-1, 0)``
           to 0, so a position up to one voxel *below* the grid would be treated
           as inside it and read voxel 0's rate.
+
+        The trace comes back as **float32**, and that is now a deliberate
+        choice rather than an inherited one. It was inherited: the cast was here
+        before anything depended on it. Two things now do.
+
+        It halves the memory the photon race walks, and that race is the
+        bottleneck once a trajectory is long -- it makes tens of millions of
+        random reads into this array, so 80 MB against 160 MB decides whether it
+        fits in cache. And :meth:`QuenchedDonorDecay.photons_fused` holds its
+        own trace as float32 to match, which is what lets the fused and
+        three-call paths be compared for *equality* rather than to a tolerance.
+
+        The precision costs nothing real: a PET rate constant is a transferable
+        starting value known to perhaps two significant figures, and float32
+        carries seven. If this is ever widened to float64, widen the fused
+        kernel with it or the equality test in
+        ``test/quenching/test_fused_decay.py`` will start failing for a reason
+        that has nothing to do with the physics.
         """
         if self.trajectory is None:
             raise ValueError("Run the simulation first.")
