@@ -308,16 +308,24 @@ class DyeDiffusionTests(IMP.test.TestCase):
         What survives is the distribution, and it is a tight one. Over 12
         seeds:
 
-            numba   94436 +/- 272   range [94002, 94835]
-            C++     94388 +/- 318   range [94031, 95096]
+            numba, 6*D*dt width   94436 +/- 272   range [94002, 94835]
+            C++,   6*D*dt width   94388 +/- 318   range [94031, 95096]
+            C++,   2*D*dt width   96618 +/- 253   range [96218, 97057]
 
-        so the bound below is roughly four standard deviations wide and would
-        still catch any real change in the geometry, the step width or the
-        rejection rule. A single seed is deliberately not asserted.
+        The third row is the current one. The step width was corrected on
+        2026-08-18 -- it had been the total 3-D MSD used as one component's
+        width, so the walk diffused at 3D -- and a shorter step rejects less
+        often, which is the whole of the difference. The first two rows are kept
+        because they are the evidence that the *port* changed nothing: same
+        width, same distribution.
+
+        The bound below is roughly four standard deviations wide and would still
+        catch a real change in the geometry, the step width or the rejection
+        rule. A single seed is deliberately not asserted.
         """
         accepted = [self.run_walk(random_seed=s).n_accepted for s in range(6)]
         mean = sum(accepted) / len(accepted)
-        self.assertAlmostEqual(mean, 94400, delta=1200)
+        self.assertAlmostEqual(mean, 96600, delta=1200)
         for walk_accepted in accepted:
             self.assertEqual(walk_accepted + (100000 - walk_accepted), 100000)
         self.assertEqual(self.run_walk().n_frames, 100000)

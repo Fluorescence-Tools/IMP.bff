@@ -5,18 +5,18 @@
 ``av/_kernels`` -- that computed the same four numbers and disagreed at the
 limits. The tests here pin the limits, because that is where they differed.
 
-The two *documented* disagreements are deliberately still here. Both are
-questions of convention that need an owner, not a refactor:
+Two documented disagreements came out of the de-duplication, and they were
+resolved differently:
 
-* ``gaussian_rmp_to_rda_mean`` is ``Rmp + s^2/Rmp`` in one module and
-  ``Rmp + s^2/(2 Rmp)`` in the other -- a factor of two that turns on what
-  ``sigma`` names.
-* ``polynomial_transfer`` reads its coefficients ascending in one and
-  descending in the other.
-
-The second is now single-sourced: one Horner evaluator, and the ascending
-caller reverses. The first is not touched at all. A test that asserted them
-equal would be asserting an answer nobody has given.
+* ``gaussian_rmp_to_rda_mean`` was ``Rmp + s^2/Rmp`` in one module and
+  ``Rmp + s^2/(2 Rmp)`` in the other. **Settled 2026-08-18**: ``sigma`` is the
+  per-component width of the separation vector, so the correction is
+  ``s^2/Rmp`` -- the two transverse components of the displacement contribute
+  ``2 s^2``, halved by the expansion. One function now.
+* ``polynomial_transfer`` reads its coefficients ascending in one caller and
+  descending in the other. That is a real difference in what the caller holds,
+  not a disagreement about physics, so **both survive** -- over one Horner
+  evaluator, with the ascending caller reversing.
 """
 
 import math
@@ -121,14 +121,38 @@ def test_polynomial_transfer_is_vectorised_and_shape_preserving():
         y.ravel(), [rd.polynomial_transfer(float(v), coeffs) for v in x.ravel()], atol=1e-9)
 
 
-def test_the_sigma_convention_is_still_an_open_question():
-    """Not a bug being tolerated -- a decision that has not been made.
+def test_the_sigma_convention_is_settled():
+    """One function, and the transverse-component derivation it comes from.
 
-    If this ever fails, someone answered it; update the note in
-    ``distance_metrics``' module docstring rather than deleting the test.
+    Anything that fitted ``sigma_rda`` through the old canonical version
+    absorbed the missing factor of two, so its fitted sigma is sqrt(2) too
+    large.
     """
-    assert dm.gaussian_rmp_to_rda_mean(45.0, 6.0) == pytest.approx(45.8)
-    assert rd.gaussian_rmp_to_rda_mean(45.0, 6.0) == pytest.approx(45.4)
+    assert dm.gaussian_rmp_to_rda_mean is rd.gaussian_rmp_to_rda_mean
+    assert rd.gaussian_rmp_to_rda_mean(45.0, 6.0) == pytest.approx(45.0 + 36.0 / 45.0)
+    assert rd.gaussian_rmp_to_rda_mean(45.0, 6.0) == pytest.approx(45.8)
+
+
+def test_the_correction_vanishes_at_coincident_mean_positions():
+    """The expansion is in sigma/Rmp and says nothing at Rmp = 0.
+
+    Clamping the denominator -- which the canonical version used to do --
+    returns 3.6e11 A here, a number that propagates as if it meant something.
+    """
+    assert rd.gaussian_rmp_to_rda_mean(0.0, 6.0) == 0.0
+    assert rd.gaussian_rmp_to_rda_mean(-3.0, 6.0) == 0.0
+    np.testing.assert_allclose(
+        rd.gaussian_rmp_to_rda_mean(np.array([0.0, 10.0, 45.0]), 6.0),
+        [0.0, 13.6, 45.8])
+
+
+def test_the_correction_grows_the_distance_and_fades_with_range():
+    """s^2/Rmp: always positive, and negligible once Rmp >> sigma."""
+    for rmp in (10.0, 30.0, 90.0):
+        assert rd.gaussian_rmp_to_rda_mean(rmp, 6.0) > rmp
+    near = rd.gaussian_rmp_to_rda_mean(10.0, 6.0) / 10.0 - 1.0
+    far = rd.gaussian_rmp_to_rda_mean(90.0, 6.0) / 90.0 - 1.0
+    assert far < near / 50
 
 
 def test_chi2_score_is_one_function_now():

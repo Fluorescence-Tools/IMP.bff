@@ -8,13 +8,13 @@
 ===========================  ====================  ==========================
 function                     here                  representation.distance
 ===========================  ====================  ==========================
-``gaussian_rmp_to_rda_mean`` ``Rmp + s^2/Rmp``     ``Rmp + s^2/(2 Rmp)``
+``gaussian_rmp_to_rda_mean`` *settled 2026-08-18*  same function now
 ``polynomial_transfer``      ascending ``c0+c1x``  descending (``np.polyfit``)
 ===========================  ====================  ==========================
 
-Measured at ``rmp=45, sigma=6``: **45.8 against 45.4** -- a factor of two in the
-correction term. And at ``rmp=45, coeffs=[0, 1, 0.02]``: **85.5 against 45.02**,
-the polynomial evaluated with its coefficients reversed.
+At ``rmp=45, coeffs=[0, 1, 0.02]``: **85.5 against 45.02**, the polynomial
+evaluated with its coefficients reversed. That one is a real difference in what
+the caller holds, and both are kept.
 
 Each is internally consistent and each documents its own convention, so neither
 is wrong in isolation. What is wrong is that they share a name in one package.
@@ -24,12 +24,13 @@ coefficients, which only the descending evaluator reads correctly. The versions
 here have **no consumers**; only ``chi2_score`` is imported from this module
 (by ``restraints/``), and that one is verified identical.
 
-Which ``gaussian_rmp_to_rda_mean`` is right is a question about what ``sigma``
-means -- per-component width of an isotropic 3-D cloud, or width of the distance
-distribution -- and is left for the owner rather than guessed at. PRD-113 stage
-4b removed only what was verified identical: ``fret_efficiency`` and
-``distance_from_fret_efficiency``, which are now re-exported from the canonical
-module.
+``gaussian_rmp_to_rda_mean`` **was** the open question -- ``Rmp + s^2/Rmp`` here
+against ``Rmp + s^2/(2 Rmp)`` there, 45.8 against 45.4 -- and it was settled on
+2026-08-18: **sigma is the per-component width of the separation vector**, so
+the correction is ``s^2/Rmp`` and this module's form was the right one. The
+canonical function now carries it and this name re-exports it. The derivation
+is in that function's docstring. PRD-113 stage 4b had already removed what was
+verified identical: ``fret_efficiency`` and ``distance_from_fret_efficiency``.
 
 What stage 4c then did, with the numba port: the *arithmetic* of the two
 disagreeing pairs is now single-sourced in C++, and the difference between them
@@ -55,36 +56,8 @@ from IMP.bff.representation.distance import (  # noqa: F401
     chi2_score,
     distance_from_fret_efficiency,
     fret_efficiency,
+    gaussian_rmp_to_rda_mean,
 )
-
-
-def gaussian_rmp_to_rda_mean(rmp: float, sigma: float = 6.0) -> float:
-    r"""Correct an Rmp (mean-position) distance to approximate <R_DA>.
-
-    For two 3-D Gaussian dye distributions with equal width *σ*, the mean
-    inter-dye distance is larger than the distance between the mean
-    positions because of the convolution of the distributions:
-
-    .. math::
-
-       \langle R_{DA} \rangle \approx R_{mp}
-       + \frac{\sigma^2}{R_{mp}}
-
-    Parameters
-    ----------
-    rmp : float
-        Distance between AV mean positions (Å).
-    sigma : float
-        Width of the dye distributions (Å).  Default 6.0.
-
-    Returns
-    -------
-    float
-        Sigma-corrected mean distance (Å).
-    """
-    if rmp <= 0.0:
-        return 0.0
-    return rmp + sigma ** 2 / rmp
 
 
 def polynomial_transfer(rmp: float, coefficients: np.ndarray) -> float:

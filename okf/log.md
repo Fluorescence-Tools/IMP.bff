@@ -24,11 +24,28 @@
     normalised fills the cube's positive octant, not the sphere: `⟨κ²⟩ = 0.333`
     where the rigid isotropic limit is `2/3`. C++ gives 0.6663. **Fixed**;
     no callers, so nothing downstream carried it.
-  * **The particle walk diffuses at 3D.** Per-component step variance is
+  * **The particle walk diffused at 3D.** Per-component step variance was
     `6 D dt` (the total 3-D MSD used as one component's width) where the
     convention is `2 D dt`. `GridDiffusionSolver` gives `⟨x²⟩ = 2Dt` exactly.
-    **Not fixed** — the `D = 40 Å²/ns` default may have absorbed it. Owner
-    decision: `okf/validation/particle_vs_field_diffusion.md`.
+    **Fixed**, after tracing it to QuEst's 2019 docstring — a Berkeley teaching
+    page's step *magnitude* transcribed as a per-component σ, unchanged through
+    Cython → numba → C++ — and after correcting my own **10× unit error**: I
+    wrote that `D = 40 Å²/ns` was implausibly high because "free Alexa488 is
+    around 4 Å²/ns", and used that to argue the default had absorbed the factor
+    of three. `1 Å²/ns = 10 µm²/s`, so 400 µm²/s **is** 40 Å²/ns — the default
+    is the free-solution value entered correctly, and there is no calibration
+    of `D` anywhere in the stack to have absorbed anything. Defaults unchanged.
+    The fix does expose a real inconsistency the wrong width was masking: the
+    particle model defaults `D = 40` (free) and the field model
+    `free_diffusion = 8` (tethered), 5× apart under one name.
+    `okf/validation/particle_vs_field_diffusion.md`.
+  * **`gaussian_rmp_to_rda_mean` settled**: σ is the per-component width of the
+    *separation vector*, so the correction is `σ²/Rmp` — the two transverse
+    components give `⟨|ε⊥|²⟩ = 2σ²`, halved by the expansion. The canonical
+    version had `σ²/(2Rmp)`, i.e. half; one function now, and `rmp ≤ 0` returns
+    0 rather than the 3.6e11 Å the clamped denominator gave. Anything that
+    fitted `sigma_rda` through the old canonical version has a σ that is √2 too
+    large.
 * **`import IMP.bff.av` as a first import had been raising ImportError** at
   every prior commit — `representation/__init__` → `distribution` → `av` →
   `representation`. Nothing in 676 tests caught it because every test imports

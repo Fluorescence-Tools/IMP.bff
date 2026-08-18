@@ -312,23 +312,53 @@ def polynomial_transfer(
 def gaussian_rmp_to_rda_mean(
     rmp: Union[float, np.ndarray], sigma: float
 ) -> Union[float, np.ndarray]:
-    """Apply Gaussian width correction to convert Rmp to RDAMean.
+    r"""Correct a mean-position distance to the mean inter-dye distance.
 
-    RDAMean ≈ Rmp + (sigma^2 / (2 * rmp))
+    .. math::
+       \langle R_{DA} \rangle \approx R_{mp} + \frac{\sigma^2}{R_{mp}}
+
+    **sigma is the per-component width of the separation vector**, not of one
+    dye cloud and not of the distance distribution. That is the convention
+    settled on 2026-08-18, and it is the one the expansion gives: writing the
+    separation as :math:`d = \Delta + \varepsilon` with
+    :math:`\varepsilon \sim N(0, \sigma^2 I_3)`,
+
+    .. math::
+       |d| \approx |\Delta| + \varepsilon\cdot\hat\Delta
+                 + \frac{|\varepsilon_\perp|^2}{2|\Delta|}
+
+    and since :math:`\langle \varepsilon\cdot\hat\Delta \rangle = 0` while the
+    **two** transverse components give
+    :math:`\langle|\varepsilon_\perp|^2\rangle = 2\sigma^2`, the correction is
+    :math:`\sigma^2/R_{mp}`.
+
+    .. note::
+       This returned :math:`R_{mp} + \sigma^2/(2 R_{mp})` until 2026-08-18 --
+       half the correction, 45.4 against 45.8 at ``rmp=45, sigma=6``. The other
+       form lived under the same name in ``IMP.bff.distance_metrics``; the two
+       are now one function. Anything that fitted ``sigma_rda`` *through* this
+       code absorbed the factor of two and its fitted sigma will be
+       :math:`\sqrt2` too large.
 
     Parameters
     ----------
     rmp : float or np.ndarray
-        Mean position distance(s).
+        Distance between the clouds' mean positions, Angstrom.
     sigma : float
-        Standard deviation of the inter-dye distance distribution.
+        Per-component width of the separation vector, Angstrom.
 
     Returns
     -------
     float or np.ndarray
-        Corrected distance(s).
+        Corrected distance(s), Angstrom. **Zero where ``rmp`` is zero or
+        negative**: the expansion is in :math:`\sigma/R_{mp}` and says nothing
+        at coincident mean positions. Clamping the denominator instead -- which
+        the canonical version used to do -- returns 3.6e11 A at ``rmp = 0``,
+        a number that then propagates as if it meant something.
     """
-    return rmp + (sigma ** 2) / (2.0 * np.maximum(rmp, 1e-10))
+    r = np.asarray(rmp, dtype=np.float64)
+    out = np.where(r > 0.0, r + (sigma ** 2) / np.where(r > 0.0, r, 1.0), 0.0)
+    return float(out) if np.ndim(rmp) == 0 else out
 
 
 def histogram_rda(

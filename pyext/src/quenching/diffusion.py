@@ -67,13 +67,38 @@ def simulate_dye_diffusion(
     :param dg: voxel edge in Angstrom.
     :param t_max: total simulated time in ns.
     :param t_step: time step in ns.
-    :param D: diffusion coefficient in A^2/ns.
+    :param D: diffusion coefficient in A^2/ns, in the standard convention --
+        the per-Cartesian-component step variance is ``2 D dt``, so
+        ``<dx^2> = 2 D t``, the same D that :class:`GridDiffusionSolver` takes.
     :param slow_fact: either a scalar factor applied inside *slow_density*, or a
         ``(ng, ng, ng)`` per-voxel factor grid from
         :func:`IMP.bff.slow_factor_grid`.
     :param random_seed: seed for a reproducible walk; ``None`` draws freely.
 
     The returned coordinates are relative to the grid anchor.
+
+    .. note::
+       **The default is a free-solution value, and it is entered correctly.**
+       ``D = 40 A^2/ns`` is 400 um^2/s (1 A^2/ns = 10 um^2/s), which is free
+       Alexa488 in water -- and this parameter is documented, back to QuEst, as
+       the dye's diffusion *in solution, when not interacting with the surface*.
+       Stickiness is applied separately, through the mobility field.
+
+       That matters because the step width was wrong until 2026-08-18:
+       ``sqrt(2*D*3*dt)`` per Cartesian component, the total three-dimensional
+       MSD used as one component's width, so the walk diffused at 3D. The
+       tempting inference -- that ``D`` had been calibrated around it and must
+       move by 3x in compensation -- is **false**. The factor of three is a
+       transcription error, and its source is still in the docstring it came
+       from: QuEst's 2019 ``simulate_traj_point`` cites a Berkeley teaching page
+       whose ``k = sqrt(D * dimensions * tau)`` is the *magnitude* of a step
+       that is then given a random direction, not a per-component sigma. No
+       calibration of ``D`` exists in any repository in this stack; every
+       document that mentions these parameters calls them uncalibrated
+       transferable starting values.
+
+       So the width was corrected and ``D`` was left alone. See
+       ``okf/validation/particle_vs_field_diffusion.md``.
     """
     seed = -1 if random_seed is None else int(random_seed)
     occupancy = np.ascontiguousarray(np.asarray(density, dtype=np.int32))

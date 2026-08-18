@@ -25,8 +25,12 @@ std::vector<double> brownian_walk_in_volume(
 
     std::mt19937_64 rng(seed >= 0 ? static_cast<std::uint64_t>(seed)
                                   : std::random_device{}());
-    // In voxel units: 2 D dt per Cartesian component, three components.
-    const double sigma = std::sqrt(2.0 * diffusion_coefficient * 3.0 * t_step) / dg;
+    // In voxel units. 2 D dt is the variance of ONE Cartesian component; the
+    // total three-dimensional MSD is 6 D dt and belongs to no single axis.
+    // This read sqrt(2 * D * 3 * dt) until 2026-08-18, i.e. it used the 3-D
+    // total as one component's width, so the walk diffused at 3D while
+    // GridDiffusionSolver -- the same dynamics as a density -- gave exactly 2Dt.
+    const double sigma = std::sqrt(2.0 * diffusion_coefficient * t_step) / dg;
     std::normal_distribution<double> gauss(0.0, sigma);
     std::uniform_int_distribution<int> pick(0, ng - 1);
 

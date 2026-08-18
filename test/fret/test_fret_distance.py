@@ -68,8 +68,10 @@ def test_rigid_body_global_coords_and_restraint():
     assert r.get_effective_distance(40.0) == pytest.approx(40.0)
     r.transfer_function_type = "Gaussian"
     r.sigma_rda = 6.0
+    # sigma is the per-component width of the separation vector, so the
+    # correction is s^2/Rmp -- settled 2026-08-18. This read 36/80, i.e. half.
     assert r.get_effective_distance(40.0) == pytest.approx(
-        40.0 + 36.0 / 80.0)
+        40.0 + 36.0 / 40.0)
 
 
 def test_select_informative_pairs_prefers_discriminating_pair():

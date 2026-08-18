@@ -12,17 +12,18 @@ the stronger check anyway:
   both of which have closed forms,
 * the decay curve's rate, which must be ``1/tau0 + kq``.
 
-.. warning::
-   ``test_free_walk_diffuses_at_three_times_D`` asserts a **discrepancy**, not a
-   correct result. The walk's step variance is ``6 D dt`` per Cartesian
-   component where the standard Brownian convention is ``2 D dt``, so at the
-   same nominal ``D`` the particle model diffuses three times faster than
-   ``GridDiffusionSolver`` -- which PRD-109 pinned to ``<x^2> = 2 D t`` and
-   which reproduces it exactly. The C++ port preserved the convention
-   deliberately: correcting it would move every quenching number computed
-   through the particle path, and the default ``D = 40 A^2/ns`` may have been
-   chosen to compensate. Recorded for the owner; the test exists so the
-   discrepancy cannot be forgotten or silently changed.
+The walk and the field solver are the same dynamics -- a Langevin trajectory
+and its Fokker-Planck density -- so they must agree on what ``D`` means. They
+did not until 2026-08-18: the step width was ``sqrt(2*D*3*dt)`` per Cartesian
+component, the total three-dimensional MSD used as one component's width, so
+the walk diffused at ``3D``. Traced to a 2019 QuEst docstring that transcribes a
+Berkeley teaching page's step *magnitude* as a per-component sigma; fixed, and
+``D`` left alone, since ``D = 40 A^2/ns`` is free Alexa488 entered correctly
+(1 A^2/ns = 10 um^2/s) and no calibration of ``D`` exists anywhere in the stack.
+Full record: ``okf/validation/particle_vs_field_diffusion.md``.
+
+The three tests below measure both models and assert they agree, so this cannot
+drift apart again.
 """
 
 import numpy as np
@@ -43,8 +44,28 @@ def _ball(ng, radius):
 
 # --- the walk ----------------------------------------------------------------
 
-def test_free_walk_diffuses_at_three_times_D():
-    """Pins the convention mismatch described in this module's docstring."""
+def test_free_walk_step_variance_is_2Ddt_per_component():
+    """The exact form, measured per step so no wall can touch it.
+
+    A displacement over many steps is noisy and boundary-sensitive; the
+    single-step variance is neither, and it is what the convention actually
+    fixes. The 3-D total is then 6 D dt, which is the number the old code put
+    into one component.
+    """
+    D, t_step = 8.0, 0.005
+    box = np.ones((151, 151, 151), dtype=np.uint8)
+    steps = [np.diff(t.xyz, axis=0) for t in
+             (dif.simulate_dye_diffusion(box, dg=1.0, t_max=4000 * t_step,
+                                         t_step=t_step, D=D, random_seed=s)
+              for s in range(40))
+             if t.acceptance_ratio > 0.9999]
+    st = np.concatenate(steps)
+    assert st.var(axis=0).mean() == pytest.approx(2 * D * t_step, rel=0.02)
+    assert (st ** 2).sum(axis=1).mean() == pytest.approx(6 * D * t_step, rel=0.02)
+
+
+def test_free_walk_diffuses_at_the_stated_D():
+    """<dx^2> = 2 D t over many steps, which is the observable claim."""
     D, t_step, n = 8.0, 0.005, 60
     box = np.ones((101, 101, 101), dtype=np.uint8)
     d = []
@@ -53,10 +74,8 @@ def test_free_walk_diffuses_at_three_times_D():
                                        t_step=t_step, D=D, random_seed=seed)
         if t.acceptance_ratio > 0.999:      # untouched by the walls
             d.append(t.xyz[n - 1] - t.xyz[0])
-    msd = (np.array(d) ** 2).mean(axis=0)
-    per_component = msd.mean()
-    assert per_component == pytest.approx(6 * D * n * t_step, rel=0.2)
-    assert per_component > 2.5 * (2 * D * n * t_step), "the 3x is what is being pinned"
+    per_component = (np.array(d) ** 2).mean(axis=0).mean()
+    assert per_component == pytest.approx(2 * D * n * t_step, rel=0.15)
 
 
 def test_grid_solver_uses_the_standard_convention():
@@ -73,6 +92,38 @@ def test_grid_solver_uses_the_standard_convention():
     axis = (np.arange(ng) - 40) * dg
     msd_x = (p.sum(axis=(1, 2)) * axis ** 2).sum()
     assert msd_x == pytest.approx(2 * D * 300 * t_step, rel=1e-3)
+
+
+def test_the_two_models_agree_on_D():
+    """The walk and the solver, measured side by side at the same D.
+
+    These are one dynamics expressed two ways; a disagreement here is a
+    disagreement about the model, not about numerics.
+    """
+    D, t_step, n = 8.0, 0.005, 60
+    box = np.ones((101, 101, 101), dtype=np.uint8)
+    d = [t.xyz[n - 1] - t.xyz[0] for t in
+         (dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
+                                     D=D, random_seed=s) for s in range(300))
+         if t.acceptance_ratio > 0.999]
+    walk_msd = (np.array(d) ** 2).mean(axis=0).mean()
+
+    ng, dg = 81, 1.0
+    bounds = np.zeros((ng, ng, ng)); bounds[2:-2, 2:-2, 2:-2] = 1.0
+    density = np.zeros((ng, ng, ng)); density[40, 40, 40] = 1.0
+    solver_step = 0.4 * diffusion_stability_limit(D, dg)
+    solver = GridDiffusionSolver(diffusion_map=np.full((ng, ng, ng), D), bounds=bounds,
+                                 density=density, t_step=solver_step, dg=dg)
+    solver.run(300, n_out=1)
+    p = np.asarray(solver.density).reshape(ng, ng, ng)
+    p = p / p.sum()
+    axis = (np.arange(ng) - 40) * dg
+    field_msd = (p.sum(axis=(1, 2)) * axis ** 2).sum()
+
+    # Compare the diffusion coefficient each one implies, not the raw MSDs:
+    # the two ran for different lengths of time.
+    assert walk_msd / (2 * n * t_step) == pytest.approx(
+        field_msd / (2 * 300 * solver_step), rel=0.15)
 
 
 def test_walk_never_leaves_the_accessible_region():

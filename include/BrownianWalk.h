@@ -28,7 +28,10 @@ IMPBFF_BEGIN_NAMESPACE
 //! One Brownian trajectory of a point particle confined to an occupancy grid.
 /*!
     Steps are isotropic Gaussians of standard deviation
-    \f$\sqrt{6 D \Delta t}/dg\f$ **in voxel units**, scaled per step by
+    \f$\sqrt{2 D \Delta t}/dg\f$ **in voxel units** -- the variance of one
+    Cartesian component, so that \f$\langle \Delta x^2\rangle = 2 D t\f$ and
+    #DiffusionSolver, which is the same dynamics as a density, agrees at the
+    same \f$D\f$. Scaled per step by
     \f$\sqrt{m}\f$ for the mobility \f$m\f$ at the particle's current voxel. A
     step that would leave the accessible region is **rejected**: the particle
     stays where it was and the frame is still emitted, so the trajectory has one
