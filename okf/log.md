@@ -1,5 +1,41 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 3a: the AV density was transposed)
+
+* **`IMP.bff.compute_av` returned `density` mirrored relative to its own
+  `points`.** IMP numbers voxels with *x* fastest (`i = x + nx*y + nx*ny*z`), so
+  `fret/av.py`'s C-order reshape into `(nx, ny, nz)` — which makes the *last*
+  axis fastest — transposed the volume. Measured on T4L A132 at 1.5 Å: of 2180
+  cloud points, **1548 (71 %)** landed on a voxel the density called occupied,
+  against **100 %** after transposing. Confirmed at 1.5, 2.0 and 2.5 Å.
+* **It survived because a mirrored volume looks right.** Same voxel count, same
+  bounding box, same total volume — only the per-voxel relationship to the
+  protein is wrong. Nothing but a voxel-by-voxel comparison catches it, and
+  nothing was doing one.
+* **The fix was already written, in the other builder.** `IMP.bff.av.compute`
+  (the array path, from imp-tricks) does
+  `reshape((nz, ny, nx), order="C").transpose(2, 1, 0)` and documents the hazard
+  in a docstring — *"a transpose still overlaps the truth by ~83 % of its voxels,
+  so the point cloud has to be compared against the grid"*. It also reads the
+  point cloud from IMP rather than deriving it from the grid, **deliberately, so
+  that two independent readings can disagree**. The structure path had neither
+  the fix nor the test. This is the case for the merge in one example.
+* **Downstream effect measured, not assumed**: on T4L A132 at 2.0 Å the mean
+  donor lifetime is **3.5626 ns** correct against **3.3974 ns** as computed —
+  4.9 % — with `k_max` 2.54 against 2.81.
+* **PRD-110 and PRD-111 read `av.density` and built their maps from it**, so
+  every number in them was computed on an accessible region mirrored relative to
+  the protein. Their *conclusions* concern the model's sensitivity structure —
+  θ unidentifiable from one decay, the multi-site rotation, `contact_distance`
+  uninformative, Smoluchowski against Itô — and a mirrored AV is still a
+  plausible AV-shaped region, so those are unlikely to hinge on the reflection.
+  **That is an expectation, not a measurement**: re-running them is owed.
+* **`test/fret/test_av_grid_registration.py`** pins it at three resolutions, plus
+  a guard on the guard — asserting that a *transposed* density actually fails the
+  test, so it cannot quietly become vacuous.
+* No quenching test broke, because they pin against analytic results rather than
+  recorded numbers. Suite **631 passed**.
+
 ## 2026-08-18 (PRD-113 stage 2: `label/`, PET as a pair property, CIF as the data format)
 
 * **`Label` and `Quencher` replace two untyped dicts.** A labelling site was a
