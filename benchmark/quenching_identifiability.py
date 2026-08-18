@@ -126,7 +126,8 @@ def quencher_table(kQ_scale: float, rC: float):
 class Site:
     """One labelling site, ready to be evaluated at many parameter vectors."""
 
-    def __init__(self, pdb_path, resolution: float, site=None):
+    def __init__(self, pdb_path, resolution: float, site=None,
+                 linker_length: float = 20.0):
         site = SITE if site is None else site
         self.site = site
         self.atoms = load_atoms(pdb_path)
@@ -138,7 +139,7 @@ class Site:
         # reporting whatever `--resolution` said. Asserted below rather than
         # trusted.
         self.av = IMP.bff.compute_av(
-            np.zeros((1, 4)), np.zeros(3), 20.0, 0.5, (3.5, 3.5, 3.5),
+            np.zeros((1, 4)), np.zeros(3), linker_length, 0.5, (3.5, 3.5, 3.5),
             disc_step=resolution,
             pdb_path=pdb_path,
             source_info={
@@ -146,7 +147,8 @@ class Site:
                 "residue_seq_number": site["residue"],
                 "atom_name": site["atom"],
                 "simulation_type": "AV1",
-                "linker_length": 20.0, "linker_width": 0.5, "radius1": 3.5,
+                "linker_length": linker_length, "linker_width": 0.5,
+                "radius1": 3.5,
                 "allowed_sphere_radius": 2.1,
             },
         )
@@ -167,6 +169,7 @@ class Site:
         if edge.any():
             self._pad()
 
+        self.linker_length = float(linker_length)
         self.time = np.linspace(0.0, T_MAX, N_TIME)
         self.n_evaluations = 0
 

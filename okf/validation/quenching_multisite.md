@@ -232,6 +232,89 @@ grid artefact.
 > declares a resolution that disagrees with `disc_step` instead of silently
 > discarding it.
 
+## Stage 1: what happens when the model is not exactly right
+
+Stage 0 assumes the field model is exactly correct at all six sites with one θ,
+which is the assumption most likely to be false and the one a joint fit punishes
+hardest — it converts a systematic error at any site into a bias in a *global*
+parameter. Two perturbations, both cheap and both realistic.
+
+**The nuisance.** A per-site fraction of dye that never sees a quencher —
+incomplete labelling, a stuck or free sub-population, an unquenched rotamer. It
+is the most ordinary nuisance in a real decay, it is genuinely per site, and it
+competes directly with `slow_factor` because both make the decay slower. True
+values 2–7 %, unequal, as they would be.
+
+**The misspecification.** Data generated with a 21 Å linker and fitted with 20 Å
+— a 5 % geometry error, which is not cosmetic: the AV grows from 1 158 to 1 443
+accessible voxels at A132.
+
+| | stage 0 | nuisance, **ignored** | nuisance, **fitted** | + 5 % geometry error, fitted |
+|---|---|---|---|---|
+| parameters | 5 | 5 | 11 | 11 |
+| `free_diffusion` | +2.7 % | **−60.5 %** | −13.0 % | −13.8 % |
+| `kQ_scale` | +0.5 % | **−29.5 %** | −5.2 % | **−1.6 %** |
+| `rC` | +0.2 % | +13.5 % | +4.2 % | −2.1 % |
+| `slow_factor` | −2.5 % | −3.4 % | −2.4 % | −3.4 % |
+| `contact_distance` | −30.7 % | −39.3 % | −32.4 % | −38.1 % |
+| reduced χ² | 1.012 | **1.683** | 1.021 | 1.110 |
+| significance of the misfit | — | **9.4 σ** | 0.3 σ | 1.5 σ |
+| forward solves | 516 | 594 | 1 338 | 1 410 |
+
+*(Ignoring the nuisance under the geometry error too: `free_diffusion` −72.6 %,
+`kQ_scale` −43.6 %, reduced χ² 1.804 — 11.1 σ.)*
+
+### Three readings, in order of how much they should change practice
+
+**1. A few percent of free dye, unmodelled, wipes out the multi-site gain.**
+`free_diffusion` goes to −60 % and `kQ_scale` to −30 % — back to PRD-110's
+single-decay errors. Six sites do not protect against a mis-specified model;
+they only sharpen a correct one.
+
+**2. It is loudly detectable, which is what makes it survivable.** Reduced χ² =
+1.683 on 379 dof is a **9.4 σ** rejection. The failure mode is not a wrong number
+quietly published; it is a fit that visibly does not describe the data. That
+distinction is the difference between a hazard and a bug.
+
+**3. Modelling it works, and the cost is paid almost entirely by
+`free_diffusion`.** Eleven parameters restore χ² to 1.021 (0.3 σ) and bring
+`kQ_scale`, `rC` and `slow_factor` back to a few percent — but `free_diffusion`
+settles at −13 %, five times worse than stage 0. The reason is a second
+trade-off, distinct from the `contact_distance`/`slow_factor` one: a free
+fraction and a fast diffusion both raise the surviving intensity at long times,
+so the nuisance eats into the mobility. **Diffusion is the parameter that pays
+for honesty about the sample.**
+
+The per-site fractions themselves come back badly (0.040 → 0.009, 0.030 →
+0.065, 0.070 → 0.011). They are nuisance parameters doing their job — absorbing
+what they must — not measurements, and should never be quoted as labelling
+efficiencies.
+
+### The geometry error is benign, and that was not the expected answer
+
+A 5 % linker-length error was included expecting it to be the damaging one — it
+is the per-site model error a joint fit should convert into global bias. It does
+not. With the nuisance fitted, `kQ_scale` comes back to **−1.6 %** and `rC` to
+−2.1 %, both *better* than under the correct geometry, and `free_diffusion`
+moves by 0.8 points. Reduced χ² rises only to 1.110, **1.5 σ** — not a rejection.
+
+So the geometry error is absorbed almost entirely by the nuisance parameters,
+and what looked like the dangerous perturbation is the harmless one. The lesson
+is the reverse of the one anticipated: **worry about the sample, not the
+structure.** A caveat that keeps this honest — one perturbation at one magnitude
+on one protein is evidence, not proof, and a *systematic* geometry error shared
+by every site (a wrong dye radius, say, rather than a wrong linker) is a
+different test that has not been run.
+
+### The stage-1 gate
+
+> *If a per-site nuisance parameter destroys identifiability, the joint fit is
+> measuring geometry error, and stage 2 becomes reducing the model.*
+
+**It does not.** `kQ_scale`, `rC` and `slow_factor` survive both perturbations at
+a few percent. The gate passes, with `free_diffusion` demoted from "recovered" to
+"recovered to about 15 %" and `contact_distance` still not a parameter.
+
 ## What this means
 
 * **Calibrating the PET model requires multi-site labelling.** That is a real
@@ -246,8 +329,15 @@ grid artefact.
   sites do not separate them, and the fit reaches reduced χ² = 1.02 at a
   `contact_distance` 33 % away from truth by building the same mobility field.
   Re-parameterise rather than collect more data.
-* **None of this is yet evidence about the world.** The data are synthetic, from
-  the same model being fitted, so this measures the model's internal geometry
-  under a perfect model and nothing else. PRD-111 stage 1 — a per-site nuisance
-  parameter, then real decays — is where that assumption gets tested, and it is
-  the assumption most likely to be false.
+* **The sample matters more than the structure.** A 2–7 % free-dye fraction,
+  unmodelled, is worth −60 % on `free_diffusion`; a 5 % linker-length error,
+  with the fraction modelled, is worth almost nothing. Fit a per-site free
+  fraction as a matter of course, and read the χ² — the dangerous case announces
+  itself at 9 σ.
+* **`free_diffusion` is the parameter that pays.** Once a free fraction is in
+  the model it degrades to about 15 %, because both raise the long-time
+  intensity. Stage 0's ±3 % was a perfect-model number.
+* **Still not evidence about the world.** All data are synthetic from the model
+  being fitted. Stage 1 tests robustness to two perturbations *of that model*,
+  which is a stronger claim than stage 0's but not the same as fitting a
+  measured decay. That remains the next thing.

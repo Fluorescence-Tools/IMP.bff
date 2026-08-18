@@ -53,6 +53,33 @@
   reported 0.00° for all 15 site pairs regardless of geometry. Rank is now capped
   at `n/2` and the decisive number is the eigenvalue gain, which no choice of
   rank can flatter.
+* **PRD-111 stage 1 measured; that gate passes too.** Two perturbations of the
+  model, both realistic. A **per-site free-dye fraction** of 2–7 % (incomplete
+  labelling, a stuck rotamer; it competes with `slow_factor` because both slow
+  the decay) and a **5 % linker-length error** (data at 21 Å fitted at 20 Å,
+  which grows the AV from 1 158 to 1 443 voxels).
+* **Unmodelled free dye wipes out the multi-site gain**: `free_diffusion`
+  −60.5 %, `kQ_scale` −29.5 % — back to PRD-110's single-decay errors. Six sites
+  sharpen a correct model; they do not protect a wrong one. **But it is loudly
+  detectable**: reduced χ² 1.683 on 379 dof is a **9.4 σ** rejection, so the
+  failure mode is a fit that visibly fails, not a wrong number quietly
+  published.
+* **Modelling it works, and `free_diffusion` pays.** 11 parameters (5 global +
+  6 per-site) restore χ² to 1.021 (0.3 σ) and bring `kQ_scale`, `rC` and
+  `slow_factor` back to a few percent, at 2.3× the forward solves — but
+  `free_diffusion` settles at −13 %, five times worse than stage 0, because a
+  free fraction and a fast diffusion both raise the long-time intensity.
+  **Stage 0's ±3 % on `free_diffusion` was a perfect-model number.** The fitted
+  fractions themselves are badly recovered (0.040 → 0.009) and must never be
+  quoted as labelling efficiencies.
+* **The geometry error is benign — the opposite of the expected answer.** The
+  5 % linker error was included expecting it to be the damaging one, since a
+  joint fit converts per-site model error into global bias. With the nuisance
+  fitted, `kQ_scale` returns to **−1.6 %** and `rC` to −2.1 % (both *better* than
+  under the correct geometry) and χ² rises only to 1.110 — 1.5 σ, not a
+  rejection. **Worry about the sample, not the structure.** Untested and
+  different in kind: a *systematic* geometry error shared by every site, which a
+  per-site nuisance cannot absorb.
 * **All of stage 0 is synthetic data from the model being fitted**, so it
   measures the model's internal geometry under a perfect model and nothing about
   the world. Stage 1 (a per-site nuisance parameter, then real decays) is where

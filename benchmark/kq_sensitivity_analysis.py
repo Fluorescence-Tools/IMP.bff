@@ -194,6 +194,117 @@ def joint_fit(site_objects, theta_true, observed, sigmas):
             "recovery": recovery}
 
 
+#: PRD-111 stage 1. A per-site fraction of dye that never sees a quencher --
+#: incomplete labelling, a stuck or free sub-population, an unquenched rotamer.
+#: It is the most ordinary nuisance in a real decay, it is genuinely per site,
+#: and it competes directly with `slow_factor`: both make the decay slower.
+#: True values are small and unequal, as they would be.
+FREE_FRACTION_TRUE = (0.03, 0.06, 0.02, 0.05, 0.04, 0.07)
+
+
+def mixed_decay(site_obj, theta, free_fraction: float) -> np.ndarray:
+    """The field decay with a free-dye sub-population mixed in.
+
+    Both terms are 1 at t = 0, so the mixture needs no renormalisation.
+    """
+    field = site_obj.decay(theta)
+    if free_fraction <= 0.0:
+        return field
+    free = np.exp(-site_obj.time / _ident.TAU0)
+    return (1.0 - free_fraction) * field + free_fraction * free
+
+
+def stage1_fit(fit_objects, theta_true, observed, sigmas, with_nuisance: bool):
+    """One theta across all sites, optionally with a free fraction per site.
+
+    `fit_objects` need not be the objects the data came from -- passing sites
+    built at a different linker length is how model misspecification is tested.
+    """
+    from scipy.optimize import least_squares
+
+    n_sites = len(fit_objects)
+    low = [p[2] for p in PARAMETERS]
+    high = [p[3] for p in PARAMETERS]
+    start = [theta_true[i] * (1.6 if i % 2 == 0 else 0.6) for i in range(len(theta_true))]
+    if with_nuisance:
+        low += [0.0] * n_sites
+        high += [0.5] * n_sites
+        start += [0.0] * n_sites
+    low, high = np.array(low), np.array(high)
+    start = np.clip(np.array(start), low, high)
+
+    def predict(x):
+        theta = x[:len(PARAMETERS)]
+        fractions = x[len(PARAMETERS):] if with_nuisance else [0.0] * n_sites
+        return [mixed_decay(obj, theta, f) for obj, f in zip(fit_objects, fractions)]
+
+    def residuals(x):
+        return np.concatenate([(pred - data) / sig for pred, data, sig
+                               in zip(predict(x), observed, sigmas)])
+
+    for obj in fit_objects:
+        obj.n_evaluations = 0
+    t0 = time.perf_counter()
+    result = least_squares(residuals, start, bounds=(low, high),
+                           diff_step=0.05, xtol=1e-6)
+    elapsed = time.perf_counter() - t0
+    solves = sum(obj.n_evaluations for obj in fit_objects)
+
+    n_data = sum(len(d) for d in observed)
+    reduced = 2.0 * float(result.cost) / max(n_data - len(start), 1)
+    print(f"    parameters: {len(start)}, forward solves: {solves}, "
+          f"wall clock: {elapsed:.1f} s, reduced chi2: {reduced:.3f}")
+    recovery, worst = {}, 0.0
+    for i, (name, *_rest) in enumerate(PARAMETERS):
+        true, found = theta_true[i], result.x[i]
+        error = (found - true) / true * 100.0
+        worst = max(worst, abs(error))
+        recovery[name] = {"true": float(true), "found": float(found),
+                          "percent": float(error)}
+        print(f"    {name:<20} true {true:8.3f}  found {found:8.3f}  ({error:+8.1f} %)")
+    fractions = result.x[len(PARAMETERS):].tolist() if with_nuisance else []
+    if fractions:
+        print("    free fraction   true " +
+              " ".join(f"{v:.3f}" for v in FREE_FRACTION_TRUE[:n_sites]))
+        print("                    found " +
+              " ".join(f"{v:.3f}" for v in fractions))
+    return {"n_parameters": int(len(start)), "forward_solves": int(solves),
+            "seconds": elapsed, "cost": float(result.cost),
+            "reduced_chi2": reduced, "worst_percent": float(worst),
+            "recovery": recovery, "free_fractions": fractions}
+
+
+def run_stage1(pdb_path, resolution, theta0, truth_linker, rng_seed=0):
+    """Generate data from one geometry, fit with another; with and without the
+    nuisance parameter. Four fits, so the two effects can be told apart."""
+    print("\n" + "=" * 72)
+    print(f"  PRD-111 stage 1: nuisance and misspecification")
+    print(f"    data generated at linker length {truth_linker} A, "
+          f"fitted at {20.0} A", flush=True)
+
+    truth = [Site(pdb_path, resolution, site=s, linker_length=truth_linker)
+             for s in SITES]
+    nominal = (truth if truth_linker == 20.0 else
+               [Site(pdb_path, resolution, site=s) for s in SITES])
+
+    rng = np.random.default_rng(rng_seed)
+    observed, sigmas = [], []
+    for obj, fraction in zip(truth, FREE_FRACTION_TRUE):
+        curve = mixed_decay(obj, theta0, fraction)
+        sigma = np.sqrt(np.maximum(curve * N_PEAK_COUNTS, 1.0)) / N_PEAK_COUNTS
+        sigmas.append(sigma)
+        observed.append(curve + rng.normal(0.0, sigma))
+
+    out = {}
+    for label, objects, nuisance in (
+        ("ignoring the free fraction", nominal, False),
+        ("fitting the free fraction", nominal, True),
+    ):
+        print(f"\n  {label}:", flush=True)
+        out[label] = stage1_fit(objects, theta0, observed, sigmas, nuisance)
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--resolution", type=float, default=2.5,
@@ -206,6 +317,13 @@ def main() -> int:
                              "counting alone and measures nothing.")
     parser.add_argument("--fit", action="store_true",
                         help="also run the joint least-squares fit (slow).")
+    parser.add_argument("--stage1", action="store_true",
+                        help="PRD-111 stage 1: per-site nuisance parameter and "
+                             "model misspecification (slow).")
+    parser.add_argument("--truth-linker", type=float, default=20.0,
+                        help="linker length the synthetic data is generated at; "
+                             "the fit always uses 20 A, so a different value "
+                             "here is a deliberate geometry error.")
     parser.add_argument("--out", type=Path, default=None,
                         help="write the numbers as JSON.")
     args = parser.parse_args()
@@ -320,6 +438,11 @@ def main() -> int:
     }
     if args.fit:
         payload["joint_fit"] = joint_fit(site_objects, theta0, observed, sigmas)
+
+    if args.stage1:
+        payload["stage1"] = run_stage1(
+            pdb_path, args.resolution, theta0, args.truth_linker)
+        payload["stage1_truth_linker"] = args.truth_linker
 
     if args.out:
         args.out.write_text(json.dumps(payload, indent=2) + "\n")
