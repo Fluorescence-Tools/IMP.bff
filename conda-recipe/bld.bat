@@ -1,5 +1,4 @@
 echo off
-git submodule update --recursive --init --remote
 
 :: echo "Patch IMPConfig.cmake"
 set IMP_CMAKE="%LIBRARY_LIB%\cmake\IMP\IMPConfig.cmake"
@@ -9,7 +8,7 @@ echo "Build documentation.i"
 cd doc
 mkdir _build\html\stable\api
 doxygen
-python ../tools/doxy2swig.py _build/xml/index.xml ../pyext/documentation.i
+python "%RECIPE_DIR%\doxy2swig.py" _build/xml/index.xml ../pyext/documentation.i
 cd ..
 
 echo "Build app wrapper"
@@ -29,7 +28,6 @@ cmake -G Ninja .. ^
       -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%" ^
 	  -DCMAKE_INSTALL_LIBDIR=bin ^
       -DCMAKE_INSTALL_PYTHONDIR="%SP_DIR%" ^
-      -DWITH_AVX=ON ^
       -DCMAKE_CXX_FLAGS="/DBOOST_ALL_DYN_LINK /EHsc /DWIN32 /DMSMPI_NO_DEPRECATE_20 /bigobj /DBOOST_ZLIB_BINARY=kernel32"
 
 if errorlevel 1 exit 1

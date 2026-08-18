@@ -115,8 +115,17 @@ EXPORTS = {
     "reference_pet_parameters": "IMP.bff.label.quencher",
     "available_dyes": "IMP.bff.dye.library",
     "read_dye_library": "IMP.bff.dye.cif",
-    "kappa2_from_dipoles": "IMP.bff.fret.kappa2",
-    "kappa2_isotropic": "IMP.bff.fret.kappa2",
+    "kappa2_from_dipoles": "IMP.bff.photophysics.kappa2",
+    "kappa2_isotropic": "IMP.bff.photophysics.kappa2",
+    # --- orientation: kappa^2 distributions, wobbling, order parameters ------
+    # 933 lines that no code could reach before PRD-113 stage 4: never exported,
+    # and importing numba directly so an installation without it could not even
+    # load the module.
+    "kappa2_distribution_dynamic": "IMP.bff.photophysics.orientation",
+    "kappa2_distribution_all": "IMP.bff.photophysics.orientation",
+    "kappa2_order_parameters": "IMP.bff.photophysics.orientation",
+    "kappa2_isotropic_distribution": "IMP.bff.photophysics.orientation",
+    "kappa2_to_distance_ratio": "IMP.bff.photophysics.orientation",
     # --- accessible volumes, fps.json, distances (fret) -----------------------
     "AccessibleVolume": "IMP.bff.representation.types",
     "States": "IMP.bff.representation.states",
@@ -190,6 +199,10 @@ EXPORTS = {
 
 #: a few exports are attributes with a different name in their module
 _SOURCE_NAME = {
+    "kappa2_distribution_dynamic": "kappasq_dwt",
+    "kappa2_distribution_all": "kappasq_all",
+    "kappa2_order_parameters": "s2delta",
+    "kappa2_isotropic_distribution": "p_isotropic_orientation_factor",
     "fps_schema_validate": "validate",
     "compare_av_and_rotamer_positions": "compare_positions",
     "compare_av_and_rotamer_pairs": "compare_pairs",

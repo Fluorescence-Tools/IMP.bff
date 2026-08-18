@@ -1,5 +1,51 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 4a: `photophysics/`, κ² unified, `spectroscopy/` gone)
+
+* **933 lines of anisotropy modelling were unreachable.**
+  `spectroscopy/kappa2.py` — κ² distributions, wobbling in a cone, order
+  parameters, the κ²→distance-ratio conversion — had **no consumers at all**: it
+  was never exported through `api.py`, and it imported `numba` *directly* rather
+  than through `IMP.bff._jit`, so an installation without numba could not even
+  load it. Both fixed; it is `photophysics/orientation.py` and is now exported.
+* **κ² has one home.** The geometry (`kappa2_from_dipoles`, 44 lines, real
+  consumers) and the distributions (933 lines, none) were in unrelated packages
+  named the same thing. `photophysics/kappa2.py` and
+  `photophysics/orientation.py` now sit side by side. `fret/kappa2.py` is a
+  re-export while the rest of `fret/` migrates.
+* **`spectroscopy/` is gone** — its two halves were an experiment-side decay
+  wrapper (deleted in stage 0) and a forward model (moved here).
+* Three docstrings became raw strings: LaTeX in them raised a `SyntaxWarning` on
+  every import.
+* Suite **641 passed**.
+
+## 2026-08-18 (the sampler: the table transfers, the short test did not)
+
+* PRD-111's posterior harness used the **stretch** move on a posterior whose
+  condition number is ~10⁵. ChiSurf benchmarks exactly that case
+  (`docs/development/benchmarks.md`) and reports 0.0036 → 0.0109 ESS per
+  evaluation from stretch to an adaptive-covariance slice at κ=100, noting the
+  gap grows with correlation. The machinery had been surveyed and then not used.
+* **An 80-step comparison said the opposite** — slice 6× *worse* per evaluation —
+  because a slice step costs 5.7 log-probability evaluations and neither chain
+  had mixed (R̂ 2.3–2.5), so the ESS being compared was meaningless.
+* **600 steps settles it**, one site, 12 walkers, 3.0 Å:
+
+  | | evaluations | wall | ESS/eval | ESS/s | worst R̂ |
+  |---|---|---|---|---|---|
+  | stretch | 5 986 | 103 s | 0.00113 | 0.066 | **3.040** |
+  | slice (adaptive covariance) | 35 428 | 753 s | **0.00223** | **0.105** | **1.137** |
+
+  2× per evaluation and 1.6× per second — but the number that decides it is R̂:
+  **stretch does not mix at all**, and got *worse* from 80 steps (2.333) to 600
+  (3.040), so its ESS never meant anything. The slice sampler is the default in
+  the harness now.
+* The forward model still dominates: one six-site evaluation is ~0.36 s. A
+  cheaper solve is a bigger lever than the proposal — the explicit scheme's
+  `dt ≤ dg²/(6D)` sets the step count, and an implicit or exponential treatment
+  of the *diffusion* term would lift it the way the exponential rate integration
+  already lifted the reaction constraint.
+
 ## 2026-08-18 (PRD-113: stage 3e was mis-scoped — six distance layers, and they agree)
 
 * **The C++ already has the distance API.** `AV.h` exports `av_distance`,

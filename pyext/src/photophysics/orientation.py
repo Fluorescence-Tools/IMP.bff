@@ -1,9 +1,30 @@
-"""
+"""Orientation: kappa^2 distributions, wobbling in a cone, and order parameters.
 
+The forward model for the orientation factor. Given how freely each dye rotates
+within the donor's excited-state lifetime -- expressed as the order parameters
+``sD2`` and ``sA2``, which is what a time-resolved anisotropy measures -- this
+gives the *distribution* of kappa^2 rather than the isotropic 2/3, and turns it
+into the distance-ratio distribution a FRET measurement actually sees.
+
+This module had **no consumers at all** before PRD-113 stage 4. It was never
+exported through ``api.py``, so 933 lines of the anisotropy modelling this
+package exists to do were unreachable, and it imported ``numba`` directly rather
+than through :mod:`IMP.bff._jit` -- so on an installation without numba it would
+not even import. Both are fixed here; the four jitted kernels are on the C++ port
+list with the rest.
+
+The other half of kappa^2 -- the geometry, ``kappa2_from_dipoles``, which turns
+two transition dipoles and a separation vector into a number -- is in
+:mod:`IMP.bff.photophysics.kappa2`. Distribution and geometry are different
+questions and now live side by side rather than in unrelated packages.
 """
-import numba as nb
-import numpy as np
+from __future__ import annotations
+
 import typing
+
+import numpy as np
+
+from .._jit import jit as _jit
 
 
 def kappasq_dwt(
@@ -135,7 +156,7 @@ def kappasq_all_delta_new(
 
 
 
-@nb.jit(nopython=True)
+@_jit(nopython=True)
 def kappasq_all_delta(
         delta: float,
         sD2: float,
@@ -261,7 +282,7 @@ def kappasq_all_delta(
     return k2scale, k2hist, k2
 
 
-@nb.jit(nopython=True)
+@_jit(nopython=True)
 def kappasq_all(
         sD2: float,
         sA2: float,
@@ -363,14 +384,14 @@ def kappasq_all(
     return k2scale, k2hist, k2
 
 
-@nb.jit(nopython=True)
+@_jit(nopython=True)
 def kappa_distance(
         d1: np.array,
         d2: np.array,
         a1: np.array,
         a2: np.array
 ) -> typing.Tuple[float, float]:
-    """Calculates the distance between the center of two dipoles and the
+    r"""Calculates the distance between the center of two dipoles and the
     orientation-factor kappa of the dipoles
 
     Calculates for the vectors d1 and d2 pointing to the donors and the vectors
@@ -439,7 +460,7 @@ def kappa_distance(
     ... )
     (0.8660254037844386, 1.0000000000000002)
 
-    """
+    r"""
     # coordinates of the dipole
     d11 = d1[0]
     d12 = d1[1]
@@ -546,7 +567,7 @@ def s2delta(
         r_inf_AD: float,
         r_0: float = 0.38
 ) -> typing.Tuple[float, float]:
-    """Calculate s2delta from the residual anisotropies of the donor and acceptor
+    r"""Calculate s2delta from the residual anisotropies of the donor and acceptor
 
     Parameters
     ----------
@@ -645,7 +666,7 @@ def calculate_kappa_distance(
     return ds, ks
 
 
-@nb.jit(nopython=True)
+@_jit(nopython=True)
 def kappasq(
         delta: float,
         sD2: float,

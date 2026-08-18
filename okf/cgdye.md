@@ -31,7 +31,7 @@ follow-up.
 `cgdye/{labeling,topology,sampling,rotamer,io,analysis,sim,scripts}` are the
 source organisation). `import IMP.bff` does not import cgdye; nothing in the
 library needs `click` (`cgdye/utils.import_click` stubs it; click is a CLI
-dependency declared in `conda-recipe/meta.yaml`). Manual page:
+dependency declared in `conda-recipe/recipe.yaml`). Manual page:
 `doc/manual/structure/structure_cgdye.ipynb`; example:
 `examples/structure/hgbp1_label_and_sample.py`.
 

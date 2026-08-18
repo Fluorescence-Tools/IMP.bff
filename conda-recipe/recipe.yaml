@@ -1,0 +1,75 @@
+schema_version: 1
+
+context:
+  version: "0.14.3"
+
+package:
+  name: imp.bff
+  version: ${{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 1
+  script:
+    if: win
+    then: bld.bat
+    else: build.sh
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - if: osx
+      then: llvm-openmp
+    - if: linux
+      then: libgomp
+    - if: unix
+      then: pkg-config
+    - swig
+    - cmake
+    - ninja
+    - graphviz
+    - python
+    - numpy
+  host:
+    - python
+    - numpy
+    - boost-cpp
+    - eigen
+    - cereal
+    - if: win
+      then:
+        - mpir
+        - msmpi
+    - imp
+  run:
+    - ${{ pin_compatible('numpy') }}
+    - python
+    - ${{ pin_compatible('imp', upper_bound='x.x') }}
+    - boost-cpp
+    - pandas
+    - mdtraj
+    - tqdm
+    - click
+    - click-didyoumean
+
+tests:
+  - script:
+      - imp_bff --help
+
+about:
+  homepage: https://github.com/fluorescence-tools/imp.bff
+  license: MPL-2.0
+  license_file: ../COPYING.LGPL
+  summary: Bayesian Framework for Fluorescence for the integrative modeling platform
+  description: |
+    The Bayesian Framework for Fluorescence (BFF) for the integrative modeling
+    platform (IMP) is C++ software with Python wrappers. IMP.bff was designed
+    for Bayesian analysis of spectroscopic data.
+  documentation: https://docs.peulen.xyz/imp.bff
+
+extra:
+  recipe-maintainers:
+    - tpeulen

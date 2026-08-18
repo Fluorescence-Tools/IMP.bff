@@ -1,0 +1,288 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main, dev]
+  release:
+    types: [published]
+  workflow_dispatch:
+  # Weekly, for the expensive test tier -- too slow to sit on every push but
+  # too useful to see for the first time when a release goes out.
+  schedule:
+    - cron: '0 4 * * 0'
+
+# One run per branch/PR. Without this every push queues a fresh copy of the
+# whole matrix behind the last one, and a fix waits on results nobody wants
+# any more. main and tags are exempt: a release build has to finish even if
+# another push lands while it runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  # ── Decide how much of the matrix this run earns ──────────────────────────
+  #
+  # A feature branch gets one fast Linux leg. dev, main, releases and manual
+  # runs get the full three-platform matrix -- that is where "builds on all
+  # platforms" actually has to hold, not on every WIP push.
+  setup:
+    name: Setup matrix
+    runs-on: ubuntu-latest
+    outputs:
+      lane: ${{ steps.check.outputs.lane }}
+      os_matrix: ${{ steps.check.outputs.os_matrix }}
+    steps:
+      - id: check
+        run: |
+          BRANCH="${{ github.ref }}"
+          if [[ "$BRANCH" == "refs/heads/main" || "$BRANCH" == "refs/heads/dev" || \
+                "$BRANCH" == refs/tags/* || \
+                "${{ github.event_name }}" == "release" || \
+                "${{ github.event_name }}" == "workflow_dispatch" || \
+                "${{ github.event_name }}" == "schedule" ]]; then
+            echo "lane=full" >> "$GITHUB_OUTPUT"
+            echo 'os_matrix={"os":["ubuntu-latest","macos-14","windows-latest"]}' >> "$GITHUB_OUTPUT"
+          else
+            echo "lane=fast" >> "$GITHUB_OUTPUT"
+            echo 'os_matrix={"os":["ubuntu-latest"]}' >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Build the conda package with rattler-build, then run it against the
+  #    fast + medium test tiers ───────────────────────────────────────────
+  build_and_test:
+    name: Build & test (${{ matrix.os }})
+    needs: setup
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.os_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge
+          channel-priority: strict
+          auto-update-conda: false
+
+      - name: Cache conda packages
+        id: get-date
+        run: echo "week=$(/bin/date -u '+%Y-%U')" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/pkgs
+          # Rolls over weekly so a stale/broken cache entry self-heals rather
+          # than following every run forever; the recipe hash still keys a
+          # fresh cache whenever the dependency set actually changes.
+          key: conda-pkgs-${{ runner.os }}-${{ hashFiles('conda-recipe/recipe.yaml') }}-${{ steps.get-date.outputs.week }}
+          restore-keys: |
+            conda-pkgs-${{ runner.os }}-${{ hashFiles('conda-recipe/recipe.yaml') }}-
+            conda-pkgs-${{ runner.os }}-
+
+      # sccache caches object files across runs (via the GitHub Actions cache
+      # backend), so only what actually changed since the last run on this OS
+      # recompiles. build.sh/bld.bat pass the launcher flags only when a
+      # `sccache` binary is on PATH, so a machine without this action set up
+      # still builds fine, just without the speedup.
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        continue-on-error: true
+      - name: Enable sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
+
+      - name: Install rattler-build
+        shell: bash -el {0}
+        run: mamba install -y rattler-build
+
+      - name: Build the conda package
+        shell: bash -el {0}
+        run: rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+
+      - name: Compiler cache statistics
+        if: always()
+        continue-on-error: true
+        run: sccache --show-stats
+
+      - name: Install the freshly built package into a test env
+        shell: bash -el {0}
+        run: |
+          mamba create -y -n bff-test -c ./conda-bld -c conda-forge \
+            imp.bff pytest
+
+      # test_*.py (fast) and medium_test_*.py (medium) run on every push;
+      # expensive_test_*.py is its own weekly job below -- see that job for
+      # why. Neither tier is picked up by pytest's default `test_*.py` glob,
+      # so the file lists are built explicitly rather than relying on
+      # collection.
+      - name: Run fast + medium tests
+        shell: bash -el {0}
+        run: |
+          conda activate bff-test
+          mapfile -t TESTS < <(find test \( -name 'test_*.py' -o -name 'medium_test_*.py' \) | sort)
+          echo "${#TESTS[@]} test files selected"
+          pytest "${TESTS[@]}" -v
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conda-package-${{ matrix.os }}
+          path: conda-bld/**/*.conda
+          if-no-files-found: error
+
+  # ── expensive_test_*.py: weekly, and on demand ─────────────────────────────
+  #
+  # These are the slow/heavy cases (exhaustive dye sampling, Langevin
+  # equilibration, full CLI sweeps). Kept off the push/PR path entirely so a
+  # normal change gets a result in minutes, not on the order the expensive
+  # suite itself takes; a regression here still surfaces within a week, or
+  # immediately via workflow_dispatch.
+  expensive_tests:
+    name: Expensive tests (${{ matrix.os }})
+    needs: setup
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.os_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge
+          channel-priority: strict
+          auto-update-conda: false
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/pkgs
+          key: conda-pkgs-${{ runner.os }}-${{ hashFiles('conda-recipe/recipe.yaml') }}
+          restore-keys: |
+            conda-pkgs-${{ runner.os }}-
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        continue-on-error: true
+      - run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
+
+      - name: Install rattler-build
+        shell: bash -el {0}
+        run: mamba install -y rattler-build
+
+      - name: Build the conda package
+        shell: bash -el {0}
+        run: rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+
+      - name: Install the freshly built package into a test env
+        shell: bash -el {0}
+        run: mamba create -y -n bff-test -c ./conda-bld -c conda-forge imp.bff pytest
+
+      - name: Run expensive tests
+        shell: bash -el {0}
+        run: |
+          conda activate bff-test
+          mapfile -t TESTS < <(find test -name 'expensive_test_*.py' | sort)
+          echo "${#TESTS[@]} test files selected"
+          pytest "${TESTS[@]}" -v
+
+  # ── Documentation: Doxygen (C++ API) + Sphinx (manual, notebooks, API) ────
+  #
+  # Build-only for now -- this catches a doc build broken by a code or docs
+  # change. Publishing (SFTP secrets already exist on this repo, unused here)
+  # is a separate decision; wire up a deploy step once that target is chosen.
+  docs:
+    name: Build documentation
+    needs: setup
+    if: needs.setup.outputs.lane == 'full' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          environment-file: doc/environment.yml
+          channels: conda-forge
+          channel-priority: strict
+          auto-update-conda: false
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/pkgs
+          key: conda-pkgs-docs-${{ runner.os }}-${{ hashFiles('doc/environment.yml') }}
+          restore-keys: |
+            conda-pkgs-docs-${{ runner.os }}-
+
+      - name: Build and install imp.bff (needed for autodoc/nbsphinx)
+        shell: bash -el {0}
+        run: |
+          mamba install -y rattler-build
+          rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+          mamba install -y -c ./conda-bld -c conda-forge imp.bff
+
+      # Best-effort: doc/Doxyfile drives the doxy2swig.py docstring generation
+      # (see conda-recipe/bld.bat) and is not a hard dependency of the Sphinx
+      # build, so a Doxygen problem is reported without failing the job.
+      - name: Doxygen (C++ API)
+        working-directory: doc
+        continue-on-error: true
+        shell: bash -el {0}
+        run: doxygen
+
+      - name: Sphinx (manual + notebooks + Python API)
+        working-directory: doc
+        shell: bash -el {0}
+        run: make html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: doc/_build/html
+          if-no-files-found: error
+
+  # ── Publish to Anaconda.org on a published GitHub Release ─────────────────
+  #
+  # Reuses the artifacts build_and_test already built and tested -- a release
+  # never ships a package that has not passed the fast+medium suite. A
+  # pre-release publishes to the `nightly` label instead of `main`.
+  deploy:
+    name: Publish to Anaconda (${{ matrix.os }})
+    needs: [setup, build_and_test]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.os_matrix) }}
+    steps:
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge
+          channel-priority: strict
+          auto-update-conda: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: conda-package-${{ matrix.os }}
+          path: conda-bld
+
+      - name: Install rattler-build
+        shell: bash -el {0}
+        run: mamba install -y rattler-build
+
+      - name: Upload to Anaconda.org
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_KEY: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          LABEL=main
+          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then LABEL=nightly; fi
+          echo "Uploading with label: $LABEL"
+          rattler-build upload anaconda -o tpeulen -c "$LABEL" --force conda-bld/**/*.conda

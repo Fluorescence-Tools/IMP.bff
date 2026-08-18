@@ -3,7 +3,7 @@
 IMP.bff sits above tttrlib in the layering and may reach down into it — tttrlib
 is the lower-level library, and delegating photon-level work there is better
 than duplicating it. But IMP.bff ships through conda-forge as part of IMP, and
-its job is structure, dye simulation, spectroscopy and scoring, none of which
+its job is structure, dye simulation, photophysics and scoring, none of which
 needs photons. So tttrlib is optional, and the core API has to work with it
 absent.
 
@@ -99,7 +99,7 @@ class Tests(IMP.test.TestCase):
             "            raise ImportError('tttrlib blocked for this test')\n"
             "        return None\n"
             "sys.meta_path.insert(0, Block())\n"
-            "import IMP, IMP.bff, IMP.bff.spectroscopy\n"
+            "import IMP, IMP.bff, IMP.bff.photophysics\n"
             "m = IMP.Model()\n"
             "assert IMP.bff.AV is not None\n"
             "assert IMP.bff.PathMap is not None\n"

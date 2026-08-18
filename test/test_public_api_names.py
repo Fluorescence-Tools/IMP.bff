@@ -18,7 +18,7 @@ _FAMILY = re.compile(
     r"|quench|Quench|QUENCH|PET|amino_acid|solvent_accessible|sphere_points"
     r"|grid_center|slow_factor|simulate_|diffusion|Diffusion|residue|Residue|occupancy"
     # PRD-113, the dye species: spectra, R0 derivation, the flrCIF map
-    r"|Dye|dye|Spectrum|spectral|spectra|FLRCIF|Label|FLUOROPHORE|Quencher|quencher|PET|pet_|REFERENCE_DYE|States|resample_av|PathMapReading)"
+    r"|Dye|dye|Spectrum|spectral|spectra|FLRCIF|Label|FLUOROPHORE|Quencher|quencher|PET|pet_|REFERENCE_DYE|States|resample_av|PathMapReading|orientation|order_parameter)"
 )
 
 
