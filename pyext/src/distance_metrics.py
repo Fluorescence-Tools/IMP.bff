@@ -1,17 +1,46 @@
-"""FRET distance metrics and chi-squared scoring.
+"""Distance helpers, and two that disagree with their namesakes.
 
-Pure Numba/numpy utility functions for converting between FRET observables
-and model distances, and for scoring model distances against experimental
-restraints with asymmetric error bars.
+**Read this before using ``polynomial_transfer`` or
+``gaussian_rmp_to_rda_mean`` from here.** Both exist under the same names in
+:mod:`IMP.bff.representation.distance`, with the same signatures, and give
+*different answers*:
 
-These functions are intended as **non-breaking enhancements** to
-``IMP.bff`` and may later migrate into the upstream IMP.bff C++ layer.
+===========================  ====================  ==========================
+function                     here                  representation.distance
+===========================  ====================  ==========================
+``gaussian_rmp_to_rda_mean`` ``Rmp + s^2/Rmp``     ``Rmp + s^2/(2 Rmp)``
+``polynomial_transfer``      ascending ``c0+c1x``  descending (``np.polyfit``)
+===========================  ====================  ==========================
+
+Measured at ``rmp=45, sigma=6``: **45.8 against 45.4** -- a factor of two in the
+correction term. And at ``rmp=45, coeffs=[0, 1, 0.02]``: **85.5 against 45.02**,
+the polynomial evaluated with its coefficients reversed.
+
+Each is internally consistent and each documents its own convention, so neither
+is wrong in isolation. What is wrong is that they share a name in one package.
+The versions in ``representation.distance`` are the live ones -- ``fret/engine.py``
+calls them, and its ``fit_transfer_polynomial`` produces ``np.polyfit``
+coefficients, which only the descending evaluator reads correctly. The versions
+here have **no consumers**; only ``chi2_score`` is imported from this module
+(by ``restraints/``), and that one is verified identical.
+
+Which ``gaussian_rmp_to_rda_mean`` is right is a question about what ``sigma``
+means -- per-component width of an isotropic 3-D cloud, or width of the distance
+distribution -- and is left for the owner rather than guessed at. PRD-113 stage
+4b removed only what was verified identical: ``fret_efficiency`` and
+``distance_from_fret_efficiency``, which are now re-exported from the canonical
+module.
 """
 
 from __future__ import annotations
 
 import math
 import numpy as np
+
+from IMP.bff.representation.distance import (  # noqa: F401
+    distance_from_fret_efficiency,
+    fret_efficiency,
+)
 from IMP.bff._jit import njit as _njit, jit as _jit
 
 
@@ -64,54 +93,6 @@ def chi2_score(
     if err == 0.0:
         return 0.0 if d == 0.0 else math.inf
     return (d / err) ** 2
-
-
-@_njit
-def fret_efficiency(distance: float, forster_radius: float = 52.0) -> float:
-    r"""FRET efficiency *E* for a single donor–acceptor distance.
-
-    .. math::
-
-       E = \frac{1}{1 + \left(\frac{R}{R_0}\right)^6}
-
-    Parameters
-    ----------
-    distance : float
-        Donor–acceptor distance *R* (Å).
-    forster_radius : float
-        Förster radius *R_0* (Å).  Default 52.0.
-
-    Returns
-    -------
-    float
-        Efficiency *E* ∈ [0, 1].
-    """
-    return 1.0 / (1.0 + (distance / forster_radius) ** 6.0)
-
-
-@_njit
-def distance_from_fret_efficiency(efficiency: float, forster_radius: float = 52.0) -> float:
-    r"""Convert FRET efficiency to distance.
-
-    .. math::
-
-       R = R_0 \left(\frac{1}{E} - 1\right)^{1/6}
-
-    Parameters
-    ----------
-    efficiency : float
-        FRET efficiency *E*.
-    forster_radius : float
-        Förster radius *R_0* (Å).  Default 52.0.
-
-    Returns
-    -------
-    float
-        Distance *R* (Å).
-    """
-    if efficiency <= 0.0 or efficiency >= 1.0:
-        return 0.0 if efficiency >= 1.0 else math.inf
-    return forster_radius * ((1.0 / efficiency) - 1.0) ** (1.0 / 6.0)
 
 
 @_njit

@@ -73,7 +73,11 @@ jobs:
         id: get-date
         run: echo "week=$(/bin/date -u '+%Y-%U')" >> "$GITHUB_OUTPUT"
         shell: bash
+      # continue-on-error: caching is an optimization, not a correctness
+      # requirement -- a cache-service hiccup (or, under `act` locally, a
+      # known image gap -- nektos/act#107) must not fail the build.
       - uses: actions/cache@v4
+        continue-on-error: true
         with:
           path: ${{ env.CONDA }}/pkgs
           # Rolls over weekly so a stale/broken cache entry self-heals rather
@@ -160,6 +164,7 @@ jobs:
           auto-update-conda: false
 
       - uses: actions/cache@v4
+        continue-on-error: true
         with:
           path: ${{ env.CONDA }}/pkgs
           key: conda-pkgs-${{ runner.os }}-${{ hashFiles('conda-recipe/recipe.yaml') }}
@@ -214,6 +219,7 @@ jobs:
           auto-update-conda: false
 
       - uses: actions/cache@v4
+        continue-on-error: true
         with:
           path: ${{ env.CONDA }}/pkgs
           key: conda-pkgs-docs-${{ runner.os }}-${{ hashFiles('doc/environment.yml') }}

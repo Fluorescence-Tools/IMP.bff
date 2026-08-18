@@ -1,9 +1,11 @@
 # Are we running cmake from this directory (out of tree build) ?
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set (CMAKE_CXX_STANDARD 14)
-  set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
-  cmake_minimum_required(VERSION 2.8.12)
+  # CMake >= 4.0 refuses to run at all below this floor ("Compatibility with
+  # CMake < 3.5 has been removed"); 3.5 is the lowest version that still
+  # parses everything below.
+  cmake_minimum_required(VERSION 3.5)
   project(imp_module)
 
   # Default Python3_FIND_STRATEGY to LOCATION

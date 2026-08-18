@@ -12,10 +12,11 @@ source:
 
 build:
   number: 1
-  script:
-    if: win
-    then: bld.bat
-    else: build.sh
+  # No explicit `script:` -- rattler-build auto-discovers build.sh (unix) /
+  # bld.bat (windows) in the recipe directory by platform. An explicit
+  # `script:` field does not support if/then/else selectors (only
+  # interpreter/env/secrets/content/file/cwd), so this is the only way to
+  # keep one recipe driving both platform scripts.
 
 requirements:
   build:
@@ -31,10 +32,17 @@ requirements:
     - cmake
     - ninja
     - graphviz
-    - python
+    - python >=3.9,<3.13  # capped -- see the host: list below for why
     - numpy
   host:
-    - python
+    # Capped: the installed imp package's own SWIG glue
+    # ($PREFIX/include/IMP/internal/swig_helpers_base.h) still calls
+    # Python-2-only C API symbols (PyString_Check, PyInt_Check,
+    # PyInt_FromLong, ...) that current CPython headers no longer shim,
+    # which fails the compile under an unpinned/latest Python. This is an
+    # upstream IMP bug, not one in this tree; revisit the cap once IMP's own
+    # SWIG headers are fixed.
+    - python >=3.9,<3.13
     - numpy
     - boost-cpp
     - eigen

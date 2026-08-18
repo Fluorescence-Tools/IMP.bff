@@ -19,6 +19,10 @@ from __future__ import annotations
 from .states import States
 from .types import AccessibleVolume
 from .pathmap import PathMapReading, resample_av
+from .distance import (
+    av_pair_statistics, average_distance, distance_between_mean_positions,
+    histogram_rda, mean_fret_distance, standard_deviation_of_distances,
+)
 from .distribution import (
     LabelDistribution, LabelDistributionAV, DyeDistributionNormal,
 )
@@ -26,4 +30,7 @@ from .distribution import (
 __all__ = [
     "States", "AccessibleVolume", "PathMapReading", "resample_av",
     "LabelDistribution", "LabelDistributionAV", "DyeDistributionNormal",
+    "av_pair_statistics", "average_distance",
+    "distance_between_mean_positions", "histogram_rda",
+    "mean_fret_distance", "standard_deviation_of_distances",
 ]

@@ -1,5 +1,41 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 4b: the distance layers, and two that disagree)
+
+* **`fret/distance.py` → `representation/distance.py`.** A distance between two
+  labels is a property of what represents them, not of the FRET engine. It was
+  the most complete of the implementations — pair statistics, the RDA histogram,
+  the transfer polynomial, orientation-resolved pair geometry — so it is the
+  canonical one. `fret/distance.py` is a re-export while the rest of `fret/`
+  migrates.
+* **I was wrong that there were six duplicates.** That claim came from matching
+  *function names* (`comm -12` over `def` lines) without ever comparing
+  signatures. Deleting on that basis broke 8 tests, which is how it was caught.
+  The truth, checked properly:
+
+  | | verdict |
+  |---|---|
+  | `fret_efficiency`, `distance_from_fret_efficiency` | identical — removed, re-exported |
+  | `chi2_score` | identical but for a parameter name — kept, it is the only symbol `restraints/` imports |
+  | `av_pair_statistics` | **different jobs**: array reduction here, sample-and-reduce there |
+  | `gaussian_rmp_to_rda_mean`, `polynomial_transfer` | **different answers** |
+
+* **Two same-named, same-signature functions give different numbers.**
+  `gaussian_rmp_to_rda_mean(45, 6)` is `Rmp + σ²/Rmp` = **45.8** here and
+  `Rmp + σ²/(2 Rmp)` = **45.4** there — a factor of two in the correction term.
+  `polynomial_transfer(45, [0, 1, 0.02])` is **85.5** here (ascending
+  coefficients) and **45.02** there (descending, `np.polyfit` order).
+* **Which is live matters and is now known.** `fret/engine.py` calls the
+  `representation.distance` versions, and its `fit_transfer_polynomial` produces
+  `np.polyfit` coefficients — which only the descending evaluator reads
+  correctly, so that pairing is consistent. The `distance_metrics` versions have
+  **no consumers**. This is a trap that had not yet sprung, not a live defect.
+* **Which `gaussian_rmp_to_rda_mean` is correct is a physics question** — whether
+  `sigma` is the per-component width of an isotropic 3-D cloud or the width of
+  the distance distribution — and is left for the owner rather than guessed.
+  Both are documented side by side at the top of `distance_metrics.py`.
+* Suite **641 passed**.
+
 ## 2026-08-18 (PRD-113 stage 4a: `photophysics/`, κ² unified, `spectroscopy/` gone)
 
 * **933 lines of anisotropy modelling were unreachable.**
