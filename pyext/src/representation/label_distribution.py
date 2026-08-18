@@ -1,5 +1,11 @@
 """Label distributions: AV-backed and Gaussian representations of where a dye is.
 
+Renamed from ``distribution.py`` in the 2026-08-18 tidy, because it sat beside
+``distributions.py`` -- one letter apart, in the same directory, meaning
+different things: this one is *where a label is*, that one was a set of
+probability density functions. That file is now ``probability.py``. A reader
+should not have to open both to find out which is which.
+
 Two representations, alongside the accessible volume itself and the rotamer
 library: :class:`LabelDistributionAV` computes an AV and reduces it lazily, and
 :class:`DyeDistributionNormal` replaces the cloud with a Gaussian.
@@ -36,7 +42,7 @@ def _av_types():
     """``(BasicAV, ACV, compute_av)``, imported on first use rather than on import.
 
     The layering here runs ``representation.types`` -> ``av`` ->
-    ``representation.distribution``: this module *builds* accessible volumes, so
+    ``representation.label_distribution``: this module *builds* accessible volumes, so
     it sits above the builder, while the builder needs only the dataclass. Both
     edges are real. Written at module level they close a cycle -- and because
     importing ``IMP.bff.representation.types`` also executes the package

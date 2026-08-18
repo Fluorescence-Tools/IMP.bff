@@ -3,40 +3,60 @@
 #define SWIG_FILE_WITH_INIT
 %}
 
+/* Vendored from numpy upstream; not ours, not edited. */
 %include "numpy.i"
 
 %pythoncode %{
 import numpy as np
 %}
 
-%include "BFF.types.i"
+/* STL templates and the numpy typemaps everything below depends on. */
+%include "IMP_bff.types.i"
 
-/* PathMap & AV */
-%include "PathMap.i"
-%include "AV.i"
+/*
+ * Headers are %include'd directly here, which is IMP's own convention -- see
+ * modules/core/pyext/swig.i-in, which does the same for 101 of them. A separate
+ * .i file per header earns its place only when it carries real content:
+ * IMP_SWIG_OBJECT/DECORATOR declarations for reference-counted types, %ignore
+ * for a method that will not marshal, a %feature("shadow"). Two do
+ * (IMP_bff.av.i, IMP_bff.pathmap.i); the fourteen one-line wrappers that used
+ * to sit beside them did not, and are gone.
+ */
 
-/* numerical kernels ported from Python (PRD-113) */
-%include "Distributions.i"
-%include "PolymerChain.i"
-%include "SolventAccessibleSurface.i"
-%include "QuenchingGrid.i"
-%include "QuenchingMap.i"
-%include "FRETRateTrace.i"
-%include "DiffusionSolver.i"
-%include "AVDistance.i"
-%include "DistanceCalibration.i"
-%include "OrientationFactor.i"
-%include "BrownianWalk.i"
-%include "PhotonSimulation.i"
-%include "LifetimeSpectrum.i"
-%include "QuenchedDecay.i"
+/* Reference-counted types: decorators, objects, and the restraint. */
+%include "IMP_bff.pathmap.i"
+%include "IMP_bff.av.i"
 
-/* Fluorescence decays */
+/* Plain functions over arrays. Ordered as the physics stacks up. */
+%include "IMP/bff/Distributions.h"
+%include "IMP/bff/PolymerChain.h"
+%include "IMP/bff/SolventAccessibleSurface.h"
 
-// The flat user-facing Python surface (PRD-107): IMP.bff.<Name> resolves the
-// cgdye/fret names lazily; the mapping and the naming rule live in
-// pyext/src/api.py. Installed here because pyext/src/__init__.py is not part
-// of a SWIG module's __init__ (only python-only modules use it).
+/* Fields stamped on the accessible-volume grid. */
+%include "IMP/bff/QuenchingGrid.h"
+%include "IMP/bff/QuenchingMap.h"
+%include "IMP/bff/FRETRateTrace.h"
+
+/* Distances and orientations over point clouds. */
+%include "IMP/bff/AVDistance.h"
+%include "IMP/bff/DistanceCalibration.h"
+%include "IMP/bff/OrientationFactor.h"
+
+/* Dynamics: the dye's position, then its excited state. */
+%include "IMP/bff/BrownianWalk.h"
+%include "IMP/bff/DiffusionSolver.h"
+%include "IMP/bff/PhotonSimulation.h"
+%include "IMP/bff/QuenchedDecay.h"
+
+/* What comes out: (amplitude, rate) pairs. */
+%include "IMP/bff/LifetimeSpectrum.h"
+
+/*
+ * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through
+ * api.py, which also owns the domain map. Installed here because a SWIG
+ * module's __init__ is generated -- pyext/src/__init__.py is not used, which is
+ * why there isn't one.
+ */
 %pythoncode %{
 from .api import module_getattr as __getattr__, module_dir as __dir__
 %}

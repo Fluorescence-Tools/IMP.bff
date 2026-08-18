@@ -13,7 +13,7 @@ The six, and what became of them (PRD-113 stage 4b):
 * ``distance_metrics.py`` -- six identically-named functions; now delegates.
 * ``av/_kernels.py`` with ``av/basic.py`` -- the numba pair, **still separate**,
   because routing them changes an RNG stream and that is a behaviour change.
-* ``representation/distribution.py`` -- ``dRmp``/``dRDA``/``dRDAE``/``pRDA`` on
+* ``representation/label_distribution.py`` -- ``dRmp``/``dRDA``/``dRDAE``/``pRDA`` on
   each of two concrete classes; still separate, same reason.
 * the **C++** ``av_distance`` family in ``AV.h``, which takes ``AV`` decorators
   rather than point arrays and is the implementation that should ultimately

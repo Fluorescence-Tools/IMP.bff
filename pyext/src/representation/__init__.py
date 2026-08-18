@@ -23,7 +23,7 @@ from .distance import (
     av_pair_statistics, average_distance, distance_between_mean_positions,
     histogram_rda, mean_fret_distance, standard_deviation_of_distances,
 )
-from .distribution import (
+from .label_distribution import (
     LabelDistribution, LabelDistributionAV, DyeDistributionNormal,
 )
 

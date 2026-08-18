@@ -236,10 +236,10 @@ BY_DOMAIN = {
         "fret_pair_distribution": "IMP.bff.representation.distance",
         "fret_efficiency": "IMP.bff.representation.distance",
         "distance_from_fret_efficiency": "IMP.bff.representation.distance",
-        # IMP.bff.representation.distribution
-        "LabelDistribution": "IMP.bff.representation.distribution",
-        "LabelDistributionAV": "IMP.bff.representation.distribution",
-        "DyeDistributionNormal": "IMP.bff.representation.distribution",
+        # IMP.bff.representation.label_distribution
+        "LabelDistribution": "IMP.bff.representation.label_distribution",
+        "LabelDistributionAV": "IMP.bff.representation.label_distribution",
+        "DyeDistributionNormal": "IMP.bff.representation.label_distribution",
         # IMP.bff.representation.states
         "States": "IMP.bff.representation.states",
         # IMP.bff.representation.types

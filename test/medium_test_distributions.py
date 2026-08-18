@@ -1,11 +1,11 @@
-"""Tests for ``IMP.bff.representation.distributions`` — mathematical distributions."""
+"""Tests for ``IMP.bff.representation.probability`` — mathematical distributions."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from IMP.bff.representation.distributions import (
+from IMP.bff.representation.probability import (
     poisson_0toN,
     normal_distribution,
     generalized_normal_distribution,

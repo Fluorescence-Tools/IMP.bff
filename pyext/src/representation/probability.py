@@ -1,5 +1,9 @@
 """Probability distributions used by the dye and linker models.
 
+Renamed from ``distributions.py``: it sat one letter away from
+``distribution.py`` in the same directory, and the two are unrelated. That one
+is now ``label_distribution.py``.
+
 **The numerics are C++** (:file:`include/IMP/bff/Distributions.h`). numba is a
 prototyping tool in this package, not a runtime dependency, so these are thin
 wrappers that hand numpy arrays to the compiled kernels and hand numpy arrays
