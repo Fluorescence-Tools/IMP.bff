@@ -1,5 +1,27 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 5, tranches 5-6: maps, FRET traces, the solver — and a 40× regression, found and fixed)
+
+* `QuenchingMap.h`, `FRETRateTrace.h`, `DiffusionSolver.h` — 7 more kernels.
+* **Gates**: `slow_near_atoms`, `fret_map`, both grid stampers and the
+  Smoluchowski step are **bit-exact**. `quenching_map` differs by 2.6× machine
+  epsilon (`np.exp` vs `std::exp`), the trace kernels by 3.2×, the Itô step by
+  4e-19. Each was isolated relatively rather than judged on an absolute number:
+  3.6e-12 looked alarming until measured against values of order 141.
+* **The port made the quenching suite 40× slower — 14 s to 558 s — and that is
+  the interesting part.** numba's kernels were `parallel=True` over `prange`;
+  the C++ was serial, allocated a grid per call, and crossed the SWIG boundary
+  **once per step**. A solve is 1 000–10 000 steps.
+* **The fix was to move the loop, not to tune the kernel.** `diffusion_propagate`
+  runs the whole ping-pong loop in C++ with OpenMP over x-slabs: 1.33 ms/step →
+  **0.023 ms**, 58×. Wiring `run()` alone changed nothing measurable — the hot
+  path was `equilibrium()`, which takes tens of thousands of steps. With both
+  inside: **488 s → 18.3 s**, now slightly better than the numba it replaced.
+* The lesson generalises to the rest of the port: **a kernel called in a tight
+  Python loop must take the loop with it**, or the binding cost dominates
+  whatever the kernel gains.
+* numba: **25 → 23**. Suite **676 passed**.
+
 ## 2026-08-18 (PRD-113 stage 5, tranche 3: ASA and the PET rate to C++)
 
 * `SolventAccessibleSurface.h` / `.cpp` — `sphere_points`,

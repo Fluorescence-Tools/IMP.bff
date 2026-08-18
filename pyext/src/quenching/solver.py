@@ -29,7 +29,11 @@ from typing import NamedTuple, Optional
 
 import numpy as np
 
-from .._jit import njit, prange
+import IMP.bff
+
+
+#: Python name -> the C++ enum.
+_FLUX = {"smoluchowski": 0, "ito": 1}
 
 __all__ = [
     "GridDiffusionResult",
@@ -165,99 +169,49 @@ def equilibrium_occupancy(
     return occupancy / total if total else occupancy
 
 
-@njit(cache=True, parallel=True)
 def _step_smoluchowski(nxt, cur, d, k, bounds):
-    """One explicit Euler step of the **Smoluchowski** form.
+    """One explicit Euler step of the **Smoluchowski** form. **C++.**
 
     The flux between two voxels is ``D_ij (p_i - p_j)`` with ``D_ij`` the
-    interface mobility (arithmetic mean), rather than ``D_i p_i - D_j p_j``.
-    The difference is the whole physics: this flux vanishes when ``p`` is
-    uniform *whatever* ``D`` does in space, so a spatially varying mobility
-    changes how fast the dye redistributes and **not where it ends up**. See
-    :func:`equilibrium_occupancy` for why that is the right requirement.
+    interface mobility, rather than ``D_i p_i - D_j p_j``. The difference is the
+    whole physics: this flux vanishes when ``p`` is uniform *whatever* ``D``
+    does in space, so a spatially varying mobility changes how fast the dye
+    redistributes and **not where it ends up**.
+
+    *k* carries ``exp(-k dt)``, applied as a factor: that is the exact solution
+    of ``dp/dt = -k p`` over the step, so the rate contributes no stability
+    constraint. ``1 - k dt`` goes negative and diverges once ``k dt > 1``.
     """
-    ng = cur.shape[0]
-    for ix in prange(ng):
-        if ix == 0 or ix == ng - 1:
-            for iy in range(ng):
-                for iz in range(ng):
-                    nxt[ix, iy, iz] = 0.0
-            continue
-        for iy in range(ng):
-            nxt[ix, iy, 0] = 0.0
-            nxt[ix, iy, ng - 1] = 0.0
-        for iz in range(ng):
-            nxt[ix, 0, iz] = 0.0
-            nxt[ix, ng - 1, iz] = 0.0
-    for ix in prange(1, ng - 1):
-        for iy in range(1, ng - 1):
-            for iz in range(1, ng - 1):
-                if bounds[ix, iy, iz] == 0:
-                    nxt[ix, iy, iz] = 0.0
-                    continue
-                p0 = cur[ix, iy, iz]
-                d0 = d[ix, iy, iz]
-                flux = (
-                    0.5 * (d0 + d[ix - 1, iy, iz]) * (p0 - cur[ix - 1, iy, iz]) * bounds[ix - 1, iy, iz]
-                    + 0.5 * (d0 + d[ix + 1, iy, iz]) * (p0 - cur[ix + 1, iy, iz]) * bounds[ix + 1, iy, iz]
-                    + 0.5 * (d0 + d[ix, iy - 1, iz]) * (p0 - cur[ix, iy - 1, iz]) * bounds[ix, iy - 1, iz]
-                    + 0.5 * (d0 + d[ix, iy + 1, iz]) * (p0 - cur[ix, iy + 1, iz]) * bounds[ix, iy + 1, iz]
-                    + 0.5 * (d0 + d[ix, iy, iz - 1]) * (p0 - cur[ix, iy, iz - 1]) * bounds[ix, iy, iz - 1]
-                    + 0.5 * (d0 + d[ix, iy, iz + 1]) * (p0 - cur[ix, iy, iz + 1]) * bounds[ix, iy, iz + 1]
-                )
-                nxt[ix, iy, iz] = (p0 - flux) * k[ix, iy, iz]
+    ng = int(cur.shape[0])
+    out = np.asarray(IMP.bff.diffusion_step(
+        np.ascontiguousarray(cur, dtype=np.float64).ravel(),
+        np.ascontiguousarray(d, dtype=np.float64).ravel(),
+        np.ascontiguousarray(k, dtype=np.float64).ravel(),
+        np.ascontiguousarray(bounds, dtype=np.float64).ravel(),
+        ng, IMP.bff.FLUX_SMOLUCHOWSKI), dtype=np.float64).reshape(ng, ng, ng)
+    nxt[...] = out
     return nxt
 
 
-@njit(cache=True, parallel=True)
 def _step(nxt, cur, d, k, bounds):
-    """One explicit Euler step of ``dp/dt = div(D grad p) - k p``.
+    """One explicit Euler step of the inherited **Ito** form. **C++.**
 
-    *d* carries ``D * dt / dg^2`` and *k* carries ``exp(-k * dt)``, folded in by
-    the caller so the inner loop is pure arithmetic. The rate term is applied as
-    a factor rather than subtracted: ``exp(-k dt)`` is the *exact* solution of
-    ``dp/dt = -k p`` over the step, so the decay contributes no stability
-    constraint at all, where ``1 - k dt`` goes negative and diverges once
-    ``k dt > 1`` -- which on a strongly quenched site it does. Flux to a voxel outside the
-    volume is dropped by the ``bounds`` factors, which is a no-flux (reflecting)
-    wall -- the dye cannot enter the protein.
+    Flux ``D_i p_i - D_j p_j``, whose stationary state is ``p ~ 1/D`` -- a
+    friction field acting as an attractive potential. Kept so the old behaviour
+    can be reproduced and compared; see :func:`equilibrium_occupancy`.
+
+    *k* carries ``exp(-k dt)``, applied as a factor: that is the exact solution
+    of ``dp/dt = -k p`` over the step, so the rate contributes no stability
+    constraint. ``1 - k dt`` goes negative and diverges once ``k dt > 1``.
     """
-    ng = cur.shape[0]
-    # The 7-point stencil cannot be evaluated on the outer shell, so that shell
-    # is written to zero rather than left alone. Leaving it alone is what
-    # ChiSurf did, and with a ping-pong pair of buffers those voxels then hold
-    # the state from *two* steps ago -- stale data that never decays and never
-    # diffuses, silently added into every population sum. It only stayed
-    # invisible because an accessible volume never reaches the grid edge, which
-    # `GridDiffusionSolver` now checks instead of assuming.
-    for ix in prange(ng):
-        if ix == 0 or ix == ng - 1:
-            for iy in range(ng):
-                for iz in range(ng):
-                    nxt[ix, iy, iz] = 0.0
-            continue
-        for iy in range(ng):
-            nxt[ix, iy, 0] = 0.0
-            nxt[ix, iy, ng - 1] = 0.0
-        for iz in range(ng):
-            nxt[ix, 0, iz] = 0.0
-            nxt[ix, ng - 1, iz] = 0.0
-    for ix in prange(1, ng - 1):
-        for iy in range(1, ng - 1):
-            for iz in range(1, ng - 1):
-                if bounds[ix, iy, iz] == 0:
-                    nxt[ix, iy, iz] = 0.0
-                    continue
-                dp = d[ix, iy, iz] * cur[ix, iy, iz]
-                flux = (
-                    (dp - d[ix - 1, iy, iz] * cur[ix - 1, iy, iz]) * bounds[ix - 1, iy, iz]
-                    + (dp - d[ix + 1, iy, iz] * cur[ix + 1, iy, iz]) * bounds[ix + 1, iy, iz]
-                    + (dp - d[ix, iy - 1, iz] * cur[ix, iy - 1, iz]) * bounds[ix, iy - 1, iz]
-                    + (dp - d[ix, iy + 1, iz] * cur[ix, iy + 1, iz]) * bounds[ix, iy + 1, iz]
-                    + (dp - d[ix, iy, iz - 1] * cur[ix, iy, iz - 1]) * bounds[ix, iy, iz - 1]
-                    + (dp - d[ix, iy, iz + 1] * cur[ix, iy, iz + 1]) * bounds[ix, iy, iz + 1]
-                )
-                nxt[ix, iy, iz] = (cur[ix, iy, iz] - flux) * k[ix, iy, iz]
+    ng = int(cur.shape[0])
+    out = np.asarray(IMP.bff.diffusion_step(
+        np.ascontiguousarray(cur, dtype=np.float64).ravel(),
+        np.ascontiguousarray(d, dtype=np.float64).ravel(),
+        np.ascontiguousarray(k, dtype=np.float64).ravel(),
+        np.ascontiguousarray(bounds, dtype=np.float64).ravel(),
+        ng, IMP.bff.FLUX_ITO), dtype=np.float64).reshape(ng, ng, ng)
+    nxt[...] = out
     return nxt
 
 
@@ -354,28 +308,25 @@ class GridDiffusionSolver:
         # Exact over the step, and unconditionally stable: see `_step`.
         k = np.exp(-self.rate_map * self.t_step)
 
+        ng = int(self.bounds.shape[0])
         n_reports = n_steps // n_out + 1
         time = np.arange(n_reports, dtype=np.float64) * self.t_step * n_out
         fluorescence = np.zeros(n_reports, dtype=np.float64)
 
-        i_out = 0
-        for step in range(n_steps):
-            if step % n_out == 0 and i_out < n_reports:
-                fluorescence[i_out] = cur.sum()
-                i_out += 1
-            nxt = self._kernel(nxt, cur, d, k, self.bounds)
-            # Swap **every** step. ChiSurf swapped only on odd steps
-            # (`if time_i % 2 > 0`) while always computing `n <- f(p)`, so every
-            # even step recomputed the previous one from a stale buffer and half
-            # the evolution was thrown away -- the field advanced at roughly
-            # half the requested rate. Fixed on the move (PRD-109); pinned by
-            # the free-diffusion variance test, which is what caught it.
-            cur, nxt = nxt, cur
-            self.n_iterations += 1
-
-        while i_out < n_reports:
-            fluorescence[i_out] = cur.sum()
-            i_out += 1
+        # **The loop runs in C++.** Calling the step kernel from a Python loop
+        # crosses the binding once per step and allocates a grid each time; a
+        # solve is 1000-10000 steps, and doing that ran 58x slower than keeping
+        # the loop inside (1.33 ms/step against 0.023).
+        fluo = IMP.bff.VectorDouble()
+        flat = IMP.bff.diffusion_propagate(
+            np.ascontiguousarray(cur, dtype=np.float64).ravel(),
+            np.ascontiguousarray(d, dtype=np.float64).ravel(),
+            np.ascontiguousarray(k, dtype=np.float64).ravel(),
+            np.ascontiguousarray(self.bounds, dtype=np.float64).ravel(),
+            int(ng), _FLUX[self.flux_form], int(n_steps), int(n_out), fluo)
+        cur = np.asarray(flat, dtype=np.float64).reshape(ng, ng, ng)
+        fluorescence = np.asarray(list(fluo), dtype=np.float64)[:n_reports]
+        self.n_iterations += n_steps
 
         self.density = cur
         return GridDiffusionResult(time, fluorescence, cur)
@@ -405,16 +356,30 @@ class GridDiffusionSolver:
         zero_rate = np.ones_like(cur)   # exp(-0 * dt): no decay
         d = self.diffusion_map * (self.t_step / self.dg ** 2)
 
+        # Also in C++, and for the same reason as `run`: this loop is the
+        # single hottest thing in the package -- tens of thousands of steps,
+        # and it was crossing the binding on every one of them.
+        ng = int(self.bounds.shape[0])
+        d_flat = np.ascontiguousarray(d, dtype=np.float64).ravel()
+        one = np.ones(cur.size, dtype=np.float64)      # exp(-0 * dt): no decay
+        b_flat = np.ascontiguousarray(self.bounds, dtype=np.float64).ravel()
         previous = cur.copy()
-        for step in range(int(n_steps)):
-            nxt = self._kernel(nxt, cur, d, zero_rate, self.bounds)
-            cur, nxt = nxt, cur
-            self.n_iterations += 1
-            if (step + 1) % int(n_check) == 0:
-                drift = float(np.abs(cur - previous).sum())
-                if drift < tolerance:
-                    break
-                previous = cur.copy()
+        remaining = int(n_steps)
+        chunk = max(1, int(n_check))
+        while remaining > 0:
+            take = min(chunk, remaining)
+            fluo = IMP.bff.VectorDouble()
+            flat = IMP.bff.diffusion_propagate(
+                np.ascontiguousarray(cur, dtype=np.float64).ravel(),
+                d_flat, one, b_flat, ng, _FLUX[self.flux_form],
+                take, take, fluo)
+            cur = np.asarray(flat, dtype=np.float64).reshape(ng, ng, ng)
+            self.n_iterations += take
+            remaining -= take
+            drift = float(np.abs(cur - previous).sum())
+            if drift < tolerance:
+                break
+            previous = cur.copy()
 
         total = cur.sum()
         if total > 0.0:
