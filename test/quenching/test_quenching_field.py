@@ -549,5 +549,67 @@ class FluxFormTests(IMP.test.TestCase):
             None, 1e-3, 1.0, True, "stratonovich")
 
 
+class RateStabilityTests(IMP.test.TestCase):
+    """The rate term constrains the step too, and it used to be ignored.
+
+    ``diffusion_stability_limit`` validated only ``dt <= dg^2/(6D)``. On a real
+    site the quenching term is far larger: T4L site 19 at 2.5 A contributes 2.01
+    to the update coefficient against diffusion's 0.16, so a step the solver
+    called safe diverged to 7e36. Site 124 broke the criterion by the same margin
+    and returned a smooth, finite, entirely plausible decay -- which is why this
+    is pinned rather than left to inspection.
+
+    The fix is to integrate the rate exactly, ``exp(-k dt)`` rather than
+    ``1 - k dt``, so it contributes no stability constraint at all.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.ng = 21
+        self.bounds = open_box(self.ng)
+        self.dg = 1.0
+
+    def test_the_limit_accounts_for_the_rate(self):
+        without = diffusion_stability_limit(8.0, 1.0)
+        with_rate = diffusion_stability_limit(8.0, 1.0, k_max=96.0)
+        self.assertAlmostEqual(without, 1.0 / 48.0, delta=1e-12)
+        self.assertAlmostEqual(with_rate, 1.0 / (48.0 + 96.0), delta=1e-12)
+        self.assertLess(with_rate, without)
+
+    def test_no_rate_reproduces_the_plain_limit(self):
+        self.assertAlmostEqual(
+            diffusion_stability_limit(4.0, 2.0),
+            2.0 ** 2 / (6.0 * 4.0), delta=1e-15)
+
+    def test_a_fast_rate_no_longer_diverges(self):
+        """``k dt`` far above 1: fatal when subtracted, harmless as a factor."""
+        d_map = np.full((self.ng,) * 3, 8.0)
+        rate = np.full((self.ng,) * 3, 96.0)
+        t_step = 0.5 * diffusion_stability_limit(8.0, self.dg)   # k*dt = 1.0
+        solver = GridDiffusionSolver(
+            d_map, self.bounds, self.bounds / self.bounds.sum(), rate,
+            t_step=t_step, dg=self.dg)
+        result = solver.run(400, n_out=40)
+        self.assertTrue(np.all(np.isfinite(result.fluorescence)))
+        self.assertTrue(np.all(result.fluorescence >= 0.0))
+        self.assertTrue(np.all(np.diff(result.fluorescence) <= 1e-12))
+        self.assertGreaterEqual(float(result.density.min()), 0.0)
+
+    def test_a_uniform_rate_is_exact_whatever_the_step(self):
+        """With ``k`` uniform the answer is ``exp(-k t)`` -- to round-off."""
+        d_map = np.full((self.ng,) * 3, 8.0)
+        k = 96.0
+        rate = np.full((self.ng,) * 3, k)
+        t_step = 0.5 * diffusion_stability_limit(8.0, self.dg)
+        n_steps = 200
+        solver = GridDiffusionSolver(
+            d_map, self.bounds, self.bounds / self.bounds.sum(), rate,
+            t_step=t_step, dg=self.dg)
+        result = solver.run(n_steps, n_out=n_steps)
+        expected = np.exp(-k * n_steps * t_step)
+        self.assertAlmostEqual(
+            float(result.fluorescence[-1]) / expected, 1.0, delta=1e-10)
+
+
 if __name__ == "__main__":
     IMP.test.main()

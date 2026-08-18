@@ -47,17 +47,33 @@ class GridDiffusionResult(NamedTuple):
     density: np.ndarray
 
 
-def diffusion_stability_limit(d_max: float, dg: float) -> float:
-    """Largest stable time step for the explicit 7-point Laplacian.
+def diffusion_stability_limit(d_max: float, dg: float, k_max: float = 0.0) -> float:
+    """Largest stable time step for the explicit scheme.
 
-    ``dt <= dg^2 / (6 D)`` in three dimensions. Exceeding it does not merely
-    lose accuracy -- the scheme diverges, and the density comes back as
-    alternating signs or NaN.
+    The updated voxel keeps the coefficient ``1 - 6 D dt/dg^2 - k dt``, so both
+    terms constrain the step:
+
+        dt <= 1 / (6 D / dg^2 + k_max)
+
+    With ``k_max = 0`` this is the familiar ``dt <= dg^2 / (6 D)``.
+
+    **The rate term used to be left out, and it dominates.** On T4L site 19 at
+    2.5 A the diffusion term contributes 0.16 to that coefficient and the
+    quenching term 2.01 -- twelve times more -- so a step this function called
+    safe diverged. Worse, the divergence is not always visible: site 124 broke
+    the criterion by the same margin and still returned a smooth, finite,
+    entirely plausible decay. Since :class:`GridDiffusionSolver` now integrates
+    the rate term exponentially it is unconditionally stable in ``k`` and only
+    the diffusion term binds, but the honest criterion is kept here for callers
+    sizing a step for the plain scheme, and because a caller who asks with a
+    ``k_max`` deserves the answer that accounts for it.
     """
     d_max = float(d_max)
-    if d_max <= 0.0:
+    k_max = float(k_max)
+    denominator = 6.0 * d_max / float(dg) ** 2 + k_max
+    if denominator <= 0.0:
         return float("inf")
-    return float(dg) ** 2 / (6.0 * d_max)
+    return 1.0 / denominator
 
 
 def equilibrium_occupancy(
@@ -178,7 +194,7 @@ def _step_smoluchowski(nxt, cur, d, k, bounds):
                     + 0.5 * (d0 + d[ix, iy, iz - 1]) * (p0 - cur[ix, iy, iz - 1]) * bounds[ix, iy, iz - 1]
                     + 0.5 * (d0 + d[ix, iy, iz + 1]) * (p0 - cur[ix, iy, iz + 1]) * bounds[ix, iy, iz + 1]
                 )
-                nxt[ix, iy, iz] = p0 - flux - k[ix, iy, iz] * p0
+                nxt[ix, iy, iz] = (p0 - flux) * k[ix, iy, iz]
     return nxt
 
 
@@ -186,8 +202,12 @@ def _step_smoluchowski(nxt, cur, d, k, bounds):
 def _step(nxt, cur, d, k, bounds):
     """One explicit Euler step of ``dp/dt = div(D grad p) - k p``.
 
-    *d* carries ``D * dt / dg^2`` and *k* carries ``k * dt``, folded in by the
-    caller so the inner loop is pure arithmetic. Flux to a voxel outside the
+    *d* carries ``D * dt / dg^2`` and *k* carries ``exp(-k * dt)``, folded in by
+    the caller so the inner loop is pure arithmetic. The rate term is applied as
+    a factor rather than subtracted: ``exp(-k dt)`` is the *exact* solution of
+    ``dp/dt = -k p`` over the step, so the decay contributes no stability
+    constraint at all, where ``1 - k dt`` goes negative and diverges once
+    ``k dt > 1`` -- which on a strongly quenched site it does. Flux to a voxel outside the
     volume is dropped by the ``bounds`` factors, which is a no-flux (reflecting)
     wall -- the dye cannot enter the protein.
     """
@@ -226,7 +246,7 @@ def _step(nxt, cur, d, k, bounds):
                     + (dp - d[ix, iy, iz - 1] * cur[ix, iy, iz - 1]) * bounds[ix, iy, iz - 1]
                     + (dp - d[ix, iy, iz + 1] * cur[ix, iy, iz + 1]) * bounds[ix, iy, iz + 1]
                 )
-                nxt[ix, iy, iz] = cur[ix, iy, iz] - flux - k[ix, iy, iz] * cur[ix, iy, iz]
+                nxt[ix, iy, iz] = (cur[ix, iy, iz] - flux) * k[ix, iy, iz]
     return nxt
 
 
@@ -320,7 +340,8 @@ class GridDiffusionSolver:
 
         # Fold dt into the coefficients so the inner loop is pure arithmetic.
         d = self.diffusion_map * (self.t_step / self.dg ** 2)
-        k = self.rate_map * self.t_step
+        # Exact over the step, and unconditionally stable: see `_step`.
+        k = np.exp(-self.rate_map * self.t_step)
 
         n_reports = n_steps // n_out + 1
         time = np.arange(n_reports, dtype=np.float64) * self.t_step * n_out
@@ -370,7 +391,7 @@ class GridDiffusionSolver:
         if total > 0.0:
             cur = cur / total
         nxt = np.zeros_like(cur)
-        zero_rate = np.zeros_like(cur)
+        zero_rate = np.ones_like(cur)   # exp(-0 * dt): no decay
         d = self.diffusion_map * (self.t_step / self.dg ** 2)
 
         previous = cur.copy()
