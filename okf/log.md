@@ -1,5 +1,63 @@
 # Update Log
 
+## 2026-08-18 (PRD-111, quenching identifiability across sites)
+* **PRD-111 stage 0 measured; the gate passes** (`okf/prds/prd-111.md`,
+  `okf/validation/quenching_multisite.md`,
+  `benchmark/kq_sensitivity_analysis.py`). PRD-110 stopped because θ is not
+  recoverable from one decay; the successor question is *what has to be
+  measured*, and the cheapest candidate is more sites. θ is **global** (one dye,
+  one chemistry, one mobility) while the geometry is **per site**, so N decays
+  share one θ and the joint Fisher information is the **sum** — which beats its
+  terms only if the blind directions rotate with the geometry. Six T4L chain-A
+  sites spanning quencher-in-contact (A124, TRP126 at 3.5 Å) to nearly-bare
+  (A53): joint condition number **1.8 × 10⁵** against 1.96 × 10⁸ for the best
+  single site. The rotation is the whole effect — joint `λ_min` **152.7** against
+  **0.0456** for the sum of the per-site minima, a 3 350× gain. A joint fit
+  confirms it: `free_diffusion` −52 % → **+2.5 %**, `kQ_scale` −69 % → **+4.3 %**,
+  in **97 evaluations against 676**.
+* **`contact_distance` and `slow_factor` are one parameter, not two.** Fisher
+  predicts ±4.1 % and ±0.2 %; the fit misses by −33.4 % and −2.8 % in exactly
+  compensating directions — at **reduced χ² = 1.016**. Not a failed fit but a
+  second, exactly equivalent minimum, reproducible across resolutions (4.33 Å /
+  0.957 at 1.5 Å, 4.51 Å / 0.960 at 2.0 Å). The two build the *same mobility
+  field*: log D correlates at 0.927, equilibrium occupancies overlap **98.7 %**.
+  `slow_factor` applies once per contacting atom and `contact_distance` sets the
+  count, so `slow_factor^n(contact_distance)` is invariant along a valley. **No
+  number of sites separates them.** `JᵀJ` error bars must not be quoted for
+  either — a local linearisation cannot see a second minimum, and here it is
+  confidently wrong about its *best*-determined parameter. The model needs
+  re-parameterising on the quantity the data determines, not more data.
+* **Repeated end to end at 2.0 Å**: joint condition 3.04 × 10⁵, rotation gain
+  5 623×, largest principal angle 88.4°, same three parameters recovered and the
+  same pair degenerate. Not a grid artefact.
+* **`compute_av` silently discarded a declared grid resolution, and it had been
+  discarding one all along.** It *writes* `simulation_grid_resolution` into
+  `source_info` from its `disc_step` argument rather than reading it back, so
+  both quenching benchmarks passed the resolution into a field that was
+  overwritten: their `--resolution` flag was inert and **every run, PRD-110's
+  included, was at the 1.5 Å default while the validation pages recorded 2.5 Å.**
+  The numbers were always internally consistent — only the label was wrong, and
+  both pages now carry the correction. `compute_av` raises on disagreement
+  instead of discarding, the benchmarks assert the spacing they got, and
+  `test/fret/test_av_resolution.py` (7 tests) pins it. A resolution is the one AV
+  parameter whose being wrong is invisible in the result.
+* **The stated hypothesis was wrong, and recorded as such.** Predicted before
+  measuring: *diffusion only matters when the dye has to travel*. The ordering is
+  the opposite — sensitivity to `free_diffusion` tracks **quenched fraction**,
+  and correlates with median dye–quencher distance at **−0.56**. Transport
+  becomes rate-limiting when quenching is fast enough to deplete. **To measure
+  dye mobility, label where the dye is strongly quenched.**
+* **A diagnostic that was pure arithmetic, caught and fixed.** The first
+  subspace-angle comparison used rank-3 blind subspaces in a 5-parameter space;
+  two subspaces of dimension `r` in `Rⁿ` must intersect once `2r > n`, so it
+  reported 0.00° for all 15 site pairs regardless of geometry. Rank is now capped
+  at `n/2` and the decisive number is the eigenvalue gain, which no choice of
+  rank can flatter.
+* **All of stage 0 is synthetic data from the model being fitted**, so it
+  measures the model's internal geometry under a perfect model and nothing about
+  the world. Stage 1 (a per-site nuisance parameter, then real decays) is where
+  that assumption is tested, and it is the assumption most likely to be false.
+
 ## 2026-08-17 (cgdye, PRD-107)
 * **PRD-107 written and stage 0 landed** (`okf/prds/prd-107.md`; plan grilled
   with the user, decisions recorded in the PRD). Hygiene found three real

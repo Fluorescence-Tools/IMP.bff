@@ -126,23 +126,36 @@ def quencher_table(kQ_scale: float, rC: float):
 class Site:
     """One labelling site, ready to be evaluated at many parameter vectors."""
 
-    def __init__(self, pdb_path, resolution: float):
+    def __init__(self, pdb_path, resolution: float, site=None):
+        site = SITE if site is None else site
+        self.site = site
         self.atoms = load_atoms(pdb_path)
+        # `disc_step` is the grid resolution, and it is the *only* way in.
+        # `compute_av` overwrites `source_info["simulation_grid_resolution"]`
+        # from this argument (`fret/av.py:167`) rather than reading it, so
+        # passing the resolution in `source_info` is silently ignored -- which
+        # is how every run before 2026-08-18 was made at the 1.5 A default while
+        # reporting whatever `--resolution` said. Asserted below rather than
+        # trusted.
         self.av = IMP.bff.compute_av(
             np.zeros((1, 4)), np.zeros(3), 20.0, 0.5, (3.5, 3.5, 3.5),
+            disc_step=resolution,
             pdb_path=pdb_path,
             source_info={
-                "chain_identifier": SITE["chain"],
-                "residue_seq_number": SITE["residue"],
-                "atom_name": SITE["atom"],
+                "chain_identifier": site["chain"],
+                "residue_seq_number": site["residue"],
+                "atom_name": site["atom"],
                 "simulation_type": "AV1",
                 "linker_length": 20.0, "linker_width": 0.5, "radius1": 3.5,
-                "simulation_grid_resolution": resolution,
                 "allowed_sphere_radius": 2.1,
             },
         )
         self.density = np.ascontiguousarray(self.av.density, dtype=np.float64)
         self.dg = float(self.av.grid_step)
+        if abs(self.dg - float(resolution)) > 1e-9:
+            raise RuntimeError(
+                f"asked for a {resolution} A grid and got {self.dg} A -- the "
+                "resolution argument is not reaching the AV builder.")
         self.x0 = np.asarray(self.av.attachment_point, dtype=np.float64)
         self.bounds = (self.density > 0).astype(np.float64)
         self.xyz = np.ascontiguousarray(self.atoms["coord"], dtype=np.float64)

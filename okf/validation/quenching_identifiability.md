@@ -1,8 +1,16 @@
 # Is the quenching model identifiable from one decay? (PRD-110 stage 0)
 
-Recorded by `python benchmark/quenching_identifiability.py --resolution 2.5 --fit`.
+Recorded by `python benchmark/quenching_identifiability.py --fit`.
 T4 lysozyme 3GUN, chain A residue 132 CB, AV1 (20 Å / 0.5 Å / 3.5 Å), grid
-29³ at 2.5 Å, 2 180 accessible voxels. Field model, τ₀ = 4 ns, decay sampled at
+29³ at **1.5 Å**, 2 180 accessible voxels.
+
+> **Correction, 2026-08-18.** This page originally said 2.5 Å. It was 1.5 Å --
+> the builder's default. `compute_av` *writes* `simulation_grid_resolution` into
+> `source_info` from its `disc_step` argument (`fret/av.py:167`) rather than
+> reading it back, so the benchmark's `--resolution` flag was silently ignored
+> and every run used the default. The numbers below are unaffected and
+> reproduce exactly -- only the label was wrong. The flag now reaches
+> `disc_step` and the grid spacing is asserted against it, so this cannot recur. Field model, τ₀ = 4 ns, decay sampled at
 64 points over 25 ns, Poisson noise for a decay peaking at 10⁴ counts.
 
 **Answer: no.** Two of five directions carry essentially all the information.

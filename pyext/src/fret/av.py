@@ -233,6 +233,20 @@ def compute_av(
     """
     if pdb_path is None or source_info is None:
         raise ValueError("compute_av requires pdb_path and source_info")
+    # `source_info` is a position definition in the fps dialect, and every other
+    # AV parameter in it is honoured (`allowed_sphere_radius`, `strip_mask`,
+    # `contact_volume_*`). `simulation_grid_resolution` is the exception: it is
+    # *written* from `disc_step` below rather than read, so a caller who states
+    # it here and leaves `disc_step` at its default silently gets 1.5 A. That is
+    # the fps field a reader is most likely to trust, so disagreement is an
+    # error rather than a preference -- a resolution is the one AV parameter
+    # whose being wrong is invisible in the result.
+    declared = source_info.get("simulation_grid_resolution")
+    if declared is not None and abs(float(declared) - float(disc_step)) > 1e-9:
+        raise ValueError(
+            f"source_info declares simulation_grid_resolution={float(declared)} A "
+            f"but disc_step={float(disc_step)} A was passed. The AV is built at "
+            "disc_step; pass the resolution there, or drop it from source_info.")
     return _av_imp_bff(
         pdb_path,
         source_info,
