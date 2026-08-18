@@ -6,7 +6,7 @@ import os
 import tempfile
 
 from IMP.bff.cgdye.sampling.clustering import cluster_frames_leader, assign_frames_to_clusters
-from IMP.bff.cgdye.sampling.boltzmann import boltzmann_weights, rotamer_cluster_weights
+from IMP.bff.scoring.boltzmann import boltzmann_weights, rotamer_cluster_weights
 from IMP.bff.io.rotamer_cif import write_rotamer_library, read_rotamer_library
 
 
@@ -75,7 +75,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
 
     def test_bonded_pairs_are_excluded_from_the_linker_score(self):
         from IMP.bff.cgdye.topology.builder import parse_dye_mol2
-        from IMP.bff.cgdye.sampling.scoring import (
+        from IMP.bff.scoring.dye_lj import (
             DyeInternalEnergyEvaluator, compute_exclusions, dye_internal_system)
         from IMP.bff.tools.paths import get_structure_dir
         atoms, bonds = parse_dye_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")

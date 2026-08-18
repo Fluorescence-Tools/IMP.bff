@@ -8,11 +8,11 @@ Boltzmann / mean-field / kinetic weights, and the master-equation limits.
 import numpy as np
 import pytest
 
-from IMP.bff.representation.rotamer.scoring import kappa2_from_dipoles
+from IMP.bff.scoring.rotamer import kappa2_from_dipoles
 from IMP.bff.dye.spectra import forster_radius_from_spectra
-from IMP.bff.cgdye.sampling.boltzmann import boltzmann_weights
+from IMP.bff.scoring.boltzmann import boltzmann_weights
 from IMP.bff.cgdye.sampling.kinetic import rotamer_transition_matrix
-from IMP.bff.cgdye.sampling.mean_field import rotamer_mean_field_weights
+from IMP.bff.scoring.mean_field import rotamer_mean_field_weights
 from IMP.bff.cgdye.analysis.fret import (
     fret_efficiency_exact_kinetic_pair,
     fret_efficiency_regimes,

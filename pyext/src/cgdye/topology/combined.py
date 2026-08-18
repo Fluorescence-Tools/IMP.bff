@@ -4,7 +4,7 @@ import math
 import re
 
 from IMP.bff.io.template_cif import read_component_template_cif
-from IMP.bff.cgdye.sampling.scoring import build_lj_type_table
+from IMP.bff.scoring.dye_lj import build_lj_type_table
 from IMP.bff.cgdye.topology.builder import (
     _serial_to_site_atom_names,
     angle_value,

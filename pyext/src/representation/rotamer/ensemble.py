@@ -26,7 +26,7 @@ from IMP.bff.representation.states import States
 from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.representation.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.representation.rotamer.scoring import compute_rotamer_score
+from IMP.bff.scoring.rotamer import compute_rotamer_score
 
 #: fps.json ``simulation_type`` of a screened 1:1 rotamer library.
 SIMULATION_TYPE_R1 = "R1"

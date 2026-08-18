@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from IMP.bff.cgdye.topology.dye import lj_cross, lj_energy
+from IMP.bff.scoring.lennard_jones import lj_cross, lj_energy
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import numpy as np
-from IMP.bff.cgdye.sampling.scoring import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
+from IMP.bff.scoring.dye_lj import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
 
 def test_bounding_box_filter():
     bbf = BoundingBoxFilter(pad=3.5)

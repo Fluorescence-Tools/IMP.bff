@@ -4,7 +4,7 @@ Sterics: how hard two atoms push each other apart. Nothing here is about
 fluorescence, which is why it is a tool rather than a domain -- and why it sits
 here rather than inside either of the two things that need it. A rotamer's score
 against a protein is a clash energy
-(:mod:`IMP.bff.representation.rotamer.scoring`); so is an explicit dye's
+(:mod:`IMP.bff.scoring.rotamer`); so is an explicit dye's
 internal energy (:mod:`IMP.bff.cgdye.topology.dye`). Those are a core
 representation and a legacy package respectively, and the first must not depend
 on the second to compute a steric term.

@@ -1,10 +1,10 @@
 """Dye topology builder utilities.
 
-The Lennard-Jones table and kernel moved to :mod:`IMP.bff.tools.lennard_jones`
+The Lennard-Jones table and kernel moved to :mod:`IMP.bff.scoring.lennard_jones`
 in the 2026-08-18 cleanup and are re-exported here, so the "one LJ source"
 property this module established still holds: every scorer
 (``sampling.scoring``, ``sampling.mean_field``,
-``representation.rotamer.scoring``) reads the same table, and the two that used
+``scoring.rotamer``) reads the same table, and the two that used
 to sit side by side (``rmin_half``/``epsilon`` here, ``p_Rmin2``/``eps`` in the
 rotamer scorer) still cannot drift apart.
 
@@ -13,7 +13,7 @@ domain must not import a legacy package to compute a steric term.
 """
 
 # Sterics live in a tool, not here -- see above.
-from IMP.bff.tools.lennard_jones import (  # noqa: F401
+from IMP.bff.scoring.lennard_jones import (  # noqa: F401
     CHARMM36_LJ,
     lj_cross,
     lj_params,
@@ -205,18 +205,4 @@ def _angle_value(a, b, c):
     return math.acos(cos_theta)
 
 
-def torsion_cosine(torsion_type):
-    """The ``IMP.core.Cosine`` for a torsion type stored in the CHARMM convention.
-
-    cgdye's ``torsion_types`` (``k``, ``periodicity`` n, ``phase_rad`` δ) mean
-    the CHARMM/AMBER form ``V = k (1 + cos(n φ − δ))``: ``T_PI`` (n = 2,
-    δ = π) is minimal at the planar 0°/180°, ``T_LINK`` (n = 3, δ = 0) at
-    the staggered ±60°/180°. ``IMP.core.Cosine(k, n, δ')`` scores
-    ``k (1 − cos(n φ − δ'))`` — the *opposite* sign — so δ' = δ + π. Passing
-    δ straight through (as the code did) put every conjugated torsion's
-    minimum at 90° and every linker torsion's at the eclipsed 0°/±120°.
-    """
-    import IMP.core
-    return IMP.core.Cosine(float(torsion_type["k"]), int(torsion_type["periodicity"]),
-                           float(torsion_type["phase_rad"]) + math.pi)
 

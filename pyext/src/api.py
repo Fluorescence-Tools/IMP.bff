@@ -54,6 +54,11 @@ BY_DOMAIN = {
         "diffusion_stability_limit": "IMP.bff.dynamics.smoluchowski",
         "equilibrium_occupancy": "IMP.bff.dynamics.smoluchowski",
     },
+    # -- scoring -- is this configuration allowed, and how heavily weighted
+    "scoring": {
+        # IMP.bff.scoring.rotamer
+        "compute_rotamer_score": "IMP.bff.scoring.rotamer",
+    },
     # -- dye -- the species: spectra, photophysics parameters, topology, the library
     "dye": {
         # IMP.bff.dye.cif
@@ -223,8 +228,7 @@ BY_DOMAIN = {
         "apply_rotamer_coordinates": "IMP.bff.representation.rotamer.library",
         "load_rotamer_library_dcd": "IMP.bff.representation.rotamer.library",
         "sample_rotamer_index": "IMP.bff.representation.rotamer.library",
-        # IMP.bff.representation.rotamer.scoring
-        "compute_rotamer_score": "IMP.bff.representation.rotamer.scoring",
+        # IMP.bff.scoring.rotamer
         # IMP.bff.representation.distance
         "av_pair_statistics": "IMP.bff.representation.distance",
         "fret_pair_geometry": "IMP.bff.representation.distance",

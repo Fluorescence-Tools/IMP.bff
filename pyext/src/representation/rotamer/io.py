@@ -14,7 +14,7 @@ import numpy as np
 import RMF
 import json
 from IMP.bff.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.representation.rotamer.scoring import _selector_resnames
+from IMP.bff.scoring.rotamer import selector_resnames
 from IMP.bff.tools.paths import get_template_dir
 
 _LIBRARY_REGISTRY: dict[str, dict[str, Any]] | None = None
@@ -290,7 +290,7 @@ def _infer_rotamer_resnames(atom_names: list[str], metadata: dict[str, Any]) -> 
     list of str or None
         Residue names, or None when no inference is possible.
     """
-    selector_resnames = _selector_resnames_from_metadata(metadata)
+    selector_resnames = selector_resnames_from_metadata(metadata)
     if not selector_resnames:
         return None
     dye_resname = next(iter(selector_resnames))
@@ -302,7 +302,7 @@ def _infer_rotamer_resnames(atom_names: list[str], metadata: dict[str, Any]) -> 
     return [linker_resname if name in linker_atoms else dye_resname for name in atom_names]
 
 
-def _selector_resnames_from_metadata(metadata: dict[str, Any]) -> set[str]:
+def selector_resnames_from_metadata(metadata: dict[str, Any]) -> set[str]:
     """Return selector residue names from rotamer metadata.
 
     Parameters
@@ -317,7 +317,7 @@ def _selector_resnames_from_metadata(metadata: dict[str, Any]) -> set[str]:
     """
     resnames: set[str] = set()
     for key in ("mu", "r", "positive", "negative"):
-        resnames.update(_selector_resnames(metadata.get(key)))
+        resnames.update(selector_resnames(metadata.get(key)))
     return resnames
 
 

@@ -16,7 +16,7 @@ Algorithmic tricks ported from IMP RotamerCalculator.cpp:
 
 import numpy as np
 
-from IMP.bff.cgdye.topology.dye import CHARMM36_LJ, lj_cross, lj_energy
+from IMP.bff.scoring.lennard_jones import CHARMM36_LJ, lj_cross, lj_energy
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +83,10 @@ def dye_internal_system(atoms_dict, bonds):
     unphysical and biases torsion/angle sampling. Site ids are
     ``dye:<serial>:<atom_name>`` (unique; see below).
     """
+    # Deferred deliberately. An exclusion list is derived from connectivity, so
+    # scoring genuinely needs the molecular graph -- but importing `scoring`
+    # must not drag in the explicit-dye package, which is off the domain
+    # layout. Keeping the edge inside the function keeps load order clean.
     from IMP.bff.cgdye.topology.dye import build_angles, build_dihedrals, build_graph
 
     ordered = sorted(atoms_dict.values(), key=lambda x: x["serial"])

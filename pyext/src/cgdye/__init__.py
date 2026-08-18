@@ -30,7 +30,7 @@ was                                          is
 ``cgdye.labeling``                           ``IMP.bff.label.attachment`` / ``.backbone_frame``
 ``cgdye.io.{rotamer_cif,rotamer_rmf,dcd,nmr_cif}``  ``IMP.bff.io.*``
 ``cgdye.utils``                              ``IMP.bff.tools.paths``
-``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.tools.lennard_jones``
+``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.scoring.lennard_jones``
 ===========================================  =============================================
 
 A rotamer library is a **representation** — a list of states with weights, the

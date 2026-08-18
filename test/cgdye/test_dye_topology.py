@@ -22,7 +22,7 @@ from IMP.bff.cgdye.topology.dye import (
     lj_params,
 )
 from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.cgdye.sampling.scoring import (
+from IMP.bff.scoring.dye_lj import (
     build_lj_type_table,
     compute_exclusions,
     compute_lj_pair_sites,
@@ -311,7 +311,7 @@ class TestTorsionConvention:
         import IMP
         import IMP.algebra
         import IMP.core
-        from IMP.bff.cgdye.topology.dye import torsion_cosine
+        from IMP.bff.scoring.torsion import torsion_cosine
         m = IMP.Model()
         def P(x):
             p = IMP.Particle(m)

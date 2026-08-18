@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from IMP.bff.tools.lennard_jones import lj_energy, lj_parameter_arrays
+from IMP.bff.scoring.lennard_jones import lj_energy, lj_parameter_arrays
 from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles  # the canonical one
 
 _GAS_CONSTANT = 1.9858775e-3
@@ -83,7 +83,7 @@ def _selector_matches(selector: str, atom_name: str, resname: str | None = None)
     return selector_resname is None or (resname is not None and str(resname).upper() == selector_resname)
 
 
-def _selector_resnames(selector: str | list[str] | None) -> set[str]:
+def selector_resnames(selector: str | list[str] | None) -> set[str]:
     """Extract residue names from FRETpredict-style selectors.
 
     Parameters
@@ -135,8 +135,8 @@ def _selector_atom_names(selector: str | list[str] | None, atom_names: list[str]
         selectors = [selector]
     else:
         selectors = list(selector)
-    selector_resnames = _selector_resnames(selectors)
-    if selector_resnames and len(selector_resnames) > 1:
+    wanted_resnames = selector_resnames(selectors)
+    if wanted_resnames and len(wanted_resnames) > 1:
         return set()
     names: set[str] = set()
     if resnames is None:
@@ -270,9 +270,9 @@ def _rotamer_charge_mask(
     """
     positive = [] if positive is None else list(positive)
     negative = [] if negative is None else list(negative)
-    if len(_selector_resnames(positive)) > 1:
+    if len(selector_resnames(positive)) > 1:
         positive = []
-    if len(_selector_resnames(negative)) > 1:
+    if len(selector_resnames(negative)) > 1:
         negative = []
     _selector_atom_names(positive, atom_names=atom_names, resnames=resnames)
     _selector_atom_names(negative, atom_names=atom_names, resnames=resnames)

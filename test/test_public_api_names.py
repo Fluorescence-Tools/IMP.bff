@@ -137,10 +137,17 @@ def test_cgdye_is_off_the_public_surface():
     assert api.domain_of("read_rotamer_library_rmf") == "io"
 
 
-def test_nothing_in_the_package_imports_cgdye():
-    """It is a leaf. If a domain grows an edge into it, that is the signal that
-    something was filed in the wrong place -- as the LJ term and the rotamer
-    library both were."""
+def test_nothing_in_the_package_imports_cgdye_at_module_scope():
+    """No domain may *load* cgdye. If one grows a module-level edge into it,
+    that is the signal something was filed in the wrong place -- as the LJ term
+    and the rotamer library both were.
+
+    Module scope, not every import: ``scoring/dye_lj.py`` reaches into
+    ``cgdye.topology.dye`` from inside a function for the molecular graph, since
+    an exclusion list is derived from connectivity. That is a genuine
+    dependency of scoring on topology and it is deferred, so importing a domain
+    never pulls cgdye in. A module-level edge would.
+    """
     import ast
     from pathlib import Path
 
@@ -150,11 +157,31 @@ def test_nothing_in_the_package_imports_cgdye():
         if "cgdye" in path.parts:
             continue
         tree = ast.parse(path.read_text())
-        names = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
-        names |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        names = set()
+        for node in tree.body:                       # body, not walk
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names.add(node.module)
+            elif isinstance(node, ast.Import):
+                names |= {a.name for a in node.names}
         if any(n.startswith("IMP.bff.cgdye") for n in names):
             offenders.append(str(path.relative_to(src)))
     assert not offenders, offenders
+
+
+def test_importing_a_domain_does_not_load_cgdye():
+    """The property the test above is a proxy for, checked directly."""
+    code = (
+        "import sys\n"
+        "import IMP.bff.scoring, IMP.bff.representation, IMP.bff.label\n"
+        "import IMP.bff.observables, IMP.bff.io, IMP.bff.dynamics\n"
+        "loaded = [m for m in sys.modules if m.startswith('IMP.bff.cgdye')]\n"
+        "assert not loaded, loaded\n"
+        "print('ok')\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                            text=True, timeout=300)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "ok" in result.stdout
 
 
 if __name__ == "__main__":

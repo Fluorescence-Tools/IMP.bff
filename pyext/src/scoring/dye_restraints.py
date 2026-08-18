@@ -4,8 +4,8 @@ import IMP
 import IMP.container
 import IMP.core
 
-from IMP.bff.cgdye.sampling.scoring import compute_exclusions, compute_lj_pair_sites
-from IMP.bff.cgdye.topology.dye import torsion_cosine
+from IMP.bff.scoring.dye_lj import compute_exclusions, compute_lj_pair_sites
+from IMP.bff.scoring.torsion import torsion_cosine
 
 
 def build_dye_restraints(model, system, site_particles):

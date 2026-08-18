@@ -54,18 +54,25 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] diffusion_coefficient \f$D\f$, A^2/ns
     \param[in] seed reproducible when non-negative; drawn from the system
                otherwise
-    \param[out] accepted per step: 1 if the step was taken, 0 if rejected
     \param[out] counts two entries, accepted and rejected
-    \return the trajectory, three coordinates per step, in Angstrom **relative
-            to the grid anchor** -- add the attachment point for the structure's
-            frame. Empty if no accessible starting voxel was found.
+    \return **four** values per step: x, y, z in Angstrom **relative to the grid
+            anchor** (add the attachment point for the structure's frame), then
+            1.0 if the step was taken and 0.0 if it was rejected. Empty if no
+            accessible starting voxel was found.
+
+    The accept flag rides in the returned array rather than in an out-parameter
+    on purpose. SWIG turns a returned `std::vector` into a Python tuple, which
+    numpy converts at C speed, but leaves an out-parameter as a wrapper object
+    that numpy walks one `__getitem__` at a time -- about 480 ns per element.
+    On a 500 000-step walk that out-parameter cost **170 ms against 55 ms for
+    the entire simulation**: three quarters of the wall clock spent handing back
+    a bit per step.
 */
 IMPBFFEXPORT std::vector<double> brownian_walk_in_volume(
         const std::vector<int>& occupancy,
         const std::vector<double>& mobility,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient, int seed,
-        std::vector<int>& accepted,
         std::vector<int>& counts);
 
 IMPBFF_END_NAMESPACE

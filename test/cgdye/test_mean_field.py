@@ -1,5 +1,5 @@
 import numpy as np
-from IMP.bff.cgdye.sampling.mean_field import rotamer_mean_field_weights, rotamer_mean_field_weights_multi_dye
+from IMP.bff.scoring.mean_field import rotamer_mean_field_weights, rotamer_mean_field_weights_multi_dye
 
 def test_mean_field_weights_single():
     n_clusters = 5
