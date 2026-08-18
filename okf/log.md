@@ -1,5 +1,36 @@
 # Update Log
 
+## 2026-08-18 (solver stability; the rate term)
+
+* **The explicit-step criterion ignored the rate term, which dominates it**
+  (`okf/validation/quenching_solver_stability.md`). The update coefficient is
+  `1 − 6D dt/dg² − k dt`; `diffusion_stability_limit` validated only the
+  diffusion half. At T4L site 19, 2.5 Å, with a 25 Å²/ns ceiling on `D` setting
+  the step: diffusion 0.16, **quenching 2.01**, sum 2.17 — past *divergence* —
+  and the decay reached **7 × 10³⁶** while the solver called the step safe.
+* **The divergence need not look like one.** Site 124 at a sum of 2.10 returned a
+  smooth, finite, monotone, plausible decay that was **2.6 % wrong** at 25 ns.
+  That is why it is pinned by a test rather than left to inspection.
+* **Two thresholds, and they differ by two**: the coefficient goes negative at a
+  sum of 1 and the scheme diverges at 2. `diffusion_stability_limit(d_max, dg,
+  k_max)` returns the positivity bound, the stricter one, because a negative
+  probability density is not an acceptable answer either.
+* **The rate is now integrated exactly** — `exp(-k dt)` as a factor rather than
+  `1 - k dt` subtracted — so it contributes no stability constraint at all and a
+  strongly quenched site costs the same as a weak one. Pinned: a uniform rate
+  reproduces `exp(-k t)` to 1e-10 whatever the step.
+* **A published claim retracted.** On finding this I said PRD-111 stages 0–1 were
+  contaminated. Wrong twice: I read the positivity bound as the divergence bound,
+  and I computed the thresholds with the *new harness's* step, 1.6× larger than
+  the one those stages used. They ran at sums of 0.92–0.98, and re-measuring
+  reproduces them to ~1 % (eigenvalues 8.223e5/2.992e4/736/129/2.67 against
+  8.209e5/2.994e4/735/128/2.66). **The divergence belongs to the new harness**:
+  tightening the `D` ceiling to save compute raised the step and pushed the
+  contact sites past 2.
+* **A real hazard removed**: at 2.0 Å the fits could search `kQ_scale` to 10,
+  where the sum reaches 8.6 and the old scheme would have diverged. They
+  converged near 1.0 and never went there, but nothing was stopping them.
+
 ## 2026-08-18 (the flux form, and the estimator)
 
 * **The flux discretisation was wrong, and it changes every earlier quenching
