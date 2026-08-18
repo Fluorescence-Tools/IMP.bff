@@ -127,7 +127,8 @@ class Site:
     """One labelling site, ready to be evaluated at many parameter vectors."""
 
     def __init__(self, pdb_path, resolution: float, site=None,
-                 linker_length: float = 20.0):
+                 linker_length: float = 20.0,
+                 flux_form: str = "smoluchowski"):
         site = SITE if site is None else site
         self.site = site
         self.atoms = load_atoms(pdb_path)
@@ -170,6 +171,7 @@ class Site:
             self._pad()
 
         self.linker_length = float(linker_length)
+        self.flux_form = flux_form
         self.time = np.linspace(0.0, T_MAX, N_TIME)
         self.n_evaluations = 0
 
@@ -219,11 +221,11 @@ class Site:
         # magnitude and the iteration was still drifting after 40 000 steps, so
         # every gradient measured through it was a gradient of an unconverged
         # field.
-        equilibrium = equilibrium_occupancy(d_map, self.bounds)
+        equilibrium = equilibrium_occupancy(d_map, self.bounds, self.flux_form)
 
         solver = GridDiffusionSolver(
             d_map, self.bounds, equilibrium, rate,
-            t_step=self.t_step, dg=self.dg)
+            t_step=self.t_step, dg=self.dg, flux_form=self.flux_form)
         result = solver.run(max(1, int(T_MAX / self.t_step)), n_out=64)
 
         curve = np.interp(self.time, result.time, result.fluorescence)

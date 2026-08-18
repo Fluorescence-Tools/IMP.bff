@@ -324,6 +324,10 @@ def main() -> int:
                         help="linker length the synthetic data is generated at; "
                              "the fit always uses 20 A, so a different value "
                              "here is a deliberate geometry error.")
+    parser.add_argument("--flux-form", default="smoluchowski",
+                        choices=("smoluchowski", "ito"),
+                        help="how the flux is discretised, which decides where "
+                             "the dye sits at equilibrium (default smoluchowski).")
     parser.add_argument("--out", type=Path, default=None,
                         help="write the numbers as JSON.")
     args = parser.parse_args()
@@ -332,6 +336,7 @@ def main() -> int:
     names = [p[0] for p in PARAMETERS]
     theta0 = np.array([p[1] for p in PARAMETERS], dtype=np.float64)
 
+    print(f"flux form: {args.flux_form}")
     print(f"structure {STRUCTURE}, resolution {args.resolution} A, "
           f"{len(SITES)} sites, theta = "
           + ", ".join(f"{n}={v:g}" for n, v in zip(names, theta0)), flush=True)
@@ -343,7 +348,8 @@ def main() -> int:
         tag = f"{site['chain']}{site['residue']}.{site['atom']}"
         print(f"\n== {tag}  ({site['note']})", flush=True)
         t0 = time.perf_counter()
-        site_obj = Site(pdb_path, args.resolution, site=site)
+        site_obj = Site(pdb_path, args.resolution, site=site,
+                        flux_form=args.flux_form)
         geom = geometry(site_obj, quencher_positions(site_obj.atoms))
         print(f"  grid {site_obj.bounds.shape}, {geom['accessible_voxels']} voxels; "
               f"nearest quencher {geom['min_dye_quencher_distance']:.1f} A from the "
@@ -421,6 +427,7 @@ def main() -> int:
 
     payload = {
         "structure": STRUCTURE, "resolution": args.resolution,
+        "flux_form": args.flux_form,
         "parameters": names, "theta0": theta0.tolist(),
         "sites": records,
         "joint_eigenvalues": _v.tolist(),

@@ -60,6 +60,7 @@ class DynamicAccessibleVolume:
         free_diffusion: float = 8.0,
         contact_distance: float = 6.5,
         slow_factor: float = 0.985,
+        flux_form: str = "smoluchowski",
     ):
         self.av = av
         self.atoms = atoms
@@ -68,6 +69,12 @@ class DynamicAccessibleVolume:
         self.free_diffusion = float(free_diffusion)
         self.contact_distance = float(contact_distance)
         self.slow_factor = float(slow_factor)
+        if flux_form not in ("smoluchowski", "ito"):
+            raise ValueError(
+                f"flux_form must be 'smoluchowski' or 'ito', not {flux_form!r}")
+        #: Where the dye sits at equilibrium. See
+        #: :func:`IMP.bff.quenching.solver.equilibrium_occupancy`.
+        self.flux_form = flux_form
 
         self._diffusion_map: Optional[np.ndarray] = None
         self._quenching_rate_map: Optional[np.ndarray] = None
@@ -194,15 +201,21 @@ class DynamicAccessibleVolume:
             # Half the explicit limit: stable with room for the map to change.
             t_step = 0.5 * diffusion_stability_limit(float(d_map.max()), self.dg)
         return GridDiffusionSolver(
-            d_map, self.bounds, density, rate_map, t_step=t_step, dg=self.dg
+            d_map, self.bounds, density, rate_map, t_step=t_step, dg=self.dg,
+            flux_form=self.flux_form,
         )
 
     @property
     def occupancy(self) -> np.ndarray:
         """The equilibrium distribution of the dye, normalised.
 
-        Not the AV density: that weights every accessible voxel equally, and a
-        dye that moves slowly near the surface spends more time there.
+        Under the default ``flux_form="smoluchowski"`` this **is** the AV
+        density, uniform over the accessible voxels, and does not depend on the
+        mobility -- equilibrium is thermodynamics, mobility is kinetics, and a
+        dye slowed by friction with no attraction is still found everywhere it
+        can reach. Under ``"ito"`` it is ``p ∝ 1/D``: see
+        :func:`IMP.bff.quenching.solver.equilibrium_occupancy` for why that is
+        the inherited behaviour rather than the physics.
         """
         if self._occupancy is None:
             self.update_occupancy()
@@ -211,18 +224,20 @@ class DynamicAccessibleVolume:
     def update_occupancy(self, t_step: Optional[float] = None, **kwargs) -> np.ndarray:
         """The equilibrium occupancy, in closed form.
 
-        ``p ∝ 1/D`` — see :func:`IMP.bff.quenching.solver.equilibrium_occupancy`.
-        Propagating to it instead is possible but slow and, on a real site where
-        the compounding slow factor makes ``D`` span orders of magnitude, may not
-        converge at all: on T4L site 132 it was still drifting after 40 000
-        iterations. Pass ``iterate=True`` to do it the long way anyway.
+        Uniform on the accessible domain under the default flux form,
+        ``p ∝ 1/D`` under ``"ito"`` — see
+        :func:`IMP.bff.quenching.solver.equilibrium_occupancy`. Propagating to it
+        instead is possible but slow and, in the ``"ito"`` form on a real site
+        where the compounding slow factor makes ``D`` span orders of magnitude,
+        may not converge at all: on T4L site 132 it was still drifting after
+        40 000 iterations. Pass ``iterate=True`` to do it the long way anyway.
         """
         if kwargs.pop("iterate", False):
             self._occupancy = self._solver(
                 self.bounds, None, t_step).equilibrium(**kwargs)
         else:
             self._occupancy = equilibrium_occupancy(
-                self.diffusion_map, self.bounds)
+                self.diffusion_map, self.bounds, self.flux_form)
         return self._occupancy
 
     def donor_decay(

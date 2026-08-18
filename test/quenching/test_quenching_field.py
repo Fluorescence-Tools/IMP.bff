@@ -307,15 +307,22 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
         self.assertAlmostEqual(float(equilibrium.sum()), 1.0, places=9)
         self.assertLess(float(interior.std() / interior.mean()), 0.05)
 
-    def test_equilibrium_favours_the_slow_region(self):
-        """The point of the field formulation: occupancy is not the AV density."""
+    def test_ito_equilibrium_favours_the_slow_region(self):
+        """The inherited behaviour, kept as the ``"ito"`` branch and pinned there.
+
+        This asserted the *default* until 2026-08-18, when Smoluchowski became
+        the default: a mobility field must not decide where the dye sits (see
+        :class:`FluxFormTests`). Occupancy differing from the AV density is a
+        real effect, but it needs an attractive potential to produce it, not
+        friction.
+        """
         d_map = np.full((self.ng,) * 3, self.D)
         half = self.ng // 2
         d_map[:half] = self.D / 20.0
         solver = GridDiffusionSolver(
             d_map, self.bounds, self.bounds.copy(),
             t_step=0.5 * diffusion_stability_limit(float(d_map.max()), self.dg),
-            dg=self.dg,
+            dg=self.dg, flux_form="ito",
         )
         equilibrium = solver.equilibrium(n_steps=20000, tolerance=1e-12)
         slow = float(equilibrium[:half][self.bounds[:half] > 0].mean())
@@ -347,7 +354,8 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         self.assertTrue(np.all(occupancy[self.bounds == 0] == 0.0))
 
     def test_d_times_p_is_constant(self):
-        occupancy = equilibrium_occupancy(self.d_map, self.bounds)
+        """The defining property of the ``"ito"`` branch, and only of it."""
+        occupancy = equilibrium_occupancy(self.d_map, self.bounds, "ito")
         inside = self.bounds > 0
         product = self.d_map[inside] * occupancy[inside]
         self.assertLess(float(product.std() / product.mean()), 1e-12)
@@ -357,10 +365,10 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         solver = GridDiffusionSolver(
             self.d_map, self.bounds, self.bounds.copy(),
             t_step=0.5 * diffusion_stability_limit(self.d_map.max(), self.dg),
-            dg=self.dg,
+            dg=self.dg, flux_form="ito",
         )
         iterated = solver.equilibrium(n_steps=200000, tolerance=1e-14, n_check=1000)
-        closed = equilibrium_occupancy(self.d_map, self.bounds)
+        closed = equilibrium_occupancy(self.d_map, self.bounds, "ito")
         inside = self.bounds > 0
         deviation = np.max(np.abs(iterated[inside] - closed[inside]) / closed[inside])
         self.assertLess(float(deviation), 1e-10)
@@ -371,12 +379,15 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         inside = occupancy[self.bounds > 0]
         self.assertLess(float(inside.std() / inside.mean()), 1e-12)
 
-    def test_slower_regions_hold_more_of_the_dye(self):
-        """The whole point: occupancy is not the accessible volume."""
+    def test_slower_regions_hold_more_of_the_dye_under_ito(self):
+        """Under ``"ito"`` only. Under the default this ratio is exactly 1."""
         d_map = np.where(self.bounds > 0, 4.0, 0.0)
         half = self.ng // 2
         d_map[:half] = np.where(self.bounds[:half] > 0, 0.25, 0.0)
-        occupancy = equilibrium_occupancy(d_map, self.bounds)
+        uniform = equilibrium_occupancy(d_map, self.bounds)
+        self.assertAlmostEqual(
+            float(uniform[self.bounds > 0].std()), 0.0, delta=1e-18)
+        occupancy = equilibrium_occupancy(d_map, self.bounds, "ito")
         slow = occupancy[:half][self.bounds[:half] > 0].mean()
         fast = occupancy[half:][self.bounds[half:] > 0].mean()
         self.assertAlmostEqual(float(slow / fast), 16.0, delta=1e-9)
@@ -435,6 +446,107 @@ class PortedDefectTests(IMP.test.TestCase):
         shell = result.density.copy()
         shell[1:-1, 1:-1, 1:-1] = 0.0
         self.assertEqual(float(shell.sum()), 0.0)
+
+
+class FluxFormTests(IMP.test.TestCase):
+    """Where the dye sits at equilibrium, and why it must not depend on ``D``.
+
+    The inherited ChiSurf kernel discretises the flux as ``d[i]p[i] - d[j]p[j]``,
+    i.e. ``∂p/∂t = ∇²(Dp)``, whose stationary state is ``p ∝ 1/D``: the dye
+    accumulates wherever it moves slowly. That makes a *friction* field act as an
+    *attractive potential*, which is not a convention -- it is wrong.
+    Equilibrium is thermodynamics and mobility is kinetics; a dye slowed near the
+    surface with no attraction is still found uniformly across its accessible
+    volume, it merely takes longer to get around.
+
+    The field's own canonical treatment agrees: the **Haas-Steinberg** equation
+    for diffusion-modulated FRET is written as
+    ``D d/dr [ p(r) d/dr ( N/p(r) ) ]`` precisely so its stationary state is the
+    *given* ``p(r)`` for any ``D``, with ``p(r)`` coming from chain statistics
+    and ``D`` a separate kinetic parameter fitted against it.
+
+    ``flux_form="smoluchowski"`` is therefore the default; ``"ito"`` is kept so
+    the inherited behaviour can be reproduced and compared.
+    """
+
+    def slab(self, ng=21, fast=8.0, slow=0.5):
+        """A domain with a strong mobility contrast down one side."""
+        bounds = open_box(ng)
+        d_map = np.full((ng,) * 3, fast)
+        d_map[:, :, 1:6] = slow
+        return bounds, d_map, fast / slow
+
+    def test_smoluchowski_equilibrium_is_uniform_whatever_the_mobility(self):
+        bounds, d_map, _ = self.slab()
+        occupancy = equilibrium_occupancy(d_map, bounds, "smoluchowski")
+        inside = occupancy[bounds > 0]
+        self.assertAlmostEqual(float(inside.max() / inside.min()), 1.0, delta=1e-12)
+        self.assertAlmostEqual(float(occupancy.sum()), 1.0, delta=1e-12)
+        self.assertEqual(float(occupancy[bounds == 0].sum()), 0.0)
+
+    def test_ito_equilibrium_is_one_over_D(self):
+        bounds, d_map, contrast = self.slab()
+        occupancy = equilibrium_occupancy(d_map, bounds, "ito")
+        inside = occupancy[bounds > 0]
+        self.assertAlmostEqual(float(inside.max() / inside.min()), contrast, delta=1e-9)
+
+    def test_the_two_forms_agree_when_the_mobility_is_uniform(self):
+        ng = 15
+        bounds = open_box(ng)
+        d_map = np.full((ng,) * 3, 4.0)
+        a = equilibrium_occupancy(d_map, bounds, "smoluchowski")
+        b = equilibrium_occupancy(d_map, bounds, "ito")
+        self.assertLess(float(np.abs(a - b).max()), 1e-15)
+
+    def test_the_iterated_solver_reproduces_each_closed_form(self):
+        """The closed forms are checked against the kernel, not asserted."""
+        for form, tolerance in (("smoluchowski", 1e-12), ("ito", 1e-9)):
+            bounds, d_map, _ = self.slab()
+            start = bounds / bounds.sum()
+            solver = GridDiffusionSolver(
+                d_map, bounds, start, dg=1.0, flux_form=form,
+                t_step=0.5 * diffusion_stability_limit(float(d_map.max()), 1.0),
+            )
+            iterated = solver.equilibrium(n_steps=60000, tolerance=1e-13)
+            closed = equilibrium_occupancy(d_map, bounds, form)
+            inside = bounds > 0
+            deviation = float(
+                np.abs(iterated[inside] - closed[inside]).max() / closed[inside].max())
+            self.assertLess(deviation, tolerance, f"{form}: {deviation:.3g}")
+
+    def test_smoluchowski_conserves_mass_without_decay(self):
+        ng = 21
+        bounds, d_map, _ = self.slab(ng)
+        solver = GridDiffusionSolver(
+            d_map, bounds, point_source(ng), dg=1.0, flux_form="smoluchowski",
+            t_step=0.5 * diffusion_stability_limit(float(d_map.max()), 1.0),
+        )
+        result = solver.run(400, n_out=40)
+        self.assertAlmostEqual(float(result.density.sum()), 1.0, delta=1e-10)
+
+    def test_smoluchowski_free_diffusion_still_spreads_as_two_D_t(self):
+        """A uniform mobility must give textbook diffusion under either form."""
+        ng = 61
+        d, dg = 1.0, 1.0
+        t_step = 0.5 * diffusion_stability_limit(d, dg)
+        n_steps = 600
+        solver = GridDiffusionSolver(
+            np.full((ng,) * 3, d), open_box(ng), point_source(ng),
+            t_step=t_step, dg=dg, flux_form="smoluchowski",
+        )
+        density = solver.run(n_steps, n_out=n_steps).density
+        axis = (np.arange(ng) - (ng - 1) // 2) * dg
+        profile = density.sum(axis=(1, 2))
+        variance = float((profile * axis ** 2).sum() / profile.sum())
+        self.assertAlmostEqual(variance / (2.0 * d * n_steps * t_step), 1.0, delta=0.02)
+
+    def test_an_unknown_flux_form_raises(self):
+        bounds, d_map, _ = self.slab()
+        self.assertRaises(
+            ValueError, equilibrium_occupancy, d_map, bounds, "stratonovich")
+        self.assertRaises(
+            ValueError, GridDiffusionSolver, d_map, bounds, bounds,
+            None, 1e-3, 1.0, True, "stratonovich")
 
 
 if __name__ == "__main__":

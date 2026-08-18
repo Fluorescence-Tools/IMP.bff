@@ -60,44 +60,126 @@ def diffusion_stability_limit(d_max: float, dg: float) -> float:
     return float(dg) ** 2 / (6.0 * d_max)
 
 
-def equilibrium_occupancy(diffusion_map, bounds) -> np.ndarray:
-    """The stationary occupancy of the volume, in closed form: ``p ∝ 1/D``.
+def equilibrium_occupancy(
+    diffusion_map, bounds, flux_form: str = "smoluchowski"
+) -> np.ndarray:
+    """The stationary occupancy of the volume, in closed form.
 
-    The kernel below propagates the flux as ``d[i]*p[i] - d[j]*p[j]``, which
+    Which closed form depends on how the flux is discretised, and the two
+    disagree completely:
+
+    ``"smoluchowski"`` (default, and the physics)
+        ``p_eq ∝ 1`` on the accessible domain -- **independent of D**.
+    ``"ito"`` (the inherited ChiSurf behaviour)
+        ``p_eq ∝ 1/D``, so the dye piles up wherever it moves slowly.
+
+    **The default is Smoluchowski because equilibrium is thermodynamics and
+    mobility is kinetics.** A dye slowed by friction near the protein surface,
+    with no attractive interaction, must still be found uniformly across its
+    accessible volume at equilibrium -- it merely takes longer to get around.
+    Letting a friction field set the distribution asserts a potential that was
+    never specified.
+
+    This is also the form the field's own canonical treatment uses: the
+    **Haas-Steinberg** equation for diffusion-modulated FRET,
+
+        ∂N(r,t)/∂t = -[1/tau_D + k_T(r)] N + D d/dr [ p(r) d/dr ( N / p(r) ) ]
+
+    is written with exactly this structure so that its stationary state is the
+    *given* distance distribution ``p(r)`` for any ``D``. ``p(r)`` comes from the
+    chain statistics -- here, from the accessible volume -- and ``D`` is a
+    separate kinetic parameter fitted against it. QuEst's notebook
+    ``04_diffusion_modulated_fret.ipynb`` integrates that equation, but with a
+    constant ``D`` and a uniform ``p(r)``, where both discretisations coincide
+    and neither is tested.
+
+    A genuinely *sticky* dye -- one with an attractive interaction, not merely a
+    slower one -- is represented by a non-uniform ``p_eq``, which is a separate
+    physical input this signature is shaped to accept later. It is not the same
+    thing as a mobility field, and conflating them is what the inherited
+    ``"ito"`` behaviour did.
+
+    The ``"ito"`` branch below documents what it is:
+
+    :func:`_step` propagates the flux as ``d[i]*p[i] - d[j]*p[j]``, which
     discretises
 
         ∂p/∂t = ∇²(D p)                    (the Itô / divergence form)
 
-    **not** ``∇·(D ∇p)``. The two differ exactly when ``D`` varies in space, and
-    the difference is the whole point here: the stationary state of ``∇·(D∇p)``
-    with no flux is *uniform*, while the stationary state of ``∇²(Dp)`` is
-    ``D p = const``, i.e.
+    **not** ``∇·(D ∇p)``. The stationary state of ``∇²(Dp)`` is ``D p = const``,
+    i.e. ``p_eq ∝ 1/D`` -- so the dye accumulates where it moves slowly. It is
+    not a small effect: on T4L site 132 the ratio of peak to mean occupancy is
+    ~75. Verified against the iterative solver to a maximum relative deviation
+    of **1.1e-13** (``test_quenching_field.py``).
 
-        p_eq(r) ∝ 1 / D(r)     on the accessible domain, 0 outside.
-
-    So a dye accumulates where it moves slowly, which is the modelling claim the
-    mobility field exists to make. That is a **convention, not a derivation** --
-    Itô against Stratonovich against the isothermal convention is a real choice
-    for diffusion in a mobility gradient, and this one is inherited from
-    ChiSurf. It is not a small effect: on T4L site 132 the ratio of peak to mean
-    occupancy is ~75.
-
-    Verified against the iterative solver to a maximum relative deviation of
-    **1.1e-13** (``test_quenching_field.py``). Use this rather than
-    :meth:`GridDiffusionSolver.equilibrium`, which spends tens of thousands of
-    iterations converging to it -- and on a real site, with ``D`` varying by
-    orders of magnitude through the compounding slow factor, may not converge in
-    any reasonable number at all.
+    Either way, use this rather than :meth:`GridDiffusionSolver.equilibrium`,
+    which spends tens of thousands of iterations converging to it -- and in the
+    ``"ito"`` form on a real site, with ``D`` varying by orders of magnitude
+    through the compounding slow factor, may not converge in any reasonable
+    number at all.
     """
     diffusion_map = np.ascontiguousarray(diffusion_map, dtype=np.float64)
     mask = np.asarray(bounds) > 0
     occupancy = np.zeros_like(diffusion_map)
-    usable = mask & (diffusion_map > 0.0)
+    if flux_form == "smoluchowski":
+        usable = mask
+    elif flux_form == "ito":
+        usable = mask & (diffusion_map > 0.0)
+    else:
+        raise ValueError(
+            f"flux_form must be 'smoluchowski' or 'ito', not {flux_form!r}")
     if not usable.any():
         return occupancy
-    occupancy[usable] = 1.0 / diffusion_map[usable]
+    if flux_form == "smoluchowski":
+        occupancy[usable] = 1.0
+    else:
+        occupancy[usable] = 1.0 / diffusion_map[usable]
     total = occupancy.sum()
     return occupancy / total if total else occupancy
+
+
+@njit(cache=True, parallel=True)
+def _step_smoluchowski(nxt, cur, d, k, bounds):
+    """One explicit Euler step of the **Smoluchowski** form.
+
+    The flux between two voxels is ``D_ij (p_i - p_j)`` with ``D_ij`` the
+    interface mobility (arithmetic mean), rather than ``D_i p_i - D_j p_j``.
+    The difference is the whole physics: this flux vanishes when ``p`` is
+    uniform *whatever* ``D`` does in space, so a spatially varying mobility
+    changes how fast the dye redistributes and **not where it ends up**. See
+    :func:`equilibrium_occupancy` for why that is the right requirement.
+    """
+    ng = cur.shape[0]
+    for ix in prange(ng):
+        if ix == 0 or ix == ng - 1:
+            for iy in range(ng):
+                for iz in range(ng):
+                    nxt[ix, iy, iz] = 0.0
+            continue
+        for iy in range(ng):
+            nxt[ix, iy, 0] = 0.0
+            nxt[ix, iy, ng - 1] = 0.0
+        for iz in range(ng):
+            nxt[ix, 0, iz] = 0.0
+            nxt[ix, ng - 1, iz] = 0.0
+    for ix in prange(1, ng - 1):
+        for iy in range(1, ng - 1):
+            for iz in range(1, ng - 1):
+                if bounds[ix, iy, iz] == 0:
+                    nxt[ix, iy, iz] = 0.0
+                    continue
+                p0 = cur[ix, iy, iz]
+                d0 = d[ix, iy, iz]
+                flux = (
+                    0.5 * (d0 + d[ix - 1, iy, iz]) * (p0 - cur[ix - 1, iy, iz]) * bounds[ix - 1, iy, iz]
+                    + 0.5 * (d0 + d[ix + 1, iy, iz]) * (p0 - cur[ix + 1, iy, iz]) * bounds[ix + 1, iy, iz]
+                    + 0.5 * (d0 + d[ix, iy - 1, iz]) * (p0 - cur[ix, iy - 1, iz]) * bounds[ix, iy - 1, iz]
+                    + 0.5 * (d0 + d[ix, iy + 1, iz]) * (p0 - cur[ix, iy + 1, iz]) * bounds[ix, iy + 1, iz]
+                    + 0.5 * (d0 + d[ix, iy, iz - 1]) * (p0 - cur[ix, iy, iz - 1]) * bounds[ix, iy, iz - 1]
+                    + 0.5 * (d0 + d[ix, iy, iz + 1]) * (p0 - cur[ix, iy, iz + 1]) * bounds[ix, iy, iz + 1]
+                )
+                nxt[ix, iy, iz] = p0 - flux - k[ix, iy, iz] * p0
+    return nxt
 
 
 @njit(cache=True, parallel=True)
@@ -171,6 +253,7 @@ class GridDiffusionSolver:
         t_step: float = 1.0,
         dg: float = 1.0,
         check_stability: bool = True,
+        flux_form: str = "smoluchowski",
     ):
         self.diffusion_map = np.ascontiguousarray(diffusion_map, dtype=np.float64)
         self.bounds = np.ascontiguousarray(
@@ -184,6 +267,16 @@ class GridDiffusionSolver:
         self.n_iterations = 0
         self.check_stability = bool(check_stability)
         self.t_step = float(t_step)
+        if flux_form not in ("smoluchowski", "ito"):
+            raise ValueError(
+                f"flux_form must be 'smoluchowski' or 'ito', not {flux_form!r}")
+        #: How the flux between voxels is discretised, which decides where the
+        #: dye sits at equilibrium. ``"smoluchowski"`` keeps the equilibrium
+        #: independent of ``D`` (the Haas-Steinberg structure); ``"ito"`` is the
+        #: inherited ChiSurf behaviour, whose equilibrium is ``p ∝ 1/D``. They
+        #: coincide when ``D`` is uniform.
+        self.flux_form = flux_form
+        self._kernel = _step if flux_form == "ito" else _step_smoluchowski
 
     def _validate(self):
         # The stencil cannot reach the outer shell, so a domain touching it
@@ -238,7 +331,7 @@ class GridDiffusionSolver:
             if step % n_out == 0 and i_out < n_reports:
                 fluorescence[i_out] = cur.sum()
                 i_out += 1
-            nxt = _step(nxt, cur, d, k, self.bounds)
+            nxt = self._kernel(nxt, cur, d, k, self.bounds)
             # Swap **every** step. ChiSurf swapped only on odd steps
             # (`if time_i % 2 > 0`) while always computing `n <- f(p)`, so every
             # even step recomputed the previous one from a stale buffer and half
@@ -282,7 +375,7 @@ class GridDiffusionSolver:
 
         previous = cur.copy()
         for step in range(int(n_steps)):
-            nxt = _step(nxt, cur, d, zero_rate, self.bounds)
+            nxt = self._kernel(nxt, cur, d, zero_rate, self.bounds)
             cur, nxt = nxt, cur
             self.n_iterations += 1
             if (step + 1) % int(n_check) == 0:
