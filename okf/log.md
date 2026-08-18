@@ -1,5 +1,48 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 1: `dye/` — the species)
+
+* **A dye had two unrelated descriptions.** The *spectral* one in
+  `fret/forster.py` (names, extinction coefficients, quantum yields, curves from
+  the bundled tables); the *molecular* one in `cgdye/io/template_cif.py` (atoms,
+  transition-dipole atoms, formal charges). Nothing connected them, so "what is
+  AlexaFluor 488" had two answers. `IMP.bff.dye.Dye` is now the one answer, and
+  it is deliberately **model-independent**: `linker_length` and
+  `allowed_sphere_radius` are AV *representation* parameters, and a rotamer
+  library has neither.
+* **R0 is derived, not supplied.** `forster_radius(donor, acceptor, kappa2, n)`
+  takes two `Dye`s and the medium. The old route hard-coded the refractive index
+  as the literal `1.4**4` inside the calculation, so nothing could ask what R0
+  would be in a different solvent — it is now a parameter (AlexaFluor488/594:
+  5.6878 nm at n = 1.4, **5.8856 nm at n = 1.33**). The name-based
+  `forster_radius_from_spectra` is kept for the rotamer code and agrees exactly.
+* **Names aligned to flrCIF**, checked against `python-ihm`'s FLR model rather
+  than guessed. `Dye.name` → `_flr_probe_list.chromophore_name`,
+  `chromophore_center_atom` → `_flr_probe_descriptor.chromophore_center_atom`,
+  `lifetime` → `_flr_reference_measurement_lifetime.lifetime`, plus
+  `reactive_probe_name`/`probe_origin`/`probe_link_type`. flrCIF's word for a dye
+  is **probe** (the reagent) and for the fluorescent moiety **chromophore**.
+  Recorded as `FLRCIF_ITEMS`, same convention as `fret/fps_schema.py`.
+* **flrCIF has no item for quantum yield, extinction coefficient or a spectrum.**
+  The nearest, `_flr_fret_calibration_parameters.phi_acceptor`, is an analysis
+  calibration value, not a species property. Those three are bff-native and
+  marked `None` deliberately rather than by omission.
+* **`_flr_reference_measurement_lifetime` is `(species_fraction, lifetime,
+  species_name)`** — the lifetime-spectrum output contract for stage 6 already
+  exists in the dictionary, named. Worth adopting verbatim there.
+* **Two defects found and fixed on the way.** `api.py` had five names appearing
+  twice; one (`read_component_template_cif`) was a genuine duplicate, and the
+  other four were **not duplicates at all** — they live in a second dict, the
+  rename map from export name to the module's real attribute. A regex dedup
+  deleted that map and broke four exports; caught by the suite, restored. The
+  lesson is the obvious one about regex edits on structured data.
+* **A plan assumption corrected**: PRD-113 stage 1 said to move
+  `cgdye/io/template_cif.py` into `dye/`. Having read it, it is a *generic
+  component* template reader used by `topology/builder`, `analysis/density` and
+  scripts — only `read_dye_template_cif` is dye-specific. It stays put and moves
+  to `io/` at stage 7; `dye/library.py` calls into it meanwhile.
+* Suite **605 passed** (from 599), same single pre-existing `IMP.em` failure.
+
 ## 2026-08-18 (PRD-113 stage 0: the instrument layer goes)
 
 * **`IMP.bff` is a forward-model engine** — what `tttrlib` is to ChiSurf for

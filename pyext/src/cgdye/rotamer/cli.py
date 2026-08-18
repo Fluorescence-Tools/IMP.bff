@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
-from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.dye.spectra import forster_radius_from_spectra
 
 
 @click.group()

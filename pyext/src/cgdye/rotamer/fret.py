@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble, resolve_backbone_site, transform_library_to_site
 from IMP.bff.fret.distance import fret_pair_efficiencies
 

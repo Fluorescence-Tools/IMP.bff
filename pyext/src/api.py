@@ -47,7 +47,6 @@ EXPORTS = {
     "write_dye_forcefield_cif": "IMP.bff.cgdye.io.cif",
     "read_component_template_cif": "IMP.bff.cgdye.io.template_cif",
     "write_component_template_cif": "IMP.bff.cgdye.io.template_cif",
-    "read_component_template_cif": "IMP.bff.cgdye.io.template_cif",
     "write_dye_template_cif": "IMP.bff.cgdye.io.template_cif",
     # --- rotamer libraries and rotamer FRET ----------------------------------
     "RotamerFRET": "IMP.bff.cgdye.rotamer.fret",
@@ -101,7 +100,13 @@ EXPORTS = {
     "fret_efficiency_exact_kinetic_pair": "IMP.bff.cgdye.analysis.fret",
     "analyze_dye_density": "IMP.bff.cgdye.analysis.density",
     # --- label-pair physics (fret) --------------------------------------------
-    "forster_radius_from_spectra": "IMP.bff.fret.forster",
+    "forster_radius_from_spectra": "IMP.bff.dye.spectra",
+    "forster_radius": "IMP.bff.dye.spectra",
+    "spectral_overlap": "IMP.bff.dye.spectra",
+    "Dye": "IMP.bff.dye.species",
+    "Spectrum": "IMP.bff.dye.species",
+    "find_dye": "IMP.bff.dye.library",
+    "available_dyes": "IMP.bff.dye.library",
     "kappa2_from_dipoles": "IMP.bff.fret.kappa2",
     "kappa2_isotropic": "IMP.bff.fret.kappa2",
     # --- accessible volumes, fps.json, distances (fret) -----------------------

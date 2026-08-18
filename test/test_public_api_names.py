@@ -16,7 +16,9 @@ _FAMILY = re.compile(
     r"|boltzmann|cluster|rrt|SIMULATION_TYPE|ensemble|torsion|hierarch|mol2|cif|rmf|dcd|protein_frames|nmr|lj_|select_atoms|attach"
     # PRD-109, the PET quenching model folded in from QuEst
     r"|quench|Quench|QUENCH|PET|amino_acid|solvent_accessible|sphere_points"
-    r"|grid_center|slow_factor|simulate_|diffusion|Diffusion|residue|Residue|occupancy)"
+    r"|grid_center|slow_factor|simulate_|diffusion|Diffusion|residue|Residue|occupancy"
+    # PRD-113, the dye species: spectra, R0 derivation, the flrCIF map
+    r"|Dye|dye|Spectrum|spectral|spectra|FLRCIF)"
 )
 
 

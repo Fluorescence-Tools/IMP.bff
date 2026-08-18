@@ -24,7 +24,7 @@ import numpy as np
 
 from IMP.bff.fret.av import AccessibleVolume
 from IMP.bff.fret.distance import fret_pair_efficiencies, fret_pair_geometry
-from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score
 

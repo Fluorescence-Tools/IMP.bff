@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from IMP.bff.cgdye.rotamer.scoring import kappa2_from_dipoles
-from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.sampling.boltzmann import boltzmann_weights
 from IMP.bff.cgdye.sampling.kinetic import rotamer_transition_matrix
 from IMP.bff.cgdye.sampling.mean_field import rotamer_mean_field_weights

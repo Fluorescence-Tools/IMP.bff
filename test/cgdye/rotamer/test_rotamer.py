@@ -12,7 +12,7 @@ from IMP.bff.fret import io as fps
 from IMP.bff.cgdye.rotamer.fps import read_rotamer_fps, rotamer_fret_from_fps
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.fret.forster import forster_radius_from_spectra
+from IMP.bff.dye.spectra import forster_radius_from_spectra
 # The rotamer CLI ships with cgdye now; invoking it through imp-tricks'
 # aggregator would make an imp.bff test depend on the layer above it.
 from IMP.bff.cgdye.rotamer.cli import rotamer as _rotamer_cli
