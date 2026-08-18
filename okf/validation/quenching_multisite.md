@@ -1,5 +1,47 @@
 # Is the quenching model identifiable across sites? (PRD-111 stage 0)
 
+> ## ⚠ Superseded numbers below — read this first
+>
+> Everything in this page below the summary was measured with the **Itô** flux
+> discretisation, where `slow_factor` acted as a disguised attraction to the
+> quenchers. That was corrected on 2026-08-18
+> ([`quenching_flux_form.md`](quenching_flux_form.md)) and the default is now
+> Smoluchowski. The page is kept because the comparison is instructive and
+> because the *argument* — that θ is global while the geometry is per site, so
+> the joint Fisher information is the sum and beats its terms only if the blind
+> directions rotate — is unchanged and still holds. The **numbers** are not
+> current.
+>
+> **Corrected stage 0**, six sites at 2.0 Å, Smoluchowski, re-measured after the
+> solver-stability fix:
+>
+> | | Itô (below) | **Smoluchowski (current)** |
+> |---|---|---|
+> | joint condition number | 3.04 × 10⁵ | **3.08 × 10⁵** |
+> | best single site | 5.46 × 10⁸ | **4.91 × 10⁷** |
+> | rotation gain | 5 623× | **401×** |
+> | largest principal angle | 88.4° | **49.3°** |
+> | `free_diffusion` | ±3.7 % | ±6.7 % |
+> | `slow_factor` | ±0.2 % | ±2.9 % |
+> | `contact_distance` | ±4.5 % | **±60.9 %** |
+> | `kQ_scale` | ±9.9 % | ±8.1 % |
+> | `rC` | ±2.3 % | ±2.1 % |
+>
+> And the fit, which is where the corrected model is *better*: `kQ_scale` +0.0 %,
+> `rC` −0.2 %, `slow_factor` +1.1 %, `free_diffusion` +10.1 %,
+> `contact_distance` +67.2 % (runs to its bound), reduced χ² 1.023, in 420
+> forward solves.
+>
+> **Three claims below are retracted specifically:** that `contact_distance` and
+> `slow_factor` are one degenerate parameter (they are not — `contact_distance`
+> is simply uninformative), that `slow_factor` is determined to ±0.2 %, and the
+> stage-1 numbers entirely, which have **not** been re-measured under the
+> corrected flux form.
+>
+> A further caveat applies to every *fit* on this page, Itô or not: they minimise
+> a Neyman weighted least squares and report an argmax. See
+> [the estimator section](#the-estimator-was-wrong-and-so-was-the-kind-of-answer).
+
 Recorded by `python benchmark/kq_sensitivity_analysis.py --resolution 1.5 --fit`.
 Six chain-A sites on T4 lysozyme 3GUN, AV1 (20 Å / 0.5 Å / 3.5 Å), grid 29³ at
 **1.5 Å** at site A132 (the AV sets the extent, so the other sites differ). Field model, τ₀ = 4 ns, decay sampled at 64 points over 25 ns, Poisson
