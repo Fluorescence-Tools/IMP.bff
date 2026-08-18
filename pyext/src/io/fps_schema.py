@@ -1,5 +1,7 @@
 """The fps.json schema — the single authored definition (PRD-97 stage 0).
 
+Moved from ``IMP.bff.fret.fps_schema`` by PRD-113 stage 7.
+
 fps.json describes labelling positions and distance measurements on a
 structure. Historically it had three readers (the C++
 ``IMP::bff::AVNetworkRestraint``/``FPSReaderWriter``, a small Python reader,
@@ -65,7 +67,7 @@ SCHEMA_VERSION = "1.0"
 #: library, R3 = mixture are reserved). R1 positions are Python-only:
 #: ``IMP::bff::AVNetworkRestraint`` never reads ``simulation_type`` and would
 #: score such a position as an AV1 with its AV parameters (the C++ side warns);
-#: filter with :func:`IMP.bff.fret.io.fps_positions_for_docking` first.
+#: filter with :func:`IMP.bff.io.fps.fps_positions_for_docking` first.
 SIMULATION_TYPES = ("AV1", "AV3", "XYZ", "R1")
 
 #: ``distance_type`` values and their flrCIF ``distance_type`` spellings.

@@ -5,15 +5,17 @@ the fps.json data schema (PRD-97): the docking engine (:mod:`.imp_engine`),
 the AV backend (:mod:`.av`), model-distance calculation (:mod:`.distance`),
 P(R_DA) distributions (:mod:`.distributions`), Olga-style informative pair
 selection (:mod:`.olga_greedy`), docking-precision estimation
-(:mod:`.uncertainty`), PMI stat-file reading (:mod:`.stat`), file I/O
-(:mod:`.io`) and the authored fps.json schema (:mod:`.fps_schema`).
+(:mod:`.uncertainty`) and PMI stat-file reading (:mod:`.stat`).
+
+File I/O and the fps.json schema moved to :mod:`IMP.bff.io` in PRD-113 stage 7
+and are **not** re-exported here: ``IMP.bff.fret.read_fps_json`` is gone, and
+``IMP.bff.io.read_fps_json`` (or the flat ``IMP.bff.read_fps_json``) replaces
+it. A FRET model should not be the thing that owns a file format.
 
 Everything here is code/script level — no GUI. Applications (e.g. ChiSurf)
 build their workflow and views on top of these functions.
 """
 
-from . import fps_schema
-from . import io
 from . import av
 from . import distance
 from . import engine
@@ -23,17 +25,6 @@ from . import stat
 from . import uncertainty
 from . import imp_engine
 
-from .io import (
-    read_fps_json,
-    write_fps_json,
-    read_evaluators_json,
-    write_evaluators_json,
-    read_old_lps_txt,
-    read_old_distances_txt,
-    load_structure,
-    write_pdb,
-    compute_rmsd,
-)
 from .av import (
     AccessibleVolume,
     compute_av,
@@ -68,12 +59,8 @@ from .imp_engine import (
 )
 
 __all__ = [
-    "fps_schema", "io", "av", "distance", "engine", "distributions",
+    "av", "distance", "engine", "distributions",
     "olga_greedy", "stat", "uncertainty", "imp_engine",
-    # io
-    "read_fps_json", "write_fps_json", "read_evaluators_json",
-    "write_evaluators_json", "read_old_lps_txt", "read_old_distances_txt",
-    "load_structure", "write_pdb", "compute_rmsd",
     # av
     "AccessibleVolume", "compute_av", "compute_avs_for_structure",
     "load_structure_with_vdw",

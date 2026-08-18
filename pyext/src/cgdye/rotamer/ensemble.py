@@ -317,7 +317,7 @@ def rotamer_ensembles_from_fps(
     for AV-only files. Positions without a library are skipped. ``kwargs`` go
     to :meth:`RotamerEnsemble.from_site`.
     """
-    from IMP.bff.fret.io import read_fps_json
+    from IMP.bff.io.fps import read_fps_json
     from IMP.bff.cgdye.rotamer.fps import RotamerPosition
 
     positions, _distances, _score_sets, _extra = read_fps_json(fps_json)

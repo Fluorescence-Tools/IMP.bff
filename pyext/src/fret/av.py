@@ -16,7 +16,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from . import io
+from IMP.bff.io import structure as _structure
 from IMP.bff.representation.types import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
 from .strip import (
@@ -450,7 +450,7 @@ def load_structure_with_vdw(pdb_path: str) -> np.ndarray:
     except Exception:
         pass
 
-    coords, particles, _model, _hier = io.load_structure_with_particles(pdb_path)
+    coords, particles, _model, _hier = _structure.load_structure_with_particles(pdb_path)
     vdw = np.full(coords.shape[0], _DEFAULT_VDW, dtype=np.float64)
     for i, p in enumerate(particles):
         try:

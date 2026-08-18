@@ -58,7 +58,7 @@ class AVMeasurement:
     error_pos : float
         Asymmetric positive error (Å); used when ``model >= exp``.
     forster_radius : float
-        Förster radius *R*\ :sub:`0` (Å).  Used for
+        Förster radius *R*\\ :sub:`0` (Å).  Used for
         ``distance_type="RDAMeanE"``.
     distance_type : str
         Which AV distance metric to compute:

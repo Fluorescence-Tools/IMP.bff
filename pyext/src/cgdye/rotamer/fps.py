@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from IMP.bff.fret.io import read_fps_json
+from IMP.bff.io.fps import read_fps_json
 
 
 @dataclass
@@ -377,7 +377,7 @@ def write_rotamer_fps(
     the new ones added (same names overwrite). The payload is validated
     against the fps.json schema before writing.
     """
-    from IMP.bff.fret.io import read_fps_json, write_fps_json
+    from IMP.bff.io.fps import read_fps_json, write_fps_json
 
     all_positions: dict[str, Any] = {}
     all_distances: dict[str, Any] = {}

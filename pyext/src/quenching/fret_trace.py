@@ -18,7 +18,7 @@ import numpy as np
 
 import IMP.bff
 
-from ..fret.kappa2 import kappa2_isotropic
+from IMP.bff.fret.kappa2 import kappa2_isotropic
 
 __all__ = [
     "MAX_KAPPA2",

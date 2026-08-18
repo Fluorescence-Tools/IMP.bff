@@ -113,11 +113,22 @@ jobs:
         continue-on-error: true
         run: sccache --show-stats
 
+      # Retries: this reuses the same conda package cache rattler-build's own
+      # internal test env (the recipe's `imp_bff --help` smoke test) just
+      # solved into moments earlier, and an in-progress lock on that cache
+      # occasionally isn't released before this step starts, corrupting an
+      # extraction ("Could not set lock", empty index.json). Transient, not a
+      # dependency problem -- a clean retry always passes.
       - name: Install the freshly built package into a test env
         shell: bash -el {0}
         run: |
-          mamba create -y -n bff-test -c ./conda-bld -c conda-forge \
-            imp.bff pytest
+          for attempt in 1 2 3; do
+            mamba create -y -n bff-test -c ./conda-bld -c conda-forge \
+              imp.bff pytest && break
+            [ "$attempt" -lt 3 ] || exit 1
+            echo "retrying test env creation (attempt $attempt failed)"
+            sleep 10
+          done
 
       # test_*.py (fast) and medium_test_*.py (medium) run on every push;
       # expensive_test_*.py is its own weekly job below -- see that job for
@@ -185,9 +196,16 @@ jobs:
         shell: bash -el {0}
         run: rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
 
+      # Retries: see the same step in build_and_test for why.
       - name: Install the freshly built package into a test env
         shell: bash -el {0}
-        run: mamba create -y -n bff-test -c ./conda-bld -c conda-forge imp.bff pytest
+        run: |
+          for attempt in 1 2 3; do
+            mamba create -y -n bff-test -c ./conda-bld -c conda-forge imp.bff pytest && break
+            [ "$attempt" -lt 3 ] || exit 1
+            echo "retrying test env creation (attempt $attempt failed)"
+            sleep 10
+          done
 
       - name: Run expensive tests
         shell: bash -el {0}
@@ -231,7 +249,15 @@ jobs:
         run: |
           mamba install -y rattler-build
           rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
-          mamba install -y -c ./conda-bld -c conda-forge imp.bff
+          # Retries: see the equivalent step in ci.yml's build_and_test job
+          # for why (a transient package-cache lock race, not a dependency
+          # problem).
+          for attempt in 1 2 3; do
+            mamba install -y -c ./conda-bld -c conda-forge imp.bff && break
+            [ "$attempt" -lt 3 ] || exit 1
+            echo "retrying imp.bff install (attempt $attempt failed)"
+            sleep 10
+          done
 
       # Best-effort: doc/Doxyfile drives the doxy2swig.py docstring generation
       # (see conda-recipe/bld.bat) and is not a hard dependency of the Sphinx

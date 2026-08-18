@@ -1,11 +1,15 @@
-"""IMP.bff.fret.io — the one fps.json reader, and the legacy C# formats."""
+"""IMP.bff.io — the fps.json reader, the legacy C# formats, and structure IO.
+
+The three used to be one module (``fret/io.py``) and are three now; the tests
+reach them through the package, which is the surface a caller sees.
+"""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from IMP.bff.fret import io as fio
+import IMP.bff.io as fio
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -99,7 +103,7 @@ def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
     assert d["Forster_radius"] == 52.0
     assert score_sets == {} and extra == {}
     # the converted payload conforms to the schema
-    from IMP.bff.fret import fps_schema
+    from IMP.bff.io import fps_schema
     errors, _ = fps_schema.validate(
         {"Positions": positions, "Distances": distances})
     assert not errors, errors
