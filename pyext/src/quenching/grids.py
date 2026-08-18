@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .._jit import njit, prange
+import IMP.bff
+
 
 __all__ = [
     "grid_center_index",
@@ -52,120 +53,50 @@ def grid_center_index(ng: int) -> int:
     return (int(ng) - 1) // 2
 
 
-@njit(cache=True)
 def _center_grid_indices(rs, r0, dg, ng, radius):
-    """Voxel coordinates and integer radii of the sphere centres."""
-    n = rs.shape[0]
-    ix0 = np.empty(n, dtype=np.int64)
-    iy0 = np.empty(n, dtype=np.int64)
-    iz0 = np.empty(n, dtype=np.int64)
-    radius_idx = np.empty(n, dtype=np.int64)
-    offset = (ng - 1) // 2
-    for i in range(n):
-        # `floor`, not `int`. `int()` truncates **toward zero**, so for a centre
-        # on the negative side of `r0` it rounds *up* while every other map here
-        # rounds down -- the walk's own occupancy test is `int(pos)` with
-        # `pos >= 0`, which is floor, and so is the trajectory sampler. The two
-        # disagreed by one voxel per axis for every quencher with a negative
-        # offset, which is half the grid.
-        ix0[i] = int(np.floor((rs[i, 0] - r0[0]) / dg)) + offset
-        iy0[i] = int(np.floor((rs[i, 1] - r0[1]) / dg)) + offset
-        iz0[i] = int(np.floor((rs[i, 2] - r0[2]) / dg)) + offset
-        radius_idx[i] = int(radius[i] / dg)
-    return ix0, iy0, iz0, radius_idx
+    """Voxel coordinates and integer radii of the sphere centres. **C++.**
+
+    Uses ``floor``, not truncation. ``int()`` truncates *toward zero*, so a
+    centre on the negative side of ``r0`` would round up while every other map
+    here rounds down -- the walk's occupancy test and the trajectory sampler
+    both floor. The two disagreed by one voxel per axis for every centre with a
+    negative offset, which is half the grid.
+    """
+    ix0, iy0, iz0, ridx = IMP.bff.center_grid_indices(
+        np.ascontiguousarray(rs, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0, dtype=np.float64).ravel(),
+        float(dg), int(ng),
+        np.ascontiguousarray(radius, dtype=np.float64).ravel())
+    return (np.asarray(ix0, dtype=np.int64), np.asarray(iy0, dtype=np.int64),
+            np.asarray(iz0, dtype=np.int64), np.asarray(ridx, dtype=np.int64))
 
 
-# The two kernels below visit only the voxels inside each centre's bounding box
-# instead of testing every voxel against every centre. The outer loop stays over
-# x-slabs so the work is parallel and free of write races.
-@njit(cache=True, parallel=True)
+def _stamp(density, ng, radius, rs, r0, dg, values, combine):
+    """One stamping kernel for both combines. **C++.**
+
+    Stickiness *multiplies* (identity 1) and rates *add* (identity 0) -- the
+    only difference between what used to be two near-identical Python kernels.
+    Rates add because parallel channels do.
+    """
+    out = IMP.bff.stamp_spheres(
+        np.ascontiguousarray(density, dtype=np.float64).ravel(), int(ng),
+        np.ascontiguousarray(radius, dtype=np.float64).ravel(),
+        np.ascontiguousarray(rs, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0, dtype=np.float64).ravel(), float(dg),
+        np.ascontiguousarray(values, dtype=np.float64).ravel(), int(combine))
+    return np.asarray(out, dtype=np.float64).reshape(int(ng), int(ng), int(ng))
+
+
 def _slow_factor_grid(density, ng, slow_radius, rs, r0, dg, slow_fact):
-    factors = np.ones(density.shape, dtype=np.float64)
-    n_slow_center = rs.shape[0]
-    ix0s, iy0s, iz0s, radius_idxs = _center_grid_indices(rs, r0, dg, ng, slow_radius)
-
-    for ix in prange(ng):
-        slab = np.ones((ng, ng), dtype=np.float64)
-        touched = False
-        for isa in range(n_slow_center):
-            r_idx = radius_idxs[isa]
-            dx = ix - ix0s[isa]
-            remaining = r_idx * r_idx - dx * dx
-            if remaining <= 0:
-                continue
-            factor = slow_fact[isa]
-            iy0 = iy0s[isa]
-            iz0 = iz0s[isa]
-            y_lo = max(0, iy0 - r_idx)
-            y_hi = min(ng - 1, iy0 + r_idx)
-            for iy in range(y_lo, y_hi + 1):
-                dy = iy - iy0
-                span2 = remaining - dy * dy
-                if span2 <= 0:
-                    continue
-                span = int(np.sqrt(span2))
-                # The membership test is strict (d^2 < r^2), so drop the
-                # boundary voxel when span2 is a perfect square.
-                if span * span >= span2:
-                    span -= 1
-                if span < 0:
-                    continue
-                z_lo = max(0, iz0 - span)
-                z_hi = min(ng - 1, iz0 + span)
-                for iz in range(z_lo, z_hi + 1):
-                    slab[iy, iz] *= factor
-                    touched = True
-        if touched:
-            for iy in range(ng):
-                for iz in range(ng):
-                    if density[ix, iy, iz] != 0:
-                        factors[ix, iy, iz] = slab[iy, iz]
-    return factors
+    """Stickiness field: factors multiply."""
+    return _stamp(density, ng, slow_radius, rs, r0, dg, slow_fact,
+                  IMP.bff.GRID_COMBINE_MULTIPLY)
 
 
-@njit(cache=True, parallel=True)
 def _additive_factor_grid(density, ng, radius, rs, r0, dg, values):
-    factors = np.zeros(density.shape, dtype=np.float64)
-    n_center = rs.shape[0]
-    ix0s, iy0s, iz0s, radius_idxs = _center_grid_indices(rs, r0, dg, ng, radius)
-
-    for ix in prange(ng):
-        slab = np.zeros((ng, ng), dtype=np.float64)
-        touched = False
-        for isa in range(n_center):
-            value = values[isa]
-            if value == 0.0:
-                continue
-            r_idx = radius_idxs[isa]
-            dx = ix - ix0s[isa]
-            remaining = r_idx * r_idx - dx * dx
-            if remaining <= 0:
-                continue
-            iy0 = iy0s[isa]
-            iz0 = iz0s[isa]
-            y_lo = max(0, iy0 - r_idx)
-            y_hi = min(ng - 1, iy0 + r_idx)
-            for iy in range(y_lo, y_hi + 1):
-                dy = iy - iy0
-                span2 = remaining - dy * dy
-                if span2 <= 0:
-                    continue
-                span = int(np.sqrt(span2))
-                if span * span >= span2:
-                    span -= 1
-                if span < 0:
-                    continue
-                z_lo = max(0, iz0 - span)
-                z_hi = min(ng - 1, iz0 + span)
-                for iz in range(z_lo, z_hi + 1):
-                    slab[iy, iz] += value
-                    touched = True
-        if touched:
-            for iy in range(ng):
-                for iz in range(ng):
-                    if density[ix, iy, iz] != 0:
-                        factors[ix, iy, iz] = slab[iy, iz]
-    return factors
+    """Rate field: parallel channels add."""
+    return _stamp(density, ng, radius, rs, r0, dg, values,
+                  IMP.bff.GRID_COMBINE_ADD)
 
 
 def slow_factor_grid(density, ng, dg, slow_radius, rs, r0, slow_fact):

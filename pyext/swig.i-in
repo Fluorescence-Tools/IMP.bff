@@ -19,6 +19,7 @@ import numpy as np
 %include "Distributions.i"
 %include "PolymerChain.i"
 %include "SolventAccessibleSurface.i"
+%include "QuenchingGrid.i"
 
 /* Fluorescence decays */
 
