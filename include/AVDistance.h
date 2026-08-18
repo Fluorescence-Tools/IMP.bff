@@ -79,6 +79,33 @@ IMPBFFEXPORT double mean_fret_distance(
         int seed = 0
 );
 
+//! The four distance statistics of a weighted distance sample.
+/*!
+    One reduction rather than four passes, and one place where the conventions
+    live: \f$\langle R_{DA}\rangle\f$, \f$R_E\f$, \f$\langle E\rangle\f$ and
+    the width of the distance distribution were computed in three modules that
+    disagreed at the limits.
+
+    Note what is **not** here: \f$R_{mp}\f$, the distance between the clouds'
+    mean positions. It is not a function of the distribution of pair distances
+    -- \f$|\langle a\rangle - \langle b\rangle|\f$ cannot be recovered from
+    \f$|a - b|\f$ -- so it takes the clouds, not a sample of them. A slot in
+    this tuple returned the mean distance under that name until 2026-07-28;
+    on 148l E15/E90 the two were 8 % apart.
+
+    \param[in] distances sampled pair distances
+    \param[in] weights per-sample weight
+    \param[in] forster_radius \f$R_0\f$
+    \return four values: mean distance, \f$R_E\f$, mean efficiency, standard
+            deviation. \f$R_E\f$ is 0 when the mean efficiency saturates at 1
+            and infinity when it reaches 0; all four are 0 for zero total weight.
+*/
+IMPBFFEXPORT std::vector<double> distance_sample_statistics(
+        const std::vector<double>& distances,
+        const std::vector<double>& weights,
+        double forster_radius = 52.0
+);
+
 //! Occupied voxels of a density as a weighted point cloud.
 /*!
     \param[in] density flat, nx*ny*nz

@@ -30,6 +30,19 @@ distribution -- and is left for the owner rather than guessed at. PRD-113 stage
 4b removed only what was verified identical: ``fret_efficiency`` and
 ``distance_from_fret_efficiency``, which are now re-exported from the canonical
 module.
+
+What stage 4c then did, with the numba port: the *arithmetic* of the two
+disagreeing pairs is now single-sourced in C++, and the difference between them
+is stated as an argument rather than duplicated as a body.
+:func:`polynomial_transfer` here reverses its coefficients and calls the same
+Horner evaluator; :func:`av_pair_statistics` calls the same reduction. The one
+thing not resolved is the one that needs a physicist: the factor of two in
+:func:`gaussian_rmp_to_rda_mean`.
+
+Also note that ``av_pair_statistics`` is itself two functions under one name --
+this one reduces a *sample of distances*, the canonical one takes two *accessible
+volumes* -- with different signatures and different return tuples. Only the
+canonical one has callers.
 """
 
 from __future__ import annotations
@@ -37,65 +50,14 @@ from __future__ import annotations
 import math
 import numpy as np
 
+import IMP.bff
 from IMP.bff.representation.distance import (  # noqa: F401
+    chi2_score,
     distance_from_fret_efficiency,
     fret_efficiency,
 )
-from IMP.bff._jit import njit as _njit, jit as _jit
 
 
-@_njit
-def chi2_score(
-    model_distance: float,
-    exp_distance: float,
-    error_neg: float,
-    error_pos: float,
-) -> float:
-    r"""Asymmetric chi-squared contribution for a single distance.
-
-    When the model distance is below the experimental value the negative
-    error is used; otherwise the positive error is used:
-
-    .. math::
-
-       \chi_i^2 = \begin{cases}
-           \left(\frac{d_{\text{mod}} - d_{\text{exp}}}{\sigma_{-}}\right)^2
-           & d_{\text{mod}} < d_{\text{exp}} \\
-           \left(\frac{d_{\text{mod}} - d_{\text{exp}}}{\sigma_{+}}\right)^2
-           & d_{\text{mod}} \geq d_{\text{exp}}
-       \end{cases}
-
-    Parameters
-    ----------
-    model_distance : float
-        Model-predicted distance (Å).
-    exp_distance : float
-        Experimental distance (Å).
-    error_neg : float
-        Negative (lower) experimental error (Å).
-    error_pos : float
-        Positive (upper) experimental error (Å).
-
-    Returns
-    -------
-    float
-        Chi-squared contribution.
-
-    Examples
-    --------
-    >>> chi2_score(50.0, 55.0, 3.0, 5.0)
-    1.777777...
-    >>> chi2_score(60.0, 55.0, 3.0, 5.0)
-    1.0
-    """
-    d = model_distance - exp_distance
-    err = error_neg if d < 0 else error_pos
-    if err == 0.0:
-        return 0.0 if d == 0.0 else math.inf
-    return (d / err) ** 2
-
-
-@_njit
 def gaussian_rmp_to_rda_mean(rmp: float, sigma: float = 6.0) -> float:
     r"""Correct an Rmp (mean-position) distance to approximate <R_DA>.
 
@@ -125,7 +87,6 @@ def gaussian_rmp_to_rda_mean(rmp: float, sigma: float = 6.0) -> float:
     return rmp + sigma ** 2 / rmp
 
 
-@_njit
 def polynomial_transfer(rmp: float, coefficients: np.ndarray) -> float:
     r"""Polynomial transfer function: Rmp -> RDAMean.
 
@@ -144,15 +105,13 @@ def polynomial_transfer(rmp: float, coefficients: np.ndarray) -> float:
     -------
     float
     """
-    y = 0.0
-    x = 1.0
-    for c in coefficients:
-        y += c * x
-        x *= rmp
-    return y
+    # Reversed, then the same Horner evaluator the descending convention uses.
+    # The two orders are the whole difference between this and the canonical
+    # ``polynomial_transfer``, and saying so in one line beats a second loop.
+    return IMP.bff.polynomial_transfer(
+        float(rmp), np.asarray(coefficients, dtype=np.float64).ravel()[::-1].copy())
 
 
-@_njit
 def av_pair_statistics(
     distances: np.ndarray,
     weights: np.ndarray,
@@ -189,21 +148,13 @@ def av_pair_statistics(
     mean_efficiency : float
         Weighted mean FRET efficiency <E>.
     """
-    w_sum = weights.sum()
-    if w_sum == 0.0:
+    r_da_mean, r_e, mean_efficiency, _sigma = IMP.bff.distance_sample_statistics(
+        np.ascontiguousarray(np.asarray(distances, dtype=np.float64).ravel()),
+        np.ascontiguousarray(np.asarray(weights, dtype=np.float64).ravel()),
+        float(forster_radius))
+    if np.asarray(weights).sum() == 0.0:
         return 0.0, math.nan, 0.0, 0.0
-
-    r_da_mean = np.dot(distances, weights) / w_sum
-
-    e_vals = 1.0 / (1.0 + (distances / forster_radius) ** 6.0)
-    mean_efficiency = np.dot(e_vals, weights) / w_sum
-
-    if mean_efficiency <= 0.0 or mean_efficiency >= 1.0:
-        r_e = 0.0 if mean_efficiency >= 1.0 else math.inf
-    else:
-        r_e = forster_radius * ((1.0 / mean_efficiency) - 1.0) ** (1.0 / 6.0)
-
-    return r_da_mean, math.nan, r_e, mean_efficiency
+    return float(r_da_mean), math.nan, float(r_e), float(mean_efficiency)
 
 
 def mean_position_distance(

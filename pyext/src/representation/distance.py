@@ -31,6 +31,8 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 
+import IMP.bff
+
 from .types import AccessibleVolume
 from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles
 
@@ -153,10 +155,8 @@ def standard_deviation_of_distances(
 ) -> float:
     """Calculate the standard deviation of the inter-AV distance distribution."""
     d = _sample_av_distance(av1, av2, n_samples)
-    w = d[:, 1]
-    mean_r = np.dot(d[:, 0], w) / w.sum()
-    var_r = np.dot(d[:, 0] ** 2, w) / w.sum() - mean_r ** 2
-    return float(np.sqrt(max(var_r, 0.0)))
+    return float(IMP.bff.distance_sample_statistics(
+        np.ascontiguousarray(d[:, 0]), np.ascontiguousarray(d[:, 1]))[3])
 
 
 def av_pair_statistics(
@@ -194,29 +194,11 @@ def av_pair_statistics(
         return rmp, rmp, rmp, 0.0
 
     d = _sample_av_distance(av1, av2, n_samples)
-    r = d[:, 0]
-    w = d[:, 1]
-    w_sum = w.sum()
-    if w_sum <= 0:
+    rda_mean, rda_mean_e, _mean_e, sigma_r = IMP.bff.distance_sample_statistics(
+        np.ascontiguousarray(d[:, 0]), np.ascontiguousarray(d[:, 1]), forster_radius)
+    if d[:, 1].sum() <= 0:
         return rmp, rmp, rmp, 0.0
-
-    rda_mean = float(np.dot(r, w) / w_sum)
-
-    # FRET-averaged distance R_E
-    e = 1.0 / (1.0 + (r / forster_radius) ** 6.0)
-    mean_e = np.dot(w, e) / w_sum
-    if mean_e <= 0:
-        rda_mean_e = rda_mean
-    elif mean_e >= 1:
-        rda_mean_e = 0.0
-    else:
-        rda_mean_e = float(forster_radius * (1.0 / mean_e - 1.0) ** (1.0 / 6.0))
-
-    # Standard deviation of distance distribution
-    var_r = np.dot(r ** 2, w) / w_sum - rda_mean ** 2
-    sigma_r = float(np.sqrt(max(var_r, 0.0)))
-
-    return rmp, rda_mean, rda_mean_e, sigma_r
+    return rmp, float(rda_mean), float(rda_mean_e), float(sigma_r)
 
 
 def fit_transfer_polynomial(
@@ -318,10 +300,13 @@ def polynomial_transfer(
     float or np.ndarray
         Evaluated value(s).
     """
-    res = 0.0
-    for c in coeffs:
-        res = res * rmp + c
-    return res
+    coeffs = np.asarray(coeffs, dtype=np.float64).ravel()
+    if np.ndim(rmp) == 0:
+        return IMP.bff.polynomial_transfer(float(rmp), coeffs)
+    x = np.asarray(rmp, dtype=np.float64)
+    y = np.asarray(IMP.bff.polynomial_transfer_vector(
+        np.ascontiguousarray(x.ravel()), coeffs), dtype=np.float64)
+    return y.reshape(x.shape)
 
 
 def gaussian_rmp_to_rda_mean(

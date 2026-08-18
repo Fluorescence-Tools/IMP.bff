@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <limits>
+#include <algorithm>
 #include <random>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -88,6 +89,34 @@ double mean_fret_distance(const std::vector<double>& p1,
     if (mean_e >= 1.0) return 0.0;
     if (mean_e <= 0.0) return std::numeric_limits<double>::infinity();
     return forster_radius * std::pow(1.0 / mean_e - 1.0, 1.0 / 6.0);
+}
+
+std::vector<double> distance_sample_statistics(
+        const std::vector<double>& distances, const std::vector<double>& weights,
+        double forster_radius) {
+    std::vector<double> out(4, 0.0);
+    const std::size_t n = std::min(distances.size(), weights.size());
+    double w_sum = 0.0, sum_r = 0.0, sum_r2 = 0.0, sum_e = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double r = distances[i], w = weights[i];
+        w_sum += w;
+        sum_r += r * w;
+        sum_r2 += r * r * w;
+        sum_e += w / (1.0 + std::pow(r / forster_radius, 6.0));
+    }
+    if (w_sum <= 0.0) return out;
+    const double mean_r = sum_r / w_sum;
+    const double mean_e = sum_e / w_sum;
+    out[0] = mean_r;
+    if (mean_e >= 1.0) out[1] = 0.0;
+    else if (mean_e <= 0.0) out[1] = std::numeric_limits<double>::infinity();
+    else out[1] = forster_radius * std::pow(1.0 / mean_e - 1.0, 1.0 / 6.0);
+    out[2] = mean_e;
+    // Clamped: the two-pass variance is exact but this one-pass form can go
+    // slightly negative on a narrow distribution, and a NaN width would
+    // propagate silently through every caller.
+    out[3] = std::sqrt(std::max(sum_r2 / w_sum - mean_r * mean_r, 0.0));
+    return out;
 }
 
 std::vector<double> density_to_points(
