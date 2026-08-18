@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from . import io
+from IMP.bff.representation import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
 from .strip import (
     BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES,
@@ -39,58 +40,7 @@ import IMP.em
 # Result container
 # ---------------------------------------------------------------------------
 
-@dataclass
-class AccessibleVolume:
-    """Represents the 3D positional distribution of a dye label."""
 
-    points: np.ndarray  # (N, 4) float64 — xyz + weight
-    density: np.ndarray  # (nx, ny, nz) float32 — 3D voxel density
-    grid_origin: np.ndarray  # (3,) float64
-    grid_step: float
-    grid_shape: Tuple[int, int, int]
-    attachment_point: np.ndarray  # (3,) float64
-    position_name: str = ""
-    params: Dict = field(default_factory=dict)
-
-    @property
-    def n_points(self) -> int:
-        return self.points.shape[0] if self.points.ndim == 2 else 0
-
-    @property
-    def mean_position(self) -> np.ndarray:
-        if self.n_points == 0:
-            return self.attachment_point.copy()
-        w = self.points[:, 3]
-        if w.sum() == 0:
-            return self.attachment_point.copy()
-        return np.average(self.points[:, :3], axis=0, weights=w)
-
-    @property
-    def has_volume(self) -> bool:
-        return self.n_points > 0
-
-
-# ---------------------------------------------------------------------------
-# Backend interface (compatibility)
-# ---------------------------------------------------------------------------
-
-def select_backend(name: str) -> None:
-    """Accept the AV backend selection of the pre-move API.
-
-    ``'auto'`` and ``'imp-bff'`` are the only valid values — IMP.bff is the
-    one backend. Kept so callers written against the pre-move API keep
-    working; any other name raises.
-
-    Raises
-    ------
-    ValueError
-        If *name* names a backend that does not exist here (including
-        ``'labellib'``, which was removed in the move).
-    """
-    if name not in ("auto", "imp-bff"):
-        raise ValueError(
-            f"Unknown backend name: '{name}' — IMP.bff is the only AV "
-            "backend (the LabelLib backend was removed).")
 
 
 def _active_backend_name() -> str:

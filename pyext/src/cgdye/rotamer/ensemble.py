@@ -22,7 +22,7 @@ from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
-from IMP.bff.fret.av import AccessibleVolume
+from IMP.bff.representation import States
 from IMP.bff.fret.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
@@ -109,19 +109,33 @@ def _frame(structure, frame_index: int) -> dict:
 # the ensemble
 # ---------------------------------------------------------------------------
 
-@dataclass
-class RotamerEnsemble(AccessibleVolume):
+@dataclass(kw_only=True)
+class RotamerEnsemble(States):
     """A rotamer library placed and screened at one labelling site (fps ``R1``).
 
-    Inherits the AV fields: ``points`` (N, 4) chromophore centre + weight,
-    ``attachment_point`` (CA), ``position_name``, ``params`` (carries
-    ``simulation_type='R1'``, library, temperature, ...). Adds the per-rotamer
-    ``mu`` (N, 3) transition dipoles, ``atoms`` (N, n_atoms, 3) in the protein
-    frame, ``atom_names``, ``resnames``, ``energies``, ``partition`` (Z) and
-    the ``library`` name.
+    A **sibling** of :class:`~IMP.bff.representation.AccessibleVolume`, not a
+    subclass of it. It used to inherit from the concrete AV, which is why
+    distance code worked for rotamers -- by inheritance rather than by design --
+    and it then had to carry a grid it does not have, filling
+    ``density``, ``grid_step`` and ``grid_shape`` with empty placeholders. No
+    consumer ever read them: they all used ``points``, ``mean_position``,
+    ``n_points`` or ``has_volume``, which is the
+    :class:`~IMP.bff.representation.States` surface both representations share.
+
+    From ``States``: ``points`` (N, 4) chromophore centre + weight,
+    ``attachment_point`` (CA), ``orientations`` (the per-rotamer transition
+    dipoles), ``position_name``, ``params`` (carries ``simulation_type='R1'``,
+    library, temperature, ...). Adds ``atoms`` (N, n_atoms, 3) in the protein
+    frame, ``atom_names``, ``resnames``, ``energies``, ``partition`` (Z) and the
+    ``library`` name.
+
+    ``mu`` remains as the name the rotamer code uses for the dipoles; it is the
+    same array as ``States.orientations``, which is what representation-agnostic
+    code asks for.
     """
 
     mu: np.ndarray = field(default_factory=lambda: np.zeros((0, 3)))
+
     atoms: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 3)))
     atom_names: tuple = ()
     resnames: tuple = ()
@@ -130,6 +144,13 @@ class RotamerEnsemble(AccessibleVolume):
     library: str = ""
     chain: str = ""
     residue: int = 0
+
+    def __post_init__(self):
+        # `mu` is what the rotamer code calls the transition dipoles;
+        # `States.orientations` is what representation-agnostic code asks for.
+        # They are one array, so a caller cannot set one and read a stale other.
+        if self.orientations is None and self.mu is not None and len(self.mu):
+            object.__setattr__(self, "orientations", self.mu)
 
     # -- construction ------------------------------------------------------
     @classmethod
@@ -195,10 +216,6 @@ class RotamerEnsemble(AccessibleVolume):
         ca_v = np.asarray(ca, dtype=np.float64)
         return cls(
             points=points,
-            density=np.zeros((0, 0, 0), dtype=np.float32),
-            grid_origin=ca_v.copy(),
-            grid_step=0.0,
-            grid_shape=(0, 0, 0),
             attachment_point=ca_v.copy(),
             position_name=position_name or f"{chain or ''}{residue}",
             params={

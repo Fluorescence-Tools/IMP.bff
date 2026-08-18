@@ -118,7 +118,8 @@ EXPORTS = {
     "kappa2_from_dipoles": "IMP.bff.fret.kappa2",
     "kappa2_isotropic": "IMP.bff.fret.kappa2",
     # --- accessible volumes, fps.json, distances (fret) -----------------------
-    "AccessibleVolume": "IMP.bff.fret.av",
+    "AccessibleVolume": "IMP.bff.representation.types",
+    "States": "IMP.bff.representation.states",
     "compute_av": "IMP.bff.fret.av",
     "compute_avs_for_structure": "IMP.bff.fret.av",
     "read_fps_json": "IMP.bff.fret.io",

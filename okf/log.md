@@ -1,5 +1,31 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 3c: States, and rotamers stop being an AV)
+
+* **`States` is the abstraction that was missing.** An AV grid point, a rotamer,
+  a coarse-grained conformer and an MD frame are the same kind of thing — a state
+  the dye can occupy, with a weight, a position and possibly an orientation.
+  Everything downstream consumes states, so distances and κ² are written once.
+* **`RotamerEnsemble` no longer inherits `AccessibleVolume`.** That inheritance
+  was *why* distance code worked for rotamers — by inheritance, not by design —
+  and it forced a rotamer library to carry a grid it does not have:
+  `density=zeros((0,0,0))`, `grid_step=0.0`, `grid_shape=(0,0,0)`. **No consumer
+  ever read them**: every one used `points`, `mean_position`, `n_points` or
+  `has_volume`, which is exactly the `States` surface. Both are now siblings.
+* **One `AccessibleVolume`.** There were two, in `av/compute.py` and
+  `fret/av.py`, with identical seven-field definitions in identical order —
+  which is how they came to disagree about the axis order of `density` without
+  anything noticing. Now `representation/types.py`, `AccessibleVolume(States)`.
+* **`mu` and `orientations` are one array.** The rotamer code keeps its name;
+  representation-agnostic code asks for `orientations`. Being the same object
+  means no caller can set one and read a stale other — and it is what lets a
+  consumer see that a rotamer library resolves dipoles where an AV does not.
+* **A regex over-matched and took `_av_imp_bff` with the dataclass.** Caught by
+  the suite; redone by locating the class and the next top-level definition
+  rather than by pattern. Same lesson as the `api.py` rename map: structured
+  code is not a place for a regex.
+* Gate still 12/12 byte-identical. Suite **633 passed**.
+
 ## 2026-08-18 (PRD-113 stage 3b: one path-map core, two front doors)
 
 * **`representation/pathmap.py` is now the one place `IMP.bff.AV` is driven.**

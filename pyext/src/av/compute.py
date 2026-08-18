@@ -13,6 +13,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from IMP.bff.representation import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
 
 # ---------------------------------------------------------------------------
@@ -78,65 +79,6 @@ def _particle_index(particle):
 
 # ---------------------------------------------------------------------------
 # Result container
-# ---------------------------------------------------------------------------
-
-@dataclass
-class AccessibleVolume:
-    """Result of an AV computation.
-
-    Attributes
-    ----------
-    points : (N, 4) float64
-        Point cloud ``(x, y, z, weight)``.
-    density : (nx, ny, nz) float64
-        3-D voxel density.
-    grid_origin : (3,) float64
-        Coordinate of the first voxel centre.
-    grid_step : float
-        Voxel spacing (Å).
-    grid_shape : tuple[int, int, int]
-        Voxel grid dimensions ``(nx, ny, nz)``.
-    attachment_point : (3,) float64
-        Coordinates of the attachment site.
-    position_name : str
-        Optional human-readable label.
-    params : dict
-        Computation parameters used.
-    """
-
-    points: np.ndarray
-    density: np.ndarray
-    grid_origin: np.ndarray
-    grid_step: float
-    grid_shape: Tuple[int, int, int]
-    attachment_point: np.ndarray
-    position_name: str = ""
-    params: dict = field(default_factory=dict)
-
-    @property
-    def n_points(self) -> int:
-        """Number of points in the point cloud."""
-        return self.points.shape[0] if self.points.ndim == 2 else 0
-
-    @property
-    def mean_position(self) -> np.ndarray:
-        """Density-weighted mean position."""
-        if self.n_points == 0:
-            return self.attachment_point.copy()
-        w = self.points[:, 3]
-        ws = w.sum()
-        if ws == 0:
-            return self.attachment_point.copy()
-        return np.average(self.points[:, :3], axis=0, weights=w)
-
-    @property
-    def has_volume(self) -> bool:
-        """Whether the AV contains any points."""
-        return self.n_points > 0
-
-
-# ---------------------------------------------------------------------------
-# IMP.bff backend
 # ---------------------------------------------------------------------------
 
 def _av_imp_bff(

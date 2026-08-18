@@ -1,4 +1,15 @@
-"""RotamerEnsemble (fps R1): a screened library that is an AccessibleVolume (PRD-108 stage 0)."""
+"""RotamerEnsemble (fps R1): a screened library, and a sibling of the AV.
+
+It *was* a subclass of :class:`AccessibleVolume` (PRD-108 stage 0), which is why
+distance code worked for rotamers: by inheritance rather than by design. It then
+had to carry a grid it does not have, filling ``density``, ``grid_step`` and
+``grid_shape`` with empty placeholders that no consumer ever read.
+
+PRD-113 stage 3c cuts that edge. Both are now
+:class:`~IMP.bff.representation.States` -- positions, weights and orientations --
+which is the surface every consumer was actually using, and which an MD or
+coarse-grained representation can supply just as well.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +23,7 @@ import pytest
 
 from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble, rotamer_ensembles_from_fps
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
-from IMP.bff.fret.av import AccessibleVolume
+from IMP.bff.representation import AccessibleVolume, States
 from IMP.bff.fret.distance import av_pair_statistics, histogram_rda, mean_fret_distance
 
 _HERE = Path(__file__).resolve().parent
@@ -38,14 +49,28 @@ def pair(hsp90):
     return d, a
 
 
-def test_is_an_accessible_volume_with_full_library(pair):
+def test_is_a_sibling_of_the_av_not_a_subclass(pair):
+    """The shared surface is States; the grid is not part of it."""
     d, a = pair
-    assert isinstance(d, AccessibleVolume)
+    assert isinstance(d, States)
+    assert not isinstance(d, AccessibleVolume), (
+        "a rotamer library is not an accessible volume: it has no grid, and "
+        "inheriting one forced it to fake density, grid_step and grid_shape")
+    for grid_field in ("density", "grid_step", "grid_shape", "grid_origin"):
+        assert not hasattr(d, grid_field)
+
+
+def test_the_full_library_is_screened(pair):
+    d, a = pair
     assert d.n_rotamers == 37 and a.n_rotamers == 7      # cutoff-30 libraries
     assert d.points.shape == (37, 4) and d.mu.shape == (37, 3) and d.atoms.shape[0] == 37
     assert d.atoms.shape[1] == len(d.atom_names)
     assert d.weights.sum() == pytest.approx(1.0)
     np.testing.assert_allclose(np.linalg.norm(d.mu, axis=1), 1.0)
+    # `mu` and the representation-agnostic `orientations` are one array, so a
+    # consumer written against States sees the dipoles a rotamer library has and
+    # an accessible volume has not.
+    assert d.orientations is d.mu and d.has_orientations
     assert d.params["simulation_type"] == "R1" and d.library == "AlexaFluor 594 C1R cutoff30"
     assert d.chain == "A" and d.residue == 452
     # centres sit within a linker length of the attachment CA

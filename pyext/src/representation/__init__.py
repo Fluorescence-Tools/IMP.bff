@@ -16,6 +16,8 @@ properties of the dye (``IMP.bff.dye``) or of where it is attached
 
 from __future__ import annotations
 
+from .states import States
+from .types import AccessibleVolume
 from .pathmap import PathMapReading, resample_av
 
-__all__ = ["PathMapReading", "resample_av"]
+__all__ = ["States", "AccessibleVolume", "PathMapReading", "resample_av"]
