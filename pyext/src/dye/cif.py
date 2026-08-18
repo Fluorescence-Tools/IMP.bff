@@ -84,6 +84,10 @@ def _float(value) -> Optional[float]:
     return float(value)
 
 
+#: Parsed libraries, keyed by resolved path and modification time.
+_LIBRARY_CACHE: Dict[tuple, Dict[str, "Dye"]] = {}
+
+
 def read_dye_library(path: str | Path | None = None) -> Dict[str, Dye]:
     """Every dye in the bundled library, keyed by chromophore name.
 
@@ -91,11 +95,37 @@ def read_dye_library(path: str | Path | None = None) -> Dict[str, Dye]:
     :returns: ``{chromophore_name: Dye}``. A dye with a table entry but no
         curves is returned without a spectrum -- it is still a usable species,
         it just cannot derive R0.
+
+    **Cached on (path, mtime, size).** The bundled library is a shipped
+    read-only file, and a spectrum lookup does not change it -- but the parse is
+    not cheap: profiling one FRETpredict comparison found this called 21 times
+    for the same file, 550 000 calls to the row cleaner and 1.65 million to the
+    float converter, for 2.2 s of a 13 s run.
+
+    The key includes mtime and size so editing the file during a session is
+    picked up; only an edit that changes neither would be missed, which is not a
+    thing that happens to a data file. Callers that mutate the returned ``Dye``
+    objects would now be mutating the cached ones -- nothing does, and nothing
+    should: a dye is a species, not a scratch pad.
     """
     if path is None:
         import IMP.bff
         path = Path(IMP.bff.get_data_path("rotamer_library")) / "R0" / DYE_LIBRARY_CIF
-    path = Path(path)
+    resolved = Path(path)
+    key = None
+    if resolved.exists():
+        stat = resolved.stat()
+        key = (str(resolved.resolve()), stat.st_mtime_ns, stat.st_size)
+        hit = _LIBRARY_CACHE.get(key)
+        if hit is not None:
+            # A fresh mapping each time, so a caller that adds or drops an entry
+            # does not edit the library for everyone. The `Dye` values are
+            # shared, and that is safe because `Dye` is frozen -- reaching round
+            # that with `object.__setattr__` corrupts the species for every
+            # later reader, which is exactly what a test did on the day this
+            # cache landed.
+            return dict(hit)
+    path = resolved
 
     dyes = _DyeHandler()
     spectra = _SpectrumHandler()
@@ -133,4 +163,7 @@ def read_dye_library(path: str | Path | None = None) -> Dict[str, Dye]:
             extinction_coefficient=_float(row.get("extinction_coefficient")),
             quantum_yield=_float(row.get("quantum_yield")),
         )
+    if key is not None:
+        _LIBRARY_CACHE[key] = out
+        return dict(out)
     return out

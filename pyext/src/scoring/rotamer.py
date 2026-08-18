@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -34,8 +35,14 @@ class RotamerScoreResult:
     energies: np.ndarray
 
 
+@lru_cache(maxsize=4096)
 def _atom_type(atom_name: str) -> str:
     """Return a coarse atom type from an atom name.
+
+    Memoised: a structure has thousands of atoms and a handful of distinct
+    names, so the same strings arrive over and over. Profiling one FRETpredict
+    comparison counted 292 872 calls, all of them resolving one of a few dozen
+    names to one of five letters.
 
     Parameters
     ----------

@@ -7,6 +7,8 @@ parallel implementation -- each is checked against the kernel it wraps, so the
 kernels can later move underneath the terms without changing an answer.
 """
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -124,8 +126,11 @@ class TestFRET:
 
     def test_it_reproduces_the_trace_kernel(self):
         from IMP.bff.quenching.fret_trace import fret_rate_trace
-        d = find_dye("AlexaFluor 488")
-        object.__setattr__(d, "lifetime", 4.0)
+        # `replace`, not `object.__setattr__`: Dye is frozen, and the library
+        # is cached, so writing through the freeze edits the species for every
+        # later reader. That is how this test used to leak a lifetime into
+        # `test_a_dye_without_a_lifetime_is_refused`.
+        d = dataclasses.replace(find_dye("AlexaFluor 488"), lifetime=4.0)
         a = find_dye("AlexaFluor 594")
         term = FRETTerm(donor=d, acceptor=a)
         donor, acceptor = _states(32, 1), _states(48, 2)
