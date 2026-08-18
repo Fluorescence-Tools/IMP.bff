@@ -13,10 +13,7 @@ spectra are module data (``data/rotamer_library/R0``, the FRETpredict tables).
 
 from __future__ import annotations
 
-import csv
 import re
-from collections.abc import Iterable
-from importlib import resources
 from pathlib import Path
 
 import numpy as np
@@ -31,50 +28,6 @@ try:  # numpy >= 2
     _trapezoid = np.trapezoid
 except AttributeError:  # pragma: no cover - numpy < 2
     _trapezoid = np.trapz
-
-def _package_resource_path(*parts: str) -> Path:
-    """Return a path to a bundled resource file.
-
-    Parameters
-    ----------
-    *parts : str
-        Relative path parts below the FRETpredict package data directory.
-
-    Returns
-    -------
-    pathlib.Path
-        Existing resource path.
-    """
-    # The rotamer library ships as IMP.bff module data (data/rotamer_library),
-    # not as a vendored package: it is data the rotamer route loads at run
-    # time, so it moved into the module rather than staying in junk/.
-    import IMP.bff
-    root = Path(IMP.bff.get_data_path("rotamer_library"))
-    parts = tuple(p for p in parts if p != "lib")
-    return root.joinpath(*parts)
-
-
-def find_r0_file(filename: str, r0_dir: str | Path | None = None) -> Path:
-    """Find a bundled R0 data file.
-
-    Parameters
-    ----------
-    filename : str
-        File name, for example ``AlexaFluor488.csv``.
-    r0_dir : pathlib.Path or str, optional
-        Optional directory containing R0 CSV files.
-
-    Returns
-    -------
-    pathlib.Path
-        Path to the requested file.
-    """
-    if r0_dir is not None:
-        path = Path(r0_dir) / filename
-        if path.exists():
-            return path
-    return _package_resource_path("lib", "R0", filename)
-
 
 def normalize_dye_name(dye_name: str) -> tuple[str, str, str]:
     """Normalize a FRETpredict-style dye name.
@@ -98,67 +51,19 @@ def normalize_dye_name(dye_name: str) -> tuple[str, str, str]:
     return dye_type, number, f"{dye_type}{number}"
 
 
-def read_dye_table(path: str | Path | None = None) -> dict[tuple[str, str], dict[str, float]]:
-    """Read the bundled dye extinction and quantum-yield table.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str, optional
-        Optional path to ``Dyes_extinction_QD.csv``.
-
-    Returns
-    -------
-    dict
-        Mapping ``(type, chromophore)`` to ``Ext_coeff`` and ``QD`` values.
-    """
-    table_path = Path(path) if path is not None else find_r0_file("Dyes_extinction_QD.csv")
-    table: dict[tuple[str, str], dict[str, float]] = {}
-    with table_path.open(newline="") as handle:
-        reader = csv.reader(handle)
-        for row in reader:
-            if len(row) < 4:
-                continue
-            dye_type, chromophore, ext_coeff, qd = row[:4]
-            table[(dye_type.strip(), chromophore.strip())] = {
-                "Ext_coeff": float(ext_coeff),
-                "QD": float(qd),
-            }
-    return table
-
-
-def read_spectrum(path: Path) -> "Spectrum":
-    """Read a normalized donor or acceptor spectrum.
-
-    Parameters
-    ----------
-    path : pathlib.Path
-        Spectrum CSV path.
-
-    Returns
-    -------
-    IMP.bff.dye.Spectrum
-        Excitation and emission on the file's shared wavelength grid.
-    """
-    from .species import Spectrum
-    data: list[tuple[float, float, float]] = []
-    with path.open(newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            data.append(
-                (
-                    float(row["Wavelength"]),
-                    float(row["Excitation"]) / 100.0,
-                    float(row["Emission"]) / 100.0,
-                )
-            )
-    array = np.array(
-        data, dtype=[("Wavelength", float), ("Excitation", float), ("Emission", float)])
-    return Spectrum(
-        wavelength=array["Wavelength"].astype(float),
-        excitation=array["Excitation"].astype(float),
-        emission=array["Emission"].astype(float),
-    )
-
+#: flrCIF items for the derivation's inputs and output. ``index_of_refraction``
+#: and ``kappa_squared`` are **not** in the upstream IHM-FLR dictionary -- they
+#: are added by ``mmfdb_flr_ext.dic`` (``../mmfdb/src/mmfdb/data``), which is
+#: what makes a stored R0 reproducible rather than a bare number.
+FLRCIF_ITEMS = {
+    "forster_radius": "_flr_fret_forster_radius.forster_radius",
+    "k2": "_flr_fret_forster_radius.kappa_squared",
+    "refractive_index": "_flr_fret_forster_radius.index_of_refraction",
+    "donor": "_flr_fret_forster_radius.donor_probe_id",
+    "acceptor": "_flr_fret_forster_radius.acceptor_probe_id",
+    # no dictionary in the stack has an item for these
+    "spectral_overlap": None,
+}
 
 #: Numerical factor of the Foerster expression with R0 in nm, the overlap
 #: integral in M^-1 cm^-1 nm^4 and wavelengths in nm.
@@ -265,18 +170,17 @@ def forster_radius_from_spectra(
     donor_type, donor_number, donor_name = normalize_dye_name(donor)
     _acceptor_type, acceptor_number, acceptor_name = normalize_dye_name(acceptor)
 
-    dye_table = read_dye_table()
-    donor_data = dye_table.get((donor_type, donor_number))
-    acceptor_data = dye_table.get((_acceptor_type, acceptor_number))
-    if donor_data is None or acceptor_data is None:
-        raise ValueError(f"No R0 dye data found for {donor!r} / {acceptor!r}")
 
-    donor_spectrum = read_spectrum(find_r0_file(f"{donor_name}.csv", r0_dir))
-    acceptor_spectrum = read_spectrum(find_r0_file(f"{acceptor_name}.csv", r0_dir))
+    from .cif import read_dye_library
+    library = read_dye_library()
+    donor_dye, acceptor_dye = library.get(donor_name), library.get(acceptor_name)
+    if donor_dye is None or acceptor_dye is None or not (
+            donor_dye.has_spectrum and acceptor_dye.has_spectrum):
+        raise ValueError(f"No spectra for {donor!r} / {acceptor!r}")
 
-    wavelengths = donor_spectrum.wavelength
-    donor_emission = donor_spectrum.emission
-    acceptor_excitation = acceptor_spectrum.excitation
+    wavelengths = donor_dye.spectrum.wavelength
+    donor_emission = donor_dye.spectrum.emission
+    acceptor_excitation = acceptor_dye.spectrum.excitation
 
     if donor_emission.size != wavelengths.size or acceptor_excitation.size != wavelengths.size:
         raise ValueError("Donor and acceptor spectra must share the same wavelength grid")
@@ -285,30 +189,10 @@ def forster_radius_from_spectra(
     if emission_integral == 0:
         return 0.0
 
-    ext_coeff_max = acceptor_data["Ext_coeff"]
+    ext_coeff_max = acceptor_dye.extinction_coefficient
     ext_coeff_acceptor = ext_coeff_max * acceptor_excitation
     overlap = _trapezoid(donor_emission * ext_coeff_acceptor * np.power(wavelengths, 4), x=wavelengths)
     overlap /= emission_integral
 
-    return _r0_from_overlap(overlap, donor_data["QD"], k2, refractive_index)
-
-
-def iter_r0_pairs(r0_dir: str | Path | None = None) -> Iterable[dict[str, object]]:
-    """Iterate precomputed R0 pairs if available.
-
-    Parameters
-    ----------
-    r0_dir : pathlib.Path or str, optional
-        Optional directory containing ``R0_pairs.csv``.
-
-    Yields
-    ------
-    dict
-        Precomputed R0 row.
-    """
-    path = Path(r0_dir) / "R0_pairs.csv" if r0_dir is not None else find_r0_file("R0_pairs.csv")
-    if not path.exists():
-        return
-    with path.open(newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        yield from reader
+    return _r0_from_overlap(
+        overlap, donor_dye.quantum_yield, k2, refractive_index)

@@ -106,7 +106,15 @@ EXPORTS = {
     "Dye": "IMP.bff.dye.species",
     "Spectrum": "IMP.bff.dye.species",
     "find_dye": "IMP.bff.dye.library",
+    # --- system: what is attached where (PRD-113 stage 2) --------------------
+    "Label": "IMP.bff.label.site",
+    "FLUOROPHORE_TYPES": "IMP.bff.label.site",
+    "Quencher": "IMP.bff.label.quencher",
+    "reference_quenchers": "IMP.bff.label.quencher",
+    "PETParameters": "IMP.bff.label.quencher",
+    "reference_pet_parameters": "IMP.bff.label.quencher",
     "available_dyes": "IMP.bff.dye.library",
+    "read_dye_library": "IMP.bff.dye.cif",
     "kappa2_from_dipoles": "IMP.bff.fret.kappa2",
     "kappa2_isotropic": "IMP.bff.fret.kappa2",
     # --- accessible volumes, fps.json, distances (fret) -----------------------

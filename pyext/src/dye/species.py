@@ -33,8 +33,12 @@ __all__ = ["Spectrum", "Dye", "FLRCIF_ITEMS"]
 #: e.g. a maleimide) and its *chromophore* is what fluoresces
 #: (``chromophore_name``). ``Dye`` here is the chromophore plus the photophysics.
 #:
-#: **Note what is missing**: flrCIF has no item for quantum yield, extinction
-#: coefficient or a spectrum. The closest,
+#: **Note what is missing**: **no dictionary in the stack has an item for
+#: quantum yield, extinction coefficient or a spectrum.** Checked across all ten
+#: ``.dic`` files in ``../mmfdb/src/mmfdb/data`` (mmCIF std, PDBx v50 and
+#: v5_next, DDL, MA, IHM, IHM-FLR, mmfdb FLR and workflow extensions): the only
+#: matches are ``_em_detector.detective_quantum_efficiency`` and the NMR
+#: spectral categories. The closest FLR item,
 #: ``_flr_fret_calibration_parameters.phi_acceptor``, is an analysis calibration
 #: value rather than a property of the species. Those three fields are therefore
 #: bff-native and marked ``None`` -- deliberately, not by omission.

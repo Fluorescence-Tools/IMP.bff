@@ -1,5 +1,55 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 2: `label/`, PET as a pair property, CIF as the data format)
+
+* **`Label` and `Quencher` replace two untyped dicts.** A labelling site was a
+  `source_info` dict threaded through the AV builder, the quenching model and
+  every benchmark — and it mixed *where the dye is attached* with *how its
+  accessible volume is computed*. `Label` carries only the first half;
+  `linker_length`, `radius1..3`, `allowed_sphere_radius` and
+  `simulation_grid_resolution` are AV *representation* parameters, and a rotamer
+  library has none of them. Pinned by a test.
+* **PET is a pair property, not a quencher property** (owner, 2026-08-18). `kQ`
+  depends on the redox potentials of *both* partners — a rhodamine, an oxazine
+  and a cyanine see the same tryptophan differently — so a `Quencher` carries
+  identity only (`comp_id`, the redox-active `atom_ids`, optional location) and
+  `PETParameters` is keyed by `(dye, comp_id)`. My first cut put `rate_constant`
+  on the `Quencher`, which would have hardened exactly that error.
+* **The bundled table says so itself.** Its docstring reads *"reference PET
+  parameters for a xanthene dye (Alexa488-like)"* — and the package applies it to
+  every dye. `reference_pet_parameters(dye)` keeps that transfer but makes it
+  visible: each entry records `measured_for`, so `is_transferred` reports when an
+  assumption was made rather than a measurement used.
+* **CIF is the data format** (owner). The dye library was 41 CSV files — one
+  extinction/QY table and one curve file per dye — with no category names, no
+  units and no provenance. Now one `dye_library.cif` (38 dyes, 26 169 spectrum
+  points) read through `ihm.format`, the CIF layer the package already uses. The
+  CSVs are gone.
+* **Two CIF traps, both caught by checking rather than by assuming.**
+  `ihm.format.CifReader` reads its keywords from the **handler's `__call__`
+  signature**, so a `**kwargs` handler is silently handed nothing — the first
+  reader returned zero dyes. And `CifWriter._repr` formats floats with `"%.3f"`,
+  which rounded the spectra to three decimals and moved R0 by 0.0065 %
+  (5.687415 vs 5.687781 nm); its docstring names the escape hatch — hand it a
+  string. After that the CIF route reproduces the CSV R0 **bit for bit**
+  (5.687781310385014).
+* **`_bff_dye` and `_bff_dye_spectrum` are bff-native, and that is recorded.**
+  No dictionary in the stack defines an item for a quantum yield, an extinction
+  coefficient or a spectrum — checked across all ten `.dic` files in
+  `../mmfdb/src/mmfdb/data`; the only matches are
+  `_em_detector.detective_quantum_efficiency` and the NMR spectral categories.
+  They should be proposed for `mmfdb_flr_ext.dic`. Identifiers still follow
+  flrCIF (`chromophore_name` is `_flr_probe_list.chromophore_name`).
+* **`_flr_fret_forster_radius.index_of_refraction` and `.kappa_squared` exist** —
+  added by `mmfdb_flr_ext.dic`, not upstream IHM-FLR — so stage 1's new
+  `refractive_index` parameter has a dictionary item after all, and a stored R0
+  can be reproducible rather than a bare number.
+* **A name collision found**: `label/` already meant label *distribution* (a
+  representation concept) and now also means label = dye at a site (a system
+  concept). `LabelDistribution*` is re-exported meanwhile and moves to
+  `representation/` in stage 3.
+* Suite **626 passed**, same single pre-existing `IMP.em` failure.
+
 ## 2026-08-18 (PRD-113 stage 1: `dye/` — the species)
 
 * **A dye had two unrelated descriptions.** The *spectral* one in
