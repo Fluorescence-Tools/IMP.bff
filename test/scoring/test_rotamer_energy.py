@@ -157,3 +157,59 @@ def test_an_unknown_potential_is_refused():
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+# --- the explicit dye's internal energy --------------------------------------
+
+def test_lj_pair_energies_match_the_gathered_numpy():
+    """Same arithmetic, without gathering both ends of every pair.
+
+    The vectorised form built ``(n_frames, n_pairs, 3)`` twice -- once for each
+    end -- before taking a single difference. At 4000 frames and 1200 pairs that
+    is 115 MB per gather, and 323 ms against 65 ms.
+    """
+    rng = np.random.default_rng(6)
+    n_frames, n_atoms, n_pairs = 300, 40, 250
+    coords = rng.normal(0, 4, (n_frames, n_atoms, 3))
+    ia = rng.integers(0, n_atoms, n_pairs)
+    ib = (ia + 1 + rng.integers(0, n_atoms - 1, n_pairs)) % n_atoms
+    rmin = rng.uniform(2.5, 4.5, n_pairs)
+    eps = rng.uniform(0.02, 0.3, n_pairs)
+
+    r = np.linalg.norm(coords[:, ia, :] - coords[:, ib, :], axis=-1)
+    want = lj_energy(r, rmin[None, :], eps[None, :], repulsive_only=True).sum(axis=-1)
+    got = np.asarray(IMP.bff.lj_pair_energies(
+        np.ascontiguousarray(coords).ravel(),
+        ia.astype(np.int32), ib.astype(np.int32), rmin, eps,
+        n_frames, n_atoms, n_pairs, True))
+    np.testing.assert_allclose(got, want, rtol=1e-12, atol=1e-14)
+
+
+def test_repulsive_only_drops_the_attractive_tail():
+    coords = np.array([[[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]]])   # beyond rmin
+    args = (np.ascontiguousarray(coords).ravel(), np.array([0], np.int32),
+            np.array([1], np.int32), np.array([3.0]), np.array([0.25]), 1, 2, 1)
+    assert IMP.bff.lj_pair_energies(*args, True)[0] == 0.0
+    assert IMP.bff.lj_pair_energies(*args, False)[0] < 0.0, "the tail is attractive"
+
+
+def test_the_scalar_and_batch_evaluators_agree():
+    """``evaluate`` is one frame through the batch path, and must stay so."""
+    from IMP.bff.scoring.dye_lj import DyeInternalEnergyEvaluator
+    rng = np.random.default_rng(2)
+    n = 12
+    system = {
+        "sites": [{"id": i, "element": "C"} for i in range(n)],
+        "bonds": [(i, i + 1, 1.5, 0) for i in range(n - 1)],
+    }
+    ev = DyeInternalEnergyEvaluator(system)
+    frames = rng.normal(0, 3, (5, n, 3))
+    batch = ev.evaluate_batch(frames)
+    for i, f in enumerate(frames):
+        assert ev.evaluate(f) == pytest.approx(batch[i], rel=1e-12)
+
+
+def test_no_pairs_means_no_energy():
+    from IMP.bff.scoring.dye_lj import DyeInternalEnergyEvaluator
+    ev = DyeInternalEnergyEvaluator({"sites": [{"id": 0, "element": "C"}], "bonds": []})
+    assert list(ev.evaluate_batch(np.zeros((3, 1, 3)))) == [0.0, 0.0, 0.0]

@@ -96,6 +96,33 @@ IMPBFFEXPORT std::vector<double> rotamer_pair_energy_matrix(
         double aabb_pad = 3.5,
         double r_floor = 0.01);
 
+//! Internal LJ energy of each frame, over an explicit list of atom pairs.
+/*!
+    The bonded exclusions have already decided which atom pairs interact, so
+    this takes the list rather than rediscovering it. One energy per frame.
+
+    The vectorised form it replaces gathered `(n_frames, n_pairs, 3)` twice --
+    once for each end of every pair -- before taking a single difference. At ten
+    thousand frames and twelve hundred pairs that is 288 MB per gather.
+
+    \param[in] coords flat, `n_frames * n_atoms * 3`
+    \param[in] index_a,index_b atom indices of each pair
+    \param[in] rmin,eps combined parameters per pair
+    \param[in] n_frames,n_atoms,n_pairs shapes
+    \param[in] repulsive_only drop the attractive tail beyond \f$R_{min}\f$
+    \param[in] r_floor distance clamp keeping the energy finite
+    \return one energy per frame
+*/
+IMPBFFEXPORT std::vector<double> lj_pair_energies(
+        const std::vector<double>& coords,
+        const std::vector<int>& index_a,
+        const std::vector<int>& index_b,
+        const std::vector<double>& rmin,
+        const std::vector<double>& eps,
+        int n_frames, int n_atoms, int n_pairs,
+        bool repulsive_only = true,
+        double r_floor = 0.01);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_ROTAMERENERGY_H

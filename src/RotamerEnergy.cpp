@@ -157,4 +157,37 @@ std::vector<double> rotamer_pair_energy_matrix(
     return out;
 }
 
+std::vector<double> lj_pair_energies(
+        const std::vector<double>& coords,
+        const std::vector<int>& index_a, const std::vector<int>& index_b,
+        const std::vector<double>& rmin, const std::vector<double>& eps,
+        int n_frames, int n_atoms, int n_pairs,
+        bool repulsive_only, double r_floor) {
+    std::vector<double> out(static_cast<std::size_t>(std::max(0, n_frames)), 0.0);
+    if (n_frames <= 0 || n_pairs <= 0 || n_atoms <= 0) return out;
+
+#pragma omp parallel for schedule(static)
+    for (int f = 0; f < n_frames; ++f) {
+        const double* xyz = &coords[static_cast<std::size_t>(f) * n_atoms * 3];
+        double e = 0.0;
+        for (int p = 0; p < n_pairs; ++p) {
+            const int ia = index_a[p], ib = index_b[p];
+            const double dx = xyz[3 * ia + 0] - xyz[3 * ib + 0];
+            const double dy = xyz[3 * ia + 1] - xyz[3 * ib + 1];
+            const double dz = xyz[3 * ia + 2] - xyz[3 * ib + 2];
+            const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+            // Both tests on the unclamped distance, as the Python has them;
+            // only the ratio uses the floor.
+            if (repulsive_only && !(d < rmin[p])) continue;
+            const double safe = d > r_floor ? d : r_floor;
+            const double ratio = rmin[p] / safe;
+            const double r6 = ratio * ratio * ratio;
+            const double ratio6 = r6 * r6;
+            e += eps[p] * (ratio6 * ratio6 - 2.0 * ratio6);
+        }
+        out[f] = e;
+    }
+    return out;
+}
+
 IMPBFF_END_NAMESPACE

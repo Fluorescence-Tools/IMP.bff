@@ -16,6 +16,8 @@ Algorithmic tricks ported from IMP RotamerCalculator.cpp:
 
 import numpy as np
 
+import IMP.bff
+
 from IMP.bff.scoring.lennard_jones import CHARMM36_LJ, lj_cross, lj_energy
 
 
@@ -344,20 +346,16 @@ class DyeInternalEnergyEvaluator:
         Returns:
             energies: shape (n_frames,)
         """
+        batch = np.asarray(coords_batch, dtype=np.float64)
         if len(self.pairs) == 0:
-            return np.zeros(coords_batch.shape[0])
-
-        # Gather positions for all pairs — shape (n_frames, n_pairs, 3)
-        pos_a = coords_batch[:, self._idx_a, :]   # (F, P, 3)
-        pos_b = coords_batch[:, self._idx_b, :]   # (F, P, 3)
-
-        # Pairwise distances — (F, P)
-        delta = pos_a - pos_b
-        r = np.linalg.norm(delta, axis=-1)        # (F, P)
-
-        # Repulsive-only LJ through the shared kernel (r clamped away from zero)
-        lj_val = lj_energy(r, self._rmin[None, :], self._eps[None, :], repulsive_only=True)
-        return lj_val.sum(axis=-1)                # (F,)
+            return np.zeros(batch.shape[0])
+        n_frames, n_atoms = batch.shape[0], batch.shape[1]
+        return np.asarray(IMP.bff.lj_pair_energies(
+            np.ascontiguousarray(batch).ravel(),
+            self._idx_a.astype(np.int32), self._idx_b.astype(np.int32),
+            self._rmin, self._eps,
+            int(n_frames), int(n_atoms), int(self._rmin.size), True),
+            dtype=np.float64)
 
     # ------------------------------------------------------------------
     # Combined Trick 1 + 3: filter then score
