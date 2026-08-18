@@ -83,14 +83,13 @@ class TestLabelDistributionAV:
             atoms_xyz=xyz, atoms_vdw=vdw,
             residue_seq_number=0, atom_name="CB",
         )
-        # Force the condition the test is about. This used to pass only
-        # because `_HAS_LABELLIB` was wrongly False on machines that *did*
-        # have a working LabelLib — the check looked for `LabelLib.AV`, which
-        # current builds do not expose. With that fixed the backend is
-        # available, so the absence has to be simulated.
+        # Force the condition the test is about: a build without IMP.bff's AV
+        # decorator, which since PRD-112 stage 1 is the only backend. This
+        # used to pass only because `_HAS_LABELLIB` was wrongly False on
+        # machines that *did* have a working LabelLib — the check looked for
+        # `LabelLib.AV`, which current builds do not expose.
         import IMP.bff.av.compute as _compute
 
-        monkeypatch.setattr(_compute, "_HAS_LABELLIB", False)
         monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
         with pytest.raises(ImportError):
             dd.get_basic_av()

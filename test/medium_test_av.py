@@ -1,6 +1,6 @@
 """Tests for ``IMP.bff.av`` — accessible volume infrastructure.
 
-All tests in this file run in **standalone mode** (no IMP or LabelLib
+All tests in this file run in **standalone mode** (no IMP
 required) and use the Numba kernels directly.
 """
 
@@ -227,7 +227,7 @@ class TestACV:
 
 
 class TestComputeAvBackends:
-    """`compute_av` end-to-end, on whichever backends this build actually has.
+    """`compute_av` end-to-end, through the array front door.
 
     Written 2026-07-27, when the `imp_bff` branch turned out never to have run:
     it raised `UsageException` on any input because it read its density by
@@ -254,59 +254,54 @@ class TestComputeAvBackends:
 
     @staticmethod
     def _available():
+        """IMP.bff's AV is the only backend (PRD-112 stage 1).
+
+        A LabelLib backend used to sit beside it, skipped by default because it
+        is unsafe: under Guard Malloc the pip LabelLib (2.x, cpython-312) dies
+        with EXC_BAD_ACCESS inside ``Grid3DExt::excludeConcentricSpheres`` -- it
+        reads past a buffer -- and with the normal allocator that read corrupts
+        the heap silently, so the rest of the session aborts at random (1 in 4
+        full-suite runs during garbage collection, 2026-08-17). It is now gone
+        rather than skipped, which also applies the owner's 2026-08-11 rule that
+        IMP.bff's AV is the only backend.
+        """
         from IMP.bff.av import compute
 
-        found = []
-        if compute._HAS_IMP_BFF:
-            found.append("imp_bff")
-        # The LabelLib backend is deliberately not exercised here. Under
-        # Guard Malloc the pip LabelLib (2.x, cpython-312) dies with
-        # EXC_BAD_ACCESS inside Grid3DExt::excludeConcentricSpheres -- it
-        # reads past a buffer -- and with the normal allocator that read
-        # corrupts the heap silently: the rest of the session then crashes
-        # at random (seen as 1-in-4 aborts of the full suite during garbage
-        # collection, 2026-08-17). Run the backend on purpose with
-        # IMP_BFF_TEST_LABELLIB=1 if you need to look at it.
-        if compute._HAS_LABELLIB and os.environ.get("IMP_BFF_TEST_LABELLIB"):
-            found.append("labellib")
-        return found
+        return ["imp_bff"] if compute._HAS_IMP_BFF else []
 
-    @pytest.mark.parametrize("backend", ["imp_bff", "labellib"])
-    def test_it_returns_a_volume(self, backend):
-        if backend not in self._available():
-            pytest.skip(f"{backend} is not available in this build")
+    def test_it_returns_a_volume(self):
+        if not self._available():
+            pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
         av = compute_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
-            grid_resolution=0.5, backend=backend,
+            grid_resolution=0.5,
         )
-        assert av.has_volume, "backend returned an empty accessible volume"
+        assert av.has_volume, "the AV backend returned an empty accessible volume"
         assert av.points.shape[1] == 4
 
-    @pytest.mark.parametrize("backend", ["imp_bff", "labellib"])
-    def test_the_volume_sits_on_the_attachment_site(self, backend):
+    def test_the_volume_sits_on_the_attachment_site(self):
         """Regression: the map used to be left at the coordinate origin.
 
         With `shift_xyz=False` and the AV decorated onto the source particle
         itself, the header origin came back (0, 0, 0) and most of the grid was
         reported accessible — a volume nowhere near the protein.
         """
-        if backend not in self._available():
-            pytest.skip(f"{backend} is not available in this build")
+        if not self._available():
+            pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
         av = compute_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
-            grid_resolution=0.5, backend=backend,
+            grid_resolution=0.5,
         )
         offset = np.linalg.norm(av.points[:, :3].mean(axis=0) - source_xyz)
         assert offset < 12.0, (
-            f"{backend} put the volume {offset:.1f} A from the attachment site"
+            f"the volume sits {offset:.1f} A from the attachment site"
         )
 
-    @pytest.mark.parametrize("backend", ["imp_bff", "labellib"])
-    def test_the_density_and_the_points_describe_the_same_volume(self, backend):
+    def test_the_density_and_the_points_describe_the_same_volume(self):
         """The transpose test.
 
         IMP numbers voxels with x fastest, so reshaping its flat tile values
@@ -315,13 +310,13 @@ class TestComputeAvBackends:
         shape is mirrored — so the grid and the cloud have to be compared
         against *each other*, voxel by voxel.
         """
-        if backend not in self._available():
-            pytest.skip(f"{backend} is not available in this build")
+        if not self._available():
+            pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
         av = compute_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
-            grid_resolution=0.5, backend=backend,
+            grid_resolution=0.5,
         )
         nx, ny, nz = av.grid_shape
         ix, iy, iz = np.nonzero(av.density)
@@ -334,7 +329,7 @@ class TestComputeAvBackends:
         a = set(map(tuple, np.round(from_density, 4)))
         b = set(map(tuple, np.round(av.points[:, :3], 4)))
         assert a == b, (
-            f"{backend}: density grid and point cloud disagree — "
+            "density grid and point cloud disagree — "
             f"{len(a - b)} voxels only in the grid, {len(b - a)} only in the cloud"
         )
 
@@ -387,7 +382,6 @@ class TestComputeAvIsThreadSafe:
                 atoms_xyz, atoms_vdw, source_xyz,
                 linker_length=12.0, linker_width=1.0,
                 dye_radii=(2.0, 0.0, 0.0), grid_resolution=1.0,
-                backend="imp_bff",
             )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.WORKERS) as pool:

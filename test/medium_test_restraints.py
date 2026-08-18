@@ -116,17 +116,20 @@ class TestSimpleAVNetworkRestraint:
         assert r.evaluate() > 0.0
 
     def test_add_av_from_coords_raises_without_backend(self, monkeypatch):
-        """Without IMP.bff or LabelLib, coordinate-based AV creation fails."""
+        """Without IMP.bff's AV decorator, coordinate-based AV creation fails.
+
+        There is one backend since PRD-112 stage 1, so the absence to simulate
+        is a build without the decorator. Two earlier revisions of this test
+        held for the wrong reason: first because the LabelLib probe looked for
+        `LabelLib.AV`, which current builds do not expose, so a usable LabelLib
+        was reported missing; then because both flags had to be cleared.
+        """
         xyz = np.array([[0., 0., 0.]])
         vdw = np.array([1.5])
         src = np.array([0., 0., 0.])
         r = SimpleAVNetworkRestraint()
-        # Simulate "no AV backend". Previously this held by accident: the
-        # LabelLib probe looked for `LabelLib.AV`, which current builds do not
-        # expose, so a usable LabelLib was reported as missing.
         import IMP.bff.av.compute as _compute
 
-        monkeypatch.setattr(_compute, "_HAS_LABELLIB", False)
         monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
         with pytest.raises((ImportError, RuntimeError)):
             r.add_av_from_coords("test", xyz, vdw, src)

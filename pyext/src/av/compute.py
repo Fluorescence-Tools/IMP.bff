@@ -30,19 +30,6 @@ try:
 except ImportError:
     pass
 
-_HAS_LABELLIB = False
-try:
-    import LabelLib as _ll
-    # Two generations of the binding: older builds expose a high-level ``AV``,
-    # current ones only the ``dyeDensityAV1`` kernel. Accept either — refusing
-    # the newer one made this backend unreachable on installs that had a
-    # perfectly working LabelLib.
-    if hasattr(_ll, "AV") or hasattr(_ll, "dyeDensityAV1"):
-        _HAS_LABELLIB = True
-except ImportError:
-    pass
-
-
 #: Radius around the attachment atom inside which obstacles are ignored, so the
 #: linker can leave the atom it is tied to.
 #:
@@ -357,96 +344,6 @@ def _av_imp_bff(
     )
 
 
-# ---------------------------------------------------------------------------
-# LabelLib backend
-# ---------------------------------------------------------------------------
-
-def _av_labellib(
-    atoms_xyz: np.ndarray,
-    atoms_vdw: np.ndarray,
-    source_xyz: np.ndarray,
-    linker_length: float = 20.0,
-    linker_width: float = 0.5,
-    dye_radii: Tuple[float, float, float] = (3.5, 0.0, 0.0),
-    grid_resolution: float = 1.5,
-) -> AccessibleVolume:
-    """Compute AV using LabelLib."""
-    if not _HAS_LABELLIB:
-        raise ImportError("LabelLib is required for the LabelLib AV backend.")
-
-    # Stack xyz + vdw into a single array as LabelLib expects.
-    #
-    # The attachment atom's own exclusion sphere has to be removed first: the
-    # linker starts *at* that atom, so leaving its radius in place puts the
-    # source inside an obstacle and LabelLib returns an empty volume — no error,
-    # just nothing. Match it by position, which is all this function is given.
-    radii = np.asarray(atoms_vdw, dtype=np.float64).copy()
-    source = np.asarray(source_xyz, dtype=np.float64)
-    coincident = np.flatnonzero(
-        np.all(np.isclose(np.asarray(atoms_xyz, dtype=np.float64), source), axis=1)
-    )
-    if coincident.size:
-        radii[coincident] = 0.0
-    atoms = np.column_stack([np.asarray(atoms_xyz, dtype=np.float64), radii])
-
-    if hasattr(_ll, "AV"):
-        density, ng, x0 = _ll.AV(
-            atoms,
-            source_xyz[0], source_xyz[1], source_xyz[2],
-            linker_length, linker_width,
-            dye_radii[0],
-            disc_step=grid_resolution,
-        )
-        density = np.asarray(density).astype(np.float64)
-        nx = ny = nz = ng
-        origin = np.asarray(x0, dtype=np.float64)
-    else:
-        # Current LabelLib: the kernel returns a Grid3D whose ``grid`` is a flat
-        # Fortran-ordered list and whose origin is the grid *centre*, i.e. the
-        # attachment point — not a corner, which is what density2points wants.
-        grid3d = _ll.dyeDensityAV1(
-            np.ascontiguousarray(atoms.T),
-            source,
-            linker_length, linker_width, dye_radii[0], grid_resolution,
-        )
-        nx, ny, nz = grid3d.shape
-        flat = grid3d.grid
-        density = np.fromiter(flat, dtype=np.float64, count=len(flat)).reshape(
-            (nx, ny, nz), order="F"
-        )
-        density[density < 0] = 0.0
-        origin = np.asarray(source_xyz, dtype=np.float64) - (
-            np.array([nx, ny, nz], dtype=np.float64) - 1.0
-        ) / 2.0 * float(grid_resolution)
-
-    total = density.sum()
-    if total > 0:
-        density = density / total
-
-    from IMP.bff.av._kernels import density2points
-    n, pts = density2points(nx, ny, nz, grid_resolution, density, origin, threshold=0.0)
-
-    return AccessibleVolume(
-        points=pts[:n],
-        density=density,
-        grid_origin=origin,
-        grid_step=float(grid_resolution),
-        grid_shape=(nx, ny, nz),
-        attachment_point=source_xyz,
-        params={
-            "backend": "labellib",
-            "linker_length": linker_length,
-            "linker_width": linker_width,
-            "dye_radii": list(dye_radii),
-            "grid_resolution": grid_resolution,
-        },
-    )
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 def compute_av(
     atoms_xyz: np.ndarray,
     atoms_vdw: np.ndarray,
@@ -455,14 +352,19 @@ def compute_av(
     linker_width: float = 0.5,
     dye_radii: Tuple[float, float, float] = (3.5, 0.0, 0.0),
     grid_resolution: float = 1.5,
-    backend: Optional[str] = None,
     allowed_sphere_radius: float = DEFAULT_ALLOWED_SPHERE_RADIUS,
 ) -> AccessibleVolume:
     """Compute an accessible volume from raw atomic coordinates.
 
-    This is a standalone function that does not require a full IMP or
-    chisurf setup.  It will use IMP.bff if available, otherwise
-    LabelLib.
+    The **array** front door: no PDB file and no fps position definition, which
+    is what ``restraints`` needs. :func:`IMP.bff.compute_av` is the other one,
+    taking a structure plus an fps position; both drive the same
+    ``IMP.bff.AV`` / ``PathMap`` core.
+
+    A ``backend`` argument used to select between this and LabelLib. It is gone
+    (PRD-112 stage 1): **IMP.bff's AV is the only backend**, decided 2026-08-11
+    and applied to ChiSurf by PRD-97 and to QuEst by PRD-109. This module was
+    the last place still shipping the alternative.
 
     Parameters
     ----------
@@ -481,14 +383,9 @@ def compute_av(
         corresponds to the AV1 (single-sphere) model.
     grid_resolution : float
         Voxel grid spacing (Å).  Default 1.5.
-    backend : str, optional
-        Force a specific backend: ``"imp_bff"``, ``"labellib"``, or
-        ``None`` for automatic selection.
     allowed_sphere_radius : float
         Radius around the attachment atom inside which obstacles are ignored,
         so the linker can leave the atom it is tied to (Å). Default 2.1.
-        **Only the IMP.bff backend uses it**: LabelLib has no such parameter
-        and instead has the attachment atom's own exclusion sphere removed.
 
     Returns
     -------
@@ -498,7 +395,7 @@ def compute_av(
     Raises
     ------
     ImportError
-        If neither IMP.bff nor LabelLib are available.
+        If this build does not expose IMP.bff's AV decorator.
 
     Examples
     --------
@@ -512,30 +409,15 @@ def compute_av(
     ...     av = compute_av(atoms_xyz, atoms_vdw, source_xyz)
     ...     print(av.n_points)
     ... except ImportError:
-    ...     print("No AV backend available")
+    ...     print("IMP.bff AV not available in this build")
     """
-    # Determine backend
-    if backend is None:
-        if _HAS_IMP_BFF:
-            backend = "imp_bff"
-        elif _HAS_LABELLIB:
-            backend = "labellib"
-        else:
-            raise ImportError(
-                "No AV computation backend available.  "
-                "Install IMP.bff or LabelLib."
-            )
-
-    if backend == "imp_bff":
-        return _av_imp_bff(
-            atoms_xyz, atoms_vdw, source_xyz,
-            linker_length, linker_width, dye_radii, grid_resolution,
-            allowed_sphere_radius,
+    if not _HAS_IMP_BFF:
+        raise ImportError(
+            "IMP.bff's AV decorator is not available in this build; it is the "
+            "only accessible-volume backend."
         )
-    elif backend == "labellib":
-        return _av_labellib(
-            atoms_xyz, atoms_vdw, source_xyz,
-            linker_length, linker_width, dye_radii, grid_resolution,
-        )
-    else:
-        raise ValueError(f"Unknown AV backend: {backend!r}")
+    return _av_imp_bff(
+        atoms_xyz, atoms_vdw, source_xyz,
+        linker_length, linker_width, dye_radii, grid_resolution,
+        allowed_sphere_radius,
+    )
