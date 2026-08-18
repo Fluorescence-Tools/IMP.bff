@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/BrownianWalk.h>
+#include <IMP/bff/internal/RandomWalk.h>
 
 #include <cmath>
 #include <random>
@@ -23,70 +24,23 @@ std::vector<double> brownian_walk_in_volume(
     // here rather than in an out-parameter.
     xyz.assign(static_cast<std::size_t>(n_steps) * 4, 0.0);
 
-    std::mt19937_64 rng(seed >= 0 ? static_cast<std::uint64_t>(seed)
-                                  : std::random_device{}());
-    // In voxel units. 2 D dt is the variance of ONE Cartesian component; the
-    // total three-dimensional MSD is 6 D dt and belongs to no single axis.
-    // This read sqrt(2 * D * 3 * dt) until 2026-08-18, i.e. it used the 3-D
-    // total as one component's width, so the walk diffused at 3D while
-    // GridDiffusionSolver -- the same dynamics as a density -- gave exactly 2Dt.
-    const double sigma = std::sqrt(2.0 * diffusion_coefficient * t_step) / dg;
-    std::normal_distribution<double> gauss(0.0, sigma);
-    std::uniform_int_distribution<int> pick(0, ng - 1);
-
-    const std::size_t n = static_cast<std::size_t>(ng);
-    const bool has_mobility = mobility.size() == n * n * n;
-
-    double px = 0.0, py = 0.0, pz = 0.0;
-    bool found = false;
-    for (int attempt = 0; attempt < 1000; ++attempt) {
-        const int ix = pick(rng), iy = pick(rng), iz = pick(rng);
-        if (occupancy[(static_cast<std::size_t>(ix) * n + iy) * n + iz] > 0) {
-            px = ix; py = iy; pz = iz;
-            found = true;
-            break;
-        }
-    }
-    if (!found) return std::vector<double>();
-
-    xyz[0] = px; xyz[1] = py; xyz[2] = pz; xyz[3] = 1.0;
-    counts[0] = 1;
     // The offset is integral, matching grids.grid_center_index(): the float
     // corner (ng - 1) / 2 disagrees with it on every even ng.
     const double half = (ng - 1) / 2;
-    for (int i = 1; i < n_steps; ++i) {
-        const std::size_t k =
-                (static_cast<std::size_t>(static_cast<int>(px)) * n +
-                 static_cast<int>(py)) * n + static_cast<int>(pz);
-        double scale = 1.0;
-        if (has_mobility) scale = std::sqrt(mobility[k]);
-
-        const double nx = px + gauss(rng) * scale;
-        const double ny = py + gauss(rng) * scale;
-        const double nz = pz + gauss(rng) * scale;
-
-        const int ix = static_cast<int>(nx);
-        const int iy = static_cast<int>(ny);
-        const int iz = static_cast<int>(nz);
-        if (ix >= 0 && ix < ng && iy >= 0 && iy < ng && iz >= 0 && iz < ng &&
-            occupancy[(static_cast<std::size_t>(ix) * n + iy) * n + iz] > 0) {
-            px = nx; py = ny; pz = nz;
-            xyz[4 * i + 3] = 1.0;
-            ++counts[0];
-        } else {
-            // Rejected: stay put, but still emit the frame.
-            ++counts[1];
-        }
-        xyz[4 * i + 0] = px;
-        xyz[4 * i + 1] = py;
-        xyz[4 * i + 2] = pz;
-    }
-    // Only the coordinates are transformed; column 3 is a flag.
-    for (int i = 0; i < n_steps; ++i) {
-        for (int k = 0; k < 3; ++k) {
-            xyz[4 * i + k] = (xyz[4 * i + k] - half) * dg;
-        }
-    }
+    int n_acc = 0, n_rej = 0;
+    const bool ok = internal::run_walk(
+            occupancy, mobility, ng, t_step, diffusion_coefficient, dg, seed,
+            n_steps, n_acc, n_rej,
+            [&](int i, double px, double py, double pz, bool accepted,
+                std::size_t /*voxel*/) {
+                xyz[4 * i + 0] = (px - half) * dg;
+                xyz[4 * i + 1] = (py - half) * dg;
+                xyz[4 * i + 2] = (pz - half) * dg;
+                xyz[4 * i + 3] = accepted ? 1.0 : 0.0;
+            });
+    if (!ok) return std::vector<double>();
+    counts[0] = n_acc;
+    counts[1] = n_rej;
     return xyz;
 }
 

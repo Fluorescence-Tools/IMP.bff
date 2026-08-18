@@ -29,6 +29,7 @@ import numpy as np
 %include "BrownianWalk.i"
 %include "PhotonSimulation.i"
 %include "LifetimeSpectrum.i"
+%include "QuenchedDecay.i"
 
 /* Fluorescence decays */
 

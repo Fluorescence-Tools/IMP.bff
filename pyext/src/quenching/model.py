@@ -22,6 +22,8 @@ from typing import Optional, Sequence
 
 import numpy as np
 
+import IMP.bff
+
 from . import sites
 from IMP.bff.dynamics.brownian import simulate_dye_diffusion
 from .fret_trace import fret_rate_pair_trace, fret_rate_trace
@@ -373,6 +375,77 @@ class QuenchedDonorDecay:
     def photon_trace(self):
         if self._photon_trace is None:
             self.simulate_photons()
+        return self._photon_trace
+
+    def photons_fused(self):
+        """The walk, the rate along it, and the photon race -- in one call.
+
+        Identical to running :meth:`simulate_diffusion` and then
+        :meth:`simulate_photons`, and asserted to be so photon-for-photon in
+        ``test/quenching/test_fused_decay.py``. What it skips is the
+        **trajectory**: the three-call path hands a ``(n_frames, 3)`` array to
+        Python, reads a rate map along it and hands the trace back, and at the
+        default ``t_max`` that is 20 million doubles crossing the boundary to
+        produce a few thousand photons. Nothing downstream of the decay wants
+        the coordinates.
+
+        Use the three calls when the trajectory *is* the point -- a correlation
+        function, a visualisation, an inspection of the rate trace. Use this one
+        inside a fitting loop.
+
+        :returns: ``(delay_times, emitted)``, the same pair
+            :attr:`photon_trace` gives.
+        """
+        # NOT `self.diffusion` -- that property runs the split walk on first
+        # access, so reading it here would do the whole simulation twice and
+        # make the fused path the slower one. Measured: 4.9 s against 1.3 s at
+        # a million steps, until this was an explicit construction.
+        if self._diffusion is None:
+            self._diffusion = DyeDiffusionSimulation(
+                self.density, self.dg, self.x0,
+                slow_factor_map=self.slow_factor_map,
+                quenching_rate_map=self.quenching_rate_map,
+            )
+        walk = self._diffusion
+        D, t_step, t_max = self.diffusion_coefficient, self.t_step, self.t_max
+        walk.t_step = float(t_step)
+        seeds = _trajectory_seeds(self.random_seed,
+                                  _resolve_parallel(self.n_trajectories))
+        slow = (walk.slow_factor_map if walk.slow_factor_map is not None
+                else self.slow_fact)
+        mobility = (np.ascontiguousarray(np.asarray(slow, dtype=np.float64)).ravel()
+                    if np.ndim(slow) == 3 else
+                    (np.empty(0) if float(slow) == 1.0 or walk.slow_density is None
+                     else np.where(np.asarray(walk.slow_density, dtype=bool),
+                                   float(slow), 1.0).ravel()))
+        rate_map = self.quenching_rate_map
+        ng = int(np.asarray(walk.density).shape[0])
+
+        stats = IMP.bff.VectorDouble()
+        flat = IMP.bff.quenched_donor_photons(
+            np.ascontiguousarray(np.asarray(walk.density, dtype=np.int32)).ravel(),
+            mobility,
+            np.ascontiguousarray(np.asarray(rate_map, dtype=np.float64)).ravel(),
+            ng, float(walk.dg), float(t_max), float(t_step), float(D),
+            IMP.bff.VectorInt([-1 if s is None else int(s) for s in seeds]),
+            float(self.tau0), int(self.n_photons),
+            -1 if self._photon_seed() is None else int(self._photon_seed()),
+            stats)
+
+        packed = np.asarray(flat, dtype=np.float64).reshape(-1, 2)
+        self._photon_trace = (np.ascontiguousarray(packed[:, 0]),
+                              packed[:, 1].astype(np.uint8))
+        # `list()`, not indexing: this module sets SWIG's `kwargs` feature, and
+        # the generated `__getitem__` will not take a positional index under it.
+        summary = list(stats)
+        if len(summary) == 5:
+            walk.n_accepted = int(summary[1])
+            walk.n_rejected = int(summary[2])
+            self._fused_stats = {
+                "n_frames": int(summary[0]),
+                "mean_k_quench": float(summary[3]),
+                "collision_fraction": float(summary[4]),
+            }
         return self._photon_trace
 
     def simulate_photons(self, k_quench=None):
