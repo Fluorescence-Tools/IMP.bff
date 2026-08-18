@@ -13,6 +13,8 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from IMP.bff.representation.pathmap import resample_av
+
 # ---------------------------------------------------------------------------
 # Backend detection
 # ---------------------------------------------------------------------------
@@ -55,61 +57,6 @@ DEFAULT_ALLOWED_SPHERE_RADIUS = 2.1
 #: caller almost all of its parallelism in order to guard the phase that is not
 #: the one failing. Each thread resamples its own model.
 _IMP_BUILD_LOCK = threading.Lock()
-
-
-def _path_map_header(path_map):
-    """The PathMapHeader, tolerating an incompletely wrapped build.
-
-    IMP 2.24 binds ``PathMap.get_path_map_header`` to a C symbol
-    (``DensityMap_get_path_map_header``) that is absent from the compiled
-    ``_IMP_bff``, so calling it raises ``AttributeError``. The writable accessor
-    is bound to a different symbol and works, and the header is only read here.
-    """
-    try:
-        return path_map.get_path_map_header()
-    except AttributeError:
-        return path_map.get_path_map_header_writable()
-
-
-def _path_map_accessible_density(path_map):
-    """``(density, edge_length, origin)`` for a path map's accessible volume.
-
-    Two things here are easy to get wrong and silent when wrong:
-
-    **Axis order.** IMP numbers voxels with *x* fastest
-    (``i = x + nx*y + nx*ny*z``), so reshaping the flat tile values C-order into
-    ``(nx, ny, nz)`` — which makes the *last* axis fastest — transposes the
-    volume, exchanging x and z. An accessible volume is globular enough that the
-    transpose still overlaps the truth by ~83 % of its voxels, so the point
-    count, the bounding box and the total volume all look right while the shape
-    is mirrored.
-
-    **Origin.** IMP sizes the map itself, and the attachment atom lands on the
-    middle voxel only when the edge length is odd. The corner must be read from
-    the header rather than reconstructed from the attachment point.
-    """
-    header = path_map.get_header()
-    nx, ny, nz = header.get_nx(), header.get_ny(), header.get_nz()
-    if not (nx == ny == nz):
-        raise ValueError(
-            f"IMP PathMap grid is not cubic ({nx}, {ny}, {nz}); "
-            "this backend assumes equal nx, ny, nz."
-        )
-    tile_values = path_map.get_tile_values(
-        IMP.bff.PM_TILE_ACCESSIBLE_DENSITY,
-        (0.0, _path_map_header(path_map).get_max_path_length()),
-    )
-    density = (
-        np.asarray(tile_values, dtype=np.float64)
-        .reshape((nz, ny, nx), order="C")
-        .transpose(2, 1, 0)
-    )
-    density = np.ascontiguousarray(np.where(density > 0.0, 1.0, 0.0))
-    origin = np.array(
-        [header.get_xorigin(), header.get_yorigin(), header.get_zorigin()],
-        dtype=np.float64,
-    )
-    return density, int(nx), origin
 
 
 def _particle_index(particle):
@@ -278,43 +225,22 @@ def _av_imp_bff(
             ah.set_name("source")
             root.add_child(ah)
 
-        # The AV is decorated onto its **own** particle, with the source passed
-        # separately. Setting it up on the source particle itself — which this
-        # did — leaves the resampled map at the coordinate origin: header origin
-        # (0, 0, 0), obstacles nowhere near the search region, and most of the
-        # grid reported accessible (259 788 points against 67 889, centred on
-        # nothing).
-        rad = IMP.algebra.Vector3D(dye_radii[0], dye_radii[1], dye_radii[2])
-        av_particle = IMP.Particle(model)
-        IMP.bff.AV.do_setup_particle(
-            model,
-            av_particle,
-            source_particle,
-            linker_length=linker_length,
-            radii=rad,
-            linker_width=linker_width,
-            # Without this the search starts inside the attachment atom's own
-            # neighbourhood and returns an empty volume, reporting nothing.
-            allowed_sphere_radius=allowed_sphere_radius,
-            contact_volume_thickness=0.0,
-            contact_volume_trapped_fraction=-1,
-            simulation_grid_resolution=grid_resolution,
-        )
-        av_decorator = IMP.bff.AV(model, av_particle)
-
-    # The C++ path search, on this thread's own model. Unlocked on purpose.
-    av_decorator.resample()
-
-    with _IMP_BUILD_LOCK:
-        path_map = av_decorator.get_map()
-        density, nx, origin = _path_map_accessible_density(path_map)
-        # The point cloud comes from IMP directly rather than from the grid
-        # above. That is deliberate: it makes the cloud and the density
-        # **independent** readings of the same volume, so a test comparing them
-        # can catch a mis-indexed grid. Deriving the points from the density
-        # instead would make any indexing error self-consistent, and therefore
-        # invisible.
-        xyz_density = np.asarray(path_map.get_xyz_density(), dtype=np.float64)
+    reading = resample_av(
+        model, source_particle,
+        linker_length=linker_length, linker_width=linker_width,
+        radii=dye_radii, disc_step=grid_resolution,
+        allowed_sphere_radius=allowed_sphere_radius,
+    )
+    nx = reading.shape[0]
+    origin = reading.origin
+    xyz_density = reading.points_xyzw
+    # This door's conventions, deliberately kept as they were: the density is
+    # binarised to an occupancy mask in float64, and the point weights are
+    # whatever IMP reported. The structure door in `IMP.bff.fret.av` keeps the
+    # raw float32 values and forces the weights to one. Reconciling the two is a
+    # behaviour change and belongs to a later stage, not to this move.
+    density = np.ascontiguousarray(
+        np.where(reading.density > 0.0, 1.0, 0.0))
 
     shape = (nx, nx, nx)
     voxel_size = float(grid_resolution)

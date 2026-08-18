@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from . import io
+from IMP.bff.representation.pathmap import resample_av
 from .strip import (
     BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES,
     default_strip_mask,
@@ -150,69 +151,28 @@ def _av_imp_bff(
     allowed_sphere_radius = float(
         source_info.get("allowed_sphere_radius", default_clearance))
 
-    av_particle = IMP.Particle(model)
-    r1, r2, r3 = radii
-    IMP.bff.AV.do_setup_particle(
-        model,
-        av_particle,
-        attachment_particle,
-        linker_length=linker_length,
-        linker_width=linker_width,
-        radii=[r1, r2, r3],
-        allowed_sphere_radius=allowed_sphere_radius,
+    reading = resample_av(
+        model, attachment_particle,
+        linker_length=linker_length, linker_width=linker_width, radii=radii,
+        disc_step=disc_step, allowed_sphere_radius=allowed_sphere_radius,
         contact_volume_thickness=float(
             source_info.get("contact_volume_thickness", 0.0)),
         contact_volume_trapped_fraction=float(
             source_info.get("contact_volume_trapped_fraction", -1)),
-        simulation_grid_resolution=disc_step,
     )
-    av = IMP.bff.AV(model, av_particle)
-    av.resample()
-
-    path_map = av.get_map()
-    header = path_map.get_header()
-    nx, ny, nz = header.get_nx(), header.get_ny(), header.get_nz()
-    tile_values = path_map.get_tile_values(
-        IMP.bff.PM_TILE_ACCESSIBLE_DENSITY, (0.0, path_map.get_path_map_header().get_max_path_length())
-    )
-    # **Axis order.** IMP numbers voxels with *x* fastest
-    # (``i = x + nx*y + nx*ny*z``), so reshaping C-order into ``(nx, ny, nz)`` --
-    # which makes the *last* axis fastest -- returns the volume transposed.
-    # This function did exactly that until PRD-113 stage 3, and the density it
-    # returned disagreed with its own point cloud: of 2180 cloud points on T4L
-    # A132 at 1.5 A, only 1548 (71 %) landed on a voxel the density called
-    # occupied, against 100 % after transposing. A mirrored volume still has the
-    # right voxel count, the right bounding box and the right total volume --
-    # which is why nothing caught it, and why the array path in
-    # ``IMP.bff.av.compute`` deliberately reads the point cloud from IMP rather
-    # than deriving it from the grid: two independent readings can disagree, one
-    # cannot. Measured downstream effect on T4L A132 at 2.0 A: mean donor
-    # lifetime 3.3974 ns against 3.5626 ns, ~4.9 %.
-    density = (
-        np.asarray(tile_values, dtype=np.float32)
-        .reshape((nz, ny, nx), order="C")
-        .transpose(2, 1, 0)
-    )
-    density = np.ascontiguousarray(density)
-
-    # get_xyz_density() returns an (N, 4) array; a bare truth test on it
-    # raises under numpy, which the pre-move code never saw because the
-    # LabelLib fallback swallowed the exception. Weights are uniform: the
-    # density column is not normalised the way the samplers expect.
-    xyz_density = np.asarray(path_map.get_xyz_density(), dtype=np.float64)
-    if xyz_density.size:
-        points = np.column_stack(
-            [xyz_density[:, :3], np.ones(xyz_density.shape[0])])
-    else:
-        points = np.zeros((0, 4), dtype=np.float64)
-
-    # IMP.em.DensityHeader.get_origin takes the axis index — the argument-less
-    # call was another line the LabelLib fallback had been hiding.
-    origin = np.array(
-        [header.get_origin(0), header.get_origin(1), header.get_origin(2)],
-        dtype=np.float64)
-    step = header.get_spacing()
-    att_xyz = np.array(av.get_source_coordinates(), dtype=np.float64)
+    nx, ny, nz = reading.shape
+    # This door's conventions, deliberately kept as they were: float32 density
+    # values (not binarised) and uniform point weights. The array door in
+    # `IMP.bff.av.compute` chooses differently on both counts; reconciling them
+    # is a behaviour change and belongs to a later stage, not to this move.
+    density = np.ascontiguousarray(reading.density, dtype=np.float32)
+    points = (
+        np.column_stack([reading.points_xyzw[:, :3],
+                         np.ones(reading.points_xyzw.shape[0])])
+        if reading.points_xyzw.size else np.zeros((0, 4), dtype=np.float64))
+    origin = reading.origin
+    step = reading.step
+    att_xyz = reading.source_xyz
 
     return AccessibleVolume(
         points=points,

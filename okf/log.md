@@ -1,5 +1,32 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 3b: one path-map core, two front doors)
+
+* **`representation/pathmap.py` is now the one place `IMP.bff.AV` is driven.**
+  Both builders set up the same decorator, call the same `resample()` and read
+  the same `PathMap`; both had to learn the same lessons, and each had learned
+  only some. The array door knew about the x-fastest voxel order; the structure
+  door did not, and shipped a mirrored density (stage 3a). Sharing the core is
+  what stops that happening a third time.
+* **Gate: 12/12 byte-identical** — 3 sites × 2 resolutions × 2 doors, comparing
+  `points`, `density`, `grid_origin`, `attachment_point`, `grid_step` and
+  `grid_shape` by SHA-256. Held after each door was repointed and again after
+  the dead code was removed. `av/compute.py` 405 → 350 lines.
+* **What is deliberately *not* shared, and why.** The two doors disagree on
+  conventions: the array door binarises the density to 0/1 float64 and keeps
+  IMP's point weights; the structure door keeps raw float32 values and forces
+  the weights to one. Those are **behaviour**, and this stage forbids behaviour
+  changes — so `PathMapReading` returns the raw readings and each door applies
+  its own conventions, with the disagreement recorded in the dataclass docstring
+  rather than silently resolved. Choosing between them is a later, deliberate
+  decision.
+* The core keeps both hard-won details, one from each door: the AV is decorated
+  onto its **own** particle with the source passed separately (otherwise the
+  resampled map sits at the coordinate origin), and the build is serialised
+  while `resample()` is not (which is ~96 % of the wall clock, so the split is
+  what makes a threaded caller worth having).
+* Suite **631 passed**, same single pre-existing `IMP.em` failure.
+
 ## 2026-08-18 (PRD-113 stage 3a: the AV density was transposed)
 
 * **`IMP.bff.compute_av` returned `density` mirrored relative to its own
