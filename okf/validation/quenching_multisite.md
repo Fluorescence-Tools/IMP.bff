@@ -315,6 +315,91 @@ different test that has not been run.
 a few percent. The gate passes, with `free_diffusion` demoted from "recovered" to
 "recovered to about 15 %" and `contact_distance` still not a parameter.
 
+## The estimator was wrong, and so was the kind of answer
+
+Recorded 2026-08-18 on the owner's question, *"you do poisson, mle, or what?"*
+The honest answer is **neither**: weighted least squares with Poisson-derived
+weights, `(F_model − F_obs)/σ` with `σ = √(max(N·F, 1))/N`. Three separate
+problems, and the repositories already solve all three.
+
+### 1. That estimator is `neyman_lsq`, and it is the wrong one here
+
+tttrlib names the four objectives it ships (`tttrlib.fit_objectives_json()`),
+and what I wrote by hand is `statistics::neyman` down to the `max(1, ·)` clamp.
+Its own description:
+
+> Weights each channel by `1/max(1, C)`. Fast and familiar, but **biased low at
+> small counts** because a channel that happens to fluctuate down is given more
+> weight. Use it for well-populated decays, or for comparison with historical
+> fits; **prefer the Poisson likelihood otherwise.**
+
+And of `poisson_mle`, the 2I\* deviance:
+
+> Correct at every count level including empty channels, where a chi-squared
+> weighted by the data is undefined and one weighted by the model is biased.
+> **This is what a TCSPC decay should normally be fitted with.**
+
+The strongly quenched sites here decay to essentially nothing well before the
+25 ns window closes, so most of the axis is exactly the low-count regime the
+Neyman weighting is biased in.
+
+**One thing made the study flattering rather than pessimistic:** σ was computed
+from the *noiseless model at the true θ*, an oracle weighting no real fit has.
+A real Neyman fit weights by the data and would do worse than what is reported
+above.
+
+`tttrlib` also carries `twoIstar` in C++ with autodiff-ready variants, and
+ChiSurf exposes the choice as `noise_model={"default","poisson"}` with
+`deviance_residuals()` returning signed 2I\* residuals so a Levenberg-Marquardt
+engine minimises the Poisson likelihood unchanged.
+
+### 2. A point estimate is the wrong output for this problem
+
+Everything above reports a best-fit vector and a marginal error bar from
+`(JᵀJ)⁻¹`. With a condition number of 10⁵ and a demonstrated second minimum,
+**there is no unique solution to report** — the answer is a posterior, and the
+interesting content is its shape and its correlations, not its argmax. The
+`contact_distance` result is this failure in miniature: the Fisher matrix
+promised ±4.1 %, and the fit walked to the bound.
+
+Prior information is being discarded, too. `PET_QUENCHING_REFERENCE` ships with
+the sentence *"starting values meant to be calibrated against measured
+lifetimes"* — **that is a prior**, and a bounded uniform search over
+`kQ_scale ∈ [0.05, 10]` throws it away.
+
+ChiSurf has the machinery: `core/fitting/priors.py` (MAP by appending prior
+residuals), `sample.py` and `ensemble.py` (Metropolis, affine-invariant stretch,
+ensemble slice), and `diagnostics.py` (split R̂, ESS, integrated autocorrelation
+time, MCSE, burn-in).
+
+### 3. The joint fit is ChiSurf's staged group fit, hand-rolled
+
+`FitGroup.run(local_first=True)` runs each member fit and then a global fit over
+the shared parameters — exactly the multi-site structure of stage 0, already
+implemented, with progress, bounds and a factor-graph freeze.
+
+### Where each piece belongs
+
+| | layer | what exists |
+|---|---|---|
+| forward model | **imp.bff** | `GridDiffusionSolver`, the quenching and mobility maps |
+| decay statistics | **tttrlib** | `twoIstar`, `statistics::{neyman,poisson,pearson,gauss}`, the objective registry |
+| inference | **chisurf** | staged `FitGroup`, priors/MAP, ensemble MCMC, convergence diagnostics |
+
+`benchmark/kq_sensitivity_analysis.py` does all three inside `imp.bff`, which is
+a layering violation as well as worse statistics. **The Fisher analysis stands**
+— it is a property of the model and the noise, and `JᵀJ` is the same matrix
+whichever way the fit is driven — but every *fit* reported here should be redone
+as a staged, prior-informed, Poisson-likelihood posterior in ChiSurf.
+
+### And χ² was never going to show it
+
+Reduced χ² came out 1.01–1.02 everywhere, including the runs where
+`contact_distance` was 30–70 % wrong or pinned at its bound. **A scalar summary
+cannot distinguish an under-determined fit from a misfitting one.** What
+distinguishes them is the *shape* of the residuals — runs, sign correlation,
+structure against time — which nothing here looked at.
+
 ## What this means
 
 * **Calibrating the PET model requires multi-site labelling.** That is a real

@@ -1,5 +1,72 @@
 # Update Log
 
+## 2026-08-18 (the flux form, and the estimator)
+
+* **The flux discretisation was wrong, and it changes every earlier quenching
+  finding** (`okf/validation/quenching_flux_form.md`). PRD-110 recorded it as
+  *"a convention, not a derivation"*; that was too generous. Equilibrium is
+  thermodynamics and mobility is kinetics, so a dye slowed by friction with no
+  attraction must still be found uniformly across its accessible volume — while
+  the inherited `d[i]p[i] − d[j]p[j]` flux gives `p ∝ 1/D`. The field's own
+  canonical treatment agrees: the **Haas-Steinberg** equation writes the
+  diffusion operator as `D ∂/∂r [ p(r) ∂/∂r ( N/p(r) ) ]` precisely so its
+  stationary state is the *given* `p(r)` for any `D`. QuEst's notebook 04
+  integrates it, but at constant `D` and uniform `p(r)` — the one case where both
+  discretisations coincide.
+* **`flux_form="smoluchowski"` is the default; `"ito"` reproduces the inherited
+  behaviour.** Both closed forms verified against the kernel at a 16× mobility
+  contrast: peak/min occupancy 1.0000 against 16.0000.
+* **`slow_factor` was a disguised attraction.** Reducing `D` near an atom
+  concentrates the dye there and the quenchers are exactly where `D` is reduced,
+  so `slow_factor^n_contacts` made the attraction exponential. Mean lifetime on
+  T4L A132 at `D = 0.5` going 0.985 → 0.90: **−32.2 % under `ito`, +0.2 % under
+  the default** — a factor of ~160 in how much the parameter matters.
+* **Four earlier findings are artifacts and are corrected in place**: PRD-110's
+  closed-form `p ∝ 1/D` (right algebra, wrong operator — the practical half
+  stands), its *"`slow_factor` only meaningful within a whisker of 1.0"*, its
+  *"decay becomes exactly independent of `D`"*, and PRD-111 stage 0's
+  *"`contact_distance` and `slow_factor` are one parameter"*. They traded because
+  `slow_factor^n` set the strength of the spurious attraction; under the default
+  `slow_factor` recovers to +1.1 % and `contact_distance` is simply
+  **uninformative** (±61 %, its own eigenvector at λ = 2.66).
+* **Where it counts the model got better**: the joint six-site fit now recovers
+  `kQ_scale` to −0.0 % and `rC` to −0.1 %, in 312 forward solves against 516. The
+  leading Fisher eigenvalue falls 34×, which is the size of the information that
+  was really an attraction. The multi-site argument survives (rotation gain 396×).
+* **PRD-111 stage 1 was not re-measured** — the free-dye nuisance, the 9.4 σ
+  detectability and the benign geometry error all ran under `ito`.
+* **The model now has no stickiness at all rather than the wrong kind.** Real
+  dyes stick; the correct form takes a separate equilibrium,
+  `flux_ij = D_ij p_eq,ij (p_i/p_eq,i − p_j/p_eq,j)`, reducing to what is
+  implemented when `p_eq` is uniform. Future work, and its own identifiability
+  question.
+* **The estimator was `neyman_lsq`, hand-rolled, and it is the wrong one.**
+  tttrlib ships the objective registry (`fit_objectives_json()`) and my
+  benchmark reproduced `statistics::neyman` down to the `max(1, ·)` clamp — which
+  tttrlib itself documents as *"biased low at small counts"*, against
+  `poisson_mle` (2I\*) being *"what a TCSPC decay should normally be fitted
+  with"*. These decays run to nothing inside the window, so most of the axis is
+  that regime. One mitigation, and it flattered the study rather than the
+  reverse: σ came from the noiseless model at the true θ, an oracle weighting no
+  real fit has.
+* **A point estimate is the wrong output**, given a 10⁵ condition number and a
+  demonstrated second minimum — the answer is a posterior. Prior information is
+  being discarded too: `PET_QUENCHING_REFERENCE` ships as *"starting values meant
+  to be calibrated"*, which is a prior, and a bounded uniform search over
+  `kQ_scale ∈ [0.05, 10]` throws it away.
+* **All of it already exists, in the right layers.** Statistics in tttrlib
+  (`twoIstar`, `statistics::{neyman,poisson,pearson,gauss}`); inference in
+  ChiSurf (`FitGroup.run(local_first=True)` staged group fitting, `priors.py`
+  MAP, `sample.py`/`ensemble.py` MCMC, `diagnostics.py` R̂/ESS/MCSE);
+  forward model here. `benchmark/kq_sensitivity_analysis.py` does all three
+  inside `imp.bff` and should not grow further — **PRD-111's inference stages
+  move to ChiSurf.** The Fisher analysis stands either way, being a property of
+  the model and the noise.
+* **χ² was never going to show the problem**: 1.01–1.02 in every run, including
+  those where `contact_distance` was 30–70 % wrong or pinned at its bound. A
+  scalar cannot distinguish an under-determined fit from a misfitting one; the
+  residual *shape* can, and nothing here looked at it.
+
 ## 2026-08-18 (PRD-111 stage 2 scoped; the acceptor observable)
 
 * **Stage 2 rewritten around the acceptor decay, on the owner's physics
