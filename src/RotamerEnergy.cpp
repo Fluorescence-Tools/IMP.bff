@@ -12,10 +12,10 @@
 IMPBFF_BEGIN_NAMESPACE
 
 std::vector<double> rotamer_interaction_energies(
-        const std::vector<double>& rotamer_coords,
-        const std::vector<double>& protein_coords,
-        const std::vector<double>& rmin_ij,
-        const std::vector<double>& eps_ij,
+        double* rotamer_coords, int n_rotamer_coords,
+        double* protein_coords, int n_protein_coords,
+        double* rmin_ij, int n_rmin_ij,
+        double* eps_ij, int n_eps_ij,
         const std::vector<double>& q_dye,
         const std::vector<double>& q_protein,
         int n_rotamers, int n_dye_atoms, int n_protein_atoms,
@@ -24,6 +24,8 @@ std::vector<double> rotamer_interaction_energies(
         double debye_length, double coulomb_prefactor) {
     std::vector<double> out(static_cast<std::size_t>(std::max(0, n_rotamers)) * 2, 0.0);
     if (n_rotamers <= 0 || n_dye_atoms <= 0 || n_protein_atoms <= 0) return out;
+    (void)n_rotamer_coords; (void)n_protein_coords;
+    (void)n_rmin_ij; (void)n_eps_ij;
 
     const bool electrostatic =
             static_cast<int>(q_dye.size()) == n_dye_atoms &&
@@ -35,16 +37,16 @@ std::vector<double> rotamer_interaction_energies(
     for (int r = 0; r < n_rotamers; ++r) {
         double steric = 0.0, coulomb = 0.0;
         const double* conf =
-                &rotamer_coords[static_cast<std::size_t>(r) * n_dye_atoms * 3];
+                rotamer_coords + static_cast<std::size_t>(r) * n_dye_atoms * 3;
         for (int a = 0; a < n_dye_atoms; ++a) {
             const double ax = conf[3 * a + 0];
             const double ay = conf[3 * a + 1];
             const double az = conf[3 * a + 2];
             const double qa = electrostatic ? q_dye[a] : 0.0;
             const double* rmin_row =
-                    &rmin_ij[static_cast<std::size_t>(a) * n_protein_atoms];
+                    rmin_ij + static_cast<std::size_t>(a) * n_protein_atoms;
             const double* eps_row =
-                    &eps_ij[static_cast<std::size_t>(a) * n_protein_atoms];
+                    eps_ij + static_cast<std::size_t>(a) * n_protein_atoms;
             for (int b = 0; b < n_protein_atoms; ++b) {
                 const double dx = ax - protein_coords[3 * b + 0];
                 const double dy = ay - protein_coords[3 * b + 1];
@@ -158,17 +160,18 @@ std::vector<double> rotamer_pair_energy_matrix(
 }
 
 std::vector<double> lj_pair_energies(
-        const std::vector<double>& coords,
+        double* coords, int n_coords,
         const std::vector<int>& index_a, const std::vector<int>& index_b,
         const std::vector<double>& rmin, const std::vector<double>& eps,
         int n_frames, int n_atoms, int n_pairs,
         bool repulsive_only, double r_floor) {
     std::vector<double> out(static_cast<std::size_t>(std::max(0, n_frames)), 0.0);
     if (n_frames <= 0 || n_pairs <= 0 || n_atoms <= 0) return out;
+    (void)n_coords;
 
 #pragma omp parallel for schedule(static)
     for (int f = 0; f < n_frames; ++f) {
-        const double* xyz = &coords[static_cast<std::size_t>(f) * n_atoms * 3];
+        const double* xyz = coords + static_cast<std::size_t>(f) * n_atoms * 3;
         double e = 0.0;
         for (int p = 0; p < n_pairs; ++p) {
             const int ia = index_a[p], ib = index_b[p];

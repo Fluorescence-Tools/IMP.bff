@@ -29,8 +29,10 @@ enum RotamerPotential {
 
 //! Steric and electrostatic energy of every conformer against the structure.
 /*!
-    \param[in] rotamer_coords flat, `n_rotamers * n_dye_atoms * 3`
-    \param[in] protein_coords flat, `n_protein_atoms * 3`
+    \param[in] rotamer_coords,n_rotamer_coords flat,
+               `n_rotamers * n_dye_atoms * 3`. A raw buffer, so numpy's array
+               passes straight through -- see #brownian_walk_in_volume on why.
+    \param[in] protein_coords,n_protein_coords flat, `n_protein_atoms * 3`
     \param[in] rmin_ij combined \f$R_{min}\f$ per (dye atom, protein atom),
                flat `n_dye_atoms * n_protein_atoms`
     \param[in] eps_ij combined well depth, same shape
@@ -48,10 +50,10 @@ enum RotamerPotential {
             Coulomb term is already in units of it.
 */
 IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
-        const std::vector<double>& rotamer_coords,
-        const std::vector<double>& protein_coords,
-        const std::vector<double>& rmin_ij,
-        const std::vector<double>& eps_ij,
+        double* rotamer_coords, int n_rotamer_coords,
+        double* protein_coords, int n_protein_coords,
+        double* rmin_ij, int n_rmin_ij,
+        double* eps_ij, int n_eps_ij,
         const std::vector<double>& q_dye,
         const std::vector<double>& q_protein,
         int n_rotamers, int n_dye_atoms, int n_protein_atoms,
@@ -105,7 +107,7 @@ IMPBFFEXPORT std::vector<double> rotamer_pair_energy_matrix(
     once for each end of every pair -- before taking a single difference. At ten
     thousand frames and twelve hundred pairs that is 288 MB per gather.
 
-    \param[in] coords flat, `n_frames * n_atoms * 3`
+    \param[in] coords,n_coords flat, `n_frames * n_atoms * 3`, zero-copy
     \param[in] index_a,index_b atom indices of each pair
     \param[in] rmin,eps combined parameters per pair
     \param[in] n_frames,n_atoms,n_pairs shapes
@@ -114,7 +116,7 @@ IMPBFFEXPORT std::vector<double> rotamer_pair_energy_matrix(
     \return one energy per frame
 */
 IMPBFFEXPORT std::vector<double> lj_pair_energies(
-        const std::vector<double>& coords,
+        double* coords, int n_coords,
         const std::vector<int>& index_a,
         const std::vector<int>& index_b,
         const std::vector<double>& rmin,

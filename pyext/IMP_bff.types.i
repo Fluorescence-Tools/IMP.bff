@@ -103,6 +103,11 @@
 %apply(int* IN_ARRAY1, int DIM1) {(int* occupancy, int n_occupancy)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* mobility, int n_mobility)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* rate_map, int n_rate_map)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* coords, int n_coords)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* rotamer_coords, int n_rotamer_coords)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* protein_coords, int n_protein_coords)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* rmin_ij, int n_rmin_ij)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* eps_ij, int n_eps_ij)}
 %apply(long long* IN_ARRAY1, int DIM1) {(long long *input, int n_input)}
 %apply(unsigned long long* IN_ARRAY1, int DIM1) {(unsigned long long *input, int n_input)}
 
