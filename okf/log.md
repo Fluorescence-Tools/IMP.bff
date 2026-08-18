@@ -1,5 +1,27 @@
 # Update Log
 
+## 2026-08-18 (PRD-113: stage 3e was mis-scoped — six distance layers, and they agree)
+
+* **The C++ already has the distance API.** `AV.h` exports `av_distance`,
+  `av_distance_quadrature`, `av_random_points`, `av_random_distances` and
+  `av_distance_distribution`, operating on `AV` decorators. Stage 3e was written
+  as "port `av/_kernels.py` to C++"; the six numba kernels are a **duplicate**
+  of that, taking point arrays instead of decorators. It is de-duplication, not
+  a port, and it belongs with the other distance layers in stage 4.
+* **There are six implementations of dye-pair distances**: `av/_kernels.py`
+  (numba), `av/basic.py` (wrapping it), `fret/distance.py`,
+  `distance_metrics.py`, `representation/distribution.py` (once on each concrete
+  class), and the C++ `av_distance` family.
+* **They agree.** T4L A132×A65, 2180×3087 points, 2×10⁵ samples: `<R_DA>` 51.945
+  against 51.940 Å, `<R_DA>_E` 51.696 against 51.692 Å, `Rmp` identical to all
+  printed digits. The spread is Monte-Carlo sampling noise. **Unlike the
+  transposed density, no defect is hiding in this one** — the merge is safe and
+  the C++ is the implementation to keep.
+* Remaining work for it: C++ overloads taking point arrays, plus SWIG typemaps
+  for a *second* 2-D input array — `BFF.types.i` defines one
+  (`double *input, int n_input1, int n_input2`) and a two-cloud signature needs
+  two. Recorded rather than started, so the change lands in one piece.
+
 ## 2026-08-18 (PRD-113 stage 3d: the label/representation collision resolved)
 
 * **`LabelDistribution*` moved to `representation/`.** `label/` means the
