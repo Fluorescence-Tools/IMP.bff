@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .._jit import njit, prange
+import IMP.bff
+
 from ..fret.kappa2 import kappa2_isotropic
 
 __all__ = [
@@ -29,45 +30,28 @@ __all__ = [
 MAX_KAPPA2 = 4.0
 
 
-@njit(cache=True, parallel=True)
 def _rate_trace(trajectory, acceptor_points, R0, tau0, r_min2, kappa2_scale):
-    n_frames = trajectory.shape[0]
-    n_acceptor = acceptor_points.shape[0]
-    rates = np.empty(n_frames, dtype=np.float64)
-    R0_6 = R0 ** 6 * kappa2_scale
-    inv_tau0 = 1.0 / tau0
-    for frame in prange(n_frames):
-        px = trajectory[frame, 0]
-        py = trajectory[frame, 1]
-        pz = trajectory[frame, 2]
-        total = 0.0
-        for j in range(n_acceptor):
-            dx = px - acceptor_points[j, 0]
-            dy = py - acceptor_points[j, 1]
-            dz = pz - acceptor_points[j, 2]
-            r2 = dx * dx + dy * dy + dz * dz
-            if r2 < r_min2:
-                r2 = r_min2
-            total += R0_6 / (r2 * r2 * r2)
-        rates[frame] = inv_tau0 * total / n_acceptor
-    return rates
+    """FRET rate per frame against a static acceptor cloud. **C++.**
+
+    The **arithmetic mean of rates** over the cloud -- the fast-exchange limit,
+    where the acceptor re-randomises within the donor's excited-state lifetime.
+    ``fret_rate_map`` accumulates the mean transfer *time* and inverts it, which
+    is the static limit. Different physics, not two spellings.
+    """
+    return np.asarray(IMP.bff.fret_rate_trace_kernel(
+        np.ascontiguousarray(trajectory, dtype=np.float64).ravel(),
+        np.ascontiguousarray(acceptor_points, dtype=np.float64).ravel(),
+        float(R0), float(tau0), float(r_min2), float(kappa2_scale)),
+        dtype=np.float64)
 
 
-@njit(cache=True, parallel=True)
 def _rate_pair_trace(donor, acceptor, R0, tau0, r_min2, kappa2_scale):
-    n_frames = donor.shape[0]
-    rates = np.empty(n_frames, dtype=np.float64)
-    R0_6 = R0 ** 6 * kappa2_scale
-    inv_tau0 = 1.0 / tau0
-    for frame in prange(n_frames):
-        dx = donor[frame, 0] - acceptor[frame, 0]
-        dy = donor[frame, 1] - acceptor[frame, 1]
-        dz = donor[frame, 2] - acceptor[frame, 2]
-        r2 = dx * dx + dy * dy + dz * dz
-        if r2 < r_min2:
-            r2 = r_min2
-        rates[frame] = inv_tau0 * R0_6 / (r2 * r2 * r2)
-    return rates
+    """FRET rate per frame from two trajectories, paired frame by frame. **C++.**"""
+    return np.asarray(IMP.bff.fret_rate_pair_trace_kernel(
+        np.ascontiguousarray(donor, dtype=np.float64).ravel(),
+        np.ascontiguousarray(acceptor, dtype=np.float64).ravel(),
+        float(R0), float(tau0), float(r_min2), float(kappa2_scale)),
+        dtype=np.float64)
 
 
 def _kappa2_scale(kappa2) -> float:

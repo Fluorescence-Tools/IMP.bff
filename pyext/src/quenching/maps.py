@@ -28,7 +28,8 @@ from collections import OrderedDict
 
 import numpy as np
 
-from .._jit import njit, prange
+import IMP.bff
+
 
 __all__ = [
     "grid_axis",
@@ -87,28 +88,23 @@ def atomic_quenching_parameters(atoms, quencher):
 # one. Fixed on the move (PRD-109).
 
 
-@njit(cache=True, parallel=True)
 def _slow_near_atoms(d_map, density, axis, r0, atoms_xyz, min_distance_sq, factor):
-    ng = density.shape[0]
-    out = np.zeros(density.shape, dtype=np.float64)
-    n_atoms = atoms_xyz.shape[0]
-    for ix in prange(ng):
-        x_d = axis[ix] + r0[0]
-        for iy in range(ng):
-            y_d = axis[iy] + r0[1]
-            for iz in range(ng):
-                if density[ix, iy, iz] <= 0:
-                    continue
-                z_d = axis[iz] + r0[2]
-                slow = 1.0
-                for ia in range(n_atoms):
-                    dx = atoms_xyz[ia, 0] - x_d
-                    dy = atoms_xyz[ia, 1] - y_d
-                    dz = atoms_xyz[ia, 2] - z_d
-                    if dx * dx + dy * dy + dz * dz < min_distance_sq:
-                        slow *= factor
-                out[ix, iy, iz] = d_map[ix, iy, iz] * slow
-    return out
+    """Slow the mobility wherever the dye contacts an atom. **C++.**
+
+    The factor is applied *once per contacting atom*, so it compounds: a voxel
+    touching 45 atoms at 0.985 ends at 0.5, and at 0.9 at 9e-3. Only values
+    within a whisker of 1.0 are meaningful -- a property of the model, not a
+    taste.
+    """
+    ng = int(density.shape[0])
+    return np.asarray(IMP.bff.slow_near_atoms(
+        np.ascontiguousarray(d_map, dtype=np.float64).ravel(),
+        np.ascontiguousarray(density, dtype=np.float64).ravel(),
+        np.ascontiguousarray(axis, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0, dtype=np.float64).ravel(),
+        np.ascontiguousarray(atoms_xyz, dtype=np.float64).ravel(),
+        float(min_distance_sq), float(factor)),
+        dtype=np.float64).reshape(ng, ng, ng)
 
 
 def slow_diffusion_near_atoms(
@@ -179,30 +175,22 @@ def diffusion_coefficient_map(
     )
 
 
-@njit(cache=True, parallel=True)
 def _quenching_map(density, axis, r0, atoms_xyz, kQ, rC, dye_radius, inv_tau0):
-    ng = density.shape[0]
-    out = np.zeros(density.shape, dtype=np.float64)
-    n_atoms = atoms_xyz.shape[0]
-    for ix in prange(ng):
-        x_d = axis[ix] + r0[0]
-        for iy in range(ng):
-            y_d = axis[iy] + r0[1]
-            for iz in range(ng):
-                if density[ix, iy, iz] <= 0.0:
-                    continue
-                z_d = axis[iz] + r0[2]
-                v = inv_tau0
-                for ia in range(n_atoms):
-                    if kQ[ia] == 0.0 or rC[ia] == 0.0:
-                        continue
-                    dx = atoms_xyz[ia, 0] - x_d
-                    dy = atoms_xyz[ia, 1] - y_d
-                    dz = atoms_xyz[ia, 2] - z_d
-                    d = np.sqrt(dx * dx + dy * dy + dz * dz) - dye_radius
-                    v += kQ[ia] * np.exp(-d / rC[ia])
-                out[ix, iy, iz] = v
-    return out
+    """PET rate field. **C++.**
+
+    Voxels outside the accessible volume stay at **zero**, not at ``1/tau0``:
+    the dye cannot be there, so it has no decay rate there.
+    """
+    ng = int(density.shape[0])
+    return np.asarray(IMP.bff.quenching_map(
+        np.ascontiguousarray(density, dtype=np.float64).ravel(),
+        np.ascontiguousarray(axis, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0, dtype=np.float64).ravel(),
+        np.ascontiguousarray(atoms_xyz, dtype=np.float64).ravel(),
+        np.ascontiguousarray(kQ, dtype=np.float64).ravel(),
+        np.ascontiguousarray(rC, dtype=np.float64).ravel(),
+        float(dye_radius), float(inv_tau0)),
+        dtype=np.float64).reshape(ng, ng, ng)
 
 
 def quenching_rate_map(
@@ -236,37 +224,25 @@ def quenching_rate_map(
     )
 
 
-@njit(cache=True, parallel=True)
 def _fret_map(density_d, density_a, axis_d, axis_a, r0_d, r0_a, r0_6, kf, step):
-    ng_d = density_d.shape[0]
-    ng_a = density_a.shape[0]
-    out = np.zeros(density_d.shape, dtype=np.float64)
-    for ix_d in prange(ng_d):
-        x_d = axis_d[ix_d] + r0_d[0]
-        for iy_d in range(ng_d):
-            y_d = axis_d[iy_d] + r0_d[1]
-            for iz_d in range(ng_d):
-                if density_d[ix_d, iy_d, iz_d] <= 0.0:
-                    continue
-                z_d = axis_d[iz_d] + r0_d[2]
-                t_ret = 0.0
-                weight = 0.0
-                for ix_a in range(0, ng_a, step):
-                    sx = (axis_a[ix_a] + r0_a[0] - x_d) ** 2
-                    for iy_a in range(0, ng_a, step):
-                        sy = (axis_a[iy_a] + r0_a[1] - y_d) ** 2
-                        for iz_a in range(0, ng_a, step):
-                            da = density_a[ix_a, iy_a, iz_a]
-                            if da <= 0.0:
-                                continue
-                            rda2 = sx + sy + (axis_a[iz_a] + r0_a[2] - z_d) ** 2
-                            r2 = r0_6 / (rda2 * rda2 * rda2)
-                            # 1 / k_ret for this acceptor position
-                            t_ret += da / (r2 * kf)
-                            weight += da
-                if weight > 0.0 and t_ret > 0.0:
-                    out[ix_d, iy_d, iz_d] = weight / t_ret
-    return out
+    """FRET rate field, donor volume against acceptor volume. **C++.**
+
+    **The harmonic mean**: the acceptor-weighted mean transfer *time* is
+    accumulated and inverted, which is the static limit -- the acceptor does not
+    move within the donor's excited-state lifetime. ``fret_rate_trace``
+    accumulates the arithmetic mean of *rates* along a trajectory, which is the
+    fast-exchange limit. Different physics, not variants.
+    """
+    ng = int(density_d.shape[0])
+    return np.asarray(IMP.bff.fret_map(
+        np.ascontiguousarray(density_d, dtype=np.float64).ravel(),
+        np.ascontiguousarray(density_a, dtype=np.float64).ravel(),
+        np.ascontiguousarray(axis_d, dtype=np.float64).ravel(),
+        np.ascontiguousarray(axis_a, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0_d, dtype=np.float64).ravel(),
+        np.ascontiguousarray(r0_a, dtype=np.float64).ravel(),
+        float(r0_6), float(kf), int(step)),
+        dtype=np.float64).reshape(ng, ng, ng)
 
 
 def fret_rate_map(
