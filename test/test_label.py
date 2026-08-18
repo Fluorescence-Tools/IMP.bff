@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff.label import LabelDistribution, LabelDistributionAV, DyeDistributionNormal
+from IMP.bff.representation import LabelDistribution, LabelDistributionAV, DyeDistributionNormal
 
 
 class TestLabelDistribution:

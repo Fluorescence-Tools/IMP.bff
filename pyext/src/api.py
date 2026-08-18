@@ -120,6 +120,9 @@ EXPORTS = {
     # --- accessible volumes, fps.json, distances (fret) -----------------------
     "AccessibleVolume": "IMP.bff.representation.types",
     "States": "IMP.bff.representation.states",
+    "LabelDistribution": "IMP.bff.representation.distribution",
+    "LabelDistributionAV": "IMP.bff.representation.distribution",
+    "DyeDistributionNormal": "IMP.bff.representation.distribution",
     "compute_av": "IMP.bff.fret.av",
     "compute_avs_for_structure": "IMP.bff.fret.av",
     "read_fps_json": "IMP.bff.fret.io",

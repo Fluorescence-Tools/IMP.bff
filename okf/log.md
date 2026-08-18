@@ -1,5 +1,23 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 3d: the label/representation collision resolved)
+
+* **`LabelDistribution*` moved to `representation/`.** `label/` means the
+  *system* — which dye is attached where — and a label *distribution* is a
+  representation of where it can be. One word, two questions; the collision was
+  recorded in stage 2 and is now removed. `label/` exports only `Label`,
+  `Quencher`, `PETParameters` and the reference tables.
+* **They are a third implementation of the `States` surface** (`points`,
+  `mean_position`, `n_points`) and a **fourth** copy of the distance layer —
+  `dRmp`/`dRDA`/`dRDAE`/`pRDA` duplicated across both concrete classes, and
+  again in `BasicAV`, and again in `fret/distance.py`. A `states` view bridges
+  them for now; folding four distance layers into one is stage 4, and is a
+  behaviour change that does not belong in a move.
+* `representation/` now holds every way of describing where a dye is:
+  `AccessibleVolume`, `LabelDistributionAV`, `DyeDistributionNormal`, and the
+  rotamer library as a sibling — all over `States`.
+* Gate 12/12. Suite **636 passed**.
+
 ## 2026-08-18 (PRD-113 stage 3c: States, and rotamers stop being an AV)
 
 * **`States` is the abstraction that was missing.** An AV grid point, a rotamer,

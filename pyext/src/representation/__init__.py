@@ -19,5 +19,11 @@ from __future__ import annotations
 from .states import States
 from .types import AccessibleVolume
 from .pathmap import PathMapReading, resample_av
+from .distribution import (
+    LabelDistribution, LabelDistributionAV, DyeDistributionNormal,
+)
 
-__all__ = ["States", "AccessibleVolume", "PathMapReading", "resample_av"]
+__all__ = [
+    "States", "AccessibleVolume", "PathMapReading", "resample_av",
+    "LabelDistribution", "LabelDistributionAV", "DyeDistributionNormal",
+]

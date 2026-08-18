@@ -11,12 +11,11 @@ for the position, ``_flr_sample_probe_details`` for what the probe is doing.
 Quenching has no item anywhere in the stack, so those names are bff-native.
 
 .. note::
-   ``LabelDistribution`` and friends are re-exported here for now but they are a
-   **different sense of the word**: a label *distribution* is one way of
-   representing where the dye can be, i.e. a representation, while a
-   :class:`Label` is a system entity saying which dye is attached where. They
-   move to ``IMP.bff.representation`` in PRD-113 stage 3, at which point this
-   package keeps only the system meaning.
+   ``LabelDistribution`` and friends used to live here and now do not. A label
+   *distribution* is one way of representing where the dye can be -- a
+   representation -- while a :class:`Label` says which dye is attached where.
+   The same word meant both; they moved to ``IMP.bff.representation`` in
+   PRD-113 stage 3d and this package keeps only the system meaning.
 """
 
 from __future__ import annotations
@@ -25,11 +24,6 @@ from .site import Label, FLUOROPHORE_TYPES
 from .quencher import (
     Quencher, PETParameters, reference_quenchers,
     reference_pet_parameters, REFERENCE_DYE,
-)
-from IMP.bff.label.distribution import (
-    LabelDistribution,
-    LabelDistributionAV,
-    DyeDistributionNormal,
 )
 
 __all__ = [
@@ -40,8 +34,4 @@ __all__ = [
     "reference_pet_parameters",
     "REFERENCE_DYE",
     "FLUOROPHORE_TYPES",
-    # moving to IMP.bff.representation in stage 3
-    "LabelDistribution",
-    "LabelDistributionAV",
-    "DyeDistributionNormal",
 ]

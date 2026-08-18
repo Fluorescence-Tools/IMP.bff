@@ -1,13 +1,23 @@
-"""Label distributions — abstract base and concrete implementations.
+"""Label distributions: AV-backed and Gaussian representations of where a dye is.
 
-Provides :class:`LabelDistribution` (abstract base) and concrete
-implementations that model the 3-D positional distribution of a dye
-label attached to a macromolecule.
+Two representations, alongside the accessible volume itself and the rotamer
+library: :class:`LabelDistributionAV` computes an AV and reduces it lazily, and
+:class:`DyeDistributionNormal` replaces the cloud with a Gaussian.
 
-The classes in this module abstract over the computation of dye
-density grids and their reduction to point clouds, mean positions,
-and inter-dye distances.  They are designed as non-breaking additions
-to ``IMP.bff``.
+Moved here from ``IMP.bff.label`` by PRD-113 stage 3d. That package now means
+the *system* -- which dye is attached where -- and a label *distribution* is a
+representation of where it can be, which is a different question. The same word
+meant both, which is the kind of collision this restructure exists to remove.
+
+.. note::
+   These classes re-implement the
+   :class:`~IMP.bff.representation.States` surface (``points``,
+   ``mean_position``, ``n_points``) and carry a **fourth** copy of the distance
+   layer (``dRmp``/``dRDA``/``dRDAE``/``pRDA``, duplicated across both concrete
+   classes, and again in ``BasicAV`` and in ``fret/distance.py``). The
+   :attr:`LabelDistribution.states` view below is the bridge; folding the four
+   distance layers into one is PRD-113 stage 4, and is a behaviour change that
+   does not belong in a move.
 """
 
 from __future__ import annotations
@@ -124,6 +134,20 @@ class LabelDistribution(abc.ABC):
     def mean_position(self) -> np.ndarray:
         """Weighted mean position ``(3,)``."""
         return self.get_basic_av().mean_position
+
+    @property
+    def states(self) -> "States":
+        """This distribution as :class:`~IMP.bff.representation.States`.
+
+        The representation-agnostic view: whatever produced the cloud, a
+        consumer that wants positions and weights asks for this and works for
+        an AV, a rotamer library, a Gaussian or an MD trajectory alike.
+        """
+        from .states import States
+        return States(points=self.points,
+                      attachment_point=np.asarray(self.attachment_point)
+                      if getattr(self, "attachment_point", None) is not None
+                      else self.mean_position)
 
     @property
     def n_points(self) -> int:
