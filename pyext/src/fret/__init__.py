@@ -4,7 +4,7 @@ This package is the home of the FRET structural-modelling algorithms and of
 the fps.json data schema (PRD-97): the docking engine (:mod:`.imp_engine`),
 the AV backend (:mod:`.av`),
 P(R_DA) distributions (:mod:`.distributions`), Olga-style informative pair
-selection (:mod:`.olga_greedy`), docking-precision estimation
+selection (:mod:`.greedy_olga`), docking-precision estimation
 (:mod:`.uncertainty`) and PMI stat-file reading (:mod:`.stat`).
 
 Model-distance calculation moved to :mod:`IMP.bff.representation.distance` in
@@ -24,7 +24,7 @@ build their workflow and views on top of these functions.
 from . import av
 from . import engine
 from . import distributions
-from . import olga_greedy
+from . import greedy_olga
 from . import stat
 from . import uncertainty
 from . import imp_engine
@@ -36,7 +36,7 @@ from .av import (
     load_structure_with_vdw,
 )
 from .engine import RigidBody, DistanceRestraint, SpringParameters
-from .olga_greedy import select_informative_pairs
+from .greedy_olga import select_informative_pairs
 from .uncertainty import estimate_position_uncertainty
 from .distributions import compute_distance_distributions
 from .imp_engine import (
@@ -57,7 +57,7 @@ from .imp_engine import (
 
 __all__ = [
     "av", "engine", "distributions",
-    "olga_greedy", "stat", "uncertainty", "imp_engine",
+    "greedy_olga", "stat", "uncertainty", "imp_engine",
     # av
     "AccessibleVolume", "compute_av", "compute_avs_for_structure",
     "load_structure_with_vdw",

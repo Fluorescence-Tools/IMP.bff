@@ -10,6 +10,9 @@
 import numpy as np
 %}
 
+/* Does this build actually thread? The kernels ask; the compiler may not listen. */
+%include "IMP/bff/Parallel.h"
+
 /* STL templates and the numpy typemaps everything below depends on. */
 %include "IMP_bff.types.i"
 
@@ -50,6 +53,9 @@ import numpy as np
 
 /* Scoring: how hard a conformer collides with its structure. */
 %include "IMP/bff/RotamerEnergy.h"
+
+/* Greedy Olga: which pair to measure next. */
+%include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
 %include "IMP/bff/LifetimeSpectrum.h"

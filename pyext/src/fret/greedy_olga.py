@@ -38,6 +38,8 @@ import math
 from typing import Tuple
 
 import numpy as np
+
+import IMP.bff
 from scipy.special import erfc, gammaincc
 
 
@@ -88,6 +90,13 @@ def _chisq_rt_cdf(chisq: np.ndarray, ndof: int) -> np.ndarray:
     # caller's chi-squared accumulator -- which is the same defect this project
     # filed against a library's CDF sampler, and it was written here by hand
     # while trying to save exactly this one allocation.
+    arr = np.asarray(chisq, dtype=np.float64)
+    flat = IMP.bff.chi2_right_tail(np.ascontiguousarray(arr).ravel(), int(ndof))
+    return np.asarray(flat, dtype=np.float64).reshape(arr.shape)
+
+
+def _chisq_rt_cdf_python(chisq: np.ndarray, ndof: int) -> np.ndarray:
+    """The reference implementation, kept because the tests compare against it."""
     x = 0.5 * np.asarray(chisq, dtype=np.float64)
     a = 0.5 * ndof
 
@@ -301,14 +310,18 @@ def _best_pair_all_candidates(
     numpy.ndarray
         Score per candidate, ``float32``.
     """
-    m = effs.shape[1]
-    out = np.empty(m, dtype=np.float32)
-    for start in range(0, m, chunk):
-        stop = min(start + chunk, m)
-        block = _rmsd_mean_mean_add(
-            rmsds, chi2, effs[:, start:stop].T, inv_err_sq, ndof, diag_weight
-        )
-        out[start:stop] = block.astype(np.float32)
+    # One C++ call, no chunking, no intermediate. The vectorised Python built a
+    # ``(chunk, n_frames, n_frames)`` array per batch -- at a thousand frames
+    # that is 512 MB for a 64-candidate chunk, allocated only to be reduced
+    # away. The kernel runs the reduction inside the loop, so its working set is
+    # ``O(n_frames)`` per candidate and `chunk` no longer means anything.
+    scores = IMP.bff.expected_rmsd_after_adding(
+        np.ascontiguousarray(rmsds, dtype=np.float64).ravel(),
+        np.ascontiguousarray(chi2, dtype=np.float64).ravel(),
+        np.ascontiguousarray(np.asarray(effs, dtype=np.float64).T).ravel(),
+        float(inv_err_sq), int(ndof), float(diag_weight),
+        int(effs.shape[0]), int(effs.shape[1]))
+    out = np.asarray(scores, dtype=np.float32)
     if unique_only:
         out[np.asarray(selected_mask) != 0] = np.float32(np.inf)
     return out
