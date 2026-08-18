@@ -1,5 +1,33 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 5, tranche 1: distributions to C++)
+
+* **numba must go entirely** (owner). 44 jitted functions across 13 files; this
+  is the first four, and it establishes the pattern for the rest: C++ header +
+  source, a SWIG `.i`, `Files.cmake`, a Python wrapper keeping the old
+  signature, and **an equality gate against the numba before anything is
+  deleted**.
+* `Distributions.h` / `Distributions.cpp` — `poisson_0toN`,
+  `normal_distribution`, `generalized_normal_distribution`,
+  `distance_between_gaussian`.
+* **Gate: 7 of 9 cases bit-for-bit identical**, the other two within
+  **7 × 10⁻¹⁸** — the last bit, from a different summation order in the
+  normalisation.
+* **Two things the port caught by forcing the formulas to be read.**
+  `generalized_normal_distribution` is *not* the exponential-power family its
+  name suggests: it skews by transforming the axis,
+  `z = −log(1 − κ(x−μ)/σ)/κ`, and evaluates the **standard** normal at `z` —
+  `loc` and `scale` are already folded in. My first header documented the wrong
+  distribution and the wrong default (`shape=2.0`, when the Python default is
+  `0.0`, i.e. no skew). Both corrected against the body rather than the name.
+* **A name collision, resolved deliberately.** SWIG binds C++ functions into
+  `IMP.bff` directly, so `IMP.bff.normal_distribution` was already taken and
+  `api.py`'s lazy hook could never fire — the test caught it. The C++ functions
+  **are** the public surface; `IMP.bff.distributions` keeps numpy-returning
+  wrappers for use inside the package, and `api.py` records why those names are
+  deliberately absent.
+* numba: **44 → 40**. Suite **656 passed**.
+
 ## 2026-08-18 (PRD-113 stage 4c: interaction terms)
 
 * **The photophysics abstraction exists now**, shaped like a force field's

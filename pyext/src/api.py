@@ -120,6 +120,11 @@ EXPORTS = {
     "PETTerm": "IMP.bff.photophysics.terms",
     "FRETTerm": "IMP.bff.photophysics.terms",
     "total_rate": "IMP.bff.photophysics.terms",
+    # Not listed here on purpose: poisson_0toN, normal_distribution,
+    # generalized_normal_distribution and distance_between_gaussian are C++
+    # (`Distributions.h`) and SWIG binds them into `IMP.bff` directly, so the
+    # flat name is already taken and the lazy hook below would never fire.
+    # `IMP.bff.distributions` keeps numpy-returning wrappers for internal use.
     "kappa2_from_dipoles": "IMP.bff.photophysics.kappa2",
     "kappa2_isotropic": "IMP.bff.photophysics.kappa2",
     # --- orientation: kappa^2 distributions, wobbling, order parameters ------

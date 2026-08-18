@@ -37,19 +37,31 @@ requirements:
   host:
     - python
     - numpy
-    - boost-cpp
+    # libboost-devel, not boost-cpp: conda-forge split the monolithic
+    # boost-cpp package into libboost/libboost-devel, and imp >=2.25.0
+    # already builds against the split packages -- boost-cpp and libboost
+    # are mutually exclusive in one environment. Matches imp's own recipe
+    # (conda-forge/imp-feedstock/recipe/meta.yaml).
+    - libboost-devel
     - eigen
     - cereal
     - if: win
       then:
         - mpir
         - msmpi
-    - imp
+    # >=2.25.0: older imp builds ship a swig_helpers_base.h that calls
+    # Python-2-only C API symbols (PyString_Check, PyInt_Check, ...) removed
+    # by SWIG 4.5's dropped compat macros -- fixed upstream in IMP itself
+    # (conda-forge/imp-feedstock's imp-swig45.patch) and first published in
+    # the 2.25.0 build. Without this floor the solver is free to pick an
+    # older, broken imp build even though a fixed one is available.
+    - imp >=2.25.0
   run:
     - ${{ pin_compatible('numpy') }}
     - python
     - ${{ pin_compatible('imp', upper_bound='x.x') }}
-    - boost-cpp
+    # No explicit libboost entry: libboost-devel's run_exports add it
+    # automatically, same as imp's own recipe does.
     - pandas
     - mdtraj
     - tqdm
