@@ -75,7 +75,9 @@ tests:
 about:
   homepage: https://github.com/fluorescence-tools/imp.bff
   license: MPL-2.0
-  license_file: ../COPYING.LGPL
+  # Relative to the source root (source: path: ../ copies the repo flat into
+  # the work dir), not the recipe directory.
+  license_file: COPYING.LGPL
   summary: Bayesian Framework for Fluorescence for the integrative modeling platform
   description: |
     The Bayesian Framework for Fluorescence (BFF) for the integrative modeling

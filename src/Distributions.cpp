@@ -5,25 +5,13 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/Distributions.h>
+#include <IMP/bff/internal/Normalize.h>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
 IMPBFF_BEGIN_NAMESPACE
-
-namespace {
-
-//! Divide by the sum, leaving an all-zero vector alone.
-void normalize_in_place(std::vector<double>& y) {
-    double total = 0.0;
-    for (double v : y) total += v;
-    if (total > 0.0) {
-        for (double& v : y) v /= total;
-    }
-}
-
-}  // namespace
 
 std::vector<double> poisson_0toN(double lam, int n) {
     if (n <= 0) return {};
@@ -45,7 +33,7 @@ std::vector<double> normal_distribution(
         const double d = x[i] - loc;
         y[i] = a * std::exp(-(d * d) / two_s2);
     }
-    if (norm) normalize_in_place(y);
+    if (norm) internal::normalize_sum(y);
     return y;
 }
 
@@ -71,7 +59,7 @@ std::vector<double> generalized_normal_distribution(
     // The Python evaluates the *standard* normal at z -- loc and scale have
     // already been folded into the transform above.
     std::vector<double> y = normal_distribution(z, 0.0, 1.0, false);
-    if (norm) normalize_in_place(y);
+    if (norm) internal::normalize_sum(y);
     return y;
 }
 
@@ -96,7 +84,7 @@ std::vector<double> distance_between_gaussian(
             pr[i] = 2.0 * distances[i] * distances[i] * inv_s2 * n[i];
         }
     }
-    if (normalize) normalize_in_place(pr);
+    if (normalize) internal::normalize_sum(pr);
     return pr;
 }
 

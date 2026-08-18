@@ -1,5 +1,30 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 5, tranche 2: polymer chains to C++ — and a live breakage found)
+
+* `PolymerChain.h` / `.cpp` — `gaussian_chain_ree`, `gaussian_chain`,
+  `worm_like_chain` (the Becker–Rosa–Everaers multi-piece solution, both sides
+  of the κ = 0.125 branch), `worm_like_chain_linker`.
+* **Gate: agreement to ≤ 3 × 10⁻¹⁷** on every case. One line reported a relative
+  failure at κ = 0.05 — on entries of order 1e-18, where a relative tolerance is
+  the wrong instrument; the absolute difference is 6e-18.
+* **The port found a function that had been raising for a whole commit.**
+  `worm_like_chain_linker` was numba-jitted and called `normal_distribution`,
+  which tranche 1 had just turned into a C++ delegation numba cannot type — so
+  every call raised `TypingError`. **The suite did not notice: 656 tests passed
+  with it broken**, because that function had no test at all.
+* So its equality gate had no working reference. It was checked against an
+  **independent numpy convolution** instead — agreement to 7e-18 — and
+  `test/test_polymer_chain.py` now covers it, along with both branches of the κ
+  expression and the contour-length cutoff.
+* The lesson is about the gate, not the port: an equality gate only proves
+  something when the thing being compared against still runs. Where it does not,
+  say so and find another reference.
+* **IMP concatenates a module's sources**, so a helper in an anonymous namespace
+  in two `.cpp` files is a redefinition rather than two private copies. Shared
+  as `include/internal/Normalize.h`.
+* numba: **40 → 35**. Suite **665 passed**.
+
 ## 2026-08-18 (PRD-113 stage 5, tranche 1: distributions to C++)
 
 * **numba must go entirely** (owner). 44 jitted functions across 13 files; this
