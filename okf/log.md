@@ -32,10 +32,16 @@
   basename, so one file was reported as a single ERROR line at the bottom of a
   780-test run and its assertions simply did not run. Basename uniqueness is
   now a test, because the failure mode is silent.
+* **`dynamics/`** — the Brownian walk, the Smoluchowski solver and the
+  excited-state Monte Carlo out of `quenching/`. They were filed under the first
+  physics that used them, not under what they are. `pyext/src/` now matches
+  PRD-113's target layout. The `api.py` domain check failed the instant they
+  moved (eight exports still filed under `quenching`), which is the drift the
+  old regex could not see.
 * The runtime domain graph is acyclic and reads as a layering:
-  `photophysics ← representation ← av ← restraints`, `fret → {photophysics,
-  representation, restraints}`, `quenching → fret`, `cgdye → {dye, fret,
-  representation}`.
+  `photophysics ← representation ← av ← restraints`, `dynamics` a leaf,
+  `quenching → {dynamics, fret}`, `fret → {io, photophysics, representation,
+  restraints}`, `cgdye → {dye, fret, io, representation}`.
 * Suite **799 passing**, one pre-existing `IMP.em` MRC failure.
 
 ## 2026-08-18 (PRD-113 stages 3-5, tranches 7-10: **numba reaches zero**)
