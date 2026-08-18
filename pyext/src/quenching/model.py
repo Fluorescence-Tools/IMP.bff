@@ -404,8 +404,45 @@ class QuenchedDonorDecay:
         kept = delays[emitted == 1]
         return float(kept.mean()) if kept.size else 0.0
 
+    def lifetime_spectrum(self, n_species: int = 128):
+        """The decay as ``(amplitude, rate)`` pairs -- the neutral output.
+
+        Prefer this to :meth:`decay_histogram`. A spectrum carries no bin width
+        and no time range, so whatever owns the instrument can convolve, bin and
+        add noise on its own terms; a histogram has already chosen all three.
+        See :mod:`IMP.bff.observables` for the contract.
+
+        Built from the *per-frame* total rate along the trajectory: each frame
+        is a state the dye occupies, weighted equally because the walk visits
+        them in proportion to their occupancy. That makes this the **static
+        approximation** -- exact only if the dye held each position for a whole
+        excited-state lifetime, which is precisely what a diffusion simulation
+        exists to deny. The returned spectrum is marked ``exact=False`` for that
+        reason, and :meth:`decay_histogram` (which races each photon against the
+        moving rate) is the one that resolves the averaging.
+
+        :param n_species: coarse-grain to at most this many species. The
+            trajectory has one state per frame -- often 10^5 -- and almost none
+            are distinguishable.
+        """
+        from IMP.bff.observables import lifetime_spectrum_from_rates
+
+        k = np.asarray(self.k_quench, dtype=np.float64).ravel()
+        if k.size == 0:
+            raise ValueError("no quenching rate trace; run the walk first")
+        intrinsic = 1.0 / self.tau0 if self.tau0 > 0.0 else 0.0
+        spectrum = lifetime_spectrum_from_rates(k + intrinsic, exact=False)
+        return spectrum.coarse_grain(n_species) if n_species else spectrum
+
     def decay_histogram(self, n_bins: int = 4096, time_range=(0.0, 50.0)):
         """Histogram of the photons that were actually emitted.
+
+        A binned curve is **not** the neutral output -- it has chosen a bin
+        width and a time range, both of which are instrument settings. Use
+        :meth:`lifetime_spectrum` unless the binning is the point. This is kept
+        because the photon trace resolves the *time-dependence* of the quenching
+        rate, which a spectrum cannot represent: it is the answer the static
+        approximation is an approximation to.
 
         **Only emitted photons.** A quenched excitation comes back with
         ``dt = 0``, so histogramming the whole trace piles every non-emitted

@@ -120,6 +120,12 @@ EXPORTS = {
     "PETTerm": "IMP.bff.photophysics.terms",
     "FRETTerm": "IMP.bff.photophysics.terms",
     "total_rate": "IMP.bff.photophysics.terms",
+
+    # PRD-113 stage 6, the output contract: experiment-neutral observables
+    "LifetimeSpectrum": "IMP.bff.observables.spectrum",
+    "fret_efficiency_from_lifetimes": "IMP.bff.observables.spectrum",
+    "lifetime_spectrum_from_rates": "IMP.bff.observables.reduce",
+    "lifetime_spectrum_from_states": "IMP.bff.observables.reduce",
     # Not listed here on purpose: sphere_points, poisson_0toN, normal_distribution,
     # generalized_normal_distribution and distance_between_gaussian are C++
     # (`Distributions.h`) and SWIG binds them into `IMP.bff` directly, so the

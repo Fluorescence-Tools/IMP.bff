@@ -28,6 +28,7 @@ import numpy as np
 %include "OrientationFactor.i"
 %include "BrownianWalk.i"
 %include "PhotonSimulation.i"
+%include "LifetimeSpectrum.i"
 
 /* Fluorescence decays */
 
