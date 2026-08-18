@@ -39,6 +39,8 @@ from __future__ import annotations
 
 import numpy as np
 
+import IMP.bff
+
 from IMP.bff.scoring.lennard_jones import lj_cross, lj_energy
 
 
@@ -110,6 +112,36 @@ def _aabb_overlap(
     )
 
 
+
+def _pair_energy_matrix(coords_a, coords_b, elements_a, elements_b,
+                        r_cutoff, aabb_pad):
+    """Interaction energy of every conformer of *a* against every one of *b*.
+
+    ``coords_a`` is ``(n_a_conf, n_a_atoms, 3)``; ``coords_b`` likewise, or
+    ``(n_b_atoms, 3)`` for a single static set such as a protein. Returns
+    ``(n_a_conf, n_b_conf)``.
+
+    The parameters are built for **this** atom ordering. That matters: the
+    version this replaces stored one matrix per unordered dye pair and reused it
+    for both orders, so with ``d1 > d2`` it multiplied a ``(n_1, n_2)`` distance
+    matrix by ``(n_2, n_1)`` parameters. The flattened lengths match, so numpy
+    broadcast it silently and paired every atom with the wrong partner's
+    parameters. Measured on a 3-atom against a 2-atom dye: 8366.65 where the
+    right answer is 8448.92.
+    """
+    a = np.asarray(coords_a, dtype=np.float64)
+    b = np.asarray(coords_b, dtype=np.float64)
+    if b.ndim == 2:
+        b = b[None, :, :]
+    rmin, eps = _build_cross_lj_params(list(elements_a), list(elements_b))
+    flat = IMP.bff.rotamer_pair_energy_matrix(
+        np.ascontiguousarray(a).ravel(), np.ascontiguousarray(b).ravel(),
+        rmin, eps,
+        int(a.shape[0]), int(a.shape[1]), int(b.shape[0]), int(b.shape[1]),
+        float(r_cutoff), float(aabb_pad))
+    return np.asarray(flat, dtype=np.float64).reshape(a.shape[0], b.shape[0])
+
+
 # ---------------------------------------------------------------------------
 # Main public function — single-dye mean-field reweighting (Eq. 39 + 42)
 # ---------------------------------------------------------------------------
@@ -154,34 +186,12 @@ def rotamer_mean_field_weights(
     n_clusters = rotamer_coords.shape[0]
     q = initial_weights.copy().astype(np.float64)
 
-    # Pre-build LJ cross params for dye × protein (Eq. 39 — E_bb)
-    rmin_dp, eps_dp = _build_cross_lj_params(dye_elements, protein_elements)
-
-    # AABB for protein (static reference) — Trick 1 pre-filter
-    prot_box = np.concatenate([
-        protein_coords.min(axis=0) - aabb_pad,
-        protein_coords.max(axis=0) + aabb_pad,
-    ])
-
-    # Pre-compute bounding boxes per rotamer cluster — Trick 1
-    rot_boxes = np.concatenate([
-        rotamer_coords.min(axis=1) - aabb_pad,    # (n_clusters, 3)
-        rotamer_coords.max(axis=1) + aabb_pad,    # (n_clusters, 3)
-    ], axis=1)                                     # (n_clusters, 6)
-
-    # Pre-compute E_bb[i] = protein–dye interaction energy for each cluster
-    # (Eq. 39).  This is constant across iterations for a static protein.
-    E_bb = np.zeros(n_clusters, dtype=np.float64)
-    for i in range(n_clusters):
-        # Trick 1: skip if bounding boxes don't overlap
-        if not _aabb_overlap(rot_boxes[i], prot_box):
-            continue
-        E_bb[i] = _lj_energy_pairs(
-            rotamer_coords[i],     # dye rotamer i
-            protein_coords,
-            rmin_dp, eps_dp,
-            r_cutoff=r_cutoff,
-        )
+    # E_bb[i], the protein interaction of each cluster (Eq. 39). Constant for a
+    # static protein, so it is computed once -- the all-pairs work is C++
+    # (:file:`include/IMP/bff/RotamerEnergy.h`), bounding-box pre-filter and all.
+    E_bb = _pair_energy_matrix(
+        rotamer_coords, protein_coords, dye_elements, protein_elements,
+        r_cutoff, aabb_pad)[:, 0]
 
     # Iterative mean-field update — Eq. 41 / 42
     # For single dye: E_P[i] = E_bb[i]  (no SC-SC cross term)
@@ -237,89 +247,43 @@ def rotamer_mean_field_weights_multi_dye(
         Updated weight arrays, one per dye.
     """
     n_dyes = len(rotamer_coords_list)
-    # q[d] holds current weights for dye d
     q_list = [w.copy().astype(np.float64) for w in initial_weights_list]
 
-    # AABB for protein
-    prot_box = np.concatenate([
-        protein_coords.min(axis=0) - aabb_pad,
-        protein_coords.max(axis=0) + aabb_pad,
-    ])
+    # Everything below the iteration is independent of the weights, so it is
+    # computed once. The version this replaces rebuilt every dye-dye energy
+    # inside the loop -- n_iter times the work for the same answer.
+    E_bb_all = [
+        _pair_energy_matrix(rotamer_coords_list[d], protein_coords,
+                            dye_elements_list[d], protein_elements,
+                            r_cutoff, aabb_pad)[:, 0]
+        for d in range(n_dyes)
+    ]
 
-    # Pre-compute E_bb[d][i] — protein interaction per dye d, cluster i  (Eq. 39)
-    E_bb_all = []
-    rmin_dp_all = []
-    eps_dp_all  = []
-    rot_boxes_all = []
-
-    for d in range(n_dyes):
-        coords_d = rotamer_coords_list[d]
-        n_clusters_d = coords_d.shape[0]
-        rmin_dp, eps_dp = _build_cross_lj_params(
-            dye_elements_list[d], protein_elements
-        )
-        rmin_dp_all.append(rmin_dp)
-        eps_dp_all.append(eps_dp)
-
-        rot_boxes_d = np.concatenate([
-            coords_d.min(axis=1) - aabb_pad,
-            coords_d.max(axis=1) + aabb_pad,
-        ], axis=1)
-        rot_boxes_all.append(rot_boxes_d)
-
-        E_bb_d = np.zeros(n_clusters_d, dtype=np.float64)
-        for i in range(n_clusters_d):
-            if not _aabb_overlap(rot_boxes_d[i], prot_box):
-                continue
-            E_bb_d[i] = _lj_energy_pairs(
-                coords_d[i], protein_coords,
-                rmin_dp, eps_dp,
-                r_cutoff=r_cutoff,
-            )
-        E_bb_all.append(E_bb_d)
-
-    # Pre-compute cross LJ params for each dye pair
-    cross_rmin = {}
-    cross_eps  = {}
+    # One matrix per *ordered* pair, each built with its own atom ordering.
+    E_sc = {}
     for d1 in range(n_dyes):
         for d2 in range(d1 + 1, n_dyes):
-            rp, ep = _build_cross_lj_params(
-                dye_elements_list[d1], dye_elements_list[d2]
-            )
-            cross_rmin[(d1, d2)] = rp
-            cross_eps[(d1, d2)]  = ep
+            m = _pair_energy_matrix(
+                rotamer_coords_list[d1], rotamer_coords_list[d2],
+                dye_elements_list[d1], dye_elements_list[d2],
+                r_cutoff, aabb_pad)
+            E_sc[(d1, d2)] = m
+            # The interaction is symmetric, so the reverse order is the
+            # transpose -- not the same matrix read the other way round, which
+            # is the mistake the old code made.
+            E_sc[(d2, d1)] = m.T
 
     # Mean-field iteration — Eq. 41 / 42
     for _iteration in range(n_iter):
         E_P_all = [E_bb_all[d].copy() for d in range(n_dyes)]
 
-        # Add dye–dye SC cross terms (Eq. 40 / 41)
+        # Eq. 41: each partner's energies weighted by its current probability.
+        # A matrix-vector product now that the energies are precomputed.
         for d1 in range(n_dyes):
-            n_i = rotamer_coords_list[d1].shape[0]
             for d2 in range(n_dyes):
                 if d1 == d2:
                     continue
-                d_lo, d_hi = (d1, d2) if d1 < d2 else (d2, d1)
-                rmin_cc = cross_rmin[(d_lo, d_hi)]
-                eps_cc  = cross_eps[(d_lo, d_hi)]
-
-                n_j = rotamer_coords_list[d2].shape[0]
-                for i in range(n_i):
-                    for j in range(n_j):
-                        # AABB pre-filter — Trick 1
-                        if not _aabb_overlap(
-                            rot_boxes_all[d1][i],
-                            rot_boxes_all[d2][j],
-                        ):
-                            continue
-                        E_sc_ij = _lj_energy_pairs(
-                            rotamer_coords_list[d1][i],
-                            rotamer_coords_list[d2][j],
-                            rmin_cc, eps_cc,
-                            r_cutoff=r_cutoff,
-                        )
-                        # Eq. 41: weighted by partner probability
-                        E_P_all[d1][i] += q_list[d2][j] * E_sc_ij
+                E_P_all[d1] += E_sc[(d1, d2)] @ q_list[d2]
 
         # Eq. 42: renormalize each dye independently
         for d in range(n_dyes):

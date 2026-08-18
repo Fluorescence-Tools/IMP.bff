@@ -61,6 +61,41 @@ IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
         double debye_length = 10.0,
         double coulomb_prefactor = 7.0);
 
+//! Repulsive-only LJ energy between every pair of conformers of two sets.
+/*!
+    The mean-field weight update needs the interaction energy of conformer *i*
+    of one dye against conformer *j* of another (or against a protein, which is
+    one "conformer"). Those energies **do not depend on the weights**, so they
+    are computed once here and the iteration becomes a matrix-vector product.
+    The Python this replaces recomputed the whole matrix inside the iteration
+    loop, doing ten times the work for the same answer.
+
+    Repulsive-only: the attractive tail (\f$r \ge R_{min}\f$) is dropped, which
+    is what the mean-field treatment wants -- it is asking what is *blocked*,
+    not what is bound.
+
+    Conformer pairs whose padded axis-aligned bounding boxes do not overlap are
+    skipped entirely, which is most of them once two dyes are more than a linker
+    apart.
+
+    \param[in] coords_a flat, `n_a_conf * n_a_atoms * 3`
+    \param[in] coords_b flat, `n_b_conf * n_b_atoms * 3`
+    \param[in] rmin,eps combined parameters, flat `n_a_atoms * n_b_atoms`
+    \param[in] r_cutoff pairs beyond this contribute nothing, Angstrom
+    \param[in] aabb_pad padding on each bounding box, Angstrom
+    \param[in] r_floor distance clamp keeping the energy finite
+    \return flat `n_a_conf * n_b_conf`
+*/
+IMPBFFEXPORT std::vector<double> rotamer_pair_energy_matrix(
+        const std::vector<double>& coords_a,
+        const std::vector<double>& coords_b,
+        const std::vector<double>& rmin,
+        const std::vector<double>& eps,
+        int n_a_conf, int n_a_atoms, int n_b_conf, int n_b_atoms,
+        double r_cutoff = 12.0,
+        double aabb_pad = 3.5,
+        double r_floor = 0.01);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_ROTAMERENERGY_H
