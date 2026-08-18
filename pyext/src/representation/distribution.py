@@ -23,11 +23,29 @@ meant both, which is the kind of collision this restructure exists to remove.
 from __future__ import annotations
 
 import abc
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import numpy as np
 
-from IMP.bff.av import BasicAV, ACV, compute_av, AccessibleVolume
+
+if TYPE_CHECKING:  # names for annotations only; see _av_types() below
+    from IMP.bff.av import ACV, BasicAV
+
+
+def _av_types():
+    """``(BasicAV, ACV, compute_av)``, imported on first use rather than on import.
+
+    The layering here runs ``representation.types`` -> ``av`` ->
+    ``representation.distribution``: this module *builds* accessible volumes, so
+    it sits above the builder, while the builder needs only the dataclass. Both
+    edges are real. Written at module level they close a cycle -- and because
+    importing ``IMP.bff.representation.types`` also executes the package
+    ``__init__``, which imports this module, narrowing the other side does not
+    break it. ``import IMP.bff.av`` as a process's first import raised
+    ImportError until this was deferred (PRD-113 stage 3).
+    """
+    from IMP.bff.av import ACV, BasicAV, compute_av
+    return BasicAV, ACV, compute_av
 
 # ---------------------------------------------------------------------------
 # Helper: find an atom in a coordinate array
@@ -106,14 +124,14 @@ class LabelDistribution(abc.ABC):
         self.simulation_grid_resolution = simulation_grid_resolution
         self.position_name = position_name
         self.verbose = verbose
-        self._av: Optional[BasicAV] = None
+        self._av: Optional["BasicAV"] = None
 
     @abc.abstractmethod
     def _compute(self):
         """Compute or recompute the underlying accessible volume."""
         ...
 
-    def get_basic_av(self) -> BasicAV:
+    def get_basic_av(self) -> "BasicAV":
         """Return (or create) the underlying ``BasicAV``.
 
         Returns
@@ -229,6 +247,7 @@ class LabelDistributionAV(LabelDistribution):
             return
         source_xyz = self.atoms_xyz[self._attachment_index]
 
+        BasicAV, _, compute_av = _av_types()
         av_result = compute_av(
             self.atoms_xyz, self.atoms_vdw, source_xyz,
             linker_length=self.linker_length,
@@ -318,6 +337,7 @@ class DyeDistributionNormal(LabelDistribution):
         r2 = np.sum(centered ** 2, axis=1)
         pts[:, 3] = np.exp(-0.5 * r2 / (self.width ** 2))
         pts[:, 3] /= pts[:, 3].sum()
+        BasicAV, _, _ = _av_types()
         self._av = BasicAV(
             points=pts,
             position_name=self.position_name,

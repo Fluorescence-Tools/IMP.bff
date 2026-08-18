@@ -13,7 +13,13 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from IMP.bff.representation import AccessibleVolume
+# The defining *module*, not the ``IMP.bff.representation`` package: the package
+# body pulls in ``distribution``, which builds AVs and so imports this one back.
+# Both edges are real -- ``av`` needs the dataclass, ``distribution`` needs the
+# builder -- and they only form a cycle when the import is written at package
+# granularity. `import IMP.bff.av` as a process's first import raised
+# ImportError until this was narrowed (PRD-113 stage 3).
+from IMP.bff.representation.types import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
 
 # ---------------------------------------------------------------------------

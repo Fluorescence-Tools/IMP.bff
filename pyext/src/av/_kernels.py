@@ -1,35 +1,29 @@
-"""Numba-accelerated kernels for accessible volume operations.
+"""Distance and density kernels for accessible volumes, in C++.
 
-These kernels provide the low-level computations used by AV classes.
-They are pure Numba (no IMP or LabelLib dependency) and can be used
-standalone.
+These were numba (``@njit(cache=True, nogil=True)``) until PRD-113 stage 3;
+numba is a prototyping tool in this package, not a runtime dependency, so the
+numerics are now :mod:`IMP.bff`'s compiled ``AVDistance`` and this module is the
+array adapter that reshapes for it. The signatures are unchanged.
 
-Every kernel here is ``@_njit(cache=True, nogil=True)``, and both flags are
-load-bearing rather than decoration:
+The kernels take **point arrays**, not the ``AV`` decorators the ``av_distance``
+family takes, so they serve a rotamer library, a coarse-grained ensemble or an
+MD trajectory as readily as an accessible volume.
 
-``nogil``
-    ``density2points`` visits every voxel of the grid and is the single most
-    expensive step of a labelling-site computation. A caller scanning many
-    sites in a thread pool -- which is what QuEst's web backend does -- would
-    otherwise serialise on the GIL precisely where the work is.
-``cache``
-    Without it every one of these compiles afresh in each new process, which a
-    short CLI run pays in full and never amortises.
-
-A caution that goes with ``cache=True``: a warm cache is only re-read, never
-re-validated against the compiler configuration, so a green suite proves
-nothing about compilation after these are edited. Clear ``*.nbi``/``*.nbc``
-under ``__pycache__`` before trusting a run.
+One behavioural note that no rewrite could avoid: :func:`random_distances` draws
+from a different generator than numba's, so *individual samples differ*. Every
+quantity built on it -- :func:`average_distance`, :func:`mean_fret_distance`,
+``pRDA`` -- is a Monte-Carlo estimator and agrees with the numba version only to
+the sampling error, about :math:`1/\\sqrt{n}`. Tests on these must compare
+distributions, never recorded numbers.
 """
 
 from __future__ import annotations
 
-import math
 import numpy as np
-from IMP.bff._jit import njit as _njit, jit as _jit
+
+import IMP.bff
 
 
-@_njit(cache=True, nogil=True)
 def random_distances(
     p1: np.ndarray,
     p2: np.ndarray,
@@ -39,7 +33,8 @@ def random_distances(
     """Draw random distance-weight pairs from two AV point clouds.
 
     Each sample picks one random point from each AV and computes the
-    Euclidean distance and the product of their density weights.
+    Euclidean distance and the product of their density weights. The two
+    clouds are drawn independently, so the pairs sample the joint distribution.
 
     Parameters
     ----------
@@ -50,7 +45,8 @@ def random_distances(
     n_samples : int
         Number of random samples to draw.
     seed : int
-        Random seed for reproducibility.
+        Seed for reproducibility. Reproducible run to run; **not** the same
+        stream as the numba version this replaces.
 
     Returns
     -------
@@ -58,22 +54,14 @@ def random_distances(
         Column 0: Euclidean distances (Å).
         Column 1: weight products.
     """
-    np.random.seed(seed)
-    n1 = p1.shape[0]
-    n2 = p2.shape[0]
-    result = np.empty((n_samples, 2), dtype=np.float64)
-    for i in range(n_samples):
-        i1 = np.random.randint(0, n1) if n1 > 0 else 0
-        i2 = np.random.randint(0, n2) if n2 > 0 else 0
-        dx = p1[i1, 0] - p2[i2, 0]
-        dy = p1[i1, 1] - p2[i2, 1]
-        dz = p1[i1, 2] - p2[i2, 2]
-        result[i, 0] = math.sqrt(dx * dx + dy * dy + dz * dz)
-        result[i, 1] = p1[i1, 3] * p2[i2, 3]
-    return result
+    out = IMP.bff.random_distances(
+        np.ascontiguousarray(p1, dtype=np.float64).ravel(),
+        np.ascontiguousarray(p2, dtype=np.float64).ravel(),
+        int(n_samples), int(seed),
+    )
+    return np.asarray(out, dtype=np.float64).reshape(int(n_samples), 2)
 
 
-@_njit(cache=True, nogil=True)
 def density2points(
     nx: int,
     ny: int,
@@ -102,29 +90,20 @@ def density2points(
     -------
     n : int
         Number of retained points.
-    points : (n_points, 4) float64
-        Point cloud ``(x, y, z, weight)``.  The array may be larger than
-        *n*; unused trailing entries should be discarded.
+    points : (n, 4) float64
+        Point cloud ``(x, y, z, weight)``. Exactly *n* rows -- the numba
+        version returned a grid-sized buffer with unused trailing entries, and
+        callers sliced it to *n*, which is still correct.
     """
-    max_points = nx * ny * nz
-    points = np.zeros((max_points, 4), dtype=np.float64)
-    n = 0
-    for ix in range(nx):
-        x = dg * ix + r0[0]
-        for iy in range(ny):
-            y = dg * iy + r0[1]
-            for iz in range(nz):
-                val = density[ix, iy, iz]
-                if val > threshold:
-                    points[n, 0] = x
-                    points[n, 1] = y
-                    points[n, 2] = dg * iz + r0[2]
-                    points[n, 3] = val
-                    n += 1
-    return n, points
+    flat = IMP.bff.density_to_points(
+        np.ascontiguousarray(density, dtype=np.float64).ravel(),
+        int(nx), int(ny), int(nz), float(dg),
+        np.asarray(r0, dtype=np.float64).ravel(), float(threshold),
+    )
+    points = np.asarray(flat, dtype=np.float64).reshape(-1, 4)
+    return points.shape[0], points
 
 
-@_njit(cache=True, nogil=True)
 def weighted_mean(points: np.ndarray, n: int) -> np.ndarray:
     """Weighted mean position of a point cloud.
 
@@ -138,24 +117,15 @@ def weighted_mean(points: np.ndarray, n: int) -> np.ndarray:
     Returns
     -------
     (3,) float64
-        Weighted mean coordinate.
+        Weighted mean coordinate; the origin for an empty cloud.
     """
-    if n == 0:
+    if points is None or n == 0:
         return np.zeros(3, dtype=np.float64)
-    w_sum = 0.0
-    mean = np.zeros(3, dtype=np.float64)
-    for i in range(n):
-        w = points[i, 3]
-        w_sum += w
-        mean[0] += points[i, 0] * w
-        mean[1] += points[i, 1] * w
-        mean[2] += points[i, 2] * w
-    if w_sum > 0.0:
-        mean /= w_sum
-    return mean
+    m = IMP.bff.points_weighted_mean(
+        np.ascontiguousarray(points[:n], dtype=np.float64).ravel())
+    return np.asarray(m, dtype=np.float64)
 
 
-@_njit(cache=True, nogil=True)
 def average_distance(points1: np.ndarray, n1: int,
                      points2: np.ndarray, n2: int,
                      n_samples: int = 50000) -> float:
@@ -175,56 +145,44 @@ def average_distance(points1: np.ndarray, n1: int,
     Returns
     -------
     float
-        Mean distance <R_DA> (Å).
+        Mean distance :math:`\\langle R_{DA}\\rangle` (Å), to the sampling error.
     """
-    d = random_distances(points1[:n1], points2[:n2], n_samples)
-    w_sum = 0.0
-    rda = 0.0
-    for i in range(n_samples):
-        w_sum += d[i, 1]
-        rda += d[i, 0] * d[i, 1]
-    if w_sum > 0.0:
-        return rda / w_sum
-    return 0.0
+    return IMP.bff.average_distance(
+        np.ascontiguousarray(points1[:n1], dtype=np.float64).ravel(),
+        np.ascontiguousarray(points2[:n2], dtype=np.float64).ravel(),
+        int(n_samples), 0)
 
 
-@_njit(cache=True, nogil=True)
 def mean_fret_distance(points1: np.ndarray, n1: int,
                        points2: np.ndarray, n2: int,
                        forster_radius: float = 52.0,
                        n_samples: int = 50000) -> float:
-    """FRET-averaged distance R_E between two AVs.
+    """FRET-averaged distance :math:`R_E` between two AVs.
+
+    The *efficiency* is averaged and converted back, which is not the same as
+    averaging the distance: :math:`1/r^6` weights close pairs far more heavily,
+    so this is always the shorter of the two.
 
     Parameters
     ----------
     points1, points2 : AV point clouds.
     n1, n2 : Number of valid rows.
     forster_radius : float
-        Förster radius R0 (Å).
+        Förster radius :math:`R_0` (Å).
     n_samples : int
 
     Returns
     -------
     float
-        FRET-averaged distance R_E (Å).
+        :math:`R_E` (Å); 0 if the mean efficiency saturates at 1, infinity if
+        it reaches 0.
     """
-    d = random_distances(points1[:n1], points2[:n2], n_samples)
-    w_sum = 0.0
-    mean_e = 0.0
-    for i in range(n_samples):
-        r = d[i, 0]
-        w = d[i, 1]
-        e = 1.0 / (1.0 + (r / forster_radius) ** 6.0)
-        w_sum += w
-        mean_e += e * w
-    if w_sum > 0.0:
-        mean_e /= w_sum
-    if mean_e <= 0.0 or mean_e >= 1.0:
-        return 0.0 if mean_e >= 1.0 else math.inf
-    return forster_radius * ((1.0 / mean_e) - 1.0) ** (1.0 / 6.0)
+    return IMP.bff.mean_fret_distance(
+        np.ascontiguousarray(points1[:n1], dtype=np.float64).ravel(),
+        np.ascontiguousarray(points2[:n2], dtype=np.float64).ravel(),
+        float(forster_radius), int(n_samples), 0)
 
 
-@_njit(cache=True, nogil=True)
 def split_av_acv(
     density: np.ndarray,
     dg: float,
@@ -244,7 +202,7 @@ def split_av_acv(
     dg : float
         Grid spacing (Å).
     radius : (n,) float64
-        Slow radius per center (broadcast scalar to all if needed).
+        Slow radius per center. A length-1 array broadcasts to all centres.
     rs : (n, 3) float64
         Slow-center coordinates (Å).
     r0 : (3,) float64
@@ -285,46 +243,18 @@ def split_av_acv(
         a float64 pair costs 12.5 MB per labelling site against 1.6 MB. A
         residue scan builds one per site.
     """
-    ng = density.shape[0]
-    n_radii = rs.shape[0]
+    ng = int(density.shape[0])
+    rs = np.ascontiguousarray(rs, dtype=np.float64).reshape(-1, 3)
+    radius = np.asarray(radius, dtype=np.float64).ravel()
+    if radius.size != rs.shape[0]:
+        radius = np.full(rs.shape[0], radius[0], dtype=np.float64)
 
-    if len(radius) != n_radii:
-        rad = np.zeros(n_radii, dtype=np.float64) + radius[0]
-    else:
-        rad = radius
+    label = np.asarray(IMP.bff.split_contact_volume(
+        np.ascontiguousarray(density, dtype=np.float64).ravel(),
+        ng, float(dg), radius, rs.ravel(),
+        np.asarray(r0, dtype=np.float64).ravel(),
+    ), dtype=np.int32).reshape(ng, ng, ng)
 
-    contact = np.zeros((ng, ng, ng), dtype=np.uint8)
-    non_contact = np.zeros((ng, ng, ng), dtype=np.uint8)
-    n_contact = 0
-    n_non = 0
-
-    # Integer offset, and `floor` below rather than `int`. See `r0` above.
-    half = (ng - 1) // 2
-
-    for ix in range(ng):
-        for iy in range(ng):
-            for iz in range(ng):
-                if density[ix, iy, iz] <= 0.0:
-                    continue
-
-                overlapped = 0
-                for isa in range(n_radii):
-                    ix0 = int(np.floor((rs[isa, 0] - r0[0]) / dg)) + half
-                    iy0 = int(np.floor((rs[isa, 1] - r0[1]) / dg)) + half
-                    iz0 = int(np.floor((rs[isa, 2] - r0[2]) / dg)) + half
-                    r_idx = int(rad[isa] / dg)
-                    dx = ix - ix0
-                    dy = iy - iy0
-                    dz = iz - iz0
-                    if dx * dx + dy * dy + dz * dz < r_idx * r_idx:
-                        overlapped = 1
-                        break
-
-                if overlapped > 0:
-                    contact[ix, iy, iz] = 1
-                    n_contact += 1
-                else:
-                    non_contact[ix, iy, iz] = 1
-                    n_non += 1
-
-    return n_contact, n_non, contact, non_contact
+    contact = (label == IMP.bff.AV_VOXEL_CONTACT).astype(np.uint8)
+    non_contact = (label == IMP.bff.AV_VOXEL_FREE).astype(np.uint8)
+    return int(contact.sum()), int(non_contact.sum()), contact, non_contact

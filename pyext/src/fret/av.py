@@ -17,7 +17,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from . import io
-from IMP.bff.representation import AccessibleVolume
+from IMP.bff.representation.types import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
 from .strip import (
     BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES,

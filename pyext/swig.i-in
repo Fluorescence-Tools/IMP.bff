@@ -23,6 +23,7 @@ import numpy as np
 %include "QuenchingMap.i"
 %include "FRETRateTrace.i"
 %include "DiffusionSolver.i"
+%include "AVDistance.i"
 
 /* Fluorescence decays */
 

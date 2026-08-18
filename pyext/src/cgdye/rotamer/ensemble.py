@@ -22,7 +22,7 @@ from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
-from IMP.bff.representation import States
+from IMP.bff.representation.states import States
 from IMP.bff.fret.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
