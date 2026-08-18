@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+import IMP.bff
+
 from IMP.bff.scoring.lennard_jones import lj_energy, lj_parameter_arrays
 from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles  # the canonical one
 
@@ -379,6 +381,12 @@ def compute_rotamer_score(
     RotamerScoreResult
         Normalized weights, partition function, and raw energies.
     """
+    # Validated first, before any of the early returns below: an unknown
+    # potential is a caller error whatever the geometry happens to be, and it
+    # used to slip through whenever the atom selection came out empty.
+    if potential not in ("lj", "gauss"):
+        raise ValueError(f"Unknown potential {potential!r}")
+
     metadata = rotamer_metadata or {}
     protein_coords = np.asarray(protein_coords, dtype=np.float64)
     rotamer_coords = np.asarray(rotamer_coords, dtype=np.float64)
@@ -429,28 +437,26 @@ def compute_rotamer_score(
             [protein_resnames[i] for i in protein_idx],
         )
 
-    pot_energy = np.zeros(rotamer_coords.shape[0], dtype=np.float64)
-    dh_energy = np.zeros(rotamer_coords.shape[0], dtype=np.float64)
-
-    for i, coords in enumerate(rotamer_coords):
-        distances = np.linalg.norm(coords[rotamer_idx, None, :] - protein_positions[None, :, :], axis=2)
-        if electrostatic:
-            mask = (q_rotamer[:, None] * q_protein[None, :] != 0.0) & (distances < 20.0)
-            if np.any(mask):
-                ri, pj = np.nonzero(mask)
-                dh_energy[i] += np.sum(q_rotamer[ri] * q_protein[pj] * 7.0 / distances[ri, pj] * np.exp(-distances[ri, pj] / 10.0))
-
-        if potential == "lj":
-            mask = distances < 10.0
-            if np.any(mask):
-                pot_energy[i] += np.sum(lj_energy(distances[mask], rmin_ij[mask], eps_ij[mask], r_floor=0.0))
-        elif potential == "gauss":
-            mask = distances < 10.0
-            if np.any(mask):
-                ratio = np.power(distances[mask] / rmin_ij[mask], 2)
-                pot_energy[i] += np.sum(eps_ij[mask] * np.exp(-0.5 * ratio))
-        else:
-            raise ValueError(f"Unknown potential {potential!r}")
+    # The all-pairs inner loop is C++ (:file:`include/IMP/bff/RotamerEnergy.h`).
+    # Every dye atom against every protein atom, for every conformer -- and the
+    # Python it replaces built an (n_dye x n_protein) distance matrix per
+    # conformer, so it allocated once per rotamer and took the square root of
+    # every pair before deciding almost all of them were beyond the cutoff.
+    selected = np.ascontiguousarray(
+        np.asarray(rotamer_coords, dtype=np.float64)[:, rotamer_idx, :])
+    energies = np.asarray(IMP.bff.rotamer_interaction_energies(
+        selected.ravel(),
+        np.ascontiguousarray(protein_positions, dtype=np.float64).ravel(),
+        np.ascontiguousarray(rmin_ij, dtype=np.float64).ravel(),
+        np.ascontiguousarray(eps_ij, dtype=np.float64).ravel(),
+        np.ascontiguousarray(q_rotamer, dtype=np.float64) if electrostatic else np.empty(0),
+        np.ascontiguousarray(q_protein, dtype=np.float64) if electrostatic else np.empty(0),
+        int(rotamer_coords.shape[0]), int(rotamer_idx.size), int(protein_idx.size),
+        IMP.bff.ROTAMER_POTENTIAL_GAUSS if potential == "gauss"
+        else IMP.bff.ROTAMER_POTENTIAL_LJ,
+    ), dtype=np.float64).reshape(-1, 2)
+    pot_energy = np.ascontiguousarray(energies[:, 0])
+    dh_energy = np.ascontiguousarray(energies[:, 1])
 
     boltzmann = np.exp(-pot_energy / (_GAS_CONSTANT * temperature) - dh_energy)
     library_weights = np.asarray(rotamer_weights if rotamer_weights is not None else metadata.get("weights", np.ones(rotamer_coords.shape[0])), dtype=np.float64)

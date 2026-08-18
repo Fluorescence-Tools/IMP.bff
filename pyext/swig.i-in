@@ -48,6 +48,9 @@ import numpy as np
 %include "IMP/bff/PhotonSimulation.h"
 %include "IMP/bff/QuenchedDecay.h"
 
+/* Scoring: how hard a conformer collides with its structure. */
+%include "IMP/bff/RotamerEnergy.h"
+
 /* What comes out: (amplitude, rate) pairs. */
 %include "IMP/bff/LifetimeSpectrum.h"
 
