@@ -22,7 +22,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .._jit import njit
+import IMP.bff
 
 __all__ = ["DyeDiffusionTrajectory", "simulate_dye_diffusion"]
 
@@ -47,136 +47,6 @@ class DyeDiffusionTrajectory(NamedTuple):
     def acceptance_ratio(self) -> float:
         total = self.n_accepted + self.n_rejected
         return float(self.n_accepted) / total if total else 0.0
-
-
-# Sequential on purpose: the walk is a strict chain of dependent steps, so
-# `parallel=True` buys no speed-up and splits the random draws across threads,
-# which makes `random_seed` non-reproducible.
-#
-# `nogil` is what makes running *whole* trajectories concurrently worthwhile:
-# without it a caller's thread pool serialises on the GIL. Numba's RNG state is
-# thread-local, so each worker still reproduces its own `random_seed`.
-@njit(cache=True, nogil=True)
-def _simulate_scalar(d, ds, dg, t_max, t_step, D, slow_fact, random_seed):
-    if random_seed >= 0:
-        np.random.seed(random_seed)
-    n_samples = int(t_max / t_step)
-    ng = d.shape[0]
-    sigma = np.sqrt(2 * D * 3 * t_step) / dg
-    pos = np.zeros((n_samples, 3), dtype=np.float64)
-    accepted = np.zeros(n_samples, dtype=np.uint8)
-    r = np.random.normal(0.0, sigma, size=(n_samples, 3))
-    slow_fact_sqrt = np.sqrt(slow_fact)
-
-    found = False
-    for _ in range(1000):
-        x_idx = np.random.randint(0, ng)
-        y_idx = np.random.randint(0, ng)
-        z_idx = np.random.randint(0, ng)
-        if d[x_idx, y_idx, z_idx] > 0:
-            pos[0, 0] = x_idx
-            pos[0, 1] = y_idx
-            pos[0, 2] = z_idx
-            found = True
-            break
-    if not found:
-        return pos, accepted, 0, 0
-
-    n_accepted = 1
-    n_rejected = 0
-    i_accepted = 0
-    accepted[0] = 1
-    for i in range(1, n_samples):
-        x_idx = int(pos[i_accepted, 0])
-        y_idx = int(pos[i_accepted, 1])
-        z_idx = int(pos[i_accepted, 2])
-        if ds[x_idx, y_idx, z_idx] > 0:
-            r[i, 0] *= slow_fact_sqrt
-            r[i, 1] *= slow_fact_sqrt
-            r[i, 2] *= slow_fact_sqrt
-
-        pos[i, 0] = pos[i_accepted, 0] + r[i, 0]
-        pos[i, 1] = pos[i_accepted, 1] + r[i, 1]
-        pos[i, 2] = pos[i_accepted, 2] + r[i, 2]
-
-        x_idx = int(pos[i, 0])
-        y_idx = int(pos[i, 1])
-        z_idx = int(pos[i, 2])
-        if 0 <= x_idx < ng and 0 <= y_idx < ng and 0 <= z_idx < ng and d[x_idx, y_idx, z_idx] > 0:
-            i_accepted = i
-            n_accepted += 1
-            accepted[i] = 1
-        else:
-            pos[i, 0] = pos[i_accepted, 0]
-            pos[i, 1] = pos[i_accepted, 1]
-            pos[i, 2] = pos[i_accepted, 2]
-            n_rejected += 1
-            accepted[i] = 0
-    # Integer offset, matching `grids._center_grid_indices` -- see
-    # `grids.grid_center_index`. Numba cannot call that helper from here.
-    return (pos - (ng - 1) // 2) * dg, accepted, n_accepted, n_rejected
-
-
-# Sequential on purpose, and `nogil` for concurrency: see `_simulate_scalar`.
-@njit(cache=True, nogil=True)
-def _simulate_grid(d, slow_factor, dg, t_max, t_step, D, random_seed):
-    if random_seed >= 0:
-        np.random.seed(random_seed)
-    n_samples = int(t_max / t_step)
-    ng = d.shape[0]
-    sigma = np.sqrt(2 * D * 3 * t_step) / dg
-    pos = np.zeros((n_samples, 3), dtype=np.float64)
-    accepted = np.zeros(n_samples, dtype=np.uint8)
-    r = np.random.normal(0.0, sigma, size=(n_samples, 3))
-
-    found = False
-    for _ in range(1000):
-        x_idx = np.random.randint(0, ng)
-        y_idx = np.random.randint(0, ng)
-        z_idx = np.random.randint(0, ng)
-        if d[x_idx, y_idx, z_idx] > 0:
-            pos[0, 0] = x_idx
-            pos[0, 1] = y_idx
-            pos[0, 2] = z_idx
-            found = True
-            break
-    if not found:
-        return pos, accepted, 0, 0
-
-    n_accepted = 1
-    n_rejected = 0
-    i_accepted = 0
-    accepted[0] = 1
-    for i in range(1, n_samples):
-        x_idx = int(pos[i_accepted, 0])
-        y_idx = int(pos[i_accepted, 1])
-        z_idx = int(pos[i_accepted, 2])
-        factor = slow_factor[x_idx, y_idx, z_idx]
-        if factor < 1.0:
-            factor_sqrt = np.sqrt(factor)
-            r[i, 0] *= factor_sqrt
-            r[i, 1] *= factor_sqrt
-            r[i, 2] *= factor_sqrt
-
-        pos[i, 0] = pos[i_accepted, 0] + r[i, 0]
-        pos[i, 1] = pos[i_accepted, 1] + r[i, 1]
-        pos[i, 2] = pos[i_accepted, 2] + r[i, 2]
-
-        x_idx = int(pos[i, 0])
-        y_idx = int(pos[i, 1])
-        z_idx = int(pos[i, 2])
-        if 0 <= x_idx < ng and 0 <= y_idx < ng and 0 <= z_idx < ng and d[x_idx, y_idx, z_idx] > 0:
-            i_accepted = i
-            n_accepted += 1
-            accepted[i] = 1
-        else:
-            pos[i, 0] = pos[i_accepted, 0]
-            pos[i, 1] = pos[i_accepted, 1]
-            pos[i, 2] = pos[i_accepted, 2]
-            n_rejected += 1
-            accepted[i] = 0
-    # Integer offset, matching `grids._center_grid_indices`.
-    return (pos - (ng - 1) // 2) * dg, accepted, n_accepted, n_rejected
 
 
 def simulate_dye_diffusion(
@@ -206,28 +76,33 @@ def simulate_dye_diffusion(
     The returned coordinates are relative to the grid anchor.
     """
     seed = -1 if random_seed is None else int(random_seed)
-    slow = np.asarray(slow_fact)
+    occupancy = np.ascontiguousarray(np.asarray(density, dtype=np.int32))
+    ng = int(occupancy.shape[0])
+    slow = np.asarray(slow_fact, dtype=np.float64)
+
+    # Mobility is a *field*: one scaling per voxel. The scalar-plus-mask form
+    # is just one way to build it, and building it here collapses what used to
+    # be two near-identical kernels into one.
     if slow.ndim == 3:
-        result = _simulate_grid(
-            np.asarray(density, dtype=np.uint8),
-            np.asarray(slow_fact, dtype=np.float64),
-            float(dg),
-            float(t_max),
-            float(t_step),
-            float(D),
-            seed,
-        )
+        mobility = np.ascontiguousarray(slow, dtype=np.float64)
+    elif float(slow) == 1.0 or slow_density is None:
+        mobility = np.empty(0, dtype=np.float64)   # uniform medium
     else:
-        if slow_density is None:
-            slow_density = np.zeros_like(np.asarray(density, dtype=np.uint8))
-        result = _simulate_scalar(
-            np.asarray(density, dtype=np.uint8),
-            np.asarray(slow_density, dtype=np.uint8),
-            float(dg),
-            float(t_max),
-            float(t_step),
-            float(D),
-            float(slow_fact),
-            seed,
-        )
-    return DyeDiffusionTrajectory(*result)
+        mask = np.asarray(slow_density, dtype=bool)
+        mobility = np.where(mask, float(slow), 1.0)
+
+    accepted_out = IMP.bff.VectorInt()
+    counts = IMP.bff.VectorInt()
+    flat = IMP.bff.brownian_walk_in_volume(
+        occupancy.ravel(), mobility.ravel(), ng, float(dg), float(t_max),
+        float(t_step), float(D), seed, accepted_out, counts)
+
+    xyz = np.asarray(flat, dtype=np.float64).reshape(-1, 3)
+    accepted = np.asarray(accepted_out, dtype=np.uint8)
+    n_acc, n_rej = (int(counts[0]), int(counts[1])) if len(counts) == 2 else (0, 0)
+    if xyz.size == 0:
+        # No accessible starting voxel: an empty trajectory of the right length.
+        n_steps = int(t_max / t_step)
+        xyz = np.zeros((n_steps, 3), dtype=np.float64)
+        accepted = np.zeros(n_steps, dtype=np.uint8)
+    return DyeDiffusionTrajectory(xyz, accepted, n_acc, n_rej)

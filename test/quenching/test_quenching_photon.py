@@ -36,19 +36,33 @@ class PhotonTraceTests(IMP.test.TestCase):
         self.k_quench = np.abs(rng.normal(0.5, 0.4, 5000)).astype(np.float32)
 
     def test_frozen_reference(self):
-        """Pinned after the waiting-time fix; QuEst gave 6271 / 1.263997559.
+        """The trace's *statistics*, since the exact trace can no longer be pinned.
 
-        The move itself was bit-for-bit against QuEst at this seed. The numbers
-        then moved by design when `_log_exp_wait` was corrected -- see
-        :meth:`test_waiting_times_are_never_negative`.
+        This asserted 6297 emitted photons and a mean delay of
+        1.266492156326010 at seed 5 -- bit-for-bit QuEst's trace, which held
+        through the numba port because both ran the same Mersenne stream. The
+        C++ port (PRD-113 stage 5) ends that: no C++ generator reproduces
+        numba's stream, so those digits describe the generator, not the model.
+
+        What survives is the distribution. Over 12 seeds at 20 000 excitations:
+
+            numba   6288 +/- 48 emitted,  <dt> 1.26699 +/- 0.01205 ns
+            C++     6328 +/- 59 emitted,  <dt> 1.25803 +/- 0.01290 ns
+
+        Both means also have closed forms under a *constant* rate, which is the
+        stronger check and is asserted in
+        ``test_dynamics_cpp.py::test_constant_rate_reproduces_the_closed_form``.
+        Here the rate varies along the trajectory, so this pins the sample.
         """
-        dts, emitted = photon.simulate_photon_trace(
-            20000, self.k_quench, t_step=0.01, tau0=4.0, random_seed=5
-        )
-        self.assertEqual(int(emitted.sum()), 6297)
-        self.assertAlmostEqual(
-            float(dts[emitted > 0].mean()), 1.266492156326010, delta=1e-9
-        )
+        emitted_counts, mean_delays = [], []
+        for seed in range(6):
+            dts, emitted = photon.simulate_photon_trace(
+                20000, self.k_quench, t_step=0.01, tau0=4.0, random_seed=seed
+            )
+            emitted_counts.append(int(emitted.sum()))
+            mean_delays.append(float(dts[emitted > 0].mean()))
+        self.assertAlmostEqual(sum(emitted_counts) / 6, 6310, delta=200)
+        self.assertAlmostEqual(sum(mean_delays) / 6, 1.2625, delta=0.05)
 
     def test_waiting_times_are_never_negative(self):
         """QuEst emitted photons *before* they were excited, 2.4e-4 of the time.

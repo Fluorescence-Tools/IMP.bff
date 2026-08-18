@@ -1,0 +1,256 @@
+"""The particle model in C++: a confined Brownian walk, photons, and the curve.
+
+These three kernels carry a random number generator, so none of them can be
+gated bit-for-bit against the numba they replace -- no C++ generator reproduces
+numba's stream. They are gated against **analytic results** instead, which is
+the stronger check anyway:
+
+* a free walk's mean squared displacement,
+* a confined walk's equilibrium distribution -- uniform on the accessible
+  region, which is what makes rejection sampling correct,
+* the emitted fraction and mean delay time under a constant quenching rate,
+  both of which have closed forms,
+* the decay curve's rate, which must be ``1/tau0 + kq``.
+
+.. warning::
+   ``test_free_walk_diffuses_at_three_times_D`` asserts a **discrepancy**, not a
+   correct result. The walk's step variance is ``6 D dt`` per Cartesian
+   component where the standard Brownian convention is ``2 D dt``, so at the
+   same nominal ``D`` the particle model diffuses three times faster than
+   ``GridDiffusionSolver`` -- which PRD-109 pinned to ``<x^2> = 2 D t`` and
+   which reproduces it exactly. The C++ port preserved the convention
+   deliberately: correcting it would move every quenching number computed
+   through the particle path, and the default ``D = 40 A^2/ns`` may have been
+   chosen to compensate. Recorded for the owner; the test exists so the
+   discrepancy cannot be forgotten or silently changed.
+"""
+
+import numpy as np
+import pytest
+
+import IMP.bff
+from IMP.bff.quenching import diffusion as dif
+from IMP.bff.quenching import photon as ph
+from IMP.bff.quenching.solver import GridDiffusionSolver, diffusion_stability_limit
+
+
+def _ball(ng, radius):
+    i = np.arange(ng)
+    x, y, z = np.meshgrid(i, i, i, indexing="ij")
+    c = (ng - 1) // 2
+    return (((x - c) ** 2 + (y - c) ** 2 + (z - c) ** 2) < radius ** 2).astype(np.uint8)
+
+
+# --- the walk ----------------------------------------------------------------
+
+def test_free_walk_diffuses_at_three_times_D():
+    """Pins the convention mismatch described in this module's docstring."""
+    D, t_step, n = 8.0, 0.005, 60
+    box = np.ones((101, 101, 101), dtype=np.uint8)
+    d = []
+    for seed in range(300):
+        t = dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step,
+                                       t_step=t_step, D=D, random_seed=seed)
+        if t.acceptance_ratio > 0.999:      # untouched by the walls
+            d.append(t.xyz[n - 1] - t.xyz[0])
+    msd = (np.array(d) ** 2).mean(axis=0)
+    per_component = msd.mean()
+    assert per_component == pytest.approx(6 * D * n * t_step, rel=0.2)
+    assert per_component > 2.5 * (2 * D * n * t_step), "the 3x is what is being pinned"
+
+
+def test_grid_solver_uses_the_standard_convention():
+    """The other half of the mismatch: the field model gives 2 D t, exactly."""
+    ng, dg, D = 81, 1.0, 8.0
+    bounds = np.zeros((ng, ng, ng)); bounds[2:-2, 2:-2, 2:-2] = 1.0
+    density = np.zeros((ng, ng, ng)); density[40, 40, 40] = 1.0
+    t_step = 0.4 * diffusion_stability_limit(D, dg)
+    s = GridDiffusionSolver(diffusion_map=np.full((ng, ng, ng), D), bounds=bounds,
+                            density=density, t_step=t_step, dg=dg)
+    s.run(300, n_out=1)
+    p = np.asarray(s.density).reshape(ng, ng, ng)
+    p = p / p.sum()
+    axis = (np.arange(ng) - 40) * dg
+    msd_x = (p.sum(axis=(1, 2)) * axis ** 2).sum()
+    assert msd_x == pytest.approx(2 * D * 300 * t_step, rel=1e-3)
+
+
+def test_walk_never_leaves_the_accessible_region():
+    ng = 31
+    ball = _ball(ng, 12)
+    t = dif.simulate_dye_diffusion(ball, dg=1.0, t_max=2000.0, t_step=0.005,
+                                   D=8.0, random_seed=1)
+    idx = np.floor(t.xyz).astype(int) + (ng - 1) // 2
+    inside = ball[np.clip(idx[:, 0], 0, ng - 1),
+                  np.clip(idx[:, 1], 0, ng - 1),
+                  np.clip(idx[:, 2], 0, ng - 1)]
+    assert inside.all()
+
+
+def test_confined_walk_samples_the_region_uniformly():
+    """Uniform in a ball gives p(r) ~ r^2, so <r> = 3R/4.
+
+    This is what rejection sampling buys, and it is why a rejected step still
+    emits a frame: dropping them would bias the walk away from the boundary.
+    """
+    t = dif.simulate_dye_diffusion(_ball(31, 12), dg=1.0, t_max=4000.0,
+                                   t_step=0.005, D=8.0, random_seed=1)
+    r = np.linalg.norm(t.xyz, axis=1)
+    assert r.mean() == pytest.approx(0.75 * 12.0, abs=1.5)
+
+
+def test_walk_emits_one_frame_per_step_accepted_or_not():
+    t = dif.simulate_dye_diffusion(_ball(21, 4), dg=1.0, t_max=100.0,
+                                   t_step=0.01, D=40.0, random_seed=2)
+    assert t.n_frames == 10000
+    assert t.accepted.shape == (10000,)
+    assert t.n_accepted + t.n_rejected == 10000
+    assert 0.0 < t.acceptance_ratio < 1.0, "a small ball must reject some steps"
+
+
+def test_walk_is_reproducible_and_seed_dependent():
+    kw = dict(dg=1.0, t_max=500.0, t_step=0.005, D=8.0)
+    ball = _ball(31, 12)
+    a = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
+    b = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
+    np.testing.assert_array_equal(a.xyz, b.xyz)
+    assert a.n_accepted == b.n_accepted
+    c = dif.simulate_dye_diffusion(ball, random_seed=6, **kw)
+    assert not np.array_equal(a.xyz, c.xyz)
+
+
+def test_mobility_field_and_scalar_mask_agree():
+    """The two Python kernels this replaced were the same walk twice over."""
+    ng = 31
+    ball = _ball(ng, 12)
+    i = np.arange(ng); x, y, z = np.meshgrid(i, i, i, indexing="ij")
+    outer = (((x - 15) ** 2 + (y - 15) ** 2 + (z - 15) ** 2) > 64)
+    kw = dict(dg=1.0, t_max=2000.0, t_step=0.005, D=8.0, random_seed=2)
+
+    field = dif.simulate_dye_diffusion(ball, slow_fact=np.where(outer, 0.1, 1.0), **kw)
+    scalar = dif.simulate_dye_diffusion(ball, slow_density=outer.astype(np.uint8),
+                                        slow_fact=0.1, **kw)
+    free = dif.simulate_dye_diffusion(ball, **kw)
+
+    step = lambda t: np.linalg.norm(np.diff(t.xyz, axis=0), axis=1).mean()
+    assert step(field) == pytest.approx(step(scalar), rel=0.05)
+    assert step(field) < step(free), "a slow region must shorten the mean step"
+
+
+def test_no_accessible_voxel_gives_an_empty_trajectory():
+    t = dif.simulate_dye_diffusion(np.zeros((11, 11, 11), dtype=np.uint8),
+                                   dg=1.0, t_max=10.0, t_step=0.01, D=8.0, random_seed=1)
+    assert t.n_accepted == 0 and t.n_rejected == 0
+    assert t.acceptance_ratio == 0.0
+    assert not t.xyz.any()
+
+
+# --- photons -----------------------------------------------------------------
+
+@pytest.mark.parametrize("kq_val", [0.0, 0.25, 0.5, 2.0])
+def test_constant_rate_reproduces_the_closed_form(kq_val):
+    """At a constant quenching rate both observables have exact answers."""
+    tau0 = 4.0
+    dts, emitted = ph.simulate_photon_trace(
+        200000, np.full(2000, kq_val), 0.01, tau0, random_seed=11)
+    assert emitted.mean() == pytest.approx(1.0 / (1.0 + kq_val * tau0), abs=0.006)
+    assert dts[emitted > 0].mean() == pytest.approx(1.0 / (1.0 / tau0 + kq_val), rel=0.02)
+
+
+def test_no_photon_is_emitted_before_it_was_excited():
+    """The epsilon this code inherited made 2.4e-4 of delay times negative."""
+    dts, _ = ph.simulate_photon_trace(500000, np.zeros(10), 0.01, 4.0, random_seed=3)
+    assert (dts >= 0).all()
+
+
+def test_quenched_events_report_zero_delay():
+    dts, emitted = ph.simulate_photon_trace(20000, np.full(500, 5.0), 0.01, 4.0, random_seed=1)
+    assert (dts[emitted == 0] == 0.0).all()
+    assert (dts[emitted > 0] > 0.0).all()
+
+
+def test_photon_trace_is_reproducible_and_seed_dependent():
+    kq = np.full(100, 0.3)
+    a = ph.simulate_photon_trace(5000, kq, 0.01, 4.0, random_seed=4)[0]
+    np.testing.assert_array_equal(a, ph.simulate_photon_trace(5000, kq, 0.01, 4.0, random_seed=4)[0])
+    assert not np.array_equal(a, ph.simulate_photon_trace(5000, kq, 0.01, 4.0, random_seed=5)[0])
+
+
+def test_unseeded_traces_are_independent_samples():
+    """Consecutive unseeded runs returning the same answer reads as precision
+    that is not there -- which is what numba's per-thread state used to do."""
+    kq = np.full(100, 0.3)
+    a = ph.simulate_photon_trace(5000, kq, 0.01, 4.0)[0]
+    b = ph.simulate_photon_trace(5000, kq, 0.01, 4.0)[0]
+    assert not np.array_equal(a, b)
+
+
+# --- the decay curve ---------------------------------------------------------
+
+@pytest.mark.parametrize("kq_val", [0.0, 0.5])
+def test_decay_falls_at_the_total_rate(kq_val):
+    n_bins, dt_tac, tau0 = 512, 0.02, 4.0
+    decay = np.zeros(n_bins)
+    ph.simulate_quenched_decay(300, decay, dt_tac, np.full(4000, kq_val), 0.01, tau0,
+                               random_seed=2)
+    t = (np.arange(n_bins) + 0.5) * dt_tac
+    keep = decay > decay.max() * 1e-4
+    rate = -np.polyfit(t[keep], np.log(decay[keep]), 1)[0]
+    assert rate == pytest.approx(1.0 / tau0 + kq_val, rel=0.02)
+
+
+def test_decay_accumulates_into_the_caller_array():
+    decay = np.full(256, 7.0)
+    ph.simulate_quenched_decay(10, decay, 0.05, np.full(500, 0.4), 0.01, 4.0, random_seed=1)
+    assert (decay >= 7.0).all()
+    assert decay.sum() > 7.0 * 256
+
+
+def test_decay_is_reproducible_and_seed_dependent():
+    rng = np.random.default_rng(0)
+    kq = np.abs(rng.normal(0.5, 0.4, 500))   # a rate that varies along the trajectory
+    out = []
+    for seed in (9, 9, 10):
+        d = np.zeros(512)
+        ph.simulate_quenched_decay(50, d, 0.02, kq, 0.01, 4.0, random_seed=seed)
+        out.append(d)
+    np.testing.assert_array_equal(out[0], out[1])
+    assert not np.array_equal(out[0], out[2])
+
+
+def test_a_constant_rate_makes_the_start_frame_irrelevant():
+    """Not a seeding bug: with kq constant every starting frame is the same."""
+    a, b = np.zeros(512), np.zeros(512)
+    ph.simulate_quenched_decay(50, a, 0.02, np.full(500, 0.5), 0.01, 4.0, random_seed=9)
+    ph.simulate_quenched_decay(50, b, 0.02, np.full(500, 0.5), 0.01, 4.0, random_seed=10)
+    np.testing.assert_array_equal(a, b)
+
+
+def test_decay_accumulation_is_not_racy():
+    """The bin index is data-dependent, so a shared accumulator loses updates.
+
+    The numba ancestor did exactly that and dropped up to 2 % of the intensity,
+    differently each run. Blocked accumulation makes the total exact and the
+    reduction order fixed.
+    """
+    totals = set()
+    for _ in range(6):
+        d = np.zeros(256)
+        ph.simulate_quenched_decay(200, d, 0.05, np.full(2000, 0.3), 0.01, 4.0, random_seed=1)
+        totals.add(round(float(d.sum()), 9))
+    assert len(totals) == 1, f"the total varies between identical runs: {totals}"
+
+
+def test_no_numba_left_in_the_particle_model():
+    import ast
+    import inspect
+    for mod in (dif, ph):
+        tree = ast.parse(inspect.getsource(mod))
+        imported = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+        imported |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        assert not any("numba" in m or m.endswith("_jit") for m in imported), (mod, imported)
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
