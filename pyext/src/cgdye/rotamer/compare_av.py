@@ -21,7 +21,7 @@ from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 import numpy as np
 
 from IMP.bff.fret.av import AccessibleVolume, compute_av
-from IMP.bff.fret.distance import (
+from IMP.bff.representation.distance import (
     av_pair_statistics,
     chi2_score,
     fret_pair_efficiencies,

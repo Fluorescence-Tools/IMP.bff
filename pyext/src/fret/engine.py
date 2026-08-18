@@ -141,7 +141,7 @@ class DistanceRestraint:
         float
             Effective distance.
         """
-        from . import distance as _dist
+        from IMP.bff.representation import distance as _dist
         if self.distance_type == "Rmp" or self.transfer_function_type == "None":
             return rmp
         elif self.transfer_function_type == "Gaussian":

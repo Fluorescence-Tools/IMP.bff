@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.polymer import (
+from IMP.bff.representation.polymer import (
     gaussian_chain, gaussian_chain_ree, worm_like_chain, worm_like_chain_linker,
 )
 

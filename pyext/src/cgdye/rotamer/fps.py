@@ -324,7 +324,7 @@ def distances_from_ensembles(
     """
     if kappa2 not in ("isotropic", "dipoles"):
         raise ValueError("kappa2 must be 'isotropic' or 'dipoles'")
-    from IMP.bff.fret.distance import fret_pair_geometry, fret_pair_efficiencies
+    from IMP.bff.representation.distance import fret_pair_geometry, fret_pair_efficiencies
 
     if distance_type not in ("RDAMean", "RDAMeanE", "Rmp"):
         raise ValueError(f"unknown distance_type {distance_type!r}")

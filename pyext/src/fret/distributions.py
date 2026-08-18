@@ -14,7 +14,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from . import av as _av
-from . import distance as _dist
+from IMP.bff.representation import distance as _dist
 
 
 def compute_distance_distributions(

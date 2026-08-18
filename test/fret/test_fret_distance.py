@@ -1,10 +1,10 @@
-"""IMP.bff.fret.distance / engine / olga_greedy — algorithm sanity checks."""
+"""IMP.bff.representation.distance / fret.engine / olga_greedy — algorithm sanity checks."""
 
 import numpy as np
 import pytest
 
 from IMP.bff.fret.av import AccessibleVolume
-from IMP.bff.fret import distance as fdist
+from IMP.bff.representation import distance as fdist
 from IMP.bff.fret.engine import DistanceRestraint, RigidBody
 from IMP.bff.fret.olga_greedy import select_informative_pairs
 

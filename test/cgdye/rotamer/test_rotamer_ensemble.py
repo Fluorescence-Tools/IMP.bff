@@ -24,7 +24,7 @@ import pytest
 from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble, rotamer_ensembles_from_fps
 from IMP.bff.cgdye.rotamer.fret import RotamerFRET
 from IMP.bff.representation import AccessibleVolume, States
-from IMP.bff.fret.distance import av_pair_statistics, histogram_rda, mean_fret_distance
+from IMP.bff.representation.distance import av_pair_statistics, histogram_rda, mean_fret_distance
 
 _HERE = Path(__file__).resolve().parent
 _PINS = _HERE.parents[1] / "references" / "cgdye_fretpredict_pins.json"

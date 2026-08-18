@@ -1,6 +1,6 @@
 """Time-resolved FRET rate along a dye trajectory.
 
-:mod:`IMP.bff.fret.distance` owns the *static* pair metrics -- ensemble averages
+:mod:`IMP.bff.representation.distance` owns the *static* pair metrics -- ensemble averages
 over two accessible-volume clouds. These are their per-frame counterparts, and
 they live here because they need a **trajectory**, which only the diffusion
 model in this package produces. They are also the hot inner loop of a run

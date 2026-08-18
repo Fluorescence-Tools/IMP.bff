@@ -14,6 +14,11 @@ called ``normal_distribution``, which had just become a C++ delegation that
 numba cannot type -- so the function raised ``TypingError`` on any call, and
 **nothing in the suite noticed**, because it has no test. The C++ version was
 checked against an independent numpy convolution instead: agreement to 7e-18.
+
+Filed under ``representation`` in the PRD-113 cleanup: a linker's end-to-end
+distribution *is* a representation of where the dye can be -- the analytic
+counterpart of what an accessible volume computes geometrically. It sat at the
+package root, which said nothing about that.
 """
 
 from __future__ import annotations

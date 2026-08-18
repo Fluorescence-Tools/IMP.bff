@@ -2,10 +2,15 @@
 
 This package is the home of the FRET structural-modelling algorithms and of
 the fps.json data schema (PRD-97): the docking engine (:mod:`.imp_engine`),
-the AV backend (:mod:`.av`), model-distance calculation (:mod:`.distance`),
+the AV backend (:mod:`.av`),
 P(R_DA) distributions (:mod:`.distributions`), Olga-style informative pair
 selection (:mod:`.olga_greedy`), docking-precision estimation
 (:mod:`.uncertainty`) and PMI stat-file reading (:mod:`.stat`).
+
+Model-distance calculation moved to :mod:`IMP.bff.representation.distance` in
+stage 4b and the 28-line re-export shim left behind was retired in the cleanup:
+a distance between two labels is a property of what *represents* them -- an
+accessible volume, a rotamer library, a Gaussian -- not of the FRET engine.
 
 File I/O and the fps.json schema moved to :mod:`IMP.bff.io` in PRD-113 stage 7
 and are **not** re-exported here: ``IMP.bff.fret.read_fps_json`` is gone, and
@@ -17,7 +22,6 @@ build their workflow and views on top of these functions.
 """
 
 from . import av
-from . import distance
 from . import engine
 from . import distributions
 from . import olga_greedy
@@ -30,13 +34,6 @@ from .av import (
     compute_av,
     compute_avs_for_structure,
     load_structure_with_vdw,
-)
-from .distance import (
-    average_distance,
-    mean_fret_distance,
-    distance_between_mean_positions,
-    model_distance,
-    chi2_score,
 )
 from .engine import RigidBody, DistanceRestraint, SpringParameters
 from .olga_greedy import select_informative_pairs
@@ -59,14 +56,11 @@ from .imp_engine import (
 )
 
 __all__ = [
-    "av", "distance", "engine", "distributions",
+    "av", "engine", "distributions",
     "olga_greedy", "stat", "uncertainty", "imp_engine",
     # av
     "AccessibleVolume", "compute_av", "compute_avs_for_structure",
     "load_structure_with_vdw",
-    # distance
-    "average_distance", "mean_fret_distance",
-    "distance_between_mean_positions", "model_distance", "chi2_score",
     # engine
     "RigidBody", "DistanceRestraint", "SpringParameters",
     # algorithms

@@ -31,7 +31,7 @@ from typing import Optional
 
 import numpy as np
 
-from IMP.bff.distance_metrics import chi2_score
+from IMP.bff.representation.distance import chi2_score
 
 
 @dataclass
@@ -136,7 +136,7 @@ class DirectLabelingRestraint:
            d_{ij} = \\|\\mathbf{x}_i - \\mathbf{x}_j\\|
 
         The chi-squared contribution per pair is computed with
-        :func:`IMP.bff.distance_metrics.chi2_score`.
+        :func:`IMP.bff.representation.distance.chi2_score`.
 
         Returns
         -------

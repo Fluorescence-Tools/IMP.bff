@@ -1,11 +1,11 @@
-"""Tests for ``IMP.bff.polymer`` — polymer chain models."""
+"""Tests for ``IMP.bff.representation.polymer`` — polymer chain models."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from IMP.bff.polymer import (
+from IMP.bff.representation.polymer import (
     gaussian_chain_ree,
     gaussian_chain,
     worm_like_chain,

@@ -37,7 +37,7 @@ from typing import Optional
 import numpy as np
 
 from IMP.bff.av import BasicAV, compute_av
-from IMP.bff.distance_metrics import chi2_score
+from IMP.bff.representation.distance import chi2_score
 
 
 @dataclass

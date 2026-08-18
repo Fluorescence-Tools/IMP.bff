@@ -16,6 +16,9 @@ The Python signatures are unchanged, so callers do not know the difference.
    they are the public surface and are deliberately absent from ``api.py``. The
    wrappers here return ``numpy`` arrays rather than SWIG vectors, which is what
    the code inside this package wants.
+
+Filed under ``representation`` in the PRD-113 cleanup: these are the shapes a
+label distribution takes. They sat at the package root, outside every domain.
 """
 
 from __future__ import annotations

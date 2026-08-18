@@ -1,7 +1,7 @@
 """One reduction behind four statistics, and the two disagreements it did not resolve.
 
 ``distance_sample_statistics`` replaced three separate reductions -- in
-``distance_metrics``, in ``representation.distance``, and inside
+``distance_metrics`` (since retired to ``junk/``), in ``representation.distance``, and inside
 ``av/_kernels`` -- that computed the same four numbers and disagreed at the
 limits. The tests here pin the limits, because that is where they differed.
 
@@ -25,8 +25,9 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.distance_metrics as dm
 from IMP.bff.representation import distance as rd
+
+dm = rd   # the two modules are one now; kept so the assertions below read unchanged
 
 
 def _reference(d, w, r0=52.0):
@@ -106,9 +107,9 @@ def test_horner_reads_coefficients_highest_power_first():
 def test_the_two_coefficient_orders_are_one_evaluator():
     coeffs = np.array([0.0, 1.0, 0.02])
     assert rd.polynomial_transfer(45.0, coeffs) == pytest.approx(45.02)
-    assert dm.polynomial_transfer(45.0, coeffs) == pytest.approx(85.5)
+    assert rd.polynomial_transfer_ascending(45.0, coeffs) == pytest.approx(85.5)
     # ...and reversing the input makes them agree, which is the whole difference
-    assert dm.polynomial_transfer(45.0, coeffs[::-1]) == pytest.approx(
+    assert rd.polynomial_transfer_ascending(45.0, coeffs[::-1]) == pytest.approx(
         rd.polynomial_transfer(45.0, coeffs))
 
 

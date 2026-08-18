@@ -29,6 +29,8 @@ from __future__ import annotations
 
 from typing import Optional, Tuple, Union
 
+import math
+
 import numpy as np
 
 import IMP.bff
@@ -554,3 +556,92 @@ def fret_pair_distribution(
     out["kappa2"] = geometry["kappa2"]
     return out
 
+
+# ---------------------------------------------------------------------------
+# The other conventions. Folded in from ``IMP.bff.distance_metrics`` when that
+# module was retired (PRD-113 cleanup): each of these is a genuinely different
+# question from its neighbour above, and each used to answer to the *same name*
+# in the other module. Naming them apart is what makes both usable.
+# ---------------------------------------------------------------------------
+
+def polynomial_transfer_ascending(
+    rmp: Union[float, np.ndarray], coeffs: np.ndarray
+) -> Union[float, np.ndarray]:
+    r"""Evaluate a transfer polynomial whose coefficients run **lowest power first**.
+
+    :math:`c_0 + c_1 x + c_2 x^2 + \dots`, the order a human writes by hand.
+    :func:`polynomial_transfer` takes the opposite order -- highest power first,
+    which is what ``np.polyfit`` returns and therefore what a *fitted*
+    calibration carries.
+
+    The two are not interchangeable and the difference is silent: at
+    ``rmp = 45`` with ``[0, 1, 0.02]`` this gives **85.5** and
+    :func:`polynomial_transfer` gives **45.02**. Both were called
+    ``polynomial_transfer``, in two modules, for as long as both existed.
+
+    One evaluator underneath: this reverses and delegates.
+    """
+    c = np.asarray(coeffs, dtype=np.float64).ravel()[::-1].copy()
+    return polynomial_transfer(rmp, c)
+
+
+def distance_sample_statistics(
+    distances: np.ndarray,
+    weights: np.ndarray,
+    forster_radius: float = 52.0,
+) -> Tuple[float, float, float, float]:
+    """Distance statistics from a **sample of pair distances**.
+
+    The sibling of :func:`av_pair_statistics`, which takes the two *clouds*.
+    This one takes distances that have already been drawn -- from
+    :func:`IMP.bff.av._kernels.random_distances`, from a trajectory, or from a
+    measurement -- and is the right entry point when the clouds are not at hand.
+
+    :returns: ``(r_da_mean, r_mp, r_e, mean_efficiency)``.
+
+    ``r_mp`` is **always NaN**, and deliberately. The distance between two
+    clouds' mean positions is not a function of the distribution of pair
+    distances: :math:`|\\langle a\\rangle - \\langle b\\rangle|` cannot be
+    recovered from :math:`|a - b|`. Use :func:`mean_position_distance`, which
+    takes the clouds.
+
+    That slot returned ``r_da_mean`` until 2026-07-28, documented as "same as
+    r_da_mean here" -- so a caller reading index 1 got a different quantity
+    under the right name. Measured on 148l E15/E90: 47.65 A against the 51.53 A
+    it returned, 8 % apart. NaN propagates instead of lying.
+    """
+    w = np.asarray(weights, dtype=np.float64).ravel()
+    if w.sum() == 0.0:
+        return 0.0, math.nan, 0.0, 0.0
+    r_da_mean, r_e, mean_efficiency, _sigma = IMP.bff.distance_sample_statistics(
+        np.ascontiguousarray(np.asarray(distances, dtype=np.float64).ravel()),
+        np.ascontiguousarray(w), float(forster_radius))
+    return float(r_da_mean), math.nan, float(r_e), float(mean_efficiency)
+
+
+def mean_position_distance(
+    points_a: np.ndarray,
+    points_b: np.ndarray,
+    weights_a: Optional[np.ndarray] = None,
+    weights_b: Optional[np.ndarray] = None,
+) -> float:
+    """:math:`R_{mp}` between two **point clouds**, rather than two AV objects.
+
+    The sibling of :func:`distance_between_mean_positions`, which takes
+    accessible volumes. Written over arrays so a rotamer library, a
+    coarse-grained ensemble or an MD frame reaches it too.
+
+    Contributed from QuEst, where it is ``AV.dRmp``.
+
+    :param points_a: ``(n, 3)`` cloud in Angstrom.
+    :param points_b: ``(m, 3)`` cloud in Angstrom.
+    :param weights_a: per-point weights; uniform if omitted.
+    :param weights_b: per-point weights; uniform if omitted.
+    """
+    a = np.asarray(points_a, dtype=np.float64).reshape((-1, 3))
+    b = np.asarray(points_b, dtype=np.float64).reshape((-1, 3))
+    if a.shape[0] == 0 or b.shape[0] == 0:
+        raise ValueError("Both point clouds must be non-empty to define R_mp.")
+    mean_a = a.mean(axis=0) if weights_a is None else np.average(a, axis=0, weights=weights_a)
+    mean_b = b.mean(axis=0) if weights_b is None else np.average(b, axis=0, weights=weights_b)
+    return float(np.sqrt(((mean_a - mean_b) ** 2).sum()))

@@ -1,4 +1,23 @@
-"""Tests for ``IMP.bff.distance_metrics`` — FRET distance utilities."""
+"""The distance conventions that used to share names across two modules.
+
+``IMP.bff.distance_metrics`` held six functions with the same names as
+``IMP.bff.representation.distance``, three of which answered genuinely
+different questions and three of which were verified identical. The module was
+retired in the PRD-113 cleanup (2026-08-18) and moved to ``junk/`` for
+reference; its three distinct functions were folded into the canonical module
+under names that say which question they answer:
+
+===================================  ===============================================
+was ``distance_metrics.``            is now ``representation.distance.``
+===================================  ===============================================
+``polynomial_transfer`` (ascending)  ``polynomial_transfer_ascending``
+``av_pair_statistics`` (a sample)    ``distance_sample_statistics``
+``mean_position_distance`` (clouds)  ``mean_position_distance`` (unchanged)
+===================================  ===============================================
+
+These tests followed the functions. They exist to make sure the retirement lost
+nothing: every value asserted here is the value the retired module produced.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +26,15 @@ import math
 import numpy as np
 import pytest
 
-from IMP.bff.distance_metrics import (
+from IMP.bff.representation.distance import (
+    av_pair_statistics as _av_pair_statistics_from_volumes,  # noqa: F401
     chi2_score,
-    fret_efficiency,
     distance_from_fret_efficiency,
+    distance_sample_statistics as av_pair_statistics,
+    fret_efficiency,
     gaussian_rmp_to_rda_mean,
     mean_position_distance,
-    polynomial_transfer,
-    av_pair_statistics,
+    polynomial_transfer_ascending as polynomial_transfer,
 )
 
 

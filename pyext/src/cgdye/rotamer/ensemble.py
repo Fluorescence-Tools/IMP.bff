@@ -10,7 +10,7 @@ labels needs (R_ij, κ²_ij, w_i·w_j), not just a mean position.
 It subclasses :class:`IMP.bff.fret.av.AccessibleVolume` with ``points`` =
 (N, 4) centre + weight, so every AV helper in ``fret`` (``av_pair_statistics``,
 ``histogram_rda``, ``mean_fret_distance``, ...) accepts it unchanged; the pair
-kernels live in :mod:`IMP.bff.fret.distance` (``fret_pair_geometry``,
+kernels live in :mod:`IMP.bff.representation.distance` (``fret_pair_geometry``,
 ``fret_pair_efficiencies``).
 """
 
@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional, Sequence
 import numpy as np
 
 from IMP.bff.representation.states import States
-from IMP.bff.fret.distance import fret_pair_efficiencies, fret_pair_geometry
+from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score
