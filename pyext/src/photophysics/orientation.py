@@ -9,9 +9,29 @@ into the distance-ratio distribution a FRET measurement actually sees.
 This module had **no consumers at all** before PRD-113 stage 4. It was never
 exported through ``api.py``, so 933 lines of the anisotropy modelling this
 package exists to do were unreachable, and it imported ``numba`` directly rather
-than through :mod:`IMP.bff._jit` -- so on an installation without numba it would
-not even import. Both are fixed here; the four jitted kernels are on the C++ port
-list with the rest.
+than through ``IMP.bff._jit`` -- so on an installation without numba it would
+not even import. Both were fixed then; the four jitted kernels became C++ in
+stage 4d and now live in ``OrientationFactor.h``.
+
+.. warning::
+   **The port found that** :func:`kappasq_all` **was returning half the right
+   answer.** It drew dipole directions with ``np.random.random(3)`` and
+   normalised them, which does not sample the sphere: it fills only the
+   positive octant of the unit cube, and non-uniformly at that. In the rigid
+   isotropic limit ``sD2 = sA2 = 1``, where the average orientation factor must
+   be :math:`2/3`, it gave **0.333**. The C++ draws three standard normals and
+   normalises -- uniform on the sphere -- and gives **0.6663** at 4e5 samples.
+
+   Nothing downstream carried the error, because the module had no callers.
+   Anyone who took numbers from this function by hand before 2026-08-18 should
+   take them again.
+
+The isotropic average is the only analytic check this module has, so it is
+worth stating why it exists: :func:`kappasq_all` at ``sD2 = sA2 = 0`` returns
+exactly :math:`2/3` for every sample (freely rotating dyes have no orientation
+preference at all), and at ``sD2 = sA2 = 1`` -- rigid dyes, random mutual
+orientation -- the *mean* is :math:`2/3` while individual values span
+:math:`[0, 4]`. A sampler that fails either is not sampling orientations.
 
 The other half of kappa^2 -- the geometry, ``kappa2_from_dipoles``, which turns
 two transition dipoles and a separation vector into a number -- is in
@@ -24,7 +44,7 @@ import typing
 
 import numpy as np
 
-from .._jit import jit as _jit
+import IMP.bff
 
 
 def kappasq_dwt(
@@ -156,7 +176,6 @@ def kappasq_all_delta_new(
 
 
 
-@_jit(nopython=True)
 def kappasq_all_delta(
         delta: float,
         sD2: float,
@@ -249,47 +268,28 @@ def kappasq_all_delta(
     vol. 133, pp. 2463-2480, J. Am. Chem. Soc., 2011
 
     """
-    # beta angles
-    beta1 = np.arange(0.001, np.pi / 2.0, step * np.pi / 180.0, dtype=np.float64)
-    phi = np.arange(0.001, 2.0 * np.pi, step * np.pi / 180.0, dtype=np.float64)
-    n = beta1.shape[0]
-    m = phi.shape[0]
-    rda_vec = np.array([1, 0, 0], dtype=np.float64)
-
-    # kappa-square values for allowed betas
-    k2 = np.zeros((n, m), dtype=np.float64)
-    k2hist = np.zeros(n_bins - 1, dtype=np.float64)
-
-    # histogram bin edges
-    k2_step = (k2_max - k2_min) / (n_bins - 1)
-    k2scale = np.arange(k2_min, k2_max + 1e-14, k2_step, dtype=np.float64)
-    for i in range(n):
-        d1 = np.array([np.cos(beta1[i]),  0, np.sin(beta1[i])])
-        n1 = np.array([-np.sin(beta1[i]), 0, np.cos(beta1[i])])
-        n2 = np.array([0, 1, 0])
-        for j in range(m):
-            d2 = (n1*np.cos(phi[j])+n2*np.sin(phi[j]))*np.sin(delta)+d1*np.cos(delta)
-            beta2 = np.arccos(np.abs(d2.dot(rda_vec)))
-            k2[i, j] = kappasq(
-                delta=delta,
-                sD2=sD2,
-                sA2=sA2,
-                beta1=beta1[i],
-                beta2=beta2
-            )
-        y, x = np.histogram(k2[i, :], bins=k2scale)
-        k2hist += y*np.sin(beta1[i])
-    return k2scale, k2hist, k2
+    scale = IMP.bff.VectorDouble()
+    hist = IMP.bff.VectorDouble()
+    flat = IMP.bff.wobbling_kappa2_distribution_delta(
+        float(delta), float(sD2), float(sA2), float(step),
+        int(n_bins), float(k2_min), float(k2_max), scale, hist)
+    k2 = np.asarray(flat, dtype=np.float64)
+    n_beta = max(1, int(np.floor((np.pi / 2.0 - 0.001) / (step * np.pi / 180.0))) + 1)
+    if n_beta and k2.size % n_beta == 0:
+        k2 = k2.reshape(n_beta, -1)
+    return (np.asarray(scale, dtype=np.float64),
+            np.asarray(hist, dtype=np.float64),
+            k2)
 
 
-@_jit(nopython=True)
 def kappasq_all(
         sD2: float,
         sA2: float,
         n_bins: int = 81,
         k2_min: float = 0.0,
         k2_max: float = 4.0,
-        n_samples: int = 10000
+        n_samples: int = 10000,
+        seed: int = 0
 ) -> typing.Tuple[np.array, np.array, np.array]:
     """Computes a orientation factor distribution for a wobbling in a cone model
     using specific second rank structure factors of the donor and acceptor.
@@ -359,32 +359,16 @@ def kappasq_all(
     vol. 133, pp. 2463-2480, J. Am. Chem. Soc., 2011
 
     """
-    k2 = np.zeros(n_samples, dtype=np.float64)
-    step = (k2_max - k2_min) / (n_bins - 1)
-    k2scale = np.arange(k2_min, k2_max + 1e-14, step, dtype=np.float64)
-    k2hist = np.zeros(k2scale.shape[0] - 1, dtype=np.float64)
-    for i in range(n_samples):
-        d1 = np.random.random(3)
-        d2 = np.random.random(3)
-        n1 = np.linalg.norm(d1)
-        n2 = np.linalg.norm(d2)
-        # Assumption here: connecting vector R_DA is along the x-axis (R_DA=[1,0,0])
-        delta = np.arccos(np.dot(d1, d2) / (n1 * n2))
-        beta1 = np.arccos(d1[0] / n1)
-        beta2 = np.arccos(d2[0] / n2)
-        k2[i] = kappasq(
-            delta=delta,
-            sD2=sD2,
-            sA2=sA2,
-            beta1=beta1,
-            beta2=beta2
-        )
-    y, x = np.histogram(k2, bins=k2scale)
-    k2hist += y
-    return k2scale, k2hist, k2
+    scale = IMP.bff.VectorDouble()
+    hist = IMP.bff.VectorDouble()
+    k2 = IMP.bff.wobbling_kappa2_distribution(
+        float(sD2), float(sA2), int(n_bins), float(k2_min), float(k2_max),
+        int(n_samples), int(seed), scale, hist)
+    return (np.asarray(scale, dtype=np.float64),
+            np.asarray(hist, dtype=np.float64),
+            np.asarray(k2, dtype=np.float64))
 
 
-@_jit(nopython=True)
 def kappa_distance(
         d1: np.array,
         d2: np.array,
@@ -461,79 +445,10 @@ def kappa_distance(
     (0.8660254037844386, 1.0000000000000002)
 
     r"""
-    # coordinates of the dipole
-    d11 = d1[0]
-    d12 = d1[1]
-    d13 = d1[2]
-
-    d21 = d2[0]
-    d22 = d2[1]
-    d23 = d2[2]
-
-    # distance between the two end points of the donor
-    dD21 = np.sqrt(
-        (d11 - d21) * (d11 - d21) +
-        (d12 - d22) * (d12 - d22) +
-        (d13 - d23) * (d13 - d23)
-    )
-
-    # normal vector of the donor-dipole
-    muD1 = (d21 - d11) / dD21
-    muD2 = (d22 - d12) / dD21
-    muD3 = (d23 - d13) / dD21
-
-    # vector to the middle of the donor-dipole
-    dM1 = d11 + dD21 * muD1 / 2.0
-    dM2 = d12 + dD21 * muD2 / 2.0
-    dM3 = d13 + dD21 * muD3 / 2.0
-
-    ### Acceptor ###
-    # cartesian coordinates of the acceptor
-    a11 = a1[0]
-    a12 = a1[1]
-    a13 = a1[2]
-
-    a21 = a2[0]
-    a22 = a2[1]
-    a23 = a2[2]
-
-    # distance between the two end points of the acceptor
-    dA21 = np.sqrt(
-        (a11 - a21) * (a11 - a21) +
-        (a12 - a22) * (a12 - a22) +
-        (a13 - a23) * (a13 - a23)
-    )
-
-    # normal vector of the acceptor-dipole
-    muA1 = (a21 - a11) / dA21
-    muA2 = (a22 - a12) / dA21
-    muA3 = (a23 - a13) / dA21
-
-    # vector to the middle of the acceptor-dipole
-    aM1 = a11 + dA21 * muA1 / 2.0
-    aM2 = a12 + dA21 * muA2 / 2.0
-    aM3 = a13 + dA21 * muA3 / 2.0
-
-    # vector connecting the middle of the dipoles
-    RDA1 = dM1 - aM1
-    RDA2 = dM2 - aM2
-    RDA3 = dM3 - aM3
-
-    # Length of the dipole-dipole vector (distance)
-    dRDA = np.sqrt(RDA1 * RDA1 + RDA2 * RDA2 + RDA3 * RDA3)
-
-    # Normalized dipole-diple vector
-    nRDA1 = RDA1 / dRDA
-    nRDA2 = RDA2 / dRDA
-    nRDA3 = RDA3 / dRDA
-
-    # Orientation factor kappa2
-    kappa = muA1 * muD1 + \
-            muA2 * muD2 + \
-            muA3 * muD3 - \
-            3.0 * (muD1 * nRDA1 + muD2 * nRDA2 + muD3 * nRDA3) * \
-            (muA1 * nRDA1 + muA2 * nRDA2 + muA3 * nRDA3)
-    return dRDA, kappa
+    d, k = IMP.bff.dipole_kappa_distance(
+        np.asarray(d1, dtype=np.float64).ravel(), np.asarray(d2, dtype=np.float64).ravel(),
+        np.asarray(a1, dtype=np.float64).ravel(), np.asarray(a2, dtype=np.float64).ravel())
+    return float(d), float(k)
 
 
 def kappa(
@@ -666,7 +581,6 @@ def calculate_kappa_distance(
     return ds, ks
 
 
-@_jit(nopython=True)
 def kappasq(
         delta: float,
         sD2: float,
@@ -711,23 +625,7 @@ def kappasq(
     vol. 133, pp. 2463-2480, J. Am. Chem. Soc., 2011
 
     """
-    s2delta = (3.0 * np.cos(delta) * np.cos(delta) - 1.0) / 2.0
-    s2beta1 = (3.0 * np.cos(beta1) * np.cos(beta1) - 1.0) / 2.0
-    s2beta2 = (3.0 * np.cos(beta2) * np.cos(beta2) - 1.0) / 2.0
-    k2 = 2.0 / 3.0 * (
-            1.0 +
-            sD2 * s2beta1 +
-            sA2 * s2beta2 +
-            sD2 * sA2 * (
-                    s2delta +
-                    6 * s2beta1 * s2beta2 +
-                    1 +
-                    2 * s2beta1 +
-                    2 * s2beta2 -
-                    9 * np.cos(beta1) * np.cos(beta2) * np.cos(delta)
-            )
-    )
-    return k2
+    return IMP.bff.wobbling_kappa2(delta, sD2, sA2, beta1, beta2)
 
 
 def p_isotropic_orientation_factor(

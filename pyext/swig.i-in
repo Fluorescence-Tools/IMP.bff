@@ -25,6 +25,7 @@ import numpy as np
 %include "DiffusionSolver.i"
 %include "AVDistance.i"
 %include "DistanceCalibration.i"
+%include "OrientationFactor.i"
 
 /* Fluorescence decays */
 
