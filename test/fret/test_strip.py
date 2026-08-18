@@ -105,7 +105,7 @@ def test_hierarchy_non_destructive_and_in_place(tmp_path):
 
 def test_cgdye_and_av_defaults_differ_only_in_cb(tmp_path):
     """The two consumers own their keep-sets; the engine is shared (PRD-106)."""
-    from IMP.bff.cgdye.labeling.attachment import SITE_KEEP_ATOM_NAMES, strip_sidechain_at_site
+    from IMP.bff.label.attachment import SITE_KEEP_ATOM_NAMES, strip_sidechain_at_site
     pdb = tmp_path / "mini.pdb"
     pdb.write_text(_PDB)
     m = IMP.Model()

@@ -230,7 +230,7 @@ def rotamer_fret_from_fps(
     RotamerFRET
         Configured rotamer FRET object.
     """
-    from IMP.bff.cgdye.rotamer.fret import RotamerFRET
+    from IMP.bff.representation.rotamer.fret import RotamerFRET
 
     donor, acceptor, distance, _positions, _distances, _extra = read_rotamer_fps(fps_path, distance_name=distance_name)
     chains = kwargs.get("chains")

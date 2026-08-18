@@ -22,8 +22,16 @@ What is checked now instead, in ``test/test_public_api_names.py``:
 * no name appears in two domains -- the flat view would silently keep one.
 
 Names resolve **lazily** through the ``__getattr__`` that ``pyext/swig.i-in``
-installs on the package: ``import IMP.bff`` does not import ``cgdye``, and
+installs on the package, so ``import IMP.bff`` imports almost nothing and
 nothing here needs ``click``. Retired names are removed, never aliased.
+
+``IMP.bff.cgdye`` is **not** a domain and has no names here. It is explicit
+all-atom dye modelling under a force field -- molecular mechanics, which is
+IMP's own territory rather than a spectroscopy library's -- and as of
+2026-08-18 it sits outside the layout, reachable only by module path. Its 38
+flat names were removed. What was *not* molecular mechanics came out of it
+first: the rotamer library into ``representation``, attachment into ``label``,
+its readers into ``io``. See that package's docstring for the table.
 """
 
 from __future__ import annotations
@@ -32,115 +40,6 @@ import importlib
 
 #: domain -> {public name -> the module that defines it}. **The authored map.**
 BY_DOMAIN = {
-    # -- cgdye -- explicit coarse-grained dyes: topology, force field, rotamers, sampling
-    "cgdye": {
-        # IMP.bff.cgdye.analysis.density
-        "analyze_dye_density": "IMP.bff.cgdye.analysis.density",
-        # IMP.bff.cgdye.analysis.fret
-        "fret_efficiency_regimes": "IMP.bff.cgdye.analysis.fret",
-        "fret_efficiency_exact_kinetic": "IMP.bff.cgdye.analysis.fret",
-        "fret_efficiency_exact_kinetic_pair": "IMP.bff.cgdye.analysis.fret",
-        # IMP.bff.cgdye.io.cif
-        "read_dye_forcefield_cif": "IMP.bff.cgdye.io.cif",
-        "write_dye_forcefield_cif": "IMP.bff.cgdye.io.cif",
-        # IMP.bff.cgdye.io.dcd
-        "read_dcd": "IMP.bff.cgdye.io.dcd",
-        # IMP.bff.cgdye.io.nmr_cif
-        "read_nmr_restraints": "IMP.bff.cgdye.io.nmr_cif",
-        "write_nmr_restraints": "IMP.bff.cgdye.io.nmr_cif",
-        # IMP.bff.cgdye.io.rotamer_rmf
-        "read_rotamer_library_rmf": "IMP.bff.cgdye.io.rotamer_rmf",
-        "write_rotamer_library_rmf": "IMP.bff.cgdye.io.rotamer_rmf",
-        # IMP.bff.cgdye.io.template_cif
-        "read_component_template_cif": "IMP.bff.cgdye.io.template_cif",
-        "write_component_template_cif": "IMP.bff.cgdye.io.template_cif",
-        "write_dye_template_cif": "IMP.bff.cgdye.io.template_cif",
-        # IMP.bff.cgdye.labeling.attachment
-        "attach_dyes": "IMP.bff.cgdye.labeling.attachment",
-        "resolve_dye_site": "IMP.bff.cgdye.labeling.attachment",
-        "place_dye_from_coords": "IMP.bff.cgdye.labeling.attachment",
-        "place_dye_from_rotamer_cb": "IMP.bff.cgdye.labeling.attachment",
-        "align_hierarchies": "IMP.bff.cgdye.labeling.attachment",
-        "strip_sidechain_at_site": "IMP.bff.cgdye.labeling.attachment",
-        "SITE_KEEP_ATOM_NAMES": "IMP.bff.cgdye.labeling.attachment",
-        # IMP.bff.cgdye.labeling.backbone_frame
-        "backbone_frame": "IMP.bff.cgdye.labeling.backbone_frame",
-        "backbone_frame_from_coords": "IMP.bff.cgdye.labeling.backbone_frame",
-        "backbone_transformation": "IMP.bff.cgdye.labeling.backbone_frame",
-        "backbone_transformation_from_coords": "IMP.bff.cgdye.labeling.backbone_frame",
-        # IMP.bff.cgdye.rotamer.compare_av
-        "compare_av_and_rotamer_positions": "IMP.bff.cgdye.rotamer.compare_av",
-        "compare_av_and_rotamer_pairs": "IMP.bff.cgdye.rotamer.compare_av",
-        # IMP.bff.cgdye.rotamer.ensemble
-        "RotamerEnsemble": "IMP.bff.cgdye.rotamer.ensemble",
-        "rotamer_ensembles_from_fps": "IMP.bff.cgdye.rotamer.ensemble",
-        "SIMULATION_TYPE_R1": "IMP.bff.cgdye.rotamer.ensemble",
-        # IMP.bff.cgdye.rotamer.fps
-        "RotamerPosition": "IMP.bff.cgdye.rotamer.fps",
-        "RotamerDistance": "IMP.bff.cgdye.rotamer.fps",
-        "read_rotamer_fps": "IMP.bff.cgdye.rotamer.fps",
-        "write_rotamer_fps": "IMP.bff.cgdye.rotamer.fps",
-        "rotamer_position_payload": "IMP.bff.cgdye.rotamer.fps",
-        "rotamer_ensemble_payload": "IMP.bff.cgdye.rotamer.fps",
-        "distances_from_ensembles": "IMP.bff.cgdye.rotamer.fps",
-        "rotamer_fret_from_fps": "IMP.bff.cgdye.rotamer.fps",
-        # IMP.bff.cgdye.rotamer.fret
-        "RotamerFRET": "IMP.bff.cgdye.rotamer.fret",
-        # IMP.bff.cgdye.rotamer.io
-        "load_rotamer_library": "IMP.bff.cgdye.rotamer.io",
-        "resolve_rotamer_library_path": "IMP.bff.cgdye.rotamer.io",
-        "rotamer_library_registry": "IMP.bff.cgdye.rotamer.io",
-        "rotamer_library_metadata": "IMP.bff.cgdye.rotamer.io",
-        "load_protein_frames": "IMP.bff.cgdye.rotamer.io",
-        # IMP.bff.cgdye.rotamer.scoring
-        "compute_rotamer_score": "IMP.bff.cgdye.rotamer.scoring",
-        # IMP.bff.cgdye.sampling.boltzmann
-        "rotamer_cluster_weights": "IMP.bff.cgdye.sampling.boltzmann",
-        "boltzmann_weights": "IMP.bff.cgdye.sampling.boltzmann",
-        # IMP.bff.cgdye.sampling.clustering
-        "cluster_frames_leader": "IMP.bff.cgdye.sampling.clustering",
-        "assign_frames_to_clusters": "IMP.bff.cgdye.sampling.clustering",
-        # IMP.bff.cgdye.sampling.kinetic
-        "rotamer_transition_matrix": "IMP.bff.cgdye.sampling.kinetic",
-        "rotamer_correlation_times": "IMP.bff.cgdye.sampling.kinetic",
-        "rotamer_rotational_correlation_time": "IMP.bff.cgdye.sampling.kinetic",
-        "reconstruct_rotamer_trajectory": "IMP.bff.cgdye.sampling.kinetic",
-        # IMP.bff.cgdye.sampling.langevin
-        "LangevinDyeSampler": "IMP.bff.cgdye.sampling.langevin",
-        "LangevinTrajectory": "IMP.bff.cgdye.sampling.langevin",
-        "make_langevin_simulator": "IMP.bff.cgdye.sampling.langevin",
-        # IMP.bff.cgdye.sampling.library_gen
-        "LinkerSampler": "IMP.bff.cgdye.sampling.library_gen",
-        "generate_linker_rotamers": "IMP.bff.cgdye.sampling.library_gen",
-        # IMP.bff.cgdye.sampling.mean_field
-        "rotamer_mean_field_weights": "IMP.bff.cgdye.sampling.mean_field",
-        "rotamer_mean_field_weights_multi_dye": "IMP.bff.cgdye.sampling.mean_field",
-        # IMP.bff.cgdye.sampling.rotamer
-        "load_rotamer_library_dcd": "IMP.bff.cgdye.sampling.rotamer",
-        "apply_rotamer_coordinates": "IMP.bff.cgdye.sampling.rotamer",
-        "sample_rotamer_index": "IMP.bff.cgdye.sampling.rotamer",
-        # IMP.bff.cgdye.sampling.rrt
-        "run_rigid_body_rrt": "IMP.bff.cgdye.sampling.rrt",
-        "run_torsion_rrt": "IMP.bff.cgdye.sampling.rrt",
-        # IMP.bff.cgdye.sampling.scoring
-        "DyeInternalEnergyEvaluator": "IMP.bff.cgdye.sampling.scoring",
-        "dye_internal_system": "IMP.bff.cgdye.sampling.scoring",
-        # IMP.bff.cgdye.sim.dye_restraints
-        "build_dye_restraints": "IMP.bff.cgdye.sim.dye_restraints",
-        # IMP.bff.cgdye.system
-        "DyeForceFieldSystem": "IMP.bff.cgdye.system",
-        # IMP.bff.cgdye.topology.builder
-        "parse_dye_mol2": "IMP.bff.cgdye.topology.builder",
-        # IMP.bff.cgdye.topology.combined
-        "build_dye_protein_system": "IMP.bff.cgdye.topology.combined",
-        "dye_forcefield_system": "IMP.bff.cgdye.topology.combined",
-        # IMP.bff.cgdye.topology.dye
-        "build_dye_topology": "IMP.bff.cgdye.topology.dye",
-        "CHARMM36_LJ": "IMP.bff.cgdye.topology.dye",
-        "lj_cross": "IMP.bff.cgdye.topology.dye",
-        "lj_energy": "IMP.bff.cgdye.topology.dye",
-        "torsion_cosine": "IMP.bff.cgdye.topology.dye",
-    },
     # -- dynamics -- integrators: Brownian, Smoluchowski, excited-state kMC
     "dynamics": {
         # IMP.bff.dynamics.brownian
@@ -172,6 +71,9 @@ BY_DOMAIN = {
     },
     # -- fret -- the FRET engine, distances, and the strip tool
     "fret": {
+        # IMP.bff.fret.compare_rotamer -- harvested from cgdye, 2026-08-18
+        "compare_av_and_rotamer_pairs": "IMP.bff.fret.compare_rotamer",
+        "compare_av_and_rotamer_positions": "IMP.bff.fret.compare_rotamer",
         # IMP.bff.fret.av
         "compute_av": "IMP.bff.fret.av",
         "compute_avs_for_structure": "IMP.bff.fret.av",
@@ -186,6 +88,15 @@ BY_DOMAIN = {
     },
     # -- io -- the formats: fps.json, its legacy ancestors, and structures
     "io": {
+        # harvested from cgdye, 2026-08-18
+        # IMP.bff.io.dcd
+        "read_dcd": "IMP.bff.io.dcd",
+        # IMP.bff.io.nmr_cif
+        "read_nmr_restraints": "IMP.bff.io.nmr_cif",
+        "write_nmr_restraints": "IMP.bff.io.nmr_cif",
+        # IMP.bff.io.rotamer_rmf
+        "read_rotamer_library_rmf": "IMP.bff.io.rotamer_rmf",
+        "write_rotamer_library_rmf": "IMP.bff.io.rotamer_rmf",
         # IMP.bff.io.fps
         "read_fps_json": "IMP.bff.io.fps",
         "write_fps_json": "IMP.bff.io.fps",
@@ -195,6 +106,20 @@ BY_DOMAIN = {
     },
     # -- label -- a dye at a site, and the quenchers it sees
     "label": {
+        # harvested from cgdye, 2026-08-18
+        # IMP.bff.label.attachment
+        "SITE_KEEP_ATOM_NAMES": "IMP.bff.label.attachment",
+        "align_hierarchies": "IMP.bff.label.attachment",
+        "attach_dyes": "IMP.bff.label.attachment",
+        "place_dye_from_coords": "IMP.bff.label.attachment",
+        "place_dye_from_rotamer_cb": "IMP.bff.label.attachment",
+        "resolve_dye_site": "IMP.bff.label.attachment",
+        "strip_sidechain_at_site": "IMP.bff.label.attachment",
+        # IMP.bff.label.backbone_frame
+        "backbone_frame": "IMP.bff.label.backbone_frame",
+        "backbone_frame_from_coords": "IMP.bff.label.backbone_frame",
+        "backbone_transformation": "IMP.bff.label.backbone_frame",
+        "backbone_transformation_from_coords": "IMP.bff.label.backbone_frame",
         # IMP.bff.label.quencher
         "Quencher": "IMP.bff.label.quencher",
         "reference_quenchers": "IMP.bff.label.quencher",
@@ -271,6 +196,35 @@ BY_DOMAIN = {
     },
     # -- representation -- where the dye can be: accessible volumes, rotamers, distributions
     "representation": {
+        # harvested from cgdye, 2026-08-18
+        # IMP.bff.fret.compare_rotamer
+        # IMP.bff.representation.rotamer.ensemble
+        "RotamerEnsemble": "IMP.bff.representation.rotamer.ensemble",
+        "SIMULATION_TYPE_R1": "IMP.bff.representation.rotamer.ensemble",
+        "rotamer_ensembles_from_fps": "IMP.bff.representation.rotamer.ensemble",
+        # IMP.bff.representation.rotamer.fps
+        "RotamerDistance": "IMP.bff.representation.rotamer.fps",
+        "RotamerPosition": "IMP.bff.representation.rotamer.fps",
+        "distances_from_ensembles": "IMP.bff.representation.rotamer.fps",
+        "read_rotamer_fps": "IMP.bff.representation.rotamer.fps",
+        "rotamer_ensemble_payload": "IMP.bff.representation.rotamer.fps",
+        "rotamer_fret_from_fps": "IMP.bff.representation.rotamer.fps",
+        "rotamer_position_payload": "IMP.bff.representation.rotamer.fps",
+        "write_rotamer_fps": "IMP.bff.representation.rotamer.fps",
+        # IMP.bff.representation.rotamer.fret
+        "RotamerFRET": "IMP.bff.representation.rotamer.fret",
+        # IMP.bff.representation.rotamer.io
+        "load_protein_frames": "IMP.bff.representation.rotamer.io",
+        "load_rotamer_library": "IMP.bff.representation.rotamer.io",
+        "resolve_rotamer_library_path": "IMP.bff.representation.rotamer.io",
+        "rotamer_library_metadata": "IMP.bff.representation.rotamer.io",
+        "rotamer_library_registry": "IMP.bff.representation.rotamer.io",
+        # IMP.bff.representation.rotamer.library
+        "apply_rotamer_coordinates": "IMP.bff.representation.rotamer.library",
+        "load_rotamer_library_dcd": "IMP.bff.representation.rotamer.library",
+        "sample_rotamer_index": "IMP.bff.representation.rotamer.library",
+        # IMP.bff.representation.rotamer.scoring
+        "compute_rotamer_score": "IMP.bff.representation.rotamer.scoring",
         # IMP.bff.representation.distance
         "av_pair_statistics": "IMP.bff.representation.distance",
         "fret_pair_geometry": "IMP.bff.representation.distance",

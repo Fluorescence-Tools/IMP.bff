@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import click
-from IMP.bff.cgdye.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer.fret import RotamerFRET
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 
 
@@ -97,6 +97,6 @@ if __name__ == "__main__":
 @click.pass_context
 def compare_av(ctx, **kwargs) -> None:
     """AV ↔ rotamer-ensemble comparison on the bundled hGBP1 and T4L systems (PRD-108)."""
-    from IMP.bff.cgdye.scripts.compare_av_rotamer import main as _main
+    from IMP.bff.fret.compare_rotamer_cli import main as _main
     ctx.invoke(_main, **kwargs)
 

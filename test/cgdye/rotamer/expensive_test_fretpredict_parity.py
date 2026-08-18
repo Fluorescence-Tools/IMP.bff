@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from IMP.bff.cgdye.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer.fret import RotamerFRET
 
 
 @pytest.mark.parametrize("fixed_r0", [False, True])

@@ -16,10 +16,25 @@ Quenching has no item anywhere in the stack, so those names are bff-native.
    representation -- while a :class:`Label` says which dye is attached where.
    The same word meant both; they moved to ``IMP.bff.representation`` in
    PRD-113 stage 3d and this package keeps only the system meaning.
+
+Attachment came the other way. :mod:`~IMP.bff.label.attachment` and
+:mod:`~IMP.bff.label.backbone_frame` -- putting a dye on a residue, and the
+local frame that orients it -- were ``cgdye/labeling/`` until the 2026-08-18
+cleanup. Attaching a label *is* the system layer; it was filed under the
+explicit-dye package because that is what first needed it.
 """
 
 from __future__ import annotations
 
+from .attachment import (
+    attach_dyes, resolve_dye_site, align_hierarchies,
+    place_dye_from_coords, place_dye_from_rotamer_cb,
+    strip_sidechain_at_site, SITE_KEEP_ATOM_NAMES,
+)
+from .backbone_frame import (
+    backbone_frame, backbone_frame_from_coords,
+    backbone_transformation, backbone_transformation_from_coords,
+)
 from .site import Label, FLUOROPHORE_TYPES
 from .quencher import (
     Quencher, PETParameters, reference_quenchers,
@@ -34,4 +49,9 @@ __all__ = [
     "reference_pet_parameters",
     "REFERENCE_DYE",
     "FLUOROPHORE_TYPES",
+    "attach_dyes", "resolve_dye_site", "align_hierarchies",
+    "place_dye_from_coords", "place_dye_from_rotamer_cb",
+    "strip_sidechain_at_site", "SITE_KEEP_ATOM_NAMES",
+    "backbone_frame", "backbone_frame_from_coords",
+    "backbone_transformation", "backbone_transformation_from_coords",
 ]

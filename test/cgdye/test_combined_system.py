@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from IMP.bff.cgdye.utils import get_template_dir, get_structure_dir
+from IMP.bff.tools.paths import get_template_dir, get_structure_dir
 
 import IMP
 import IMP.algebra

@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.cgdye.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer.fret import RotamerFRET
 
 _HERE = Path(__file__).resolve().parent
 _PINS = _HERE.parents[1] / "references" / "cgdye_fretpredict_pins.json"

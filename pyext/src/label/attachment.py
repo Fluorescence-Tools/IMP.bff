@@ -19,7 +19,7 @@ import IMP.atom
 import IMP.algebra
 import IMP.core
 
-from IMP.bff.cgdye.labeling.backbone_frame import (
+from IMP.bff.label.backbone_frame import (
     backbone_frame,
     backbone_transformation_from_coords,
     _find_atom,

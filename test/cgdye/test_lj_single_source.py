@@ -13,11 +13,11 @@ import pytest
 from IMP.bff.cgdye.topology.dye import CHARMM36_LJ, lj_cross, lj_energy, lj_parameter_arrays
 from IMP.bff.cgdye.sampling.scoring import lj_score
 from IMP.bff.cgdye.sampling.mean_field import _lj_energy_pairs
-from IMP.bff.cgdye.rotamer.scoring import _scaled_parameters
+from IMP.bff.representation.rotamer.scoring import _scaled_parameters
 
 
 def test_table_is_the_only_one():
-    import IMP.bff.cgdye.rotamer.scoring as rs
+    import IMP.bff.representation.rotamer.scoring as rs
     assert not hasattr(rs, "LJ_PARAMETERS")
     for elem in ("C", "N", "O", "S", "H"):
         rmin2, eps = _scaled_parameters([elem], 1.0, 1.0)
@@ -67,7 +67,7 @@ def test_scalar_and_pairwise_kernels_agree():
 
 def test_rotamer_scoring_uses_the_shared_kernel():
     """rotamer.scoring's full 12-6 energy equals lj_energy on the same pairs."""
-    from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score
+    from IMP.bff.representation.rotamer.scoring import compute_rotamer_score
     rng = np.random.default_rng(5)
     n_prot, n_rot = 12, 5
     protein_coords = rng.uniform(0, 8, size=(n_prot, 3))

@@ -48,7 +48,7 @@ def find_dye(
     if template_cif is None:
         return dye
 
-    from IMP.bff.cgdye.io.template_cif import read_dye_template_cif
+    from IMP.bff.io.template_cif import read_dye_template_cif
     template = read_dye_template_cif(str(template_cif))
     d1, d2 = template.get("dipole_atom_1"), template.get("dipole_atom_2")
     return replace(

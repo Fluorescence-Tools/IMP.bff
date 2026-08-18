@@ -10,6 +10,13 @@ from both, and -- when the fps.json carries experimental distances -- the
 against drift and asserts loose sanity bounds only: an AV with a 20 Å linker
 and a screened rotamer library are two different physical models of the same
 label, and their difference is data, not a failure.
+
+Filed under ``fret`` rather than ``av`` or ``representation.rotamer``, which is
+where it reads more naturally: a tool that compares two things has to sit above
+both. It uses the AV builder in :mod:`IMP.bff.fret.av` and the rotamer ensemble
+in :mod:`IMP.bff.representation.rotamer`, and ``fret`` is the lowest package
+above both. Putting it in ``av`` closed the loop
+``av -> fret -> restraints -> av``.
 """
 
 from __future__ import annotations
@@ -27,7 +34,7 @@ from IMP.bff.representation.distance import (
     fret_pair_efficiencies,
     fret_pair_geometry,
 )
-from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble
+from IMP.bff.representation.rotamer.ensemble import RotamerEnsemble
 
 
 def _av_position(pos: Dict[str, Any]) -> Dict[str, Any]:
@@ -102,7 +109,7 @@ def compare_positions(
     "n_rotamers", "av_extent", "rot_extent"}}`` (extents = rms distance of
     the weighted cloud from its mean, Å).
     """
-    from IMP.bff.cgdye.rotamer.io import load_protein_frames
+    from IMP.bff.representation.rotamer.io import load_protein_frames
 
     frame = load_protein_frames(pdb)[0]
     p_names = [str(n).upper() for n in frame["atom_names"]]

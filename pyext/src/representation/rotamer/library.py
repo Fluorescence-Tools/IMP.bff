@@ -1,4 +1,14 @@
-"""Rotamer-library based sampling utilities (IMP-native application)."""
+"""Loading a rotamer library, and drawing a state from it.
+
+The mechanics of the discrete-states representation: read the library off disk
+(DCD frames plus weights), put one of its conformers onto a hierarchy, and draw
+an index according to the weights.
+
+Was ``cgdye/sampling/rotamer.py`` until the 2026-08-18 cleanup. It sat with the
+force-field samplers because it uses the same file formats, but a rotamer
+library is not something you *sample from a potential* -- it is a list of states
+with weights already attached, which is a representation.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +27,7 @@ def load_rotamer_library_dcd(pdb_path, dcd_path, weights_path=None, max_frames=N
     Atom names come from the PDB through IMP.atom and coordinates from the DCD
     through the in-tree reader, so this needs nothing beyond IMP and numpy.
     """
-    from IMP.bff.cgdye.io.dcd import read_dcd
+    from IMP.bff.io.dcd import read_dcd
 
     model = IMP.Model()
     hierarchy = IMP.atom.read_pdb(str(pdb_path), model, IMP.atom.AllPDBSelector())

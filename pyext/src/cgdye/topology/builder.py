@@ -23,8 +23,8 @@ import IMP.atom
 import IMP.core
 
 from ..io.cif import write_dye_forcefield_cif
-from ..io.template_cif import read_component_template_cif
-from IMP.bff.cgdye.utils import import_click
+from IMP.bff.io.template_cif import read_component_template_cif
+from IMP.bff.tools.paths import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
 

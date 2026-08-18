@@ -25,8 +25,8 @@ import numpy as np
 from IMP.bff.representation.states import States
 from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.dye.spectra import forster_radius_from_spectra
-from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
-from IMP.bff.cgdye.rotamer.scoring import compute_rotamer_score
+from IMP.bff.representation.rotamer.io import load_protein_frames, load_rotamer_library
+from IMP.bff.representation.rotamer.scoring import compute_rotamer_score
 
 #: fps.json ``simulation_type`` of a screened 1:1 rotamer library.
 SIMULATION_TYPE_R1 = "R1"
@@ -318,7 +318,7 @@ def rotamer_ensembles_from_fps(
     to :meth:`RotamerEnsemble.from_site`.
     """
     from IMP.bff.io.fps import read_fps_json
-    from IMP.bff.cgdye.rotamer.fps import RotamerPosition
+    from IMP.bff.representation.rotamer.fps import RotamerPosition
 
     positions, _distances, _score_sets, _extra = read_fps_json(fps_json)
     frame = _frame(structure, frame_index)

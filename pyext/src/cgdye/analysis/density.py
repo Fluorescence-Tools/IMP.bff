@@ -15,8 +15,8 @@ import IMP.rmf
 import RMF
 
 from ..io.cif import read_dye_forcefield_cif
-from ..io.template_cif import read_component_template_cif, region_features
-from IMP.bff.cgdye.utils import import_click
+from IMP.bff.io.template_cif import read_component_template_cif, region_features
+from IMP.bff.tools.paths import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
 
@@ -762,7 +762,7 @@ def main(
             tpl = Path(tpl_list[i])
         else:
             # Default: the bundled template, which is IMP module data
-            from IMP.bff.cgdye.utils import get_template_dir
+            from IMP.bff.tools.paths import get_template_dir
             tpl = get_template_dir() / f"{mob}.template.cif"
         template_map[mob] = tpl
 

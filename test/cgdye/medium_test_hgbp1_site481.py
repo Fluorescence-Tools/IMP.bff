@@ -2,14 +2,14 @@
 
 import sys
 from pathlib import Path
-from IMP.bff.cgdye.utils import get_template_dir, get_structure_dir
+from IMP.bff.tools.paths import get_template_dir, get_structure_dir
 
 import IMP
 import IMP.atom
 import IMP.core
 
 
-from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_dye_site
+from IMP.bff.label.attachment import attach_dyes, resolve_dye_site
 
 
 def _site_atoms(hier, chain_id, resnum):

@@ -5,7 +5,7 @@ Only three remain, and only because tests exercise them. The other 24 moved to
 for one system (``hgbp1_site481``), one-off analyses, or examples of a concept
 that has since been retired. Every library function they called is still in
 ``IMP.bff.cgdye``; the one capability that existed *only* in a script -- writing
-mol2 -- was lifted into :mod:`IMP.bff.cgdye.io.mol2` first.
+mol2 -- was lifted into :mod:`IMP.bff.io.mol2` first.
 
 A driver belongs next to the analysis it drove, not in an installed package. If
 one of these grows a reusable function, that function belongs in a module.

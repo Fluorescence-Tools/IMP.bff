@@ -1,4 +1,4 @@
-"""Tests for IMP.bff.cgdye.rotamer."""
+"""Tests for IMP.bff.representation.rotamer."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 from IMP.bff.io import fps
-from IMP.bff.cgdye.rotamer.fps import read_rotamer_fps, rotamer_fret_from_fps
-from IMP.bff.cgdye.rotamer.fret import RotamerFRET
-from IMP.bff.cgdye.rotamer.io import load_protein_frames, load_rotamer_library
+from IMP.bff.representation.rotamer.fps import read_rotamer_fps, rotamer_fret_from_fps
+from IMP.bff.representation.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer.io import load_protein_frames, load_rotamer_library
 from IMP.bff.dye.spectra import forster_radius_from_spectra
 # The rotamer CLI ships with cgdye now; invoking it through imp-tricks'
 # aggregator would make an imp.bff test depend on the layer above it.
-from IMP.bff.cgdye.rotamer.cli import rotamer as _rotamer_cli
+from IMP.bff.representation.rotamer.cli import rotamer as _rotamer_cli
 
 def _fixture_pdb(name: str, tmp_path: Path) -> Path:
     """Unpack a bundled (gzip'd) fixture structure into tmp_path and return it."""
@@ -51,7 +51,7 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
     of 711 -- the pp11 tutorial numbers were off by 0.2 in E. The FRETpredict
     DCD sets in data/rotamer_library are the canonical libraries now.
     """
-    from IMP.bff.cgdye.rotamer.io import resolve_rotamer_library_path
+    from IMP.bff.representation.rotamer.io import resolve_rotamer_library_path
     sizes = {}
     for cutoff in (10, 20, 30):
         name = f"AlexaFluor 488 C1R cutoff{cutoff}"
@@ -179,7 +179,7 @@ def test_load_protein_frames_from_rmf_trajectory(tmp_path: Path) -> None:
     import IMP.algebra
     import IMP.rmf
     import RMF
-    from IMP.bff.cgdye.utils import get_structure_dir
+    from IMP.bff.tools.paths import get_structure_dir
 
     # Two-frame RMF written on the fly from 148L: frame 1 is frame 0
     # translated by 1 Angstrom along x.

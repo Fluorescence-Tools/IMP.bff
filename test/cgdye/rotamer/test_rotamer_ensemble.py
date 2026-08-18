@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.cgdye.rotamer.ensemble import RotamerEnsemble, rotamer_ensembles_from_fps
-from IMP.bff.cgdye.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer.ensemble import RotamerEnsemble, rotamer_ensembles_from_fps
+from IMP.bff.representation.rotamer.fret import RotamerFRET
 from IMP.bff.representation import AccessibleVolume, States
 from IMP.bff.representation.distance import av_pair_statistics, histogram_rda, mean_fret_distance
 
@@ -139,7 +139,7 @@ def test_from_fps_positions(hsp90, tmp_path):
 
 def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     """R1 entries write, validate, read back; the docking filter drops them."""
-    from IMP.bff.cgdye.rotamer.fps import (
+    from IMP.bff.representation.rotamer.fps import (
         distances_from_ensembles, rotamer_ensemble_payload, write_rotamer_fps)
     from IMP.bff.io import fps_schema
     from IMP.bff.io.fps import fps_positions_for_docking, read_fps_json

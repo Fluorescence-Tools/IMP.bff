@@ -13,9 +13,9 @@ import IMP.rmf
 import numpy as np
 import RMF
 import json
-from IMP.bff.cgdye.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.cgdye.rotamer.scoring import _selector_resnames
-from IMP.bff.cgdye.utils import get_template_dir
+from IMP.bff.io.rotamer_rmf import read_rotamer_library_rmf
+from IMP.bff.representation.rotamer.scoring import _selector_resnames
+from IMP.bff.tools.paths import get_template_dir
 
 _LIBRARY_REGISTRY: dict[str, dict[str, Any]] | None = None
 
@@ -347,7 +347,7 @@ def load_rotamer_library(
     if suffix == ".dcd":
         # FRETpredict library set: <stem>.pdb (names, residues) + DCD frames +
         # per-rotamer weights, read with the in-tree DCD reader.
-        from IMP.bff.cgdye.sampling.rotamer import load_rotamer_library_dcd
+        from IMP.bff.representation.rotamer.library import load_rotamer_library_dcd
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")
         weights_path = path.with_name(f"{path.stem}_weights.txt")

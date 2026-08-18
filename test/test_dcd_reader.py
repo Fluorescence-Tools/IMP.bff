@@ -18,7 +18,7 @@ import numpy as np
 import IMP
 import IMP.bff
 import IMP.test
-from IMP.bff.cgdye.io.dcd import DCDFormatError, read_dcd, read_dcd_header
+from IMP.bff.io.dcd import DCDFormatError, read_dcd, read_dcd_header
 
 
 def _library_dir():

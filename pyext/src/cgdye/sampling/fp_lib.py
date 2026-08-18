@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple
 
 def load_fp_library() -> Dict[str, Dict]:
     """Load the FP library from the bundled JSON file."""
-    from IMP.bff.cgdye.utils import _data_root
+    from IMP.bff.tools.paths import _data_root
     path = _data_root() / "fp_library.json"
     with open(path, "r") as f:
         return json.load(f)

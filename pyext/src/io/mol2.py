@@ -9,6 +9,10 @@ capability reachable only by running a script is a capability nobody finds.
 Lifted into the library in the PRD-113 cleanup (2026-08-18) when that script
 moved to ``junk/``. The driver is gone; this is what it was for.
 
+It landed in ``cgdye/io/`` first and moved here when ``cgdye`` left the domain
+layout -- a capability rescued from a script should not then be buried in a
+legacy package.
+
 Bonds come from ``CONECT`` records when the PDB has them and from geometry when
 it does not -- :func:`infer_bonds` uses a covalent-radius cutoff, which is a
 guess and is why it is not the default.

@@ -103,7 +103,7 @@ def test_import_is_lazy_and_click_free():
         "import IMP.bff\n"
         "assert 'IMP.bff.cgdye' not in sys.modules, 'import IMP.bff must not import cgdye'\n"
         "IMP.bff.RotamerFRET; IMP.bff.forster_radius_from_spectra; IMP.bff.strip_hierarchy\n"
-        "import IMP.bff.cgdye as c; c.attach_dyes\n"
+        "import IMP.bff.label as l; l.attach_dyes\n"
         "print('ok')\n"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
@@ -111,12 +111,50 @@ def test_import_is_lazy_and_click_free():
     assert "ok" in result.stdout
 
 
-def test_cgdye_mirror_matches_api():
+def test_cgdye_is_off_the_public_surface():
+    """It is explicit-dye molecular mechanics, kept but not a domain.
+
+    ``cgdye`` used to mirror its slice of the flat map. As of 2026-08-18 it has
+    no flat names at all: propagating an all-atom dye under a force field is
+    IMP's territory, not a spectroscopy library's, so the package stays
+    importable by module path and off the surface. What was *not* molecular
+    mechanics was taken out of it first -- the rotamer library into
+    ``representation``, attachment into ``label``, its readers into ``io``.
+    """
     import IMP.bff.cgdye as cgdye
-    expected = sorted(n for n, m in api.EXPORTS.items() if m.startswith("IMP.bff.cgdye."))
-    assert cgdye.__all__ == expected
-    for name in expected[:5]:
-        assert getattr(cgdye, name) is api.resolve(name)
+
+    assert cgdye.__all__ == []
+    assert not [m for m in api.EXPORTS.values() if m.startswith("IMP.bff.cgdye.")]
+    assert "cgdye" not in api.BY_DOMAIN
+
+    # still reachable by module path -- kept, not deleted
+    import importlib
+    assert importlib.import_module("IMP.bff.cgdye.sampling.langevin").LangevinDyeSampler
+
+    # and the harvested pieces landed where they were supposed to
+    assert api.domain_of("RotamerFRET") == "representation"
+    assert api.domain_of("attach_dyes") == "label"
+    assert api.domain_of("read_rotamer_library_rmf") == "io"
+
+
+def test_nothing_in_the_package_imports_cgdye():
+    """It is a leaf. If a domain grows an edge into it, that is the signal that
+    something was filed in the wrong place -- as the LJ term and the rotamer
+    library both were."""
+    import ast
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "pyext" / "src"
+    offenders = []
+    for path in sorted(src.rglob("*.py")):
+        if "cgdye" in path.parts:
+            continue
+        tree = ast.parse(path.read_text())
+        names = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+        names |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        if any(n.startswith("IMP.bff.cgdye") for n in names):
+            offenders.append(str(path.relative_to(src)))
+    assert not offenders, offenders
 
 
 if __name__ == "__main__":

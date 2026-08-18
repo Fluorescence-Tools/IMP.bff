@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from IMP.bff.cgdye.topology.dye import lj_energy, lj_parameter_arrays
-from IMP.bff.fret.kappa2 import kappa2_from_dipoles  # re-export: κ² lives in fret
+from IMP.bff.tools.lennard_jones import lj_energy, lj_parameter_arrays
+from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles  # the canonical one
 
 _GAS_CONSTANT = 1.9858775e-3
 

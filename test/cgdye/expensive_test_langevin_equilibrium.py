@@ -12,9 +12,9 @@ import IMP
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.labeling.attachment import attach_dyes
+from IMP.bff.label.attachment import attach_dyes
 from IMP.bff.cgdye.sampling.langevin import LangevinDyeSampler
-from IMP.bff.cgdye.utils import get_structure_dir
+from IMP.bff.tools.paths import get_structure_dir
 
 
 def _centroid_distances(integrator, n_steps, write_every, seed):
