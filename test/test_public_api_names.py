@@ -1,6 +1,20 @@
-"""The flat ``IMP.bff.*`` surface: every export resolves, is documented, and says what it is."""
+"""The public surface: domain-scoped, resolvable, documented, and correctly filed.
 
-import re
+This replaced a naming-families regex. That test asserted every export's *name*
+matched one of ``Rotamer|Dye|Linker|Langevin|...`` -- a list that had to grow
+with every feature, and which could only ever say that a name looked plausible.
+It could not tell a misfiled name from a well-filed one, and it grew by four
+tokens in the six months before this was written.
+
+What is checked instead is structural, and does not grow:
+
+* every export resolves and carries a docstring;
+* every export's module lies **inside the domain it is filed under**, so the
+  grouping in ``api.py`` is enforced rather than decorative;
+* no name is exported by two domains;
+* every domain in the map is a real subpackage.
+"""
+
 import subprocess
 import sys
 
@@ -9,20 +23,6 @@ import pytest
 import IMP.bff
 import IMP.bff.api as api
 
-# a name is self-explanatory when it carries one of these tokens
-_FAMILY = re.compile(
-    r"(Rotamer|Dye|Linker|Langevin|AccessibleVolume|CHARMM36|SITE_KEEP"
-    r"|rotamer|dye|linker|langevin|fret|fps|forster|kappa2|strip|backbone|_av\b|_avs_|^av_"
-    r"|boltzmann|cluster|rrt|SIMULATION_TYPE|ensemble|torsion|hierarch|mol2|cif|rmf|dcd|protein_frames|nmr|lj_|select_atoms|attach"
-    # PRD-109, the PET quenching model folded in from QuEst
-    r"|quench|Quench|QUENCH|PET|amino_acid|solvent_accessible|sphere_points"
-    r"|grid_center|slow_factor|simulate_|diffusion|Diffusion|residue|Residue|occupancy"
-    # PRD-113, the dye species: spectra, R0 derivation, the flrCIF map
-    r"|Dye|dye|Spectrum|spectral|spectra|FLRCIF|Label|FLUOROPHORE|Quencher|quencher|PET|pet_|REFERENCE_DYE|States|resample_av|PathMapReading|orientation|order_parameter|Term|total_rate|poisson|normal_distribution|gaussian"
-    # PRD-113 stage 6, the output contract
-    r"|lifetime_spectrum|LifetimeSpectrum|fret_efficiency_from_lifetimes)"
-)
-
 
 @pytest.mark.parametrize("name", api.public_names())
 def test_export_resolves_and_is_documented(name):
@@ -30,10 +30,52 @@ def test_export_resolves_and_is_documented(name):
     assert value is not None
     if not isinstance(value, (dict, tuple, list)):
         assert getattr(value, "__doc__", None), f"{name} has no docstring"
-    assert _FAMILY.search(name), f"{name} does not say what it is (naming families)"
     # reachable flat, and cached after first access
     assert getattr(IMP.bff, name) is value
     assert name in dir(IMP.bff)
+
+
+@pytest.mark.parametrize("domain", sorted(api.BY_DOMAIN))
+def test_every_export_lives_in_the_domain_it_is_filed_under(domain):
+    """The check the naming regex could not make.
+
+    A name filed under ``fret`` whose module is ``IMP.bff.quenching.model`` is
+    a mistake, and it is exactly the kind of mistake that accumulates when the
+    grouping is a comment.
+    """
+    prefix = f"IMP.bff.{domain}."
+    wrong = {name: module for name, module in api.BY_DOMAIN[domain].items()
+             if not module.startswith(prefix)}
+    assert not wrong, wrong
+
+
+def test_the_flat_view_is_derived_and_complete():
+    flat = {}
+    for members in api.BY_DOMAIN.values():
+        flat.update(members)
+    assert flat == api.EXPORTS
+
+
+def test_no_name_is_exported_by_two_domains():
+    seen = {}
+    clashes = {}
+    for domain, members in api.BY_DOMAIN.items():
+        for name in members:
+            if name in seen:
+                clashes[name] = (seen[name], domain)
+            seen[name] = domain
+    assert not clashes, clashes
+
+
+def test_every_domain_is_a_real_subpackage():
+    import importlib
+    for domain in api.BY_DOMAIN:
+        importlib.import_module(f"IMP.bff.{domain}")
+
+
+def test_domain_of_agrees_with_the_module_path():
+    for name, module in api.EXPORTS.items():
+        assert module.split(".")[2] == api.domain_of(name), name
 
 
 def test_no_retired_names_survive():
