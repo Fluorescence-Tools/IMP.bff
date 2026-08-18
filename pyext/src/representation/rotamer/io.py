@@ -412,39 +412,20 @@ def _collect_frame(hierarchy) -> tuple[np.ndarray, list[str], list[str], list[st
     tuple
         ``(coords, atom_names, atom_types, resnames, chain_ids, residue_indices)``.
     """
-    particles = _atom_particles(hierarchy)
-    coords = np.zeros((len(particles), 3), dtype=np.float64)
-    atom_names: list[str] = []
-    atom_types: list[str] = []
-    resnames: list[str] = []
-    chain_ids: list[str] = []
-    residue_indices: list[int] = []
-    for i, p in enumerate(particles):
-        xyz = IMP.core.XYZ(p)
-        coords[i] = [xyz.get_x(), xyz.get_y(), xyz.get_z()]
-        if IMP.atom.Atom.get_is_setup(p):
-            atom = IMP.atom.Atom(p)
-            name = atom.get_name()
-            parts = name.split()
-            atom_names.append(parts[1] if len(parts) > 1 else parts[0])
-            atom_types.append(atom.get_atom_type().get_string())
-            res_p = p.get_parent()
-            if IMP.atom.Residue.get_is_setup(res_p):
-                resnames.append(str(IMP.atom.Residue(res_p).get_residue_type().get_string()))
-                chain_p = res_p.get_parent()
-                chain_ids.append(str(IMP.atom.Chain(chain_p).get_id()) if IMP.atom.Chain.get_is_setup(chain_p) else "")
-                residue_indices.append(int(IMP.atom.Residue(res_p).get_index()))
-            else:
-                resnames.append("")
-                chain_ids.append("")
-                residue_indices.append(-1)
-        else:
-            name = p.get_name()
-            atom_names.append(name)
-            atom_types.append(name[0] if name else "C")
-            resnames.append("")
-            chain_ids.append("")
-            residue_indices.append(-1)
+    # Two C++ calls instead of about a dozen SWIG crossings per atom. The loop
+    # this replaces built a decorator, read three coordinates, looked up a type
+    # and walked two parents for every leaf -- tens of thousands of crossings
+    # per frame to move a few kilobytes, and it was the single largest cost in
+    # loading a rotamer library.
+    packed = np.asarray(IMP.bff.hierarchy_atom_coordinates(hierarchy),
+                        dtype=np.float64).reshape(-1, 4)
+    coords = np.ascontiguousarray(packed[:, :3])
+    residue_indices = packed[:, 3].astype(int).tolist()
+    meta = list(IMP.bff.hierarchy_atom_metadata(hierarchy))
+    atom_names = meta[0::4]
+    atom_types = meta[1::4]
+    resnames = meta[2::4]
+    chain_ids = meta[3::4]
     return coords, atom_names, atom_types, resnames, chain_ids, residue_indices
 
 

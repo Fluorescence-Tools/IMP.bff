@@ -30,6 +30,9 @@ import numpy as np
 %include "IMP_bff.pathmap.i"
 %include "IMP_bff.av.i"
 
+/* Reading a frame out of a hierarchy without a SWIG call per atom. */
+%include "IMP/bff/HierarchyFrame.h"
+
 /* Plain functions over arrays. Ordered as the physics stacks up. */
 %include "IMP/bff/Distributions.h"
 %include "IMP/bff/PolymerChain.h"
