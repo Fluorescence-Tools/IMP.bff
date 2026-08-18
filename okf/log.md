@@ -1,5 +1,37 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 0: the instrument layer goes)
+
+* **`IMP.bff` is a forward-model engine** — what `tttrlib` is to ChiSurf for
+  photons, `IMP.bff` is for structure. It emits **experiment-neutral** quantities
+  (lifetime spectra, rate constants, κ² distributions, distances) and leaves
+  convolution, IRF, pileup, counting statistics and fitting against raw data
+  outside. Scoring against *structural* data (distances, as `AVNetworkRestraint`
+  does) stays. Recorded as [PRD-113](prds/prd-113.md); PRD-112 is absorbed into
+  it, its LabelLib stage done and standing.
+* **Deleted the TCSPC instrument layer**: `src/Decay*.cpp` (10) +
+  `src/PhotonStatistics.cpp`, `include/Decay*.h` (11) +
+  `include/internal/PhotonStatistics.h`, `pyext/Decay*.i` (11) and their
+  `%include` lines, `test/test_Decay*.py` (9), and
+  `pyext/src/spectroscopy/decay.py`. 44 files. It did convolution, pileup,
+  linearisation and decay *fitting* — all experiment-side — and its only consumer
+  was that one Python module. **Nothing in chisurf, quest, imp-tricks or tttrlib
+  referenced any of it**, and no AV/PathMap source included it, so the cut was
+  clean.
+* **`spectroscopy/kappa2.py` deliberately survives.** It is the opposite kind of
+  thing: a forward model producing orientation-factor distributions,
+  wobbling-in-a-cone averages and order parameters from structure. It moves to
+  `photophysics/` in stage 4, joining `fret/kappa2.py` so that "kappa squared"
+  has one home instead of two. `spectroscopy/__init__.py` re-exported the deleted
+  module and is now a docstring saying which half went and why —
+  `test_tttrlib_is_optional.py` imports that package, so it had to keep
+  importing.
+* **Verified**: cmake reconfigured, module rebuilt, `DecayCurve` and friends
+  absent from `IMP.bff`, `AV`/`PathMap`/`AVNetworkRestraint` intact. Suite **599
+  passed**; the single failure, `test_AccessibleVolume::test_access_av_feature`,
+  is the pre-existing unrelated `IMP.em` MRC error — the gate is that it neither
+  disappears nor gains company, and it did neither.
+
 ## 2026-08-18 (solver stability; the rate term)
 
 * **The explicit-step criterion ignored the rate term, which dominates it**

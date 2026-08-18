@@ -16,17 +16,6 @@ import numpy as np
 %include "AV.i"
 
 /* Fluorescence decays */
-%include "DecayRoutines.i"
-%include "DecayCurve.i"
-%include "DecayRange.i"
-%include "DecayLifetimeHandler.i"
-%include "DecayModifier.i"
-%include "DecayConvolution.i"
-%include "DecayPattern.i"
-%include "DecayPileup.i"
-%include "DecayLinearization.i"
-%include "DecayScale.i"
-%include "DecayScore.i"
 
 // The flat user-facing Python surface (PRD-107): IMP.bff.<Name> resolves the
 // cgdye/fret names lazily; the mapping and the naming rule live in
