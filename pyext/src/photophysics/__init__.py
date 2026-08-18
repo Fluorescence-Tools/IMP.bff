@@ -23,6 +23,12 @@ coarse-grained model and an MD trajectory alike.
 from __future__ import annotations
 
 from .kappa2 import kappa2_from_dipoles, kappa2_isotropic
+from .terms import (
+    FRETTerm, InteractionTerm, PETTerm, RadiativeTerm, total_rate,
+)
 from . import orientation
 
-__all__ = ["kappa2_from_dipoles", "kappa2_isotropic", "orientation"]
+__all__ = [
+    "kappa2_from_dipoles", "kappa2_isotropic", "orientation",
+    "InteractionTerm", "RadiativeTerm", "PETTerm", "FRETTerm", "total_rate",
+]

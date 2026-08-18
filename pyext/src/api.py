@@ -115,6 +115,11 @@ EXPORTS = {
     "reference_pet_parameters": "IMP.bff.label.quencher",
     "available_dyes": "IMP.bff.dye.library",
     "read_dye_library": "IMP.bff.dye.cif",
+    "InteractionTerm": "IMP.bff.photophysics.terms",
+    "RadiativeTerm": "IMP.bff.photophysics.terms",
+    "PETTerm": "IMP.bff.photophysics.terms",
+    "FRETTerm": "IMP.bff.photophysics.terms",
+    "total_rate": "IMP.bff.photophysics.terms",
     "kappa2_from_dipoles": "IMP.bff.photophysics.kappa2",
     "kappa2_isotropic": "IMP.bff.photophysics.kappa2",
     # --- orientation: kappa^2 distributions, wobbling, order parameters ------

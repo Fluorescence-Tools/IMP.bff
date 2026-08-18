@@ -1,5 +1,33 @@
 # Update Log
 
+## 2026-08-18 (PRD-113 stage 4c: interaction terms)
+
+* **The photophysics abstraction exists now**, shaped like a force field's
+  terms: a functional form, an **arity**, and parameters looked up by type.
+  1-body `RadiativeTerm`, 2-body `PETTerm` (dye × quencher atoms) and `FRETTerm`
+  (dye × dye), with the N-body case shaped for but not implemented.
+* **Rates add, and that is a first-class property.** `total_rate()` sums the
+  channels because parallel deactivation channels add — which is exactly what
+  `GridDiffusionSolver` already relies on when it sums a quenching map and a
+  FRET map. Burying that inside each observable is how `fret_rate_trace` and
+  `fret_rate_map` became two incompatible calls.
+* **They are a consolidation, not a seventh layer, and the tests say so.**
+  `PETTerm` reproduces `quenching_rate_map`'s law at the voxel centres to
+  1e-9 (minus the `1/tau0` floor, which is the radiative term's job — that
+  separation is the point of having terms). `FRETTerm` reproduces
+  `fret_rate_trace` exactly. The kernels can move underneath the terms later
+  without changing an answer.
+* **`R0` is derived inside the term** from the two dyes, the medium's refractive
+  index and κ² — not passed in. And the term reports
+  `used_isotropic_kappa2`, so a representation that cannot resolve orientations
+  (an accessible volume) is *told* it fell back to 2/3 rather than silently
+  averaged.
+* **Terms are representation-agnostic**: they consume
+  `IMP.bff.representation.States`, so one implementation serves an AV, a rotamer
+  library, a coarse-grained model and an MD trajectory. `needs_orientations`
+  says which terms care.
+* Suite **656 passed**.
+
 ## 2026-08-18 (PRD-113 stage 4b: the distance layers, and two that disagree)
 
 * **`fret/distance.py` → `representation/distance.py`.** A distance between two
