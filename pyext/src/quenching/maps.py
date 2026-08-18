@@ -1,9 +1,9 @@
 """Rate and mobility maps on an accessible-volume grid.
 
 The *field* formulation of the quenched-dye model: instead of walking a dye and
-reading rates along its trajectory (:mod:`IMP.bff.quenching.diffusion`), assign
+reading rates along its trajectory (:mod:`IMP.bff.dynamics.brownian`), assign
 every voxel a diffusion coefficient and a decay rate, and propagate the excited
-state on the grid (:mod:`IMP.bff.quenching.solver`). Deterministic, no shot
+state on the grid (:mod:`IMP.bff.dynamics.smoluchowski`). Deterministic, no shot
 noise, and the natural home for a *distance-dependent* quenching law.
 
 Moved here from ChiSurf (``chisurf/core/structure/av/functions.py``) by PRD-109.

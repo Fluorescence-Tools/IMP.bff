@@ -76,7 +76,7 @@ def lifetime_spectrum_from_states(
        for the whole excited-state lifetime, and wrong when the dye reorganises
        fast enough to average over rates -- then the decay is not a sum of
        exponentials at all and the population has to be propagated instead
-       (:class:`~IMP.bff.quenching.solver.GridDiffusionSolver`, or the Brownian
+       (:class:`~IMP.bff.dynamics.smoluchowski.GridDiffusionSolver`, or the Brownian
        walk). Pass ``exact=False`` when using it outside that limit, so the
        spectrum says what it is.
 

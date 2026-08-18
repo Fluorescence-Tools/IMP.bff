@@ -72,7 +72,7 @@ def test_the_package_works_with_numba_blocked():
         "import IMP.bff\n"
         "from IMP.bff.av import _kernels\n"
         "from IMP.bff.photophysics import orientation\n"
-        "from IMP.bff.quenching import diffusion, photon\n"
+        "from IMP.bff.dynamics import brownian, excited_state\n"
         "from IMP.bff.representation import distance\n"
         "assert 'numba' not in [m for m in sys.modules if sys.modules[m] is not None "
         "and m == 'numba']\n"
@@ -80,7 +80,7 @@ def test_the_package_works_with_numba_blocked():
         "pts = np.array([[0., 0., 0., 1.], [2., 0., 0., 1.]])\n"
         "assert _kernels.weighted_mean(pts, 2)[0] == 1.0\n"
         "assert abs(orientation.kappasq(0.0, 0.0, 0.0, 0.0, 0.0) - 2/3) < 1e-12\n"
-        "d, _ = photon.simulate_photon_trace(100, np.zeros(10), 0.01, 4.0, random_seed=1)\n"
+        "d, _ = excited_state.simulate_photon_trace(100, np.zeros(10), 0.01, 4.0, random_seed=1)\n"
         "assert (d >= 0).all()\n"
         "print('ok')\n"
     )

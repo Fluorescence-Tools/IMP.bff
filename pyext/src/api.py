@@ -141,6 +141,20 @@ BY_DOMAIN = {
         "lj_energy": "IMP.bff.cgdye.topology.dye",
         "torsion_cosine": "IMP.bff.cgdye.topology.dye",
     },
+    # -- dynamics -- integrators: Brownian, Smoluchowski, excited-state kMC
+    "dynamics": {
+        # IMP.bff.dynamics.brownian
+        "DyeDiffusionTrajectory": "IMP.bff.dynamics.brownian",
+        "simulate_dye_diffusion": "IMP.bff.dynamics.brownian",
+        # IMP.bff.dynamics.excited_state
+        "simulate_photon_trace": "IMP.bff.dynamics.excited_state",
+        "simulate_quenched_decay": "IMP.bff.dynamics.excited_state",
+        # IMP.bff.dynamics.smoluchowski
+        "GridDiffusionSolver": "IMP.bff.dynamics.smoluchowski",
+        "GridDiffusionResult": "IMP.bff.dynamics.smoluchowski",
+        "diffusion_stability_limit": "IMP.bff.dynamics.smoluchowski",
+        "equilibrium_occupancy": "IMP.bff.dynamics.smoluchowski",
+    },
     # -- dye -- the species: spectra, photophysics parameters, topology, the library
     "dye": {
         # IMP.bff.dye.cif
@@ -221,9 +235,6 @@ BY_DOMAIN = {
     "quenching": {
         # IMP.bff.quenching.asa
         "solvent_accessible_surface": "IMP.bff.quenching.asa",
-        # IMP.bff.quenching.diffusion
-        "DyeDiffusionTrajectory": "IMP.bff.quenching.diffusion",
-        "simulate_dye_diffusion": "IMP.bff.quenching.diffusion",
         # IMP.bff.quenching.dynamic
         "DynamicAccessibleVolume": "IMP.bff.quenching.dynamic",
         # IMP.bff.quenching.fret_trace
@@ -251,20 +262,12 @@ BY_DOMAIN = {
         "normalize_amino_acid_quenching": "IMP.bff.quenching.pet",
         "quencher_atom_indices": "IMP.bff.quenching.pet",
         "quencher_centers": "IMP.bff.quenching.pet",
-        # IMP.bff.quenching.photon
-        "simulate_photon_trace": "IMP.bff.quenching.photon",
-        "simulate_quenched_decay": "IMP.bff.quenching.photon",
         # IMP.bff.quenching.sites
         "ResidueSites": "IMP.bff.quenching.sites",
         "residue_sites": "IMP.bff.quenching.sites",
         "slow_factors_for_residues": "IMP.bff.quenching.sites",
         "quenching_rates_for_residues": "IMP.bff.quenching.sites",
         "quench_radii_for_residues": "IMP.bff.quenching.sites",
-        # IMP.bff.quenching.solver
-        "GridDiffusionSolver": "IMP.bff.quenching.solver",
-        "GridDiffusionResult": "IMP.bff.quenching.solver",
-        "diffusion_stability_limit": "IMP.bff.quenching.solver",
-        "equilibrium_occupancy": "IMP.bff.quenching.solver",
     },
     # -- representation -- where the dye can be: accessible volumes, rotamers, distributions
     "representation": {

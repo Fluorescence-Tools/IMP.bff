@@ -16,7 +16,7 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.quenching import photon
+from IMP.bff.dynamics import excited_state as photon
 
 try:
     import numba

@@ -19,7 +19,8 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.quenching import asa, diffusion, fret_trace, grids, pet
+from IMP.bff.quenching import asa, fret_trace, grids, pet
+from IMP.bff.dynamics import brownian as diffusion
 
 
 def sphere_grid(ng=40, radius_voxels=15, slow_voxels=8):

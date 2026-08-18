@@ -30,9 +30,9 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.quenching import diffusion as dif
-from IMP.bff.quenching import photon as ph
-from IMP.bff.quenching.solver import GridDiffusionSolver, diffusion_stability_limit
+from IMP.bff.dynamics import brownian as dif
+from IMP.bff.dynamics import excited_state as ph
+from IMP.bff.dynamics.smoluchowski import GridDiffusionSolver, diffusion_stability_limit
 
 
 def _ball(ng, radius):
