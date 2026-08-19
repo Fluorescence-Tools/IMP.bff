@@ -64,7 +64,7 @@ def build_dye_topology(atoms, bonds, template):
         result["bonds"].append((a, b, _distance(atoms[a], atoms[b])))
 
     for a, b, c in build_angles(graph):
-        result["angles"].append((a, b, c, _angle_value(atoms[a], atoms[b], atoms[c])))
+        result["angles"].append((a, b, c, angle_value(atoms[a], atoms[b], atoms[c])))
 
     for a, b, c, d in build_dihedrals(graph):
         result["dihedrals"].append((a, b, c, d))
@@ -109,16 +109,12 @@ def _distance(a, b):
     ) ** 0.5
 
 
-def _angle_value(a, b, c):
-    ba = [a["x"] - b["x"], a["y"] - b["y"], a["z"] - b["z"]]
-    bc = [c["x"] - b["x"], c["y"] - b["y"], c["z"] - b["z"]]
-    dot = sum(x * y for x, y in zip(ba, bc))
-    mag_ba = sum(x**2 for x in ba) ** 0.5
-    mag_bc = sum(x**2 for x in bc) ** 0.5
-    if mag_ba == 0 or mag_bc == 0:
-        return 0.0
-    cos_theta = max(-1.0, min(1.0, dot / (mag_ba * mag_bc)))
-    return math.acos(cos_theta)
+# `_angle_value` was here: the same formula as `angle_value` below, differing
+# only in what it returns when an arm has zero length -- 0.0 against that one's
+# 1.910633 rad, the tetrahedral angle. Neither fires: 6,364 angles across the
+# shipped structures have no zero-length arm. The tetrahedral fallback is the
+# one kept, because a harmonic minimum at a collapsed angle is not a default
+# anyone wants if it ever does.
 
 
 # --------------------------------------------------------------------------
