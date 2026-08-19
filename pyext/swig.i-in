@@ -65,6 +65,10 @@ import numpy as np
 %include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
+/* Local sequence alignment: which template a fusion's domain matches. */
+%include "IMP/bff/SequenceAlignment.h"
+%template(AlignedBlocks) std::vector<IMP::bff::AlignedBlock>;
+
 /* Leader clustering: how a conformer stack becomes a rotamer library. */
 %include "IMP/bff/Clustering.h"
 

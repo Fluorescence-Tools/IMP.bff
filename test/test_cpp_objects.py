@@ -419,3 +419,80 @@ def test_leader_clustering_matches_the_python_it_replaced():
     expected = float(np.sqrt(np.mean(np.sum(
         (coords[0] - coords[1]) ** 2, axis=-1))))
     assert abs(IMP.bff.rmsd_no_align(a, b) - expected) < 1e-12
+
+
+def test_smith_waterman_matches_the_python_it_replaced():
+    """Local alignment with affine gaps, against a reference implementation.
+
+    The reference here is the Python that was replaced, kept verbatim, because
+    the thing that can go wrong is not the score but the *precedence* when two
+    paths tie -- stop, then diagonal, then a gap in the template, then a gap in
+    the query. A tie broken the other way gives the same score and different
+    blocks, and the blocks are what the caller uses.
+    """
+    import random
+
+    import numpy as np
+    import IMP.bff
+
+    def reference(query, templ, match=2.0, mismatch=-1.0,
+                  gap_open=-5.0, gap_extend=-1.0):
+        n, m = len(query), len(templ)
+        if n == 0 or m == 0:
+            return [], []
+        neg = float("-inf")
+        main = np.zeros((n + 1, m + 1))
+        gap_q = np.full((n + 1, m + 1), neg)
+        gap_t = np.full((n + 1, m + 1), neg)
+        trace = np.zeros((n + 1, m + 1), dtype=np.int8)
+        best, best_ij = 0.0, (0, 0)
+        for i in range(1, n + 1):
+            qi = query[i - 1]
+            for j in range(1, m + 1):
+                gap_q[i, j] = max(main[i - 1, j] + gap_open, gap_q[i - 1, j] + gap_extend)
+                gap_t[i, j] = max(main[i, j - 1] + gap_open, gap_t[i, j - 1] + gap_extend)
+                diag = main[i - 1, j - 1] + (match if qi == templ[j - 1] else mismatch)
+                cell = max(0.0, diag, gap_q[i, j], gap_t[i, j])
+                main[i, j] = cell
+                trace[i, j] = (0 if cell == 0.0 else 1 if cell == diag
+                               else 2 if cell == gap_q[i, j] else 3)
+                if cell > best:
+                    best, best_ij = cell, (i, j)
+        if best <= 0.0:
+            return [], []
+        i, j = best_ij
+        qb, tb = [], []
+        rq, rt = i, j
+        while i > 0 and j > 0 and trace[i, j] != 0:
+            step = trace[i, j]
+            if step == 1:
+                i, j = i - 1, j - 1
+                continue
+            if rq != i or rt != j:
+                qb.append((i, rq))
+                tb.append((j, rt))
+            if step == 2:
+                i -= 1
+            else:
+                j -= 1
+            rq, rt = i, j
+        if rq != i or rt != j:
+            qb.append((i, rq))
+            tb.append((j, rt))
+        return qb[::-1], tb[::-1]
+
+    random.seed(7)
+    aa = "ACDEFGHIKLMNPQRSTVWY"
+    for trial in range(120):
+        n, m = random.randint(1, 40), random.randint(1, 40)
+        q = "".join(random.choice(aa) for _ in range(n))
+        t = "".join(random.choice(aa) for _ in range(m))
+        if trial % 3 == 0 and n > 8:                 # force real homology
+            t = t[:5] + q[2:2 + n // 2] + t[5:]
+        want_q, want_t = reference(q, t)
+        blocks = IMP.bff.smith_waterman(q, t)
+        assert [(b.query_start, b.query_end) for b in blocks] == want_q, (q, t)
+        assert [(b.template_start, b.template_end) for b in blocks] == want_t, (q, t)
+
+    assert len(IMP.bff.smith_waterman("", "ABC")) == 0
+    assert IMP.bff.smith_waterman_score("ABCDEF", "ABCDEF") == 12.0
