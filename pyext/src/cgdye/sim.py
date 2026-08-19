@@ -9,8 +9,9 @@ import os
 import random
 
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.scoring import torsion_cosine, compute_exclusions
-from IMP.bff.cgdye.topology import build_graph, find_cycles
+from IMP.bff.scoring import torsion_cosine
+from IMP.bff.cgdye.topology import (
+    _read_mol2_atom_names, angle_value, build_graph, find_cycles)
 import IMP
 import IMP.bff
 import IMP.algebra
@@ -42,31 +43,6 @@ def _read_mol2_quiet(path, model):
         return IMP.atom.read_mol2(str(path), model)
     finally:
         IMP.set_log_level(old)
-
-
-def _read_mol2_atom_names(path: str) -> dict:
-    """Return {serial: atom_name} from @<TRIPOS>ATOM section.
-
-    IMP's read_mol2 maps TRIPOS types (C.3 → C3) losing the actual column-2
-    atom name (e.g. C12, N1).  Read them directly from the file by serial.
-    """
-    names = {}
-    in_atom = False
-    with open(path) as fh:
-        for line in fh:
-            if line.startswith("@<TRIPOS>ATOM"):
-                in_atom = True
-                continue
-            if line.startswith("@<TRIPOS>"):
-                in_atom = False
-                continue
-            if not in_atom:
-                continue
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-            names[int(parts[0])] = parts[1]
-    return names
 
 
 def _atom_name(p):
@@ -275,22 +251,17 @@ def _dist(p1, p2):
 
 
 def _angle(p1, p2, p3):
-    a = IMP.core.XYZ(p1).get_coordinates()
-    b = IMP.core.XYZ(p2).get_coordinates()
-    c = IMP.core.XYZ(p3).get_coordinates()
-    bax = a[0] - b[0]
-    bay = a[1] - b[1]
-    baz = a[2] - b[2]
-    bcx = c[0] - b[0]
-    bcy = c[1] - b[1]
-    bcz = c[2] - b[2]
-    nba = math.sqrt(bax * bax + bay * bay + baz * baz)
-    nbc = math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz)
-    if nba == 0 or nbc == 0:
-        return 1.910633
-    dot = bax * bcx + bay * bcy + baz * bcz
-    cosang = max(-1.0, min(1.0, dot / (nba * nbc)))
-    return math.acos(cosang)
+    """The angle at *p2*, through the topology module's arithmetic.
+
+    This was a second copy of `topology.angle_value` -- same formula, same
+    1.910633 rad fallback when an arm has zero length -- differing only in
+    taking IMP particles where that one takes coordinate dicts. Only the shape
+    adaptation is left.
+    """
+    def xyz(p):
+        c = IMP.core.XYZ(p).get_coordinates()
+        return {"x": c[0], "y": c[1], "z": c[2]}
+    return angle_value(xyz(p1), xyz(p2), xyz(p3))
 
 
 def _build_restraints(model, system, site_particles):
@@ -352,7 +323,7 @@ def _build_restraints(model, system, site_particles):
         # derivation that agreed only because `impropers` is always empty --
         # scoring counts improper pairs and this did not. One answer now, so
         # filling impropers changes one place instead of two.
-        excl = {tuple(sorted(p)) for p in compute_exclusions(system)}
+        excl = system.exclusions()
         for i in range(len(sids)):
             for j in range(i + 1, len(sids)):
                 a, b = sids[i], sids[j]
@@ -375,14 +346,15 @@ def _mobile_ring_site_ids(
 ):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    full_graph = _site_graph(system)
+    full_graph = system.get_bonded_neighbors()
     mobile_ids = {
         s.id
         for s in system.sites
         if s.component == mobile_component
     }
     mobile_graph = {
-        sid: {nb for nb in full_graph.get(sid, set()) if nb in mobile_ids}
+        sid: {nb for nb in (full_graph[sid] if sid in full_graph else ())
+              if nb in mobile_ids}
         for sid in mobile_ids
     }
 
@@ -403,38 +375,9 @@ def _mobile_ring_site_ids(
     return ring_ids
 
 
-def _topo_distance_leq(graph, src, dst, max_depth):
-    if src == dst:
-        return True
-    seen = {src}
-    frontier = {src}
-    depth = 0
-    while frontier and depth < max_depth:
-        depth += 1
-        nxt = set()
-        for node in frontier:
-            for nb in graph.get(node, set()):
-                if nb == dst:
-                    return True
-                if nb in seen:
-                    continue
-                seen.add(nb)
-                nxt.add(nb)
-        frontier = nxt
-    return False
-
-
-
-def _site_graph(system):
-    """The site adjacency of *system*, through the topology module's builder.
-
-    This module had its own copy. Both produced the same graph -- checked on the
-    shipped combined system -- so the copy is gone and only the shape adaptation
-    (a typed system's bonds into pairs) is left.
-    """
-    from IMP.bff.io.cif import as_forcefield_system
-    system = as_forcefield_system(system)
-    return build_graph((bd.site_a, bd.site_b) for bd in system.bonds)
+# `_topo_distance_leq` was here -- a breadth-first walk over the site graph,
+# bounded by depth. It is `DyeForceFieldSystem::is_within_bonds` now: the walk
+# reads only the bonds, so it belongs on the object that holds them.
 
 
 def _fixed_flex_ids(system, fixed_flex_mode, fixed_name):
@@ -468,7 +411,6 @@ def _build_go_restraints(
 ):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    graph = _site_graph(system)
     s2c = {s.id: s.component for s in system.sites}
 
     def is_heavy(sid):
@@ -481,7 +423,7 @@ def _build_go_restraints(
         for i, s1 in enumerate(ids):
             p1 = site_particles[s1]
             for s2 in ids[i + 1 :]:
-                if _topo_distance_leq(graph, s1, s2, 2):
+                if system.is_within_bonds(s1, s2, 2):
                     continue
                 p2 = site_particles[s2]
                 d0 = _dist(p1, p2)

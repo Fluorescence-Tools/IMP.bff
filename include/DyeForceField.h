@@ -243,6 +243,35 @@ public:
     //! Component names the sampler may move -- the dyes.
     std::vector<std::string> get_mobile_components() const;
 
+    // ----------------------------------------------------------------------
+    // The molecular graph
+    //
+    // Derived from the bonds this object already holds, so it belongs here
+    // rather than in three Python copies over the same data. `cgdye.sim`,
+    // `cgdye.topology` and `scoring` each had their own; they agreed on the
+    // shipped system and had drifted in shape (a set of tuples, a set of
+    // frozensets, a defaultdict of sets).
+    // ----------------------------------------------------------------------
+
+    //! Site ids adjacent to each site, keyed by site id.
+    std::map<std::string, std::vector<std::string> > get_bonded_neighbors() const;
+
+    //! The 1-2, 1-3 and 1-4 pairs, each as a sorted (a, b).
+    /** Bonds give 1-2, angle ends 1-3, dihedral ends 1-4. Impropers contribute
+        their a-c, a-d and b-d pairs when `include_impropers` is true, which is
+        the one place the Python copies disagreed -- and only in principle,
+        since no builder of a combined system fills `impropers`. See
+        okf/validation/impropers_are_dropped.md. */
+    std::vector<std::pair<std::string, std::string> > get_exclusions(
+            bool include_impropers = true) const;
+
+    //! Simple cycles of at most `max_len` sites, each as sorted site ids.
+    std::vector<std::vector<std::string> > find_rings(int max_len = 8) const;
+
+    //! Whether `a` reaches `b` in at most `max_depth` bonds.
+    bool is_within_bonds(const std::string& a, const std::string& b,
+                         int max_depth) const;
+
     IMP_SHOWABLE_INLINE(DyeForceFieldSystem,
                         out << "DyeForceFieldSystem(\"" << name_ << "\", "
                             << sites_.size() << " sites, " << bonds_.size()

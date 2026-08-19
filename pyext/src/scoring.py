@@ -223,39 +223,10 @@ def lj_score(r, rmin, epsilon):
 # Exclusion / topology helpers
 # ---------------------------------------------------------------------------
 
-def compute_exclusions(system):
-    """Compute 1-2, 1-3, and 1-4 excluded pairs from system topology.
-
-    Returns a set of frozenset({site_id_a, site_id_b}) pairs.
-    """
-    from IMP.bff.io.cif import as_forcefield_system
-    system = as_forcefield_system(system)
-    excluded = set()
-
-    bond_pairs = set()
-    for bd in system.bonds:
-        bond_pairs.add(frozenset({bd.site_a, bd.site_b}))
-    excluded.update(bond_pairs)
-
-    angle_ends = set()
-    for an in system.angles:
-        pair = frozenset({an.site_a, an.site_c})
-        if pair not in excluded:
-            angle_ends.add(pair)
-    excluded.update(angle_ends)
-
-    dihedral_ends = set()
-    for to in system.dihedrals:
-        pair = frozenset({to.site_a, to.site_d})
-        if pair not in excluded:
-            dihedral_ends.add(pair)
-    excluded.update(dihedral_ends)
-
-    for to in system.impropers:
-        for x, y in [(to.site_a, to.site_c), (to.site_a, to.site_d), (to.site_b, to.site_d)]:
-            excluded.add(frozenset({x, y}))
-
-    return excluded
+# `compute_exclusions` was here. It is `DyeForceFieldSystem::get_exclusions`
+# now -- a derivation over bonds, angles and torsions belongs on the object
+# that holds them, and the C++ reproduces this function's 600 pairs on the
+# shipped combined system exactly.
 
 
 def dye_internal_system(atoms_dict, bonds):
@@ -263,7 +234,7 @@ def dye_internal_system(atoms_dict, bonds):
 
     Sites are the MOL2 atoms in serial order (ids ``dye:<atom_name>``, the
     order ``LinkerSampler.get_coords`` uses); bonds, angles and dihedrals are
-    derived from the MOL2 connectivity so that :func:`compute_exclusions`
+    derived from the MOL2 connectivity so that the system's exclusions
     removes the 1-2, 1-3 and 1-4 pairs from the LJ pair list. Without them the
     linker sampler scored bonded neighbours with the repulsive LJ, which is
     unphysical and biases torsion/angle sampling. Site ids are
@@ -343,7 +314,7 @@ def compute_lj_pair_sites(system, excluded=None):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
     if excluded is None:
-        excluded = compute_exclusions(system)
+        excluded = {frozenset(p) for p in system.exclusions()}
     elem_map = site_element_map(system)
     sites = system.sites
     pairs = []
@@ -694,7 +665,7 @@ def build_dye_restraints(model, system, site_particles):
         fun = IMP.core.Harmonic(theta0, float(k))
         restraints.append(IMP.core.DihedralRestraint(model, fun, p1, p2, p3, p4))
 
-    excluded = compute_exclusions(system)
+    excluded = {frozenset(p) for p in system.exclusions()}
     for sa, sb, rmin, eps in compute_lj_pair_sites(system, excluded=excluded):
         if sa not in site_particles or sb not in site_particles:
             continue

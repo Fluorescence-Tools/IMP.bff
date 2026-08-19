@@ -18,14 +18,13 @@ from IMP.bff.cgdye.topology import (
     build_graph,
     find_cycles,
 )
-from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.cif import as_forcefield_system, read_dye_forcefield_cif, write_dye_forcefield_cif
 # CHARMM36_LJ, lj_cross and lj_params are scoring's, and were reached through
 # `cgdye.topology` only because it imports them for its own use. Importing them
 # from their owner is what lets that pass-through go.
 from IMP.bff.scoring import CHARMM36_LJ, lj_cross, lj_params
 from IMP.bff.scoring import (
     build_lj_type_table,
-    compute_exclusions,
     compute_lj_pair_sites,
     lj_cross_params,
     lj_score,
@@ -209,7 +208,7 @@ class TestExclusionList:
             "dihedrals": [],
             "impropers": [],
         }
-        excluded = compute_exclusions(system)
+        excluded = {frozenset(p) for p in as_forcefield_system(system).exclusions()}
         assert frozenset({"A/1", "A/2"}) in excluded
         assert frozenset({"A/2", "A/3"}) in excluded
 
@@ -220,7 +219,7 @@ class TestExclusionList:
             "dihedrals": [],
             "impropers": [],
         }
-        excluded = compute_exclusions(system)
+        excluded = {frozenset(p) for p in as_forcefield_system(system).exclusions()}
         assert frozenset({"A/1", "A/3"}) in excluded
 
     def test_dihedral_ends_excluded(self):
@@ -230,7 +229,7 @@ class TestExclusionList:
             "dihedrals": [("A/1", "A/2", "A/3", "A/4", "T_PI")],
             "impropers": [],
         }
-        excluded = compute_exclusions(system)
+        excluded = {frozenset(p) for p in as_forcefield_system(system).exclusions()}
         assert frozenset({"A/1", "A/4"}) in excluded
 
     def test_nonbonded_pair_not_excluded(self):
@@ -240,7 +239,7 @@ class TestExclusionList:
             "dihedrals": [],
             "impropers": [],
         }
-        excluded = compute_exclusions(system)
+        excluded = {frozenset(p) for p in as_forcefield_system(system).exclusions()}
         assert frozenset({"A/1", "A/3"}) not in excluded
 
 

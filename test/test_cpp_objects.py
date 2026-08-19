@@ -259,3 +259,64 @@ def test_an_av_carries_no_grid_when_it_was_built_from_points():
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+def test_the_molecular_graph_is_the_systems_own():
+    """`get_bonded_neighbors`, `get_exclusions`, `find_rings`, `is_within_bonds`.
+
+    All four read only the bonds, angles and torsions the system already holds,
+    so they are methods on it rather than Python functions taking it apart.
+    Before, three modules had their own copies -- `cgdye.sim`, `cgdye.topology`
+    and `scoring` -- which agreed on the shipped system and had drifted into
+    three container shapes for one answer (a set of tuples, a set of frozensets,
+    a defaultdict of sets).
+
+    The numbers here are the Python's, recorded when it was replaced.
+    """
+    import IMP.bff
+    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff.cgdye.topology import build_dye_protein_system, build_graph, find_cycles
+
+    system = build_dye_protein_system(
+        str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
+        "CX4", "atto655",
+        protein_template=str(get_template_dir("cx4.template.cif")),
+        dye_template=str(get_template_dir("atto655.template.cif")),
+    )
+
+    # the graph, against the builder that still serves raw bond lists
+    from_bonds = {k: set(v) for k, v in
+                  build_graph([(b.site_a, b.site_b) for b in system.bonds]).items()}
+    from_system = {k: set(v) for k, v in system.get_bonded_neighbors().items()}
+    assert from_system == from_bonds
+
+    # rings, against the Python cycle finder over that graph
+    assert ({tuple(sorted(c)) for c in system.find_rings(8)}
+            == {tuple(sorted(c)) for c in find_cycles(from_bonds, max_len=8)})
+    assert len(system.find_rings(8)) == 9
+
+    # exclusions: 1-2 from bonds, 1-3 from angle ends, 1-4 from dihedral ends
+    excl = system.exclusions()
+    assert len(excl) == 600
+    assert all(a <= b for a, b in excl), "each pair is sorted"
+    for bond in system.bonds:
+        assert tuple(sorted((bond.site_a, bond.site_b))) in excl
+    for angle in system.angles:
+        assert tuple(sorted((angle.site_a, angle.site_c))) in excl
+    for tor in system.dihedrals:
+        assert tuple(sorted((tor.site_a, tor.site_d))) in excl
+
+    # impropers are empty on every shipped system, so the flag is inert today
+    # -- which is the only reason the three Python copies ever agreed
+    assert not system.impropers
+    assert system.exclusions(False) == excl
+
+    # reachability, bounded by bond count
+    first = system.bonds[0]
+    assert system.is_within_bonds(first.site_a, first.site_b, 1)
+    assert system.is_within_bonds(first.site_a, first.site_a, 0)
+    # depth actually bounds: the far end of an angle is two bonds away, so it
+    # is reachable at 2 and not at 1
+    angle = next(a for a in system.angles if a.site_a != a.site_c)
+    assert system.is_within_bonds(angle.site_a, angle.site_c, 2)
+    assert not system.is_within_bonds(angle.site_a, angle.site_c, 1)
