@@ -69,6 +69,83 @@
 %enddef
 
 
+
+/*---------------------------------------------------------------------------*
+ * A contiguous ndarray into a `const std::vector<double>&` -- in one memcpy.
+ *
+ * SWIG's default conversion for a vector parameter walks the sequence and calls
+ * SWIG_AsVal_double on every item. Handed a numpy array that is the *slowest*
+ * of the three ways in, because each element access mints a fresh Python float:
+ *
+ *     ndarray -> const std::vector<double>&     32-37 ns/element
+ *     list    -> const std::vector<double>&      8-13 ns/element
+ *     ndarray -> (double*, int) via IN_ARRAY1        free
+ *
+ * Measured 2026-08-19 on this box, on `quenched_decay` and
+ * `lifetime_spectrum_decay` at 10k-400k elements. Every adapter in
+ * `pyext/src` hands these kernels `np.ascontiguousarray(x).ravel()`, so the
+ * package was paying the worst of the three everywhere. `diffusion_propagate`
+ * takes four ng^3 grids: at ng = 41 one call spent 9.5 ms crossing the boundary
+ * before doing any work -- the cost of 53 solver steps, and
+ * `equilibrium_occupancy` chunks that call up to 200 times.
+ *
+ * This typemap takes the fast path when the argument is a 1-D contiguous
+ * float64 array and falls back to SWIG's own converter otherwise, so lists,
+ * tuples and VectorDouble keep working exactly as before. It still *copies* --
+ * the kernels take a vector and some of them keep it -- but a memcpy is about
+ * 0.5 ns/element, so the conversion stops being visible.
+ *
+ * It is a copy on purpose. Aliasing numpy's buffer into a std::vector is not
+ * expressible, and a kernel that outlives the call would hold a dangling
+ * pointer. Kernels on the hot path should still take (double*, int) through
+ * IN_ARRAY1 and read the caller's memory directly; this typemap is what makes
+ * the rest of them cheap without touching their signatures.
+ *---------------------------------------------------------------------------*/
+%typemap(in, fragment="NumPy_Macros")
+        const std::vector<double>& (std::vector<double> imp_bff_tmp,
+                                    std::vector<double>* imp_bff_ptr = 0,
+                                    int imp_bff_res = 0) {
+    if (is_numpy_array($input) && array_type($input) == NPY_DOUBLE &&
+        array_numdims($input) == 1 && array_is_contiguous($input)) {
+        const double* imp_bff_data = (const double*) array_data($input);
+        imp_bff_tmp.assign(imp_bff_data,
+                           imp_bff_data + array_size($input, 0));
+        $1 = &imp_bff_tmp;
+    } else if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**) &imp_bff_ptr,
+                                         $descriptor(std::vector<double>*), 0))
+               && imp_bff_ptr) {
+        // An already-wrapped VectorDouble: pass it through untouched. Taking
+        // this case explicitly rather than through swig::asptr matters --
+        // overriding the typemap keeps std_vector.i's traits specialisation
+        // from ever being emitted, and the generic asptr only knows sequences.
+        $1 = imp_bff_ptr;
+    } else {
+        imp_bff_res = swig::asptr($input, &imp_bff_ptr);
+        if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
+            SWIG_exception_fail(
+                SWIG_ArgError(imp_bff_res),
+                "in method '$symname', argument $argnum of type '$1_type'");
+        }
+        imp_bff_tmp = *imp_bff_ptr;
+        if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
+        $1 = &imp_bff_tmp;
+    }
+}
+
+// The `in` typemap above declares its own temporaries; std_vector.i's default
+// `freearg` frees ones it no longer declares, so it has to go with it.
+%typemap(freearg) const std::vector<double>& {}
+
+%typemap(typecheck, precedence=SWIG_TYPECHECK_VECTOR, fragment="NumPy_Macros")
+        const std::vector<double>& {
+    void* imp_bff_vp = 0;
+    $1 = (is_numpy_array($input) && array_type($input) == NPY_DOUBLE &&
+          array_numdims($input) == 1) ? 1
+       : SWIG_IsOK(SWIG_ConvertPtr($input, &imp_bff_vp,
+                                   $descriptor(std::vector<double>*), 0)) ? 1
+       : (PySequence_Check($input) ? 1 : 0);
+}
+
 /*---------------------*/
 // Generic numpy arrays
 /*---------------------*/
@@ -138,6 +215,7 @@
 // silent leak of the whole array on every call. A name only the managed
 // typemap claims cannot be resolved the wrong way by reordering.
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)}
+%apply(int** ARGOUTVIEWM_ARRAY1, int* DIM1) {(int** out_view_i, int* n_out_view_i)}
 %apply(double** ARGOUTVIEWM_ARRAY2, int* DIM1, int* DIM2) {(double** output, int* n_output1, int* n_output2)}
 %apply (double** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(double** output, int* dim1, int* dim2, int* dim3)}
 %apply (float** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(float **output, int *nx, int *ny, int *nz)}
