@@ -370,3 +370,52 @@ def test_the_molecular_graph_matches_the_python_it_replaced():
     # nodes need not be integers: scoring builds graphs over site ids
     named = [("dye:C1", "dye:C2"), ("dye:C2", "dye:C3")]
     assert build_angles(build_graph(named)) == [("dye:C1", "dye:C2", "dye:C3")]
+
+
+def test_leader_clustering_matches_the_python_it_replaced():
+    """`cluster_frames_leader`, `assign_frames_to_clusters`, `rmsd_no_align`.
+
+    The sweep order is part of the answer -- frame 0 leads and each later frame
+    joins the *first* leader within the threshold -- so this is reproduced, not
+    improved on: it is how FRETpredict's shipped libraries were built, and a
+    k-medoids that found better centres would give a different library.
+
+    Six well-separated shapes with noise, so the thresholds actually cluster;
+    an earlier version of this check used random coordinates and every frame
+    became its own centre, which would have passed against almost any
+    implementation.
+    """
+    import numpy as np
+    import IMP.bff
+
+    rng = np.random.default_rng(3)
+    base = rng.normal(size=(6, 30, 3)) * 6.0
+    coords = np.concatenate(
+        [base[i % 6] + rng.normal(size=(30, 3)) * 0.15 for i in range(600)]
+    ).reshape(600, 30, 3)
+
+    def python_leader(c, threshold):
+        centers = [0]
+        for i in range(1, c.shape[0]):
+            if all(np.sqrt(np.mean(np.sum((c[i] - c[j]) ** 2, axis=-1))) >= threshold
+                   for j in centers):
+                centers.append(i)
+        return centers
+
+    for threshold in (0.5, 1.0, 2.0, 4.0, 8.0):
+        expected = python_leader(coords, threshold)
+        got = list(IMP.bff.cluster_frames_leader(coords, threshold))
+        assert got == expected, threshold
+        assert len(got) == 6
+
+    centers = np.asarray(python_leader(coords, 1.0), dtype=np.int32)
+    got = list(IMP.bff.assign_frames_to_clusters(coords, centers))
+    for i, assigned in enumerate(got):
+        d = [np.sqrt(np.mean(np.sum((coords[i] - coords[c]) ** 2, axis=-1)))
+             for c in centers]
+        assert assigned == int(np.argmin(d))
+
+    a, b = coords[0].ravel(), coords[1].ravel()
+    expected = float(np.sqrt(np.mean(np.sum(
+        (coords[0] - coords[1]) ** 2, axis=-1))))
+    assert abs(IMP.bff.rmsd_no_align(a, b) - expected) < 1e-12

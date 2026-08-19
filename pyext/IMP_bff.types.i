@@ -191,6 +191,12 @@
 %apply(double* IN_ARRAY1, int DIM1) {(double* mu2, int n_mu2)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* r, int n_r)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* kappa2, int n_kappa2)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* coords_a, int n_coords_a)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* coords_b, int n_coords_b)}
+%apply(int* IN_ARRAY1, int DIM1) {(int* cluster_centers, int n_cluster_centers)}
+// (n_frames, n_atoms, 3): the conformer stack a rotamer library is clustered
+// from. 3-D so the kernel knows the frame stride without being told twice.
+%apply(double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) {(double* cluster_coords, int n_frames, int n_atoms, int n_dim)}
 %apply(long long* IN_ARRAY1, int DIM1) {(long long *input, int n_input)}
 %apply(unsigned long long* IN_ARRAY1, int DIM1) {(unsigned long long *input, int n_input)}
 

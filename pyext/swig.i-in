@@ -65,6 +65,9 @@ import numpy as np
 %include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
+/* Leader clustering: how a conformer stack becomes a rotamer library. */
+%include "IMP/bff/Clustering.h"
+
 /* Bond connectivity, and the angles, torsions and rings that follow from it. */
 %include "IMP/bff/MolecularGraph.h"
 %template(VectorVectorInt) std::vector<std::vector<int> >;
