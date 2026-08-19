@@ -6,6 +6,7 @@
  */
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/AVDistance.h>
+#include <IMP/bff/internal/GridShape.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/exception.h>
 
@@ -14,22 +15,13 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-namespace {
-//! The cube root of a flat grid's length, or 0 when it is not a cube.
-int cube_side(std::size_t n) {
-    if (n == 0) return 0;
-    const int s = static_cast<int>(std::lround(std::cbrt(static_cast<double>(n))));
-    return (static_cast<std::size_t>(s) * s * s == n) ? s : 0;
-}
-}  // namespace
-
 BasicAV::BasicAV(const std::vector<double>& points,
                  const std::vector<double>& density,
                  const std::vector<double>& grid_origin,
                  double grid_step,
                  const std::string& position_name)
         : points_(points), density_(density), grid_origin_(grid_origin),
-          grid_step_(grid_step), ng_(cube_side(density.size())),
+          grid_step_(grid_step), ng_(internal::cube_side(density.size())),
           position_name_(position_name) {
     if (!points_.empty() && points_.size() % 4 != 0) {
         IMP_THROW("a point cloud is four values per point (x, y, z, weight); "

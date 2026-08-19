@@ -519,175 +519,25 @@ def _resolve_parallel(parallel_trajectories):
     return max(1, min(requested, MAX_PARALLEL_TRAJECTORIES))
 
 
-class DyeDiffusionSimulation:
-    """A dye's Brownian walk in its accessible volume, and the rate it sees.
-
-    :param density: binary AV occupancy, ``(ng, ng, ng)``.
-    :param dg: voxel edge in Angstrom.
-    :param x0: the grid anchor -- the attachment point.
-    :param slow_density: binary contact grid, used with a scalar *slow_fact*.
-    :param slow_factor_map: per-voxel stickiness, used instead of the pair
-        above when given.
-    :param quenching_rate_map: per-voxel quenching rate (1/ns), sampled along
-        the trajectory to give :attr:`k_quench`.
-    """
-
-    def __init__(
-        self,
-        density,
-        dg: float,
-        x0,
-        slow_density=None,
-        slow_factor_map=None,
-        quenching_rate_map=None,
-    ):
-        self.density = np.ascontiguousarray(density, dtype=np.uint8)
-        self.dg = float(dg)
-        self.x0 = np.asarray(x0, dtype=np.float64)
-        self.slow_density = (
-            None if slow_density is None
-            else np.ascontiguousarray(slow_density, dtype=np.uint8)
-        )
-        self.slow_factor_map = slow_factor_map
-        self.quenching_rate_map = quenching_rate_map
-
-        self.trajectory: Optional[np.ndarray] = None
-        self.t_step: Optional[float] = None
-        self.n_accepted = 0
-        self.n_rejected = 0
-
-    def run(
-        self,
-        D: float = 40.0,
-        slow_fact: float = 0.01,
-        t_step: float = 0.002,
-        t_max: float = 10000.0,
-        n_trajectories: int = -1,
-        random_seed=None,
-    ) -> Optional[np.ndarray]:
-        """Simulate the walk and return the trajectory in the structure's frame.
-
-        *n_trajectories* independent walks are run and **concatenated**, not
-        averaged: the photon Monte-Carlo downstream draws a random start frame
-        per photon, so a longer concatenated record is exactly what it wants,
-        and the walks parallelise because the kernel releases the GIL.
-
-        :returns: ``(n_frames, 3)`` positions in Angstrom, or ``None`` if no
-            walk found a starting point (an empty accessible volume).
-        """
-        self.t_step = float(t_step)
-        n_trajectories = _resolve_parallel(n_trajectories)
-        seeds = _trajectory_seeds(random_seed, n_trajectories)
-
-        slow = self.slow_factor_map if self.slow_factor_map is not None else slow_fact
-
-        def one(seed):
-            return simulate_dye_diffusion(
-                self.density,
-                self.slow_density,
-                self.dg,
-                t_max=t_max,
-                t_step=t_step,
-                D=D,
-                slow_fact=slow,
-                random_seed=seed,
-            )
-
-        if n_trajectories == 1:
-            results = [one(seeds[0])]
-        else:
-            with ThreadPoolExecutor(max_workers=n_trajectories) as pool:
-                results = list(pool.map(one, seeds))
-
-        successful = [r for r in results if r.n_accepted > 0]
-        if not successful:
-            self.trajectory = None
-            return None
-
-        parts = [r.xyz for r in successful]
-        trajectory = np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
-        self.trajectory = trajectory + self.x0
-        self.n_accepted = int(sum(r.n_accepted for r in successful))
-        self.n_rejected = int(sum(r.n_rejected for r in successful))
-        return self.trajectory
-
-    @property
-    def n_frames(self) -> int:
-        return 0 if self.trajectory is None else int(self.trajectory.shape[0])
-
-    @property
-    def mean_position(self) -> np.ndarray:
-        if self.trajectory is None:
-            raise ValueError("Run the simulation first.")
-        return self.trajectory.mean(axis=0)
-
-    def sample_grid(self, grid) -> np.ndarray:
-        """Read a per-voxel field along the trajectory.
-
-        The index map here **must** be the one the grids were stamped with, or
-        the walk reads rates from beside where the quenchers were placed. Two
-        details carry that, and both were bugs once:
-
-        * the centre offset is the integer ``(ng - 1) // 2``
-          (:func:`IMP.bff.grid_center_index`), not the float ``(ng - 1) / 2``,
-          which differ on every even edge length -- and even is the normal case;
-        * the conversion is ``floor``, not ``trunc``: ``trunc`` maps ``[-1, 0)``
-          to 0, so a position up to one voxel *below* the grid would be treated
-          as inside it and read voxel 0's rate.
-
-        The trace comes back as **float32**, and that is now a deliberate
-        choice rather than an inherited one. It was inherited: the cast was here
-        before anything depended on it. Two things now do.
-
-        It halves the memory the photon race walks, and that race is the
-        bottleneck once a trajectory is long -- it makes tens of millions of
-        random reads into this array, so 80 MB against 160 MB decides whether it
-        fits in cache. And :meth:`QuenchedDonorDecay.photons_fused` holds its
-        own trace as float32 to match, which is what lets the fused and
-        three-call paths be compared for *equality* rather than to a tolerance.
-
-        The precision costs nothing real: a PET rate constant is a transferable
-        starting value known to perhaps two significant figures, and float32
-        carries seven. If this is ever widened to float64, widen the fused
-        kernel with it or the equality test in
-        ``test/quenching/test_fused_decay.py`` will start failing for a reason
-        that has nothing to do with the physics.
-        """
-        if self.trajectory is None:
-            raise ValueError("Run the simulation first.")
-        values = np.asarray(grid, dtype=np.float32)
-        centre = np.array(
-            [grid_center_index(n) for n in values.shape], dtype=np.float64
-        )
-        indices = np.floor(
-            (self.trajectory - self.x0) / self.dg + centre
-        ).astype(np.int64)
-        inside = np.ones(indices.shape[0], dtype=bool)
-        for axis, size in enumerate(values.shape):
-            inside &= (indices[:, axis] >= 0) & (indices[:, axis] < size)
-        out = np.zeros(indices.shape[0], dtype=np.float32)
-        if np.any(inside):
-            out[inside] = values[tuple(indices[inside].T)]
-        return out
-
-    @property
-    def k_quench(self) -> np.ndarray:
-        """The quenching rate (1/ns) the dye experiences, frame by frame."""
-        if self.trajectory is None:
-            raise ValueError("Run the simulation first.")
-        if self.quenching_rate_map is None:
-            return np.zeros(self.n_frames, dtype=np.float32)
-        return self.sample_grid(self.quenching_rate_map)
-
-    @property
-    def quenched(self) -> np.ndarray:
-        """Which frames the dye spent in contact with a quencher."""
-        return self.k_quench > 0.0
-
-    @property
-    def collision_fraction(self) -> float:
-        quenched = self.quenched
-        return float(quenched.sum()) / quenched.shape[0] if quenched.size else 0.0
+# ``DyeDiffusionSimulation`` is **C++**.
+#
+# It held the occupancy grid, the mobility field, the rate map and the
+# trajectory as numpy arrays and drove the walk kernel from a
+# ``ThreadPoolExecutor``. The kernel was already across the boundary; the state
+# was not, and ``sample_grid`` -- tens of millions of indexed reads along the
+# trajectory -- was the single largest numpy cost left in the package.
+#
+# Gated bit-for-bit against the Python before it was deleted, for one walk and
+# for four concatenated: trajectory, accepted/rejected counts, ``mean_position``,
+# ``k_quench``, ``quenched`` and ``sample_grid`` all identical. That was only
+# possible because the C++ derives its per-walk seeds with the same
+# ``(base + i * 104729) % (2**31 - 1)`` the Python used; a different derivation
+# would have forced a distributional comparison instead.
+#
+# ``sample_grid`` over 400 000 frames: 14.1 ms -> 1.22 ms.
+#
+# See ``include/IMP/bff/DyeDiffusion.h`` and ``pyext/IMP_bff.dyediffusion.i``.
+from IMP.bff import DyeDiffusionSimulation  # noqa: F401
 
 
 class QuenchedDonorDecay:
@@ -913,8 +763,10 @@ class QuenchedDonorDecay:
         # the generated `__getitem__` will not take a positional index under it.
         summary = list(stats)
         if len(summary) == 5:
-            walk.n_accepted = int(summary[1])
-            walk.n_rejected = int(summary[2])
+            # The fused kernel never materialises a trajectory, but it does
+            # report the step counts, and the walk record is where callers look
+            # for them.
+            walk.set_step_counts(int(summary[1]), int(summary[2]))
             self._fused_stats = {
                 "n_frames": int(summary[0]),
                 "mean_k_quench": float(summary[3]),

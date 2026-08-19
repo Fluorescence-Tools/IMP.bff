@@ -27,31 +27,17 @@ __all__ = [
 ]
 
 
-def grid_center_index(ng: int) -> int:
-    """The voxel index that the grid anchor ``x0`` sits on.
-
-    **One convention, everywhere.** A cubic grid of edge *ng* anchored at ``x0``
-    places voxel ``i`` at ``x0 + (i - grid_center_index(ng)) * dg``, and that is
-    the *definition*, not one of two defensible readings.
-
-    It follows from how the grid is built. On the ``IMP.bff`` path
-    ``x0 = grid_origin + ((ng - 1) // 2) * dg``, so voxel ``i`` sits at
-    ``grid_origin + i * dg`` by construction, and the integer offset is the one
-    that inverts that. The float corner ``(ng - 1) / 2`` differs whenever *ng*
-    is **even** -- the normal case, not an edge case -- and integer voxel
-    indexing cannot express it.
-
-    QuEst had four call sites disagreeing about this until 2026-07-28: the grid
-    stamps used the integer offset and the trajectory kernels the float one, so
-    on an even *ng* the walk read the quenching map half a voxel from where the
-    quenchers had been placed.
-
-    Numba cannot call this from an ``njit`` kernel, so the kernels below spell
-    ``(ng - 1) // 2`` inline. If you add a call site, use this function; if you
-    cannot, quote this docstring.
-    """
-    return (int(ng) - 1) // 2
-
+# ``grid_center_index`` is **C++**, and has to be: it is the one convention
+# every grid in the package is stamped and read with, and a second definition
+# is exactly how the two sides drift. It moved with
+# ``DyeDiffusionSimulation``, which reads grids through it.
+#
+# A cubic grid of edge ``ng`` anchored at ``x0`` places voxel ``i`` at
+# ``x0 + (i - grid_center_index(ng)) * dg``. That is the *definition*, not one
+# of two defensible readings: the integer ``(ng - 1) // 2`` and the float
+# ``(ng - 1) / 2`` differ on every even edge length, and even is the normal
+# case.
+from IMP.bff import grid_center_index  # noqa: F401
 
 def _center_grid_indices(rs, r0, dg, ng, radius):
     """Voxel coordinates and integer radii of the sphere centres. **C++.**
