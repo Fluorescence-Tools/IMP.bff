@@ -74,6 +74,9 @@ import numpy as np
 /* The particle picture of a tethered dye. */
 %include "IMP_bff.dyediffusion.i"
 
+/* ...and the field picture. */
+%include "IMP_bff.griddiffusion.i"
+
 /*
  * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through
  * api.py, which also owns the domain map. Installed here because a SWIG

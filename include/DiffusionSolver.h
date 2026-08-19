@@ -16,6 +16,7 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <limits>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -63,6 +64,33 @@ enum FluxForm {
     \param[out] out_view,n_out_view the density after one step, as a numpy
                 view over the kernel's buffer
 */
+//! Largest stable time step for the explicit scheme, ns.
+/*!
+    The updated voxel keeps the coefficient \f$1 - 6D\,dt/dg^2 - k\,dt\f$, so
+    both terms constrain the step: \f$dt \le 1/(6D/dg^2 + k_{max})\f$. With
+    \f$k_{max} = 0\f$ this is the familiar \f$dt \le dg^2/(6D)\f$.
+
+    **Two thresholds, and they differ by a factor of two.** The most
+    oscillatory mode is amplified by \f$|1 - 6D\,dt/dg^2 - k\,dt|\f$, so the
+    scheme *diverges* only once that sum exceeds **2**. This returns the
+    stronger bound, where it reaches **1** and the coefficient first goes
+    negative: between the two the answer stays bounded but the density can go
+    negative, which for a probability density is not an acceptable answer
+    either.
+
+    **The rate term dominates, and it used to be left out.** On T4L site 19 at
+    2.5 A, diffusion contributed 0.16 to that coefficient and quenching 2.01 --
+    twelve times more -- and the sum of 2.17 is past the divergence threshold,
+    so the decay reached 7e36 while the check called the step safe. Worse, the
+    divergence need not look like one: site 124, at 2.10, returned a smooth,
+    finite, entirely plausible decay that was 2.6 % wrong at 25 ns.
+*/
+inline double diffusion_stability_limit(double d_max, double dg,
+                                        double k_max = 0.0) {
+    const double denom = 6.0 * d_max / (dg * dg) + k_max;
+    return denom > 0.0 ? 1.0 / denom : std::numeric_limits<double>::infinity();
+}
+
 IMPBFFEXPORT void diffusion_step(
         const std::vector<double>& cur,
         const std::vector<double>& d,
