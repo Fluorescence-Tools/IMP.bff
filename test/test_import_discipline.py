@@ -16,7 +16,7 @@ Three properties, and the first two are different:
 * **Standalone importable.** Even an acyclic graph breaks if a package
   ``__init__`` pulls in a module that imports back through the package. Only
   starting a fresh interpreter proves this, so that is what the test does.
-* **No reaching into another domain's privates.** ``from IMP.bff.quenching.pet
+* **No reaching into another domain's privates.** ``from IMP.bff.quenching
   import _foo`` couples two domains through something neither promised to keep.
 """
 
@@ -119,12 +119,20 @@ def _graph():
 #:
 #: * **something binds its submodules by path** -- of the 99 dotted
 #:   ``IMP.bff.*`` names referenced across chisurf, imp-tricks, quest and
-#:   ucfret, only 19 still resolve, and they are concentrated in ``quenching``
-#:   (five), ``restraints`` (two) and ``cgdye`` (most of it);
+#:   ucfret, only 19 still resolve, and they are concentrated in
+#:   ``restraints`` (two) and ``cgdye`` (most of it);
 #: * **size** -- ``representation`` is 4,900 lines and ``io`` is 3,800. One
 #:   module each would be larger than anything in IMP; ``pmi/macros.py``, the
 #:   biggest, is 2,803.
-FAMILIES = ("representation", "quenching", "restraints", "cgdye", "io")
+#:
+#: ``quenching`` left on 2026-08-19. It had six modules averaging 320 lines and
+#: exactly three internal edges, all from ``model``; the other five did not
+#: refer to each other at all, so the directory separated nothing. It failed
+#: the size test too, at 1,924 lines -- smaller than ``io/cif.py`` alone. The
+#: external references that had justified it were five dotted paths in chisurf
+#: and quest, and two of quest's three named files that had already stopped
+#: existing. Both repos now import ``IMP.bff.quenching`` itself.
+FAMILIES = ("representation", "restraints", "cgdye", "io")
 
 
 def test_the_domains_are_what_we_think_they_are():

@@ -21,7 +21,7 @@ from IMP.bff.label import reference_pet_parameters
 from IMP.bff.photophysics import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
-import IMP.bff.quenching.model as maps
+import IMP.bff.quenching as maps
 from IMP.bff.representation import States
 
 
@@ -125,7 +125,7 @@ class TestFRET:
         assert term.used_isotropic_kappa2
 
     def test_it_reproduces_the_trace_kernel(self):
-        from IMP.bff.quenching.fret_trace import fret_rate_trace
+        from IMP.bff.quenching import fret_rate_trace
         # `replace`, not `object.__setattr__`: Dye is frozen, and the library
         # is cached, so writing through the freeze edits the species for every
         # later reader. That is how this test used to leak a lifetime into

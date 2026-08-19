@@ -134,41 +134,41 @@ BY_DOMAIN = {
     },
     # -- quenching -- the PET model, assembled for one labelling site
     "quenching": {
-        # IMP.bff.quenching.asa
-        "solvent_accessible_surface": "IMP.bff.quenching.asa",
-        # IMP.bff.quenching.dynamic
-        "DynamicAccessibleVolume": "IMP.bff.quenching.dynamic",
-        # IMP.bff.quenching.fret_trace
-        "fret_rate_pair_trace": "IMP.bff.quenching.fret_trace",
-        "fret_rate_trace": "IMP.bff.quenching.fret_trace",
-        # IMP.bff.quenching.grids
-        "av_contact_mask": "IMP.bff.quenching.grids",
-        "grid_center_index": "IMP.bff.quenching.grids",
-        "quenching_rate_grid": "IMP.bff.quenching.grids",
-        "slow_factor_grid": "IMP.bff.quenching.grids",
-        # IMP.bff.quenching.model
-        "atomic_quenching_parameters": "IMP.bff.quenching.model",
-        "diffusion_coefficient_map": "IMP.bff.quenching.model",
-        "fret_rate_map": "IMP.bff.quenching.model",
-        "quenching_rate_map": "IMP.bff.quenching.model",
-        "radial_diffusion_map": "IMP.bff.quenching.model",
-        "slow_diffusion_near_atoms": "IMP.bff.quenching.model",
-        # IMP.bff.quenching.model
-        "DyeDiffusionSimulation": "IMP.bff.quenching.model",
-        "QuenchedDonorDecay": "IMP.bff.quenching.model",
-        # IMP.bff.quenching.pet
-        "PET_QUENCHING_REFERENCE": "IMP.bff.quenching.pet",
-        "QUENCHER_ATOMS": "IMP.bff.quenching.pet",
-        "amino_acid_quenching_defaults": "IMP.bff.quenching.pet",
-        "normalize_amino_acid_quenching": "IMP.bff.quenching.pet",
-        "quencher_atom_indices": "IMP.bff.quenching.pet",
-        "quencher_centers": "IMP.bff.quenching.pet",
-        # IMP.bff.quenching.model
-        "ResidueSites": "IMP.bff.quenching.model",
-        "quench_radii_for_residues": "IMP.bff.quenching.model",
-        "quenching_rates_for_residues": "IMP.bff.quenching.model",
-        "residue_sites": "IMP.bff.quenching.model",
-        "slow_factors_for_residues": "IMP.bff.quenching.model",
+        # IMP.bff.quenching
+        "solvent_accessible_surface": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "DynamicAccessibleVolume": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "fret_rate_pair_trace": "IMP.bff.quenching",
+        "fret_rate_trace": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "av_contact_mask": "IMP.bff.quenching",
+        "grid_center_index": "IMP.bff.quenching",
+        "quenching_rate_grid": "IMP.bff.quenching",
+        "slow_factor_grid": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "atomic_quenching_parameters": "IMP.bff.quenching",
+        "diffusion_coefficient_map": "IMP.bff.quenching",
+        "fret_rate_map": "IMP.bff.quenching",
+        "quenching_rate_map": "IMP.bff.quenching",
+        "radial_diffusion_map": "IMP.bff.quenching",
+        "slow_diffusion_near_atoms": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "DyeDiffusionSimulation": "IMP.bff.quenching",
+        "QuenchedDonorDecay": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "PET_QUENCHING_REFERENCE": "IMP.bff.quenching",
+        "QUENCHER_ATOMS": "IMP.bff.quenching",
+        "amino_acid_quenching_defaults": "IMP.bff.quenching",
+        "normalize_amino_acid_quenching": "IMP.bff.quenching",
+        "quencher_atom_indices": "IMP.bff.quenching",
+        "quencher_centers": "IMP.bff.quenching",
+        # IMP.bff.quenching
+        "ResidueSites": "IMP.bff.quenching",
+        "quench_radii_for_residues": "IMP.bff.quenching",
+        "quenching_rates_for_residues": "IMP.bff.quenching",
+        "residue_sites": "IMP.bff.quenching",
+        "slow_factors_for_residues": "IMP.bff.quenching",
     },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {

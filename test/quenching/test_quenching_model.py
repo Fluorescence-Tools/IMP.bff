@@ -9,15 +9,15 @@ import numpy as np
 import IMP
 import IMP.test
 
-import IMP.bff.quenching.model as sites
-from IMP.bff.quenching.grids import grid_center_index, quenching_rate_grid
-from IMP.bff.quenching.model import (
+import IMP.bff.quenching as sites
+from IMP.bff.quenching import grid_center_index, quenching_rate_grid
+from IMP.bff.quenching import (
     DyeDiffusionSimulation,
     QuenchedDonorDecay,
     _resolve_parallel,
     _trajectory_seeds,
 )
-from IMP.bff.quenching.pet import amino_acid_quenching_defaults
+from IMP.bff.quenching import amino_acid_quenching_defaults
 
 
 ATOM_DTYPE = [
@@ -123,7 +123,7 @@ class TrajectorySeedTests(IMP.test.TestCase):
         self.assertEqual(_trajectory_seeds(None, 1), [None])
 
     def test_the_trajectory_count_is_capped(self):
-        from IMP.bff.quenching.model import MAX_PARALLEL_TRAJECTORIES
+        from IMP.bff.quenching import MAX_PARALLEL_TRAJECTORIES
         self.assertEqual(_resolve_parallel(100), MAX_PARALLEL_TRAJECTORIES)
         self.assertEqual(_resolve_parallel(2), 2)
         self.assertGreaterEqual(_resolve_parallel(-1), 1)

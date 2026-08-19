@@ -29,7 +29,7 @@ import pytest
 
 import IMP.bff
 import IMP.bff.representation.av as _kernels
-import IMP.bff.quenching.model as qmaps
+import IMP.bff.quenching as qmaps
 
 
 def rss_mb():

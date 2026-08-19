@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.quenching.asa import _asa, sphere_points
-from IMP.bff.quenching.pet import quenching_rate_per_frame
+from IMP.bff.quenching import _asa, sphere_points
+from IMP.bff.quenching import quenching_rate_per_frame
 
 
 class TestSpherePoints:

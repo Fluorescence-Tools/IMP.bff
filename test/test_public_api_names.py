@@ -39,7 +39,7 @@ def test_export_resolves_and_is_documented(name):
 def test_every_export_lives_in_the_domain_it_is_filed_under(domain):
     """The check the naming regex could not make.
 
-    A name filed under ``fret`` whose module is ``IMP.bff.quenching.model`` is
+    A name filed under ``fret`` whose module is ``IMP.bff.quenching`` is
     a mistake, and it is exactly the kind of mistake that accumulates when the
     grouping is a comment.
     """

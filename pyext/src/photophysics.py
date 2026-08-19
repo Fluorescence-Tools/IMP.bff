@@ -821,7 +821,7 @@ class PETTerm(InteractionTerm):
 
     def rate_constants(self, states, atoms, **_) -> np.ndarray:
         """:param atoms: the structured atom array ``IMP.bff.quenching`` uses."""
-        import IMP.bff.quenching.model as maps
+        import IMP.bff.quenching as maps
 
         table = {
             comp_id: {
@@ -876,7 +876,7 @@ class FRETTerm(InteractionTerm):
 
     def rate_constants(self, donor_states, acceptor_states, r_min: float = 7.0,
                        **_) -> np.ndarray:
-        from IMP.bff.quenching.fret_trace import fret_rate_trace
+        from IMP.bff.quenching import fret_rate_trace
 
         tau0 = self.donor.lifetime
         if tau0 is None or tau0 <= 0.0:
@@ -909,7 +909,7 @@ def total_rate(terms: Sequence[InteractionTerm], *participants, **kwargs) -> np.
 
 
 def _quencher_atoms(comp_id: str):
-    from IMP.bff.quenching.pet import QUENCHER_ATOMS
+    from IMP.bff.quenching import QUENCHER_ATOMS
     return QUENCHER_ATOMS.get(comp_id, ())
 
 

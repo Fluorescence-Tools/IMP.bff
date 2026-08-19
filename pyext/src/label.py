@@ -915,7 +915,7 @@ def reference_quenchers() -> Dict[str, Quencher]:
     Identity only -- see :func:`reference_pet_parameters` for the rates, which
     depend on the dye.
     """
-    from IMP.bff.quenching.pet import PET_QUENCHING_REFERENCE, QUENCHER_ATOMS
+    from IMP.bff.quenching import PET_QUENCHING_REFERENCE, QUENCHER_ATOMS
 
     return {
         comp_id: Quencher(comp_id=comp_id,
@@ -931,7 +931,7 @@ def reference_pet_parameters(
 ) -> Dict[str, PETParameters]:
     """The published PET chemistry for one dye against each quencher type.
 
-    Reads ``IMP.bff.quenching.pet.PET_QUENCHING_REFERENCE`` rather than
+    Reads ``IMP.bff.quenching.PET_QUENCHING_REFERENCE`` rather than
     restating it. That table was measured for a xanthene dye
     (:data:`REFERENCE_DYE`); asking for any other dye returns the same numbers
     with ``measured_for`` set to the reference, so
@@ -945,7 +945,7 @@ def reference_pet_parameters(
     :param attenuation_length: ``rC`` for the exponential through-space form.
         ``None`` keeps the hard contact-sphere model.
     """
-    from IMP.bff.quenching.pet import PET_QUENCHING_REFERENCE
+    from IMP.bff.quenching import PET_QUENCHING_REFERENCE
 
     return {
         comp_id: PETParameters(

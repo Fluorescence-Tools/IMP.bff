@@ -23,8 +23,8 @@ import time
 import numpy as np
 import pytest
 
-from IMP.bff.quenching.model import QuenchedDonorDecay
-from IMP.bff.quenching.pet import amino_acid_quenching_defaults
+from IMP.bff.quenching import QuenchedDonorDecay
+from IMP.bff.quenching import amino_acid_quenching_defaults
 
 ATOM_DTYPE = [
     ("chain", "U4"), ("res_id", "i8"), ("res_name", "U4"),
