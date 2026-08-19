@@ -1,5 +1,36 @@
 # Update Log
 
+## 2026-08-19 (PRD-115 proposed: a differentiable lattice on a shared NN core)
+
+* **PRD-115 written** ([prds/prd-115.md](prds/prd-115.md)): make the field
+  solver differentiable — hand adjoint of `diffusion_propagate` (the sweep is
+  linear in `cur`, so the reverse pass is the transposed 7-point stencil;
+  Smoluchowski self-adjoint up to the `bounds` mask, Itô not; √n
+  checkpointing on the `n_out` states), per-voxel features over reachable
+  voxels only, and a learned `D(r)`/`k(r)` (later a drift potential) on the
+  vendored `MlpCore.h`. Built on PRD-111's finding that `slow_factor` and
+  `contact_distance` are one parameter — the data determine the *field* — and
+  that every gradient in the stack is a finite difference through a 1–10 s
+  solve. Not a PINN: nothing replaces the solver; no torch/jax.
+* **The NN side is done in tttrlib** (T-20260819-01, commits `933a4cc7a`,
+  `8ac9b0a52`, `cd0cdb000`): header-only, std-only `MlpCore.h` with
+  `backward(dL/dy)`, Taylor-augmented passes for losses on `dy/dx` and
+  `d²y/dx²`, smooth activations, flat parameters, whole-model `MlpModel` +
+  scalers + JSON templated on the JSON type. Vendored verbatim at
+  `include/internal/MlpCore.h`; `test/test_vendored_mlpcore.py` compares
+  sha256 with `../tttrlib` and compiles `test/cpp_snippets/mlpcore_eval.cpp`
+  against bff's own `internal/json.h` under `IMP::bff::internal`, loading a
+  model trained by the conda-packaged tttrlib 0.27.0 — predictions to 1e-12,
+  `dL/dparams` and `dL/dx` FD-checked. Perf was asserted properly (thread
+  CPU time, pre-refactor code from git, interleaved) after wall-clock had
+  misled twice: parity.
+* Found by the survey, fixed: `benchmark/quenching_identifiability.py`
+  imported `IMP.bff.quenching.solver`, which PRD-113 moved to
+  `IMP.bff.sampling.smoluchowski`; both quenching benchmarks were
+  un-runnable. Noted for PRD-115: `#pragma omp` is inert in bff builds; no
+  orientational degree of freedom exists anywhere in bff, so anisotropy is a
+  separate PRD, not something `MlpCore.h` covers.
+
 ## 2026-08-19 (overnight: seven kernels to C++, and the marshalling that was the real cost)
 
 Seven ports, each gated as equality against the Python it replaced. **The suite
