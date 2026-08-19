@@ -411,23 +411,6 @@ DEFAULT_ALLOWED_SPHERE_RADIUS = 2.1
 _IMP_BUILD_LOCK = threading.Lock()
 
 
-def _particle_index(particle):
-    """The index of *particle*, whichever spelling this IMP uses.
-
-    ``Particle.get_particle_index()`` exists in some IMP builds and
-    ``get_index()`` in others; calling the wrong one is an ``AttributeError``
-    at AV-construction time, which is the last place anyone looks.
-    """
-    for name in ("get_particle_index", "get_index"):
-        getter = getattr(particle, name, None)
-        if getter is not None:
-            return getter()
-    raise AttributeError(
-        f"{type(particle).__name__} exposes neither get_particle_index() nor "
-        "get_index(); cannot address it in the model."
-    )
-
-
 # ---------------------------------------------------------------------------
 # Result container
 # ---------------------------------------------------------------------------
