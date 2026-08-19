@@ -158,12 +158,20 @@ def _compute_long_axis(atoms, ref_axis=None):
     return axis
 
 
-def _write_axis_profile(
-    axis_values_by_region, region_order, out_csv, bin_width, region_colors
+def _write_binned_profile(
+    values_by_region, region_order, out_csv, bin_width, region_colors,
+    origin=None,
 ):
+    """A binned profile per region, as CSV.
+
+    One function for both profiles the analysis writes. They differed in one
+    line: the axis profile bins from ``min(all_values)``, the radial one from
+    zero, because a distance from an axis has an origin and a position along it
+    does not. That is *origin* -- ``None`` means "from the smallest value".
+    """
     all_values = []
     for region in region_order:
-        all_values.extend(axis_values_by_region.get(region, []))
+        all_values.extend(values_by_region.get(region, []))
 
     col_header = (
         ",".join(f"{r}_count" for r in region_order)
@@ -176,7 +184,7 @@ def _write_axis_profile(
             out.write(f"bin_start_A,bin_end_A,center_A,{col_header}\n")
         return
 
-    zmin = min(all_values)
+    zmin = min(all_values) if origin is None else float(origin)
     zmax = max(all_values)
     n_bins = max(1, int(math.ceil((zmax - zmin) / bin_width)))
     edges = [zmin + i * bin_width for i in range(n_bins + 1)]
@@ -184,7 +192,7 @@ def _write_axis_profile(
 
     counts = {r: [0] * n_bins for r in region_order}
     for region in region_order:
-        vals = axis_values_by_region.get(region, [])
+        vals = values_by_region.get(region, [])
         for z in vals:
             idx = int((z - zmin) // bin_width)
             idx = max(0, min(n_bins - 1, idx))
@@ -204,56 +212,11 @@ def _write_axis_profile(
                 f"{edges[i]:.4f},{edges[i + 1]:.4f},{centers[i]:.4f},{count_vals},{density_vals}\n"
             )
 
+
     # Rendering deliberately omitted: the CSV above carries every
     # number the plot showed, and IMP.bff carries no dependency
     # beyond what IMP itself brings. Plot it in the application.
 
-
-def _write_xy_profile(
-    xy_values_by_region, region_order, out_csv, bin_width, region_colors
-):
-    all_values = []
-    for region in region_order:
-        all_values.extend(xy_values_by_region.get(region, []))
-
-    col_header = (
-        ",".join(f"{r}_count" for r in region_order)
-        + ","
-        + ",".join(f"{r}_density" for r in region_order)
-    )
-
-    if not all_values:
-        with open(out_csv, "w") as out:
-            out.write(f"bin_start_A,bin_end_A,center_A,{col_header}\n")
-        return
-
-    rmin = 0.0
-    rmax = max(all_values)
-    n_bins = max(1, int(math.ceil((rmax - rmin) / bin_width)))
-    edges = [rmin + i * bin_width for i in range(n_bins + 1)]
-    centers = [0.5 * (edges[i] + edges[i + 1]) for i in range(n_bins)]
-
-    counts = {r: [0] * n_bins for r in region_order}
-    for region in region_order:
-        vals = xy_values_by_region.get(region, [])
-        for rv in vals:
-            idx = int((rv - rmin) // bin_width)
-            idx = max(0, min(n_bins - 1, idx))
-            counts[region][idx] += 1
-
-    density = {}
-    for region in region_order:
-        total = max(1, sum(counts[region]))
-        density[region] = [c / (total * bin_width) for c in counts[region]]
-
-    with open(out_csv, "w") as out:
-        out.write(f"bin_start_A,bin_end_A,center_A,{col_header}\n")
-        for i in range(n_bins):
-            count_vals = ",".join(str(counts[r][i]) for r in region_order)
-            density_vals = ",".join(f"{density[r][i]:.8f}" for r in region_order)
-            out.write(
-                f"{edges[i]:.4f},{edges[i + 1]:.4f},{centers[i]:.4f},{count_vals},{density_vals}\n"
-            )
 
     # Rendering deliberately omitted: the CSV above carries every
     # number the plot showed, and IMP.bff carries no dependency
@@ -637,14 +600,16 @@ def analyze_dye_density(
         print(f"  Wrote radial histogram: {hist_out}")
 
     axis_csv = mobile_out / "axis_z_profile_regions.csv"
-    _write_axis_profile(
+    _write_binned_profile(
         axis_distances, region_order, axis_csv, bin_width, region_colors
     )
     print(f"  Wrote axis profile CSV: {axis_csv}")
 
     xy_csv = mobile_out / "axis_xy_profile_regions.csv"
-    _write_xy_profile(
-        xy_distances, region_order, xy_csv, bin_width, region_colors
+    # origin=0.0: a distance from the axis is measured from the axis, so the
+    # first bin starts at zero rather than at the smallest distance observed.
+    _write_binned_profile(
+        xy_distances, region_order, xy_csv, bin_width, region_colors, origin=0.0
     )
     print(f"  Wrote xy profile CSV: {xy_csv}")
 

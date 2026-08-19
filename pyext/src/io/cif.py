@@ -1209,17 +1209,29 @@ def _as_bool(v, h):
     return s.upper() in {"1", "YES", "TRUE"}
 
 
-def read_component_template_cif(path):
-    """Read a component feature template (regions/features per component) from mmCIF.
+def read_component_template_cif(path, with_dye_metadata=False):
+    """Read a cgdye component template from mmCIF.
 
-    The generic cgdye template: named regions and per-atom features used by the
-    topology builder and the density analysis. Dye-specific templates with
-    dipole/charge metadata are read by :func:`read_dye_template_cif`.
+    Named regions and per-atom features, plus the impropers the template
+    declares. With *with_dye_metadata* -- which :func:`read_dye_template_cif`
+    asks for by name -- the ``_cgdye_metadata`` category is read too: the
+    centre atom, the two dipole atoms, and the charged-atom lists. It is off
+    by default so this function returns exactly the three keys it always did.
+
+    This was two functions. The dye one was the component one plus that
+    handler and its five keys, copied; 27 lines of 122 differed, and of those
+    27 all but three were the copy itself.
     """
+
     template = {
         "name": os.path.splitext(os.path.basename(path))[0],
         "features": {},
         "impropers": [],
+        "center_atom": None,
+        "dipole_atom_1": None,
+        "dipole_atom_2": None,
+        "positive_atoms": [],
+        "negative_atoms": [],
     }
 
     class TemplateH(_BaseHandler):
@@ -1227,6 +1239,26 @@ def read_component_template_cif(path):
             n = _as_str(name, self)
             if n:
                 template["name"] = n
+
+    _metadata_map = {
+        "center_atom": lambda v: v if v else None,
+        "dipole_atom_1": lambda v: v if v else None,
+        "dipole_atom_2": lambda v: v if v else None,
+        "positive_atoms": lambda v: [a.strip() for a in v.split(",")] if v else [],
+        "negative_atoms": lambda v: [a.strip() for a in v.split(",")] if v else [],
+    }
+
+    class MetadataH(_BaseHandler):
+        def __call__(self, key, value):
+            k = _as_str(key, self)
+            v = _as_str(value, self)
+            if not k or not v or k not in _metadata_map:
+                return
+            result = _metadata_map[k](v)
+            if k in ("positive_atoms", "negative_atoms"):
+                template[k].extend(result)
+            else:
+                template[k] = result
 
     class FeatureH(_BaseHandler):
         def __call__(self, feature_id, rb, md_fixed, feature_type, region_color):
@@ -1299,6 +1331,13 @@ def read_component_template_cif(path):
         "_cgdye_feature_atom": FeatureAtomH(),
         "_cgdye_improper": ImproperH(),
     }
+
+    if with_dye_metadata:
+        handlers["_cgdye_metadata"] = MetadataH()
+    else:
+        for key in ("center_atom", "dipole_atom_1", "dipole_atom_2",
+                    "positive_atoms", "negative_atoms"):
+            template.pop(key)
 
     with open(path) as fh:
         r = ihm.format.CifReader(fh, handlers)
@@ -1419,127 +1458,9 @@ def flex_features(template):
 
 
 def read_dye_template_cif(path):
-    """Read a dye template with additional metadata fields.
-
-    Returns dict with: name, features, impropers, center_atom, dipole_atom_1,
-                       dipole_atom_2, positive_atoms, negative_atoms
-    """
-
-    template = {
-        "name": os.path.splitext(os.path.basename(path))[0],
-        "features": {},
-        "impropers": [],
-        "center_atom": None,
-        "dipole_atom_1": None,
-        "dipole_atom_2": None,
-        "positive_atoms": [],
-        "negative_atoms": [],
-    }
-
-    class TemplateH(_BaseHandler):
-        def __call__(self, name):
-            n = _as_str(name, self)
-            if n:
-                template["name"] = n
-
-    _metadata_map = {
-        "center_atom": lambda v: v if v else None,
-        "dipole_atom_1": lambda v: v if v else None,
-        "dipole_atom_2": lambda v: v if v else None,
-        "positive_atoms": lambda v: [a.strip() for a in v.split(",")] if v else [],
-        "negative_atoms": lambda v: [a.strip() for a in v.split(",")] if v else [],
-    }
-
-    class MetadataH(_BaseHandler):
-        def __call__(self, key, value):
-            k = _as_str(key, self)
-            v = _as_str(value, self)
-            if not k or not v or k not in _metadata_map:
-                return
-            result = _metadata_map[k](v)
-            if k in ("positive_atoms", "negative_atoms"):
-                template[k].extend(result)
-            else:
-                template[k] = result
-
-    class FeatureH(_BaseHandler):
-        def __call__(self, feature_id, rb, md_fixed, feature_type, region_color):
-            fid = _as_str(feature_id, self)
-            if not fid:
-                return
-            template["features"].setdefault(
-                fid,
-                {
-                    "rb": False,
-                    "md_fixed": False,
-                    "feature_type": "dof",
-                    "region_color": None,
-                    "atoms": [],
-                },
-            )
-            rbv = _as_bool(rb, self)
-            mdv = _as_bool(md_fixed, self)
-            ftv = _as_str(feature_type, self)
-            rcv = _as_str(region_color, self)
-            if rbv is not None:
-                template["features"][fid]["rb"] = rbv
-            if mdv is not None:
-                template["features"][fid]["md_fixed"] = mdv
-            if ftv is not None:
-                template["features"][fid]["feature_type"] = ftv
-            if rcv is not None and rcv != ".":
-                template["features"][fid]["region_color"] = rcv
-
-    class FeatureAtomH(_BaseHandler):
-        def __call__(self, feature_id, atom_name, occurrence):
-            fid = _as_str(feature_id, self)
-            anm = _as_str(atom_name, self)
-            occ = _as_int(occurrence, self)
-            if not fid or not anm:
-                return
-            template["features"].setdefault(
-                fid,
-                {
-                    "rb": False,
-                    "md_fixed": False,
-                    "feature_type": "dof",
-                    "region_color": None,
-                    "atoms": [],
-                },
-            )
-            template["features"][fid]["atoms"].append(
-                {
-                    "name": anm,
-                    "occurrence": 1 if occ is None else occ,
-                }
-            )
-
-    class ImproperH(_BaseHandler):
-        def __call__(self, center_atom, type):
-            ca = _as_str(center_atom, self)
-            it = _as_str(type, self)
-            if not ca or not it:
-                return
-            template["impropers"].append(
-                {
-                    "center_atom": ca,
-                    "type": it,
-                }
-            )
-
-    handlers = {
-        "_cgdye_template": TemplateH(),
-        "_cgdye_metadata": MetadataH(),
-        "_cgdye_feature": FeatureH(),
-        "_cgdye_feature_atom": FeatureAtomH(),
-        "_cgdye_improper": ImproperH(),
-    }
-
-    with open(path) as fh:
-        r = ihm.format.CifReader(fh, handlers)
-        r.read_file()
-
-    return template
+    """A component template read with its dye metadata -- see
+    :func:`read_component_template_cif`, which this names."""
+    return read_component_template_cif(path, with_dye_metadata=True)
 
 
 def write_dye_template_cif(path, template):

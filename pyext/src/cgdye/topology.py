@@ -450,24 +450,9 @@ def _serial_to_site_atom_names(atoms):
     return out
 
 
-def _resolve_template_feature_ids(
-    template, feature_id, component, atoms, serial_to_site_name
-):
-    spec = template.get("features", {}).get(feature_id, {})
-    entries = spec.get("atoms", [])
-    by_name = defaultdict(list)
-    for serial, atom in sorted(atoms.items()):
-        by_name[atom.get("atom_name", "")].append(serial)
-
-    out = []
-    for e in entries:
-        name = e.get("name")
-        occurrence = int(e.get("occurrence", 1))
-        idx = occurrence - 1
-        serials = by_name.get(name, [])
-        if 0 <= idx < len(serials):
-            out.append(sid(component, serial_to_site_name[serials[idx]]))
-    return sorted(set(out))
+# `_resolve_template_feature_ids` was here, identical to `_resolve_feature_ids`
+# below but for a `defaultdict` where that one uses `setdefault`, and parameter
+# names. The two builders in this file had one each.
 
 
 def _build_ring_impropers_from_template(graph, serial_to_atom, center_serials):
@@ -841,7 +826,7 @@ def build_system_from_specs(
         if template:
             for fid, spec in template.get("features", {}).items():
                 if spec.get("feature_type") == "dof":
-                    ids = _resolve_template_feature_ids(
+                    ids = _resolve_feature_ids(
                         template, fid, comp_name, comp_atoms, all_site_names[comp_name]
                     )
                     if ids:
