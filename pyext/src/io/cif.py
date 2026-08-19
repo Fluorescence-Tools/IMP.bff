@@ -1439,19 +1439,6 @@ def region_features(template):
     return out
 
 
-def flex_features(template):
-    """Return list of feature IDs that are DOF features with no rb/md_fixed (i.e., flex)."""
-    out = []
-    for fid, spec in template.get("features", {}).items():
-        if (
-            spec.get("feature_type") == "dof"
-            and not spec.get("rb")
-            and not spec.get("md_fixed")
-        ):
-            out.append(fid)
-    return out
-
-
 # ============================================================================
 # Dye-specific template handlers (for IMP rotamer library system)
 # ============================================================================
@@ -1489,18 +1476,6 @@ def write_dye_template_cif(path, template):
 
     _write_cif_safe(path, template.get("name", "dye_template"), _write)
 
-
-def get_dye_metadata(template):
-    """Extract dye-specific metadata from template.
-
-    Returns dict with center_atom, dipole_atoms (tuple), positive_atoms, negative_atoms.
-    """
-    return {
-        "center_atom": template.get("center_atom"),
-        "dipole_atoms": (template.get("dipole_atom_1"), template.get("dipole_atom_2")),
-        "positive_atoms": template.get("positive_atoms", []),
-        "negative_atoms": template.get("negative_atoms", []),
-    }
 
 def as_forcefield_system(system):
     """A system, whichever way it was given.
