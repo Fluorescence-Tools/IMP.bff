@@ -11,8 +11,10 @@ IMP::bff::internal namespace and manage compiler warnings.
 Vendored copies live here too and are the exception to the rule above: they
 keep their upstream namespaces and include guards so they can be refreshed by
 a plain `cp`. `pcg_*.h` (PCG random numbers), `json.h` (nlohmann/json), and
-`MlpCore.h` — the differentiable MLP kernels shared with tttrlib
-(`../tttrlib/modules/math/include/MlpCore.h` is the source; never edit the copy;
-`test/test_vendored_mlpcore.py` fails when the two diverge). `MlpCore.h`
-honours `TTTRLIB_MLPCORE_NAMESPACE`, so a bff header may define it as
-`IMP::bff::internal` before including if the `tttrlib` namespace is unwanted.
+`MlpCore.h` — the differentiable MLP kernels — and `LatticeDiffusion.h` — the
+masked-lattice diffusion solver and its adjoint behind `DiffusionSolver.cpp` —
+shared with tttrlib (`../tttrlib/modules/math/include/` is the source; never
+edit the copies; `test/test_vendored_headers.py` fails when they diverge).
+Both honour a namespace macro (`TTTRLIB_MLPCORE_NAMESPACE`,
+`TTTRLIB_LATTICE_NAMESPACE`), so a bff source may define it as
+`IMP::bff::internal` before including, as `DiffusionSolver.cpp` does.

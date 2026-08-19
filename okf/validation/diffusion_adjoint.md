@@ -1,7 +1,9 @@
 # The adjoint of the lattice field solver: exact to roundoff, 4.4× a forward
 
-Recorded 2026-08-19 (PRD-115 stage 0, T-20260819-02). Kernel in
-`src/DiffusionSolver.cpp` (`diffusion_propagate_adjoint`, `adjoint_sweep`),
+Recorded 2026-08-19 (PRD-115 stage 0, T-20260819-02). Kernel in tttrlib's
+`modules/math/include/LatticeDiffusion.h` (`lattice_propagate_adjoint`,
+`lattice_adjoint_sweep`), vendored at `include/internal/LatticeDiffusion.h` and
+wrapped by `src/DiffusionSolver.cpp` (`diffusion_propagate_adjoint`),
 Python `GridDiffusionSolver.gradient` in `pyext/src/sampling/smoluchowski.py`;
 pinned by `test/quenching/test_diffusion_adjoint.py`.
 

@@ -3,7 +3,9 @@
  *  \brief Explicit propagation of an excited-state density on an AV grid.
  *
  * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
+ * not a runtime dependency, so every numerical kernel is C++. The kernel and
+ * its adjoint are tttrlib's LatticeDiffusion.h, vendored verbatim at
+ * internal/LatticeDiffusion.h; this header is the IMP-facing shell.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.

@@ -1,20 +1,27 @@
-"""``include/internal/MlpCore.h`` is a verbatim copy of tttrlib's, and stays one.
+"""The headers vendored from tttrlib are verbatim copies, and stay so.
 
-The differentiable MLP kernels (forward, backward, the Taylor-augmented passes
-that give ``dy/dx`` and ``d2y/dx2`` and their adjoint) are written once, in
-tttrlib ``modules/math/include/MlpCore.h`` — header-only and std-only for
-exactly this reason. IMP.bff cannot link tttrlib (it is a soft, Python-level
-dependency; see ``test_tttrlib_is_optional.py``), so it carries a copy the way
-it carries pcg and nlohmann/json, and a network trained in tttrlib evaluates
-and differentiates here bit for bit.
+Two kernels are written once, in tttrlib, header-only and std-only for
+exactly this reason, and carried here the way pcg and nlohmann/json are:
+
+* ``include/internal/MlpCore.h`` — the differentiable MLP (forward, backward,
+  the Taylor-augmented passes for ``dy/dx`` and ``d²y/dx²`` and their adjoint,
+  the whole-model struct with scalers and the JSON format);
+* ``include/internal/LatticeDiffusion.h`` — the masked-lattice diffusion
+  solver behind ``GridDiffusionSolver`` and its adjoint.
+
+IMP.bff cannot link tttrlib (it is a soft, Python-level dependency; see
+``test_tttrlib_is_optional.py``), so it carries copies, and a network trained
+in tttrlib evaluates and differentiates here bit for bit; a gradient of the
+field solver computed here is the one tttrlib's test validated.
 
 A copy diverges silently — someone fixes a derivative on one side, the other
 keeps training to the wrong minimum. Hence a test, not a convention: when the
-sibling checkout is present the two files must be identical. To refresh::
+sibling checkout is present each pair must be identical. To refresh::
 
     cp ../tttrlib/modules/math/include/MlpCore.h include/internal/MlpCore.h
+    cp ../tttrlib/modules/math/include/LatticeDiffusion.h include/internal/LatticeDiffusion.h
 
-The direction is one-way; tttrlib is the source. Never edit the copy.
+The direction is one-way; tttrlib is the source. Never edit the copies.
 """
 
 import hashlib
@@ -31,35 +38,39 @@ def _sha(path):
 
 
 class Tests(IMP.test.TestCase):
-    def _paths(self):
+    VENDORED = ("MlpCore.h", "LatticeDiffusion.h")
+
+    def _paths(self, name="MlpCore.h"):
         here = os.path.dirname(os.path.abspath(__file__))
         repo = os.path.dirname(here)
-        ours = os.path.join(repo, "include", "internal", "MlpCore.h")
+        ours = os.path.join(repo, "include", "internal", name)
         theirs = os.path.join(os.path.dirname(repo), "tttrlib", "modules", "math",
-                              "include", "MlpCore.h")
+                              "include", name)
         return ours, theirs
 
-    def test_copy_exists_and_is_std_only(self):
-        ours, _ = self._paths()
-        self.assertTrue(os.path.exists(ours), ours)
-        with open(ours) as fh:
-            text = fh.read()
-        # The contract that makes the copy possible: nothing but the standard
-        # library, and no dependency on the rest of either repository.
-        for forbidden in ("Mat.h", "nlohmann", "Registry.h", "SimPcgRandom", "Eigen", "IMP/"):
-            self.assertNotIn('#include "' + forbidden, text)
-            self.assertNotIn("#include <" + forbidden, text)
-        self.assertIn("TTTRLIB_MLPCORE_H", text)
+    def test_copies_exist_and_are_std_only(self):
+        for name in self.VENDORED:
+            ours, _ = self._paths(name)
+            self.assertTrue(os.path.exists(ours), ours)
+            with open(ours) as fh:
+                text = fh.read()
+            # The contract that makes the copy possible: nothing but the standard
+            # library, and no dependency on the rest of either repository.
+            for forbidden in ("Mat.h", "nlohmann", "Registry.h", "SimPcgRandom", "Eigen", "IMP/"):
+                self.assertNotIn('#include "' + forbidden, text, name)
+                self.assertNotIn("#include <" + forbidden, text, name)
+            self.assertIn("TTTRLIB_" + name[:-2].upper() + "_H", text)
 
-    def test_copy_matches_tttrlib_when_the_checkout_is_present(self):
-        ours, theirs = self._paths()
-        if not os.path.exists(theirs):
-            self.skipTest("../tttrlib checkout not present; cannot compare")
-        self.assertEqual(
-            _sha(ours), _sha(theirs),
-            "include/internal/MlpCore.h differs from ../tttrlib/modules/math/include/MlpCore.h; "
-            "tttrlib is the source -- refresh with "
-            "`cp ../tttrlib/modules/math/include/MlpCore.h include/internal/MlpCore.h`")
+    def test_copies_match_tttrlib_when_the_checkout_is_present(self):
+        for name in self.VENDORED:
+            ours, theirs = self._paths(name)
+            if not os.path.exists(theirs):
+                self.skipTest("../tttrlib checkout not present; cannot compare")
+            self.assertEqual(
+                _sha(ours), _sha(theirs),
+                f"include/internal/{name} differs from ../tttrlib/modules/math/include/{name}; "
+                "tttrlib is the source -- refresh with "
+                f"`cp ../tttrlib/modules/math/include/{name} include/internal/{name}`")
 
     def test_bff_evaluates_and_differentiates_a_tttrlib_trained_model(self):
         """A network trained by tttrlib runs, and differentiates, here.
