@@ -8,7 +8,6 @@ import re
 
 from IMP.bff.io.cif import read_component_template_cif, write_dye_forcefield_cif
 from IMP.bff.scoring import CHARMM36_LJ, build_lj_type_table
-from IMP.bff.tools import import_click
 import IMP
 import IMP.algebra
 import IMP.atom
@@ -188,7 +187,6 @@ Usage:
 
 
 
-click = import_click()  # optional: only the CLI entry point needs it
 
 
 def _atom_name_from_type(atom_type_string):
@@ -575,49 +573,10 @@ def _parse_component_spec(spec_str):
     return parts
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option(
-    "--component",
-    "components",
-    multiple=True,
-    required=True,
-    help="Component spec: name=X,mol2=Y,template=Z,role=fixed|mobile (repeatable)",
-)
-@click.option("--output-cif", type=click.Path(path_type=str), required=True)
-@click.option("--bond-k", type=float, default=2000.0, show_default=True)
-@click.option("--angle-k", type=float, default=400.0, show_default=True)
-@click.option("--pi-dihedral-k", type=float, default=12.0, show_default=True)
-@click.option("--linker-dihedral-k", type=float, default=1.5, show_default=True)
-@click.option("--ring-improper-k", type=float, default=40.0, show_default=True)
-@click.option("--pi-improper-k", type=float, default=180.0, show_default=True)
-@click.option("--flat-improper-k", type=float, default=120.0, show_default=True)
-@click.option("--orient-improper-k", type=float, default=220.0, show_default=True)
-@click.option("--n-steps", type=int, default=500000, show_default=True)
-@click.option("--write-every", type=int, default=1000, show_default=True)
-@click.option(
-    "--default-radius",
-    type=float,
-    default=1.7,
-    show_default=True,
-    help="Default site radius in Angstrom.",
-)
-@click.option(
-    "--default-mass",
-    type=float,
-    default=12.0,
-    show_default=True,
-    help="Default site mass in Da.",
-)
-@click.option("--nonbonded-k", type=float, default=5.0, show_default=True)
-@click.option(
-    "--nonbonded-cutoff",
-    type=float,
-    default=6.0,
-    show_default=True,
-    help="Nonbonded cutoff in Angstrom.",
-)
-@click.option("--minimize-steps", type=int, default=200, show_default=True)
-def main(
+# The click decorators for this moved to `bin/imp_bff` as
+# `build-system`; what is left is the function they called, which is
+# library code and now importable without click.
+def build_system_from_specs(
     components,
     output_cif,
     bond_k,
@@ -640,7 +599,7 @@ def main(
     for spec in components:
         parts = _parse_component_spec(spec)
         if "name" not in parts or "mol2" not in parts or "role" not in parts:
-            raise click.ClickException(
+            raise ValueError(
                 "Component spec must include name, mol2, template, role"
             )
         parsed_components.append(
@@ -656,7 +615,7 @@ def main(
     mobile_comps = [c for c in parsed_components if c["role"] == "mobile"]
 
     if len(fixed_comps) != 1:
-        raise click.ClickException("Exactly one fixed component required")
+        raise ValueError("Exactly one fixed component required")
 
     fixed_name = fixed_comps[0]["name"]
     fixed_mol2 = fixed_comps[0]["mol2"]
@@ -997,8 +956,6 @@ def main(
     )
 
 
-if __name__ == "__main__":
-    main()
 
 
 # --------------------------------------------------------------------------

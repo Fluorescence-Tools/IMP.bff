@@ -46,6 +46,7 @@ from IMP.bff.cgdye.sampling import (
 )
 from IMP.bff.tools import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff.dye import forster_radius_from_spectra
+from IMP.bff.analysis import DEFAULT_TRAJ_ROOT, DEFAULT_OUTPUT_DIR
 
 
 @click.command(
@@ -1134,6 +1135,248 @@ def av_vs_rotamer(system, okf_dir, pins, n_samples, temperature, cutoffs):
         click.echo(f"wrote {pin_path}")
 
 
+
+
+# --------------------------------------------------------------------------
+# analyze-trajectories -- was a `main` inside `IMP.bff.analysis`
+# --------------------------------------------------------------------------
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--traj-root",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_TRAJ_ROOT,
+    show_default=True,
+)
+@click.option(
+    "--runs-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory containing run*/ subdirs for combined analysis.",
+)
+@click.option(
+    "--combine-runs",
+    is_flag=True,
+    default=False,
+    help="Combine all run*/ trajectories under --runs-root into one analysis.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_OUTPUT_DIR,
+    show_default=True,
+)
+@click.option(
+    "--mobile",
+    "mobiles",
+    type=str,
+    multiple=True,
+    required=True,
+    help="Mobile component name(s) to analyze (e.g. atto655). Repeatable.",
+)
+@click.option(
+    "--mobile-template-cif",
+    "mobile_template_cifs",
+    type=click.Path(path_type=Path),
+    multiple=True,
+    default=None,
+    help=(
+        "Path to template CIF for the mobile component. "
+        "One per --mobile, or a single path used for all. "
+        "If omitted, looks for cgdye/templates/{mobile}.template.cif."
+    ),
+)
+@click.option(
+    "--fixed-name",
+    type=str,
+    default=None,
+    help="Fixed component name in the RMF hierarchy. Inferred if not provided.",
+)
+@click.option(
+    "--system-name",
+    type=str,
+    default=None,
+    help=(
+        "Run output directory name (e.g. 'CX4_atto655_imp'). "
+        "This is the subdirectory under --traj-root that the runner wrote. "
+        "Defaults to '{fixed-name}_{mobile}_imp' when --fixed-name is set, "
+        "otherwise auto-detected."
+    ),
+)
+@click.option(
+    "--axis-element",
+    type=str,
+    default=None,
+    help="One-letter element symbol to orient the fixed-component axis (e.g. S).",
+)
+@click.option("--resolution", type=float, default=4.0, show_default=True)
+@click.option("--voxel-size", type=float, default=1.0, show_default=True)
+@click.option("--bin-width", type=float, default=0.5, show_default=True)
+@click.option(
+    "--max-frames",
+    type=int,
+    default=0,
+    show_default=True,
+    help="0 means all frames.",
+)
+def analyze_trajectories(traj_root, runs_root, combine_runs, output_dir, mobiles, mobile_template_cifs, fixed_name, system_name, axis_element, resolution, voxel_size, bin_width, max_frames):
+    """Dye density and distance statistics over simulation trajectories."""
+    import click as _click
+    from IMP.bff.analysis import analyze_dye_trajectories
+    try:
+        return analyze_dye_trajectories(traj_root=traj_root, runs_root=runs_root, combine_runs=combine_runs, output_dir=output_dir, mobiles=mobiles, mobile_template_cifs=mobile_template_cifs, fixed_name=fixed_name, system_name=system_name, axis_element=axis_element, resolution=resolution, voxel_size=voxel_size, bin_width=bin_width, max_frames=max_frames)
+    except ValueError as exc:                    # library-level, rendered as a CLI error
+        raise _click.ClickException(str(exc)) from exc
+
+
+# --------------------------------------------------------------------------
+# simulate -- was a `main` inside `IMP.bff.cgdye.sim`
+# --------------------------------------------------------------------------
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--system-cif", type=click.Path(path_type=str), default=None)
+@click.option("--systems-dir", type=click.Path(path_type=str), default=None)
+@click.option(
+    "--output-root",
+    type=click.Path(path_type=str),
+    default=None,
+    show_default=True,
+    help="Root directory for trajectory output. Defaults to 'output/trajs' relative to the current working directory.",
+)
+@click.option(
+    "--md-steps",
+    type=int,
+    default=20000,
+    show_default=True,
+    help="Total MD steps after MC pre-stage.",
+)
+@click.option("--write-every", type=int, default=500, show_default=True)
+@click.option(
+    "--sampling-mode",
+    type=click.Choice(["simple_md", "hybrid_md_mc", "multi_restart"]),
+    default="hybrid_md_mc",
+    show_default=True,
+)
+@click.option("--mc-steps", type=int, default=8, show_default=True)
+@click.option("--mc-temperature", type=float, default=2.0, show_default=True)
+@click.option("--rb-max-translation", type=float, default=0.35, show_default=True)
+@click.option("--rb-max-rotation-deg", type=float, default=4.0, show_default=True)
+@click.option(
+    "--friction-ps",
+    type=float,
+    default=None,
+    show_default=True,
+    help="Langevin friction coefficient in ps^-1. Overrides system CIF value.",
+)
+@click.option(
+    "--temperature-k",
+    type=float,
+    default=None,
+    show_default=True,
+    help="MD temperature in K. Overrides system CIF value.",
+)
+@click.option("--mobile-group", type=str, default=None, show_default=True)
+@click.option(
+    "--fixed-flex-mode",
+    type=click.Choice(["static", "flex"]),
+    default="static",
+    show_default=True,
+    help="'static': fixed component fully rigid. 'flex': atoms in the {name}_flex group are released.",
+)
+@click.option(
+    "--freeze-mobile-rings/--no-freeze-mobile-rings",
+    default=True,
+    show_default=True,
+    help="Fallback only: use ring detection as MD-fixed set when mmCIF has no _ff_dof_md_fixed_member.",
+)
+@click.option("--init-placement/--no-init-placement", default=True, show_default=True)
+@click.option("--init-distance-a", type=float, default=62.5, show_default=True)
+@click.option("--init-trials", type=int, default=200, show_default=True)
+@click.option("--init-seed", type=int, default=42, show_default=True)
+@click.option(
+    "--com-pull-k", type=float, default=0.0, help="Weak harmonic force pulling guest COM to host COM."
+)
+@click.option("--go-mobile-k", type=float, default=3.0, show_default=True)
+@click.option("--go-fixed-k", type=float, default=2.0, show_default=True)
+@click.option("--go-cutoff", type=float, default=6.0, show_default=True)
+@click.option(
+    "--log-every-frames",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Progress print frequency in written frames.",
+)
+@click.option("--n-restarts", type=int, default=1, show_default=True, help="Number of independent restarts (for multi_restart mode).")
+def simulate(system_cif, systems_dir, output_root, md_steps, write_every, sampling_mode, mc_steps, mc_temperature, rb_max_translation, rb_max_rotation_deg, friction_ps, temperature_k, mobile_group, fixed_flex_mode, freeze_mobile_rings, init_placement, init_distance_a, init_trials, init_seed, com_pull_k, go_mobile_k, go_fixed_k, go_cutoff, log_every_frames, n_restarts):
+    """Propagate an explicit dye on a force-field system (MD, MC, or both)."""
+    import click as _click
+    from IMP.bff.cgdye.sim import run_dye_simulation
+    try:
+        return run_dye_simulation(system_cif=system_cif, systems_dir=systems_dir, output_root=output_root, md_steps=md_steps, write_every=write_every, sampling_mode=sampling_mode, mc_steps=mc_steps, mc_temperature=mc_temperature, rb_max_translation=rb_max_translation, rb_max_rotation_deg=rb_max_rotation_deg, friction_ps=friction_ps, temperature_k=temperature_k, mobile_group=mobile_group, fixed_flex_mode=fixed_flex_mode, freeze_mobile_rings=freeze_mobile_rings, init_placement=init_placement, init_distance_a=init_distance_a, init_trials=init_trials, init_seed=init_seed, com_pull_k=com_pull_k, go_mobile_k=go_mobile_k, go_fixed_k=go_fixed_k, go_cutoff=go_cutoff, log_every_frames=log_every_frames, n_restarts=n_restarts)
+    except ValueError as exc:                    # library-level, rendered as a CLI error
+        raise _click.ClickException(str(exc)) from exc
+
+
+# --------------------------------------------------------------------------
+# build-system -- was a `main` inside `IMP.bff.cgdye.topology`
+# --------------------------------------------------------------------------
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--component",
+    "components",
+    multiple=True,
+    required=True,
+    help="Component spec: name=X,mol2=Y,template=Z,role=fixed|mobile (repeatable)",
+)
+@click.option("--output-cif", type=click.Path(path_type=str), required=True)
+@click.option("--bond-k", type=float, default=2000.0, show_default=True)
+@click.option("--angle-k", type=float, default=400.0, show_default=True)
+@click.option("--pi-dihedral-k", type=float, default=12.0, show_default=True)
+@click.option("--linker-dihedral-k", type=float, default=1.5, show_default=True)
+@click.option("--ring-improper-k", type=float, default=40.0, show_default=True)
+@click.option("--pi-improper-k", type=float, default=180.0, show_default=True)
+@click.option("--flat-improper-k", type=float, default=120.0, show_default=True)
+@click.option("--orient-improper-k", type=float, default=220.0, show_default=True)
+@click.option("--n-steps", type=int, default=500000, show_default=True)
+@click.option("--write-every", type=int, default=1000, show_default=True)
+@click.option(
+    "--default-radius",
+    type=float,
+    default=1.7,
+    show_default=True,
+    help="Default site radius in Angstrom.",
+)
+@click.option(
+    "--default-mass",
+    type=float,
+    default=12.0,
+    show_default=True,
+    help="Default site mass in Da.",
+)
+@click.option("--nonbonded-k", type=float, default=5.0, show_default=True)
+@click.option(
+    "--nonbonded-cutoff",
+    type=float,
+    default=6.0,
+    show_default=True,
+    help="Nonbonded cutoff in Angstrom.",
+)
+@click.option("--minimize-steps", type=int, default=200, show_default=True)
+def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_dihedral_k, ring_improper_k, pi_improper_k, flat_improper_k, orient_improper_k, n_steps, write_every, default_radius, default_mass, nonbonded_k, nonbonded_cutoff, minimize_steps):
+    """Build a force-field system from component MOL2 files and templates.
+
+    Note this is not the same builder as
+    `IMP.bff.cgdye.topology.build_dye_protein_system`: on the same two
+    components they agree on sites, bonds, angles and dihedrals and differ on
+    impropers, which this one builds (81) and that one leaves empty. See
+    okf/validation/impropers_are_dropped.md.
+    """
+    import click as _click
+    from IMP.bff.cgdye.topology import build_system_from_specs
+    try:
+        return build_system_from_specs(components=components, output_cif=output_cif, bond_k=bond_k, angle_k=angle_k, pi_dihedral_k=pi_dihedral_k, linker_dihedral_k=linker_dihedral_k, ring_improper_k=ring_improper_k, pi_improper_k=pi_improper_k, flat_improper_k=flat_improper_k, orient_improper_k=orient_improper_k, n_steps=n_steps, write_every=write_every, default_radius=default_radius, default_mass=default_mass, nonbonded_k=nonbonded_k, nonbonded_cutoff=nonbonded_cutoff, minimize_steps=minimize_steps)
+    except ValueError as exc:
+        raise _click.ClickException(str(exc)) from exc
+
+
 @click.group(cls=DYMGroup)
 def cli():
     """IMP.bff -- fluorescence forward models on structures."""
@@ -1149,6 +1392,11 @@ def main():
     cli.add_command(dye)
     cli.add_command(rotamer)
     cli.add_command(av_vs_rotamer)
+    # three more `main`s that lived inside library modules, reachable only as
+    # `python -m IMP.bff.<module>` and absent from every --help
+    cli.add_command(analyze_trajectories)
+    cli.add_command(simulate)
+    cli.add_command(build_system)
     cli()
 
 

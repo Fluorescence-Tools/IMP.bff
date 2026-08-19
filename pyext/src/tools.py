@@ -68,56 +68,6 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-class _ClickStub:
-    """Stand-in for ``click`` so library modules import without it.
-
-    ``click`` is a hard dependency of the command-line entry points
-    (``bin/imp_bff``; declared in conda-recipe/meta.yaml)
-    but not of the library: modules that carry a ``@click.command`` next to
-    their functions must still import when click is absent. The stub keeps
-    module import working; invoking a stubbed command raises ImportError.
-    """
-
-    class ClickException(RuntimeError):
-        pass
-
-    BadParameter = ClickException
-    UsageError = ClickException
-
-    class Path:  # noqa: D401 - signature-compatible placeholder
-        def __init__(self, *args, **kwargs):
-            pass
-
-    class Choice(Path):
-        pass
-
-    @staticmethod
-    def _decorator(*_args, **_kwargs):
-        def wrap(fn):
-            def _missing(*a, **k):
-                raise ImportError("click is required for the cgdye command line")
-            _missing.__doc__ = getattr(fn, "__doc__", None)
-            _missing.__name__ = getattr(fn, "__name__", "main")
-            _missing.__wrapped__ = fn
-            return _missing
-        return wrap
-
-    command = option = argument = group = _decorator
-
-    @staticmethod
-    def echo(*args, **kwargs):
-        print(*args)
-
-
-def import_click():
-    """Return ``click`` or a stub when it is not installed (see _ClickStub)."""
-    try:
-        import click
-    except ImportError:
-        return _ClickStub()
-    return click
-
-
 # --------------------------------------------------------------------------
 # tools (package level)
 # --------------------------------------------------------------------------

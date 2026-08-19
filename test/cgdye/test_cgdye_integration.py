@@ -54,8 +54,12 @@ class TestIntegration(unittest.TestCase):
         # everything the parent had, so the child could not import IMP.bff.
         env["PYTHONPATH"] = os.pathsep.join(
             [p for p in (".", env.get("PYTHONPATH", "")) if p])
-        # runner.py uses package-relative imports, so it must run as a module.
-        cmd = [sys.executable, "-m", "IMP.bff.cgdye.sim"] + args
+        # The command is `imp_bff simulate` now. `IMP.bff.cgdye.sim` kept the
+        # function and lost the click wrapper, so `-m` on it exits 0 having
+        # done nothing -- which is how this test failed: a returncode of 0 and
+        # no output directory.
+        program = Path(__file__).resolve().parents[2] / "bin" / "imp_bff"
+        cmd = [sys.executable, str(program), "simulate"] + args
         # Use a reasonable timeout for integration tests
         return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
 

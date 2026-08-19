@@ -26,7 +26,6 @@ import numpy as np
 
 from IMP.bff.io.cif import read_dye_forcefield_cif
 from IMP.bff.io.cif import read_component_template_cif, region_features
-from IMP.bff.tools import import_click
 import IMP
 import IMP.algebra
 import IMP.atom
@@ -44,7 +43,6 @@ import IMP.rmf
 
 
 
-click = import_click()  # optional: only the CLI entry point needs it
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -682,85 +680,10 @@ def analyze_dye_density(
         print(f"  Wrote axis definition: {axis_def}")
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option(
-    "--traj-root",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_TRAJ_ROOT,
-    show_default=True,
-)
-@click.option(
-    "--runs-root",
-    type=click.Path(path_type=Path),
-    default=None,
-    help="Directory containing run*/ subdirs for combined analysis.",
-)
-@click.option(
-    "--combine-runs",
-    is_flag=True,
-    default=False,
-    help="Combine all run*/ trajectories under --runs-root into one analysis.",
-)
-@click.option(
-    "--output-dir",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_OUTPUT_DIR,
-    show_default=True,
-)
-@click.option(
-    "--mobile",
-    "mobiles",
-    type=str,
-    multiple=True,
-    required=True,
-    help="Mobile component name(s) to analyze (e.g. atto655). Repeatable.",
-)
-@click.option(
-    "--mobile-template-cif",
-    "mobile_template_cifs",
-    type=click.Path(path_type=Path),
-    multiple=True,
-    default=None,
-    help=(
-        "Path to template CIF for the mobile component. "
-        "One per --mobile, or a single path used for all. "
-        "If omitted, looks for cgdye/templates/{mobile}.template.cif."
-    ),
-)
-@click.option(
-    "--fixed-name",
-    type=str,
-    default=None,
-    help="Fixed component name in the RMF hierarchy. Inferred if not provided.",
-)
-@click.option(
-    "--system-name",
-    type=str,
-    default=None,
-    help=(
-        "Run output directory name (e.g. 'CX4_atto655_imp'). "
-        "This is the subdirectory under --traj-root that the runner wrote. "
-        "Defaults to '{fixed-name}_{mobile}_imp' when --fixed-name is set, "
-        "otherwise auto-detected."
-    ),
-)
-@click.option(
-    "--axis-element",
-    type=str,
-    default=None,
-    help="One-letter element symbol to orient the fixed-component axis (e.g. S).",
-)
-@click.option("--resolution", type=float, default=4.0, show_default=True)
-@click.option("--voxel-size", type=float, default=1.0, show_default=True)
-@click.option("--bin-width", type=float, default=0.5, show_default=True)
-@click.option(
-    "--max-frames",
-    type=int,
-    default=0,
-    show_default=True,
-    help="0 means all frames.",
-)
-def main(
+# The click decorators for this moved to `bin/imp_bff` as
+# `analyze-trajectories`; what is left is the function they called, which is
+# library code and now importable without click.
+def analyze_dye_trajectories(
     traj_root,
     runs_root,
     combine_runs,
@@ -795,7 +718,7 @@ def main(
     for mob in mobiles:
         tpl = template_map[mob]
         if not tpl.exists():
-            raise click.ClickException(
+            raise ValueError(
                 f"Template CIF not found for mobile component '{mob}': {tpl}\n"
                 "Pass --mobile-template-cif explicitly."
             )
@@ -814,8 +737,6 @@ def main(
         )
 
 
-if __name__ == "__main__":
-    main()
 
 
 # --------------------------------------------------------------------------

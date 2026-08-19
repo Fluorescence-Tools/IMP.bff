@@ -10,7 +10,6 @@ import random
 
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring import torsion_cosine
-from IMP.bff.tools import import_click
 import IMP
 import IMP.bff
 import IMP.algebra
@@ -33,7 +32,6 @@ import IMP.rmf
 
 
 
-click = import_click()  # optional: only the CLI entry point needs it
 
 
 def _read_mol2_quiet(path, model):
@@ -1538,91 +1536,20 @@ def _parse_paths(system_cif, systems_dir):
     if system_cif:
         return [system_cif]
     if not systems_dir:
-        raise click.ClickException("Provide --system-cif or --systems-dir")
+        raise ValueError("Provide --system-cif or --systems-dir")
     paths = []
     for fn in sorted(os.listdir(systems_dir)):
         if fn.endswith(".cif"):
             paths.append(os.path.join(systems_dir, fn))
     if not paths:
-        raise click.ClickException(f"No .cif files found in {systems_dir}")
+        raise ValueError(f"No .cif files found in {systems_dir}")
     return paths
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option("--system-cif", type=click.Path(path_type=str), default=None)
-@click.option("--systems-dir", type=click.Path(path_type=str), default=None)
-@click.option(
-    "--output-root",
-    type=click.Path(path_type=str),
-    default=None,
-    show_default=True,
-    help="Root directory for trajectory output. Defaults to 'output/trajs' relative to the current working directory.",
-)
-@click.option(
-    "--md-steps",
-    type=int,
-    default=20000,
-    show_default=True,
-    help="Total MD steps after MC pre-stage.",
-)
-@click.option("--write-every", type=int, default=500, show_default=True)
-@click.option(
-    "--sampling-mode",
-    type=click.Choice(["simple_md", "hybrid_md_mc", "multi_restart"]),
-    default="hybrid_md_mc",
-    show_default=True,
-)
-@click.option("--mc-steps", type=int, default=8, show_default=True)
-@click.option("--mc-temperature", type=float, default=2.0, show_default=True)
-@click.option("--rb-max-translation", type=float, default=0.35, show_default=True)
-@click.option("--rb-max-rotation-deg", type=float, default=4.0, show_default=True)
-@click.option(
-    "--friction-ps",
-    type=float,
-    default=None,
-    show_default=True,
-    help="Langevin friction coefficient in ps^-1. Overrides system CIF value.",
-)
-@click.option(
-    "--temperature-k",
-    type=float,
-    default=None,
-    show_default=True,
-    help="MD temperature in K. Overrides system CIF value.",
-)
-@click.option("--mobile-group", type=str, default=None, show_default=True)
-@click.option(
-    "--fixed-flex-mode",
-    type=click.Choice(["static", "flex"]),
-    default="static",
-    show_default=True,
-    help="'static': fixed component fully rigid. 'flex': atoms in the {name}_flex group are released.",
-)
-@click.option(
-    "--freeze-mobile-rings/--no-freeze-mobile-rings",
-    default=True,
-    show_default=True,
-    help="Fallback only: use ring detection as MD-fixed set when mmCIF has no _ff_dof_md_fixed_member.",
-)
-@click.option("--init-placement/--no-init-placement", default=True, show_default=True)
-@click.option("--init-distance-a", type=float, default=62.5, show_default=True)
-@click.option("--init-trials", type=int, default=200, show_default=True)
-@click.option("--init-seed", type=int, default=42, show_default=True)
-@click.option(
-    "--com-pull-k", type=float, default=0.0, help="Weak harmonic force pulling guest COM to host COM."
-)
-@click.option("--go-mobile-k", type=float, default=3.0, show_default=True)
-@click.option("--go-fixed-k", type=float, default=2.0, show_default=True)
-@click.option("--go-cutoff", type=float, default=6.0, show_default=True)
-@click.option(
-    "--log-every-frames",
-    type=int,
-    default=10,
-    show_default=True,
-    help="Progress print frequency in written frames.",
-)
-@click.option("--n-restarts", type=int, default=1, show_default=True, help="Number of independent restarts (for multi_restart mode).")
-def main(
+# The click decorators for this moved to `bin/imp_bff` as
+# `simulate`; what is left is the function they called, which is
+# library code and now importable without click.
+def run_dye_simulation(
     system_cif,
     systems_dir,
     output_root,
@@ -1691,5 +1618,3 @@ def main(
         )
 
 
-if __name__ == "__main__":
-    main()
