@@ -1,0 +1,261 @@
+"""The model objects that moved to C++, and the things that moved with them.
+
+Four objects left Python for C++ over 2026-08-19: ``LifetimeSpectrum``,
+``BasicAV``/``ACV``, ``DyeDiffusionSimulation`` and ``GridDiffusionSolver``,
+along with the kappa^2 sampler. Each was gated against the Python it replaced
+*before* that Python was deleted -- but a gate against code that no longer
+exists cannot be re-run, so what it established has to be written down as
+invariants instead.
+
+Everything here is either a property that must hold on its own terms, or a
+thing that was **actually wrong at some point** during the move and would be
+silent if it came back. The per-surface behaviour is already covered by the
+suites those objects came with (``test_lifetime_spectrum.py``,
+``medium_test_av.py``, ``test_quenching_field.py``, ``test_integrators.py``),
+which were not modified by the port and are the real regression net.
+"""
+
+import numpy as np
+import pytest
+
+import IMP.bff
+
+
+# --------------------------------------------------------------------------
+# GridDiffusionSolver
+# --------------------------------------------------------------------------
+def _grid(ng=15, r=None):
+    ax = np.arange(ng) - (ng - 1) / 2
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.sqrt(x ** 2 + y ** 2 + z ** 2)
+
+
+def test_the_stability_bound_does_not_include_the_rate():
+    """`k` is carried as ``exp(-k dt)``, so it constrains nothing.
+
+    That is the *exact* solution of ``dp/dt = -k p`` over the step; it is the
+    ``1 - k dt`` form that diverges once ``k dt > 1``, and this scheme does not
+    use it. Passing ``k_max`` into the bound cut the allowed step by a third on
+    a site with ``k_max = 96 1/ns`` and rejected steps that are perfectly
+    stable. The check is the two-argument call, and a large rate must not move
+    it.
+    """
+    assert IMP.bff.diffusion_stability_limit(8.0, 1.0) == pytest.approx(1.0 / 48.0)
+
+    ng = 15
+    bounds = (_grid(ng) < ng / 3.0).astype(np.float64)
+    dmap = 8.0 * bounds
+    dt = 0.9 / 48.0                       # inside the diffusion-only bound
+    for k in (0.0, 96.0):                 # a rate that would fail the wrong bound
+        rate = k * bounds
+        solver = IMP.bff.GridDiffusionSolver(
+            dmap, bounds, bounds / bounds.sum(), rate, dt, 1.0)
+        solver.run(10, 5)                 # must not raise
+
+
+def test_a_step_past_the_diffusion_bound_still_raises():
+    ng = 15
+    bounds = (_grid(ng) < ng / 3.0).astype(np.float64)
+    solver = IMP.bff.GridDiffusionSolver(
+        8.0 * bounds, bounds, bounds / bounds.sum(), None, 1.1 / 48.0, 1.0)
+    with pytest.raises(ValueError, match="stability limit"):
+        solver.run(1, 1)
+
+
+def test_the_constructor_takes_the_diffusion_map_first():
+    """The parameter order callers pass positionally.
+
+    It is *not* the order the C++ constructor takes -- the shadow bridges them
+    -- and getting it wrong produced a solver whose `D` and `k` were swapped,
+    which fails as a stability error a long way from the cause.
+    """
+    ng = 15
+    bounds = (_grid(ng) < ng / 3.0).astype(np.float64)
+    dmap = 8.0 * bounds
+    solver = IMP.bff.GridDiffusionSolver(dmap, bounds, bounds / bounds.sum())
+    np.testing.assert_allclose(solver.diffusion_map, dmap)
+    np.testing.assert_allclose(solver.bounds, bounds)
+
+
+def test_a_domain_touching_the_outer_shell_raises():
+    """The 7-point stencil cannot be evaluated there, so population would be
+    discarded silently."""
+    ng = 11
+    bounds = np.ones((ng, ng, ng))
+    with pytest.raises(ValueError, match="outer shell"):
+        IMP.bff.GridDiffusionSolver(
+            bounds, bounds, bounds / bounds.sum(), None, 1e-4, 1.0).run(1, 1)
+
+
+# --------------------------------------------------------------------------
+# DyeDiffusionSimulation
+# --------------------------------------------------------------------------
+def _walk(ng=15):
+    r = _grid(ng)
+    occ = (r < ng / 3.0).astype(np.uint8)
+    return IMP.bff.DyeDiffusionSimulation(
+        density=occ, dg=1.0, x0=np.zeros(3),
+        quenching_rate_map=np.where(r < ng / 6.0, 0.3, 0.0))
+
+
+def test_one_seed_gives_one_walk_and_a_different_seed_a_different_one():
+    a, b, c = _walk(), _walk(), _walk()
+    ta = a.run(t_max=40.0, n_trajectories=1, random_seed=3)
+    tb = b.run(t_max=40.0, n_trajectories=1, random_seed=3)
+    tc = c.run(t_max=40.0, n_trajectories=1, random_seed=4)
+    np.testing.assert_array_equal(ta, tb)
+    assert not np.array_equal(ta, tc)
+
+
+def test_concatenated_walks_do_not_repeat_one_trajectory():
+    """Seeds are strided by a large prime, not reused.
+
+    Reusing the base seed would run n identical trajectories and concatenate
+    them, which looks like n times the sampling and is none of it.
+    """
+    w = _walk()
+    w.run(t_max=40.0, n_trajectories=4, random_seed=11)
+    n = w.n_frames // 4
+    first = w.trajectory[:n]
+    for k in range(1, 4):
+        assert not np.array_equal(first, w.trajectory[k * n:(k + 1) * n])
+
+
+def test_replacing_the_volume_discards_the_trajectory():
+    """It was a walk in the *old* volume; keeping it would let a caller read
+    positions the new occupancy forbids. The Python allowed exactly that."""
+    w = _walk()
+    w.run(t_max=40.0, n_trajectories=1, random_seed=5)
+    assert w.n_frames > 0
+    w.density = np.zeros((15, 15, 15), dtype=np.uint8)
+    assert w.n_frames == 0
+    assert w.trajectory is None
+    assert w.n_accepted == 0
+
+
+def test_each_grid_takes_its_shape_from_its_own_length():
+    """The fields are stored separately and are only conventionally the same
+    size, so swapping the volume for a smaller one must not make the rate map
+    unreadable."""
+    w = _walk(ng=15)
+    w.density = np.zeros((11, 11, 11), dtype=np.uint8)
+    assert w.density.shape == (11, 11, 11)
+    assert w.quenching_rate_map.shape == (15, 15, 15)
+
+
+def test_sample_grid_uses_the_integer_centre_and_floors():
+    """One convention, and both halves of it were bugs once.
+
+    The offset is the *integer* ``grid_center_index``, which differs from the
+    float ``(ng - 1) / 2`` on every even edge length -- and even is the normal
+    case. The conversion is ``floor``, not ``trunc``: ``trunc`` maps
+    ``[-1, 0)`` to 0, so a position up to one voxel below the grid would read
+    voxel 0's value.
+    """
+    assert IMP.bff.grid_center_index(15) == 7
+    assert IMP.bff.grid_center_index(16) == 7          # not 7.5
+    w = _walk()
+    w.run(t_max=40.0, n_trajectories=1, random_seed=5)
+    ramp = np.arange(15 ** 3, dtype=np.float64).reshape(15, 15, 15)
+    got = w.sample_grid(ramp)
+    centre = IMP.bff.grid_center_index(15)
+    idx = np.floor(w.trajectory / w.dg + centre).astype(np.int64)
+    inside = np.all((idx >= 0) & (idx < 15), axis=1)
+    want = np.zeros(w.n_frames, dtype=np.float64)
+    want[inside] = ramp[tuple(idx[inside].T)]
+    np.testing.assert_array_equal(got.astype(np.float64), want)
+
+
+# --------------------------------------------------------------------------
+# kappa^2
+# --------------------------------------------------------------------------
+def test_the_isotropic_limit_is_exactly_two_thirds():
+    """Drawing directions with three standard normals is load-bearing.
+
+    Normalising a *uniform* draw fills the cube's positive octant rather than
+    the sphere, which halved <kappa^2> to 0.333 here. This limit is the check
+    that caught it: with both order parameters zero there is no wobble at all,
+    so every sample must be 2/3 exactly.
+    """
+    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+        0.0, 0.0, 0.5, 20000, 31, 0.0, 4.0, 7))
+    samples = out[61:]
+    np.testing.assert_allclose(samples, 2.0 / 3.0, rtol=1e-12)
+
+
+def test_the_fully_trapped_limit_spans_the_whole_range():
+    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+        1.0, 1.0, 0.5, 50000, 31, 0.0, 4.0, 7))
+    samples = out[61:]
+    assert samples.min() < 0.05 and samples.max() > 3.9
+    assert samples.mean() == pytest.approx(2.0 / 3.0, abs=0.05)
+
+
+def test_the_distance_ratio_transform_is_zero_outside_the_sampled_range():
+    """``np.interp(..., left=0, right=0)``, not clamped.
+
+    The transform puts a 5 % margin either side of the transformed points, so
+    the first and last bins are outside the range *by construction*. Clamping
+    instead planted the extreme weight on a ratio no kappa^2 in the input maps
+    to -- a 0.12 error in the weights while the axis and <kappa^2> still
+    matched to 2e-16.
+    """
+    k2_val = np.array([0.5, 1.0, 2.0])
+    k2_amp = np.array([1.0, 1.0, 1.0])
+    axis, w, mean = np.split(
+        np.asarray(IMP.bff.kappa2_distance_ratio_transform(k2_amp, k2_val, 32)),
+        [32, 64])
+    assert w[0] == 0.0 and w[-1] == 0.0
+    assert w.sum() == pytest.approx(1.0)
+
+
+def test_the_distance_ratio_transform_carries_its_jacobian():
+    """Transforming the abscissa and carrying the weights across unchanged
+    would be wrong wherever the mapping is non-linear, which is everywhere."""
+    k2_val = np.array([0.4, 0.8, 1.6, 3.2])
+    k2_amp = np.ones(4)
+    out = np.asarray(IMP.bff.kappa2_distance_ratio_transform(k2_amp, k2_val, 64))
+    mean = out[128]
+    assert mean == pytest.approx(np.mean(k2_val))
+    # r = (<k2>/k2)^(1/6) is decreasing in k2, so the smallest k2 gives the
+    # largest ratio -- the transform must not silently reverse it.
+    axis = out[:64]
+    assert axis[0] < (mean / k2_val.max()) ** (1 / 6.0)
+    assert axis[-1] > (mean / k2_val.min()) ** (1 / 6.0)
+
+
+@pytest.mark.parametrize("amp,val,match", [
+    (np.ones(3), -np.ones(3), "strictly positive"),
+    (np.ones(3), np.ones(4), "same shape"),
+    (-np.ones(3), np.ones(3), "non-negative"),
+    (np.zeros(3), np.ones(3), "must be positive"),
+])
+def test_the_transform_refuses_impossible_input(amp, val, match):
+    with pytest.raises(ValueError, match=match):
+        IMP.bff.kappa2_distance_ratio_transform(amp, val, 8)
+
+
+# --------------------------------------------------------------------------
+# the objects are values
+# --------------------------------------------------------------------------
+def test_a_spectrum_is_a_value_not_a_handle():
+    """`IMP_SWIG_VALUE`, so a copy is independent."""
+    s = IMP.bff.LifetimeSpectrum(np.array([0.4, 0.2]), np.array([0.25, 1.0]))
+    t = IMP.bff.LifetimeSpectrum(s.amplitudes, s.rate_constants, s.exact)
+    assert t.n_species == 2
+    np.testing.assert_array_equal(t.amplitudes, s.amplitudes)
+
+
+def test_an_av_carries_no_grid_when_it_was_built_from_points():
+    """``density`` is ``None``, not an empty array: every consumer tests it."""
+    pts = np.ascontiguousarray(np.random.default_rng(0).random((40, 4)))
+    av = IMP.bff.BasicAV(points=pts, position_name="donor")
+    assert av.density is None
+    assert av.grid_origin is None
+    assert av.n_points == 40
+    assert av.points.shape == (40, 4)
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
