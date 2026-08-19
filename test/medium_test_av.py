@@ -1,4 +1,4 @@
-"""Tests for ``IMP.bff.av`` — accessible volume infrastructure.
+"""Tests for ``IMP.bff.representation.av`` — accessible volume infrastructure.
 
 All tests in this file run in **standalone mode** (no IMP
 required) and use the Numba kernels directly.
@@ -11,8 +11,8 @@ import os
 import numpy as np
 import pytest
 
-from IMP.bff.av import BasicAV, ACV, compute_av, AccessibleVolume
-from IMP.bff.av._kernels import (
+from IMP.bff.representation.av import BasicAV, ACV, compute_av, AccessibleVolume
+from IMP.bff.representation.av._kernels import (
     random_distances,
     density2points,
     weighted_mean,
@@ -265,7 +265,7 @@ class TestComputeAvBackends:
         rather than skipped, which also applies the owner's 2026-08-11 rule that
         IMP.bff's AV is the only backend.
         """
-        from IMP.bff.av import compute
+        from IMP.bff.representation.av import compute
 
         return ["imp_bff"] if compute._HAS_IMP_BFF else []
 

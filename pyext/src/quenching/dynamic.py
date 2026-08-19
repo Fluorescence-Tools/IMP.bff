@@ -27,7 +27,7 @@ from typing import Optional
 import numpy as np
 
 from . import maps
-from IMP.bff.dynamics.smoluchowski import (
+from IMP.bff.sampling.smoluchowski import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,
@@ -73,7 +73,7 @@ class DynamicAccessibleVolume:
             raise ValueError(
                 f"flux_form must be 'smoluchowski' or 'ito', not {flux_form!r}")
         #: Where the dye sits at equilibrium. See
-        #: :func:`IMP.bff.dynamics.smoluchowski.equilibrium_occupancy`.
+        #: :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy`.
         self.flux_form = flux_form
 
         self._diffusion_map: Optional[np.ndarray] = None
@@ -214,7 +214,7 @@ class DynamicAccessibleVolume:
         mobility -- equilibrium is thermodynamics, mobility is kinetics, and a
         dye slowed by friction with no attraction is still found everywhere it
         can reach. Under ``"ito"`` it is ``p ∝ 1/D``: see
-        :func:`IMP.bff.dynamics.smoluchowski.equilibrium_occupancy` for why that is
+        :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy` for why that is
         the inherited behaviour rather than the physics.
         """
         if self._occupancy is None:
@@ -226,7 +226,7 @@ class DynamicAccessibleVolume:
 
         Uniform on the accessible domain under the default flux form,
         ``p ∝ 1/D`` under ``"ito"`` — see
-        :func:`IMP.bff.dynamics.smoluchowski.equilibrium_occupancy`. Propagating to it
+        :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy`. Propagating to it
         instead is possible but slow and, in the ``"ito"`` form on a real site
         where the compounding slow factor makes ``D`` span orders of magnitude,
         may not converge at all: on T4L site 132 it was still drifting after
@@ -245,7 +245,7 @@ class DynamicAccessibleVolume:
     ):
         """Integrate the donor decay on the grid, from the equilibrium start.
 
-        :returns: a :class:`IMP.bff.dynamics.smoluchowski.GridDiffusionResult` --
+        :returns: a :class:`IMP.bff.sampling.smoluchowski.GridDiffusionResult` --
             time axis in ns, surviving excited-state fraction, final density.
         """
         start = self.occupancy

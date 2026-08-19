@@ -12,7 +12,7 @@ from typing import Optional
 
 import numpy as np
 
-from IMP.bff.av import _kernels
+from IMP.bff.representation.av import _kernels
 
 BACKENDS_AVAILABLE = False
 try:
@@ -55,7 +55,7 @@ class BasicAV:
     Examples
     --------
     >>> import numpy as np
-    >>> from IMP.bff.av import BasicAV
+    >>> from IMP.bff.representation.av import BasicAV
     >>> # Create a simple spherical AV
     >>> n = 500
     >>> pts = np.random.randn(n, 4).astype(np.float64)

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import click
 
-from IMP.bff.fret.compare_rotamer import (
+from IMP.bff.representation.compare import (
     compare_pairs, compare_positions, markdown_table, summary_numbers)
 
 DONOR_LIB = "AlexaFluor 488 C1R"      # + " cutoff<N>"
@@ -77,7 +77,7 @@ def main(system, okf_dir, pins, n_samples, temperature, cutoffs):
     cases = {"hgbp1": hgbp1_case, "t4l": t4l_case}
     names = ["hgbp1", "t4l"] if system == "both" else [system]
     md = ["# AV ↔ rotamer-ensemble cross-validation (PRD-108)", "",
-          "Recorded by `python -m IMP.bff.fret.compare_rotamer_cli`. AVs from the fps.json positions "
+          "Recorded by `python -m IMP.bff.representation.compare_cli`. AVs from the fps.json positions "
           "(default FPS strip; the authored T4L `strip_mask` is outside the current dialect), rotamer ensembles "
           f"screened at T = {temperature} K without electrostatics; R0 = {R0_A488_A594} Å (κ² = 2/3). "
           "This table is authoritative; the test pins the numbers and asserts loose sanity bounds only.", ""]

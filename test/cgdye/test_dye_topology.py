@@ -21,7 +21,7 @@ from IMP.bff.cgdye.topology.dye import (
     lj_cross,
     lj_params,
 )
-from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring.dye_lj import (
     build_lj_type_table,
     compute_exclusions,

@@ -13,7 +13,7 @@ label, and their difference is data, not a failure.
 
 Filed under ``fret`` rather than ``av`` or ``representation.rotamer``, which is
 where it reads more naturally: a tool that compares two things has to sit above
-both. It uses the AV builder in :mod:`IMP.bff.fret.av` and the rotamer ensemble
+both. It uses the AV builder in :mod:`IMP.bff.representation.av.structure` and the rotamer ensemble
 in :mod:`IMP.bff.representation.rotamer`, and ``fret`` is the lowest package
 above both. Putting it in ``av`` closed the loop
 ``av -> fret -> restraints -> av``.
@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 
-from IMP.bff.fret.av import AccessibleVolume, compute_av
+from IMP.bff.representation.av.structure import AccessibleVolume, compute_av
 from IMP.bff.representation.distance import (
     av_pair_statistics,
     chi2_score,

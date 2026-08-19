@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from IMP.bff.fret.av import AccessibleVolume
+from IMP.bff.representation.av.structure import AccessibleVolume
 from IMP.bff.representation import distance as fdist
-from IMP.bff.fret.engine import DistanceRestraint, RigidBody
-from IMP.bff.fret.greedy_olga import select_informative_pairs
+from IMP.bff.restraints.engine import DistanceRestraint, RigidBody
+from IMP.bff.restraints.greedy_olga import select_informative_pairs
 
 
 def _point_av(xyz):

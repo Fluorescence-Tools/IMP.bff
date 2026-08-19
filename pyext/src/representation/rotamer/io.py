@@ -347,7 +347,7 @@ def load_rotamer_library(
     if suffix == ".dcd":
         # FRETpredict library set: <stem>.pdb (names, residues) + DCD frames +
         # per-rotamer weights, read with the in-tree DCD reader.
-        from IMP.bff.representation.rotamer.library import load_rotamer_library_dcd
+        from IMP.bff.sampling.rotamer_library import load_rotamer_library_dcd
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")
         weights_path = path.with_name(f"{path.stem}_weights.txt")

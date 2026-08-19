@@ -11,7 +11,7 @@ anything outside the dialect is refused loudly, never silently ignored.
 import numpy as np
 import pytest
 
-from IMP.bff.fret import av
+from IMP.bff.representation.av import structure as av
 
 _PDB = """\
 ATOM      1  N   ILE A   3      11.104   6.134  -6.504  1.00  0.00           N

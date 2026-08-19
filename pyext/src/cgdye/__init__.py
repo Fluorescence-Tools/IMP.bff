@@ -26,9 +26,9 @@ What was taken out of it first, because it was not molecular mechanics:
 was                                          is
 ===========================================  =============================================
 ``cgdye.rotamer``                            ``IMP.bff.representation.rotamer``
-``cgdye.sampling.rotamer``                   ``IMP.bff.representation.rotamer.library``
+``cgdye.sampling.rotamer``                   ``IMP.bff.sampling.rotamer_library``
 ``cgdye.labeling``                           ``IMP.bff.label.attachment`` / ``.backbone_frame``
-``cgdye.io.{rotamer_cif,rotamer_rmf,dcd,nmr_cif}``  ``IMP.bff.io.*``
+``cgdye.io.*`` (all of it)             ``IMP.bff.io.*``
 ``cgdye.utils``                              ``IMP.bff.tools.paths``
 ``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.scoring.lennard_jones``
 ===========================================  =============================================

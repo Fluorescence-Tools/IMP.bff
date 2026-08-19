@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 
 class TestIO(unittest.TestCase):
     def test_read_write_ff_system(self):
@@ -43,7 +43,7 @@ class TestIO(unittest.TestCase):
             # Note: write_dye_forcefield_cif expects mol2 files to exist if it's going to write _atom_site
             # But we can test the basic round-trip of topology categories.
             # We'll mock the _parse_struct_atom_site_rows to avoid file dependency
-            import IMP.bff.cgdye.io.cif as cif_mod
+            import IMP.bff.io.forcefield_cif as cif_mod
             original_parse = cif_mod._parse_struct_atom_site_rows
             cif_mod._parse_struct_atom_site_rows = lambda path, asym, ent: []
             

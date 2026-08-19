@@ -26,7 +26,7 @@ class TestIntegration(unittest.TestCase):
         # Build the CX4+atto655 force-field system into a temporary directory
         # instead of expecting a pre-built output/systems/*.system.cif: the
         # test used to skip everywhere the build-system task had not run.
-        from IMP.bff.cgdye.io.cif import write_dye_forcefield_cif
+        from IMP.bff.io.forcefield_cif import write_dye_forcefield_cif
         from IMP.bff.cgdye.topology.combined import build_dye_protein_system
         from IMP.bff.tools.paths import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()

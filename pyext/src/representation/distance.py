@@ -594,7 +594,7 @@ def distance_sample_statistics(
 
     The sibling of :func:`av_pair_statistics`, which takes the two *clouds*.
     This one takes distances that have already been drawn -- from
-    :func:`IMP.bff.av._kernels.random_distances`, from a trajectory, or from a
+    :func:`IMP.bff.representation.av._kernels.random_distances`, from a trajectory, or from a
     measurement -- and is the right entry point when the clouds are not at hand.
 
     :returns: ``(r_da_mean, r_mp, r_e, mean_efficiency)``.

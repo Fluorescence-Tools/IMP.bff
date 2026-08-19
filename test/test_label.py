@@ -88,7 +88,7 @@ class TestLabelDistributionAV:
         # used to pass only because `_HAS_LABELLIB` was wrongly False on
         # machines that *did* have a working LabelLib — the check looked for
         # `LabelLib.AV`, which current builds do not expose.
-        import IMP.bff.av.compute as _compute
+        import IMP.bff.representation.av.compute as _compute
 
         monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
         with pytest.raises(ImportError):

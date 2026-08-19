@@ -43,7 +43,7 @@ where most of the structure-based modelling in this package lives.
 It is **wrong** when the dye reorganises fast enough to average over rate
 constants during the lifetime. Then the decay is not multi-exponential at all
 and no set of amplitudes reproduces it; the population has to be propagated,
-which is what :class:`~IMP.bff.dynamics.smoluchowski.GridDiffusionSolver` and the
+which is what :class:`~IMP.bff.sampling.smoluchowski.GridDiffusionSolver` and the
 Brownian walk are for. Their output is a curve, and
 :func:`lifetime_spectrum_from_states` is not the right reduction for it.
 

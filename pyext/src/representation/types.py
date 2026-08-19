@@ -16,8 +16,8 @@ __all__ = ["AccessibleVolume"]
 class AccessibleVolume(States):
     """States enumerated as a voxel grid, plus the grid itself.
 
-    One definition. There were two identical ones -- ``IMP.bff.av.compute`` and
-    ``IMP.bff.fret.av``, same seven fields in the same order -- which is how they
+    One definition. There were two identical ones -- ``IMP.bff.representation.av.compute`` and
+    ``IMP.bff.representation.av.structure``, same seven fields in the same order -- which is how they
     came to disagree about the axis order of ``density`` without anything
     noticing (PRD-113 stage 3a).
 

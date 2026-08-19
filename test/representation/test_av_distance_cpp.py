@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.av import _kernels
+from IMP.bff.representation.av import _kernels
 
 
 def test_split_is_exact_and_complementary():

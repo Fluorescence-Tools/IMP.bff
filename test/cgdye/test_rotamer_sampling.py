@@ -11,7 +11,7 @@ import IMP.atom
 import IMP.core
 import numpy as np
 
-from IMP.bff.representation.rotamer.library import (
+from IMP.bff.sampling.rotamer_library import (
     apply_rotamer_coordinates,
     find_reference_rotamer_files,
     load_rotamer_library_dcd,

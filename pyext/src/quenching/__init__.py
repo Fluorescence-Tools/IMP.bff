@@ -21,7 +21,7 @@ Three layers, each usable on its own:
 
 The **integrators moved out** in PRD-113 stage 7. The Brownian walk, the
 Smoluchowski field solver and the excited-state Monte Carlo are now
-:mod:`IMP.bff.dynamics`: none of them is specific to PET quenching -- a Brownian
+:mod:`IMP.bff.sampling`: none of them is specific to PET quenching -- a Brownian
 walk in a volume is a Brownian walk in a volume -- and filing a general
 integrator under the first physics that used it is how it comes to look like a
 detail of one model.

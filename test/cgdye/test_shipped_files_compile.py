@@ -87,7 +87,7 @@ def test_library_imports_without_click():
     code = (
         "import sys; sys.modules['click'] = None\n"
         "import IMP.bff.cgdye\n"
-        "import IMP.bff.cgdye.analysis.density, IMP.bff.cgdye.topology.builder, "
+        "import IMP.bff.analysis.density, IMP.bff.cgdye.topology.builder, "
         "IMP.bff.cgdye.sim.runner\n"
         "print('ok')\n"
     )

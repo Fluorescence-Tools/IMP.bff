@@ -13,7 +13,7 @@ refractive index, so no call site needs to carry ``forster_radius=52.0``.
 from __future__ import annotations
 
 from .species import Dye, Spectrum, FLRCIF_ITEMS
-from .library import find_dye, available_dyes
+from IMP.bff.dye.library import find_dye, available_dyes
 from .cif import read_dye_library, DYE_LIBRARY_CIF
 from .spectra import (
     DEFAULT_REFRACTIVE_INDEX,

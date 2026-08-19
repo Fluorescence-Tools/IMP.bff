@@ -17,8 +17,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.fret.compare_rotamer import compare_pairs, compare_positions
-from IMP.bff.fret.compare_rotamer_cli import R0_A488_A594, hgbp1_case, t4l_case
+from IMP.bff.representation.compare import compare_pairs, compare_positions
+from IMP.bff.representation.compare_cli import R0_A488_A594, hgbp1_case, t4l_case
 
 _PINS = Path(__file__).resolve().parents[2] / "references" / "cgdye_av_vs_rotamer_pins.json"
 
@@ -51,7 +51,7 @@ def test_av_vs_rotamer_pins_and_sanity(case_name, case):
 
     # sanity: two models of the same label (skipping sites the rotamer model
     # finds buried, Z < 0.05 -- FRETpredict's uniform fallback)
-    from IMP.bff.fret.compare_rotamer import Z_CUTOFF
+    from IMP.bff.representation.compare import Z_CUTOFF
     for name, got in per_pos.items():
         assert got["av_n_points"] > 0 and got["n_rotamers"] > 0
         if got["partition"] < Z_CUTOFF:

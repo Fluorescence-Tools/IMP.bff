@@ -16,7 +16,7 @@ import numpy as np
 
 from IMP.bff.label.attachment import attach_dyes, place_dye_from_coords, resolve_dye_site
 from IMP.bff.io.rotamer_rmf import read_rotamer_library_rmf, write_rotamer_library_rmf
-from IMP.bff.representation.rotamer.library import (
+from IMP.bff.sampling.rotamer_library import (
     apply_rotamer_coordinates,
     sample_rotamer_index,
 )

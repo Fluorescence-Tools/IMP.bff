@@ -22,7 +22,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from ..io.cif import write_dye_forcefield_cif
+from IMP.bff.io.forcefield_cif import write_dye_forcefield_cif
 from IMP.bff.io.template_cif import read_component_template_cif
 from IMP.bff.tools.paths import import_click
 

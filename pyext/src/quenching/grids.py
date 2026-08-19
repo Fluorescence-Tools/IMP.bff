@@ -145,11 +145,11 @@ def quenching_rate_grid(density, ng, dg, radius, rs, r0, values):
 def av_contact_mask(density, ng, dg, slow_radius, rs, r0):
     """The contact ("slow") part of an AV density grid, as a binary mask.
 
-    A thin adapter over :func:`IMP.bff.av._kernels.split_av_acv`, which returns
+    A thin adapter over :func:`IMP.bff.representation.av._kernels.split_av_acv`, which returns
     both parts plus their counts; for a binary density the contact part is what
     the PET model wants.
     """
-    from ..av._kernels import split_av_acv
+    from IMP.bff.representation.av._kernels import split_av_acv
 
     density = np.asarray(density, dtype=np.uint8)
     ng = int(ng)

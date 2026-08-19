@@ -13,7 +13,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from . import av as _av
+from IMP.bff.representation.av import structure as _av
 from IMP.bff.representation import distance as _dist
 
 

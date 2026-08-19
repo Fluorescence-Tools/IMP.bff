@@ -17,7 +17,7 @@ import numpy as np
 # body pulls in ``distribution``, which builds AVs and so imports this one back.
 # Both edges are real -- ``av`` needs the dataclass, ``distribution`` needs the
 # builder -- and they only form a cycle when the import is written at package
-# granularity. `import IMP.bff.av` as a process's first import raised
+# granularity. `import IMP.bff.representation.av` as a process's first import raised
 # ImportError until this was narrowed (PRD-113 stage 3).
 from IMP.bff.representation.types import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
@@ -184,7 +184,7 @@ def _av_imp_bff(
     xyz_density = reading.points_xyzw
     # This door's conventions, deliberately kept as they were: the density is
     # binarised to an occupancy mask in float64, and the point weights are
-    # whatever IMP reported. The structure door in `IMP.bff.fret.av` keeps the
+    # whatever IMP reported. The structure door in `IMP.bff.representation.av.structure` keeps the
     # raw float32 values and forces the weights to one. Reconciling the two is a
     # behaviour change and belongs to a later stage, not to this move.
     density = np.ascontiguousarray(
@@ -274,7 +274,7 @@ def compute_av(
     Examples
     --------
     >>> import numpy as np
-    >>> from IMP.bff.av import compute_av
+    >>> from IMP.bff.representation.av import compute_av
     >>> # Toy system: 2 atoms + attachment site
     >>> atoms_xyz = np.array([[0.,0.,0.],[3.,0.,0.]])
     >>> atoms_vdw = np.array([1.5, 1.5])

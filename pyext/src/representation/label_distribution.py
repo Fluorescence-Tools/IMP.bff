@@ -35,7 +35,7 @@ import numpy as np
 
 
 if TYPE_CHECKING:  # names for annotations only; see _av_types() below
-    from IMP.bff.av import ACV, BasicAV
+    from IMP.bff.representation.av import ACV, BasicAV
 
 
 def _av_types():
@@ -47,10 +47,10 @@ def _av_types():
     edges are real. Written at module level they close a cycle -- and because
     importing ``IMP.bff.representation.types`` also executes the package
     ``__init__``, which imports this module, narrowing the other side does not
-    break it. ``import IMP.bff.av`` as a process's first import raised
+    break it. ``import IMP.bff.representation.av`` as a process's first import raised
     ImportError until this was deferred (PRD-113 stage 3).
     """
-    from IMP.bff.av import ACV, BasicAV, compute_av
+    from IMP.bff.representation.av import ACV, BasicAV, compute_av
     return BasicAV, ACV, compute_av
 
 # ---------------------------------------------------------------------------

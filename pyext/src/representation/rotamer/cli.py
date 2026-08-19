@@ -97,6 +97,6 @@ if __name__ == "__main__":
 @click.pass_context
 def compare_av(ctx, **kwargs) -> None:
     """AV ↔ rotamer-ensemble comparison on the bundled hGBP1 and T4L systems (PRD-108)."""
-    from IMP.bff.fret.compare_rotamer_cli import main as _main
+    from IMP.bff.representation.compare_cli import main as _main
     ctx.invoke(_main, **kwargs)
 

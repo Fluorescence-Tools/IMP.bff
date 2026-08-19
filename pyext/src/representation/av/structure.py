@@ -19,7 +19,7 @@ import numpy as np
 from IMP.bff.io import structure as _structure
 from IMP.bff.representation.types import AccessibleVolume
 from IMP.bff.representation.pathmap import resample_av
-from .strip import (
+from IMP.bff.label.strip import (
     BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES,
     default_strip_mask,
     parse_strip_mask,
@@ -113,7 +113,7 @@ def _av_imp_bff(
     nx, ny, nz = reading.shape
     # This door's conventions, deliberately kept as they were: float32 density
     # values (not binarised) and uniform point weights. The array door in
-    # `IMP.bff.av.compute` chooses differently on both counts; reconciling them
+    # `IMP.bff.representation.av.compute` chooses differently on both counts; reconciling them
     # is a behaviour change and belongs to a later stage, not to this move.
     density = np.ascontiguousarray(reading.density, dtype=np.float32)
     points = (
@@ -519,7 +519,7 @@ def _find_attachment_point(
 # The FPS strip: obstacles removed around the attachment site
 # ---------------------------------------------------------------------------
 
-#: The strip grammar and the AV default live in :mod:`IMP.bff.fret.strip`
+#: The strip grammar and the AV default live in :mod:`IMP.bff.label.strip`
 #: (PRD-106): the AV build keeps the backbone plus the attachment atom
 #: (``default_strip_mask``), imported above.
 

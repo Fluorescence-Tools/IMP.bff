@@ -14,7 +14,7 @@ import IMP.em
 import IMP.rmf
 import RMF
 
-from ..io.cif import read_dye_forcefield_cif
+from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif
 from IMP.bff.io.template_cif import read_component_template_cif, region_features
 from IMP.bff.tools.paths import import_click
 

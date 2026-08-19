@@ -25,11 +25,11 @@ import numpy as np
 import IMP.bff
 
 from . import sites
-from IMP.bff.dynamics.brownian import simulate_dye_diffusion
+from IMP.bff.sampling.brownian import simulate_dye_diffusion
 from .fret_trace import fret_rate_pair_trace, fret_rate_trace
 from .grids import grid_center_index, quenching_rate_grid, slow_factor_grid
 from .pet import DEFAULT_DYE_RADIUS, normalize_amino_acid_quenching
-from IMP.bff.dynamics.excited_state import simulate_photon_trace
+from IMP.bff.sampling.excited_state import simulate_photon_trace
 
 __all__ = ["DyeDiffusionSimulation", "QuenchedDonorDecay", "MAX_PARALLEL_TRAJECTORIES"]
 

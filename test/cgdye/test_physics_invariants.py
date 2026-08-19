@@ -13,7 +13,7 @@ from IMP.bff.dye.spectra import forster_radius_from_spectra
 from IMP.bff.scoring.boltzmann import boltzmann_weights
 from IMP.bff.cgdye.sampling.kinetic import rotamer_transition_matrix
 from IMP.bff.scoring.mean_field import rotamer_mean_field_weights
-from IMP.bff.cgdye.analysis.fret import (
+from IMP.bff.analysis.kinetic_fret import (
     fret_efficiency_exact_kinetic_pair,
     fret_efficiency_regimes,
     fret_efficiency_exact_kinetic,

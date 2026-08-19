@@ -118,7 +118,7 @@ def ensure_fps_json(fps_path: str, pdb_paths: Sequence[str]) -> str:
         return cached
     import tempfile
 
-    from . import io as _io
+    from IMP.bff import io as _io
     positions, distances, score_sets, extra = _io.read_fps_json(
         p, pdb_paths=list(pdb_paths))
     fd, out = tempfile.mkstemp(suffix=".fps.json", prefix="fps_")
@@ -1065,8 +1065,8 @@ def dock_minimize(
              "stopped": stopped, "trajectory": traj_frames}
     if params.save_distributions and not stopped:
         try:
-            from . import av as _av
-            from . import distributions as _distr
+            from IMP.bff.representation.av import structure as _av
+            from IMP.bff.observables import pair_distribution as _distr
             _av.select_backend(params.av_backend)
             positions, dists, _ss = _read_positions(ensure_fps_json(fps_json_path, pdb_paths))
             res = _distr.compute_distance_distributions(

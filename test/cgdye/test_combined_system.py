@@ -11,7 +11,7 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff.cgdye.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring.dye_restraints import build_dye_restraints
 from IMP.bff.cgdye.topology.combined import build_dye_protein_system
 

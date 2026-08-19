@@ -8,7 +8,7 @@ resides in the contact volume near specified slow centres.
 Examples
 --------
 >>> import numpy as np
->>> from IMP.bff.av import BasicAV, ACV
+>>> from IMP.bff.representation.av import BasicAV, ACV
 >>> pts = np.random.randn(500, 4).astype(np.float64)
 >>> pts[:, 3] = np.abs(pts[:, 3]) + 0.01  # positive weights
 >>> av = BasicAV(points=pts)
@@ -21,8 +21,8 @@ from typing import Optional
 
 import numpy as np
 
-from IMP.bff.av.basic import BasicAV
-from IMP.bff.av import _kernels
+from IMP.bff.representation.av.basic import BasicAV
+from IMP.bff.representation.av import _kernels
 
 
 class ACV(BasicAV):

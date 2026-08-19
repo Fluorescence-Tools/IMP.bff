@@ -1,6 +1,6 @@
 """The subpackage import graph: acyclic, standalone, and no reaching into privates.
 
-This is the test that should have existed already. `import IMP.bff.av` as a
+This is the test that should have existed already. `import IMP.bff.representation.av` as a
 process's first import raised ImportError at every commit before 2026-08-18 --
 ``representation/__init__`` imports ``distribution``, which imports ``av``,
 which imports ``representation`` -- and nothing in 676 tests caught it, because
@@ -104,10 +104,16 @@ def _graph():
 
 
 def test_the_domains_are_what_we_think_they_are():
-    """A guard on the test itself: if this list empties, the rest passes vacuously."""
+    """A guard on the test itself: if this list empties, the rest passes vacuously.
+
+    The four stages -- representation, scoring, sampling, analysis -- plus the
+    things that cut across every model: the species, where it is attached, the
+    photophysics, the output contract, the formats, and scoring against data.
+    """
     assert len(DOMAINS) >= 6, DOMAINS
-    for expected in ("av", "dye", "label", "observables", "photophysics",
-                     "quenching", "representation", "restraints"):
+    for expected in ("representation", "scoring", "sampling", "analysis",
+                     "dye", "label", "photophysics", "observables",
+                     "io", "restraints"):
         assert expected in DOMAINS, (expected, DOMAINS)
 
 
@@ -186,6 +192,44 @@ def test_relative_imports_do_not_climb_out_of_their_domain():
                     f"{rel}: 'from {'.' * node.level}{node.module or ''} import ...' "
                     f"climbs past its domain")
     assert not offenders, offenders
+
+
+def test_every_module_imports():
+    """Import every file in the package, in one fresh interpreter.
+
+    This is the test that was missing. Four modules carried stale
+    sibling-relative imports from before ``fret/`` was decomposed --
+    ``observables/pair_distribution.py`` broke at module scope and could not be
+    imported at all, and ``restraints/docking.py`` had three that would have
+    failed at call time. **808 tests passed over them**, because nothing in the
+    suite imports those two modules.
+
+    A module that no test exercises still has to import. That is the cheapest
+    possible check and it costs one subprocess.
+    """
+    modules = []
+    for path in sorted(SOURCE.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(SOURCE).with_suffix("")
+        parts = [p for p in rel.parts if p != "__init__"]
+        modules.append("IMP.bff" + ("." + ".".join(parts) if parts else ""))
+    assert len(modules) > 50, "the source scan found almost nothing"
+
+    code = (
+        "import importlib, sys\n"
+        f"broken = []\n"
+        f"for name in {modules!r}:\n"
+        "    try:\n"
+        "        importlib.import_module(name)\n"
+        "    except Exception as exc:\n"
+        "        broken.append(f'{name}: {type(exc).__name__}: {exc}')\n"
+        "sys.stdout.write(chr(10).join(broken))\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                            text=True, timeout=600)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert not result.stdout.strip(), result.stdout
 
 
 def test_test_module_basenames_are_unique():

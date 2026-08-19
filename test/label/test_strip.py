@@ -2,7 +2,7 @@
 
 ``fret.av`` strips PDB text for the AV build and cgdye strips an IMP
 hierarchy before attaching an explicit dye; both go through
-``IMP.bff.fret.strip`` so the same mask selects the same atoms whatever the
+``IMP.bff.label.strip`` so the same mask selects the same atoms whatever the
 representation.
 """
 
@@ -12,7 +12,7 @@ import pytest
 import IMP
 import IMP.atom
 
-from IMP.bff.fret import strip
+from IMP.bff.label import strip
 
 _PDB = """\
 ATOM      1  N   ILE A   3      11.104   6.134  -6.504  1.00  0.00           N

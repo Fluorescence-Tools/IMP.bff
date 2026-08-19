@@ -7,7 +7,7 @@ dipole and the weight are kept -- and every atom, so nothing downstream has
 to re-derive them -- which is what a FRET *rate distribution* over a pair of
 labels needs (R_ij, κ²_ij, w_i·w_j), not just a mean position.
 
-It subclasses :class:`IMP.bff.fret.av.AccessibleVolume` with ``points`` =
+It subclasses :class:`IMP.bff.representation.av.structure.AccessibleVolume` with ``points`` =
 (N, 4) centre + weight, so every AV helper in ``fret`` (``av_pair_statistics``,
 ``histogram_rda``, ``mean_fret_distance``, ...) accepts it unchanged; the pair
 kernels live in :mod:`IMP.bff.representation.distance` (``fret_pair_geometry``,

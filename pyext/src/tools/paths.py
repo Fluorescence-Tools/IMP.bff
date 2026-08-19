@@ -1,4 +1,8 @@
-"""Utility helpers for cgdye."""
+"""Where the shipped data lives, and how to reach it.
+
+Templates, structures, rotamer libraries and output directories. Used across
+the package -- it was ``cgdye/utils.py`` until the explicit-dye package left the
+domain layout, and the name said so."""
 
 from __future__ import annotations
 

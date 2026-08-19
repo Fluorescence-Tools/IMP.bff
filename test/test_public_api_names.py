@@ -173,7 +173,7 @@ def test_importing_a_domain_does_not_load_cgdye():
     code = (
         "import sys\n"
         "import IMP.bff.scoring, IMP.bff.representation, IMP.bff.label\n"
-        "import IMP.bff.observables, IMP.bff.io, IMP.bff.dynamics\n"
+        "import IMP.bff.observables, IMP.bff.io, IMP.bff.sampling\n"
         "loaded = [m for m in sys.modules if m.startswith('IMP.bff.cgdye')]\n"
         "assert not loaded, loaded\n"
         "print('ok')\n"

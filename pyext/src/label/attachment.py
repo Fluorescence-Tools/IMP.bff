@@ -56,7 +56,7 @@ def _get_atom_particles(hier):
 #: cgdye's keep-set at a labelling site: the backbone (and a terminal OXT).
 #: CB is *stripped* -- the explicit dye linker is built off CA and replaces the
 #: whole side chain, so a CB left behind would clash with the linker's first
-#: atom. The AV convention (``IMP.bff.fret.strip.default_strip_mask``) keeps
+#: atom. The AV convention (``IMP.bff.label.strip.default_strip_mask``) keeps
 #: CB because the AV linker attaches at it; each consumer owns its default,
 #: the engine takes the mask (PRD-106).
 SITE_KEEP_ATOM_NAMES = ("N", "CA", "C", "O", "OXT")
@@ -70,11 +70,11 @@ def strip_sidechain_at_site(
 ):
     """Remove side-chain atoms at the labelling residue, in place.
 
-    Delegates to the shared strip engine (:mod:`IMP.bff.fret.strip`) with the
+    Delegates to the shared strip engine (:mod:`IMP.bff.label.strip`) with the
     mask ``chain <id> and resid <n> and not name <keep...>``. Returns the
     number of removed atoms.
     """
-    from IMP.bff.fret.strip import site_strip_mask, strip_hierarchy
+    from IMP.bff.label.strip import site_strip_mask, strip_hierarchy
 
     mask = site_strip_mask(chain_id, resnum, keep_atom_names)
     _, n_removed = strip_hierarchy(protein_hier, mask, inplace=True)

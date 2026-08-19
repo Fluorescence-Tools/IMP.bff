@@ -8,7 +8,7 @@ programmatically.
 
 Examples
 --------
->>> from IMP.bff.av import BasicAV
+>>> from IMP.bff.representation.av import BasicAV
 >>> from IMP.bff.restraints import SimpleAVNetworkRestraint
 >>> import numpy as np
 >>>
@@ -36,7 +36,7 @@ from typing import Optional
 
 import numpy as np
 
-from IMP.bff.av import BasicAV, compute_av
+from IMP.bff.representation.av import BasicAV, compute_av
 from IMP.bff.representation.distance import chi2_score
 
 
@@ -134,7 +134,7 @@ class SimpleAVNetworkRestraint:
         atoms_vdw : (N,) array
         source_xyz : (3,) array
         linker_length, linker_width, dye_radii, grid_resolution
-            Forwarded to :func:`IMP.bff.av.compute_av`.
+            Forwarded to :func:`IMP.bff.representation.av.compute_av`.
 
         Returns
         -------

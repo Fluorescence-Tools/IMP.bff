@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.fret import greedy_olga as go
+from IMP.bff.restraints import greedy_olga as go
 
 scipy_special = pytest.importorskip("scipy.special")
 

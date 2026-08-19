@@ -14,7 +14,7 @@ import IMP
 import IMP.test
 
 from IMP.bff.quenching import maps
-from IMP.bff.dynamics.smoluchowski import (
+from IMP.bff.sampling.smoluchowski import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,
