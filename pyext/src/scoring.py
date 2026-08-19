@@ -229,29 +229,31 @@ def compute_exclusions(system):
 
     Returns a set of frozenset({site_id_a, site_id_b}) pairs.
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     excluded = set()
 
     bond_pairs = set()
-    for a, b, _length, _tid in system.get("bonds", []):
-        bond_pairs.add(frozenset({a, b}))
+    for bd in system.bonds:
+        bond_pairs.add(frozenset({bd.site_a, bd.site_b}))
     excluded.update(bond_pairs)
 
     angle_ends = set()
-    for a, b, c, _theta, _tid in system.get("angles", []):
-        pair = frozenset({a, c})
+    for an in system.angles:
+        pair = frozenset({an.site_a, an.site_c})
         if pair not in excluded:
             angle_ends.add(pair)
     excluded.update(angle_ends)
 
     dihedral_ends = set()
-    for a, b, c, d, _tid in system.get("dihedrals", []):
-        pair = frozenset({a, d})
+    for to in system.dihedrals:
+        pair = frozenset({to.site_a, to.site_d})
         if pair not in excluded:
             dihedral_ends.add(pair)
     excluded.update(dihedral_ends)
 
-    for a, b, c, d, _tid in system.get("impropers", []):
-        for x, y in [(a, c), (a, d), (b, d)]:
+    for to in system.impropers:
+        for x, y in [(to.site_a, to.site_c), (to.site_a, to.site_d), (to.site_b, to.site_d)]:
             excluded.add(frozenset({x, y}))
 
     return excluded
@@ -312,12 +314,14 @@ def site_element_map(system):
 
     Derives element from atom_name prefix (first letter capitalized).
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     import re
 
     result = {}
-    for s in system.get("sites", []):
-        sid = s["id"]
-        aname = s.get("atom_name", "")
+    for s in system.sites:
+        sid = s.id
+        aname = s.atom_name
         m = re.match(r"([A-Za-z])", aname)
         elem = m.group(1).upper() if m else "C"
         result[sid] = elem
@@ -337,15 +341,17 @@ def compute_lj_pair_sites(system, excluded=None):
 
     Returns list of (site_id_a, site_id_b, rmin_ij, epsilon_ij).
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if excluded is None:
         excluded = compute_exclusions(system)
     elem_map = site_element_map(system)
-    sites = system.get("sites", [])
+    sites = system.sites
     pairs = []
     for i in range(len(sites)):
         for j in range(i + 1, len(sites)):
-            sa = sites[i]["id"]
-            sb = sites[j]["id"]
+            sa = sites[i].id
+            sb = sites[j].id
             pair = frozenset({sa, sb})
             if pair in excluded:
                 continue
@@ -485,9 +491,11 @@ class DyeInternalEnergyEvaluator:
     """
 
     def __init__(self, system, excluded=None):
+        from IMP.bff.io.cif import as_forcefield_system
+        system = as_forcefield_system(system)
         self.pairs = compute_lj_pair_sites(system, excluded=excluded)
         # Map site_id to index in the coordinate array
-        self.id_to_idx = {s["id"]: i for i, s in enumerate(system["sites"])}
+        self.id_to_idx = {s.id: i for i, s in enumerate(system.sites)}
 
         # Pre-extract index arrays and parameter arrays for vectorized eval
         if self.pairs:
@@ -600,8 +608,13 @@ def torsion_cosine(torsion_type):
     δ straight through (as the code did) put every conjugated torsion's
     minimum at 90° and every linker torsion's at the eclipsed 0°/±120°.
     """
-    return IMP.core.Cosine(float(torsion_type["k"]), int(torsion_type["periodicity"]),
-                           float(torsion_type["phase_rad"]) + math.pi)
+    if isinstance(torsion_type, dict):          # a hand-written type table
+        k = torsion_type["k"]
+        n = torsion_type["periodicity"]
+        phase = torsion_type["phase_rad"]
+    else:
+        k, n, phase = torsion_type.k, torsion_type.periodicity, torsion_type.phase
+    return IMP.core.Cosine(float(k), int(n), float(phase) + math.pi)
 
 
 # --------------------------------------------------------------------------
@@ -614,60 +627,62 @@ def build_dye_restraints(model, system, site_particles):
 
     Nonbonded uses per-pair HarmonicLowerBound at LJ rmin.
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     restraints = []
 
-    bt = system.get("bond_types", {})
-    at = system.get("angle_types", {})
-    tt = system.get("torsion_types", {})
-    it = system.get("improper_types", {})
+    bt = system.bond_types
+    at = system.angle_types
+    tt = system.torsion_types
+    it = system.improper_types
 
-    for a, b, length, tid in system.get("bonds", []):
-        if a not in site_particles or b not in site_particles:
+    for bd in system.bonds:
+        if bd.site_a not in site_particles or bd.site_b not in site_particles:
             continue
-        p1, p2 = site_particles[a], site_particles[b]
-        d0 = float(length)
-        k = float(bt[tid]["k"])
+        p1, p2 = site_particles[bd.site_a], site_particles[bd.site_b]
+        d0 = float(bd.length)
+        k = float(bt[bd.type_id])
         restraints.append(
             IMP.core.DistanceRestraint(model, IMP.core.Harmonic(d0, k), p1, p2)
         )
 
-    for a, b, c, theta, tid in system.get("angles", []):
+    for an in system.angles:
         if (
-            a not in site_particles
-            or b not in site_particles
-            or c not in site_particles
+            an.site_a not in site_particles
+            or an.site_b not in site_particles
+            or an.site_c not in site_particles
         ):
             continue
-        p1, p2, p3 = site_particles[a], site_particles[b], site_particles[c]
-        k = float(at[tid]["k"])
+        p1, p2, p3 = site_particles[an.site_a], site_particles[an.site_b], site_particles[an.site_c]
+        k = float(at[an.type_id])
         restraints.append(
             IMP.core.AngleRestraint(
-                model, IMP.core.Harmonic(float(theta), k), p1, p2, p3
+                model, IMP.core.Harmonic(float(an.theta), k), p1, p2, p3
             )
         )
 
-    for a, b, c, d, tid in system.get("dihedrals", []):
-        if any(x not in site_particles for x in (a, b, c, d)):
+    for to in system.dihedrals:
+        if any(x not in site_particles for x in (to.site_a, to.site_b, to.site_c, to.site_d)):
             continue
         p1, p2, p3, p4 = (
-            site_particles[a],
-            site_particles[b],
-            site_particles[c],
-            site_particles[d],
+            site_particles[to.site_a],
+            site_particles[to.site_b],
+            site_particles[to.site_c],
+            site_particles[to.site_d],
         )
         # CHARMM-convention type -> IMP.core.Cosine (sign flip, see torsion_cosine)
-        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[tid]), p1, p2, p3, p4))
+        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[to.type_id]), p1, p2, p3, p4))
 
-    for a, b, c, d, tid in system.get("impropers", []):
-        if any(x not in site_particles for x in (a, b, c, d)):
+    for to in system.impropers:
+        if any(x not in site_particles for x in (to.site_a, to.site_b, to.site_c, to.site_d)):
             continue
         p1, p2, p3, p4 = (
-            site_particles[a],
-            site_particles[b],
-            site_particles[c],
-            site_particles[d],
+            site_particles[to.site_a],
+            site_particles[to.site_b],
+            site_particles[to.site_c],
+            site_particles[to.site_d],
         )
-        t = it[tid]
+        t = it[to.type_id]
         theta0 = IMP.core.get_dihedral(
             IMP.core.XYZ(p1), IMP.core.XYZ(p2), IMP.core.XYZ(p3), IMP.core.XYZ(p4)
         )

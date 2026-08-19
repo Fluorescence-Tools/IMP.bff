@@ -1,5 +1,6 @@
 """Read/write compact FF topology mmCIF tables."""
 
+import IMP.bff
 import ihm.format
 import json
 import os
@@ -634,8 +635,8 @@ def read_dye_forcefield_cif(path):
     site_no_to_id = {}
     next_no = 1
     for s in system["sites"]:
-        sid = s.get("id")
-        num = s.get("site_no")
+        sid = s["id"]
+        num = s["site_no"]
         if num is None:
             while next_no in site_no_to_id:
                 next_no += 1
@@ -653,11 +654,11 @@ def read_dye_forcefield_cif(path):
 
     system["bonds"] = [
         [_resolve_site_ref(a), _resolve_site_ref(b), length, tid]
-        for a, b, length, tid in system.get("bonds", [])
+        for a, b, length, tid in system["bonds"]
     ]
     system["angles"] = [
         [_resolve_site_ref(a), _resolve_site_ref(b), _resolve_site_ref(c), theta, tid]
-        for a, b, c, theta, tid in system.get("angles", [])
+        for a, b, c, theta, tid in system["angles"]
     ]
     system["dihedrals"] = [
         [
@@ -667,7 +668,7 @@ def read_dye_forcefield_cif(path):
             _resolve_site_ref(d),
             tid,
         ]
-        for a, b, c, d, tid in system.get("dihedrals", [])
+        for a, b, c, d, tid in system["dihedrals"]
     ]
     system["impropers"] = [
         [
@@ -677,70 +678,75 @@ def read_dye_forcefield_cif(path):
             _resolve_site_ref(d),
             tid,
         ]
-        for a, b, c, d, tid in system.get("impropers", [])
+        for a, b, c, d, tid in system["impropers"]
     ]
     system["groups"] = {
         gid: [_resolve_site_ref(v) for v in sids]
-        for gid, sids in system.get("groups", {}).items()
+        for gid, sids in system["groups"].items()
     }
     system["rb_groups"] = {
         rid: [_resolve_site_ref(v) for v in sids]
-        for rid, sids in system.get("rb_groups", {}).items()
+        for rid, sids in system["rb_groups"].items()
     }
     system["md_fixed_groups"] = {
         fid: [_resolve_site_ref(v) for v in sids]
-        for fid, sids in system.get("md_fixed_groups", {}).items()
+        for fid, sids in system["md_fixed_groups"].items()
     }
 
-    return system
+    return forcefield_system_from_dict(system)
 
 
 def write_dye_forcefield_cif(path, system):
-    """Write a compact force-field system dict (see :func:`read_dye_forcefield_cif`) to mmCIF."""
+    """Write a force-field system (see :func:`read_dye_forcefield_cif`) to mmCIF.
+
+    Accepts a :class:`IMP.bff.DyeForceFieldSystem` or the plain dictionary that
+    preceded it, normalising once here so everything below sees one type. The
+    dictionary form is what callers assembling a system by hand still write.
+    """
+    system = as_forcefield_system(system)
     with open(path, "w") as out:
         w = ihm.format.CifWriter(out)
-        w.start_block(system.get("name", "ff_system"))
+        w.start_block((system.name or "ff_system"))
         out_dir = os.path.dirname(os.path.abspath(path))
 
         with w.category("_ff_system") as c:
-            c.write(name=system.get("name", "ff_system"))
+            c.write(name=(system.name or "ff_system"))
 
         with w.loop("_ff_component", ["id", "mol2_path", "pdb_path", "role"]) as l:
-            for cid, spec in system.get("components", {}).items():
+            for cid, spec in system.components.items():
                 l.write(
                     id=cid,
-                    mol2_path=spec.get("mol2"),
-                    pdb_path=spec.get("pdb"),
-                    role=spec.get("role"),
+                    # `None`, not `""`: the type uses an empty string for an
+                    # absent path, and mmCIF spells absent as an omitted value.
+                    # Writing "" round-trips into a path that is falsy but not
+                    # None, which every `is None` check downstream misses.
+                    mol2_path=spec.mol2_path or None,
+                    pdb_path=spec.pdb_path or None,
+                    role=spec.role or None,
                 )
 
-        if "probes" in system:
+        if system.probes:
             with w.loop("_flr_probe_list", ["probe_id", "chromophore_name", "probe_origin", "probe_link_type"]) as l:
-                for p in system["probes"]:
+                for p in system.probes:
                     l.write(
-                        probe_id=p["id"],
-                        chromophore_name=p["name"],
-                        probe_origin=p.get("origin", "extrinsic"),
-                        probe_link_type=p.get("link_type", "covalent")
+                        probe_id=p.id,
+                        chromophore_name=p.name,
+                        probe_origin=p.origin,
+                        probe_link_type=p.link_type
                     )
 
-        if "labeling_sites" in system:
-            with w.loop("_flr_poly_probe_position", ["id", "entity_id", "seq_id", "comp_id", "atom_id"]) as l:
-                for s in system["labeling_sites"]:
-                    l.write(
-                        id=s["id"],
-                        entity_id=s["entity_id"],
-                        seq_id=s["seq_id"],
-                        comp_id=s["comp_id"],
-                        atom_id=s.get("atom_id", "CA")
-                    )
+        # `labeling_sites` was **deleted**, not typed. It was initialised to an
+        # empty list in the topology builder, never appended to anywhere, and
+        # written here into a `_flr_poly_probe_position` loop that therefore
+        # could never emit a row. It survived because a dictionary key that is
+        # always empty looks exactly like one that is sometimes populated.
 
         atom_site_rows = []
         asym_ord = 0
         for ent_id, (cid, spec) in enumerate(
-            system.get("components", {}).items(), start=1
+            system.components.items(), start=1
         ):
-            struct_path = spec.get("mol2") or spec.get("pdb")
+            struct_path = spec.mol2_path or spec.pdb_path
             if not struct_path:
                 continue
             if not os.path.isabs(struct_path):
@@ -799,18 +805,17 @@ def write_dye_forcefield_cif(path, system):
                     )
                     atom_id += 1
 
-        sites = system.get("sites", [])
+        sites = system.sites
         compact_site_loop = all(
-            abs(float(s.get("radius", 1.7)) - 1.7) < 1e-12
-            and abs(float(s.get("mass", 12.0)) - 12.0) < 1e-12
+            abs(float(s.radius) - 1.7) < 1e-12
+            and abs(float(s.mass) - 12.0) < 1e-12
             for s in sites
         )
 
         def _site_atom_name(site):
-            atom_name = site.get("atom_name")
-            if atom_name:
-                return atom_name
-            sid = str(site.get("id", ""))
+            if site.atom_name:
+                return site.atom_name
+            sid = str(site.id)
             if "/" in sid:
                 return sid.split("/", 1)[1]
             if ":" in sid:
@@ -822,8 +827,8 @@ def write_dye_forcefield_cif(path, system):
         used_site_nos = set()
         next_no = 1
         for s in sites:
-            sid = s["id"]
-            num = s.get("site_no")
+            sid = s.id
+            num = s.site_no
             if num is not None:
                 num = int(num)
                 if num in used_site_nos:
@@ -845,10 +850,10 @@ def write_dye_forcefield_cif(path, system):
                 for s, num in site_rows:
                     l.write(
                         site_no=num,
-                        site_id=s["id"],
-                        component_id=s["component"],
+                        site_id=s.id,
+                        component_id=s.component,
                         atom_name=_site_atom_name(s),
-                        site_serial=s["site_serial"],
+                        site_serial=s.site_serial,
                     )
         else:
             with w.loop(
@@ -866,12 +871,12 @@ def write_dye_forcefield_cif(path, system):
                 for s, num in site_rows:
                     l.write(
                         site_no=num,
-                        site_id=s["id"],
-                        component_id=s["component"],
+                        site_id=s.id,
+                        component_id=s.component,
                         atom_name=_site_atom_name(s),
-                        site_serial=s["site_serial"],
-                        radius_A=s.get("radius", 1.7),
-                        mass_Da=s.get("mass", 12.0),
+                        site_serial=s.site_serial,
+                        radius_A=s.radius,
+                        mass_Da=s.mass,
                     )
 
         def _write_no_ranges(loop_name, id_col, member_col, mapping):
@@ -891,100 +896,104 @@ def write_dye_forcefield_cif(path, system):
                     for gid, start, _ in rows:
                         l.write(**{id_col: gid, "n": start})
 
-        _write_no_ranges("_ff_group_member", "group_id", "n", system.get("groups", {}))
+        _write_no_ranges("_ff_group_member", "group_id", "n", system.groups)
 
         with w.loop("_ff_dof_fixed_group", ["group_id"]) as l:
-            for gid in system.get("fixed_groups", []):
+            for gid in system.fixed_groups:
                 l.write(group_id=gid)
 
-        _write_no_ranges("_ff_dof_rb_member", "rb_id", "n", system.get("rb_groups", {}))
+        _write_no_ranges("_ff_dof_rb_member", "rb_id", "n", system.rb_groups)
         _write_no_ranges(
             "_ff_dof_md_fixed_member",
             "md_fixed_id",
             "n",
-            system.get("md_fixed_groups", {}),
+            system.md_fixed_groups,
         )
 
-        samp = system.get("sampling", {})
+        samp = system.sampling
         with w.category("_ff_sampling") as c:
             c.write(
-                temperature_K=samp.get("temperature_K", 300.0),
-                friction_ps=samp.get("friction_ps", 10.0),
-                timestep_fs=samp.get("timestep_fs", 0.25),
-                n_steps=samp.get("n_steps", 500000),
-                write_every=samp.get("write_every", 1000),
-                minimize_steps=samp.get("minimize_steps", 200),
+                temperature_K=samp.temperature_K,
+                friction_ps=samp.friction_ps,
+                timestep_fs=samp.timestep_fs,
+                n_steps=samp.n_steps,
+                write_every=samp.write_every,
+                minimize_steps=samp.minimize_steps,
             )
 
-        nb = system.get("nonbonded", {})
+        nb = system.nonbonded
         with w.category("_ff_nonbonded") as c:
             c.write(
-                enabled="YES" if nb.get("enabled", True) else "NO",
-                k=nb.get("k", 5.0),
-                cutoff_A=nb.get("cutoff_A", 6.0),
+                enabled="YES" if nb.enabled else "NO",
+                k=nb.k,
+                cutoff_A=nb.cutoff,
             )
 
         with w.loop("_ff_bond_type", ["type_id", "k_kcal_mol_A2"]) as l:
-            for tid, t in system.get("bond_types", {}).items():
-                l.write(type_id=tid, k_kcal_mol_A2=t["k"])
+            for tid, k in system.bond_types.items():
+                l.write(type_id=tid, k_kcal_mol_A2=k)
 
         with w.loop("_ff_angle_type", ["type_id", "k_kcal_mol_rad2"]) as l:
-            for tid, t in system.get("angle_types", {}).items():
-                l.write(type_id=tid, k_kcal_mol_rad2=t["k"])
+            for tid, k in system.angle_types.items():
+                l.write(type_id=tid, k_kcal_mol_rad2=k)
 
         with w.loop(
             "_ff_torsion_type", ["type_id", "periodicity", "phase_rad", "k_kcal_mol"]
         ) as l:
-            for tid, t in system.get("torsion_types", {}).items():
+            for tid, t in system.torsion_types.items():
                 l.write(
                     type_id=tid,
-                    periodicity=t["periodicity"],
-                    phase_rad=t["phase_rad"],
-                    k_kcal_mol=t["k"],
+                    periodicity=t.periodicity,
+                    phase_rad=t.phase,
+                    k_kcal_mol=t.k,
                 )
 
         with w.loop(
             "_ff_improper_type", ["type_id", "periodicity", "phase_rad", "k_kcal_mol"]
         ) as l:
-            for tid, t in system.get("improper_types", {}).items():
+            for tid, t in system.improper_types.items():
                 l.write(
                     type_id=tid,
-                    periodicity=t["periodicity"],
-                    phase_rad=t["phase_rad"],
-                    k_kcal_mol=t["k"],
+                    periodicity=t.periodicity,
+                    phase_rad=t.phase,
+                    k_kcal_mol=t.k,
                 )
 
-        if system.get("lj_types"):
+        if system.lj_types:
             with w.loop(
                 "_ff_lj_type",
                 ["type_id", "element", "rmin_half_A", "epsilon_kcal_mol"],
             ) as l:
-                for tid, t in system["lj_types"].items():
+                for tid, t in system.lj_types.items():
                     l.write(
                         type_id=tid,
-                        element=t["element"],
-                        rmin_half_A=t["rmin_half"],
-                        epsilon_kcal_mol=t["epsilon"],
+                        element=t.element,
+                        rmin_half_A=t.rmin_half,
+                        epsilon_kcal_mol=t.epsilon,
                     )
 
         def _no(sid):
             return site_id_to_no[sid]
 
         with w.loop("_ff_bond", ["n1", "n2", "length_A", "type_id"]) as l:
-            for a, b, length, tid in system.get("bonds", []):
-                l.write(n1=_no(a), n2=_no(b), length_A=length, type_id=tid)
+            for bd in system.bonds:
+                l.write(n1=_no(bd.site_a), n2=_no(bd.site_b),
+                        length_A=bd.length, type_id=bd.type_id)
 
         with w.loop("_ff_angle", ["n1", "n2", "n3", "theta_rad", "type_id"]) as l:
-            for a, b, c, theta, tid in system.get("angles", []):
-                l.write(n1=_no(a), n2=_no(b), n3=_no(c), theta_rad=theta, type_id=tid)
+            for an in system.angles:
+                l.write(n1=_no(an.site_a), n2=_no(an.site_b), n3=_no(an.site_c),
+                        theta_rad=an.theta, type_id=an.type_id)
 
         with w.loop("_ff_torsion", ["n1", "n2", "n3", "n4", "type_id"]) as l:
-            for a, b, c, d, tid in system.get("dihedrals", []):
-                l.write(n1=_no(a), n2=_no(b), n3=_no(c), n4=_no(d), type_id=tid)
+            for to in system.dihedrals:
+                l.write(n1=_no(to.site_a), n2=_no(to.site_b), n3=_no(to.site_c),
+                        n4=_no(to.site_d), type_id=to.type_id)
 
         with w.loop("_ff_improper", ["n1", "n2", "n3", "n4", "type_id"]) as l:
-            for a, b, c, d, tid in system.get("impropers", []):
-                l.write(n1=_no(a), n2=_no(b), n3=_no(c), n4=_no(d), type_id=tid)
+            for to in system.impropers:
+                l.write(n1=_no(to.site_a), n2=_no(to.site_b), n3=_no(to.site_c),
+                        n4=_no(to.site_d), type_id=to.type_id)
 
 
 # --------------------------------------------------------------------------
@@ -1612,3 +1621,187 @@ def get_dye_metadata(template):
         "positive_atoms": template.get("positive_atoms", []),
         "negative_atoms": template.get("negative_atoms", []),
     }
+
+def as_forcefield_system(system):
+    """A system, whichever way it was given.
+
+    The typed object passes through; a dictionary is converted. Public entry
+    points that take a system call this once, so everything below them sees
+    :class:`IMP.bff.DyeForceFieldSystem` and nothing has to ask.
+
+    The dictionary spelling is kept because assembling a system by hand -- a
+    handful of sites and one bond, in a test or a script -- is genuinely easier
+    as a literal than as a dozen constructor calls. What is not kept is the
+    dictionary reaching any of the code that *uses* a system.
+    """
+    if isinstance(system, dict):
+        return forcefield_system_from_dict(system)
+    return system
+
+
+def forcefield_system_from_dict(d):
+    """A parsed or built dictionary as a typed :class:`IMP.bff.DyeForceFieldSystem`.
+
+    **One conversion, used by both producers.** The mmCIF reader and
+    ``cgdye.topology.build_dye_protein_system`` both built "the system", and
+    they did not agree: the reader's sites carried ``site_no`` and no element,
+    the builder's carried an element and no ``site_no``, and the writer coped
+    with ``s.site_no``. Funnelling both through here is what makes the
+    shape single.
+
+    **Group members are canonicalised to site id tokens.** The mmCIF schema
+    spells a member two ways -- by index (``n``, or ``n_start``/``n_end`` for a
+    run) or by id (``site_id``, ...) -- and the dictionary carried whichever
+    the file used, so a consumer could receive ``4`` or ``"CX4/S1"`` for the
+    same site with no way to tell which. An index is resolved here against the
+    site list; anything already a string is kept.
+    """
+    sites_in = list(d.get("sites") or [])
+    by_no = {}
+    for i, row in enumerate(sites_in):
+        by_no[i] = str(row.get("id") or "")
+        n = row.get("site_no")
+        if n is not None:
+            by_no[int(n)] = str(row.get("id") or "")
+
+    def _token(x):
+        if isinstance(x, str):
+            return x
+        return by_no.get(int(x), str(x))
+
+    sys_ = IMP.bff.DyeForceFieldSystem(str(d.get("name") or ""))
+
+    comps = IMP.bff.FFComponentMap()
+    for cid, spec in (d.get("components") or {}).items():
+        c = IMP.bff.FFComponent()
+        # Two spellings, because two producers: the mmCIF reader stores
+        # `mol2_path` (the column name) and the topology builder stores `mol2`.
+        # Accepting both here is what lets the one type serve both.
+        c.mol2_path = str(spec.get("mol2_path") or spec.get("mol2") or "")
+        c.pdb_path = str(spec.get("pdb_path") or spec.get("pdb") or "")
+        c.role = str(spec.get("role") or "")
+        comps[str(cid)] = c
+    sys_.components = comps
+
+    sites = IMP.bff.FFSiteVector()
+    for i, row in enumerate(sites_in):
+        st = IMP.bff.FFSite()
+        st.id = str(row.get("id") or "")
+        st.component = str(row.get("component") or "")
+        st.atom_name = str(row.get("atom_name") or "")
+        st.element = str(row.get("element") or "")
+        st.site_no = int(row.get("site_no") if row.get("site_no") is not None else i)
+        st.site_serial = int(row.get("site_serial") or 0)
+        st.radius = float(row.get("radius") if row.get("radius") is not None else 1.7)
+        st.mass = float(row.get("mass") if row.get("mass") is not None else 12.0)
+        sites.append(st)
+    sys_.sites = sites
+
+    def _groups(key):
+        m = IMP.bff.MapStringVectorString()
+        for gid, members in (d.get(key) or {}).items():
+            v = IMP.bff.VectorString()
+            for x in members:
+                v.append(_token(x))
+            m[str(gid)] = v
+        return m
+    sys_.groups = _groups("groups")
+    sys_.rb_groups = _groups("rb_groups")
+    sys_.md_fixed_groups = _groups("md_fixed_groups")
+
+    fg = IMP.bff.VectorString()
+    for g in d.get("fixed_groups") or []:
+        fg.append(str(g))
+    sys_.fixed_groups = fg
+
+    def _scalar_types(key):
+        m = IMP.bff.MapStringDouble()
+        for tid, params in (d.get(key) or {}).items():
+            m[str(tid)] = float((params or {}).get("k") or 0.0)
+        return m
+    sys_.bond_types = _scalar_types("bond_types")
+    sys_.angle_types = _scalar_types("angle_types")
+
+    def _torsion_types(key):
+        m = IMP.bff.FFTorsionTypeMap()
+        for tid, params in (d.get(key) or {}).items():
+            params = params or {}
+            t = IMP.bff.FFTorsionType()
+            t.periodicity = int(params.get("periodicity") or 1)
+            t.phase = float(params.get("phase_rad") or 0.0)
+            t.k = float(params.get("k") or 0.0)
+            m[str(tid)] = t
+        return m
+    sys_.torsion_types = _torsion_types("torsion_types")
+    sys_.improper_types = _torsion_types("improper_types")
+
+    lj = IMP.bff.FFLJTypeMap()
+    for tid, params in (d.get("lj_types") or {}).items():
+        params = params or {}
+        t = IMP.bff.FFLJType()
+        t.element = str(params.get("element") or "")
+        t.rmin_half = float(params.get("rmin_half") or 0.0)
+        t.epsilon = float(params.get("epsilon") or 0.0)
+        lj[str(tid)] = t
+    sys_.lj_types = lj
+
+    bonds = IMP.bff.FFBondVector()
+    for row in d.get("bonds") or []:
+        a, b, length, tid = row
+        r = IMP.bff.FFBond()
+        r.site_a, r.site_b = _token(a), _token(b)
+        r.length = float(length or 0.0)
+        r.type_id = str(tid or "")
+        bonds.append(r)
+    sys_.bonds = bonds
+
+    angles = IMP.bff.FFAngleVector()
+    for row in d.get("angles") or []:
+        a, b, c, theta, tid = row
+        r = IMP.bff.FFAngle()
+        r.site_a, r.site_b, r.site_c = _token(a), _token(b), _token(c)
+        r.theta = float(theta or 0.0)
+        r.type_id = str(tid or "")
+        angles.append(r)
+    sys_.angles = angles
+
+    def _torsions(key):
+        v = IMP.bff.FFTorsionVector()
+        for row in d.get(key) or []:
+            a, b, c, dd, tid = row
+            r = IMP.bff.FFTorsion()
+            r.site_a, r.site_b = _token(a), _token(b)
+            r.site_c, r.site_d = _token(c), _token(dd)
+            r.type_id = str(tid or "")
+            v.append(r)
+        return v
+    sys_.dihedrals = _torsions("dihedrals")
+    sys_.impropers = _torsions("impropers")
+
+    probes = IMP.bff.FFProbeVector()
+    for row in d.get("probes") or []:
+        pr = IMP.bff.FFProbe()
+        pr.id = int(row.get("id") or 0)
+        pr.name = str(row.get("name") or "")
+        pr.origin = str(row.get("origin") or "extrinsic")
+        pr.link_type = str(row.get("link_type") or "covalent")
+        probes.append(pr)
+    sys_.probes = probes
+
+    nb = IMP.bff.FFNonbonded()
+    src = d.get("nonbonded") or {}
+    nb.enabled = bool(src.get("enabled", True))
+    nb.k = float(src.get("k", 5.0))
+    nb.cutoff = float(src.get("cutoff_A", 6.0))
+    sys_.nonbonded = nb
+
+    sp = IMP.bff.FFSampling()
+    src = d.get("sampling") or {}
+    sp.temperature_K = float(src.get("temperature_K", 300.0))
+    sp.friction_ps = float(src.get("friction_ps", 10.0))
+    sp.timestep_fs = float(src.get("timestep_fs", 0.25))
+    sp.n_steps = int(src.get("n_steps", 500000))
+    sp.write_every = int(src.get("write_every", 1000))
+    sp.minimize_steps = int(src.get("minimize_steps", 200))
+    sys_.sampling = sp
+    return sys_

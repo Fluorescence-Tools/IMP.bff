@@ -399,17 +399,17 @@ class LangevinDyeSampler:
         dye_atoms.sort(key=lambda a: IMP.atom.Atom(a).get_input_index())
         self.dye_particles = [a.get_particle() for a in dye_atoms]
         self.system = dye_forcefield_system(dye_mol2, "dye")
-        sites = self.system["sites"]
+        sites = self.system.sites
         if len(sites) != len(self.dye_particles):
             raise ValueError(f"MOL2 has {len(sites)} atoms, the dye hierarchy {len(self.dye_particles)}")
-        self.site_particles = {s["id"]: p for s, p in zip(sites, self.dye_particles)}
-        self.atom_names = tuple(s["atom_name"] for s in sites)
-        anchor_ids = set(self.system["groups"]["dye_anchor"])
-        self.mobile = [p for s, p in zip(sites, self.dye_particles) if s["id"] not in anchor_ids]
-        self.fixed = [p for s, p in zip(sites, self.dye_particles) if s["id"] in anchor_ids]
+        self.site_particles = {s.id: p for s, p in zip(sites, self.dye_particles)}
+        self.atom_names = tuple(s.atom_name for s in sites)
+        anchor_ids = set(self.system.groups["dye_anchor"])
+        self.mobile = [p for s, p in zip(sites, self.dye_particles) if s.id not in anchor_ids]
+        self.fixed = [p for s, p in zip(sites, self.dye_particles) if s.id in anchor_ids]
 
-        radii = [_VDW_RADIUS.get(_element(s["atom_name"]), 1.7) for s in sites]
-        masses = [float(s.get("mass", 12.011)) for s in sites]
+        radii = [_VDW_RADIUS.get(_element(s.atom_name), 1.7) for s in sites]
+        masses = [float(s.mass) for s in sites]
         for p, r, m in zip(self.dye_particles, radii, masses):
             if not IMP.core.XYZR.get_is_setup(p):
                 IMP.core.XYZR.setup_particle(p, r)

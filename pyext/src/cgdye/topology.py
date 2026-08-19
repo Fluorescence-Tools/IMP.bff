@@ -898,7 +898,6 @@ def main(
     fixed_groups = [f"{c['name']}_all" for c in fixed_comps]
 
     probes = []
-    labeling_sites = []
     
     for i, c in enumerate(parsed_components, start=1):
         if c["role"] == "mobile":
@@ -941,7 +940,6 @@ def main(
             for c in parsed_components
         },
         "probes": probes,
-        "labeling_sites": labeling_sites,
         "sites": sites,
         "groups": groups,
         "rb_groups": rb_groups,
@@ -1159,37 +1157,40 @@ def build_dye_protein_system(
         if m:
             elements.add(m.group(1).upper())
 
-    return {
-        "name": f"{protein_name}_{dye_name}",
-        "components": {
-            protein_name: {"mol2": protein_mol2, "role": "fixed"},
-            dye_name: {"mol2": dye_mol2, "role": "mobile"},
-        },
-        "sites": sites,
-        "groups": groups,
-        "rb_groups": rb_groups,
-        "md_fixed_groups": md_fixed_groups,
-        "fixed_groups": [f"{protein_name}_all"],
-        "bond_types": {"B1": {"k": 2000.0}},
-        "angle_types": {"A1": {"k": 400.0}},
-        "torsion_types": {
-            "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
-            "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
-        },
-        "improper_types": {
-            "I_RING": {"periodicity": 2, "phase_rad": 0.0, "k": 40.0},
-            "I_PI": {"periodicity": 2, "phase_rad": 0.0, "k": 180.0},
-            "I_FLAT": {"periodicity": 2, "phase_rad": 0.0, "k": 120.0},
-            "I_ORIENT": {"periodicity": 2, "phase_rad": 0.0, "k": 220.0},
-        },
-        "lj_types": build_lj_type_table(elements),
-        "bonds": bonds,
-        "angles": angles,
-        "dihedrals": dihedrals,
-        "impropers": impropers,
-        "nonbonded": {"enabled": True, "k": 5.0, "cutoff_A": 6.0},
-        "sampling": {"n_steps": 500000, "write_every": 1000, "minimize_steps": 200},
-    }
+    from IMP.bff.io.cif import forcefield_system_from_dict
+    return forcefield_system_from_dict(
+    {
+            "name": f"{protein_name}_{dye_name}",
+            "components": {
+                protein_name: {"mol2": protein_mol2, "role": "fixed"},
+                dye_name: {"mol2": dye_mol2, "role": "mobile"},
+            },
+            "sites": sites,
+            "groups": groups,
+            "rb_groups": rb_groups,
+            "md_fixed_groups": md_fixed_groups,
+            "fixed_groups": [f"{protein_name}_all"],
+            "bond_types": {"B1": {"k": 2000.0}},
+            "angle_types": {"A1": {"k": 400.0}},
+            "torsion_types": {
+                "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
+                "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
+            },
+            "improper_types": {
+                "I_RING": {"periodicity": 2, "phase_rad": 0.0, "k": 40.0},
+                "I_PI": {"periodicity": 2, "phase_rad": 0.0, "k": 180.0},
+                "I_FLAT": {"periodicity": 2, "phase_rad": 0.0, "k": 120.0},
+                "I_ORIENT": {"periodicity": 2, "phase_rad": 0.0, "k": 220.0},
+            },
+            "lj_types": build_lj_type_table(elements),
+            "bonds": bonds,
+            "angles": angles,
+            "dihedrals": dihedrals,
+            "impropers": impropers,
+            "nonbonded": {"enabled": True, "k": 5.0, "cutoff_A": 6.0},
+            "sampling": {"n_steps": 500000, "write_every": 1000, "minimize_steps": 200},
+        }
+    )
 
 
 def dye_forcefield_system(dye_mol2, dye_name="dye", dye_template=None, default_radius=1.7, default_mass=12.0):
@@ -1224,23 +1225,26 @@ def dye_forcefield_system(dye_mol2, dye_name="dye", dye_template=None, default_r
         dihedrals.append([sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), sid(dye_name, d_names[c]), sid(dye_name, d_names[d]), tt])
     anchor = [sid(dye_name, d_names[k]) for k in sorted(d_atoms) if d_names[k].upper() in {"N", "CA", "C", "O"}]
     elements = {s["element"] for s in sites}
-    return {
-        "name": dye_name,
-        "components": {dye_name: {"mol2": dye_mol2, "role": "mobile"}},
-        "sites": sites,
-        "groups": {f"{dye_name}_all": [s["id"] for s in sites], f"{dye_name}_anchor": anchor},
-        "rb_groups": {}, "md_fixed_groups": {},
-        "fixed_groups": [f"{dye_name}_anchor"],
-        "bond_types": {"B1": {"k": 2000.0}},
-        "angle_types": {"A1": {"k": 400.0}},
-        "torsion_types": {
-            "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
-            "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
-        },
-        "improper_types": {},
-        "lj_types": build_lj_type_table(elements),
-        "bonds": bonds, "angles": angles, "dihedrals": dihedrals, "impropers": [],
-    }
+    from IMP.bff.io.cif import forcefield_system_from_dict
+    return forcefield_system_from_dict(
+    {
+            "name": dye_name,
+            "components": {dye_name: {"mol2": dye_mol2, "role": "mobile"}},
+            "sites": sites,
+            "groups": {f"{dye_name}_all": [s["id"] for s in sites], f"{dye_name}_anchor": anchor},
+            "rb_groups": {}, "md_fixed_groups": {},
+            "fixed_groups": [f"{dye_name}_anchor"],
+            "bond_types": {"B1": {"k": 2000.0}},
+            "angle_types": {"A1": {"k": 400.0}},
+            "torsion_types": {
+                "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
+                "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
+            },
+            "improper_types": {},
+            "lj_types": build_lj_type_table(elements),
+            "bonds": bonds, "angles": angles, "dihedrals": dihedrals, "impropers": [],
+        }
+    )
 
 
 #: atomic masses (Da) of the elements a dye MOL2 carries

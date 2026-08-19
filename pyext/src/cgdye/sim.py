@@ -13,6 +13,7 @@ from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring import torsion_cosine
 from IMP.bff.tools import import_click
 import IMP
+import IMP.bff
 import IMP.algebra
 import IMP.atom
 import IMP.container
@@ -82,44 +83,50 @@ def _atom_name(p):
 
 
 def _validate_system(system):
-    if not system.get("components"):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
+    if not system.components:
         raise ValueError("system requires components")
-    if not system.get("sites"):
+    if not system.sites:
         raise ValueError("system requires sites")
 
-    sids = [s["id"] for s in system["sites"]]
+    sids = [s.id for s in system.sites]
     if len(sids) != len(set(sids)):
         raise ValueError("duplicate site ids")
     sidset = set(sids)
 
-    for s in system["sites"]:
-        if s["component"] not in system["components"]:
-            raise ValueError(f"site {s['id']} unknown component {s['component']}")
-        if s.get("site_serial") is None:
-            raise ValueError(f"site {s['id']} missing site_serial")
+    for s in system.sites:
+        if s.component not in system.components:
+            raise ValueError(f"site {s.id} unknown component {s.component}")
 
-    for a, b, *_ in system.get("bonds", []):
-        if a not in sidset or b not in sidset:
+    for bd in system.bonds:
+        if bd.site_a not in sidset or bd.site_b not in sidset:
             raise ValueError("bond references unknown site")
-    for a, b, c, *_ in system.get("angles", []):
-        if a not in sidset or b not in sidset or c not in sidset:
+    for an in system.angles:
+        if any(x not in sidset for x in (an.site_a, an.site_b, an.site_c)):
             raise ValueError("angle references unknown site")
-    for block in ("dihedrals", "impropers"):
-        for a, b, c, d, *_ in system.get(block, []):
-            if a not in sidset or b not in sidset or c not in sidset or d not in sidset:
-                raise ValueError(f"{block} references unknown site")
+    for name, block in (("dihedrals", system.dihedrals),
+                        ("impropers", system.impropers)):
+        for to in block:
+            if any(x not in sidset
+                   for x in (to.site_a, to.site_b, to.site_c, to.site_d)):
+                raise ValueError(f"{name} references unknown site")
 
 
 def _group_ids(system, group_name):
-    g = system.get("groups", {})
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
+    g = system.groups
     if group_name not in g:
         raise ValueError(f"unknown group {group_name}")
     return g[group_name]
 
 
 def _component_for_group(system, group_name):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     ids = set(_group_ids(system, group_name))
-    comps = {s["component"] for s in system.get("sites", []) if s.get("id") in ids}
+    comps = {s.component for s in system.sites if s.id in ids}
     if not comps:
         raise ValueError(f"group {group_name} has no sites")
     if len(comps) != 1:
@@ -130,6 +137,8 @@ def _component_for_group(system, group_name):
 
 
 def _infer_fixed_component(system):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     fixed = fixed_components(system)
     if fixed:
         return fixed[0]
@@ -137,12 +146,14 @@ def _infer_fixed_component(system):
 
 
 def _infer_mobile_group(system):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     mobile = mobile_components(system)
     if not mobile:
         raise ValueError("No component with role 'mobile' found in system")
     comp = mobile[0]
     # Check for '{comp}_all' group
-    g = system.get("groups", {})
+    g = system.groups
     target = f"{comp}_all"
     if target in g:
         return target
@@ -153,6 +164,8 @@ def _infer_mobile_group(system):
 
 
 def _load_hierarchies(model, system, system_cif, only_components=None):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     base = os.path.dirname(os.path.abspath(system_cif))
     root = IMP.atom.Hierarchy.setup_particle(IMP.Particle(model, "root"))
 
@@ -161,12 +174,12 @@ def _load_hierarchies(model, system, system_cif, only_components=None):
     component_atom_name_serial = {}
     component_atom_name_particles = {}
 
-    for comp, spec in system["components"].items():
+    for comp, spec in system.components.items():
         if only_components is not None and comp not in only_components:
             continue
         # Support both new mol2 key and legacy pdb key
-        struct_path = spec.get("mol2") or spec.get("pdb")
-        if struct_path is None:
+        struct_path = spec.mol2_path or spec.pdb_path
+        if not struct_path:
             raise ValueError(f"Component {comp} has no mol2 or pdb path in system CIF")
         if not os.path.isabs(struct_path):
             struct_path = os.path.normpath(os.path.join(base, struct_path))
@@ -206,13 +219,13 @@ def _load_hierarchies(model, system, system_cif, only_components=None):
 
     site_particles = {}
     site_atom_names = {}
-    for s in system["sites"]:
-        sid = s["id"]
-        comp = s["component"]
+    for s in system.sites:
+        sid = s.id
+        comp = s.component
         if only_components is not None and comp not in only_components:
             continue
-        serial = s.get("site_serial")
-        atom_name = s.get("atom_name")
+        serial = s.site_serial
+        atom_name = s.atom_name
         amap = component_atom_serial.get(comp, {})
         p = None
         if serial is not None:
@@ -239,11 +252,11 @@ def _load_hierarchies(model, system, system_cif, only_components=None):
             p = p.get_particle()
 
         xyzr = IMP.core.XYZR(p)
-        xyzr.set_radius(float(s.get("radius", xyzr.get_radius())))
+        xyzr.set_radius(float(s.radius))
         if not IMP.atom.Mass.get_is_setup(p):
-            IMP.atom.Mass.setup_particle(p, float(s.get("mass", 12.0)))
+            IMP.atom.Mass.setup_particle(p, float(s.mass))
         else:
-            IMP.atom.Mass(p).set_mass(float(s.get("mass", IMP.atom.Mass(p).get_mass())))
+            IMP.atom.Mass(p).set_mass(float(s.mass))
 
         if not IMP.atom.Bonded.get_is_setup(p):
             IMP.atom.Bonded.setup_particle(p)
@@ -283,56 +296,58 @@ def _angle(p1, p2, p3):
 
 
 def _build_restraints(model, system, site_particles):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     restraints = []
     softsphere_restraints = []
 
-    bt = system.get("bond_types", {})
-    at = system.get("angle_types", {})
-    tt = system.get("torsion_types", {})
-    it = system.get("improper_types", {})
+    bt = system.bond_types
+    at = system.angle_types
+    tt = system.torsion_types
+    it = system.improper_types
 
     sp = site_particles  # shorthand; only contains loaded components
 
-    for a, b, length, tid in system.get("bonds", []):
-        if a not in sp or b not in sp:
+    for bd in system.bonds:
+        if bd.site_a not in sp or bd.site_b not in sp:
             continue
-        p1, p2 = sp[a], sp[b]
-        k = float(bt[tid]["k"])
-        d0 = _dist(p1, p2) if length is None else float(length)
+        p1, p2 = sp[bd.site_a], sp[bd.site_b]
+        k = float(bt[bd.type_id])
+        d0 = _dist(p1, p2) if bd.length is None else float(bd.length)
         restraints.append(
             IMP.core.DistanceRestraint(model, IMP.core.Harmonic(d0, k), p1, p2)
         )
 
-    for a, b, c, theta, tid in system.get("angles", []):
-        if a not in sp or b not in sp or c not in sp:
+    for an in system.angles:
+        if an.site_a not in sp or an.site_b not in sp or an.site_c not in sp:
             continue
-        p1, p2, p3 = sp[a], sp[b], sp[c]
-        k = float(at[tid]["k"])
-        t0 = _angle(p1, p2, p3) if theta is None else float(theta)
+        p1, p2, p3 = sp[an.site_a], sp[an.site_b], sp[an.site_c]
+        k = float(at[an.type_id])
+        t0 = _angle(p1, p2, p3) if an.theta is None else float(an.theta)
         restraints.append(
             IMP.core.AngleRestraint(model, IMP.core.Harmonic(t0, k), p1, p2, p3)
         )
 
-    for a, b, c, d, tid in system.get("dihedrals", []):
-        if a not in sp or b not in sp or c not in sp or d not in sp:
+    for to in system.dihedrals:
+        if to.site_a not in sp or to.site_b not in sp or to.site_c not in sp or to.site_d not in sp:
             continue
-        p1, p2, p3, p4 = sp[a], sp[b], sp[c], sp[d]
+        p1, p2, p3, p4 = sp[to.site_a], sp[to.site_b], sp[to.site_c], sp[to.site_d]
         # CHARMM-convention type -> IMP.core.Cosine (sign flip, see topology.dye.torsion_cosine)
-        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[tid]), p1, p2, p3, p4))
+        restraints.append(IMP.core.DihedralRestraint(model, torsion_cosine(tt[to.type_id]), p1, p2, p3, p4))
 
-    for a, b, c, d, tid in system.get("impropers", []):
-        if a not in sp or b not in sp or c not in sp or d not in sp:
+    for to in system.impropers:
+        if to.site_a not in sp or to.site_b not in sp or to.site_c not in sp or to.site_d not in sp:
             continue
-        p1, p2, p3, p4 = sp[a], sp[b], sp[c], sp[d]
-        t = it[tid]
+        p1, p2, p3, p4 = sp[to.site_a], sp[to.site_b], sp[to.site_c], sp[to.site_d]
+        t = it[to.type_id]
         theta0 = IMP.core.get_dihedral(
             IMP.core.XYZ(p1), IMP.core.XYZ(p2), IMP.core.XYZ(p3), IMP.core.XYZ(p4)
         )
-        fun = IMP.core.Harmonic(theta0, float(t["k"]))
+        fun = IMP.core.Harmonic(theta0, float(t.k))
         restraints.append(IMP.core.DihedralRestraint(model, fun, p1, p2, p3, p4))
 
-    nb = system.get("nonbonded", {})
-    if nb.get("enabled", True):
+    nb = system.nonbonded
+    if nb.enabled:
         sids = sorted(site_particles.keys())
         idx_pairs = []
         excl = _derive_exclusions(system)
@@ -345,7 +360,7 @@ def _build_restraints(model, system, site_particles):
                     (site_particles[a].get_index(), site_particles[b].get_index())
                 )
         lpc = IMP.container.ListPairContainer(model, idx_pairs)
-        pair_score = IMP.core.SoftSpherePairScore(float(nb.get("k", 5.0)))
+        pair_score = IMP.core.SoftSpherePairScore(float(nb.k))
         rnb = IMP.container.PairsRestraint(pair_score, lpc)
         restraints.append(rnb)
         softsphere_restraints.append(rnb)
@@ -354,33 +369,35 @@ def _build_restraints(model, system, site_particles):
 
 
 def _derive_exclusions(system):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     excl = set()
 
     def add_pair(a, b):
         excl.add((a, b) if a <= b else (b, a))
 
-    explicit = system.get("exclusions", [])
-    for a, b in explicit:
-        add_pair(a, b)
+    # An explicit `exclusions` list used to short-circuit everything below.
+    # Nothing ever produced one -- not the reader, not the topology builder,
+    # not a test -- so the branch was dead and the derived exclusions were
+    # always what was used. Removed with the key when the system became typed.
 
-    if explicit:
-        return excl
-
-    for a, b, *_ in system.get("bonds", []):
-        add_pair(a, b)
-    for a, _, c, *_ in system.get("angles", []):
-        add_pair(a, c)
-    for a, _, _, d, *_ in system.get("dihedrals", []):
-        add_pair(a, d)
+    for bd in system.bonds:
+        add_pair(bd.site_a, bd.site_b)
+    for an in system.angles:
+        add_pair(an.site_a, an.site_c)
+    for to in system.dihedrals:
+        add_pair(to.site_a, to.site_d)
 
     return excl
 
 
 def _build_site_graph(system):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     g = defaultdict(set)
-    for a, b, *_ in system.get("bonds", []):
-        g[a].add(b)
-        g[b].add(a)
+    for bd in system.bonds:
+        g[bd.site_a].add(bd.site_b)
+        g[bd.site_b].add(bd.site_a)
     return g
 
 
@@ -417,11 +434,13 @@ def _find_cycles(graph, max_len=8):
 def _mobile_ring_site_ids(
     system, site_atom_names, mobile_component, include_attached_h=True
 ):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     full_graph = _build_site_graph(system)
     mobile_ids = {
-        s["id"]
-        for s in system.get("sites", [])
-        if s.get("component") == mobile_component
+        s.id
+        for s in system.sites
+        if s.component == mobile_component
     }
     mobile_graph = {
         sid: {nb for nb in full_graph.get(sid, set()) if nb in mobile_ids}
@@ -474,9 +493,11 @@ def _fixed_flex_ids(system, fixed_flex_mode, fixed_name):
     - ``"flex"``     – atoms listed in the ``{name}_flex`` group of the
                         system CIF are released; all other fixed atoms stay fixed
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if fixed_flex_mode != "flex":
         return set()
-    groups = system.get("groups", {})
+    groups = system.groups
     flex_group = f"{fixed_name}_flex"
     return set(groups.get(flex_group, []))
 
@@ -493,8 +514,10 @@ def _build_go_restraints(
     go_fixed_k,
     cutoff,
 ):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     graph = _build_site_graph(system)
-    s2c = {s["id"]: s["component"] for s in system.get("sites", [])}
+    s2c = {s.id: s.component for s in system.sites}
 
     def is_heavy(sid):
         nm = site_atom_names.get(sid, "")
@@ -554,14 +577,16 @@ def _build_component_atom_maps(component_hiers, system=None, system_cif=None):
     For MOL2-backed components the true atom names are read directly from the
     file (IMP's read_mol2 maps TRIPOS types, losing the real column-2 name).
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     base = os.path.dirname(os.path.abspath(system_cif)) if system_cif else None
     out = {}
     for comp, hier in component_hiers.items():
         # Resolve real atom names from MOL2 if available
         mol2_names = {}
         if system and base:
-            spec = system.get("components", {}).get(comp, {})
-            struct_path = spec.get("mol2") or spec.get("pdb") or ""
+            spec = system.components.get(comp, {})
+            struct_path = spec.mol2_path or spec.pdb_path or ""
             if struct_path and not os.path.isabs(struct_path):
                 struct_path = os.path.normpath(os.path.join(base, struct_path))
             if struct_path.endswith(".mol2") and os.path.exists(struct_path):
@@ -696,15 +721,17 @@ def _configure_movable(
     md_fixed_site_ids,
     explicit_movable_ids=None,
 ):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     fixed = set()
-    for gid in system.get("fixed_groups", []):
+    for gid in system.fixed_groups:
         fixed.update(_group_ids(system, gid))
 
     # In flex mode, release atoms listed in any {component}_flex group that
     # belongs to a fixed component.  Those atoms were included in the broad
     # fixed_groups entry but should be free to move during MD.
     if fixed_flex_mode == "flex":
-        for gid, ids in system.get("groups", {}).items():
+        for gid, ids in system.groups.items():
             if gid.endswith("_flex"):
                 fixed.difference_update(ids)
 
@@ -733,17 +760,34 @@ def _configure_movable(
 
 
 def _absolutize_component_pdbs(system, system_cif):
-    sys_out = json.loads(json.dumps(system))
+    """Component paths relative to the system CIF, made absolute.
+
+    The copy used to be ``json.loads(json.dumps(system))`` -- a deep copy that
+    only worked because the system was a dictionary of plain data. A typed
+    system is not JSON, so the components map is rebuilt directly, which is
+    what the function meant in the first place: nothing else was being copied.
+    """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     base_dir = Path(system_cif).resolve().parent
-    for comp, spec in sys_out.get("components", {}).items():
-        for key in ("mol2", "pdb"):
-            p = spec.get(key)
-            if p and not os.path.isabs(p):
-                sys_out["components"][comp][key] = str((base_dir / p).resolve())
-    return sys_out
+
+    comps = IMP.bff.FFComponentMap()
+    for comp, spec in system.components.items():
+        c = IMP.bff.FFComponent()
+        c.role = spec.role
+        for src, dst in (("mol2_path", "mol2_path"), ("pdb_path", "pdb_path")):
+            value = getattr(spec, src)
+            if value and not os.path.isabs(value):
+                value = str((base_dir / value).resolve())
+            setattr(c, dst, value)
+        comps[comp] = c
+    system.components = comps
+    return system
 
 
 def _write_system_copy(system, system_cif, out_dir, output_root):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     sys_out = _absolutize_component_pdbs(system, system_cif)
 
     out_path = Path(out_dir)
@@ -762,7 +806,7 @@ def _write_system_copy(system, system_cif, out_dir, output_root):
         else out_root / "systems"
     )
     systems_dir.mkdir(parents=True, exist_ok=True)
-    root_copy_path = systems_dir / f"{system.get('name', 'ff_system')}.system.cif"
+    root_copy_path = systems_dir / f"{(system.name or 'ff_system')}.system.cif"
     write_dye_forcefield_cif(str(root_copy_path), sys_out)
 
 
@@ -1060,6 +1104,8 @@ def _run(
     log_every_frames,
     n_restarts,
 ):
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     model = IMP.Model()
     if mobile_group is None:
         mobile_group = _infer_mobile_group(system)
@@ -1097,7 +1143,7 @@ def _run(
     if com_pull_k > 0:
         fixed_ids = (
             _group_ids(system, f"{fixed_component}_all")
-            if f"{fixed_component}_all" in system.get("groups", {})
+            if f"{fixed_component}_all" in system.groups
             else []
         )
         mobile_ids = _group_ids(system, mobile_group)
@@ -1127,7 +1173,7 @@ def _run(
     if init_placement:
         fixed_ids = (
             _group_ids(system, f"{fixed_component}_all")
-            if f"{fixed_component}_all" in system.get("groups", {})
+            if f"{fixed_component}_all" in system.groups
             else []
         )
         mobile_ids_for_init = _group_ids(system, mobile_group)
@@ -1155,18 +1201,25 @@ def _run(
             flush=True,
         )
 
-    sampling = dict(system.get("sampling", {}))
+    # A copy, so a CLI override does not mutate the system the caller handed in.
+    sampling = IMP.bff.FFSampling()
+    sampling.temperature_K = system.sampling.temperature_K
+    sampling.friction_ps = system.sampling.friction_ps
+    sampling.timestep_fs = system.sampling.timestep_fs
+    sampling.n_steps = system.sampling.n_steps
+    sampling.write_every = system.sampling.write_every
+    sampling.minimize_steps = system.sampling.minimize_steps
     if md_steps is not None:
-        sampling["n_steps"] = md_steps
+        sampling.n_steps = int(md_steps)
     if write_every_override is not None:
-        sampling["write_every"] = write_every_override
+        sampling.write_every = int(write_every_override)
 
-    n_steps = int(sampling.get("n_steps", 100000))
-    write_every = int(sampling.get("write_every", 1000))
-    temperature_k = float(sampling.get("temperature_K", 300.0))
-    friction_ps = float(sampling.get("friction_ps", 10.0))
-    timestep_fs = float(sampling.get("timestep_fs", 0.25))
-    minimize_steps = int(sampling.get("minimize_steps", 200))
+    n_steps = int(sampling.n_steps)
+    write_every = int(sampling.write_every)
+    temperature_k = float(sampling.temperature_K)
+    friction_ps = float(sampling.friction_ps)
+    timestep_fs = float(sampling.timestep_fs)
+    minimize_steps = int(sampling.minimize_steps)
 
     mobile_all_ids = _group_ids(system, mobile_group)
     ring_ids = _mobile_ring_site_ids(
@@ -1178,7 +1231,7 @@ def _run(
     # remain MD-movable but still ride the RB during MC.
     default_rb_site_groups = [list(mobile_all_ids)]
 
-    md_fixed_groups_cfg = system.get("md_fixed_groups", {})
+    md_fixed_groups_cfg = system.md_fixed_groups
     mobile_md_fixed = sorted(
         sid
         for sids in md_fixed_groups_cfg.values()
@@ -1364,6 +1417,8 @@ def _run_multi_restart(
     host_component,
 ):
     """Run multiple independent restarts of the hybrid MC/MD simulation and collect final states."""
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     print(f"Running {n_restarts} independent restarts for multi_restart mode.")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1418,7 +1473,7 @@ def _run_multi_restart(
             mobile_ids_for_init = _group_ids(system, guest_group)
             fixed_ids = (
                 _group_ids(system, f"{host_component}_all")
-                if f"{host_component}_all" in system.get("groups", {})
+                if f"{host_component}_all" in system.groups
                 else []
             )
             fixed_ps = (

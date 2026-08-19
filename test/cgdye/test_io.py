@@ -52,9 +52,9 @@ class TestIO(unittest.TestCase):
                 self.assertTrue(os.path.exists(cif_path))
                 
                 read_system = read_dye_forcefield_cif(cif_path)
-                self.assertEqual(read_system["name"], system["name"])
-                self.assertEqual(len(read_system["sites"]), len(system["sites"]))
-                self.assertEqual(read_system["sampling"]["n_steps"], system["sampling"]["n_steps"])
+                self.assertEqual(read_system.name, system["name"])
+                self.assertEqual(len(read_system.sites), len(system["sites"]))
+                self.assertEqual(read_system.sampling.n_steps, system["sampling"]["n_steps"])
             finally:
                 cif_mod._parse_struct_atom_site_rows = original_parse
 

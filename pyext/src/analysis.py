@@ -316,7 +316,7 @@ def load_site_name_lookup(traj_root, system_name, component):
 
     system = read_dye_forcefield_cif(str(system_cif))
     lookup = {}
-    for site in system.get("sites", []):
+    for site in system.sites:
         if site.get("component") == component:
             serial = site.get("site_serial")
             if serial is not None:

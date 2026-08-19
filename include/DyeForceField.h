@@ -45,6 +45,13 @@ struct IMPBFFEXPORT FFSite {
     std::string id;
     std::string component;
     std::string atom_name;
+    //! Chemical element, which is what picks the site's LJ type.
+    //!
+    //! Present because the two producers of this structure disagreed about it:
+    //! the mmCIF reader set `site_no` and no element, the topology builder set
+    //! an element and no `site_no`, and `read_dye_forcefield_cif` guarded with
+    //! `s.get("site_no")` because it might not be there. One type, one shape.
+    std::string element;
     //! Index within the system, and within its component's own numbering.
     int site_no = 0;
     int site_serial = 0;
@@ -101,6 +108,21 @@ struct IMPBFFEXPORT FFLJType {
     IMP_SHOWABLE_INLINE(FFLJType, out << "FFLJType(" << element << ")");
 };
 
+//! A fluorophore in the system, for the flrCIF probe list.
+/*!
+    One per *mobile* component: in this model a component that the sampler may
+    move is a dye, and a fixed one is what it is attached to.
+*/
+struct IMPBFFEXPORT FFProbe {
+    int id = 0;
+    std::string name;
+    //! `"extrinsic"` for a dye added to the structure, `"intrinsic"` for a
+    //! native fluorophore such as a tryptophan.
+    std::string origin;
+    std::string link_type;
+    IMP_SHOWABLE_INLINE(FFProbe, out << "FFProbe(" << name << ")");
+};
+
 //! The soft-sphere non-bonded term.
 struct IMPBFFEXPORT FFNonbonded {
     bool enabled = true;
@@ -128,6 +150,7 @@ IMP_VALUES(FFAngle, FFAngles);
 IMP_VALUES(FFTorsion, FFTorsions);
 IMP_VALUES(FFTorsionType, FFTorsionTypes);
 IMP_VALUES(FFLJType, FFLJTypes);
+IMP_VALUES(FFProbe, FFProbes);
 IMP_VALUES(FFNonbonded, FFNonbondeds);
 IMP_VALUES(FFSampling, FFSamplings);
 
@@ -164,6 +187,7 @@ class IMPBFFEXPORT DyeForceFieldSystem {
     std::vector<FFAngle> angles_;
     std::vector<FFTorsion> dihedrals_;
     std::vector<FFTorsion> impropers_;
+    std::vector<FFProbe> probes_;
     FFNonbonded nonbonded_;
     FFSampling sampling_;
 
@@ -188,6 +212,7 @@ public:
     const std::vector<FFAngle>& get_angles() const { return angles_; }
     const std::vector<FFTorsion>& get_dihedrals() const { return dihedrals_; }
     const std::vector<FFTorsion>& get_impropers() const { return impropers_; }
+    const std::vector<FFProbe>& get_probes() const { return probes_; }
     FFNonbonded get_nonbonded() const { return nonbonded_; }
     FFSampling get_sampling() const { return sampling_; }
 
@@ -206,6 +231,7 @@ public:
     void set_angles(const std::vector<FFAngle>& v) { angles_ = v; }
     void set_dihedrals(const std::vector<FFTorsion>& v) { dihedrals_ = v; }
     void set_impropers(const std::vector<FFTorsion>& v) { impropers_ = v; }
+    void set_probes(const std::vector<FFProbe>& v) { probes_ = v; }
     void set_nonbonded(const FFNonbonded& v) { nonbonded_ = v; }
     void set_sampling(const FFSampling& v) { sampling_ = v; }
 

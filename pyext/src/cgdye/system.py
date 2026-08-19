@@ -24,17 +24,17 @@ class DyeForceFieldSystem:
     def get_fixed_components(self):
         """Return list of component names with role 'fixed'."""
         comps = self.data.get("components", {})
-        return [name for name, spec in comps.items() if spec.get("role") == "fixed"]
+        return [name for name, spec in comps.items() if spec.role == "fixed"]
 
     def get_mobile_components(self):
         """Return list of component names with role 'mobile'."""
         comps = self.data.get("components", {})
-        return [name for name, spec in comps.items() if spec.get("role") == "mobile"]
+        return [name for name, spec in comps.items() if spec.role == "mobile"]
 
     def get_component_role(self, name):
         """Return role ('fixed' or 'mobile') for a component, or None if not found."""
         spec = self.data.get("components", {}).get(name, {})
-        return spec.get("role")
+        return spec.role
 
     def get_fixed_component(self):
         """Return the single fixed component name, or None if not uniquely defined."""
@@ -67,26 +67,32 @@ class DyeForceFieldSystem:
 
 def fixed_components(system):
     """Return list of component names with role 'fixed'."""
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if isinstance(system, DyeForceFieldSystem):
         return system.get_fixed_components()
-    comps = system.get("components", {})
-    return [name for name, spec in comps.items() if spec.get("role") == "fixed"]
+    comps = system.components
+    return [name for name, spec in comps.items() if spec.role == "fixed"]
 
 
 def mobile_components(system):
     """Return list of component names with role 'mobile'."""
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if isinstance(system, DyeForceFieldSystem):
         return system.get_mobile_components()
-    comps = system.get("components", {})
-    return [name for name, spec in comps.items() if spec.get("role") == "mobile"]
+    comps = system.components
+    return [name for name, spec in comps.items() if spec.role == "mobile"]
 
 
 def component_role(system, name):
     """Return role ('fixed' or 'mobile') for a component, or None if not found."""
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if isinstance(system, DyeForceFieldSystem):
         return system.get_component_role(name)
-    spec = system.get("components", {}).get(name, {})
-    return spec.get("role")
+    spec = system.components.get(name, {})
+    return spec.role
 
 
 def derive_system_name(*mol2_paths):
@@ -100,6 +106,8 @@ def derive_system_name(*mol2_paths):
 
 def fixed_component(system):
     """Return the single fixed component name, or None if not uniquely defined."""
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if isinstance(system, DyeForceFieldSystem):
         return system.get_fixed_component()
     fixed = fixed_components(system)
@@ -113,8 +121,10 @@ def find_group_for_component(system, component_name, group_suffix):
 
     Returns the group name if found, None otherwise.
     """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
     if isinstance(system, DyeForceFieldSystem):
         return system.find_group_for_component(component_name, group_suffix)
-    groups = system.get("groups", {})
+    groups = system.groups
     target = f"{component_name}_{group_suffix}"
     return target if target in groups else None

@@ -46,7 +46,7 @@ class TestIntegration(unittest.TestCase):
         cls._tmp.cleanup()
 
     def setUp(self):
-        self.script = _cgdye_file("sim", "runner.py")
+        self.script = _cgdye_file("sim.py")
 
     def run_sim(self, args):
         env = os.environ.copy()

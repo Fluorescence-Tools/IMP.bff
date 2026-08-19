@@ -25,15 +25,15 @@ def test_build_combined_system_basic():
         protein_template=str(get_template_dir("cx4.template.cif")),
         dye_template=str(get_template_dir("atto655.template.cif")),
     )
-    assert system["name"] == "CX4_atto655"
-    assert "CX4" in system["components"]
-    assert "atto655" in system["components"]
-    assert len(system["sites"]) > 0
-    assert len(system["bonds"]) > 0
-    assert len(system["angles"]) > 0
-    assert len(system["dihedrals"]) > 0
-    assert "lj_types" in system
-    assert "LJ_C" in system["lj_types"]
+    assert system.name == "CX4_atto655"
+    assert "CX4" in system.components
+    assert "atto655" in system.components
+    assert len(system.sites) > 0
+    assert len(system.bonds) > 0
+    assert len(system.angles) > 0
+    assert len(system.dihedrals) > 0
+    assert system.lj_types
+    assert "LJ_C" in system.lj_types
 
 
 def test_combined_system_cif_roundtrip(tmp_path):
@@ -48,9 +48,9 @@ def test_combined_system_cif_roundtrip(tmp_path):
     out = tmp_path / "combined.system.cif"
     write_dye_forcefield_cif(str(out), system)
     loaded = read_dye_forcefield_cif(str(out))
-    assert loaded["name"] == "CX4_atto655"
-    assert len(loaded["sites"]) == len(system["sites"])
-    assert "LJ_C" in loaded.get("lj_types", {})
+    assert loaded.name == "CX4_atto655"
+    assert len(loaded.sites) == len(system.sites)
+    assert "LJ_C" in loaded.lj_types
 
 
 def test_build_dye_restraints_smoke():
@@ -65,13 +65,13 @@ def test_build_dye_restraints_smoke():
 
     model = IMP.Model()
     site_particles = {}
-    for i, s in enumerate(system["sites"]):
+    for i, s in enumerate(system.sites):
         p = IMP.Particle(model)
         IMP.core.XYZ.setup_particle(
             p,
             IMP.algebra.Vector3D(float(i), 0.0, 0.0),
         )
-        site_particles[s["id"]] = p
+        site_particles[s.id] = p
 
     restraints = build_dye_restraints(model, system, site_particles)
     assert len(restraints) > 0

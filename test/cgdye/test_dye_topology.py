@@ -184,10 +184,10 @@ class TestLJTypeCifRoundtrip:
         try:
             write_dye_forcefield_cif(path, system)
             loaded = read_dye_forcefield_cif(path)
-            assert "LJ_C" in loaded["lj_types"]
-            assert loaded["lj_types"]["LJ_C"]["element"] == "C"
-            assert abs(loaded["lj_types"]["LJ_C"]["rmin_half"] - 2.024) < 1e-3
-            assert "LJ_N" in loaded["lj_types"]
+            assert "LJ_C" in loaded.lj_types
+            assert loaded.lj_types["LJ_C"].element == "C"
+            assert abs(loaded.lj_types["LJ_C"].rmin_half - 2.024) < 1e-3
+            assert "LJ_N" in loaded.lj_types
         finally:
             os.unlink(path)
 

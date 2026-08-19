@@ -19,6 +19,7 @@ IMP_SWIG_VALUE(IMP::bff, FFAngle, FFAngles);
 IMP_SWIG_VALUE(IMP::bff, FFTorsion, FFTorsions);
 IMP_SWIG_VALUE(IMP::bff, FFTorsionType, FFTorsionTypes);
 IMP_SWIG_VALUE(IMP::bff, FFLJType, FFLJTypes);
+IMP_SWIG_VALUE(IMP::bff, FFProbe, FFProbes);
 IMP_SWIG_VALUE(IMP::bff, FFNonbonded, FFNonbondeds);
 IMP_SWIG_VALUE(IMP::bff, FFSampling, FFSamplings);
 IMP_SWIG_VALUE(IMP::bff, DyeForceFieldSystem, DyeForceFieldSystems);
@@ -37,6 +38,7 @@ IMP_SWIG_VALUE(IMP::bff, DyeForceFieldSystem, DyeForceFieldSystems);
 %template(FFBondVector) std::vector<IMP::bff::FFBond>;
 %template(FFAngleVector) std::vector<IMP::bff::FFAngle>;
 %template(FFTorsionVector) std::vector<IMP::bff::FFTorsion>;
+%template(FFProbeVector) std::vector<IMP::bff::FFProbe>;
 
 
 // Read-only properties, so `system.sites` reads like the dictionary it
@@ -57,5 +59,6 @@ IMP_SWIG_VALUE(IMP::bff, DyeForceFieldSystem, DyeForceFieldSystems);
 %attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, angles, get_angles, set_angles);
 %attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, dihedrals, get_dihedrals, set_dihedrals);
 %attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, impropers, get_impropers, set_impropers);
+%attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, probes, get_probes, set_probes);
 %attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, nonbonded, get_nonbonded, set_nonbonded);
 %attribute_py(IMP::bff::DyeForceFieldSystem, PyObject*, sampling, get_sampling, set_sampling);
