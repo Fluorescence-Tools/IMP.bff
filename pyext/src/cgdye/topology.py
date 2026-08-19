@@ -74,68 +74,33 @@ def build_dye_topology(atoms, bonds, template):
 
 
 def _build_impropers(atoms, graph, template):
-    out = []
-    name_to_serial = defaultdict(list)
+    """The template's improper centres expanded against the bond graph.
+
+    One expander family per kind, shared with `build_forcefield_system`. There
+    were two -- a per-centre set used here and a per-centre-list set used
+    there, differing in bounds checks and a dedup -- and they agreed on every
+    kind for atto655, cx4 and alexa488_r48. The list form is the one kept: it
+    is the one whose output ships.
+    """
+    by_name = defaultdict(list)
     for serial, atom in atoms.items():
-        name_to_serial[atom["atom_name"]].append(serial)
+        by_name[atom["atom_name"]].append(serial)
 
+    expand = {
+        "ring": _build_ring_impropers_from_template,
+        "pi": _build_pi_impropers_from_template,
+        "flat": _build_flat_impropers_from_template,
+        "orient": _build_orient_impropers_from_template,
+    }
+    centers_by_kind = defaultdict(list)
     for imp in template.get("impropers", []):
-        center_name = imp["center_atom"]
-        imp_type = imp["type"]
-        for center in name_to_serial.get(center_name, []):
-            if imp_type == "ring":
-                out.extend(_ring_impropers(center, graph))
-            elif imp_type == "pi":
-                out.extend(_pi_impropers(center, graph))
-            elif imp_type == "flat":
-                out.extend(_flat_impropers(center, graph, atoms))
-            elif imp_type == "orient":
-                out.extend(_orient_impropers(center, graph, atoms))
+        centers_by_kind[imp["type"]].extend(by_name.get(imp["center_atom"], []))
+
+    out = []
+    for kind, centers in centers_by_kind.items():
+        if kind in expand:
+            out.extend(expand[kind](graph, atoms, sorted(set(centers))))
     return out
-
-
-def _ring_impropers(center, graph):
-    cycles = find_cycles(graph)
-    ring_atoms = set()
-    for cyc in cycles:
-        ring_atoms.update(cyc)
-    if center not in ring_atoms:
-        return []
-    nbrs = sorted(graph.get(center, set()))
-    ring_nbrs = [n for n in nbrs if n in ring_atoms]
-    if len(ring_nbrs) < 2:
-        return []
-    non_ring = [n for n in nbrs if n not in ring_nbrs]
-    wing3 = non_ring[0] if non_ring else (nbrs[2] if len(nbrs) >= 3 else None)
-    if wing3 is None:
-        return []
-    return [(ring_nbrs[0], center, ring_nbrs[1], wing3)]
-
-
-def _pi_impropers(center, graph):
-    nbrs = sorted(graph.get(center, set()))
-    if len(nbrs) != 3:
-        return []
-    return [(nbrs[0], center, nbrs[1], nbrs[2])]
-
-
-def _flat_impropers(center, graph, atoms):
-    if atoms[center]["element"] != "S":
-        return []
-    o_nbrs = sorted(n for n in graph.get(center, set()) if atoms[n]["element"] == "O")
-    if len(o_nbrs) < 3:
-        return []
-    return [(o_nbrs[0], center, o_nbrs[1], o_nbrs[2])]
-
-
-def _orient_impropers(center, graph, atoms):
-    if atoms[center]["element"] != "S":
-        return []
-    c_nbrs = sorted(n for n in graph.get(center, set()) if atoms[n]["element"] == "C")
-    o_nbrs = sorted(n for n in graph.get(center, set()) if atoms[n]["element"] == "O")
-    if not c_nbrs or len(o_nbrs) < 2:
-        return []
-    return [(c_nbrs[0], center, o_nbrs[0], o_nbrs[1])]
 
 
 def _distance(a, b):
