@@ -111,7 +111,7 @@ fluorescence, which is why it is a tool rather than a domain -- and why it sits
 here rather than inside either of the two things that need it. A rotamer's score
 against a protein is a clash energy
 (:mod:`IMP.bff.scoring`); so is an explicit dye's
-internal energy (:mod:`IMP.bff.cgdye.topology.dye`). Those are a core
+internal energy (:mod:`IMP.bff.cgdye.topology`). Those are a core
 representation and a legacy package respectively, and the first must not depend
 on the second to compute a steric term.
 
@@ -272,7 +272,7 @@ def dye_internal_system(atoms_dict, bonds):
     # scoring genuinely needs the molecular graph -- but importing `scoring`
     # must not drag in the explicit-dye package, which is off the domain
     # layout. Keeping the edge inside the function keeps load order clean.
-    from IMP.bff.cgdye.topology.dye import build_angles, build_dihedrals, build_graph
+    from IMP.bff.cgdye.topology import build_angles, build_dihedrals, build_graph
 
     ordered = sorted(atoms_dict.values(), key=lambda x: x["serial"])
     # Site ids carry the serial: MOL2 atom names are not unique across the

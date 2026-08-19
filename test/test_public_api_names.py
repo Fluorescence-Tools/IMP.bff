@@ -134,7 +134,7 @@ def test_cgdye_is_off_the_public_surface():
 
     # still reachable by module path -- kept, not deleted
     import importlib
-    assert importlib.import_module("IMP.bff.cgdye.sampling.langevin").LangevinDyeSampler
+    assert importlib.import_module("IMP.bff.cgdye.sampling").LangevinDyeSampler
 
     # and the harvested pieces landed where they were supposed to
     assert api.domain_of("RotamerFRET") == "representation"

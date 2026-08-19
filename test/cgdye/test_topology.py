@@ -1,6 +1,6 @@
 import unittest
 import os
-from IMP.bff.cgdye.topology.builder import parse_dye_mol2, build_graph, build_angles, build_dihedrals
+from IMP.bff.cgdye.topology import parse_dye_mol2, build_graph, build_angles, build_dihedrals
 from IMP.bff.tools import get_structure_dir
 
 class TestTopology(unittest.TestCase):

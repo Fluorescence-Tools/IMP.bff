@@ -5,7 +5,7 @@ import numpy as np
 import os
 import tempfile
 
-from IMP.bff.cgdye.sampling.clustering import cluster_frames_leader, assign_frames_to_clusters
+from IMP.bff.cgdye.sampling import cluster_frames_leader, assign_frames_to_clusters
 from IMP.bff.scoring import boltzmann_weights, rotamer_cluster_weights
 from IMP.bff.io.cif import write_rotamer_library, read_rotamer_library
 
@@ -74,7 +74,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
     """The linker LJ score excludes bonded neighbours; a short run is pinned."""
 
     def test_bonded_pairs_are_excluded_from_the_linker_score(self):
-        from IMP.bff.cgdye.topology.builder import parse_dye_mol2
+        from IMP.bff.cgdye.topology import parse_dye_mol2
         from IMP.bff.scoring import (
             DyeInternalEnergyEvaluator, compute_exclusions, dye_internal_system)
         from IMP.bff.tools import get_structure_dir
@@ -106,7 +106,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         import hashlib
         import json
         from pathlib import Path
-        from IMP.bff.cgdye.sampling.library_gen import generate_linker_rotamers
+        from IMP.bff.cgdye.sampling import generate_linker_rotamers
         from IMP.bff.tools import get_structure_dir
         pins_path = Path(__file__).resolve().parents[1] / "references" / "cgdye_sampler_pins.json"
         with open(pins_path) as fh:

@@ -42,8 +42,8 @@ not reach into a legacy package to get.
 
 Reach what remains by its module path::
 
-    from IMP.bff.cgdye.sampling.langevin import LangevinDyeSampler
-    from IMP.bff.cgdye.topology.dye import build_dye_topology
+    from IMP.bff.cgdye.sampling import LangevinDyeSampler
+    from IMP.bff.cgdye.topology import build_dye_topology
 """
 
 from __future__ import annotations

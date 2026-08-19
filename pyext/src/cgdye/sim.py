@@ -1,14 +1,17 @@
-#!/usr/bin/env python
-"""IMP MD runner from compact FF mmCIF with md23-style hybrid sampling."""
+"""Simulation runners for cgdye."""
 
+from .system import fixed_components, mobile_components
+from collections import defaultdict
+from pathlib import Path
+import RMF
 import json
 import math
 import os
 import random
-from collections import defaultdict
-from pathlib import Path
 
-
+from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.scoring import torsion_cosine
+from IMP.bff.tools import import_click
 import IMP
 import IMP.algebra
 import IMP.atom
@@ -18,12 +21,17 @@ import IMP.pmi.dof
 import IMP.pmi.samplers
 import IMP.pmi.tools
 import IMP.rmf
-import RMF
 
-from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from ..system import fixed_components, mobile_components
-from IMP.bff.scoring import torsion_cosine
-from IMP.bff.tools import import_click
+# --------------------------------------------------------------------------
+# runner
+# --------------------------------------------------------------------------
+"""IMP MD runner from compact FF mmCIF with md23-style hybrid sampling."""
+
+#!/usr/bin/env python
+
+
+
+
 
 click = import_click()  # optional: only the CLI entry point needs it
 

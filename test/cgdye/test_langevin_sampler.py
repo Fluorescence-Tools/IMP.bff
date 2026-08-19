@@ -17,7 +17,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.sampling.langevin import KB_KCAL, LangevinDyeSampler, make_simulator
+from IMP.bff.cgdye.sampling import KB_KCAL, LangevinDyeSampler, make_simulator
 
 
 def _particle(m, xyz, radius=1.7, mass=12.0):

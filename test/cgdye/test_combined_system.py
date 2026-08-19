@@ -13,7 +13,7 @@ import IMP.core
 
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring import build_dye_restraints
-from IMP.bff.cgdye.topology.builder import build_dye_protein_system
+from IMP.bff.cgdye.topology import build_dye_protein_system
 
 
 def test_build_combined_system_basic():

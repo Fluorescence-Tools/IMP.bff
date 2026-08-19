@@ -1,1 +1,0 @@
-"""Simulation runners for cgdye."""

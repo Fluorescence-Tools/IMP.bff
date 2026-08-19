@@ -27,7 +27,7 @@ class TestIntegration(unittest.TestCase):
         # instead of expecting a pre-built output/systems/*.system.cif: the
         # test used to skip everywhere the build-system task had not run.
         from IMP.bff.io.cif import write_dye_forcefield_cif
-        from IMP.bff.cgdye.topology.builder import build_dye_protein_system
+        from IMP.bff.cgdye.topology import build_dye_protein_system
         from IMP.bff.tools import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()
         system = build_dye_protein_system(
@@ -55,7 +55,7 @@ class TestIntegration(unittest.TestCase):
         env["PYTHONPATH"] = os.pathsep.join(
             [p for p in (".", env.get("PYTHONPATH", "")) if p])
         # runner.py uses package-relative imports, so it must run as a module.
-        cmd = [sys.executable, "-m", "IMP.bff.cgdye.sim.runner"] + args
+        cmd = [sys.executable, "-m", "IMP.bff.cgdye.sim"] + args
         # Use a reasonable timeout for integration tests
         return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
 

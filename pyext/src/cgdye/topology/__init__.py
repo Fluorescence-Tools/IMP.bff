@@ -1,1 +1,0 @@
-"""Topology builders for cgdye."""

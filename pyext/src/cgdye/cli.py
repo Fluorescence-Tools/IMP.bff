@@ -20,8 +20,8 @@ from IMP.bff.sampling import (
     apply_rotamer_coordinates,
     sample_rotamer_index,
 )
-from .sampling.kinetic import reconstruct_rotamer_trajectory, rotamer_rotational_correlation_time, rotamer_correlation_times
-from .sampling.library_gen import generate_linker_rotamers
+from .sampling import reconstruct_rotamer_trajectory, rotamer_rotational_correlation_time, rotamer_correlation_times
+from .sampling import generate_linker_rotamers
 from IMP.bff.tools import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
 
 def _chain_sequence(hierarchy, chain_id):
@@ -347,9 +347,9 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
 
     Not Langevin dynamics: no forces, friction or temperature -- a proposal is
     accepted whenever the dye does not clash. Real Langevin/Brownian dynamics
-    is ``sample-langevin`` (IMP.bff.cgdye.sampling.langevin).
+    is ``sample-langevin`` (IMP.bff.cgdye.sampling).
     """
-    from .sampling.library_gen import LinkerSampler
+    from .sampling import LinkerSampler
     random.seed(seed); np.random.seed(seed)
     protein_path = resolve_protein_pdb(protein_pdb)
     model = IMP.Model()
@@ -446,7 +446,7 @@ def sample_langevin(protein_pdb, chain, residue, dye, integrator, temperature, t
     site; the dye's backbone anchor stays on the residue. Thermodynamic pins:
     test/cgdye/test_langevin_sampler.py.
     """
-    from .sampling.langevin import LangevinDyeSampler
+    from .sampling import LangevinDyeSampler
     protein_path = resolve_protein_pdb(protein_pdb)
     mol2 = Path(dye) if Path(dye).exists() else find_dye_mol2(dye)
     model = IMP.Model()
@@ -554,7 +554,7 @@ def label_fp(pdb_id_or_path, site, output):
 @click.option("--output", help="Output labeled PDB")
 def label_fusion(pdb_path, chain, output):
     """Automatically detect and label FPs in a fusion protein."""
-    from .sampling.segments import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
+    from .sampling import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
     model = IMP.Model()
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
 

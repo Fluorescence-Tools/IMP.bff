@@ -11,7 +11,7 @@ from IMP.bff.tools import get_template_dir, get_structure_dir
 import pytest
 
 
-from IMP.bff.cgdye.topology.dye import (
+from IMP.bff.cgdye.topology import (
     CHARMM36_LJ,
     build_angles,
     build_dihedrals,
