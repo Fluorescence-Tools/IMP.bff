@@ -1,5 +1,80 @@
 # Update Log
 
+## 2026-08-19 (the objects move to C++: bff starts becoming C++-carried)
+
+pmi's shape was a waypoint, not the target. `atom` is 314 lines of Python over
+13,137 of C++ and `core` is 495 over 10,305, and they are shims **not because
+their kernels are in C++ but because their domain objects are**. bff had 16,404
+executable Python lines against 37,000 of C++, and only **1 % of its calls
+reached a C++ kernel** — the kernels were done. No amount of further kernel
+porting changes the shape while an object is a Python class holding numpy
+arrays.
+
+Four objects and three kernels moved, each gated against the Python it replaced
+*before* that Python was deleted:
+
+| | removed | speed | gate |
+|---|---|---|---|
+| `LifetimeSpectrum` | 161 | — | its 22 tests, untouched |
+| `BasicAV` + `ACV` | 465 | — | cloud and all three distances bit-identical |
+| `DyeDiffusionSimulation` | 171 | `sample_grid` **11.6×** | **bit-identical**, incl. 4 concatenated walks |
+| `GridDiffusionSolver` | 292 | — | adjoint gradients to 2e-14 relative |
+| κ² sampler + 3 kernels | 267 | `kappasq_dwt` **43×** | limits exact; 5e-4 on 200k draws |
+
+Ratio C++ : executable Python went **2.26 → 2.48 : 1**. For calibration: `isd`
+is 1.37, `core` 21, `atom` 42.
+
+**The bit-exact gate was only possible because the seed derivation moved
+unchanged.** `(base + i * 104729) % (2**31 - 1)` — a large prime stride, so
+walks from one base seed do not share a low-order pattern. A different
+derivation in C++ would have forced a distributional comparison and a far
+weaker gate.
+
+**Two mistakes, both caught by the suite rather than by my own gate**, because
+the gate called everything by keyword and the suite does not:
+
+* **the `GridDiffusionSolver` constructor order.** It is `(diffusion_map,
+  bounds, density, ...)` and callers pass positionally. Swapping `D` and `k`
+  surfaces as a stability error a long way from the cause.
+* **`k_max` does not belong in the stability bound.** The rate is carried as
+  `exp(-k dt)`, the exact solution over the step, so it constrains nothing; it
+  is the `1 - k dt` form that diverges. Including it cut the allowed step by a
+  third on a site with `k_max = 96 1/ns`. `diffusion_stability_limit`'s own
+  docstring describes the older form, which is what misled me.
+
+And one caught by the gate, which is what gates are for: the distance-ratio
+transform fills **zero** outside the sampled range (`np.interp(left=0, right=0)`)
+and renormalises *after* interpolation. Clamping instead was a 0.12 error in
+the weights while the axis and ⟨κ²⟩ still matched to 2e-16 — the shape of error
+that looks like a working port if only the easy outputs are checked.
+
+`test/test_cpp_objects.py` writes all of that down as invariants, because a
+gate against deleted code cannot be re-run.
+
+**Two corrections to earlier claims in this log's neighbourhood**, both from
+measuring the wrong thing:
+
+* **cgdye is pinned by one import, not seven.** Of the files binding
+  `IMP.bff.cgdye`, 31 are in imp-tricks' `build/lib/` — a stale copy of imp.bff
+  itself — 2 are examples that already fail (`IMP.bff.cgdye.rotamer` was
+  removed by an earlier migration), and the single live file binds
+  `cgdye.cli.dye` plus `cgdye.rotamer.cli`, the second also already broken. The
+  earlier count measured *paths that resolve*, not *live consumers*.
+* **counting numpy calls is a poor way to pick a port target.** Of the four
+  functions it ranked highest, `compute_rotamer_score` is string-keyed atom
+  selection around an inner loop that is already C++, `kappa_distance` was
+  already a wrapper, and `convolve_distance_with_k2_ratio` already called
+  `outer_product_histogram`. Counting *arithmetic* rather than array operations
+  says so immediately.
+
+**What is left, honestly.** The decision-free numerics are exhausted. Of the
+remaining ~15,700 executable lines, the arithmetic-heavy remainder is
+concentrated in `cgdye` (3,542 lines, 141 `IMP.atom`/`core` calls and zero
+numpy — C++-native work) and `io/cif` (2,855, and `ihm` has no C++ equivalent
+in the stack, so that is *writing* a CIF parser rather than moving one). Both
+need an owner decision. `_chisq_rt_cdf_python` must **stay** Python: it is the
+reference the C++ `chi2_right_tail` is gated against.
+
 ## 2026-08-19 (pyext/src consolidated: 113 files to 50)
 
 `pmi`, the most Python-heavy module in IMP, is 23,394 lines in **26 files**.
