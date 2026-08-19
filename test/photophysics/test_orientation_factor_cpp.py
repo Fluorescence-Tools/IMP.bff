@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.photophysics import orientation as o
+import IMP.bff.photophysics as o
 
 
 # --- the geometry ------------------------------------------------------------
@@ -138,8 +138,21 @@ def test_no_numba_left_in_orientation():
     imported = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
     imported |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     assert not any("numba" in m or m.endswith("_jit") for m in imported), imported
-    assert not [n.name for n in ast.walk(tree)
-                if isinstance(n, ast.FunctionDef) and n.decorator_list]
+
+    # "no decorated function anywhere" was the original proxy for "@njit is
+    # gone". It stopped meaning that when photophysics/ merged into one module
+    # and brought `@abc.abstractmethod` with it. What the proxy was reaching
+    # for is a compilation decorator, so say that instead -- an abstract method
+    # is not evidence of numba.
+    compiled = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for dec in node.decorator_list:
+            text = ast.unparse(dec)
+            if any(w in text for w in ("njit", "jit", "vectorize", "guvectorize")):
+                compiled.append((node.name, text))
+    assert not compiled, compiled
 
 
 if __name__ == "__main__":

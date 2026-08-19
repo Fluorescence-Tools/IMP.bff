@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir
 
 
 import pytest
@@ -46,7 +46,7 @@ class TestDyeTemplateRead:
 
     def test_read_dye_template(self):
         """Read A48_C1R template and verify structure."""
-        from IMP.bff.io.template_cif import read_dye_template_cif
+        from IMP.bff.io.cif import read_dye_template_cif
 
         template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
 
@@ -73,7 +73,7 @@ class TestDyeTemplateWrite:
 
     def test_write_dye_template_roundtrip(self):
         """Write and read back a dye template, verify consistency."""
-        from IMP.bff.io.template_cif import read_dye_template_cif, write_dye_template_cif
+        from IMP.bff.io.cif import read_dye_template_cif, write_dye_template_cif
 
         template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
 
@@ -142,7 +142,7 @@ class TestRotamerLibraryRead:
 
     def test_rotamer_library_structure(self):
         """Verify rotamer library reader handles numpy format."""
-        from IMP.bff.io.rotamer_cif import read_rotamer_library, normalize_weights
+        from IMP.bff.io.cif import read_rotamer_library, normalize_weights
 
         test_lib = {
             "id": [1, 2, 3],
@@ -156,7 +156,7 @@ class TestRotamerLibraryRead:
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            from IMP.bff.io.rotamer_cif import write_rotamer_library
+            from IMP.bff.io.cif import write_rotamer_library
 
             output_base = os.path.join(tmpdir, "test_rotamer")
             write_rotamer_library(output_base, test_lib)
@@ -188,7 +188,7 @@ class TestRotamerLibraryNormalize:
 
     def test_normalize_weights(self):
         """Verify weight normalization sums to 1.0."""
-        from IMP.bff.io.rotamer_cif import normalize_weights
+        from IMP.bff.io.cif import normalize_weights
 
         lib = {"id": [1, 2, 3], "weight": [50.0, 30.0, 20.0], "coords": {}}
 

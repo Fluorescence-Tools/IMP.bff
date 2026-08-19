@@ -20,7 +20,7 @@ with a real IMP model:
   annealing), which natively writes RMF trajectories and best-scoring PDBs;
 * ``ConjugateGradients`` provides local refinement.
 
-The single input format is ``fps.json`` (see :mod:`IMP.bff.io.fps_schema` for the
+The single input format is ``fps.json`` (see :mod:`IMP.bff.io.fps` for the
 authored definition and :mod:`.io` for the reader). ``IMP.bff`` parses it
 natively for scoring, so the path is passed straight through.
 
@@ -1065,8 +1065,8 @@ def dock_minimize(
              "stopped": stopped, "trajectory": traj_frames}
     if params.save_distributions and not stopped:
         try:
-            from IMP.bff.representation.av import structure as _av
-            from IMP.bff.observables import pair_distribution as _distr
+            import IMP.bff.representation.av as _av
+            import IMP.bff.observables as _distr
             _av.select_backend(params.av_backend)
             positions, dists, _ss = _read_positions(ensure_fps_json(fps_json_path, pdb_paths))
             res = _distr.compute_distance_distributions(
@@ -1290,7 +1290,7 @@ def _model_uncertainty(details, pdb_paths, params, output_dir):
     if len(best_pdbs) < 2:
         return None
     try:
-        from . import uncertainty as _unc
+        from . import network as _unc
         fixed_idx = int(params.fixed_body) if int(params.fixed_body) < len(pdb_paths) else 0
         _lines, _xyz, fchains = _unc._read_pdb_atoms(pdb_paths[fixed_idx])
         return _unc.estimate_position_uncertainty(

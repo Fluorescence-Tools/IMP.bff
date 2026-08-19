@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir
 
 
 from IMP.bff.cgdye.sampling.rrt import (

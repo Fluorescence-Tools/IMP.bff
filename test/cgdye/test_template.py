@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from IMP.bff.io.template_cif import read_component_template_cif, write_component_template_cif
+from IMP.bff.io.cif import read_component_template_cif, write_component_template_cif
 
 class TestTemplate(unittest.TestCase):
     def test_read_write_template(self):

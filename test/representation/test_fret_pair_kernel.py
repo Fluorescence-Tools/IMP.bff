@@ -39,7 +39,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles
+from IMP.bff.photophysics import kappa2_from_dipoles
 from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
 
 

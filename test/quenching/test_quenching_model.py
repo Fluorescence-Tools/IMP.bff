@@ -9,7 +9,7 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.quenching import sites
+import IMP.bff.quenching.model as sites
 from IMP.bff.quenching.grids import grid_center_index, quenching_rate_grid
 from IMP.bff.quenching.model import (
     DyeDiffusionSimulation,

@@ -9,8 +9,8 @@ import IMP.core
 import numpy as np
 import pytest
 
-from IMP.bff.label.attachment import attach_dyes, place_dye_from_coords
-from IMP.bff.tools.paths import get_structure_dir, get_output_dir
+from IMP.bff.label import attach_dyes, place_dye_from_coords
+from IMP.bff.tools import get_structure_dir, get_output_dir
 
 # The FRETpredict reference libraries are IMP.bff module data
 # (data/rotamer_library): one <dye>_<linker>.pdb per dye/linker combination,

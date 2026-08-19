@@ -103,8 +103,8 @@ def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
     assert d["Forster_radius"] == 52.0
     assert score_sets == {} and extra == {}
     # the converted payload conforms to the schema
-    from IMP.bff.io import fps_schema
-    errors, _ = fps_schema.validate(
+    import IMP.bff.io.fps as fps_schema
+    errors, _ = fps_schema.validate_fps(
         {"Positions": positions, "Distances": distances})
     assert not errors, errors
 

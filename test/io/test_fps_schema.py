@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import IMP.bff
-from IMP.bff.io import fps_schema
+import IMP.bff.io.fps as fps_schema
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -59,12 +59,12 @@ def test_validate_requires_distance_fields_and_position_refs():
                             "error_pos": 2.0}},
         "χ²": {"s": {"distances": ["d", "missing"]}},
     }
-    errors, _ = fps_schema.validate(payload)
+    errors, _ = fps_schema.validate_fps(payload)
     assert any("ghost" in e for e in errors)
     assert any("missing" in e for e in errors)
     # a required distance field left out
     del payload["Distances"]["d"]["distance"]
-    errors, _ = fps_schema.validate(payload)
+    errors, _ = fps_schema.validate_fps(payload)
     assert any("missing required field 'distance'" in e for e in errors)
 
 

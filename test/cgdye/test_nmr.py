@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from IMP.bff.io.nmr_cif import read_nmr_restraints, write_nmr_restraints
+from IMP.bff.io.cif import read_nmr_restraints, write_nmr_restraints
 
 class TestNMR(unittest.TestCase):
     def test_read_write_nmr_restraints(self):

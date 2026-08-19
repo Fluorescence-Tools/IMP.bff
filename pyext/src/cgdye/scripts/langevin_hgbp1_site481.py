@@ -18,9 +18,9 @@ import IMP
 import IMP.atom
 import numpy as np
 
-from IMP.bff.label.attachment import attach_dyes
+from IMP.bff.label import attach_dyes
 from IMP.bff.cgdye.sampling.langevin import LangevinDyeSampler
-from IMP.bff.tools.paths import get_structure_dir
+from IMP.bff.tools import get_structure_dir
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})

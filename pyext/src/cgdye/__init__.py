@@ -26,11 +26,11 @@ What was taken out of it first, because it was not molecular mechanics:
 was                                          is
 ===========================================  =============================================
 ``cgdye.rotamer``                            ``IMP.bff.representation.rotamer``
-``cgdye.sampling.rotamer``                   ``IMP.bff.sampling.rotamer_library``
-``cgdye.labeling``                           ``IMP.bff.label.attachment`` / ``.backbone_frame``
+``cgdye.sampling.rotamer``                   ``IMP.bff.sampling``
+``cgdye.labeling``                           ``IMP.bff.label`` / ``.backbone_frame``
 ``cgdye.io.*`` (all of it)             ``IMP.bff.io.*``
-``cgdye.utils``                              ``IMP.bff.tools.paths``
-``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.scoring.lennard_jones``
+``cgdye.utils``                              ``IMP.bff.tools``
+``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.scoring``
 ===========================================  =============================================
 
 A rotamer library is a **representation** — a list of states with weights, the

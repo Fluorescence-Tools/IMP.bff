@@ -18,8 +18,8 @@ from IMP.bff.label import (
     Label, Quencher, PETParameters, reference_quenchers,
     reference_pet_parameters, REFERENCE_DYE, FLUOROPHORE_TYPES,
 )
-from IMP.bff.label.site import FLRCIF_ITEMS as SITE_ITEMS
-from IMP.bff.label.quencher import FLRCIF_ITEMS as QUENCHER_ITEMS
+from IMP.bff.label import LABEL_FLRCIF_ITEMS as SITE_ITEMS
+from IMP.bff.label import QUENCHER_FLRCIF_ITEMS as QUENCHER_ITEMS
 
 
 class TestLabel:

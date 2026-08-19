@@ -30,9 +30,19 @@ import pytest
 
 SOURCE = Path(__file__).resolve().parent.parent / "pyext" / "src"
 
-#: The domains. Everything else is a loose module at the package root.
-DOMAINS = sorted(p.name for p in SOURCE.iterdir()
-                 if p.is_dir() and (p / "__init__.py").exists())
+#: The domains -- **by name, not by directory**.
+#:
+#: Most are now a single flat module (``scoring.py``), a handful are still
+#: packages (``representation/``). Deriving this list from directories alone
+#: quietly dropped nine domains out of the acyclic-graph check the moment they
+#: were merged, which is the opposite of what the consolidation should do to a
+#: structural test.
+DOMAINS = sorted(
+    [p.name for p in SOURCE.iterdir()
+     if p.is_dir() and (p / "__init__.py").exists()]
+    + [p.stem for p in SOURCE.glob("*.py")
+       if p.stem not in ("__init__", "api")]
+)
 
 
 def _is_type_checking(node) -> bool:
@@ -93,14 +103,28 @@ def _graph():
     edges = defaultdict(set)
     for path in sorted(SOURCE.rglob("*.py")):
         rel = path.relative_to(SOURCE)
-        if not rel.parts or rel.parts[0] not in DOMAINS:
+        here = rel.parts[0] if len(rel.parts) > 1 else rel.stem
+        if here not in DOMAINS:
             continue
-        here = rel.parts[0]
         for target, _names in _module_level_imports(path):
             there = _domain_of(target)
             if there and there != here:
                 edges[here].add(there)
     return edges
+
+
+#: The domains that stayed *directories*. Everything else is one flat module.
+#:
+#: A directory has to earn itself, and two things count as earning it:
+#:
+#: * **something binds its submodules by path** -- of the 99 dotted
+#:   ``IMP.bff.*`` names referenced across chisurf, imp-tricks, quest and
+#:   ucfret, only 19 still resolve, and they are concentrated in ``quenching``
+#:   (five), ``restraints`` (two) and ``cgdye`` (most of it);
+#: * **size** -- ``representation`` is 4,900 lines and ``io`` is 3,800. One
+#:   module each would be larger than anything in IMP; ``pmi/macros.py``, the
+#:   biggest, is 2,803.
+FAMILIES = ("representation", "quenching", "restraints", "cgdye", "io")
 
 
 def test_the_domains_are_what_we_think_they_are():
@@ -109,12 +133,26 @@ def test_the_domains_are_what_we_think_they_are():
     The four stages -- representation, scoring, sampling, analysis -- plus the
     things that cut across every model: the species, where it is attached, the
     photophysics, the output contract, the formats, and scoring against data.
+    Most are now a single module rather than a package; the domain is the name,
+    not the directory.
     """
-    assert len(DOMAINS) >= 6, DOMAINS
-    for expected in ("representation", "scoring", "sampling", "analysis",
-                     "dye", "label", "photophysics", "observables",
-                     "io", "restraints"):
+    assert len(DOMAINS) >= 12, DOMAINS
+    for expected in FAMILIES + ("scoring", "sampling", "analysis", "dye",
+                                "label", "photophysics", "observables"):
         assert expected in DOMAINS, (expected, DOMAINS)
+
+
+def test_a_directory_only_exists_where_something_binds_its_submodules():
+    """The rule the consolidation applied, kept as a rule.
+
+    113 files averaging 236 lines became 50 averaging ~510, which is pmi's
+    shape. What decided each case was not taste -- see :data:`FAMILIES`.
+    """
+    import IMP.bff
+    src = SOURCE
+    dirs = {p.name for p in src.iterdir()
+            if p.is_dir() and p.name != "__pycache__" and (p / "__init__.py").exists()}
+    assert dirs == set(FAMILIES), (sorted(dirs), sorted(FAMILIES))
 
 
 def test_the_subpackage_graph_is_acyclic():
@@ -157,9 +195,9 @@ def test_no_domain_imports_another_domains_private_names():
     offenders = []
     for path in sorted(SOURCE.rglob("*.py")):
         rel = path.relative_to(SOURCE)
-        if not rel.parts or rel.parts[0] not in DOMAINS:
+        here = rel.parts[0] if len(rel.parts) > 1 else rel.stem
+        if here not in DOMAINS:
             continue
-        here = rel.parts[0]
         for target, names in _module_level_imports(path):
             there = _domain_of(target)
             if there is None or there == here:
@@ -214,7 +252,11 @@ def test_every_module_imports():
         rel = path.relative_to(SOURCE).with_suffix("")
         parts = [p for p in rel.parts if p != "__init__"]
         modules.append("IMP.bff" + ("." + ".".join(parts) if parts else ""))
-    assert len(modules) > 50, "the source scan found almost nothing"
+    # A guard on the scan, not on the package. It was 50 when there were 114
+    # modules; the consolidation brought that to 50 exactly, so the guard fired
+    # on the success it was supposed to be blind to. A count-based tripwire has
+    # to be well clear of the number it is guarding.
+    assert len(modules) > 25, "the source scan found almost nothing"
 
     code = (
         "import importlib, sys\n"

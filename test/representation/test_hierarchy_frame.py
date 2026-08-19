@@ -22,7 +22,7 @@ import IMP
 import IMP.atom
 import IMP.core
 import IMP.bff
-from IMP.bff.tools.paths import get_structure_dir
+from IMP.bff.tools import get_structure_dir
 
 
 def _reference(hierarchy):

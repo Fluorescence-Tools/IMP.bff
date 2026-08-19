@@ -1,6 +1,6 @@
 """Dye topology builder utilities.
 
-The Lennard-Jones table and kernel moved to :mod:`IMP.bff.scoring.lennard_jones`
+The Lennard-Jones table and kernel moved to :mod:`IMP.bff.scoring`
 in the 2026-08-18 cleanup and are re-exported here, so the "one LJ source"
 property this module established still holds: every scorer
 (``sampling.scoring``, ``sampling.mean_field``,
@@ -13,7 +13,7 @@ domain must not import a legacy package to compute a steric term.
 """
 
 # Sterics live in a tool, not here -- see above.
-from IMP.bff.scoring.lennard_jones import (  # noqa: F401
+from IMP.bff.scoring import (  # noqa: F401
     CHARMM36_LJ,
     lj_cross,
     lj_params,

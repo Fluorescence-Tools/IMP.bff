@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from IMP.bff.representation.av import BasicAV, ACV, compute_av, AccessibleVolume
-from IMP.bff.representation.av._kernels import (
+from IMP.bff.representation.av import (
     random_distances,
     density2points,
     weighted_mean,
@@ -265,7 +265,7 @@ class TestComputeAvBackends:
         rather than skipped, which also applies the owner's 2026-08-11 rule that
         IMP.bff's AV is the only backend.
         """
-        from IMP.bff.representation.av import compute
+        import IMP.bff.representation.av as compute
 
         return ["imp_bff"] if compute._HAS_IMP_BFF else []
 

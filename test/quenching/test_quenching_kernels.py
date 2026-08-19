@@ -20,7 +20,7 @@ import IMP
 import IMP.test
 
 from IMP.bff.quenching import asa, fret_trace, grids, pet
-from IMP.bff.sampling import brownian as diffusion
+import IMP.bff.sampling as diffusion
 
 
 def sphere_grid(ng=40, radius_voxels=15, slow_voxels=8):

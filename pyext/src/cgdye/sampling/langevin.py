@@ -182,8 +182,8 @@ class LangevinDyeSampler:
         repulsion_k: float = 10.0,
         seed: Optional[int] = None,
     ):
-        from IMP.bff.scoring.dye_restraints import build_dye_restraints
-        from IMP.bff.cgdye.topology.combined import dye_forcefield_system
+        from IMP.bff.scoring import build_dye_restraints
+        from IMP.bff.cgdye.topology.builder import dye_forcefield_system
 
         if integrator not in ("md", "bd"):
             raise ValueError("integrator must be 'md' or 'bd'")

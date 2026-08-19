@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from IMP.bff.representation.av.structure import AccessibleVolume
-from IMP.bff.representation import distance as fdist
-from IMP.bff.restraints.engine import DistanceRestraint, RigidBody
+from IMP.bff.representation.av import AccessibleVolume
+import IMP.bff.representation.distance as fdist
+from IMP.bff.restraints.network import DistanceRestraint, RigidBody
 from IMP.bff.restraints.greedy_olga import select_informative_pairs
 
 

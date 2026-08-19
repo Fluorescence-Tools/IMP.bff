@@ -1,6 +1,6 @@
-# `pyext/src` — the Python side, and where it is going
+# `pyext/src` — the Python side
 
-## The shape this is converging on
+## The shape
 
 Every other IMP module has one of two shapes:
 
@@ -11,21 +11,59 @@ Every other IMP module has one of two shapes:
 | `npctransport` | 168 | 1 | 0 | 8,835 |
 | `isd` | 5,407 | 13 | 0 | 7,387 |
 | `pmi` (the most Python-heavy in IMP) | 23,394 | 26 | 5 | 530 |
-| **`bff` (here)** | **~26,000** | **~113** | **~20** | **5,818** |
+| **`bff` (here)** | **~26,900** | **50** | **6** | **~6,000** |
 
 **C++-carried** — `atom`, `core`, `em`, `isd`: Python is a 1–13 file shim over
-7–13k lines of C++. **Python-carried** — `pmi`: 26 files and five subdirectories,
-each a genuine family (`dof io plotting restraints topology`).
+7–13k lines of C++. **Python-carried** — `pmi`: 26 files and five
+subdirectories, each a genuine family (`dof io plotting restraints topology`).
 
-`bff` is neither. It has four times `pmi`'s file count at similar total Python,
-so its files average ~230 lines against `pmi`'s ~900. **The tree is deep because
-the files are fragmented**, and no choice of directory scheme fixes that.
+`bff` used to be neither: **113 files averaging 236 lines**, against `pmi`'s 26
+averaging 900, at a similar total. The tree was deep because the files were
+fragmented, and no choice of directory scheme fixes that — so the files were
+merged rather than re-filed. It is now 50 files averaging ~510, which is the
+`pmi` shape; the target remains the C++-carried one, and it gets closer every
+time a kernel moves.
 
-**The target is the C++-carried shape.** Numerics keep moving into C++ until the
-Python is a thin shim of roughly a dozen flat files; the four stages then become
-file names rather than directories. Restructuring happens *last*, once the
-Python has stopped shrinking — reorganising a tree that is still losing half its
-contents is work that gets redone.
+### What decided each case
+
+A domain became **one flat module** unless it had a reason not to. Two reasons
+counted:
+
+* **Something binds its submodules by path.** Of the 99 dotted `IMP.bff.*`
+  names referenced across `chisurf`, `imp-tricks`, `quest` and `ucfret`, only
+  19 still resolve — and they are concentrated in `quenching`, `restraints` and
+  `cgdye`. Those stayed packages.
+* **Size.** `representation` is 4,900 lines and `io` is 3,800; one module each
+  would be larger than anything in IMP (`pmi/macros.py`, at 2,803, is the
+  biggest). They stayed packages holding a handful of substantial modules.
+
+Everything else — `scoring`, `sampling`, `analysis`, `dye`, `label`,
+`photophysics`, `observables`, `tools`, `cli` — is one file.
+
+**A CLI is not a stage, and it does not live beside the code it drives.** A
+`click` command is a decorated function, so `import click` runs at module scope;
+merging `representation/rotamer/cli.py` into `representation/rotamer.py` made
+`import IMP.bff.representation.rotamer` require `click`. Every command-line
+entry point outside `cgdye` is in `cli.py`, and
+`test_import_is_lazy_and_click_free` is what keeps it there.
+
+### What merging found
+
+Names that only ever differed by which module they sat in, and would have
+shadowed each other silently:
+
+* **four different `FLRCIF_ITEMS`** — one per dataclass, mapping its fields to
+  flrCIF items, in `dye/species`, `dye/spectra`, `label/site` and
+  `label/quencher`. Now `DYE_`, `FORSTER_RADIUS_`, `LABEL_` and `QUENCHER_`
+  prefixed.
+* **two `compute_av`** — one taking arrays, one taking a PDB plus an fps
+  position. `IMP.bff.compute_av` resolved to the second while
+  `IMP.bff.representation.av.compute_av` resolved to the first, so the *route*
+  decided which function you got. The structure one is now
+  `compute_av_from_structure`; both flat names keep their meaning.
+* **`validate` against a `validate` flag** — `io/fps_schema.validate(payload)`
+  merged into a module whose `read_fps_json` takes `validate: bool`, so the
+  call became `validate(payload)` on a boolean. Now `validate_fps`.
 
 ## The four stages
 
@@ -51,19 +89,19 @@ question from stage 2's "is this configuration allowed".
 
 ## What is here now
 
-Directories in transition. `av/`, `fret/` and `dynamics/` are gone — the first
-two decomposed into the stages, the third folded into `sampling/`.
-
-* **Stages**: `representation/` (with `av/` and `rotamer/`), `scoring/`,
-  `sampling/`, `analysis/`
-* **Across the stages**: `dye/`, `label/`, `photophysics/`, `observables/`
-* **Formats and data**: `io/`, `restraints/`
+* **Stages**: `representation/` (`av.py`, `rotamer.py`, `distance.py`,
+  `compare.py`, `pathmap.py`), `scoring.py`, `sampling.py`, `analysis.py`
+* **Across the stages**: `dye.py`, `label.py`, `photophysics.py`,
+  `observables.py`
+* **Formats and data**: `io/` (`cif.py`, `fps.py`, `structure.py`),
+  `restraints/` (`docking.py`, `greedy_olga.py`, `network.py`,
+  `simple_av_network.py`, `direct_labeling.py`)
 * **Assembled models**, applications of the stages rather than stages
   themselves: `quenching/` (the PET model for one site), `cgdye/` (explicit
   all-atom dye MD, off the domain layout — nothing in the package imports it at
   module scope)
-* **Utility**: `tools/` (paths to shipped data), `cli/` (what `bin/imp_bff`
-  imports)
+* **Utility**: `tools.py` (paths to shipped data), `cli.py` (every click entry
+  point outside `cgdye`)
 * `api.py` — the public surface. `BY_DOMAIN` is authored; `EXPORTS` is derived.
 
 ## What holds it together

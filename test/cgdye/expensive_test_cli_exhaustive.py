@@ -2,7 +2,7 @@ import os
 import pytest
 from click.testing import CliRunner
 from IMP.bff.cgdye.cli import dye
-from IMP.bff.tools.paths import get_structure_dir
+from IMP.bff.tools import get_structure_dir
 
 @pytest.fixture(scope="module")
 def runner():

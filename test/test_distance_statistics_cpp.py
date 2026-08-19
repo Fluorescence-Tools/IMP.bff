@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.representation import distance as rd
+import IMP.bff.representation.distance as rd
 
 dm = rd   # the two modules are one now; kept so the assertions below read unchanged
 

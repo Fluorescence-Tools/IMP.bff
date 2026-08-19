@@ -43,9 +43,14 @@ def test_every_export_lives_in_the_domain_it_is_filed_under(domain):
     a mistake, and it is exactly the kind of mistake that accumulates when the
     grouping is a comment.
     """
-    prefix = f"IMP.bff.{domain}."
+    # `IMP.bff.observables` and `IMP.bff.io.fps` are both "in the observables
+    # / io domain"; a domain that is one flat module *is* the module, so an
+    # exact match counts as much as a prefix. Before the consolidation only the
+    # prefix form existed and this read `startswith`.
+    module_form = f"IMP.bff.{domain}"
+    package_form = f"IMP.bff.{domain}."
     wrong = {name: module for name, module in api.BY_DOMAIN[domain].items()
-             if not module.startswith(prefix)}
+             if module != module_form and not module.startswith(package_form)}
     assert not wrong, wrong
 
 

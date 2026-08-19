@@ -6,8 +6,8 @@ import os
 import tempfile
 
 from IMP.bff.cgdye.sampling.clustering import cluster_frames_leader, assign_frames_to_clusters
-from IMP.bff.scoring.boltzmann import boltzmann_weights, rotamer_cluster_weights
-from IMP.bff.io.rotamer_cif import write_rotamer_library, read_rotamer_library
+from IMP.bff.scoring import boltzmann_weights, rotamer_cluster_weights
+from IMP.bff.io.cif import write_rotamer_library, read_rotamer_library
 
 
 class TestRotamerGeneration(unittest.TestCase):
@@ -75,9 +75,9 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
 
     def test_bonded_pairs_are_excluded_from_the_linker_score(self):
         from IMP.bff.cgdye.topology.builder import parse_dye_mol2
-        from IMP.bff.scoring.dye_lj import (
+        from IMP.bff.scoring import (
             DyeInternalEnergyEvaluator, compute_exclusions, dye_internal_system)
-        from IMP.bff.tools.paths import get_structure_dir
+        from IMP.bff.tools import get_structure_dir
         atoms, bonds = parse_dye_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
         system = dye_internal_system(atoms, bonds)
         self.assertEqual(len(system["sites"]), len(atoms))
@@ -107,7 +107,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         import json
         from pathlib import Path
         from IMP.bff.cgdye.sampling.library_gen import generate_linker_rotamers
-        from IMP.bff.tools.paths import get_structure_dir
+        from IMP.bff.tools import get_structure_dir
         pins_path = Path(__file__).resolve().parents[1] / "references" / "cgdye_sampler_pins.json"
         with open(pins_path) as fh:
             pins = json.load(fh)

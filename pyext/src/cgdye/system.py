@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 
 
 class DyeForceFieldSystem:

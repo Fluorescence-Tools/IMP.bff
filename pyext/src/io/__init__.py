@@ -6,10 +6,10 @@ other groups -- and it changes for reasons that have nothing to do with the
 physics; leaving readers next to the model they happen to feed is how two
 dialects of one format come to exist without anyone deciding.
 
-* :mod:`IMP.bff.io.fps_schema` -- the authored definition of ``fps.json``, every
+* :mod:`IMP.bff.io.fps` -- the authored definition of ``fps.json``, every
   field mapped to its flrCIF item where the dictionary defines one.
 * :mod:`IMP.bff.io.fps` -- the one reader and writer for ``fps.json``.
-* :mod:`IMP.bff.io.fps_legacy` -- the legacy C# FPS ``.txt`` formats,
+* :mod:`IMP.bff.io.fps` -- the legacy C# FPS ``.txt`` formats,
   **read only**. A format nobody can still read is data that has been lost, and
   a decade of measurements live in these files; nothing should write them again.
 * :mod:`IMP.bff.io.structure` -- PDB and RMF, and coordinate comparison.
@@ -29,7 +29,7 @@ from IMP.bff.io.fps import (  # noqa: F401
     write_evaluators_json,
     write_fps_json,
 )
-from IMP.bff.io.fps_legacy import (  # noqa: F401
+from IMP.bff.io.fps import (  # noqa: F401
     read_old_distances_txt,
     read_old_lps_txt,
 )

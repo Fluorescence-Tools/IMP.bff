@@ -12,9 +12,9 @@ import IMP.atom
 
 from ..topology.builder import parse_dye_mol2, build_graph
 from .clustering import cluster_frames_leader, assign_frames_to_clusters
-from IMP.bff.scoring.boltzmann import boltzmann_weights, rotamer_cluster_weights
-from IMP.bff.scoring.dye_lj import DyeInternalEnergyEvaluator, compute_lj_pair_sites, dye_internal_system
-from IMP.bff.scoring.mean_field import rotamer_mean_field_weights
+from IMP.bff.scoring import boltzmann_weights, rotamer_cluster_weights
+from IMP.bff.scoring import DyeInternalEnergyEvaluator, compute_lj_pair_sites, dye_internal_system
+from IMP.bff.scoring import rotamer_mean_field_weights
 
 
 class LinkerSampler:

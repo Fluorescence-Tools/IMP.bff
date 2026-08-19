@@ -243,7 +243,7 @@ def quencher_atom_indices(atoms, selection):
     """Atom indices per residue type, for a ``{residue: [atom names]}`` selection.
 
     *atoms* is a structured array with ``res_name`` and ``atom_name`` fields --
-    the shape QuEst's structure reader and :mod:`IMP.bff.representation.av.structure` both produce.
+    the shape QuEst's structure reader and :mod:`IMP.bff.representation.av` both produce.
     Returns an ``OrderedDict`` keyed the same way as *selection*, with a
     ``uint32`` index array per residue type (possibly empty).
     """

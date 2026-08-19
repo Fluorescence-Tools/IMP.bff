@@ -7,10 +7,10 @@ import IMP.atom
 import IMP.core
 from pathlib import Path
 
-from IMP.bff.io.rotamer_rmf import read_rotamer_library_rmf
-from IMP.bff.sampling.rotamer_library import apply_rotamer_coordinates, sample_rotamer_index
+from IMP.bff.io.structure import read_rotamer_library_rmf
+from IMP.bff.sampling import apply_rotamer_coordinates, sample_rotamer_index
 from IMP.bff.cgdye.sampling.library_gen import LinkerSampler
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir
 
 ROTAMER_LIB_DIR = get_template_dir("rotamer")
 STRUCTURES_DIR = get_structure_dir()

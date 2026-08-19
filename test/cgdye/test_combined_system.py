@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir
 
 import IMP
 import IMP.algebra
@@ -11,9 +11,9 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.scoring.dye_restraints import build_dye_restraints
-from IMP.bff.cgdye.topology.combined import build_dye_protein_system
+from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.scoring import build_dye_restraints
+from IMP.bff.cgdye.topology.builder import build_dye_protein_system
 
 
 def test_build_combined_system_basic():

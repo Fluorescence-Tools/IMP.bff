@@ -149,7 +149,7 @@ def av_contact_mask(density, ng, dg, slow_radius, rs, r0):
     both parts plus their counts; for a binary density the contact part is what
     the PET model wants.
     """
-    from IMP.bff.representation.av._kernels import split_av_acv
+    from IMP.bff.representation.av import split_av_acv
 
     density = np.asarray(density, dtype=np.uint8)
     ng = int(ng)

@@ -16,7 +16,7 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.sampling import excited_state as photon
+import IMP.bff.sampling as photon
 
 try:
     import numba

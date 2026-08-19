@@ -20,7 +20,7 @@ API. Everything under ``IMP.bff`` now ships from imp.bff.
 
 from __future__ import annotations
 
-from .AVNetworkRestraint import AVNetworkRestraintWrapper
+from .network import AVNetworkRestraintWrapper
 from .simple_av_network import SimpleAVNetworkRestraint, AVMeasurement
 from .direct_labeling import DirectLabelingRestraint, LabelingSite
 

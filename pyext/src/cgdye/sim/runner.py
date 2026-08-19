@@ -20,11 +20,11 @@ import IMP.pmi.tools
 import IMP.rmf
 import RMF
 
-from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.io.nmr_cif import read_nmr_restraints
+from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.io.cif import read_nmr_restraints
 from ..system import fixed_components, mobile_components
-from IMP.bff.scoring.torsion import torsion_cosine
-from IMP.bff.tools.paths import import_click
+from IMP.bff.scoring import torsion_cosine
+from IMP.bff.tools import import_click
 
 click = import_click()  # optional: only the CLI entry point needs it
 

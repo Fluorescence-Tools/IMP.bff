@@ -1,3 +1,154 @@
+"""States: positions, weights and orientations -- what every representation supplies.
+
+An accessible-volume grid point, a rotamer, a coarse-grained conformer and an MD
+frame are the same kind of thing: *a state the dye can occupy, with a weight, a
+position and possibly an orientation*. What differs is only how the states were
+generated. Everything downstream -- distances, kappa^2, the interaction terms --
+consumes states, so it is written once and works for all of them.
+
+This is the abstraction that was missing. ``RotamerEnsemble`` inherited from the
+concrete :class:`~IMP.bff.representation.AccessibleVolume` instead, which is why
+distance code happened to work for rotamers: by inheritance, not by design. The
+cost showed up in the fields a rotamer library then had to carry and could not
+fill -- ``density=zeros((0, 0, 0))``, ``grid_step=0.0``, ``grid_shape=(0, 0, 0)``
+-- placeholders for a grid that does not exist. No consumer ever read them:
+every one of them used ``points``, ``mean_position``, ``n_points`` or
+``has_volume``, which is exactly this surface.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Dict, Optional, TYPE_CHECKING, Tuple, Union
+import abc
+import math
+
+import numpy as np
+
+from IMP.bff.photophysics import kappa2_from_dipoles
+import IMP.bff
+
+__all__ = [
+    'AccessibleVolume',
+    'States',
+    'distance_between_gaussian',
+    'gaussian_chain',
+    'gaussian_chain_ree',
+    'generalized_normal_distribution',
+    'normal_distribution',
+    'poisson_0toN',
+    'worm_like_chain',
+    'worm_like_chain_linker',
+]
+
+# --------------------------------------------------------------------------
+# states
+# --------------------------------------------------------------------------
+"""States: positions, weights and orientations -- what every representation supplies.
+
+An accessible-volume grid point, a rotamer, a coarse-grained conformer and an MD
+frame are the same kind of thing: *a state the dye can occupy, with a weight, a
+position and possibly an orientation*. What differs is only how the states were
+generated. Everything downstream -- distances, kappa^2, the interaction terms --
+consumes states, so it is written once and works for all of them.
+
+This is the abstraction that was missing. ``RotamerEnsemble`` inherited from the
+concrete :class:`~IMP.bff.representation.AccessibleVolume` instead, which is why
+distance code happened to work for rotamers: by inheritance, not by design. The
+cost showed up in the fields a rotamer library then had to carry and could not
+fill -- ``density=zeros((0, 0, 0))``, ``grid_step=0.0``, ``grid_shape=(0, 0, 0)``
+-- placeholders for a grid that does not exist. No consumer ever read them:
+every one of them used ``points``, ``mean_position``, ``n_points`` or
+``has_volume``, which is exactly this surface.
+"""
+
+@dataclass(kw_only=True)
+class States:
+    """A weighted set of states of one label.
+
+    :param points: ``(N, 4)`` -- ``x, y, z, weight``. One row per state.
+    :param attachment_point: ``(3,)`` where the label is tied to the structure.
+    :param orientations: ``(N, 3)`` transition dipoles, when the representation
+        resolves them. ``None`` for a positional-only model such as an AV, which
+        is why kappa^2 from an AV needs an isotropic assumption and kappa^2 from
+        a rotamer library does not.
+    :param position_name: human-readable label for the site.
+    :param params: how these states were produced -- representation parameters,
+        not dye or site properties.
+    """
+
+    points: np.ndarray
+    attachment_point: np.ndarray
+    orientations: Optional[np.ndarray] = None
+    position_name: str = ""
+    params: Dict = field(default_factory=dict)
+
+    @property
+    def positions(self) -> np.ndarray:
+        """``(N, 3)`` state coordinates."""
+        return self.points[:, :3]
+
+    @property
+    def weights(self) -> np.ndarray:
+        """``(N,)`` state weights, unnormalised."""
+        return self.points[:, 3]
+
+    @property
+    def n_points(self) -> int:
+        return self.points.shape[0] if self.points.ndim == 2 else 0
+
+    @property
+    def has_volume(self) -> bool:
+        return self.n_points > 0
+
+    @property
+    def has_orientations(self) -> bool:
+        return self.orientations is not None and len(self.orientations) > 0
+
+    @property
+    def mean_position(self) -> np.ndarray:
+        """Weight-averaged position, falling back to the attachment point."""
+        if self.n_points == 0:
+            return np.asarray(self.attachment_point).copy()
+        w = self.points[:, 3]
+        if w.sum() == 0:
+            return np.asarray(self.attachment_point).copy()
+        return np.average(self.points[:, :3], axis=0, weights=w)
+
+
+# --------------------------------------------------------------------------
+# types
+# --------------------------------------------------------------------------
+"""The accessible volume: a region a dye can reach, as one of several representations."""
+
+@dataclass(kw_only=True)
+class AccessibleVolume(States):
+    """States enumerated as a voxel grid, plus the grid itself.
+
+    One definition. There were two identical ones -- ``IMP.bff.representation.av`` and
+    ``IMP.bff.representation.av``, same seven fields in the same order -- which is how they
+    came to disagree about the axis order of ``density`` without anything
+    noticing (PRD-113 stage 3a).
+
+    :param density: ``(nx, ny, nz)`` accessible density, in the **coordinate**
+        axis order. IMP orders its flat tile values with *x* fastest; a C-order
+        reshape into ``(nx, ny, nz)`` returns the volume transposed, and a
+        mirrored volume has the right voxel count, bounding box and total volume,
+        so only a voxel-by-voxel comparison against ``points`` catches it.
+    :param grid_origin: ``(3,)`` coordinate of the first voxel centre.
+    :param grid_step: voxel edge in Angstrom.
+    :param grid_shape: ``(nx, ny, nz)``.
+    """
+
+    density: np.ndarray
+    grid_origin: np.ndarray
+    grid_step: float
+    grid_shape: Tuple[int, int, int]
+
+
+# --------------------------------------------------------------------------
+# distance
+# --------------------------------------------------------------------------
 """Distances between two labels, whatever represents them.
 
 Takes anything with :class:`~IMP.bff.representation.States` -- an accessible
@@ -25,18 +176,6 @@ They were checked against each other before any of this: on T4L A132 x A65,
 the spread is Monte-Carlo sampling noise -- so this is de-duplication with no
 defect hiding in it, unlike the transposed density found in stage 3a.
 """
-from __future__ import annotations
-
-from typing import Optional, Tuple, Union
-
-import math
-
-import numpy as np
-
-import IMP.bff
-
-from .types import AccessibleVolume
-from IMP.bff.photophysics.kappa2 import kappa2_from_dipoles
 
 N_DISTANCE_SAMPLES: int = 50000
 
@@ -663,3 +802,565 @@ def mean_position_distance(
     mean_a = a.mean(axis=0) if weights_a is None else np.average(a, axis=0, weights=weights_a)
     mean_b = b.mean(axis=0) if weights_b is None else np.average(b, axis=0, weights=weights_b)
     return float(np.sqrt(((mean_a - mean_b) ** 2).sum()))
+
+
+# --------------------------------------------------------------------------
+# label_distribution
+# --------------------------------------------------------------------------
+"""Label distributions: AV-backed and Gaussian representations of where a dye is.
+
+Renamed from ``distribution.py`` in the 2026-08-18 tidy, because it sat beside
+``distributions.py`` -- one letter apart, in the same directory, meaning
+different things: this one is *where a label is*, that one was a set of
+probability density functions. That file is now ``probability.py``. A reader
+should not have to open both to find out which is which.
+
+Two representations, alongside the accessible volume itself and the rotamer
+library: :class:`LabelDistributionAV` computes an AV and reduces it lazily, and
+:class:`DyeDistributionNormal` replaces the cloud with a Gaussian.
+
+Moved here from ``IMP.bff.label`` by PRD-113 stage 3d. That package now means
+the *system* -- which dye is attached where -- and a label *distribution* is a
+representation of where it can be, which is a different question. The same word
+meant both, which is the kind of collision this restructure exists to remove.
+
+.. note::
+   These classes re-implement the
+   :class:`~IMP.bff.representation.States` surface (``points``,
+   ``mean_position``, ``n_points``) and carry a **fourth** copy of the distance
+   layer (``dRmp``/``dRDA``/``dRDAE``/``pRDA``, duplicated across both concrete
+   classes, and again in ``BasicAV`` and in ``fret/distance.py``). The
+   :attr:`LabelDistribution.states` view below is the bridge; folding the four
+   distance layers into one is PRD-113 stage 4, and is a behaviour change that
+   does not belong in a move.
+"""
+
+if TYPE_CHECKING:  # names for annotations only; see _av_types() below
+    from IMP.bff.representation.av import ACV, BasicAV
+
+
+def _av_types():
+    """``(BasicAV, ACV, compute_av)``, imported on first use rather than on import.
+
+    The layering here runs ``representation.types`` -> ``av`` ->
+    ``representation.label_distribution``: this module *builds* accessible volumes, so
+    it sits above the builder, while the builder needs only the dataclass. Both
+    edges are real. Written at module level they close a cycle -- and because
+    importing ``IMP.bff.representation.types`` also executes the package
+    ``__init__``, which imports this module, narrowing the other side does not
+    break it. ``import IMP.bff.representation.av`` as a process's first import raised
+    ImportError until this was deferred (PRD-113 stage 3).
+    """
+    from IMP.bff.representation.av import ACV, BasicAV, compute_av
+    return BasicAV, ACV, compute_av
+
+# ---------------------------------------------------------------------------
+# Helper: find an atom in a coordinate array
+# ---------------------------------------------------------------------------
+
+def _find_atom_index(
+    atoms_xyz: np.ndarray,
+    atoms_vdw: np.ndarray,
+    residue_seq_number: int,
+    atom_name: str,
+    chain_id: Optional[str] = None,
+) -> int:
+    """Find the index of an atom matching the given criteria.
+
+    This is a simplified replacement for the chisurf
+    ``chisurf.core.fio.structure.coordinates.get_atom_index`` routine.
+    It first tries to match by all criteria; if *chain_id* is ``None``
+    it matches only by residue number and atom name.
+
+    Parameters
+    ----------
+    atoms_xyz : (N, 3) float64
+    atoms_vdw : (N,) float64
+    residue_seq_number : int
+    atom_name : str
+    chain_id : str, optional
+    """
+    for i in range(len(atoms_xyz)):
+        # The minimal signature: residue_seq_number + atom_name.
+        # In a real scenario the structured array would contain columns
+        # ``residue_seq_number``, ``atom_name``, ``chain_id``.  Here we
+        # simply return *i*; subclasses can override with a more
+        # sophisticated lookup.
+        return i
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Abstract base
+# ---------------------------------------------------------------------------
+
+class LabelDistribution(abc.ABC):
+    """Abstract base for a 3-D dye label distribution.
+
+    Subclasses must implement :meth:`_compute_density`.
+
+    Attributes
+    ----------
+    origin : (3,) ndarray
+        Attachment site (reference point) in Å.
+    density : (ng, ng, ng) ndarray or None
+        Density grid (if computed).
+    verbose : bool
+    simulation_grid_resolution : float
+        Grid spacing (Å).
+    position_name : str
+        Human-readable label.
+    """
+
+    density: Optional[np.ndarray] = None
+    origin: Optional[np.ndarray] = None
+    verbose: bool = True
+    simulation_grid_resolution: float
+    position_name: str
+
+    def __init__(
+        self,
+        simulation_type: str = "AV1",
+        origin: Optional[np.ndarray] = None,
+        simulation_grid_resolution: float = 0.5,
+        position_name: str = "",
+        verbose: bool = False,
+    ):
+        self.simulation_type = simulation_type
+        self.origin = origin
+        self.simulation_grid_resolution = simulation_grid_resolution
+        self.position_name = position_name
+        self.verbose = verbose
+        self._av: Optional["BasicAV"] = None
+
+    @abc.abstractmethod
+    def _compute(self):
+        """Compute or recompute the underlying accessible volume."""
+        ...
+
+    def get_basic_av(self) -> "BasicAV":
+        """Return (or create) the underlying ``BasicAV``.
+
+        Returns
+        -------
+        BasicAV
+        """
+        if self._av is None:
+            self._compute()
+        return self._av  # type: ignore
+
+    # Convenience accessors that delegate to BasicAV
+    @property
+    def points(self) -> np.ndarray:
+        """Point cloud ``(N, 4)`` of the dye distribution."""
+        return self.get_basic_av().points
+
+    @property
+    def mean_position(self) -> np.ndarray:
+        """Weighted mean position ``(3,)``."""
+        return self.get_basic_av().mean_position
+
+    @property
+    def states(self) -> "States":
+        """This distribution as :class:`~IMP.bff.representation.States`.
+
+        The representation-agnostic view: whatever produced the cloud, a
+        consumer that wants positions and weights asks for this and works for
+        an AV, a rotamer library, a Gaussian or an MD trajectory alike.
+        """
+        # (was: from .distance import ...) -- now in this module
+        return States(points=self.points,
+                      attachment_point=np.asarray(self.attachment_point)
+                      if getattr(self, "attachment_point", None) is not None
+                      else self.mean_position)
+
+    @property
+    def n_points(self) -> int:
+        """Number of points in the dye distribution."""
+        return self.get_basic_av().n_points
+
+
+# ---------------------------------------------------------------------------
+# AV-based label distribution
+# ---------------------------------------------------------------------------
+
+class LabelDistributionAV(LabelDistribution):
+    """Label distribution computed via an Accessible Volume (AV).
+
+    Parameters
+    ----------
+    atoms_xyz : (N, 3) float64
+        Atomic coordinates of the host structure.
+    atoms_vdw : (N,) float64
+        Van der Waals radii (Å).
+    linker_length : float
+        Dye linker length (Å).
+    linker_width : float
+        Linker width (Å).
+    dye_radii : tuple (r1, r2, r3)
+        Dye-sphere radii for the AV1/AV3 model (Å).
+    residue_seq_number : int
+        Attachment residue sequence number.
+    atom_name : str
+        Attachment atom name (e.g. ``"CB"``).
+    chain_id : str, optional
+        Chain identifier.
+    simulation_grid_resolution : float
+        AV grid spacing (Å).
+    position_name : str
+        Optional human-readable label.
+    verbose : bool
+    """
+
+    def __init__(
+        self,
+        atoms_xyz: np.ndarray,
+        atoms_vdw: np.ndarray,
+        linker_length: float = 20.0,
+        linker_width: float = 0.5,
+        dye_radii: tuple[float, float, float] = (3.5, 0.0, 0.0),
+        residue_seq_number: int = 0,
+        atom_name: str = "CB",
+        chain_id: Optional[str] = None,
+        simulation_grid_resolution: float = 1.5,
+        position_name: str = "",
+        verbose: bool = False,
+    ):
+        self.atoms_xyz = np.asarray(atoms_xyz, dtype=np.float64)
+        self.atoms_vdw = np.asarray(atoms_vdw, dtype=np.float64)
+        self.linker_length = float(linker_length)
+        self.linker_width = float(linker_width)
+        self.dye_radii = tuple(float(r) for r in dye_radii)
+        self.residue_seq_number = residue_seq_number
+        self.atom_name = atom_name
+        self.chain_id = chain_id
+        self._attachment_index = _find_atom_index(
+            atoms_xyz, atoms_vdw,
+            residue_seq_number, atom_name, chain_id,
+        )
+
+        super().__init__(
+            simulation_type="AV1" if dye_radii[1] == 0.0 else "AV3",
+            simulation_grid_resolution=simulation_grid_resolution,
+            position_name=position_name,
+            verbose=verbose,
+        )
+        self.origin = atoms_xyz[self._attachment_index].copy()
+        # AV is lazily computed in get_basic_av()
+
+    def _compute(self):
+        """Compute the AV for this label."""
+        if self._av is not None:
+            return
+        source_xyz = self.atoms_xyz[self._attachment_index]
+
+        BasicAV, _, compute_av = _av_types()
+        av_result = compute_av(
+            self.atoms_xyz, self.atoms_vdw, source_xyz,
+            linker_length=self.linker_length,
+            linker_width=self.linker_width,
+            dye_radii=self.dye_radii,
+            grid_resolution=self.simulation_grid_resolution,
+        )
+        self.density = av_result.density
+        self._av = BasicAV(
+            points=av_result.points,
+            density=av_result.density,
+            grid_origin=av_result.grid_origin,
+            grid_step=av_result.grid_step,
+            position_name=self.position_name,
+        )
+
+    # Distance methods
+    def dRmp(self, other: "LabelDistributionAV") -> float:
+        """:math:`R_{\\mathrm{mp}}` distance to another label."""
+        return self.get_basic_av().dRmp(other.get_basic_av())
+
+    def dRDA(self, other: "LabelDistributionAV", n_samples: int = 50000) -> float:
+        """:math:`\\langle R_{DA}\\rangle` mean distance."""
+        return self.get_basic_av().dRDA(other.get_basic_av(), n_samples)
+
+    def dRDAE(self, other: "LabelDistributionAV",
+              forster_radius: float = 52.0, n_samples: int = 50000) -> float:
+        """:math:`R_E` FRET-averaged distance."""
+        return self.get_basic_av().dRDAE(
+            other.get_basic_av(), forster_radius, n_samples
+        )
+
+    def pRDA(self, other: "LabelDistributionAV",
+             axis: Optional[np.ndarray] = None,
+             n_samples: int = 50000) -> tuple[np.ndarray, np.ndarray]:
+        """Distance distribution :math:`p(R_{DA})`."""
+        return self.get_basic_av().pRDA(
+            other.get_basic_av(), axis, n_samples
+        )
+
+
+# ---------------------------------------------------------------------------
+# Normal (Gaussian) dye distribution — no structure needed
+# ---------------------------------------------------------------------------
+
+class DyeDistributionNormal(LabelDistribution):
+    """Gaussian (normal) dye distribution around a point.
+
+    This distribution does not require a structure; the dye is modelled
+    as a 3-D isotropic Gaussian centred at a given point.
+
+    Parameters
+    ----------
+    origin : (3,) ndarray
+        Mean position (Å).
+    width : float
+        Standard deviation (Å) in each dimension.
+    position_name : str
+        Optional human-readable label.
+    verbose : bool
+    """
+
+    def __init__(
+        self,
+        origin: np.ndarray,
+        width: float = 6.0,
+        position_name: str = "",
+        verbose: bool = False,
+    ):
+        self.width = float(width)
+        super().__init__(
+            origin=np.asarray(origin, dtype=np.float64),
+            simulation_grid_resolution=1.0,
+            position_name=position_name,
+            verbose=verbose,
+        )
+        # Normal distributions don't use a grid; create a point cloud directly
+        self._compute()
+
+    def _compute(self):
+        """Draw random points from the 3-D Gaussian."""
+        n_pts = 50000
+        pts = np.random.randn(n_pts, 4).astype(np.float64)
+        pts[:, :3] = pts[:, :3] * self.width + self.origin
+        # Weight: Gaussian height relative to the distribution centre
+        centered = pts[:, :3] - self.origin
+        r2 = np.sum(centered ** 2, axis=1)
+        pts[:, 3] = np.exp(-0.5 * r2 / (self.width ** 2))
+        pts[:, 3] /= pts[:, 3].sum()
+        BasicAV, _, _ = _av_types()
+        self._av = BasicAV(
+            points=pts,
+            position_name=self.position_name,
+        )
+
+    def dRmp(self, other: "DyeDistributionNormal") -> float:
+        return self.get_basic_av().dRmp(other.get_basic_av())
+
+    def dRDA(self, other: "DyeDistributionNormal",
+             n_samples: int = 50000) -> float:
+        return self.get_basic_av().dRDA(other.get_basic_av(), n_samples)
+
+    def dRDAE(self, other: "DyeDistributionNormal",
+              forster_radius: float = 52.0,
+              n_samples: int = 50000) -> float:
+        return self.get_basic_av().dRDAE(
+            other.get_basic_av(), forster_radius, n_samples
+        )
+
+    def pRDA(self, other: "DyeDistributionNormal",
+             axis: Optional[np.ndarray] = None,
+             n_samples: int = 50000) -> tuple[np.ndarray, np.ndarray]:
+        return self.get_basic_av().pRDA(
+            other.get_basic_av(), axis, n_samples
+        )
+
+
+# --------------------------------------------------------------------------
+# polymer
+# --------------------------------------------------------------------------
+"""End-to-end distance distributions of ideal and worm-like chains.
+
+The linker between an attachment point and a dye is a short polymer, and its
+end-to-end distribution is what an accessible volume approximates
+geometrically. These give it analytically.
+
+**The numerics are C++** (:file:`include/IMP/bff/PolymerChain.h`); these are
+wrappers that keep the Python signatures and return numpy arrays. Ported under
+PRD-113 -- numba is a prototyping tool in this package, not a runtime
+dependency.
+
+The port found a live breakage. ``worm_like_chain_linker`` was numba-jitted and
+called ``normal_distribution``, which had just become a C++ delegation that
+numba cannot type -- so the function raised ``TypingError`` on any call, and
+**nothing in the suite noticed**, because it has no test. The C++ version was
+checked against an independent numpy convolution instead: agreement to 7e-18.
+
+Filed under ``representation`` in the PRD-113 cleanup: a linker's end-to-end
+distribution *is* a representation of where the dye can be -- the analytic
+counterpart of what an accessible volume computes geometrically. It sat at the
+package root, which said nothing about that.
+"""
+
+def _axis(x) -> np.ndarray:
+    return np.ascontiguousarray(x, dtype=np.float64).ravel()
+
+
+def gaussian_chain_ree(segment_length: float, number_of_segments: int) -> float:
+    r"""RMS end-to-end distance of an ideal chain, :math:`b\sqrt{N}`."""
+    return float(IMP.bff.gaussian_chain_ree(
+        float(segment_length), int(number_of_segments)))
+
+
+def gaussian_chain(
+    distances: np.ndarray, segment_length: float, number_of_segments: int
+) -> np.ndarray:
+    r"""Radial distribution of an ideal chain.
+
+    :math:`P(r) = 4\pi r^2 (3/2\pi\langle r^2\rangle)^{3/2}
+    \exp(-3r^2/2\langle r^2\rangle)`. Not normalised on the given axis unless
+    that axis covers the probability mass.
+    """
+    return np.asarray(IMP.bff.gaussian_chain(
+        _axis(distances), float(segment_length), int(number_of_segments)),
+        dtype=np.float64)
+
+
+def worm_like_chain(
+    distances: np.ndarray,
+    kappa: float,
+    chain_length: float = 0.0,
+    normalize: bool = True,
+    distance: bool = True,
+) -> np.ndarray:
+    r"""Radial distribution of a worm-like chain.
+
+    The multi-piece analytical solution of Becker, Rosa & Everaers (Eur Phys J E
+    32:53-69, 2010); :math:`\kappa` is the dimensionless persistence-length
+    ratio and the expression branches at :math:`\kappa = 0.125`.
+
+    :param chain_length: contour length; 0 takes the largest ``r`` on the axis.
+    :param distance: multiply by :math:`r^2`, giving a distance distribution
+        rather than a density in space.
+
+    Values at or beyond the contour length stay zero -- a chain cannot be longer
+    than itself, and the closed form diverges there.
+    """
+    return np.asarray(IMP.bff.worm_like_chain(
+        _axis(distances), float(kappa), float(chain_length),
+        bool(normalize), bool(distance)), dtype=np.float64)
+
+
+def worm_like_chain_linker(
+    distances: np.ndarray,
+    kappa: float,
+    chain_length: float = 0.0,
+    sigma: float = 6.0,
+    normalize: bool = True,
+) -> np.ndarray:
+    r"""Worm-like chain broadened by the dye linkers at each end.
+
+    Convolves :func:`worm_like_chain` with a Gaussian of width *sigma*: the
+    chain distribution is between the *attachment points*, and what a FRET
+    experiment measures is between the *dyes*.
+    """
+    return np.asarray(IMP.bff.worm_like_chain_linker(
+        _axis(distances), float(kappa), float(chain_length), float(sigma),
+        bool(normalize)), dtype=np.float64)
+
+
+# --------------------------------------------------------------------------
+# probability
+# --------------------------------------------------------------------------
+"""Probability distributions used by the dye and linker models.
+
+Renamed from ``distributions.py``: it sat one letter away from
+``distribution.py`` in the same directory, and the two are unrelated. That one
+is now ``label_distribution.py``.
+
+**The numerics are C++** (:file:`include/IMP/bff/Distributions.h`). numba is a
+prototyping tool in this package, not a runtime dependency, so these are thin
+wrappers that hand numpy arrays to the compiled kernels and hand numpy arrays
+back. Ported under PRD-113; each function was checked against the numba version
+it replaces -- seven of nine cases bit-for-bit identical, the other two within
+7e-18, which is the last bit and comes from a different summation order in the
+normalisation.
+
+The Python signatures are unchanged, so callers do not know the difference.
+
+.. note::
+   The flat names ``IMP.bff.normal_distribution`` and friends resolve to the
+   **C++** functions -- SWIG binds them into the package namespace directly, so
+   they are the public surface and are deliberately absent from ``api.py``. The
+   wrappers here return ``numpy`` arrays rather than SWIG vectors, which is what
+   the code inside this package wants.
+
+Filed under ``representation`` in the PRD-113 cleanup: these are the shapes a
+label distribution takes. They sat at the package root, outside every domain.
+"""
+
+def poisson_0toN(lam: float, N: int) -> np.ndarray:
+    r"""Poisson probabilities for :math:`k = 0 \dots N-1`.
+
+    Uses the recursion :math:`p_0 = e^{-\lambda},\ p_k = p_{k-1}\lambda/k`
+    rather than a factorial, which overflows long before the probabilities stop
+    mattering.
+
+    :param lam: rate parameter.
+    :param N: number of terms.
+    :returns: ``(N,)``.
+
+    >>> import numpy as np
+    >>> np.round(poisson_0toN(0.2, 5), 6)
+    array([0.818731, 0.163746, 0.016375, 0.001091, 0.000055])
+    """
+    return np.asarray(IMP.bff.poisson_0toN(float(lam), int(N)), dtype=np.float64)
+
+
+def normal_distribution(
+    x: np.ndarray, loc: float = 0.0, scale: float = 1.0, norm: bool = True
+) -> np.ndarray:
+    """Normal density on *x*.
+
+    :param norm: divide by the sum, so a discretised density sums to one.
+    """
+    return np.asarray(
+        IMP.bff.normal_distribution(
+            np.ascontiguousarray(x, dtype=np.float64).ravel(),
+            float(loc), float(scale), bool(norm)),
+        dtype=np.float64)
+
+
+def generalized_normal_distribution(
+    x: np.ndarray,
+    loc: float = 0.0,
+    scale: float = 1.0,
+    shape: float = 0.0,
+    norm: bool = True,
+) -> np.ndarray:
+    r"""Normal density with a **skew**, applied by transforming the axis.
+
+    :math:`z = -\log(1 - \kappa (x - \mu)/\sigma)/\kappa`, evaluated against the
+    standard normal. ``shape = 0`` is the untransformed normal; positive skews
+    left, negative right. Not the exponential-power family, despite the name.
+    """
+    return np.asarray(
+        IMP.bff.generalized_normal_distribution(
+            np.ascontiguousarray(x, dtype=np.float64).ravel(),
+            float(loc), float(scale), float(shape), bool(norm)),
+        dtype=np.float64)
+
+
+def distance_between_gaussian(
+    distances: np.ndarray,
+    separation_distance: float,
+    sigma: float,
+    normalize: bool = False,
+) -> np.ndarray:
+    r"""Distance distribution between two isotropic 3-D Gaussians.
+
+    :math:`p(r) = (r/d)[N(r; d, \sigma) - N(r; -d, \sigma)]`, degenerating at
+    :math:`d = 0` to the Maxwell form :math:`2r^2/\sigma^2 \cdot N(r; 0, \sigma)`
+    -- which is what the separate branch exists to avoid dividing by.
+    """
+    return np.asarray(
+        IMP.bff.distance_between_gaussian(
+            np.ascontiguousarray(distances, dtype=np.float64).ravel(),
+            float(separation_distance), float(sigma), bool(normalize)),
+        dtype=np.float64)

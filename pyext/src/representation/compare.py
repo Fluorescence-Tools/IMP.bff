@@ -1,3 +1,37 @@
+"""AV ↔ rotamer-ensemble comparison on the bundled hGBP1 and T4L systems (PRD-108).
+
+Writes the authoritative table ``okf/validation/av_vs_rotamer.md`` and the
+pin file ``test/references/cgdye_av_vs_rotamer_pins.json`` when run from the
+repository (``--okf-dir``/``--pins`` override the paths); otherwise prints
+the tables.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+import json
+import sys
+
+import numpy as np
+
+from IMP.bff.representation.av import AccessibleVolume, compute_av
+from IMP.bff.representation.distance import av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry
+from IMP.bff.representation.rotamer import RotamerEnsemble
+
+__all__ = [
+    'av_for_position',
+    'compare_pairs',
+    'compare_positions',
+    'ensemble_for_position',
+    'ensemble_pair_statistics',
+    'markdown_table',
+    'summary_numbers',
+]
+
+# --------------------------------------------------------------------------
+# compare
+# --------------------------------------------------------------------------
 """AV ↔ rotamer-ensemble cross-validation (PRD-108 stage 2).
 
 For each labelling position: the accessible volume the fps.json position
@@ -13,29 +47,11 @@ label, and their difference is data, not a failure.
 
 Filed under ``fret`` rather than ``av`` or ``representation.rotamer``, which is
 where it reads more naturally: a tool that compares two things has to sit above
-both. It uses the AV builder in :mod:`IMP.bff.representation.av.structure` and the rotamer ensemble
+both. It uses the AV builder in :mod:`IMP.bff.representation.av` and the rotamer ensemble
 in :mod:`IMP.bff.representation.rotamer`, and ``fret`` is the lowest package
 above both. Putting it in ``av`` closed the loop
 ``av -> fret -> restraints -> av``.
 """
-
-from __future__ import annotations
-
-import json
-from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
-
-import numpy as np
-
-from IMP.bff.representation.av.structure import AccessibleVolume, compute_av
-from IMP.bff.representation.distance import (
-    av_pair_statistics,
-    chi2_score,
-    fret_pair_efficiencies,
-    fret_pair_geometry,
-)
-from IMP.bff.representation.rotamer.ensemble import RotamerEnsemble
-
 
 def _av_position(pos: Dict[str, Any]) -> Dict[str, Any]:
     """The fps position with its authored ``strip_mask`` dropped.
@@ -109,7 +125,7 @@ def compare_positions(
     "n_rotamers", "av_extent", "rot_extent"}}`` (extents = rms distance of
     the weighted cloud from its mean, Å).
     """
-    from IMP.bff.representation.rotamer.io import load_protein_frames
+    from IMP.bff.representation.rotamer import load_protein_frames
 
     frame = load_protein_frames(pdb)[0]
     p_names = [str(n).upper() for n in frame["atom_names"]]
@@ -241,9 +257,3 @@ def summary_numbers(per_position: Dict[str, Dict[str, Any]], rows: Sequence[Dict
         "positions": {n: {k: v for k, v in r.items() if k not in ("av", "ensemble")} for n, r in per_position.items()},
         "pairs": [dict(r) for r in rows],
     }
-
-
-__all__ = [
-    "av_for_position", "ensemble_for_position", "ensemble_pair_statistics",
-    "compare_positions", "compare_pairs", "markdown_table", "summary_numbers",
-]

@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.scoring.mean_field import (
+from IMP.bff.scoring import (
     _aabb_overlap,
     _build_cross_lj_params,
     _lj_energy_pairs,

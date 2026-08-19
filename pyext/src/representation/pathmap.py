@@ -1,7 +1,7 @@
 """The one place ``IMP.bff.AV`` is driven and its path map is read.
 
-Two builders grew independently — ``IMP.bff.representation.av.compute`` from imp-tricks (raw
-arrays in) and ``IMP.bff.representation.av.structure`` from ChiSurf (a structure plus an fps
+Two builders grew independently — ``IMP.bff.representation.av`` from imp-tricks (raw
+arrays in) and ``IMP.bff.representation.av`` from ChiSurf (a structure plus an fps
 position). Both set up the same C++ decorator, call the same ``resample()`` and
 read the same ``PathMap``, and both had to learn the same lessons; each learned
 some of them.

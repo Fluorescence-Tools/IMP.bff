@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from IMP.bff.representation.compare import compare_pairs, compare_positions
-from IMP.bff.representation.compare_cli import R0_A488_A594, hgbp1_case, t4l_case
+from IMP.bff.representation.compare import R0_A488_A594, hgbp1_case, t4l_case
 
 _PINS = Path(__file__).resolve().parents[2] / "references" / "cgdye_av_vs_rotamer_pins.json"
 

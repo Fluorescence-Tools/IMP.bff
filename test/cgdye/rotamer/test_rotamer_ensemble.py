@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.representation.rotamer.ensemble import RotamerEnsemble, rotamer_ensembles_from_fps
-from IMP.bff.representation.rotamer.fret import RotamerFRET
+from IMP.bff.representation.rotamer import RotamerEnsemble, rotamer_ensembles_from_fps
+from IMP.bff.representation.rotamer import RotamerFRET
 from IMP.bff.representation import AccessibleVolume, States
 from IMP.bff.representation.distance import av_pair_statistics, histogram_rda, mean_fret_distance
 
@@ -139,9 +139,9 @@ def test_from_fps_positions(hsp90, tmp_path):
 
 def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     """R1 entries write, validate, read back; the docking filter drops them."""
-    from IMP.bff.representation.rotamer.fps import (
+    from IMP.bff.representation.rotamer import (
         distances_from_ensembles, rotamer_ensemble_payload, write_rotamer_fps)
-    from IMP.bff.io import fps_schema
+    import IMP.bff.io.fps as fps_schema
     from IMP.bff.io.fps import fps_positions_for_docking, read_fps_json
 
     d, a = pair
@@ -166,7 +166,7 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     write_rotamer_fps(out, positions, distances)                    # validated on write
     p, dist, _s, _e = read_fps_json(out)
     assert set(p) == {"d1", "a1"} and set(dist) == {"d1_a1"}
-    errors, warnings = fps_schema.validate({"Positions": p, "Distances": dist})
+    errors, warnings = fps_schema.validate_fps({"Positions": p, "Distances": dist})
     assert errors == []
     # what the C++ scorer may see: no R1 positions, no dangling distances
     kept_p, kept_d = fps_positions_for_docking(p, dist)
@@ -188,7 +188,7 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
 
 
 def test_r1_requires_a_library():
-    from IMP.bff.io import fps_schema
+    import IMP.bff.io.fps as fps_schema
     errors, _ = fps_schema.validate_position({"chain_identifier": "A", "residue_seq_number": 1,
                                               "atom_name": "CA", "simulation_type": "R1"}, "x")
     assert any("rotamer_library" in e for e in errors)

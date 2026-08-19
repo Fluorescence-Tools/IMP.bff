@@ -21,7 +21,7 @@ from IMP.bff.label import reference_pet_parameters
 from IMP.bff.photophysics import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
-from IMP.bff.quenching import maps
+import IMP.bff.quenching.model as maps
 from IMP.bff.representation import States
 
 

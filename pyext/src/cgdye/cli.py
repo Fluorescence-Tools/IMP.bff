@@ -14,15 +14,15 @@ import IMP.rmf
 import RMF
 import numpy as np
 
-from IMP.bff.label.attachment import attach_dyes, place_dye_from_coords, resolve_dye_site
-from IMP.bff.io.rotamer_rmf import read_rotamer_library_rmf, write_rotamer_library_rmf
-from IMP.bff.sampling.rotamer_library import (
+from IMP.bff.label import attach_dyes, place_dye_from_coords, resolve_dye_site
+from IMP.bff.io.structure import read_rotamer_library_rmf, write_rotamer_library_rmf
+from IMP.bff.sampling import (
     apply_rotamer_coordinates,
     sample_rotamer_index,
 )
 from .sampling.kinetic import reconstruct_rotamer_trajectory, rotamer_rotational_correlation_time, rotamer_correlation_times
 from .sampling.library_gen import generate_linker_rotamers
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
 
 def _chain_sequence(hierarchy, chain_id):
     """One-letter sequence of a chain in an IMP hierarchy.
@@ -485,7 +485,7 @@ def get_residue_range(hier):
 @click.option("--output", help="Output PDB path")
 def label_fp(pdb_id_or_path, site, output):
     """Label a protein with one or more Fluorescent Proteins (FPs)."""
-    from IMP.bff.label.attachment import align_hierarchies
+    from IMP.bff.label import align_hierarchies
     model = IMP.Model()
     if os.path.exists(pdb_id_or_path):
         pdb_path = pdb_id_or_path
@@ -528,7 +528,7 @@ def label_fp(pdb_id_or_path, site, output):
         
         # Get target backbone coords
         try:
-            from IMP.bff.label.attachment import resolve_dye_site
+            from IMP.bff.label import resolve_dye_site
             t_site = resolve_dye_site(protein, chain_id, res_num)
             t_ca, t_n, t_c = [IMP.core.XYZ(t_site[k]).get_coordinates() for k in ["CA", "N", "C"]]
             
@@ -630,7 +630,7 @@ def label_fusion(pdb_path, chain, output):
 
 
 # rotamer tools live in their own group (rotamer/cli.py): `dye rotamer predict|r0|compare-av`
-from IMP.bff.representation.rotamer.cli import rotamer as _rotamer_group  # noqa: E402
+from IMP.bff.cli import rotamer as _rotamer_group  # noqa: E402
 
 dye.add_command(_rotamer_group, "rotamer")
 

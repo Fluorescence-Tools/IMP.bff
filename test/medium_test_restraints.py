@@ -128,7 +128,7 @@ class TestSimpleAVNetworkRestraint:
         vdw = np.array([1.5])
         src = np.array([0., 0., 0.])
         r = SimpleAVNetworkRestraint()
-        import IMP.bff.representation.av.compute as _compute
+        import IMP.bff.representation.av as _compute
 
         monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
         with pytest.raises((ImportError, RuntimeError)):

@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.representation.av import _kernels
+import IMP.bff.representation.av as _kernels
 
 
 def test_split_is_exact_and_complementary():
@@ -153,10 +153,18 @@ def test_kernels_carry_no_numba():
         a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
     }
     assert not any("numba" in m or m.endswith("_jit") for m in imported), imported
-    assert not [
-        n.name for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef) and n.decorator_list
-    ], "a kernel still carries a decorator"
+    compiled = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for dec in node.decorator_list:
+            text = ast.unparse(dec)
+            if any(w in text for w in ("njit", "jit", "vectorize", "guvectorize")):
+                compiled.append((node.name, text))
+    # "no decorated function at all" was the proxy for "@njit is gone". It
+    # stopped meaning that when av/ merged into one module and brought
+    # @property and @lru_cache with it. Name the thing instead.
+    assert not compiled, compiled
     for name in ("random_distances", "density2points", "weighted_mean",
                  "average_distance", "mean_fret_distance", "split_av_acv"):
         fn = getattr(_kernels, name)

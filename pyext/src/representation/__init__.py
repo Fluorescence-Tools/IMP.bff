@@ -16,16 +16,13 @@ properties of the dye (``IMP.bff.dye``) or of where it is attached
 
 from __future__ import annotations
 
-from .states import States
-from .types import AccessibleVolume
-from .pathmap import PathMapReading, resample_av
 from .distance import (
+    AccessibleVolume, DyeDistributionNormal, LabelDistribution,
+    LabelDistributionAV, States,
     av_pair_statistics, average_distance, distance_between_mean_positions,
     histogram_rda, mean_fret_distance, standard_deviation_of_distances,
 )
-from .label_distribution import (
-    LabelDistribution, LabelDistributionAV, DyeDistributionNormal,
-)
+from .pathmap import PathMapReading, resample_av
 
 __all__ = [
     "States", "AccessibleVolume", "PathMapReading", "resample_av",

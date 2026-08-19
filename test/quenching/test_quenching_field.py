@@ -13,8 +13,8 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.quenching import maps
-from IMP.bff.sampling.smoluchowski import (
+import IMP.bff.quenching.model as maps
+from IMP.bff.sampling import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,

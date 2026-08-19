@@ -26,8 +26,8 @@ from typing import Optional
 
 import numpy as np
 
-from . import maps
-from IMP.bff.sampling.smoluchowski import (
+from . import model as maps
+from IMP.bff.sampling import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,

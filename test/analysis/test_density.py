@@ -3,7 +3,7 @@ import numpy as np
 import IMP
 import IMP.core
 import IMP.algebra
-from IMP.bff.analysis.density import _compute_fixed_axis, _compute_long_axis, write_radial_histogram
+from IMP.bff.analysis import _compute_fixed_axis, _compute_long_axis, write_radial_histogram
 import tempfile
 import os
 

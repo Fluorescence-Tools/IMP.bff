@@ -6,7 +6,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from IMP.bff.tools.paths import get_template_dir, get_structure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir
 
 import pytest
 
@@ -21,8 +21,8 @@ from IMP.bff.cgdye.topology.dye import (
     lj_cross,
     lj_params,
 )
-from IMP.bff.io.forcefield_cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.scoring.dye_lj import (
+from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff.scoring import (
     build_lj_type_table,
     compute_exclusions,
     compute_lj_pair_sites,
@@ -311,7 +311,7 @@ class TestTorsionConvention:
         import IMP
         import IMP.algebra
         import IMP.core
-        from IMP.bff.scoring.torsion import torsion_cosine
+        from IMP.bff.scoring import torsion_cosine
         m = IMP.Model()
         def P(x):
             p = IMP.Particle(m)

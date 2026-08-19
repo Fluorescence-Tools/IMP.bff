@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 import IMP.bff
-from IMP.bff.dye.cif import DYE_LIBRARY_CIF, _LIBRARY_CACHE, read_dye_library
+from IMP.bff.dye import DYE_LIBRARY_CIF, _LIBRARY_CACHE, read_dye_library
 
 
 def _bundled_path():
@@ -91,7 +91,7 @@ def test_a_missing_file_is_not_cached(tmp_path):
 
 def test_the_atom_type_lookup_is_memoised():
     """Thousands of atoms, a few dozen distinct names, five possible answers."""
-    from IMP.bff.scoring.rotamer import _atom_type
+    from IMP.bff.scoring import _atom_type
     assert hasattr(_atom_type, "cache_info")
     _atom_type.cache_clear()
     for _ in range(500):
