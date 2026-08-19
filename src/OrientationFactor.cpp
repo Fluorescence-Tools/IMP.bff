@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/OrientationFactor.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
@@ -158,6 +159,119 @@ std::vector<double> wobbling_kappa2_distribution(
         accumulate(k2_hist, k2_scale, v, 1.0);
     }
     return k2;
+}
+
+
+void dynamic_kappa2_distribution(
+        double sD2, double sA2, double fret_efficiency,
+        int n_samples, int n_bins, double k2_min, double k2_max, int seed,
+        double** out_view, int* n_out_view) {
+    if (n_samples < 0) n_samples = 0;
+    if (n_bins < 2) n_bins = 2;
+    const std::size_t n_edges = static_cast<std::size_t>(n_bins);
+    const std::size_t n_counts = n_edges - 1;
+    double* out = internal::new_double_view(
+            n_edges + n_counts + static_cast<std::size_t>(n_samples),
+            out_view, n_out_view);
+    if (out == nullptr) return;
+
+    const double step = (k2_max - k2_min) / (n_bins - 1);
+    for (std::size_t i = 0; i < n_edges; ++i) out[i] = k2_min + step * i;
+    double* counts = out + n_edges;
+    double* samples = counts + n_counts;
+
+    // Three standard normals per direction. Normalising a *uniform* draw fills
+    // the cube's positive octant rather than the sphere, and that halved
+    // <kappa^2> to 0.333 in the isotropic limit where it must be exactly 2/3.
+    std::mt19937_64 rng(seed < 0 ? std::random_device{}()
+                                 : static_cast<std::uint64_t>(seed));
+    std::normal_distribution<double> gauss(0.0, 1.0);
+    const double x = 1.0 / fret_efficiency - 1.0;
+
+    for (int i = 0; i < n_samples; ++i) {
+        double d[3], a[3];
+        for (int k = 0; k < 3; ++k) { d[k] = gauss(rng); a[k] = gauss(rng); }
+        const double nd = std::sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
+        const double na = std::sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+        const double dot = d[0]*a[0] + d[1]*a[1] + d[2]*a[2];
+        // R_DA is taken along x, so each beta is the angle to that axis.
+        const double delta = std::acos(dot / (nd * na));
+        const double beta1 = std::acos(d[0] / nd);
+        const double beta2 = std::acos(a[0] / na);
+
+        const double k2_tf = wobbling_kappa2(delta, 1.0, 0.0, beta1, beta2);
+        const double k2_ft = wobbling_kappa2(delta, 0.0, 1.0, beta1, beta2);
+        const double k2_tt = wobbling_kappa2(delta, 1.0, 1.0, beta1, beta2);
+
+        // The four sub-populations -- donor free or trapped against acceptor
+        // free or trapped -- combined into one efficiency, then inverted back
+        // into the single kappa^2 that would have produced it.
+        const double two_thirds = 2.0 / 3.0;
+        const double e = (1.0 - sD2) * (1.0 - sA2) / (1.0 + x)
+                       + sD2 * sA2 / (1.0 + two_thirds / k2_tt * x)
+                       + sD2 * (1.0 - sA2) / (1.0 + two_thirds / k2_tf * x)
+                       + (1.0 - sD2) * sA2 / (1.0 + two_thirds / k2_ft * x);
+        samples[i] = two_thirds * x / (1.0 / e - 1.0);
+    }
+
+    // numpy's histogram convention: bins are half-open except the last, which
+    // is closed, so a sample exactly at k2_max lands in it rather than nowhere.
+    for (int i = 0; i < n_samples; ++i) {
+        const double v = samples[i];
+        if (v < out[0] || v > out[n_edges - 1]) continue;
+        std::size_t b = 0;
+        while (b + 1 < n_counts && v >= out[b + 1]) ++b;
+        counts[b] += 1.0;
+    }
+}
+
+void kappa2_dipole_matrix(const std::vector<double>& mu_donor,
+                         const std::vector<double>& mu_acceptor,
+                         const std::vector<double>& r_vectors,
+                         double** out_view, int* n_out_view) {
+    const std::size_t nd = mu_donor.size() / 3;
+    const std::size_t na = mu_acceptor.size() / 3;
+    double* out = internal::new_double_view(nd * na, out_view, n_out_view);
+    if (out == nullptr) return;
+    for (std::size_t i = 0; i < nd; ++i) {
+        const double* md = &mu_donor[3 * i];
+        for (std::size_t j = 0; j < na; ++j) {
+            const double* ma = &mu_acceptor[3 * j];
+            const std::size_t base = 3 * (i * na + j);
+            if (base + 2 >= r_vectors.size()) continue;
+            const double rx = r_vectors[base + 0];
+            const double ry = r_vectors[base + 1];
+            const double rz = r_vectors[base + 2];
+            const double rn = std::sqrt(rx * rx + ry * ry + rz * rz);
+            // A zero separation contributes zero rather than a division by
+            // zero: coincident states are reachable and are not an error.
+            const double ux = rn > 0.0 ? rx / rn : 0.0;
+            const double uy = rn > 0.0 ? ry / rn : 0.0;
+            const double uz = rn > 0.0 ? rz / rn : 0.0;
+            const double cos_da = md[0]*ma[0] + md[1]*ma[1] + md[2]*ma[2];
+            const double cos_dr = md[0]*ux + md[1]*uy + md[2]*uz;
+            const double cos_ar = ma[0]*ux + ma[1]*uy + ma[2]*uz;
+            const double k = cos_da - 3.0 * cos_dr * cos_ar;
+            out[i * na + j] = k * k;
+        }
+    }
+}
+
+void isotropic_kappa2_density(const std::vector<double>& k2,
+                              double** out_view, int* n_out_view) {
+    double* out = internal::new_double_view(k2.size(), out_view, n_out_view);
+    if (out == nullptr) return;
+    const double s3 = std::sqrt(3.0);
+    for (std::size_t i = 0; i < k2.size(); ++i) {
+        const double k = std::sqrt(k2[i]);
+        if (k >= 0.0 && k <= 1.0) {
+            out[i] = 0.5 / (s3 * k) * std::log(2.0 + s3);
+        } else if (k > 1.0 && k <= 2.0) {
+            out[i] = 0.5 / (s3 * k) * std::log((2.0 + s3) / (k + std::sqrt(k * k - 1.0)));
+        } else {
+            out[i] = 0.0;
+        }
+    }
 }
 
 IMPBFF_END_NAMESPACE

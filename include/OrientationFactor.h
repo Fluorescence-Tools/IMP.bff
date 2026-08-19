@@ -90,6 +90,80 @@ IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution(
         int n_samples, int seed,
         std::vector<double>& k2_scale, std::vector<double>& k2_hist);
 
+
+//! \f$p(\kappa^2)\f$ for a *dynamic* pair, conditioned on a measured efficiency.
+/*!
+    The distribution the "dynamic averaging" model gives: both dipoles wobble in
+    a cone set by their order parameters, and each sampled pair of orientations
+    is converted to the \f$\kappa^2\f$ that would reproduce the *measured*
+    transfer efficiency. That last step is what makes this different from
+    wobbling_kappa2_distribution() -- it does not ask what \f$\kappa^2\f$ the
+    geometry gives, it asks what \f$\kappa^2\f$ the geometry *and the data*
+    together imply.
+
+    Per sample: two isotropic directions are drawn, \f$R_{DA}\f$ is taken along
+    x, and the four sub-populations (donor free or trapped, acceptor free or
+    trapped) are combined into one efficiency before being inverted back into a
+    single \f$\kappa^2\f$.
+
+    Drawing the directions with three standard normals is load-bearing: the
+    normalised components of a *uniform* draw fill the cube's positive octant,
+    not the sphere, and that halved \f$\langle\kappa^2\rangle\f$ to 0.333 in the
+    isotropic limit where it must be exactly 2/3.
+
+    \param[in] sD2,sA2 second-rank order parameters of donor and acceptor
+    \param[in] fret_efficiency the measured efficiency
+    \param[in] n_samples orientation pairs to draw
+    \param[in] n_bins bins between \p k2_min and \p k2_max
+    \param[in] k2_min,k2_max histogram range
+    \param[in] seed reproducible sampling; negative draws freely
+    \param[out] out_view,n_out_view the bin edges (\p n_bins of them), then the
+                raw counts in the \p n_bins - 1 bins between them, then the
+                \p n_samples sampled values -- the three things the Python
+                returned as a tuple, concatenated, because a numpy view is one
+                array and the shim splits it at known offsets
+*/
+IMPBFFEXPORT void dynamic_kappa2_distribution(
+        double sD2, double sA2, double fret_efficiency,
+        int n_samples, int n_bins, double k2_min, double k2_max, int seed,
+        double** out_view, int* n_out_view);
+
+//! \f$\kappa^2\f$ for every donor/acceptor dipole pair, given the separations.
+/*!
+    Flat in, flat out -- the shaped front door is
+    ``IMP.bff.photophysics.kappa2_from_dipoles``, which reshapes to
+    `(n_d, n_a)`. Two names because they are two things: this one cannot know
+    the caller's intended shape from a 1-D view, and a Python function that
+    only reshapes is exactly the thin shim this layer is supposed to be.
+
+    \f$\kappa = \hat\mu_D\cdot\hat\mu_A - 3(\hat\mu_D\cdot\hat r)(\hat\mu_A\cdot\hat r)\f$,
+    squared. A zero-length separation contributes zero rather than a division
+    by zero: coincident states are reachable and are not an error.
+
+    \param[in] mu_donor flat `(n_d, 3)` transition dipoles
+    \param[in] mu_acceptor flat `(n_a, 3)`
+    \param[in] r_vectors flat `(n_d, n_a, 3)` donor-to-acceptor separations
+    \param[out] out_view,n_out_view the flat `(n_d, n_a)` matrix
+*/
+IMPBFFEXPORT void kappa2_dipole_matrix(
+        const std::vector<double>& mu_donor,
+        const std::vector<double>& mu_acceptor,
+        const std::vector<double>& r_vectors,
+        double** out_view, int* n_out_view);
+
+//! \f$p(\kappa^2)\f$ for isotropically oriented, *static* dipoles.
+/*!
+    The closed form, not a sample: the classic two-branch expression, singular
+    at \f$\kappa^2 = 1\f$ and zero above 4. Static because each molecule keeps
+    its orientation for the whole excited-state lifetime -- the dynamic limit is
+    the delta function at 2/3 instead.
+
+    \param[in] k2 the abscissa
+    \param[out] out_view,n_out_view the density at each \p k2
+*/
+IMPBFFEXPORT void isotropic_kappa2_density(
+        const std::vector<double>& k2, double** out_view, int* n_out_view);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_ORIENTATIONFACTOR_H

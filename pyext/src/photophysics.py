@@ -52,31 +52,23 @@ rotamer scoring and the ensemble pair kernels import it. Resolves the PRD-47
 κ² placement on the bff side: κ² lives in imp.bff.
 """
 
-def kappa2_from_dipoles(mu_donor: np.ndarray, mu_acceptor: np.ndarray, r_vectors: np.ndarray) -> np.ndarray:
-    """Compute orientation factors from dipole and distance vectors.
+def kappa2_from_dipoles(mu_donor: np.ndarray, mu_acceptor: np.ndarray,
+                        r_vectors: np.ndarray) -> np.ndarray:
+    """``kappa^2`` for every donor/acceptor dipole pair. **C++.**
 
-    Parameters
-    ----------
-    mu_donor : numpy.ndarray
-        Donor transition-dipole vectors with shape ``(n_donor, 3)``.
-    mu_acceptor : numpy.ndarray
-        Acceptor transition-dipole vectors with shape ``(n_acceptor, 3)``.
-    r_vectors : numpy.ndarray
-        Donor-to-acceptor vectors with shape ``(n_donor, n_acceptor, 3)``.
+    A zero-length separation contributes zero rather than a division by zero:
+    coincident states are reachable and are not an error.
 
-    Returns
-    -------
-    numpy.ndarray
-        ``kappa^2`` matrix.
+    :param mu_donor: ``(n_d, 3)`` transition dipoles.
+    :param mu_acceptor: ``(n_a, 3)``.
+    :param r_vectors: ``(n_d, n_a, 3)`` donor-to-acceptor separations.
+    :returns: the ``(n_d, n_a)`` matrix.
     """
-    r_vectors = np.asarray(r_vectors, dtype=np.float64)
-    r_norm = np.linalg.norm(r_vectors, axis=2, keepdims=True)
-    r_unit = np.divide(r_vectors, r_norm, out=np.zeros_like(r_vectors), where=r_norm > 0.0)
-    cos_da = np.einsum("ik,jk->ij", mu_donor, mu_acceptor)
-    cos_dr = np.einsum("ik,ijk->ij", mu_donor, r_unit)
-    cos_ar = np.einsum("jk,ijk->ij", mu_acceptor, r_unit)
-    return np.power(cos_da - 3.0 * cos_dr * cos_ar, 2)
-
+    d = np.ascontiguousarray(np.asarray(mu_donor, dtype=np.float64))
+    a = np.ascontiguousarray(np.asarray(mu_acceptor, dtype=np.float64))
+    r = np.ascontiguousarray(np.asarray(r_vectors, dtype=np.float64))
+    out = IMP.bff.kappa2_dipole_matrix(d.ravel(), a.ravel(), r.ravel())
+    return np.asarray(out).reshape(d.shape[0], a.shape[0])
 
 def kappa2_isotropic() -> float:
     """⟨κ²⟩ for isotropically and rapidly reorienting dipoles (2/3)."""
@@ -127,92 +119,22 @@ two transition dipoles and a separation vector into a number -- is in
 questions and now live side by side rather than in unrelated packages.
 """
 
-def kappasq_dwt(
-        sD2: float,
-        sA2: float,
-        fret_efficiency: float,
-        n_samples: int = 10000,
-        n_bins: int = 31,
-        k2_min: float = 0.0,
-        k2_max: float = 4.0
-):
+def kappasq_dwt(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
+                k2_min=0.0, k2_max=4.0, seed=-1):
+    """p(kappa^2) for a dynamic pair, conditioned on a measured efficiency.
+
+    **C++** (:func:`IMP.bff.dynamic_kappa2_distribution`). The Python drew
+    10 000 orientation pairs in an explicit loop and called ``kappasq`` three
+    times per sample: 128.6 ms against 3.02 ms for 20 000 samples, 43x.
+
+    :returns: ``(bin_edges, counts, samples)`` -- the three arrays the loop
+        built, split out of the one buffer the kernel publishes.
     """
-
-    Parameters
-    ----------
-    sD2 : float
-        Second rank order parameter S2 of the donor dye. This can correspond
-        to the fraction of trapped donor dye.
-    sA2 : float
-        Second rank order parameter S2 of the acceptor dye. This can correspond
-        to the fraction of trapped acceptor dye.
-    fret_efficiency : float
-        FRET efficiency
-    n_bins : int
-        The number of bins in the kappa2 distribution that is
-        generated.
-    k2_max : float
-        Upper kappa2 bound in the generated histogram
-    k2_min : float
-        Lower kappa2 bound in the generate histogram
-    n_samples : int
-        The number random vector pairs that are drawn (default: 10000)
-
-    Returns
-    -------
-    """
-
-    # Binning of the kappa2 distribution
-    k2_step = (k2_max - k2_min) / (n_bins - 1)
-    k2_scale = np.arange(k2_min, k2_max + 1e-14, k2_step, dtype=np.float64)
-
-    # Generate random orientations for the TDM vectors
-    donor_vec = np.random.randn(n_samples, 3)
-    acceptor_vec = np.random.randn(n_samples, 3)
-
-    # x = (R_DA/R_0)^6; relative DA distance
-    x = 1 / fret_efficiency - 1
-
-    k2s = np.zeros(n_samples, dtype=np.float64)
-    for i in range(n_samples):
-        donor = donor_vec[i]
-        acceptor = acceptor_vec[i]
-        # Assumption here: connecting vector R_DA is along the x-axis (R_DA=[1,0,0])
-        delta = np.arccos(np.dot(donor, acceptor) / (np.linalg.norm(donor) * np.linalg.norm(acceptor)))
-        beta1 = np.arccos(donor[0] / np.linalg.norm(donor))
-        beta2 = np.arccos(acceptor[0] / np.linalg.norm(acceptor))
-
-        k2_trapped_free = kappasq(
-            delta=delta,
-            sD2=1,
-            sA2=0,
-            beta1=beta1,
-            beta2=beta2
-        )
-        k2_free_trapped = kappasq(
-            delta=delta,
-            sD2=0,
-            sA2=1,
-            beta1=beta1,
-            beta2=beta2
-        )
-        k2_trapped_trapped = kappasq(
-            delta=delta,
-            sD2=1,
-            sA2=1,
-            beta1=beta1,
-            beta2=beta2
-        )
-        ##
-        Ek2 = (1 - sD2) * (1 - sA2) / (1 + x) + sD2 * sA2 / (1 + 2 / 3. / k2_trapped_trapped * x) + sD2 * (1 - sA2) / (
-                1 + 2 / 3. / k2_trapped_free * x) + (1 - sD2) * sA2 / (1 + 2 / 3. / k2_free_trapped * x)
-        k2 = 2 / 3. * x / (1 / Ek2 - 1)
-        k2s[i] = k2
-
-    # create the histogram
-    k2hist, bins = np.histogram(k2s, k2_scale)
-    return k2_scale, k2hist, k2s
-
+    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+        float(sD2), float(sA2), float(fret_efficiency), int(n_samples),
+        int(n_bins), float(k2_min), float(k2_max), int(seed)))
+    n_edges = int(n_bins)
+    return out[:n_edges], out[n_edges:2 * n_edges - 1], out[2 * n_edges - 1:]
 
 def kappasq_all_delta_new(
         delta: float,
@@ -708,65 +630,22 @@ def kappasq(
     return IMP.bff.wobbling_kappa2(delta, sD2, sA2, beta1, beta2)
 
 
-def p_isotropic_orientation_factor(
-        k2: np.ndarray,
-        normalize: bool = True
-) -> np.ndarray:
-    """Calculates an the probability of a given kappa2 according to
-    an isotropic orientation factor distribution
+def p_isotropic_orientation_factor(k2: np.ndarray,
+                                   normalize: bool = True) -> np.ndarray:
+    """``p(kappa^2)`` for isotropically oriented, *static* dipoles. **C++.**
 
-    Parameters
-    ----------
-    k2 : numpy-array
-        An array containing kappa squared values.
-    normalize : bool
-        If this parameter is set to True (default) the returned distribution is
-        normalized to unity.
+    The closed form: singular at ``kappa^2 = 1`` and zero above 4. Static
+    because each molecule keeps its orientation for the whole excited-state
+    lifetime -- the dynamic limit is the delta function at 2/3 instead.
 
-    Returns
-    -------
-    p_k2 : numpy-array
-        The probability distribution of kappa2 for isotropic oriented dipoles
-
-
-    Example
-    -------
-    >>> import scikit_fluorescence.modeling.kappa2
-    >>> k2 = np.linspace(0.1, 4, 32)
-    >>> p_k2 = scikit_fluorescence.modeling.kappa2.p_isotropic_orientation_factor(k2=k2)
-    >>> p_k2
-    array([0.17922824, 0.11927194, 0.09558154, 0.08202693, 0.07297372,
-           0.06637936, 0.06130055, 0.05723353, 0.04075886, 0.03302977,
-           0.0276794 , 0.02359627, 0.02032998, 0.01763876, 0.01537433,
-           0.01343829, 0.01176177, 0.01029467, 0.00899941, 0.00784718,
-           0.00681541, 0.00588615, 0.00504489, 0.0042798 , 0.0035811 ,
-           0.00294063, 0.00235153, 0.001808  , 0.00130506, 0.00083845,
-           0.0004045 , 0.        ])
-
-    Notes
-    -----
-    http://www.fretresearch.org/kappasquaredchapter.pdf
-
+    :param normalize: divide by the sum, which is what every caller wants and
+        what makes the two branches comparable.
     """
-    ks = np.sqrt(k2)
-    s3 = np.sqrt(3.)
-    r = np.zeros_like(k2)
-    for i, k in enumerate(ks):
-        if 0 <= k <= 1:
-            r[i] = 0.5 / (s3 * k) * np.log(2 + s3)
-        elif 1 <= k <= 2:
-            r[i] = 0.5 / (s3 * k) * np.log((2 + s3) / (k + np.sqrt(k**2 - 1.0)))
+    r = np.asarray(IMP.bff.isotropic_kappa2_density(
+        np.ascontiguousarray(np.asarray(k2, dtype=np.float64)).ravel()))
     if normalize:
-        r /= max(1.0, r.sum())
-    return r
-
-
-# ---------------------------------------------------------------------------
-# Moved here from ChiSurf on 2026-08-10. Kappa-squared is IMP.bff's, whole:
-# its purpose is an R0/distance correction used when scoring a structure, so
-# it follows its consumer rather than its input. See the scope boundaries in
-# chisurf/okf/references/imp-ecosystem.md.
-# ---------------------------------------------------------------------------
+        r = r / max(1.0, r.sum())
+    return r.reshape(np.shape(k2))
 
 def kappa2_to_distance_ratio(k2_amp: np.ndarray, k2_val: np.ndarray, n_bins: int = 32) -> tuple:
     """Transform κ² distribution to R_app/R_DA distance ratio distribution.
