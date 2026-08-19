@@ -686,7 +686,13 @@ def build_dye_restraints(model, system, site_particles):
         theta0 = IMP.core.get_dihedral(
             IMP.core.XYZ(p1), IMP.core.XYZ(p2), IMP.core.XYZ(p3), IMP.core.XYZ(p4)
         )
-        fun = IMP.core.Harmonic(theta0, float(t["k"]))
+        # `t` is an `FFTorsionType`, not a dict -- this read `t["k"]`, which
+        # raises `TypeError` on the typed object. It had never run: no builder
+        # of a combined system fills `impropers`, so this loop has no
+        # iterations to reach the bug with. `sim.py` has the same block spelled
+        # correctly, which is how the two drifted apart unnoticed.
+        k = t["k"] if isinstance(t, dict) else t.k
+        fun = IMP.core.Harmonic(theta0, float(k))
         restraints.append(IMP.core.DihedralRestraint(model, fun, p1, p2, p3, p4))
 
     excluded = compute_exclusions(system)

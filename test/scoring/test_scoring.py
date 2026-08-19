@@ -87,3 +87,56 @@ if __name__ == "__main__":
         print("pytest not installed; skipping", __file__)
         sys.exit(0)
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+def test_improper_restraints_are_built_from_a_typed_system():
+    """The improper branch of ``build_dye_restraints``, which had never run.
+
+    No builder of a combined system fills ``impropers`` -- ``build_dye_protein_system``
+    hard-codes an empty list -- so the loop that turns them into
+    ``IMP.core.DihedralRestraint``s had no iterations, and the ``t["k"]`` inside
+    it (``t`` is an ``FFTorsionType``, not a dict) could not raise. Injecting one
+    improper is enough to hold the branch open.
+    """
+    import IMP
+    import IMP.bff
+    import IMP.atom
+    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff.cgdye.topology import build_dye_protein_system
+    from IMP.bff.scoring import build_dye_restraints
+
+    system = build_dye_protein_system(
+        str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
+        "CX4", "atto655",
+        protein_template=str(get_template_dir("cx4.template.cif")),
+        dye_template=str(get_template_dir("atto655.template.cif")),
+    )
+    assert system.improper_types, "the templates declare improper types"
+
+    model = IMP.Model()
+    site_particles = {}
+    for site in system.sites:
+        p = IMP.Particle(model)
+        IMP.core.XYZR.setup_particle(p)
+        IMP.core.XYZ(p).set_coordinates(IMP.algebra.Vector3D(
+            float(site.site_no), float(site.site_no % 7), float(site.site_no % 5)))
+        site_particles[site.id] = p
+
+    def n_dihedral(restraints):
+        return sum(isinstance(r, IMP.core.DihedralRestraint) for r in restraints)
+
+    before = build_dye_restraints(model, system, site_particles)
+    without = len(before)
+
+    first = system.dihedrals[0]
+    improper = IMP.bff.FFTorsion()
+    improper.site_a, improper.site_b = first.site_a, first.site_b
+    improper.site_c, improper.site_d = first.site_c, first.site_d
+    improper.type_id = sorted(system.improper_types)[0]
+    system.impropers = [improper]
+
+    with_one = build_dye_restraints(model, system, site_particles)
+    # by count, not by position: the nonbonded pairs are appended after the
+    # bonded terms, so the new restraint is not the last one in the list
+    assert len(with_one) == without + 1
+    assert n_dihedral(with_one) == n_dihedral(before) + 1
