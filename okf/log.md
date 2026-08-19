@@ -1391,3 +1391,20 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   imp.bff, imp, imp-tricks, chisurf, fpsimp, quest, ucfret — and the
   where-knowledge-lives map), and `references/index.md` pointing into the
   shared bundles. `AGENTS.md`/`CLAUDE.md` updated to match.
+
+## 2026-08-19 — programs into `bin/`, and what the improper gap was hiding
+
+- `scripts/` and `pyext/src/cgdye/scripts/` folded into `bin/`, IMP's place for
+  installed programs: `imp_bff_traj2bcif`, `imp_bff_dye_pdb2cif`. The
+  conversion half of the dye converter joined `io.structure`; the one-system
+  Langevin driver became an example. Adding a program to `bin/` **disables the
+  module** until it has a documented section in `README.md` — `setup_module.py`
+  enforces it, and the symptom is a missing `_IMP_bff.so`, not a doc warning.
+- A package-wide dead-code audit found essentially nothing (2 candidates in 570
+  definitions, one a false positive). Its first three revisions each measured
+  themselves rather than the code — see 1d1dfb5.
+- Chasing a duplicated exclusion derivation surfaced
+  [`impropers_are_dropped.md`](impropers_are_dropped.md): the combined-system
+  builder never fills `impropers`, which left 81 of them unbuilt across the two
+  shipped components, hid a `TypeError` in `scoring.build_dye_restraints`
+  (fixed, 192a763), and is the only reason the two exclusion derivations agree.
