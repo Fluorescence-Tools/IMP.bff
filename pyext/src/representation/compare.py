@@ -13,7 +13,7 @@ import json
 
 import numpy as np
 
-from IMP.bff.representation.av import AccessibleVolume, compute_av
+from IMP.bff.representation.av import AccessibleVolume, compute_av_from_structure
 from IMP.bff.representation.distance import av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.representation.rotamer import RotamerEnsemble
 
@@ -68,7 +68,11 @@ def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = 
     """The accessible volume of one fps.json position on ``pdb``."""
     p = _av_position(pos)
     ds = float(disc_step or p.get("simulation_grid_resolution", 1.5))
-    return compute_av(
+    # the structure door -- this passed `pdb_path`/`source_info` to the *array*
+    # door, a signature that stopped existing when the two were separated. The
+    # only test that reached it could not be collected at the time, so nothing
+    # said so.
+    return compute_av_from_structure(
         np.zeros((0, 4)), np.zeros(3),
         float(p.get("linker_length", 20.0)), float(p.get("linker_width", 1.0)),
         (float(p.get("radius1", 3.5)), float(p.get("radius2", 0.0)), float(p.get("radius3", 0.0))),

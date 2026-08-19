@@ -561,28 +561,47 @@ def _parse_component_spec(spec_str):
 # The click decorators for this moved to `bin/imp_bff` as
 # `build-system`; what is left is the function they called, which is
 # library code and now importable without click.
-def build_system_from_specs(
+def build_forcefield_system(
     components,
-    output_cif,
-    bond_k,
-    angle_k,
-    pi_dihedral_k,
-    linker_dihedral_k,
-    ring_improper_k,
-    pi_improper_k,
-    flat_improper_k,
-    orient_improper_k,
-    n_steps,
-    write_every,
-    default_radius,
-    default_mass,
-    nonbonded_k,
-    nonbonded_cutoff,
-    minimize_steps,
+    bond_k=2000.0,
+    angle_k=400.0,
+    pi_dihedral_k=12.0,
+    linker_dihedral_k=1.5,
+    ring_improper_k=40.0,
+    pi_improper_k=180.0,
+    flat_improper_k=120.0,
+    orient_improper_k=220.0,
+    n_steps=20000,
+    write_every=100,
+    default_radius=1.7,
+    default_mass=12.0,
+    nonbonded_k=5.0,
+    nonbonded_cutoff=6.0,
+    minimize_steps=200,
+    relative_to=None,
 ):
+    """Build a :class:`IMP.bff.DyeForceFieldSystem` from component specs.
+
+    *components* is a list of ``name=X,mol2=Y,template=Z,role=fixed|mobile``
+    strings, or of dicts with those keys. *relative_to* is a directory the
+    recorded mol2 paths are made relative to -- the writer passes the output
+    file's directory, because that is a property of the file being written and
+    not of the system; without it the paths are absolute.
+
+    **This is the only builder.** There were three, and they disagreed: this
+    one produced the impropers the templates declare, and the two convenience
+    wrappers below -- the ones every caller actually used -- hard-coded
+    ``impropers = []``. On the two shipped components they agreed on all of
+    sites, bonds, angles, dihedrals, groups, and every type table, and differed
+    only there: 81 against 0. The disagreement was invisible because this
+    builder never returned a system; it wrote a CIF and printed, so its output
+    could only be reached by writing a file and reading it back.
+    """
     parsed_components = []
     for spec in components:
-        parts = _parse_component_spec(spec)
+        # a dict passes through: the wrappers below build one directly rather
+        # than formatting a string only to parse it back
+        parts = spec if isinstance(spec, dict) else _parse_component_spec(spec)
         if "name" not in parts or "mol2" not in parts or "role" not in parts:
             raise ValueError(
                 "Component spec must include name, mol2, template, role"
@@ -599,24 +618,33 @@ def build_system_from_specs(
     fixed_comps = [c for c in parsed_components if c["role"] == "fixed"]
     mobile_comps = [c for c in parsed_components if c["role"] == "mobile"]
 
-    if len(fixed_comps) != 1:
-        raise ValueError("Exactly one fixed component required")
+    if len(fixed_comps) > 1:
+        raise ValueError("At most one fixed component is supported")
 
-    fixed_name = fixed_comps[0]["name"]
-    fixed_mol2 = fixed_comps[0]["mol2"]
-    fixed_template_path = fixed_comps[0].get("template")
-
-    fixed_atoms, fixed_bonds = parse_dye_mol2(fixed_mol2, fixed_name)
-    fixed_site_names = _serial_to_site_atom_names(fixed_atoms)
-    print(f"Fixed ({fixed_name}): {len(fixed_atoms)} atoms, {len(fixed_bonds)} bonds")
-
+    # A dye on its own has no fixed component -- `dye_forcefield_system` builds
+    # exactly that. The fixed one is a starting point for the accumulation
+    # below, not a requirement of the format.
     templates = {}
-    if fixed_template_path:
-        templates[fixed_name] = read_component_template_cif(fixed_template_path)
+    all_atoms = {}
+    all_site_names = {}
+    all_graphs = {}
+    fixed_name = None
 
-    all_atoms = {(fixed_name, k): v for k, v in fixed_atoms.items()}
-    all_site_names = {fixed_name: fixed_site_names}
-    all_graphs = {fixed_name: build_graph(fixed_bonds)}
+    if fixed_comps:
+        fixed_name = fixed_comps[0]["name"]
+        fixed_mol2 = fixed_comps[0]["mol2"]
+        fixed_template_path = fixed_comps[0].get("template")
+
+        fixed_atoms, fixed_bonds = parse_dye_mol2(fixed_mol2, fixed_name)
+        fixed_site_names = _serial_to_site_atom_names(fixed_atoms)
+        print(f"Fixed ({fixed_name}): {len(fixed_atoms)} atoms, {len(fixed_bonds)} bonds")
+
+        if fixed_template_path:
+            templates[fixed_name] = read_component_template_cif(fixed_template_path)
+
+        all_atoms = {(fixed_name, k): v for k, v in fixed_atoms.items()}
+        all_site_names = {fixed_name: fixed_site_names}
+        all_graphs = {fixed_name: build_graph(fixed_bonds)}
 
     for comp in mobile_comps:
         name = comp["name"]
@@ -639,7 +667,7 @@ def build_system_from_specs(
     system_name = "_".join(system_name_parts)
 
     sites = []
-    for comp_name, comp_atoms in [(fixed_name, fixed_atoms)] + [
+    for comp_name, comp_atoms in ([(fixed_name, fixed_atoms)] if fixed_comps else []) + [
         (c["name"], parse_dye_mol2(c["mol2"], c["name"])[0]) for c in mobile_comps
     ]:
         for serial in sorted(comp_atoms.keys()):
@@ -871,12 +899,13 @@ def build_system_from_specs(
             "epsilon": params["epsilon"],
         }
 
-    out_dir = os.path.dirname(os.path.abspath(output_cif))
+    out_dir = os.path.abspath(relative_to) if relative_to else None
     system = {
         "name": system_name,
         "components": {
             c["name"]: {
-                "mol2": os.path.relpath(os.path.abspath(c["mol2"]), out_dir),
+                "mol2": (os.path.relpath(os.path.abspath(c["mol2"]), out_dir)
+                         if out_dir else os.path.abspath(c["mol2"])),
                 "role": c["role"],
             }
             for c in parsed_components
@@ -932,12 +961,47 @@ def build_system_from_specs(
         },
     }
 
+    from IMP.bff.io.cif import forcefield_system_from_dict
+    return forcefield_system_from_dict(system)
+
+
+def build_system_from_specs(
+    components,
+    output_cif,
+    bond_k,
+    angle_k,
+    pi_dihedral_k,
+    linker_dihedral_k,
+    ring_improper_k,
+    pi_improper_k,
+    flat_improper_k,
+    orient_improper_k,
+    n_steps,
+    write_every,
+    default_radius,
+    default_mass,
+    nonbonded_k,
+    nonbonded_cutoff,
+    minimize_steps,
+):
+    """`build_forcefield_system` written to *output_cif* -- the `build-system`
+    command's body, and nothing more than the write."""
+    system = build_forcefield_system(
+        components, bond_k=bond_k, angle_k=angle_k, pi_dihedral_k=pi_dihedral_k,
+        linker_dihedral_k=linker_dihedral_k, ring_improper_k=ring_improper_k,
+        pi_improper_k=pi_improper_k, flat_improper_k=flat_improper_k,
+        orient_improper_k=orient_improper_k, n_steps=n_steps,
+        write_every=write_every, default_radius=default_radius,
+        default_mass=default_mass, nonbonded_k=nonbonded_k,
+        nonbonded_cutoff=nonbonded_cutoff, minimize_steps=minimize_steps,
+        relative_to=os.path.dirname(os.path.abspath(output_cif)))
     os.makedirs(os.path.dirname(os.path.abspath(output_cif)), exist_ok=True)
     write_dye_forcefield_cif(output_cif, system)
     print(f"Wrote {output_cif}")
     print(
-        f"sites={len(sites)} bonds={len(bonds)} angles={len(angles)} "
-        f"dihedrals={len(dihedrals)} impropers={len(impropers)}"
+        f"sites={len(system.sites)} bonds={len(system.bonds)} "
+        f"angles={len(system.angles)} dihedrals={len(system.dihedrals)} "
+        f"impropers={len(system.impropers)}"
     )
 
 
@@ -974,217 +1038,58 @@ def build_dye_protein_system(
     default_radius=1.7,
     default_mass=12.0,
 ):
-    """Build one force-field system for a protein and a dye from their MOL2 files.
+    """One force-field system for a protein and a dye, both from MOL2.
 
-    Bonded terms come from the MOL2 connectivity (and the optional templates),
-    non-bonded LJ types from the CHARMM36 table; the result is the dict
-    ``write_dye_forcefield_cif`` writes and ``sim.runner`` simulates.
+    A two-component :func:`build_forcefield_system`. It used to be a second
+    implementation of that function -- 167 lines that agreed with it on sites,
+    bonds, angles, dihedrals, groups and every type table, and differed only in
+    hard-coding ``impropers = []``. Systems built here now carry the impropers
+    the templates declare: 81 of them on the two shipped components, where this
+    produced none. See okf/validation/impropers_are_dropped.md.
     """
-    p_atoms, p_bonds = parse_dye_mol2(protein_mol2, protein_name)
-    d_atoms, d_bonds = parse_dye_mol2(dye_mol2, dye_name)
-    p_names = _serial_to_site_atom_names(p_atoms)
-    d_names = _serial_to_site_atom_names(d_atoms)
-    p_graph = build_graph(p_bonds)
-    d_graph = build_graph(d_bonds)
-
-    p_template = read_component_template_cif(protein_template) if protein_template else {}
-    d_template = read_component_template_cif(dye_template) if dye_template else {}
-
-    sites = []
-    for serial in sorted(p_atoms):
-        aname = p_names[serial]
-        sites.append(
-            {
-                "id": sid(protein_name, aname),
-                "component": protein_name,
-                "atom_name": aname,
-                "site_serial": serial,
-                "radius": default_radius,
-                "mass": default_mass,
-            }
-        )
-    for serial in sorted(d_atoms):
-        aname = d_names[serial]
-        sites.append(
-            {
-                "id": sid(dye_name, aname),
-                "component": dye_name,
-                "atom_name": aname,
-                "site_serial": serial,
-                "radius": default_radius,
-                "mass": default_mass,
-            }
-        )
-
-    bonds = []
-    for a, b in sorted(p_bonds):
-        bonds.append(
-            [
-                sid(protein_name, p_names[a]),
-                sid(protein_name, p_names[b]),
-                distance(p_atoms[a], p_atoms[b]),
-                "B1",
-            ]
-        )
-    for a, b in sorted(d_bonds):
-        bonds.append(
-            [
-                sid(dye_name, d_names[a]),
-                sid(dye_name, d_names[b]),
-                distance(d_atoms[a], d_atoms[b]),
-                "B1",
-            ]
-        )
-
-    angles = []
-    for comp_name, comp_atoms, comp_names, comp_graph in [
-        (protein_name, p_atoms, p_names, p_graph),
-        (dye_name, d_atoms, d_names, d_graph),
-    ]:
-        for a, b, c in build_angles(comp_graph):
-            angles.append(
-                [
-                    sid(comp_name, comp_names[a]),
-                    sid(comp_name, comp_names[b]),
-                    sid(comp_name, comp_names[c]),
-                    angle_value(comp_atoms[a], comp_atoms[b], comp_atoms[c]),
-                    "A1",
-                ]
-            )
-
-    dihedrals = []
-    for a, b, c, d in build_dihedrals(d_graph):
-        eb = d_atoms.get(b, {}).get("element", "")
-        ec = d_atoms.get(c, {}).get("element", "")
-        tt = "T_PI" if eb in {"C", "N"} and ec in {"C", "N"} else "T_LINK"
-        dihedrals.append(
-            [
-                sid(dye_name, d_names[a]),
-                sid(dye_name, d_names[b]),
-                sid(dye_name, d_names[c]),
-                sid(dye_name, d_names[d]),
-                tt,
-            ]
-        )
-
-    impropers = []
-
-    groups = {
-        f"{protein_name}_all": [sid(protein_name, p_names[k]) for k in sorted(p_atoms)],
-        f"{dye_name}_all": [sid(dye_name, d_names[k]) for k in sorted(d_atoms)],
-    }
-    rb_groups = {}
-    md_fixed_groups = {}
-
-    for comp_name, templ, atoms, names in [
-        (protein_name, p_template, p_atoms, p_names),
-        (dye_name, d_template, d_atoms, d_names),
-    ]:
-        for fid, spec in templ.get("features", {}).items():
-            ids = _resolve_feature_ids(templ, fid, comp_name, atoms, names)
-            if not ids:
-                continue
-            if spec.get("rb"):
-                rb_groups[f"{comp_name}_{fid}_rb"] = ids
-            elif spec.get("md_fixed"):
-                md_fixed_groups[f"{comp_name}_{fid}_md_fixed"] = ids
-            else:
-                groups[f"{comp_name}_{fid}"] = ids
-
-    elements = set()
-    for s in sites:
-        m = re.match(r"([A-Za-z])", s["atom_name"])
-        if m:
-            elements.add(m.group(1).upper())
-
-    from IMP.bff.io.cif import forcefield_system_from_dict
-    return forcefield_system_from_dict(
-    {
-            "name": f"{protein_name}_{dye_name}",
-            "components": {
-                protein_name: {"mol2": protein_mol2, "role": "fixed"},
-                dye_name: {"mol2": dye_mol2, "role": "mobile"},
-            },
-            "sites": sites,
-            "groups": groups,
-            "rb_groups": rb_groups,
-            "md_fixed_groups": md_fixed_groups,
-            "fixed_groups": [f"{protein_name}_all"],
-            "bond_types": {"B1": {"k": 2000.0}},
-            "angle_types": {"A1": {"k": 400.0}},
-            "torsion_types": {
-                "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
-                "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
-            },
-            "improper_types": {
-                "I_RING": {"periodicity": 2, "phase_rad": 0.0, "k": 40.0},
-                "I_PI": {"periodicity": 2, "phase_rad": 0.0, "k": 180.0},
-                "I_FLAT": {"periodicity": 2, "phase_rad": 0.0, "k": 120.0},
-                "I_ORIENT": {"periodicity": 2, "phase_rad": 0.0, "k": 220.0},
-            },
-            "lj_types": build_lj_type_table(elements),
-            "bonds": bonds,
-            "angles": angles,
-            "dihedrals": dihedrals,
-            "impropers": impropers,
-            "nonbonded": {"enabled": True, "k": 5.0, "cutoff_A": 6.0},
-            "sampling": {"n_steps": 500000, "write_every": 1000, "minimize_steps": 200},
-        }
+    return build_forcefield_system(
+        [
+            {"name": protein_name, "mol2": protein_mol2,
+             "template": protein_template, "role": "fixed"},
+            {"name": dye_name, "mol2": dye_mol2,
+             "template": dye_template, "role": "mobile"},
+        ],
+        default_radius=default_radius,
+        default_mass=default_mass,
     )
 
 
-def dye_forcefield_system(dye_mol2, dye_name="dye", dye_template=None, default_radius=1.7, default_mass=12.0):
-    """A force-field system dict for one dye alone (no protein component).
+def dye_forcefield_system(
+    dye_mol2,
+    dye_name="dye",
+    dye_template=None,
+    default_radius=1.7,
+    default_mass=12.0,
+):
+    """A force-field system for one dye alone, with no protein component.
 
-    The same bonded/non-bonded terms and types as :func:`build_dye_protein_system`
-    gives the dye; the dye's backbone-anchor atoms (``N``, ``CA``, ``C``, ``O``)
-    are collected in ``fixed_groups`` so a sampler can hold them on the
-    labelled residue. Site ids are ``<dye_name>:<atom_name>`` (unique via
-    ``_serial_to_site_atom_names``).
+    A one-component :func:`build_forcefield_system`, and formerly a third
+    implementation of it.
+
+    The one thing that is this function's own: the dye's backbone-anchor atoms
+    (``N``, ``CA``, ``C``, ``O``) are collected into a ``<dye_name>_anchor``
+    group and named in ``fixed_groups``, so a sampler can hold them on the
+    labelled residue. With no protein component there is nothing else fixed.
     """
-    d_atoms, d_bonds = parse_dye_mol2(dye_mol2, dye_name)
-    d_names = _serial_to_site_atom_names(d_atoms)
-    d_graph = build_graph(d_bonds)
-    d_template = read_component_template_cif(dye_template) if dye_template else {}
-    sites = []
-    for serial in sorted(d_atoms):
-        aname = d_names[serial]
-        elem = d_atoms[serial].get("element", "C") or "C"
-        sites.append({"id": sid(dye_name, aname), "component": dye_name, "atom_name": aname,
-                      "site_serial": serial, "radius": default_radius, "mass": _ELEMENT_MASS.get(elem, default_mass),
-                      "element": elem})
-    bonds = [[sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), distance(d_atoms[a], d_atoms[b]), "B1"]
-             for a, b in sorted(d_bonds)]
-    angles = [[sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), sid(dye_name, d_names[c]),
-               angle_value(d_atoms[a], d_atoms[b], d_atoms[c]), "A1"] for a, b, c in build_angles(d_graph)]
-    dihedrals = []
-    for a, b, c, d in build_dihedrals(d_graph):
-        eb = d_atoms.get(b, {}).get("element", "")
-        ec = d_atoms.get(c, {}).get("element", "")
-        tt = "T_PI" if eb in {"C", "N"} and ec in {"C", "N"} else "T_LINK"
-        dihedrals.append([sid(dye_name, d_names[a]), sid(dye_name, d_names[b]), sid(dye_name, d_names[c]), sid(dye_name, d_names[d]), tt])
-    anchor = [sid(dye_name, d_names[k]) for k in sorted(d_atoms) if d_names[k].upper() in {"N", "CA", "C", "O"}]
-    elements = {s["element"] for s in sites}
-    from IMP.bff.io.cif import forcefield_system_from_dict
-    return forcefield_system_from_dict(
-    {
-            "name": dye_name,
-            "components": {dye_name: {"mol2": dye_mol2, "role": "mobile"}},
-            "sites": sites,
-            "groups": {f"{dye_name}_all": [s["id"] for s in sites], f"{dye_name}_anchor": anchor},
-            "rb_groups": {}, "md_fixed_groups": {},
-            "fixed_groups": [f"{dye_name}_anchor"],
-            "bond_types": {"B1": {"k": 2000.0}},
-            "angle_types": {"A1": {"k": 400.0}},
-            "torsion_types": {
-                "T_PI": {"periodicity": 2, "phase_rad": math.pi, "k": 12.0},
-                "T_LINK": {"periodicity": 3, "phase_rad": 0.0, "k": 1.5},
-            },
-            "improper_types": {},
-            "lj_types": build_lj_type_table(elements),
-            "bonds": bonds, "angles": angles, "dihedrals": dihedrals, "impropers": [],
-        }
+    system = build_forcefield_system(
+        [{"name": dye_name, "mol2": dye_mol2,
+          "template": dye_template, "role": "mobile"}],
+        default_radius=default_radius,
+        default_mass=default_mass,
     )
+
+    anchor = [site.id for site in system.sites
+              if site.atom_name.upper() in {"N", "CA", "C", "O"}]
+    groups = {k: list(v) for k, v in system.groups.items()}
+    groups[f"{dye_name}_anchor"] = sorted(anchor)
+    system.groups = groups
+    system.fixed_groups = [f"{dye_name}_anchor"]
+    return system
 
 
 #: atomic masses (Da) of the elements a dye MOL2 carries

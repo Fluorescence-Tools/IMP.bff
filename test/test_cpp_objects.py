@@ -306,10 +306,17 @@ def test_the_molecular_graph_is_the_systems_own():
     for tor in system.dihedrals:
         assert tuple(sorted((tor.site_a, tor.site_d))) in excl
 
-    # impropers are empty on every shipped system, so the flag is inert today
-    # -- which is the only reason the three Python copies ever agreed
-    assert not system.impropers
-    assert system.exclusions(False) == excl
+    # impropers are built now (they were dropped by this builder until the
+    # three builders were collapsed into one), so `include_impropers` is live:
+    # it adds each improper's a-c, a-d and b-d pairs, and every one of those is
+    # already 1-2 or 1-3 bonded on these components -- so the flag changes
+    # nothing here while no longer being inert by accident.
+    assert len(system.impropers) == 81
+    assert system.exclusions(False) <= excl
+    for tor in system.impropers:
+        for x, y in ((tor.site_a, tor.site_c), (tor.site_a, tor.site_d),
+                     (tor.site_b, tor.site_d)):
+            assert tuple(sorted((x, y))) in excl
 
     # reachability, bounded by bond count
     first = system.bonds[0]

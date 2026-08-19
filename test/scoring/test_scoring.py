@@ -112,6 +112,7 @@ def test_improper_restraints_are_built_from_a_typed_system():
         dye_template=str(get_template_dir("atto655.template.cif")),
     )
     assert system.improper_types, "the templates declare improper types"
+    assert system.impropers, "and the builder produces them"
 
     model = IMP.Model()
     site_particles = {}
@@ -128,15 +129,11 @@ def test_improper_restraints_are_built_from_a_typed_system():
     before = build_dye_restraints(model, system, site_particles)
     without = len(before)
 
-    first = system.dihedrals[0]
-    improper = IMP.bff.FFTorsion()
-    improper.site_a, improper.site_b = first.site_a, first.site_b
-    improper.site_c, improper.site_d = first.site_c, first.site_d
-    improper.type_id = sorted(system.improper_types)[0]
-    system.impropers = [improper]
+    # the builder produces 81; dropping them is what the count must show
+    kept = list(system.impropers)
+    system.impropers = []
+    stripped = build_dye_restraints(model, system, site_particles)
+    system.impropers = kept
 
-    with_one = build_dye_restraints(model, system, site_particles)
-    # by count, not by position: the nonbonded pairs are appended after the
-    # bonded terms, so the new restraint is not the last one in the list
-    assert len(with_one) == without + 1
-    assert n_dihedral(with_one) == n_dihedral(before) + 1
+    assert n_dihedral(before) == n_dihedral(stripped) + len(kept)
+    assert len(before) == len(stripped) + len(kept)
