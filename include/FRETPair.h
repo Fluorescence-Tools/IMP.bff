@@ -49,7 +49,7 @@ IMPBFF_BEGIN_NAMESPACE
                 managed and the unmanaged typemap, and binding the unmanaged one
                 would leak the whole array on every call. On allocation failure
                 the view comes back empty rather than as a null pointer. Returning a `std::vector` instead makes SWIG build one
-                Python float per element and numpy walk them back: **66 ns each**,
+                Python float per element and numpy walk them back: **35-40 ns each**,
                 which on a 400x350 pair matrix is 18 ms of a 20 ms call against
                 about 1 ms of arithmetic.
 
@@ -77,14 +77,15 @@ IMPBFFEXPORT void fret_pair_matrices(
     \param[in] r,n_r separations, flat `n1 * n2`
     \param[in] kappa2,n_kappa2 orientation factors, same shape
     \param[in] forster_radius \f$R_0\f$ at \f$\kappa^2 = 2/3\f$
-    \return two concatenated blocks: the efficiencies, then the rate ratios.
-            The rate ratios are **not** sanitised — an infinite rate at zero
+    \param[out] out_view,n_out_view two concatenated blocks: the efficiencies,
+                then the rate ratios. The rate ratios are **not** sanitised — an infinite rate at zero
             separation is true, and the caller decides what to do with it.
 */
-IMPBFFEXPORT std::vector<double> fret_pair_efficiency_matrices(
+IMPBFFEXPORT void fret_pair_efficiency_matrices(
         double* r, int n_r,
         double* kappa2, int n_kappa2,
-        double forster_radius);
+        double forster_radius,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

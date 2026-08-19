@@ -46,13 +46,15 @@ IMPBFFEXPORT std::vector<double> points_weighted_mean(
     \param[in] p1,p2 flat clouds, four per point
     \param[in] n_samples samples to draw
     \param[in] seed for reproducibility
-    \return flat, two per sample: distance, weight product
+    \param[out] out_view,n_out_view flat, two per sample: distance, weight
+                product. A numpy view over the kernel's buffer.
 */
-IMPBFFEXPORT std::vector<double> random_distances(
+IMPBFFEXPORT void random_distances(
         const std::vector<double>& p1,
         const std::vector<double>& p2,
         int n_samples,
-        int seed = 0
+        int seed,
+        double** out_view, int* n_out_view
 );
 
 //! Weighted mean inter-point distance \f$\langle R_{DA}\rangle\f$.
@@ -113,14 +115,15 @@ IMPBFFEXPORT std::vector<double> distance_sample_statistics(
     \param[in] dg voxel edge
     \param[in] r0 grid anchor
     \param[in] threshold keep voxels strictly above this
-    \return flat, four per kept point
+    \param[out] out_view,n_out_view flat, four per kept point
 */
-IMPBFFEXPORT std::vector<double> density_to_points(
+IMPBFFEXPORT void density_to_points(
         const std::vector<double>& density,
         int nx, int ny, int nz,
         double dg,
         const std::vector<double>& r0,
-        double threshold = 0.0
+        double threshold,
+        double** out_view, int* n_out_view
 );
 
 //! Label each voxel of an accessible volume contact, free, or empty.
@@ -142,15 +145,16 @@ IMPBFFEXPORT std::vector<double> density_to_points(
     \param[in] rad per-centre slow radius
     \param[in] rs centre coordinates, flat
     \param[in] r0 grid anchor
-    \return flat ng^3 of #AVVoxel
+    \param[out] out_view_i,n_out_view_i flat ng^3 of #AVVoxel
 */
-IMPBFFEXPORT std::vector<int> split_contact_volume(
+IMPBFFEXPORT void split_contact_volume(
         const std::vector<double>& density,
         int ng,
         double dg,
         const std::vector<double>& rad,
         const std::vector<double>& rs,
-        const std::vector<double>& r0
+        const std::vector<double>& r0,
+        int** out_view_i, int* n_out_view_i
 );
 
 IMPBFF_END_NAMESPACE

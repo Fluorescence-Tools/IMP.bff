@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/PhotonSimulation.h>
+#include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/PhotonRace.h>
 
 #include <cmath>
@@ -19,7 +20,8 @@ IMPBFF_BEGIN_NAMESPACE
 // The per-photon race lives in internal/PhotonRace.h, shared with the fused
 // walk->rate->photons kernel so both run the same draws.
 
-std::vector<double> photon_trace(
+namespace {
+std::vector<double> photon_trace_impl(
         int n_ph, const std::vector<double>& k_quench,
         double t_step, double tau0, int seed) {
     const int n = n_ph > 0 ? n_ph : 0;
@@ -35,6 +37,13 @@ std::vector<double> photon_trace(
         out[2 * i + 1] = got ? 1.0 : 0.0;
     }
     return out;
+}
+}  // namespace
+
+void photon_trace(int n_ph, const std::vector<double>& k_quench,
+        double t_step, double tau0, int seed, double** out_view, int* n_out_view) {
+    internal::copy_to_view(photon_trace_impl(n_ph, k_quench, t_step, tau0, seed),
+                           out_view, n_out_view);
 }
 
 std::vector<double> quenched_decay(

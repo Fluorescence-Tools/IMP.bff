@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/QuenchingGrid.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
@@ -27,7 +28,8 @@ void center_grid_indices(
     }
 }
 
-std::vector<double> stamp_spheres(
+namespace {
+std::vector<double> stamp_spheres_impl(
         const std::vector<double>& density, int ng,
         const std::vector<double>& radius, const std::vector<double>& rs,
         const std::vector<double>& r0, double dg,
@@ -89,6 +91,15 @@ std::vector<double> stamp_spheres(
         }
     }
     return factors;
+}
+}  // namespace
+
+void stamp_spheres(const std::vector<double>& density, int ng,
+        const std::vector<double>& radius, const std::vector<double>& rs,
+        const std::vector<double>& r0, double dg,
+        const std::vector<double>& values, int combine, double** out_view, int* n_out_view) {
+    internal::copy_to_view(stamp_spheres_impl(density, ng, radius, rs, r0, dg, values, combine),
+                           out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

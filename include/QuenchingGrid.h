@@ -79,7 +79,7 @@ IMPBFFEXPORT void center_grid_indices(
     \param[in] values per-centre value -- a factor, or a rate
     \param[in] combine GRID_COMBINE_MULTIPLY or GRID_COMBINE_ADD
 */
-IMPBFFEXPORT std::vector<double> stamp_spheres(
+IMPBFFEXPORT void stamp_spheres(
         const std::vector<double>& density,
         int ng,
         const std::vector<double>& radius,
@@ -88,7 +88,8 @@ IMPBFFEXPORT std::vector<double> stamp_spheres(
         double dg,
         const std::vector<double>& values,
         int combine
-);
+,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

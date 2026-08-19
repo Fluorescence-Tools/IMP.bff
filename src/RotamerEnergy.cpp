@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/RotamerEnergy.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
@@ -102,7 +103,8 @@ inline bool boxes_overlap(const double* a, const double* b) {
 }
 }  // namespace
 
-std::vector<double> rotamer_pair_energy_matrix(
+namespace {
+std::vector<double> rotamer_pair_energy_matrix_impl(
         const std::vector<double>& coords_a, const std::vector<double>& coords_b,
         const std::vector<double>& rmin, const std::vector<double>& eps,
         int n_a_conf, int n_a_atoms, int n_b_conf, int n_b_atoms,
@@ -157,6 +159,16 @@ std::vector<double> rotamer_pair_energy_matrix(
         }
     }
     return out;
+}
+}  // namespace
+
+void rotamer_pair_energy_matrix(const std::vector<double>& coords_a, const std::vector<double>& coords_b,
+        const std::vector<double>& rmin, const std::vector<double>& eps,
+        int n_a_conf, int n_a_atoms, int n_b_conf, int n_b_atoms,
+        double** out_view, int* n_out_view,
+        double r_cutoff, double aabb_pad, double r_floor) {
+    internal::copy_to_view(rotamer_pair_energy_matrix_impl(coords_a, coords_b, rmin, eps, n_a_conf, n_a_atoms, n_b_conf, n_b_atoms, r_cutoff, aabb_pad, r_floor),
+                           out_view, n_out_view);
 }
 
 std::vector<double> lj_pair_energies(

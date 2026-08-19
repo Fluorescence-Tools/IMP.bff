@@ -5,13 +5,15 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/LifetimeSpectrum.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::vector<double> lifetime_spectrum_decay(
+namespace {
+std::vector<double> lifetime_spectrum_decay_impl(
         const std::vector<double>& amplitudes,
         const std::vector<double>& rate_constants,
         const std::vector<double>& time) {
@@ -27,6 +29,14 @@ std::vector<double> lifetime_spectrum_decay(
         out[static_cast<std::size_t>(j)] = f;
     }
     return out;
+}
+}  // namespace
+
+void lifetime_spectrum_decay(const std::vector<double>& amplitudes,
+        const std::vector<double>& rate_constants,
+        const std::vector<double>& time, double** out_view, int* n_out_view) {
+    internal::copy_to_view(lifetime_spectrum_decay_impl(amplitudes, rate_constants, time),
+                           out_view, n_out_view);
 }
 
 std::vector<double> lifetime_spectrum_coarse_grain(

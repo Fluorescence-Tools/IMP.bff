@@ -7,6 +7,7 @@
  *
  */
 #include <IMP/bff/AV.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <chrono>
 
@@ -1105,7 +1106,11 @@ IMP::ParticleIndex search_labeling_site(
 //! Random sampling over AV
     void get_xyz_density();
 
-std::vector<double> av_random_points(const AV& av, int n_samples){
+namespace {
+// The samplers, as plain vectors. The exported entry points below publish a
+// numpy view over a copy; these two are what the other kernels in this file
+// call, and they must not allocate a view only to free it.
+std::vector<double> sample_points(const AV& av, int n_samples){
     auto m = av.get_map();
     auto d = m->get_xyz_density();
     std::vector<double> data; 
@@ -1127,13 +1132,13 @@ std::vector<double> av_random_points(const AV& av, int n_samples){
     return data;    
 }
 
-std::vector<double> av_random_distances(
+std::vector<double> sample_distances(
         const AV& av1,
         const AV& av2,
         int n_samples
 ){
-    auto p1 = av_random_points(av1, n_samples);
-    auto p2 = av_random_points(av2, n_samples);
+    auto p1 = sample_points(av1, n_samples);
+    auto p2 = sample_points(av2, n_samples);
     std::vector<double> data; data.reserve(n_samples);
     for (int s = 0; s < n_samples; s++) {
         auto dx = p1[s * 4 + 0] - p2[s * 4 + 0];
@@ -1144,6 +1149,18 @@ std::vector<double> av_random_distances(
     }
     return data;
 }
+}  // namespace
+
+void av_random_points(const AV& av, double** out_view, int* n_out_view,
+                      int n_samples){
+    internal::copy_to_view(sample_points(av, n_samples), out_view, n_out_view);
+}
+
+void av_random_distances(const AV& av1, const AV& av2,
+                         double** out_view, int* n_out_view, int n_samples){
+    internal::copy_to_view(sample_distances(av1, av2, n_samples),
+                           out_view, n_out_view);
+}
 
 std::vector<double> av_distance_distribution(
         const AV& av1,
@@ -1152,7 +1169,7 @@ std::vector<double> av_distance_distribution(
         std::vector<double> axis,
         int n_samples
 ){
-    auto data = av_random_distances(av1, av2, n_samples);
+    auto data = sample_distances(av1, av2, n_samples);
  
 //    // For future versions (requires C++14)
 //    using namespace boost::histogram; // strip the boost::histogram prefix

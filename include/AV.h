@@ -619,15 +619,17 @@ IMPBFFEXPORT double av_distance_quadrature(
 );
 
 // Draw random points in AV. Returns (x,y,z,d) vector
-IMPBFFEXPORT std::vector<double> av_random_points(
+IMPBFFEXPORT void av_random_points(
         const AV& av1,
+        double** out_view, int* n_out_view,
         int n_samples=10000
 );
 
 //! Random sampling over AV/AV distances
-IMPBFFEXPORT std::vector<double> av_random_distances(
+IMPBFFEXPORT void av_random_distances(
         const AV& av1,
         const AV& av2,
+        double** out_view, int* n_out_view,
         int n_samples=10000
 );
 

@@ -65,7 +65,7 @@ IMPBFF_BEGIN_NAMESPACE
     \return two values per photon: delay time in ns (0 if quenched), and 1 or 0
             for emitted. Empty if no walk found a starting voxel.
 */
-IMPBFFEXPORT std::vector<double> quenched_donor_photons(
+IMPBFFEXPORT void quenched_donor_photons(
         int* occupancy, int n_occupancy,
         double* mobility, int n_mobility,
         double* rate_map, int n_rate_map,
@@ -73,7 +73,8 @@ IMPBFFEXPORT std::vector<double> quenched_donor_photons(
         double diffusion_coefficient,
         const std::vector<int>& walk_seeds,
         double tau0, int n_photons, int photon_seed,
-        std::vector<double>& stats);
+        std::vector<double>& stats,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

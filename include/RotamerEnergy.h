@@ -86,14 +86,18 @@ IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
     \param[in] r_cutoff pairs beyond this contribute nothing, Angstrom
     \param[in] aabb_pad padding on each bounding box, Angstrom
     \param[in] r_floor distance clamp keeping the energy finite
-    \return flat `n_a_conf * n_b_conf`
+    \param[out] out_view,n_out_view flat `n_a_conf * n_b_conf`. Placed before
+                the defaulted parameters, not after: a parameter without a
+                default may not follow one that has it, and numpy's typemap
+                binds on the pair's *names*, not its position.
 */
-IMPBFFEXPORT std::vector<double> rotamer_pair_energy_matrix(
+IMPBFFEXPORT void rotamer_pair_energy_matrix(
         const std::vector<double>& coords_a,
         const std::vector<double>& coords_b,
         const std::vector<double>& rmin,
         const std::vector<double>& eps,
         int n_a_conf, int n_a_atoms, int n_b_conf, int n_b_atoms,
+        double** out_view, int* n_out_view,
         double r_cutoff = 12.0,
         double aabb_pad = 3.5,
         double r_floor = 0.01);

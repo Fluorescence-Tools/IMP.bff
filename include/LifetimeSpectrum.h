@@ -38,10 +38,11 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] time the abscissa, ns
     \return \p time.size() values
 */
-IMPBFFEXPORT std::vector<double> lifetime_spectrum_decay(
+IMPBFFEXPORT void lifetime_spectrum_decay(
         const std::vector<double>& amplitudes,
         const std::vector<double>& rate_constants,
-        const std::vector<double>& time);
+        const std::vector<double>& time,
+        double** out_view, int* n_out_view);
 
 //! Reduce many species to few, preserving the first two moments exactly.
 /*!

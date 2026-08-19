@@ -2,11 +2,29 @@
  *  \file IMP/bff/internal/OutputView.h
  *  \brief Handing a large array back to numpy without copying it.
  *
- * A kernel that returns a `std::vector` makes SWIG build one Python float per
- * element and numpy walk them back: **~66 ns each**, against ~340 ns for an
- * out-parameter. Neither is free, and for a large result the return path costs
- * far more than the arithmetic — a 400×350 pair matrix was 38 ms of marshalling
- * against about 1 ms of work.
+ * The cost of crossing the SWIG boundary, per element, measured on this box on
+ * 2026-08-19 (`quenched_decay` and `lifetime_spectrum_decay`, 10k–400k
+ * elements, work held constant while the array size varied):
+ *
+ *     OUT  returned std::vector -> tuple            8–16 ns   (SWIG)
+ *          ...then np.asarray over that tuple      ~27 ns     (numpy)
+ *          ------------------------------------------------
+ *          what the caller actually pays          35–40 ns
+ *          ARGOUTVIEWM_ARRAY1                        free
+ *          a SWIG proxy walked per __getitem__     ~340 ns
+ *
+ *     IN   ndarray -> const std::vector<double>&   32–37 ns   (default typemap)
+ *          list    -> const std::vector<double>&    8–13 ns
+ *          ndarray -> const std::vector<double>&    4.4 ns    (bulk-copy
+ *                                                              typemap, in
+ *                                                              IMP_bff.types.i)
+ *          ndarray -> (double*, int) IN_ARRAY1        free
+ *
+ * An earlier note in this file put the return path at 66 ns/element. That was
+ * too high; the decomposition above is what two kernels agree on. The ordering
+ * it implies has not changed — for a large result the return path still costs
+ * far more than the arithmetic, and a 400×350 pair matrix was ~20 ms of
+ * marshalling against about 1 ms of work.
  *
  * numpy's `ARGOUTVIEWM_ARRAY1` typemap takes a `(pointer, length)` pair and
  * wraps the buffer in an ndarray that **owns** it. No copy, no conversion.

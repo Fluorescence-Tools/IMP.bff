@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/FRETPair.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -90,12 +91,13 @@ void fret_pair_matrices(
     }
 }
 
-std::vector<double> fret_pair_efficiency_matrices(
+void fret_pair_efficiency_matrices(
         double* r, int n_r, double* kappa2, int n_kappa2,
-        double forster_radius) {
+        double forster_radius, double** out_view, int* n_out_view) {
     const int n = n_r < n_kappa2 ? n_r : n_kappa2;
-    std::vector<double> out(static_cast<std::size_t>(std::max(0, n)) * 2, 0.0);
-    if (n <= 0) return out;
+    double* out = internal::new_double_view(
+            static_cast<std::size_t>(std::max(0, n)) * 2, out_view, n_out_view);
+    if (out == nullptr || n <= 0) return;
     const std::size_t block = static_cast<std::size_t>(n);
 
 #pragma omp parallel for schedule(static)
@@ -123,7 +125,6 @@ std::vector<double> fret_pair_efficiency_matrices(
                                  ? std::numeric_limits<double>::infinity()
                                  : 1.5 * k2 / ratio6;
     }
-    return out;
 }
 
 IMPBFF_END_NAMESPACE

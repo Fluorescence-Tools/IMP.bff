@@ -33,14 +33,15 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] min_distance_sq squared contact distance
     \param[in] factor per-contact slowing factor
 */
-IMPBFFEXPORT std::vector<double> slow_near_atoms(
+IMPBFFEXPORT void slow_near_atoms(
         const std::vector<double>& d_map,
         const std::vector<double>& density,
         const std::vector<double>& axis,
         const std::vector<double>& r0,
         const std::vector<double>& atoms_xyz,
         double min_distance_sq,
-        double factor
+        double factor,
+        double** out_view, int* n_out_view
 );
 
 //! Quenching-rate field: \f$k(r) = 1/\tau_0 + \sum_a k_a e^{-(|r-r_a| - r_{dye})/r_{C,a}}\f$.
@@ -57,7 +58,7 @@ IMPBFFEXPORT std::vector<double> slow_near_atoms(
     \param[in] dye_radius subtracted from the centre-to-centre distance
     \param[in] inv_tau0 the radiative floor
 */
-IMPBFFEXPORT std::vector<double> quenching_map(
+IMPBFFEXPORT void quenching_map(
         const std::vector<double>& density,
         const std::vector<double>& axis,
         const std::vector<double>& r0,
@@ -65,7 +66,8 @@ IMPBFFEXPORT std::vector<double> quenching_map(
         const std::vector<double>& kQ,
         const std::vector<double>& rC,
         double dye_radius,
-        double inv_tau0
+        double inv_tau0,
+        double** out_view, int* n_out_view
 );
 
 //! FRET-rate field of a donor volume against a whole acceptor volume.
@@ -84,7 +86,7 @@ IMPBFFEXPORT std::vector<double> quenching_map(
     \param[in] kf radiative rate
     \param[in] step stride over the acceptor grid; 1 visits every voxel
 */
-IMPBFFEXPORT std::vector<double> fret_map(
+IMPBFFEXPORT void fret_map(
         const std::vector<double>& density_d,
         const std::vector<double>& density_a,
         const std::vector<double>& axis_d,
@@ -93,7 +95,8 @@ IMPBFFEXPORT std::vector<double> fret_map(
         const std::vector<double>& r0_a,
         double r0_6,
         double kf,
-        int step
+        int step,
+        double** out_view, int* n_out_view
 );
 
 IMPBFF_END_NAMESPACE

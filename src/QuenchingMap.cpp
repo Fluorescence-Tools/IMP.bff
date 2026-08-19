@@ -5,19 +5,21 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/QuenchingMap.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <cmath>
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::vector<double> slow_near_atoms(
+void slow_near_atoms(
         const std::vector<double>& d_map, const std::vector<double>& density,
         const std::vector<double>& axis, const std::vector<double>& r0,
         const std::vector<double>& atoms_xyz, double min_distance_sq,
-        double factor) {
+        double factor, double** out_view, int* n_out_view) {
     const std::size_t ng = axis.size();
     const std::size_t n_atoms = atoms_xyz.size() / 3;
-    std::vector<double> out(density.size(), 0.0);
+    double* out = internal::new_double_view(density.size(), out_view, n_out_view);
+    if (out == nullptr) return;
     for (std::size_t ix = 0; ix < ng; ++ix) {
         const double x = axis[ix] + r0[0];
         for (std::size_t iy = 0; iy < ng; ++iy) {
@@ -38,17 +40,18 @@ std::vector<double> slow_near_atoms(
             }
         }
     }
-    return out;
 }
 
-std::vector<double> quenching_map(
+void quenching_map(
         const std::vector<double>& density, const std::vector<double>& axis,
         const std::vector<double>& r0, const std::vector<double>& atoms_xyz,
         const std::vector<double>& kQ, const std::vector<double>& rC,
-        double dye_radius, double inv_tau0) {
+        double dye_radius, double inv_tau0,
+        double** out_view, int* n_out_view) {
     const std::size_t ng = axis.size();
     const std::size_t n_atoms = atoms_xyz.size() / 3;
-    std::vector<double> out(density.size(), 0.0);
+    double* out = internal::new_double_view(density.size(), out_view, n_out_view);
+    if (out == nullptr) return;
     for (std::size_t ix = 0; ix < ng; ++ix) {
         const double x = axis[ix] + r0[0];
         for (std::size_t iy = 0; iy < ng; ++iy) {
@@ -71,17 +74,18 @@ std::vector<double> quenching_map(
             }
         }
     }
-    return out;
 }
 
-std::vector<double> fret_map(
+void fret_map(
         const std::vector<double>& density_d, const std::vector<double>& density_a,
         const std::vector<double>& axis_d, const std::vector<double>& axis_a,
         const std::vector<double>& r0_d, const std::vector<double>& r0_a,
-        double r0_6, double kf, int step) {
+        double r0_6, double kf, int step,
+        double** out_view, int* n_out_view) {
     const std::size_t ng_d = axis_d.size();
     const std::size_t ng_a = axis_a.size();
-    std::vector<double> out(density_d.size(), 0.0);
+    double* out = internal::new_double_view(density_d.size(), out_view, n_out_view);
+    if (out == nullptr) return;
     if (step < 1) step = 1;
     for (std::size_t ixd = 0; ixd < ng_d; ++ixd) {
         const double x = axis_d[ixd] + r0_d[0];
@@ -116,7 +120,6 @@ std::vector<double> fret_map(
             }
         }
     }
-    return out;
 }
 
 IMPBFF_END_NAMESPACE

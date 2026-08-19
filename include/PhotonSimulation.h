@@ -49,7 +49,7 @@ IMPBFF_BEGIN_NAMESPACE
             event), then 1.0 if a photon got out and 0.0 if quenching won.
 
     Interleaved rather than returned alongside an out-parameter. SWIG turns a
-    returned `std::vector` into a Python tuple, which costs ~66 ns per element to build and walk back;
+    returned `std::vector` into a Python tuple, which costs ~35-40 ns per element to build and walk back;
     an out-parameter stays a wrapper object that numpy walks one `__getitem__`
     at a time, about 340 ns per element against 34 ns for an *input* array of
     the same size. On a 40 000-photon trace that flag cost 13.7 ms of 152 ms.
@@ -58,9 +58,10 @@ IMPBFF_BEGIN_NAMESPACE
     element, so ~180 ms for a five-million-frame trace. #quenched_donor_photons
     avoids it entirely by never letting the trace out of C++.
 */
-IMPBFFEXPORT std::vector<double> photon_trace(
+IMPBFFEXPORT void photon_trace(
         int n_ph, const std::vector<double>& k_quench,
-        double t_step, double tau0, int seed);
+        double t_step, double tau0, int seed,
+        double** out_view, int* n_out_view);
 
 //! Trajectory-driven fluorescence decay, without shot noise.
 /*!

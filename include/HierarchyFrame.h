@@ -10,7 +10,7 @@
  *
  * These do the walk on the C++ side and hand back arrays. Two calls rather than
  * one with out-parameters, because a *returned* `std::vector` becomes a Python
- * tuple that costs ~66 ns per element to build and walk back, while an out-parameter stays a wrapper
+ * tuple that costs ~35-40 ns per element to build and walk back, while an out-parameter stays a wrapper
  * object numpy walks one element at a time.
  *
  * \authors Thomas-Otavio Peulen
@@ -35,8 +35,9 @@ IMPBFF_BEGIN_NAMESPACE
     \return four values per atom: x, y, z, and the residue index as a double
             (-1 where the leaf has no residue parent)
 */
-IMPBFFEXPORT std::vector<double> hierarchy_atom_coordinates(
-        IMP::atom::Hierarchy hierarchy);
+IMPBFFEXPORT void hierarchy_atom_coordinates(
+        IMP::atom::Hierarchy hierarchy,
+        double** out_view, int* n_out_view);
 
 //! Names of every XYZ leaf, in the same order as #hierarchy_atom_coordinates.
 /*!

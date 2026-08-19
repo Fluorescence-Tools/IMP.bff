@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/QuenchedDecay.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/bff/internal/PhotonRace.h>
 #include <IMP/bff/internal/RandomWalk.h>
@@ -14,7 +15,8 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::vector<double> quenched_donor_photons(
+namespace {
+std::vector<double> quenched_donor_photons_impl(
         int* occupancy, int n_occupancy,
         double* mobility, int n_mobility,
         double* rate_map, int n_rate_map,
@@ -94,6 +96,19 @@ std::vector<double> quenched_donor_photons(
         out[2 * i + 1] = got ? 1.0 : 0.0;
     }
     return out;
+}
+}  // namespace
+
+void quenched_donor_photons(int* occupancy, int n_occupancy,
+        double* mobility, int n_mobility,
+        double* rate_map, int n_rate_map,
+        int ng, double dg, double t_max, double t_step,
+        double diffusion_coefficient,
+        const std::vector<int>& walk_seeds,
+        double tau0, int n_photons, int photon_seed,
+        std::vector<double>& stats, double** out_view, int* n_out_view) {
+    internal::copy_to_view(quenched_donor_photons_impl(occupancy, n_occupancy, mobility, n_mobility, rate_map, n_rate_map, ng, dg, t_max, t_step, diffusion_coefficient, walk_seeds, tau0, n_photons, photon_seed, stats),
+                           out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

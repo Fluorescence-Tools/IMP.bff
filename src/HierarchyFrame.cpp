@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/HierarchyFrame.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/atom/Atom.h>
 #include <IMP/atom/Chain.h>
@@ -25,7 +26,8 @@ IMP::ParticlesTemp xyz_leaves(IMP::atom::Hierarchy hierarchy) {
 }
 }  // namespace
 
-std::vector<double> hierarchy_atom_coordinates(IMP::atom::Hierarchy hierarchy) {
+namespace {
+std::vector<double> hierarchy_atom_coordinates_impl(IMP::atom::Hierarchy hierarchy) {
     const IMP::ParticlesTemp particles = xyz_leaves(hierarchy);
     std::vector<double> out(particles.size() * 4, 0.0);
     for (std::size_t i = 0; i < particles.size(); ++i) {
@@ -45,6 +47,12 @@ std::vector<double> hierarchy_atom_coordinates(IMP::atom::Hierarchy hierarchy) {
         out[4 * i + 3] = residue_index;
     }
     return out;
+}
+}  // namespace
+
+void hierarchy_atom_coordinates(IMP::atom::Hierarchy hierarchy, double** out_view, int* n_out_view) {
+    internal::copy_to_view(hierarchy_atom_coordinates_impl(hierarchy),
+                           out_view, n_out_view);
 }
 
 std::vector<std::string> hierarchy_atom_metadata(IMP::atom::Hierarchy hierarchy) {

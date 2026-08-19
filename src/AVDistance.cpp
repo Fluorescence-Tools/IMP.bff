@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/AVDistance.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <cmath>
 #include <limits>
@@ -31,36 +32,49 @@ std::vector<double> points_weighted_mean(const std::vector<double>& points) {
     return mean;
 }
 
-std::vector<double> random_distances(
-        const std::vector<double>& p1, const std::vector<double>& p2,
-        int n_samples, int seed) {
-    // **Not bit-comparable with the numba it replaces.** numba draws from its
-    // own Mersenne stream, which no other generator reproduces, so a sampled
-    // estimator can only be checked distributionally -- two estimates of the
-    // same quantity, agreeing to the sampling error of ~1/sqrt(n_samples).
-    std::vector<double> out(static_cast<std::size_t>(std::max(0, n_samples)) * 2, 0.0);
+namespace {
+//! Draw `n_samples` (distance, weight-product) pairs into `out`.
+/*! Shared by the public kernel, which publishes a numpy view, and by the two
+    reductions below, which consume the samples and never hand them back --
+    those would otherwise allocate a view only to free it. */
+void sample_pairs(const std::vector<double>& p1, const std::vector<double>& p2,
+                  int n_samples, int seed, double* out) {
     const std::size_t n1 = p1.size() / 4;
     const std::size_t n2 = p2.size() / 4;
-    if (n_samples <= 0) return out;
+    if (n_samples <= 0 || n1 == 0 || n2 == 0) return;
     std::mt19937_64 rng(static_cast<std::uint64_t>(seed));
-    std::uniform_int_distribution<std::size_t> d1(0, n1 ? n1 - 1 : 0);
-    std::uniform_int_distribution<std::size_t> d2(0, n2 ? n2 - 1 : 0);
+    std::uniform_int_distribution<std::size_t> d1(0, n1 - 1);
+    std::uniform_int_distribution<std::size_t> d2(0, n2 - 1);
     for (int i = 0; i < n_samples; ++i) {
-        const std::size_t i1 = n1 ? d1(rng) : 0;
-        const std::size_t i2 = n2 ? d2(rng) : 0;
-        if (n1 == 0 || n2 == 0) continue;
+        const std::size_t i1 = d1(rng);
+        const std::size_t i2 = d2(rng);
         const double dx = p1[4 * i1 + 0] - p2[4 * i2 + 0];
         const double dy = p1[4 * i1 + 1] - p2[4 * i2 + 1];
         const double dz = p1[4 * i1 + 2] - p2[4 * i2 + 2];
         out[2 * i + 0] = std::sqrt(dx * dx + dy * dy + dz * dz);
         out[2 * i + 1] = p1[4 * i1 + 3] * p2[4 * i2 + 3];
     }
-    return out;
+}
+}  // namespace
+
+void random_distances(
+        const std::vector<double>& p1, const std::vector<double>& p2,
+        int n_samples, int seed, double** out_view, int* n_out_view) {
+    // **Not bit-comparable with the numba it replaces.** numba draws from its
+    // own Mersenne stream, which no other generator reproduces, so a sampled
+    // estimator can only be checked distributionally -- two estimates of the
+    // same quantity, agreeing to the sampling error of ~1/sqrt(n_samples).
+    double* out = internal::new_double_view(
+            static_cast<std::size_t>(std::max(0, n_samples)) * 2,
+            out_view, n_out_view);
+    if (out == nullptr) return;
+    sample_pairs(p1, p2, n_samples, seed, out);
 }
 
 double average_distance(const std::vector<double>& p1,
                         const std::vector<double>& p2, int n_samples, int seed) {
-    const std::vector<double> d = random_distances(p1, p2, n_samples, seed);
+    std::vector<double> d(static_cast<std::size_t>(std::max(0, n_samples)) * 2, 0.0);
+    sample_pairs(p1, p2, n_samples, seed, d.data());
     double w_sum = 0.0, rda = 0.0;
     for (std::size_t i = 0; i < d.size() / 2; ++i) {
         w_sum += d[2 * i + 1];
@@ -72,7 +86,8 @@ double average_distance(const std::vector<double>& p1,
 double mean_fret_distance(const std::vector<double>& p1,
                           const std::vector<double>& p2, double forster_radius,
                           int n_samples, int seed) {
-    const std::vector<double> d = random_distances(p1, p2, n_samples, seed);
+    std::vector<double> d(static_cast<std::size_t>(std::max(0, n_samples)) * 2, 0.0);
+    sample_pairs(p1, p2, n_samples, seed, d.data());
     double w_sum = 0.0, mean_e = 0.0;
     for (std::size_t i = 0; i < d.size() / 2; ++i) {
         const double r = d[2 * i + 0];
@@ -119,11 +134,21 @@ std::vector<double> distance_sample_statistics(
     return out;
 }
 
-std::vector<double> density_to_points(
+void density_to_points(
         const std::vector<double>& density, int nx, int ny, int nz, double dg,
-        const std::vector<double>& r0, double threshold) {
-    std::vector<double> points;
-    points.reserve(static_cast<std::size_t>(nx) * ny * nz / 4 * 4);
+        const std::vector<double>& r0, double threshold,
+        double** out_view, int* n_out_view) {
+    // Two passes. A view has to be sized before it is filled, and the count of
+    // occupied voxels is not known in advance -- so count, allocate exactly,
+    // then fill. The counting pass is a scan with no writes and is far cheaper
+    // than the growth it replaces.
+    std::size_t kept = 0;
+    for (std::size_t k = 0; k < density.size(); ++k) {
+        if (density[k] > threshold) ++kept;
+    }
+    double* points = internal::new_double_view(kept * 4, out_view, n_out_view);
+    if (points == nullptr) return;
+    std::size_t w = 0;
     for (int ix = 0; ix < nx; ++ix) {
         const double x = dg * ix + r0[0];
         for (int iy = 0; iy < ny; ++iy) {
@@ -131,23 +156,23 @@ std::vector<double> density_to_points(
             for (int iz = 0; iz < nz; ++iz) {
                 const double v = density[(static_cast<std::size_t>(ix) * ny + iy) * nz + iz];
                 if (v > threshold) {
-                    points.push_back(x);
-                    points.push_back(y);
-                    points.push_back(dg * iz + r0[2]);
-                    points.push_back(v);
+                    points[w++] = x;
+                    points[w++] = y;
+                    points[w++] = dg * iz + r0[2];
+                    points[w++] = v;
                 }
             }
         }
     }
-    return points;
 }
 
-std::vector<int> split_contact_volume(
+void split_contact_volume(
         const std::vector<double>& density, int ng, double dg,
         const std::vector<double>& rad, const std::vector<double>& rs,
-        const std::vector<double>& r0) {
+        const std::vector<double>& r0, int** out_view_i, int* n_out_view_i) {
     const std::size_t n = static_cast<std::size_t>(ng);
-    std::vector<int> label(n * n * n, AV_VOXEL_EMPTY);
+    int* label = internal::new_int_view(n * n * n, out_view_i, n_out_view_i);
+    if (label == nullptr) return;
     const std::size_t n_centre = rad.size();
     // Integer offset and `floor`, both deliberate: see the header. Hoisted out
     // of the voxel loop -- they depend only on the centre.
@@ -177,7 +202,7 @@ std::vector<int> split_contact_volume(
             }
         }
     }
-    return label;
+
 }
 
 IMPBFF_END_NAMESPACE
