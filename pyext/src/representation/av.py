@@ -424,6 +424,7 @@ def _av_from_arrays(
     dye_radii: Tuple[float, float, float] = (3.5, 0.0, 0.0),
     grid_resolution: float = 1.5,
     allowed_sphere_radius: float = DEFAULT_ALLOWED_SPHERE_RADIUS,
+    search_stencil: int = 0,
 ) -> AccessibleVolume:
     """Compute AV using IMP.bff.
 
@@ -506,17 +507,25 @@ def _av_from_arrays(
         linker_length=linker_length, linker_width=linker_width,
         radii=dye_radii, disc_step=grid_resolution,
         allowed_sphere_radius=allowed_sphere_radius,
+        search_stencil=search_stencil,
     )
     nx = reading.shape[0]
     origin = reading.origin
     xyz_density = reading.points_xyzw
-    # This door's conventions, deliberately kept as they were: the density is
-    # binarised to an occupancy mask in float64, and the point weights are
-    # whatever IMP reported. The structure door in `IMP.bff.representation.av.structure` keeps the
-    # raw float32 values and forces the weights to one. Reconciling the two is a
-    # behaviour change and belongs to a later stage, not to this move.
-    density = np.ascontiguousarray(
-        np.where(reading.density > 0.0, 1.0, 0.0))
+    # This door's conventions: float64, and the point weights are whatever IMP
+    # reported. The structure door in `IMP.bff.representation.av.structure`
+    # keeps the raw float32 values and forces the weights to one.
+    #
+    # The density used to be **binarised** here, `np.where(d > 0, 1, 0)`. For
+    # AV1 that is a no-op -- the carve already emits exactly 0 or 1 -- but it
+    # destroys AV3, whose whole content is the grading: the density is the
+    # fraction of the three probe radii that fit, {1/3, 2/3, 1}, matching
+    # LabelLib's `excludeConcentricSpheres`. Binarising it returns the AV1
+    # volume of the *smallest* radius and silently discards the other two, which
+    # is the same defect as `get_radii()` dropping `radius2`: an AV3 that looks
+    # like it worked. The raw values are kept, so AV1 is unchanged and AV3 means
+    # something.
+    density = np.ascontiguousarray(np.asarray(reading.density, dtype=float))
 
     shape = (nx, nx, nx)
     voxel_size = float(grid_resolution)
@@ -542,6 +551,7 @@ def _av_from_arrays(
             "dye_radii": list(dye_radii),
             "grid_resolution": grid_resolution,
             "allowed_sphere_radius": allowed_sphere_radius,
+            "search_stencil": search_stencil or 74,
         },
     )
 
@@ -555,6 +565,7 @@ def compute_av(
     dye_radii: Tuple[float, float, float] = (3.5, 0.0, 0.0),
     grid_resolution: float = 1.5,
     allowed_sphere_radius: float = DEFAULT_ALLOWED_SPHERE_RADIUS,
+    search_stencil: int = 0,
 ) -> AccessibleVolume:
     """Compute an accessible volume from raw atomic coordinates.
 
@@ -588,6 +599,10 @@ def compute_av(
     allowed_sphere_radius : float
         Radius around the attachment atom inside which obstacles are ignored,
         so the linker can leave the atom it is tied to (Å). Default 2.1.
+    search_stencil : int
+        Dijkstra neighbour stencil. 0 (default) keeps the AV's own default of
+        **74**, the LabelLib reference metric. 26 is the speed option: ~1.9×
+        faster for ~20 % less volume. 30 is the historical variant.
 
     Returns
     -------
@@ -621,7 +636,7 @@ def compute_av(
     return _av_from_arrays(
         atoms_xyz, atoms_vdw, source_xyz,
         linker_length, linker_width, dye_radii, grid_resolution,
-        allowed_sphere_radius,
+        allowed_sphere_radius, search_stencil,
     )
 
 
@@ -1205,3 +1220,44 @@ def _stripped_pdb_for(
         return str(pdb_path)
     _STRIPPED_PDB_CACHE[key] = result
     return result
+
+
+# --------------------------------------------------------------------------
+# Reporting AV positions
+#
+# Was in `tools.py`. It reads AVs and prints their mean positions, which is
+# this module's subject rather than a path helper's.
+# --------------------------------------------------------------------------
+def display_mean_av_positions(
+        used_avs: typing.List[IMP.bff.AV],
+        dye_radius: float = 3.5
+):
+    """Decorate the accessible volume particles
+    with a mass and radii, so that they appear
+    in the rmf file"""
+    for dye in used_avs:
+        # Add radius and mass to dye
+        p_dye = dye.get_particle()
+        if not IMP.core.XYZR.get_is_setup(p_dye):
+            p_dye = IMP.core.XYZR.setup_particle(p_dye)
+            p_dye.set_radius(dye_radius)
+        else:
+            p_dye = IMP.core.XYZR(p_dye)
+        if not IMP.atom.Mass.get_is_setup(p_dye):
+            IMP.atom.Mass.setup_particle(p_dye, 100)
+
+        # add dye to atom hier
+        p_att = dye.get_source()
+        h_att = IMP.atom.Hierarchy(p_att)
+        IMP.atom.Hierarchy.setup_particle(p_dye)
+        h_dye = IMP.atom.Hierarchy(p_dye)
+        h_att.add_child(h_dye)
+        # create bond between dye and source
+        if not IMP.atom.Bonded.get_is_setup(p_dye):
+            IMP.atom.Bonded.setup_particle(p_dye)
+        if not IMP.atom.Bonded.get_is_setup(p_att):
+            IMP.atom.Bonded.setup_particle(p_att)
+        if not IMP.atom.get_bond(IMP.atom.Bonded(p_dye), IMP.atom.Bonded(p_att)):
+            IMP.atom.create_bond(
+                IMP.atom.Bonded(p_dye), IMP.atom.Bonded(p_att), 1)
+

@@ -974,3 +974,38 @@ def read_angle_file(
         )
     return flexible_residues, bonds
 
+
+# --------------------------------------------------------------------------
+# Crosslink tables
+#
+# A file reader, and so here rather than in `tools.py` where it sat.
+# --------------------------------------------------------------------------
+def read_xlink_table(fn: str) -> typing.Dict[int, typing.Dict]:
+    """Read a xlink table
+
+    :param fn: filename of the xlink table
+    :return:
+    """
+    # Read the xlink table
+    xlinks = {}  # a dict of the xlinks, the keys are used to address the xlinks
+    xlink_idx = 0
+    with open(fn, 'r') as fp:
+        lines = fp.readlines()
+        for line in lines[1:]:
+            try:
+                line = line.strip()
+                protein_1, residue_1, protein_2, residue_2 = line.split(',')
+                residue_1 = int(residue_1)
+                residue_2 = int(residue_2)
+                d = {
+                    'protein_1': protein_1,
+                    'protein_2': protein_2,
+                    'residue_1': residue_1,
+                    'residue_2': residue_2
+                }
+                xlinks[xlink_idx] = d
+                xlink_idx += 1
+            except ValueError:
+                pass
+    return xlinks
+

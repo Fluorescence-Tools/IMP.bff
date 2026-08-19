@@ -34,6 +34,7 @@ import IMP.pmi.restraints.basic
 import IMP.pmi.restraints.stereochemistry
 
 import IMP.bff
+import IMP.bff.representation.av
 import IMP.bff.tools
 import IMP.bff.restraints
 
@@ -193,7 +194,7 @@ output_objects.append(fret_restraint)
 # # %%
 # # Adds the AV to the atom Hierarchy to display the dye mean position:
 # used_avs = fret_restraint.av_network_restraint.get_used_avs()
-# IMP.bff.tools.display_mean_av_positions(used_avs)
+# IMP.bff.representation.av.display_mean_av_positions(used_avs)
 
 # %%
 # Sampling

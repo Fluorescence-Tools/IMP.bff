@@ -49,6 +49,7 @@ import IMP.core
 import IMP.container
 import IMP.bff
 import IMP.bff.restraints
+import IMP.bff.representation.distance
 import IMP.rmf
 import IMP.pmi
 import IMP.pmi.tools
@@ -80,7 +81,7 @@ _CONVERTER_CACHE: Dict[Tuple[float, float], object] = {}
 
 
 def _get_converter(forster_radius: float, sigma: float):
-    """Return a cached :class:`IMP.bff.tools.FRETDistanceConverter`.
+    """Return a cached :class:`IMP.bff.representation.distance.FRETDistanceConverter`.
 
     The converter's lookup tables depend only on ``forster_radius`` and
     ``sigma``; ``__call__`` mutates only the (synchronously read) centre
@@ -89,7 +90,7 @@ def _get_converter(forster_radius: float, sigma: float):
     key = (round(float(forster_radius), 3), round(float(sigma), 3))
     dc = _CONVERTER_CACHE.get(key)
     if dc is None:
-        dc = IMP.bff.tools.FRETDistanceConverter(
+        dc = IMP.bff.representation.distance.FRETDistanceConverter(
             forster_radius=forster_radius, sigma=sigma,
             distance_range=(1.0, 2.5 * forster_radius))
         _CONVERTER_CACHE[key] = dc
@@ -619,7 +620,7 @@ def _collect_pairs(asm: "_Assembly") -> List[PairDistance]:
 
     In mean-position (rigid-body) mode the model distance is obtained from the
     distance between the AV mean positions converted to the modelled observable
-    with the Gaussian transfer function (``IMP.bff.tools.FRETDistanceConverter``).
+    with the Gaussian transfer function (``IMP.bff.representation.distance.FRETDistanceConverter``).
     In full-AV mode the restraint's own ``get_model_distance`` is used.
     """
     pairs: List[PairDistance] = []

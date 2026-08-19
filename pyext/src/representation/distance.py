@@ -1363,3 +1363,134 @@ def distance_between_gaussian(
             np.ascontiguousarray(distances, dtype=np.float64).ravel(),
             float(separation_distance), float(sigma), bool(normalize)),
         dtype=np.float64)
+
+
+# --------------------------------------------------------------------------
+# Distance <-> FRET efficiency, with a distribution behind it
+#
+# `FRETDistanceConverter` was in `tools.py`, which is otherwise `get_*_dir`
+# and `ensure_dir` -- 121 lines of FRET arithmetic in a module of path
+# helpers. Its consumers are `restraints.network` and `restraints.docking`.
+# --------------------------------------------------------------------------
+class FRETDistanceConverter(object):
+
+    _forster_radius_: float = 52.0
+
+    # current center-to-center distance
+    _dist_center_center_: float = 50.0
+
+    # Variables for distance distribution computation
+    _distances_: np.ndarray = None  # distance array for distance distribution
+    _fret_efficiencies_: np.ndarray = None  # FRET efficiency array corre
+    _density_: np.ndarray = None
+
+    # lookup table to cache the computation
+    _d_mean_: np.ndarray = None
+    _d_mean_fret_: np.ndarray = None
+    _e_mean_: np.ndarray = None
+
+    def _update_fret_efficiencies_(self, forster_radius: float):
+        RDA = self._distances_
+        R0 = forster_radius
+        self._fret_efficiencies_ = 1. / (1 + (RDA / R0)**6.0)
+
+    def _update_lookup(self):
+        self._d_mean_ = np.empty_like(self._distances_)
+        self._d_mean_fret_ = np.empty_like(self._distances_)
+        self._e_mean_ = np.empty_like(self._distances_)
+        for i, d in enumerate(self._distances_):
+            self._update_density(d, self._sigma_)
+            self._d_mean_[i] = self.calc_distance_mean()
+            self._d_mean_fret_[i] = self.calc_distance_mean_fret()
+            self._e_mean_[i] = self.calc_fret_efficiency_mean()
+
+    def _update_density(self, dcc: float, w: float):
+        """Update the distance distribution
+
+        @param dcc center-to-center distance
+        @param w parameter controlling the distribution width
+        """
+        d = self._distances_
+        n1 = scipy.stats.norm(-dcc, w)
+        n2 = scipy.stats.norm(dcc, w)
+        p = n1.pdf(d) + n2.pdf(d)
+        p /= p.sum()
+        self._density_ = p
+
+    @property
+    def dist_center_center(self):
+        return self._dist_center_center_
+
+    @dist_center_center.setter
+    def dist_center_center(self, v):
+        self._dist_center_center_ = v
+
+    @property
+    def sigma(self):
+        return self._sigma_
+
+    @sigma.setter
+    def sigma(self, v: float):
+        self._sigma_ = v
+        self._update_lookup()
+
+    @property
+    def forster_radius(self):
+        return self._forster_radius_
+
+    @forster_radius.setter
+    def forster_radius(self, v: float):
+        self._forster_radius_ = v
+        self._update_fret_efficiencies_(v)
+        self._update_lookup()
+
+    def calc_distance_mean(self):
+        p = self._density_
+        v = self._distances_
+        return p @ v
+
+    def calc_fret_efficiency_mean(self):
+        p = self._density_
+        v = self._fret_efficiencies_
+        return p @ v
+
+    def calc_distance_mean_fret(self):
+        E = self.calc_fret_efficiency_mean()
+        R0 = self.forster_radius
+        return R0 * (1. / E - 1.)**(1. / 6.)
+
+    @property
+    def fret_efficiency_mean(self):
+        return np.interp(self.dist_center_center, self._distances_, self._e_mean_)
+
+    @property
+    def distance_mean(self):
+        return np.interp(self.dist_center_center, self._distances_, self._d_mean_)
+
+    @property
+    def distance_mean_fret(self):
+        return np.interp(self.dist_center_center, self._distances_, self._d_mean_fret_)
+
+    def __call__(self, value: float, distance_type: int):
+        self.dist_center_center = value
+        if distance_type == IMP.bff.DYE_PAIR_DISTANCE_MEAN:
+            return self.distance_mean
+        elif distance_type == IMP.bff.DYE_PAIR_DISTANCE_E:
+            return self.distance_mean_fret
+        elif distance_type == IMP.bff.DYE_PAIR_DISTANCE_MP:
+            return value
+
+    def __init__(
+            self,
+            forster_radius: float = 52.0,
+            sigma: float = 6.0,
+            distance_range: typing.Tuple[float, float] = (1.0, 100.0),
+            n_distances: int = 128
+    ):
+        self._forster_radius_ = forster_radius
+        self._sigma_ = sigma
+        self._distances_ = np.linspace(*distance_range, n_distances, dtype=np.float64)
+        self._density_ = np.zeros_like(self._distances_)
+        self._update_fret_efficiencies_(self._forster_radius_)
+        self._update_lookup()
+

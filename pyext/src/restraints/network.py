@@ -18,7 +18,8 @@ import IMP.algebra
 import IMP.atom
 import IMP.bayesianem
 import IMP.bff
-import IMP.bff.tools
+import IMP.bff.io.structure
+import IMP.bff.representation.distance
 import IMP.container
 import IMP.core
 import IMP.isd
@@ -58,7 +59,7 @@ class AVMeanDistanceRestraint(IMP.Restraint):
         self.d2 = IMP.core.XYZ(av2)
         forster_radius = dist.forster_radius
         distance_range = (1, 2.5 * forster_radius)
-        self.dc = IMP.bff.tools.FRETDistanceConverter(
+        self.dc = IMP.bff.representation.distance.FRETDistanceConverter(
             forster_radius=forster_radius,
             sigma=sigma,
             distance_range=distance_range
@@ -638,11 +639,11 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
         self.verbose = verbose
         xlink_file = xlink_settings['xlink_file']
         if pathlib.Path(xlink_file).is_file():
-            self.xlinks = IMP.bff.tools.read_xlink_table(
+            self.xlinks = IMP.bff.io.structure.read_xlink_table(
                 fn=xlink_file
             )
         elif (base_dir / xlink_file).is_file():
-            self.xlinks = IMP.bff.tools.read_xlink_table(
+            self.xlinks = IMP.bff.io.structure.read_xlink_table(
                 fn=str(base_dir / xlink_file)
             )
         else:
@@ -665,7 +666,7 @@ class ScoreXlinkSurfaceDistance(IMP.pmi.restraints.RestraintBase):
             *args, **kwargs
     ):
         if pathlib.Path(xlink_file).is_file():
-            self.xlinks = IMP.bff.tools.read_xlink_table(
+            self.xlinks = IMP.bff.io.structure.read_xlink_table(
                 fn=xlink_file
             )
         if pathlib.Path(rmf_file).is_file():
