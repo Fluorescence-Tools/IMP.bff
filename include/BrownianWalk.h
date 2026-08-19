@@ -59,30 +59,35 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] seed reproducible when non-negative; drawn from the system
                otherwise
     \param[out] counts two entries, accepted and rejected
-    \return **four** values per step: x, y, z in Angstrom **relative to the grid
-            anchor** (add the attachment point for the structure's frame), then
-            1.0 if the step was taken and 0.0 if it was rejected. Empty if no
-            accessible starting voxel was found.
+    \param[out] out_view,n_out_view **four** values per step: x, y, z in
+                Angstrom **relative to the grid anchor** (add the attachment
+                point for the structure's frame), then 1.0 if the step was taken
+                and 0.0 if it was rejected. Empty if no accessible starting
+                voxel was found.
 
-    The accept flag rides in the returned array rather than in an out-parameter
-    on purpose, and the trajectory itself is still a returned `std::vector`,
-    which is **not** free: measured at ~66 ns per element to build the tuple and
-    walk it back into numpy, against ~340 ns for an out-parameter. The right
-    answer for an array this large is a numpy view over the kernel's own buffer
-    (`ARGOUTVIEWM`, as #fret_pair_matrices uses) -- on a 400x350 matrix that took
-    38 ms to 0.22 ms. This kernel has not been converted yet. SWIG turns a returned `std::vector` into a Python tuple at ~66 ns
+                A numpy view over the kernel's own buffer, not a returned
+                `std::vector`. At a million steps that is four million doubles,
+                and a returned vector costs ~35-40 ns each to build and walk back
+                -- 224 ms of pure conversion. See internal/OutputView.h for what
+                makes a view safe.
+
+    The accept flag rides in the same array as the coordinates rather than in a
+    separate out-parameter: SWIG leaves an out-parameter as a wrapper object
+    that numpy walks one `__getitem__` at a time, ~340 ns per element, which on
+    a 500 000-step walk cost 170 ms against 55 ms for the whole simulation. SWIG turns a returned `std::vector` into a Python tuple at ~35-40 ns
     per element, and leaves an out-parameter as a wrapper object that numpy
     walks one `__getitem__` at a time at ~340 ns.
     On a 500 000-step walk that out-parameter cost **170 ms against 55 ms for
     the entire simulation**: three quarters of the wall clock spent handing back
     a bit per step.
 */
-IMPBFFEXPORT std::vector<double> brownian_walk_in_volume(
+IMPBFFEXPORT void brownian_walk_in_volume(
         int* occupancy, int n_occupancy,
         double* mobility, int n_mobility,
         int ng, double dg, double t_max, double t_step,
         double diffusion_coefficient, int seed,
-        std::vector<int>& counts);
+        std::vector<int>& counts,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

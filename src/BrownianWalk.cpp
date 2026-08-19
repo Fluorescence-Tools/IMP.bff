@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/BrownianWalk.h>
+#include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/RandomWalk.h>
 
 #include <cmath>
@@ -12,17 +13,22 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::vector<double> brownian_walk_in_volume(
+void brownian_walk_in_volume(
         int* occupancy, int n_occupancy, double* mobility, int n_mobility,
         int ng, double dg, double t_max, double t_step,
-        double diffusion_coefficient, int seed, std::vector<int>& counts) {
+        double diffusion_coefficient, int seed, std::vector<int>& counts,
+        double** out_view, int* n_out_view) {
     counts.assign(2, 0);
     const int n_steps = static_cast<int>(t_max / t_step);
-    std::vector<double> xyz;
-    if (n_steps <= 0 || ng <= 0) return xyz;
+    if (n_steps <= 0 || ng <= 0) {
+        internal::new_double_view(0, out_view, n_out_view);
+        return;
+    }
     // Four per step: x, y, z, accepted. See the header for why the flag rides
-    // here rather than in an out-parameter.
-    xyz.assign(static_cast<std::size_t>(n_steps) * 4, 0.0);
+    // here rather than in a separate out-parameter.
+    double* xyz = internal::new_double_view(
+            static_cast<std::size_t>(n_steps) * 4, out_view, n_out_view);
+    if (xyz == nullptr) return;
 
     // The offset is integral, matching grids.grid_center_index(): the float
     // corner (ng - 1) / 2 disagrees with it on every even ng.
@@ -39,10 +45,15 @@ std::vector<double> brownian_walk_in_volume(
                 xyz[4 * i + 2] = (pz - half) * dg;
                 xyz[4 * i + 3] = accepted ? 1.0 : 0.0;
             });
-    if (!ok) return std::vector<double>();
+    if (!ok) {
+        // No accessible starting voxel: an empty view, and the buffer just
+        // published is replaced rather than leaked.
+        std::free(xyz);
+        internal::new_double_view(0, out_view, n_out_view);
+        return;
+    }
     counts[0] = n_acc;
     counts[1] = n_rej;
-    return xyz;
 }
 
 IMPBFF_END_NAMESPACE

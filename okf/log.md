@@ -59,12 +59,35 @@ ride in the returned array rather than in out-parameters; large inputs take
 `(pointer, length)` through numpy.i's `IN_ARRAY1`; small ones stay
 `std::vector`.
 
-> **Corrected 2026-08-19.** "Converts at C speed" was wrong. A returned
-> `std::vector` costs **~66 ns per element** — cheaper than an out-parameter's
-> ~340 ns, but not free. On a 400×350 pair matrix that was 38 ms of a 38 ms
-> call, against about 1 ms of arithmetic. The right answer for a large array is
-> a numpy **view** over the kernel's own buffer (`ARGOUTVIEWM`): 38 ms → 0.22 ms.
-> See the 2026-08-19 entry above.
+> **Corrected 2026-08-19, twice.** "Converts at C speed" was wrong: a returned
+> `std::vector` is not free. Measured properly — work held constant while the
+> array size varies, on two kernels — the return path costs **35–40 ns per
+> element** (8–16 ns for SWIG to build the tuple, ~27 ns for `np.asarray` to
+> walk it back), not the 66 ns first recorded. An out-parameter walked as a
+> proxy is ~340 ns. The right answer for a large array is a numpy **view** over
+> the kernel's own buffer (`ARGOUTVIEWM`), which is free.
+>
+> The second correction is the more useful one. **The input side was the worse
+> half, and it was invisible because every adapter did the natural thing.**
+> Handing `np.ascontiguousarray(x).ravel()` to a `const std::vector<double>&`
+> parameter costs **32–37 ns per element** — *more* than passing the same
+> numbers as a Python list (8–13 ns), because SWIG walks the sequence and each
+> ndarray element access mints a fresh Python float. So the package was paying
+> the most expensive of the three ways in, everywhere, by writing the code that
+> looked fastest.
+>
+> Fixed in one place rather than forty: `IMP_bff.types.i` now carries an `in`
+> typemap for `const std::vector<double>&` that bulk-copies a 1-D contiguous
+> float64 array (**4.4 ns/element**) and falls back to SWIG's own converter for
+> lists, tuples and `VectorDouble`. No kernel signature changed.
+> `diffusion_propagate` — four `ng³` grids in, one out — went from **9.54 ms to
+> 0.296 ms** of boundary crossing at `ng = 41`: the cost of 53 solver steps, and
+> `equilibrium_occupancy` makes up to 200 such calls per solve.
+>
+> The full table now lives in `include/internal/OutputView.h`; the guards are
+> `test/test_zero_copy_views.py` (ownership, aliasing, leaks) and
+> `test/test_vector_input_typemap.py` (the fallbacks, and that a strided array
+> is not read as contiguous).
 
 **Defects the ports found**, all pre-existing and all invisible to a gate that
 compares against the previous implementation:

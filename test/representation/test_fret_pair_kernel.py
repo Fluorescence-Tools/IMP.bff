@@ -11,7 +11,7 @@ dipoles: 44.3 ms -> 4.68 ms.
 .. warning::
    Most of that win is **not** the arithmetic. It is the return path. Handing a
    ``std::vector`` back makes SWIG build one Python float per element and numpy
-   walk them back — **66 ns each**, which on a 400 x 350 matrix was 38 ms
+   walk them back — **35-40 ns each**, which on a 400 x 350 matrix was ~20 ms
    against about 1 ms of actual work. Returning a numpy *view* over the kernel's
    own buffer costs nothing.
 
@@ -145,16 +145,27 @@ def test_the_view_is_managed_not_leaked():
     assert not first.flags.owndata
     assert first.base is not None, "an unmanaged view has no owner and leaks"
 
+    # A leak is 1.4 MB *per call*, so it is linear and unmissable; what is not
+    # unmissable is the allocator's first few hundred blocks, which raise the
+    # high-water mark once and never again. Measuring the **second** batch
+    # separates the two: a leak still shows ~290 MB there, a one-off step
+    # shows nothing. Measuring the first batch made this fail only when the
+    # whole suite ran, and only because the heap was already fragmented.
     per_call_mb = n1 * n2 * 2 * 8 / 1e6
+
+    def one_batch():
+        for _ in range(200):
+            del_me = IMP.bff.fret_pair_matrices(p1, p2, empty, empty, n1, n2)
+            del del_me
+        gc.collect()
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
+
+    one_batch()                                   # reach steady state
     before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
-    for _ in range(200):
-        del_me = IMP.bff.fret_pair_matrices(p1, p2, empty, empty, n1, n2)
-        del del_me
-    gc.collect()
-    grew = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024) - before
+    grew = one_batch() - before
     assert grew < per_call_mb * 10, (
-        f"200 calls of {per_call_mb:.1f} MB grew RSS by {grew:.1f} MB -- "
-        "the view is not being freed")
+        f"200 further calls of {per_call_mb:.1f} MB grew RSS by {grew:.1f} MB "
+        "-- the view is not being freed")
 
 
 def test_the_kernel_does_not_write_to_its_inputs():

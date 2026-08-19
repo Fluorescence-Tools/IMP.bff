@@ -5,19 +5,21 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/FRETRateTrace.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <cmath>
 
 IMPBFF_BEGIN_NAMESPACE
 
-std::vector<double> fret_rate_trace_kernel(
+void fret_rate_trace_kernel(
         const std::vector<double>& trajectory,
         const std::vector<double>& acceptor_points, double R0, double tau0,
-        double r_min2, double kappa2_scale) {
+        double r_min2, double kappa2_scale,
+        double** out_view, int* n_out_view) {
     const std::size_t n_frames = trajectory.size() / 3;
     const std::size_t n_acceptor = acceptor_points.size() / 3;
-    std::vector<double> rates(n_frames, 0.0);
-    if (n_acceptor == 0 || n_frames == 0) return rates;
+    double* rates = internal::new_double_view(n_frames, out_view, n_out_view);
+    if (rates == nullptr || n_acceptor == 0 || n_frames == 0) return;
     const double R0_6 = std::pow(R0, 6) * kappa2_scale;
     const double inv_tau0 = 1.0 / tau0;
     for (std::size_t f = 0; f < n_frames; ++f) {
@@ -36,14 +38,15 @@ std::vector<double> fret_rate_trace_kernel(
         // Arithmetic mean of rates: the fast-exchange limit.
         rates[f] = inv_tau0 * total / static_cast<double>(n_acceptor);
     }
-    return rates;
 }
 
-std::vector<double> fret_rate_pair_trace_kernel(
+void fret_rate_pair_trace_kernel(
         const std::vector<double>& donor, const std::vector<double>& acceptor,
-        double R0, double tau0, double r_min2, double kappa2_scale) {
+        double R0, double tau0, double r_min2, double kappa2_scale,
+        double** out_view, int* n_out_view) {
     const std::size_t n_frames = donor.size() / 3;
-    std::vector<double> rates(n_frames, 0.0);
+    double* rates = internal::new_double_view(n_frames, out_view, n_out_view);
+    if (rates == nullptr) return;
     const double R0_6 = std::pow(R0, 6) * kappa2_scale;
     const double inv_tau0 = 1.0 / tau0;
     for (std::size_t f = 0; f < n_frames; ++f) {
@@ -54,7 +57,6 @@ std::vector<double> fret_rate_pair_trace_kernel(
         if (r2 < r_min2) r2 = r_min2;
         rates[f] = inv_tau0 * R0_6 / (r2 * r2 * r2);
     }
-    return rates;
 }
 
 IMPBFF_END_NAMESPACE

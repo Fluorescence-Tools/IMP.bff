@@ -485,7 +485,7 @@ def fret_pair_geometry(
     empty = np.empty(0)
     # The kernel hands back a numpy view over its own buffer -- no conversion,
     # no copy. Returning a std::vector instead would make SWIG build one Python
-    # float per element and numpy walk them back, 66 ns each: on a 400x350 pair
+    # float per element and numpy walk them back, 35-40 ns each: on a 400x350 pair
     # matrix that was 38 ms against 0.22 ms, for about 1 ms of arithmetic.
     packed = IMP.bff.fret_pair_matrices(
         p1.ravel(), p2.ravel(),

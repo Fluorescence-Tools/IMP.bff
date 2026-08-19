@@ -125,11 +125,17 @@ def simulate_dye_diffusion(
         occupancy.ravel(), mobility.ravel(), ng, float(dg), float(t_max),
         float(t_step), float(D), seed, counts)
 
-    # Four columns: x, y, z, accepted. The flag comes back inside the returned
-    # array because a SWIG out-parameter is a wrapper object that numpy walks
-    # one element at a time -- 170 ms of a 255 ms walk, measured.
-    packed = np.asarray(flat, dtype=np.float64).reshape(-1, 4)
-    xyz = np.ascontiguousarray(packed[:, :3])
+    # Four columns: x, y, z, accepted. Already a numpy array -- the kernel
+    # hands back a view over its own buffer, so there is nothing to convert. A
+    # returned std::vector would cost ~35-40 ns per element, which at a million
+    # steps is 140 ms; an out-parameter would cost ~340 ns.
+    packed = flat.reshape(-1, 4)
+    # Strided views, not copies. `ascontiguousarray` here duplicated three
+    # million doubles on a million-step walk -- 54 ms of a 200 ms call -- and
+    # every consumer either does arithmetic that produces a fresh contiguous
+    # array anyway (`trajectory + x0`) or passes through a numpy typemap that
+    # handles a stride.
+    xyz = packed[:, :3]
     accepted = packed[:, 3].astype(np.uint8)
     n_acc, n_rej = (int(counts[0]), int(counts[1])) if len(counts) == 2 else (0, 0)
     if xyz.size == 0:

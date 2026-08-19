@@ -33,14 +33,20 @@ IMPBFF_BEGIN_NAMESPACE
     \param[in] r_min2 squared closest approach; pairs nearer than this are
         clamped, because \f$1/r^6\f$ diverges and two dyes cannot interpenetrate
     \param[in] kappa2_scale multiplier on \f$R_0^6\f$ from the orientation factor
+    \param[out] out_view,n_out_view the rate at each frame, as a numpy view over
+                the kernel's buffer -- a trajectory runs to millions of frames
+                and a returned `std::vector` costs ~35-40 ns each to hand back
+                (internal/OutputView.h carries the measured table).
+                See internal/OutputView.h.
 */
-IMPBFFEXPORT std::vector<double> fret_rate_trace_kernel(
+IMPBFFEXPORT void fret_rate_trace_kernel(
         const std::vector<double>& trajectory,
         const std::vector<double>& acceptor_points,
         double R0,
         double tau0,
         double r_min2,
-        double kappa2_scale
+        double kappa2_scale,
+        double** out_view, int* n_out_view
 );
 
 //! FRET rate per frame from two trajectories, paired frame by frame.
@@ -51,14 +57,16 @@ IMPBFFEXPORT std::vector<double> fret_rate_trace_kernel(
 
     \param[in] donor,acceptor positions, flat, three per frame, same length
     \param[in] R0,tau0,r_min2,kappa2_scale as above
+    \param[out] out_view,n_out_view the rate at each frame, as above
 */
-IMPBFFEXPORT std::vector<double> fret_rate_pair_trace_kernel(
+IMPBFFEXPORT void fret_rate_pair_trace_kernel(
         const std::vector<double>& donor,
         const std::vector<double>& acceptor,
         double R0,
         double tau0,
         double r_min2,
-        double kappa2_scale
+        double kappa2_scale,
+        double** out_view, int* n_out_view
 );
 
 IMPBFF_END_NAMESPACE

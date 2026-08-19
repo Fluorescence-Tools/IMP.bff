@@ -38,20 +38,21 @@ def _rate_trace(trajectory, acceptor_points, R0, tau0, r_min2, kappa2_scale):
     ``fret_rate_map`` accumulates the mean transfer *time* and inverts it, which
     is the static limit. Different physics, not two spellings.
     """
-    return np.asarray(IMP.bff.fret_rate_trace_kernel(
+    # Already a numpy array: the kernel hands back a view over its own buffer.
+    # A trajectory runs to millions of frames, and a returned std::vector would
+    # cost ~35-40 ns each to build and walk back.
+    return IMP.bff.fret_rate_trace_kernel(
         np.ascontiguousarray(trajectory, dtype=np.float64).ravel(),
         np.ascontiguousarray(acceptor_points, dtype=np.float64).ravel(),
-        float(R0), float(tau0), float(r_min2), float(kappa2_scale)),
-        dtype=np.float64)
+        float(R0), float(tau0), float(r_min2), float(kappa2_scale))
 
 
 def _rate_pair_trace(donor, acceptor, R0, tau0, r_min2, kappa2_scale):
     """FRET rate per frame from two trajectories, paired frame by frame. **C++.**"""
-    return np.asarray(IMP.bff.fret_rate_pair_trace_kernel(
+    return IMP.bff.fret_rate_pair_trace_kernel(
         np.ascontiguousarray(donor, dtype=np.float64).ravel(),
         np.ascontiguousarray(acceptor, dtype=np.float64).ravel(),
-        float(R0), float(tau0), float(r_min2), float(kappa2_scale)),
-        dtype=np.float64)
+        float(R0), float(tau0), float(r_min2), float(kappa2_scale))
 
 
 def _kappa2_scale(kappa2) -> float:
