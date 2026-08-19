@@ -65,6 +65,11 @@ import numpy as np
 %include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
+/* MOL2 in: the atoms and bonds a force-field component is built from. */
+%include "IMP/bff/Mol2IO.h"
+%template(Mol2Atoms) std::vector<IMP::bff::Mol2Atom>;
+%template(MapIntString) std::map<int, std::string>;
+
 /* Local sequence alignment: which template a fusion's domain matches. */
 %include "IMP/bff/SequenceAlignment.h"
 %template(AlignedBlocks) std::vector<IMP::bff::AlignedBlock>;

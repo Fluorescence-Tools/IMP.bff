@@ -11,7 +11,7 @@ import random
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff.scoring import torsion_cosine
 from IMP.bff.cgdye.topology import (
-    _read_mol2_atom_names, angle_value, build_graph, find_cycles)
+    angle_value, build_graph, find_cycles)
 import IMP
 import IMP.bff
 import IMP.algebra
@@ -174,7 +174,7 @@ def _load_hierarchies(model, system, system_cif, only_components=None):
         # For MOL2 files, read true atom names from the file (IMP maps TRIPOS
         # types C.3->C3 etc., losing the actual name like C12, N1).
         mol2_names = (
-            _read_mol2_atom_names(struct_path) if struct_path.endswith(".mol2") else {}
+            dict(IMP.bff.read_mol2_atom_names(struct_path)) if struct_path.endswith(".mol2") else {}
         )
 
         atom_map = {}
@@ -484,7 +484,7 @@ def _build_component_atom_maps(component_hiers, system=None, system_cif=None):
             if struct_path and not os.path.isabs(struct_path):
                 struct_path = os.path.normpath(os.path.join(base, struct_path))
             if struct_path.endswith(".mol2") and os.path.exists(struct_path):
-                mol2_names = _read_mol2_atom_names(struct_path)
+                mol2_names = dict(IMP.bff.read_mol2_atom_names(struct_path))
 
         by_name = defaultdict(list)
         by_serial = {}

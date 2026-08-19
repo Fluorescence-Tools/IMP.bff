@@ -151,90 +151,35 @@ Usage:
 
 
 
-def _atom_name_from_type(atom_type_string):
-    return (
-        atom_type_string.replace("HET: ", "")
-        .replace("HET:", "")
-        .replace("ATOM: ", "")
-        .replace("ATOM:", "")
-        .strip()
-    )
-
-
-def _element_from_atom_name(atom_name):
-    m = re.match(r"([A-Za-z]+)", atom_name)
-    if not m:
-        return "C"
-    return m.group(1)[0].upper()
-
-
-def _read_mol2_atom_names(path) -> dict:
-    names = {}
-    in_atom = False
-    with open(path) as fh:
-        for line in fh:
-            if line.startswith("@<TRIPOS>ATOM"):
-                in_atom = True
-                continue
-            if line.startswith("@<TRIPOS>"):
-                in_atom = False
-                continue
-            if not in_atom:
-                continue
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-            names[int(parts[0])] = parts[1]
-    return names
-
-
 def parse_dye_mol2(path, component):
     """Read a MOL2 file into ``(atoms, bonds)``.
 
-    ``atoms`` maps the MOL2 serial to a dict (serial, component, atom_name,
-    resname, element, x, y, z); ``bonds`` is a set of sorted serial pairs.
+    :func:`IMP.bff.read_mol2_component`. ``atoms`` maps the MOL2 serial to a
+    dict (serial, component, atom_name, resname, element, x, y, z); ``bonds``
+    is a set of sorted serial pairs.
+
+    The atom *name* comes from column 2 of ``@<TRIPOS>ATOM`` rather than the
+    TRIPOS type, because IMP's ``read_mol2`` maps ``C.3`` to ``C3`` and loses
+    ``C12``/``N1`` -- the names a template's features and impropers refer to.
+
+    Gated against the Python it replaced on atto655, cx4, alexa488_r48 and the
+    4,698-atom 1DG3: identical atoms, identical bonds, every field equal.
     """
-    model = IMP.Model()
-    old_level = IMP.get_log_level()
-    try:
-        IMP.set_log_level(IMP.SILENT)
-        hier = IMP.atom.read_mol2(str(path), model)
-    finally:
-        IMP.set_log_level(old_level)
-
-    mol2_atom_names = _read_mol2_atom_names(path)
-
-    atoms = {}
-    imp_particles = {}
-    for p in IMP.atom.get_by_type(hier, IMP.atom.ATOM_TYPE):
-        atom = IMP.atom.Atom(p)
-        serial = atom.get_input_index()
-        atom_name = mol2_atom_names.get(serial) or _atom_name_from_type(
-            atom.get_atom_type().get_string()
-        )
-        residue = IMP.atom.get_residue(atom)
-        coord = IMP.core.XYZ(p).get_coordinates()
-        resname = residue.get_residue_type().get_string() if residue else "UNK"
-        atoms[serial] = {
-            "serial": serial,
-            "component": component,
-            "atom_name": atom_name,
-            "resname": resname or "UNK",
-            "element": _element_from_atom_name(atom_name),
-            "x": float(coord[0]),
-            "y": float(coord[1]),
-            "z": float(coord[2]),
+    component_data = IMP.bff.read_mol2_component(str(path), component)
+    atoms = {
+        a.serial: {
+            "serial": a.serial,
+            "component": a.component,
+            "atom_name": a.atom_name,
+            "resname": a.resname,
+            "element": a.element,
+            "x": a.x,
+            "y": a.y,
+            "z": a.z,
         }
-        imp_particles[serial] = p
-
-    bonds = set()
-    for bond_p in IMP.atom.get_internal_bonds(hier):
-        b = IMP.atom.Bond(bond_p)
-        s1 = IMP.atom.Atom(b.get_bonded(0).get_particle()).get_input_index()
-        s2 = IMP.atom.Atom(b.get_bonded(1).get_particle()).get_input_index()
-        bonds.add(tuple(sorted((s1, s2))))
-
-    return atoms, bonds
+        for a in component_data.atoms
+    }
+    return atoms, {tuple(b) for b in component_data.bonds}
 
 
 def distance(a, b):
@@ -830,7 +775,7 @@ def build_forcefield_system(
     lj_types = {}
     all_elements = set()
     for s in sites:
-        ename = _element_from_atom_name(s["atom_name"])
+        ename = IMP.bff.element_from_atom_name(s["atom_name"])
         all_elements.add(ename)
     
     for elem in sorted(all_elements):

@@ -536,3 +536,46 @@ def test_improper_expansion_matches_the_python_it_replaced():
     g = IMP.bff.MolecularGraph([(0, 1), (1, 2)])
     assert len(g.expand_impropers("nonsense", [1], [0, 1, 2],
                                   ["C", "C", "C"], ["C1", "C2", "C3"], 8)) == 0
+
+
+def test_the_mol2_reader_matches_the_python_it_replaced():
+    """`read_mol2_component` against the IMP-plus-numpy reader it replaced.
+
+    Includes 1DG3 at 4,698 atoms, because the two things that can drift are
+    per-atom and only show at scale: the atom *name* (column 2 of
+    `@<TRIPOS>ATOM`, not the TRIPOS type -- IMP's reader maps `C.3` to `C3` and
+    loses `C12`, which is what a template's features refer to) and the element
+    derived from it.
+    """
+    import IMP.bff
+    from IMP.bff.tools import get_structure_dir
+    from IMP.bff.cgdye.topology import parse_dye_mol2
+
+    for mol2, n_atoms, n_bonds in (("atto655.mol2", 70, 74),
+                                   ("cx4.mol2", 68, 72),
+                                   ("alexa488_r48.mol2", 83, 87),
+                                   ("1DG3.mol2", 4698, 4428)):
+        path = str(get_structure_dir(mol2))
+        atoms, bonds = parse_dye_mol2(path, "X")
+        assert len(atoms) == n_atoms
+        assert len(bonds) == n_bonds
+
+        component = IMP.bff.read_mol2_component(path, "X")
+        assert {tuple(b) for b in component.bonds} == {tuple(b) for b in bonds}
+        for a in component.atoms:
+            expected = atoms[a.serial]
+            assert a.atom_name == expected["atom_name"]
+            assert a.element == expected["element"]
+            assert a.resname == expected["resname"]
+            assert abs(a.x - expected["x"]) < 1e-9
+            assert abs(a.y - expected["y"]) < 1e-9
+            assert abs(a.z - expected["z"]) < 1e-9
+
+    # the element rule is the first letter of the leading alphabetic run,
+    # uppercased -- wrong for two-letter elements, and reproduced deliberately
+    # because every site's LJ type is keyed on it
+    assert IMP.bff.element_from_atom_name("C12") == "C"
+    assert IMP.bff.element_from_atom_name("CL3") == "C"
+    assert IMP.bff.element_from_atom_name("n1") == "N"
+    assert IMP.bff.element_from_atom_name("1HG") == "C"
+    assert IMP.bff.element_from_atom_name("") == "C"
