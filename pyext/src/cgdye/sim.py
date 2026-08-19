@@ -9,7 +9,8 @@ import os
 import random
 
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.scoring import torsion_cosine
+from IMP.bff.scoring import torsion_cosine, compute_exclusions
+from IMP.bff.cgdye.topology import build_graph, find_cycles
 import IMP
 import IMP.bff
 import IMP.algebra
@@ -347,7 +348,11 @@ def _build_restraints(model, system, site_particles):
     if nb.enabled:
         sids = sorted(site_particles.keys())
         idx_pairs = []
-        excl = _derive_exclusions(system)
+        # scoring owns "which pairs are excluded". This module had its own
+        # derivation that agreed only because `impropers` is always empty --
+        # scoring counts improper pairs and this did not. One answer now, so
+        # filling impropers changes one place instead of two.
+        excl = {tuple(sorted(p)) for p in compute_exclusions(system)}
         for i in range(len(sids)):
             for j in range(i + 1, len(sids)):
                 a, b = sids[i], sids[j]
@@ -365,75 +370,12 @@ def _build_restraints(model, system, site_particles):
     return restraints, softsphere_restraints
 
 
-def _derive_exclusions(system):
-    from IMP.bff.io.cif import as_forcefield_system
-    system = as_forcefield_system(system)
-    excl = set()
-
-    def add_pair(a, b):
-        excl.add((a, b) if a <= b else (b, a))
-
-    # An explicit `exclusions` list used to short-circuit everything below.
-    # Nothing ever produced one -- not the reader, not the topology builder,
-    # not a test -- so the branch was dead and the derived exclusions were
-    # always what was used. Removed with the key when the system became typed.
-
-    for bd in system.bonds:
-        add_pair(bd.site_a, bd.site_b)
-    for an in system.angles:
-        add_pair(an.site_a, an.site_c)
-    for to in system.dihedrals:
-        add_pair(to.site_a, to.site_d)
-
-    return excl
-
-
-def _build_site_graph(system):
-    from IMP.bff.io.cif import as_forcefield_system
-    system = as_forcefield_system(system)
-    g = defaultdict(set)
-    for bd in system.bonds:
-        g[bd.site_a].add(bd.site_b)
-        g[bd.site_b].add(bd.site_a)
-    return g
-
-
-def _find_cycles(graph, max_len=8):
-    nodes = sorted(graph.keys())
-    cycles = set()
-
-    def canonical(cyc):
-        cyc = list(cyc)
-        n = len(cyc)
-        rots = [tuple(cyc[i:] + cyc[:i]) for i in range(n)]
-        rc = list(reversed(cyc))
-        rots.extend(tuple(rc[i:] + rc[:i]) for i in range(n))
-        return min(rots)
-
-    def dfs(start, cur, visited, path):
-        for nbr in graph.get(cur, set()):
-            if nbr == start and len(path) >= 3:
-                cycles.add(canonical(path))
-                continue
-            if nbr in visited:
-                continue
-            if nbr < start:
-                continue
-            if len(path) >= max_len:
-                continue
-            dfs(start, nbr, visited | {nbr}, path + [nbr])
-
-    for start in nodes:
-        dfs(start, start, {start}, [start])
-    return cycles
-
-
 def _mobile_ring_site_ids(
     system, site_atom_names, mobile_component, include_attached_h=True
 ):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    full_graph = _build_site_graph(system)
+    full_graph = _site_graph(system)
     mobile_ids = {
         s.id
         for s in system.sites
@@ -444,7 +386,7 @@ def _mobile_ring_site_ids(
         for sid in mobile_ids
     }
 
-    cycles = _find_cycles(mobile_graph, max_len=8)
+    cycles = find_cycles(mobile_graph, max_len=8)
     ring_ids = set()
     for cyc in cycles:
         if len(cyc) in (5, 6, 7):
@@ -482,6 +424,19 @@ def _topo_distance_leq(graph, src, dst, max_depth):
     return False
 
 
+
+def _site_graph(system):
+    """The site adjacency of *system*, through the topology module's builder.
+
+    This module had its own copy. Both produced the same graph -- checked on the
+    shipped combined system -- so the copy is gone and only the shape adaptation
+    (a typed system's bonds into pairs) is left.
+    """
+    from IMP.bff.io.cif import as_forcefield_system
+    system = as_forcefield_system(system)
+    return build_graph((bd.site_a, bd.site_b) for bd in system.bonds)
+
+
 def _fixed_flex_ids(system, fixed_flex_mode, fixed_name):
     """Return the set of fixed component site IDs that are allowed to move.
 
@@ -513,7 +468,7 @@ def _build_go_restraints(
 ):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    graph = _build_site_graph(system)
+    graph = _site_graph(system)
     s2c = {s.id: s.component for s in system.sites}
 
     def is_heavy(sid):
