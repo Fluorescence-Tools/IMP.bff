@@ -41,7 +41,7 @@ import IMP.atom
 import IMP.bff
 import IMP.core
 from IMP.bff.quenching import maps
-from IMP.bff.quenching.solver import (
+from IMP.bff.sampling.smoluchowski import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,

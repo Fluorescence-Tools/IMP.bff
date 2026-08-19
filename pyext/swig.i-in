@@ -54,6 +54,9 @@ import numpy as np
 %include "IMP/bff/PhotonSimulation.h"
 %include "IMP/bff/QuenchedDecay.h"
 
+/* FRET over every pair of two labelled ensembles. */
+%include "IMP/bff/FRETPair.h"
+
 /* Scoring: how hard a conformer collides with its structure. */
 %include "IMP/bff/RotamerEnergy.h"
 

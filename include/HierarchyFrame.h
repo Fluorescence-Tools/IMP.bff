@@ -10,7 +10,7 @@
  *
  * These do the walk on the C++ side and hand back arrays. Two calls rather than
  * one with out-parameters, because a *returned* `std::vector` becomes a Python
- * tuple that numpy converts at C speed, while an out-parameter stays a wrapper
+ * tuple that costs ~66 ns per element to build and walk back, while an out-parameter stays a wrapper
  * object numpy walks one element at a time.
  *
  * \authors Thomas-Otavio Peulen

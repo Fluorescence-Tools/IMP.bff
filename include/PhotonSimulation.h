@@ -49,7 +49,7 @@ IMPBFF_BEGIN_NAMESPACE
             event), then 1.0 if a photon got out and 0.0 if quenching won.
 
     Interleaved rather than returned alongside an out-parameter. SWIG turns a
-    returned `std::vector` into a Python tuple, which numpy converts at C speed;
+    returned `std::vector` into a Python tuple, which costs ~66 ns per element to build and walk back;
     an out-parameter stays a wrapper object that numpy walks one `__getitem__`
     at a time, about 340 ns per element against 34 ns for an *input* array of
     the same size. On a 40 000-photon trace that flag cost 13.7 ms of 152 ms.

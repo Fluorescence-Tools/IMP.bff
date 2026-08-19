@@ -463,32 +463,42 @@ def fret_pair_geometry(
     ``points`` are (N, 3) centres (Å), ``weights`` (N,) normalised or not,
     ``mu`` optional (N, 3) transition-dipole vectors. Without dipoles κ² is
     the isotropic 2/3 everywhere (an AV cloud). Returns a dict with ``R``
-    (N1, N2), ``kappa2`` (N1, N2), ``weight`` (N1, N2, normalised to 1),
-    ``r_vectors`` (N1, N2, 3) and ``kappa2_avg``.
+    (N1, N2), ``kappa2`` (N1, N2), ``weight`` (N1, N2, normalised to 1) and
+    ``kappa2_avg``.
+
+    The separation vectors used to come back as ``r_vectors`` (N1, N2, 3).
+    **Nothing ever read them** -- they were the largest allocation in the call,
+    built for no consumer -- and the kernel now forms each one and discards it.
     """
-    p1 = np.asarray(points1, dtype=np.float64)[:, :3]
-    p2 = np.asarray(points2, dtype=np.float64)[:, :3]
-    w1 = np.asarray(weights1, dtype=np.float64)
-    w2 = np.asarray(weights2, dtype=np.float64)
+    p1 = np.ascontiguousarray(np.asarray(points1, dtype=np.float64)[:, :3])
+    p2 = np.ascontiguousarray(np.asarray(points2, dtype=np.float64)[:, :3])
+    w1 = np.asarray(weights1, dtype=np.float64).ravel()
+    w2 = np.asarray(weights2, dtype=np.float64).ravel()
+    n1, n2 = p1.shape[0], p2.shape[0]
+
     weight = np.outer(w1, w2)
     total = weight.sum()
     if total > 0:
         weight = weight / total
-    r_vectors = p1[:, None, :] - p2[None, :, :]
-    r = np.linalg.norm(r_vectors, axis=2)
-    if mu1 is None or mu2 is None:
-        kappa2 = np.full(r.shape, 2.0 / 3.0)
-    else:
-        m1 = np.asarray(mu1, dtype=np.float64)
-        m2 = np.asarray(mu2, dtype=np.float64)
-        m1 = m1 / np.linalg.norm(m1, axis=1, keepdims=True)
-        m2 = m2 / np.linalg.norm(m2, axis=1, keepdims=True)
-        kappa2 = kappa2_from_dipoles(m1, m2, r_vectors)
+
+    oriented = mu1 is not None and mu2 is not None
+    empty = np.empty(0)
+    # The kernel hands back a numpy view over its own buffer -- no conversion,
+    # no copy. Returning a std::vector instead would make SWIG build one Python
+    # float per element and numpy walk them back, 66 ns each: on a 400x350 pair
+    # matrix that was 38 ms against 0.22 ms, for about 1 ms of arithmetic.
+    packed = IMP.bff.fret_pair_matrices(
+        p1.ravel(), p2.ravel(),
+        np.ascontiguousarray(np.asarray(mu1, dtype=np.float64)).ravel() if oriented else empty,
+        np.ascontiguousarray(np.asarray(mu2, dtype=np.float64)).ravel() if oriented else empty,
+        int(n1), int(n2))
+    r = packed[: n1 * n2].reshape(n1, n2)
+    kappa2 = packed[n1 * n2:].reshape(n1, n2)
+
     return {
         "R": r,
         "kappa2": kappa2,
         "weight": weight,
-        "r_vectors": r_vectors,
         "kappa2_avg": float(np.sum(kappa2 * weight)),
     }
 
@@ -511,12 +521,20 @@ def fret_pair_efficiencies(
     kappa2 = geometry["kappa2"]
     weight = geometry["weight"]
     kappa2_avg = geometry["kappa2_avg"]
+    n1, n2 = r.shape
+    packed = np.asarray(IMP.bff.fret_pair_efficiency_matrices(
+        np.ascontiguousarray(r, dtype=np.float64).ravel(),
+        np.ascontiguousarray(kappa2, dtype=np.float64).ravel(),
+        float(forster_radius)), dtype=np.float64)
+    e_pair = packed[: n1 * n2].reshape(n1, n2)
+    rate_ratio = packed[n1 * n2:].reshape(n1, n2)
+
+    # dynamic1 uses the ensemble-averaged kappa2 rather than the per-pair one,
+    # so it is a different expression and stays here -- one pass, no temporaries
+    # worth moving.
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio6 = np.power(r / float(forster_radius), 6)
-        rate_ratio = 1.5 * kappa2 / ratio6                # k_FRET / k_rad
-        e_pair = 1.0 / (1.0 + 2.0 / 3.0 * ratio6 / kappa2)
         e_dyn1 = 1.0 / (1.0 + 2.0 / 3.0 / kappa2_avg * ratio6)
-    e_pair = np.nan_to_num(e_pair, nan=1.0, posinf=1.0)
     e_dyn1 = np.nan_to_num(e_dyn1, nan=1.0, posinf=1.0)
     rate_avg = float(np.sum(np.nan_to_num(rate_ratio, posinf=0.0) * weight))
     out = {

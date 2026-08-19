@@ -108,6 +108,12 @@
 %apply(double* IN_ARRAY1, int DIM1) {(double* protein_coords, int n_protein_coords)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* rmin_ij, int n_rmin_ij)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* eps_ij, int n_eps_ij)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* points1, int n_points1)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* points2, int n_points2)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* mu1, int n_mu1)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* mu2, int n_mu2)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* r, int n_r)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* kappa2, int n_kappa2)}
 %apply(long long* IN_ARRAY1, int DIM1) {(long long *input, int n_input)}
 %apply(unsigned long long* IN_ARRAY1, int DIM1) {(unsigned long long *input, int n_input)}
 
@@ -124,6 +130,14 @@
 
 // float and double
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** output, int* n_output)}
+
+// `out_view` rather than `output`, and deliberately. `(double **output, int
+// *n_output)` is claimed TWICE above -- once by ARGOUTVIEW (numpy does *not*
+// own the buffer) and once by ARGOUTVIEWM (numpy frees it). Which one binds
+// depends on the order of these lines, and getting the non-managed one means a
+// silent leak of the whole array on every call. A name only the managed
+// typemap claims cannot be resolved the wrong way by reordering.
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)}
 %apply(double** ARGOUTVIEWM_ARRAY2, int* DIM1, int* DIM2) {(double** output, int* n_output1, int* n_output2)}
 %apply (double** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(double** output, int* dim1, int* dim2, int* dim3)}
 %apply (float** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(float **output, int *nx, int *ny, int *nz)}

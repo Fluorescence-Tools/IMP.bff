@@ -65,9 +65,14 @@ IMPBFF_BEGIN_NAMESPACE
             accessible starting voxel was found.
 
     The accept flag rides in the returned array rather than in an out-parameter
-    on purpose. SWIG turns a returned `std::vector` into a Python tuple, which
-    numpy converts at C speed, but leaves an out-parameter as a wrapper object
-    that numpy walks one `__getitem__` at a time -- about 480 ns per element.
+    on purpose, and the trajectory itself is still a returned `std::vector`,
+    which is **not** free: measured at ~66 ns per element to build the tuple and
+    walk it back into numpy, against ~340 ns for an out-parameter. The right
+    answer for an array this large is a numpy view over the kernel's own buffer
+    (`ARGOUTVIEWM`, as #fret_pair_matrices uses) -- on a 400x350 matrix that took
+    38 ms to 0.22 ms. This kernel has not been converted yet. SWIG turns a returned `std::vector` into a Python tuple at ~66 ns
+    per element, and leaves an out-parameter as a wrapper object that numpy
+    walks one `__getitem__` at a time at ~340 ns.
     On a 500 000-step walk that out-parameter cost **170 ms against 55 ms for
     the entire simulation**: three quarters of the wall clock spent handing back
     a bit per step.

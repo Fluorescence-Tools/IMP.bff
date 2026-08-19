@@ -22,11 +22,18 @@ atom), neither of which the intended port would have touched.
 
 **Marshalling turned out to be the dominant cost**, not arithmetic. Converting a
 numpy array into a `std::vector` runs ~34 ns per element; a *returned* vector
-becomes a Python tuple and converts at C speed, while an **out-parameter** stays
-a wrapper walked one `__getitem__` at a time at ~340 ns. Three consequences,
-now applied consistently: flags ride in the returned array rather than in
-out-parameters; large inputs take `(pointer, length)` through numpy.i's
-`IN_ARRAY1`; small ones stay `std::vector`.
+becomes a Python tuple, while an **out-parameter** stays a wrapper walked one
+`__getitem__` at a time. Three consequences, now applied consistently: flags
+ride in the returned array rather than in out-parameters; large inputs take
+`(pointer, length)` through numpy.i's `IN_ARRAY1`; small ones stay
+`std::vector`.
+
+> **Corrected 2026-08-19.** "Converts at C speed" was wrong. A returned
+> `std::vector` costs **~66 ns per element** — cheaper than an out-parameter's
+> ~340 ns, but not free. On a 400×350 pair matrix that was 38 ms of a 38 ms
+> call, against about 1 ms of arithmetic. The right answer for a large array is
+> a numpy **view** over the kernel's own buffer (`ARGOUTVIEWM`): 38 ms → 0.22 ms.
+> See the 2026-08-19 entry above.
 
 **Defects the ports found**, all pre-existing and all invisible to a gate that
 compares against the previous implementation:
