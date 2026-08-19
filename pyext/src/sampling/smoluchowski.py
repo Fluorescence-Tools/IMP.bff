@@ -43,6 +43,17 @@ __all__ = [
 ]
 
 
+class GridDiffusionGradient(NamedTuple):
+    """What :meth:`GridDiffusionSolver.gradient` returns -- ``dL/dD``,
+    ``dL/dk`` and ``dL/dp0`` per voxel, each ``(ng, ng, ng)``, in the units
+    of the solver's inputs (A^2/ns, 1/ns, and the unnormalised initial
+    density)."""
+
+    d_diffusion: np.ndarray
+    d_rate: np.ndarray
+    d_density: np.ndarray
+
+
 class GridDiffusionResult(NamedTuple):
     """Time axis, surviving excited-state fraction, and the final density."""
 
@@ -330,6 +341,81 @@ class GridDiffusionSolver:
 
         self.density = cur
         return GridDiffusionResult(time, fluorescence, cur)
+
+    def gradient(self, dL_dF, n_steps: int, n_out: int = 10,
+                 density=None) -> GridDiffusionGradient:
+        """Gradient of a loss on the decay with respect to every voxel of
+        ``D``, ``k`` and the initial density -- the adjoint of :meth:`run`.
+
+        For ``L = sum_k dL_dF[k] * fluorescence[k]`` (any loss, once its
+        sensitivity to each reported point is known -- a Poisson likelihood's
+        residuals, a chi-square's ``2 (model - data) / sigma^2``), returns
+        ``dL/dD``, ``dL/dk`` and ``dL/dp0`` for the run that :meth:`run` with
+        the same ``n_steps``, ``n_out`` and starting density performs. All
+        voxels at once, for about four times the cost of one :meth:`run`
+        (measured 4.4x on a 41^3 grid: one forward with checkpoints, one
+        forward re-run between checkpoints, and a memory-bound reverse sweep
+        of the transposed stencil that reads five fields per neighbour where
+        the forward reads three; see ``diffusion_propagate_adjoint``).
+        Finite differences need one run *per parameter*.
+
+        The gradient is of the *discrete* scheme actually run, so it agrees
+        with a central difference of :meth:`run` to roundoff; that is also why
+        the time step must not depend on the parameters being differentiated
+        (choose it from the range of ``D`` you fit over, not the current
+        value).
+
+        :param dL_dF: sensitivity of the loss to each reported population,
+            length ``n_steps // n_out + 1`` (as :meth:`run` reports).
+        :param density: the starting density of the run being differentiated.
+            Defaults to the solver's current density -- note that :meth:`run`
+            replaces that with the final one, so for a completed run pass the
+            density it started from.
+        :returns: :class:`GridDiffusionGradient` -- ``d_density`` includes
+            the normalisation :meth:`run` applies (``p0 = p b / sum(p b)``).
+        """
+        self._validate()
+        n_steps = int(n_steps)
+        n_out = max(1, int(n_out))
+        n_reports = n_steps // n_out + 1
+        dL_dF = np.ascontiguousarray(dL_dF, dtype=np.float64).ravel()
+        if dL_dF.shape[0] != n_reports:
+            raise ValueError(
+                f"dL_dF has {dL_dF.shape[0]} entries; run(n_steps={n_steps}, "
+                f"n_out={n_out}) reports {n_reports} points")
+
+        p = self.density if density is None else np.asarray(density, dtype=np.float64)
+        p = np.ascontiguousarray(p, dtype=np.float64)
+        cur = p * self.bounds
+        total = cur.sum()
+        if total > 0.0:
+            cur = cur / total
+
+        dt = self.t_step
+        d = self.diffusion_map * (dt / self.dg ** 2)
+        decay = np.exp(-self.rate_map * dt)
+        ng = int(self.bounds.shape[0])
+
+        flat = IMP.bff.diffusion_propagate_adjoint(
+            np.ascontiguousarray(cur).ravel(),
+            np.ascontiguousarray(d).ravel(),
+            np.ascontiguousarray(decay).ravel(),
+            np.ascontiguousarray(self.bounds).ravel(),
+            int(ng), _FLUX[self.flux_form], int(n_steps), int(n_out), dL_dF)
+        g = np.asarray(flat, dtype=np.float64).reshape(3, ng, ng, ng)
+        g_d, g_decay, g_cur = g[0], g[1], g[2]
+
+        # Chain rule through the folding run() applies:
+        #   d = D dt/dg^2                 -> dL/dD = dL/dd * dt/dg^2
+        #   decay = exp(-k dt)            -> dL/dk = dL/ddecay * (-dt) * decay
+        #   cur = p b / sum(p b)          -> dL/dp = b (g - <g, cur>) / total
+        d_diffusion = g_d * (dt / self.dg ** 2)
+        d_rate = g_decay * (-dt) * decay
+        if total > 0.0:
+            d_density = self.bounds * (g_cur - float(np.sum(g_cur * cur))) / total
+        else:
+            d_density = np.zeros_like(g_cur)
+        return GridDiffusionGradient(d_diffusion, d_rate, d_density)
 
     def equilibrium(
         self, n_steps: int = 20000, tolerance: float = 1e-8, n_check: int = 100

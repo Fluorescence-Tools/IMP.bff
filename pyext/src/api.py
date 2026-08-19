@@ -227,6 +227,7 @@ BY_DOMAIN = {
         "load_rotamer_library_dcd": "IMP.bff.sampling.rotamer_library",
         "sample_rotamer_index": "IMP.bff.sampling.rotamer_library",
         # IMP.bff.sampling.smoluchowski
+        "GridDiffusionGradient": "IMP.bff.sampling.smoluchowski",
         "GridDiffusionResult": "IMP.bff.sampling.smoluchowski",
         "GridDiffusionSolver": "IMP.bff.sampling.smoluchowski",
         "diffusion_stability_limit": "IMP.bff.sampling.smoluchowski",

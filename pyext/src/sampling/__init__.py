@@ -47,6 +47,7 @@ from IMP.bff.sampling.rotamer_library import (  # noqa: F401
     sample_rotamer_index,
 )
 from IMP.bff.sampling.smoluchowski import (  # noqa: F401
+    GridDiffusionGradient,
     GridDiffusionResult,
     GridDiffusionSolver,
     diffusion_stability_limit,
@@ -58,6 +59,6 @@ __all__ = [
     "simulate_photon_trace", "simulate_quenched_decay",
     "apply_rotamer_coordinates", "load_rotamer_library_dcd",
     "sample_rotamer_index",
-    "GridDiffusionResult", "GridDiffusionSolver",
+    "GridDiffusionGradient", "GridDiffusionResult", "GridDiffusionSolver",
     "diffusion_stability_limit", "equilibrium_occupancy",
 ]
