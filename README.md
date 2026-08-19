@@ -51,6 +51,22 @@ output_objects.append(fret_restraint)
 ```
 
 
+# imp_bff_traj2bcif: convert a trajectory to BinaryCIF {#imp_bff_traj2bcif}
+
+Converts a DCD or XTC trajectory to a BinaryCIF `_atom_site` coordinate
+category, which is the format the shipped rotamer libraries use. Lossless
+float32 by default: the FRETpredict pins are sensitive to dipole *directions*
+between atoms about 1.7 A apart, so a quantisation grid that looks harmless as
+a displacement is not one as an angle. `--grid` opts into quantisation for
+corpora where that does not hold. Reading a DCD needs only `IMP.bff`; reading
+an XTC needs `mdtraj`, which `imp_bff` already imports.
+
+# imp_bff_dye_pdb2cif: convert a dye PDB to mmCIF {#imp_bff_dye_pdb2cif}
+
+Writes the `_atom_site` records for a dye structure, deriving the element from
+the atom name where the PDB does not carry one. The conversion itself is
+`IMP.bff.io.structure.convert_pdb_to_cif`; this is its command-line driver.
+
 # Info
 
 _Author(s)_: Thomas-Otavio Peulen

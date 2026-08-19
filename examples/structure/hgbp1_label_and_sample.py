@@ -88,7 +88,7 @@ assert not (set(site_residue_atoms) - backbone), "sidechain was not stripped"
 # --- 4. where can the dye go? -----------------------------------------------
 # The dye's reachable volume is what an AV or a FRET efficiency is computed
 # from. Here we simply report the labelled system; the sampling scripts under
-# IMP.bff.cgdye.scripts (dof_walk_hgbp1_site481, rrt_hgbp1_site481) walk the
+# junk/cgdye-scripts (dof_walk_hgbp1_site481, rrt_hgbp1_site481) walk the
 # dye's internal degrees of freedom and write a trajectory, and
 # IMP.bff.cgdye.sampling holds the samplers they drive.
 dye_atoms = IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE)

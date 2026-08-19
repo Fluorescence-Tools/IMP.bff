@@ -24,7 +24,7 @@ import IMP.bff
 import IMP.bff.io.structure as ios
 
 REPO = Path(__file__).resolve().parent.parent.parent
-SCRIPT = REPO / "scripts" / "trajectory_to_bcif.py"
+SCRIPT = REPO / "bin" / "imp_bff_traj2bcif"
 #: A shipped library: small enough to round-trip in a test, real data.
 LIB = REPO / "data" / "rotamer_library" / "A56_C1R_cutoff30.bcif"
 #: The shipped files are lossless. Quantisation is exercised separately,
@@ -34,7 +34,13 @@ GRID = 0.001
 
 @pytest.fixture(scope="module")
 def encoder():
-    spec = importlib.util.spec_from_file_location("traj_to_bcif", SCRIPT)
+    # An explicit loader: the program lives in `bin/` with no extension, the
+    # way IMP's installed programs do, and `spec_from_file_location` cannot
+    # infer a loader without one.
+    import importlib.machinery
+    spec = importlib.util.spec_from_file_location(
+        "traj_to_bcif", SCRIPT,
+        loader=importlib.machinery.SourceFileLoader("traj_to_bcif", str(SCRIPT)))
     mod = importlib.util.module_from_spec(spec)
     sys.modules["traj_to_bcif"] = mod
     spec.loader.exec_module(mod)

@@ -27,13 +27,13 @@ Usage
 -----
 ::
 
-    scripts/trajectory_to_bcif.py lib.dcd lib.bcif            # lossless
-    scripts/trajectory_to_bcif.py lib.dcd lib.bcif --grid 0.001
-    scripts/trajectory_to_bcif.py --all data/rotamer_library
-    scripts/trajectory_to_bcif.py traj.xtc traj.bcif --top conf_ed.gro
+    imp_bff_traj2bcif lib.dcd lib.bcif            # lossless, the default
+    imp_bff_traj2bcif lib.dcd lib.bcif --grid 0.001
+    imp_bff_traj2bcif --all data/rotamer_library
+    imp_bff_traj2bcif traj.xtc traj.bcif --top conf_ed.gro
 
-Reading a DCD needs only ``IMP.bff``; reading an XTC needs ``mdtraj``, which is
-a converter-time dependency and not one of the package's.
+Reading a DCD needs only ``IMP.bff``; reading an XTC needs ``mdtraj``, which
+``bin/imp_bff`` already imports, so it is not a new dependency.
 """
 from __future__ import annotations
 

@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Convert a dye PDB to an mmCIF structure file.
+
+The conversion itself is :func:`IMP.bff.io.structure.convert_pdb_to_cif`; this
+is the command-line driver for it. The two used to live together inside the
+package as ``IMP.bff.cgdye.scripts.convert_dye_pdb``, which meant a test
+imported a library function out of a script and the package shipped a
+``__main__`` nobody could find.
+"""
+import argparse
+
+from IMP.bff.io.structure import convert_pdb_to_cif
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("pdb", help="input PDB")
+    ap.add_argument("cif", help="output mmCIF")
+    ap.add_argument("--dye-id", default=None,
+                    help="chemical component id to record (default: from the file)")
+    a = ap.parse_args(argv)
+    convert_pdb_to_cif(a.pdb, a.cif, a.dye_id)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -16,7 +16,7 @@ class TestDyePdbConversion:
 
     def test_convert_a48_c1r_pdb_to_mmcif(self):
         """Convert A48_C1R.pdb and verify atom count."""
-        from IMP.bff.cgdye.scripts.convert_dye_pdb import convert_pdb_to_cif
+        from IMP.bff.io.structure import convert_pdb_to_cif
 
         # The rotamer library moved into imp.bff as module data when cgdye
         # did; reaching it by walking up from this file stopped working.
