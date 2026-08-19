@@ -1,6 +1,6 @@
 # The combined-system builder drops every improper
 
-**Status:** open — a physics gap, not yet changed. Found 2026-08-19.
+**Status:** closed 2026-08-19 — fixed in `2e08e06`. Kept because the reasoning is the record of a physics change.
 
 ## What
 
@@ -50,11 +50,27 @@ Because `impropers` is always empty:
   path only with `"impropers": []`, so the expansion is unmeasured on both
   paths.
 
-## The decision that is open
+## What it turned out to be
 
-Filling `impropers` changes what the force field restrains, so it moves
-simulation results. That is a physics change and is deliberately not being made
-as part of the structural work. What is needed is a judgement on whether the
-omission was intentional — a decision that the ring core is stiff enough
-without it — or an oversight when the combined builder was written alongside
-the per-dye one.
+Not a missing capability. `cgdye/topology.py` held **three** builders of a
+`DyeForceFieldSystem`, and the largest — `build_system_from_specs`, the body of
+the `build-system` command — *did* expand the templates' impropers, producing
+exactly the 81 predicted above. It could not be used: it never returned a
+system, it wrote a CIF and printed, so its output was reachable only by writing
+a file and reading it back. Every caller used one of the two wrappers, and both
+hard-coded `impropers = []`.
+
+Verified before the change: on CX4+atto655 the two builders agreed on sites
+(138), bonds (146), angles (262), dihedrals (207), components, all four group
+maps, `fixed_groups` and all five type tables, and differed on nothing but
+impropers.
+
+Fixed in `2e08e06` by collapsing the three into one implementation that returns
+the system. Systems now carry the impropers their templates declare — 81 for
+CX4+atto655, 33 for atto655 alone. This moves simulation results, and was done
+on instruction after the gap was raised.
+
+Two consequences already visible: `scoring.build_dye_restraints`'s improper
+branch now executes (it had a `TypeError` in it, fixed in `192a763` while it
+was still unreachable), and `DyeForceFieldSystem::get_exclusions`'s
+`include_impropers` flag is live rather than inert.
