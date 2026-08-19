@@ -1,5 +1,59 @@
 # Update Log
 
+## 2026-08-19 (pyext/src consolidated: 113 files to 50)
+
+`pmi`, the most Python-heavy module in IMP, is 23,394 lines in **26 files**.
+`bff` was 26,900 in **113**, averaging 236 lines against pmi's 900. The tree was
+deep because the files were fragmented, so the files were merged rather than
+re-filed — no directory scheme turns 236-line modules into a shape IMP has
+anywhere. It is now **50 files averaging 539**.
+
+**What decided each case, and it was not taste.** A domain became one flat
+module unless it had a reason not to:
+
+* **Something binds its submodules by path.** Of the 99 dotted `IMP.bff.*`
+  names referenced across chisurf, imp-tricks, quest and ucfret, only **19
+  still resolve** — the rest were broken by the earlier migrations and nobody
+  noticed. The 19 concentrate in `quenching` (five), `restraints` (two) and
+  `cgdye` (most of it). Those stayed packages.
+* **Size.** One `representation.py` would be 4,900 lines and one `io.py` 3,800,
+  both larger than anything in IMP (`pmi/macros.py`, the biggest, is 2,803).
+  Those stayed packages holding a handful of substantial modules.
+
+**Merging is what finds the collisions.** Three were live, and invisible only
+because the two definitions sat in different modules:
+
+* **four `FLRCIF_ITEMS`**, one per dataclass, in `dye/species`, `dye/spectra`,
+  `label/site`, `label/quencher`;
+* **two `compute_av`** — arrays vs. a PDB plus an fps position.
+  `IMP.bff.compute_av` resolved to the second while
+  `IMP.bff.representation.av.compute_av` resolved to the first, so *the route
+  decided which function you got*. Now `compute_av_from_structure`, with both
+  flat names keeping their meaning;
+* **`validate` shadowed by a `validate` flag** — `io/fps_schema.validate(payload)`
+  merged into a module whose `read_fps_json` takes `validate: bool`, making the
+  call `validate(payload)` on a boolean. Now `validate_fps`.
+
+**One rule, learned by breaking it.** A click command is a decorated function,
+so `import click` runs at module scope; merging `representation/rotamer/cli.py`
+into `rotamer.py` made `import IMP.bff.representation.rotamer` require click.
+**A CLI does not live beside the code it drives** — every entry point outside
+cgdye is in `cli.py`.
+
+**Three structural tests had quietly stopped covering anything**, and the
+consolidation is what exposed it:
+
+* `test_import_discipline` derived its domain list from *directories*, so nine
+  domains fell out of the acyclic-graph check the moment they were merged;
+* its `len(modules) > 50` tripwire was set when there were 114 modules, and
+  fired on the success it was meant to be blind to;
+* two "no decorated function anywhere" assertions stood in for "`@njit` is
+  gone", and stopped meaning that when `@abc.abstractmethod` and `@property`
+  were merged in beside the kernels.
+
+All three now say what they mean. `test_a_directory_only_exists_where_something_binds_its_submodules`
+is new and holds the rule above.
+
 ## 2026-08-19 (PRD-115 proposed: a differentiable lattice on a shared NN core)
 
 * **PRD-115 written** ([prds/prd-115.md](prds/prd-115.md)): make the field
