@@ -22,7 +22,8 @@ import numpy as np
  * .i file per header earns its place only when it carries real content:
  * IMP_SWIG_OBJECT/DECORATOR declarations for reference-counted types, %ignore
  * for a method that will not marshal, a %feature("shadow"). Two do
- * (IMP_bff.av.i, IMP_bff.pathmap.i); the fourteen one-line wrappers that used
+ * (IMP_bff.av.i, IMP_bff.pathmap.i, IMP_bff.observables.i); the fourteen
+ * one-line wrappers that used
  * to sit beside them did not, and are gone.
  */
 
@@ -64,7 +65,8 @@ import numpy as np
 %include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
-%include "IMP/bff/LifetimeSpectrum.h"
+/* The output contract, a C++ value with a Python surface. */
+%include "IMP_bff.observables.i"
 
 /*
  * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through

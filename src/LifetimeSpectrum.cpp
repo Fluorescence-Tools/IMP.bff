@@ -5,6 +5,8 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/LifetimeSpectrum.h>
+#include <IMP/exception.h>
+#include <limits>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
@@ -100,6 +102,120 @@ std::vector<double> outer_product_histogram(
         }
     }
     return hist;
+}
+
+
+// --------------------------------------------------------------------------
+// LifetimeSpectrum
+// --------------------------------------------------------------------------
+
+LifetimeSpectrum::LifetimeSpectrum(const std::vector<double>& amplitudes,
+                                   const std::vector<double>& rate_constants,
+                                   bool exact)
+        : amplitudes_(amplitudes), rate_constants_(rate_constants), exact_(exact) {
+    if (amplitudes_.size() != rate_constants_.size()) {
+        IMP_THROW("a spectrum needs one rate per amplitude: "
+                          << amplitudes_.size() << " against "
+                          << rate_constants_.size(),
+                  IMP::ValueException);
+    }
+    for (std::size_t i = 0; i < rate_constants_.size(); ++i) {
+        if (rate_constants_[i] < 0.0) {
+            IMP_THROW("a negative rate constant is a growing population, "
+                      "not a decaying one", IMP::ValueException);
+        }
+    }
+}
+
+void LifetimeSpectrum::get_amplitudes(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(amplitudes_, out_view, n_out_view);
+}
+
+void LifetimeSpectrum::get_rate_constants(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(rate_constants_, out_view, n_out_view);
+}
+
+void LifetimeSpectrum::get_lifetimes(double** out_view, int* n_out_view) const {
+    const std::size_t n = rate_constants_.size();
+    double* out = internal::new_double_view(n, out_view, n_out_view);
+    if (out == nullptr) return;
+    for (std::size_t i = 0; i < n; ++i) {
+        // A zero rate is a species that never decays, and its lifetime is
+        // infinite rather than undefined. Dividing would give the same value
+        // with a signal that says "error"; this says "does not decay".
+        out[i] = rate_constants_[i] > 0.0
+                         ? 1.0 / rate_constants_[i]
+                         : std::numeric_limits<double>::infinity();
+    }
+}
+
+double LifetimeSpectrum::get_total_amplitude() const {
+    double s = 0.0;
+    for (std::size_t i = 0; i < amplitudes_.size(); ++i) s += amplitudes_[i];
+    return s;
+}
+
+double LifetimeSpectrum::get_species_averaged_lifetime() const {
+    const double total = get_total_amplitude();
+    if (total == 0.0) return 0.0;
+    double acc = 0.0;
+    for (std::size_t i = 0; i < amplitudes_.size(); ++i) {
+        // One non-decaying species makes the whole average infinite -- it holds
+        // population forever. Skipping it instead would report the average of
+        // the species that *do* decay, under a name that says otherwise.
+        if (rate_constants_[i] <= 0.0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        acc += amplitudes_[i] / rate_constants_[i];
+    }
+    return acc / total;
+}
+
+double LifetimeSpectrum::get_intensity_averaged_lifetime() const {
+    double num = 0.0, den = 0.0;
+    for (std::size_t i = 0; i < amplitudes_.size(); ++i) {
+        if (rate_constants_[i] <= 0.0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        const double tau = 1.0 / rate_constants_[i];
+        num += amplitudes_[i] * tau * tau;
+        den += amplitudes_[i] * tau;
+    }
+    if (den == 0.0) return 0.0;
+    return num / den;
+}
+
+LifetimeSpectrum LifetimeSpectrum::normalized() const {
+    const double total = get_total_amplitude();
+    if (total == 0.0) return *this;
+    std::vector<double> a(amplitudes_.size());
+    for (std::size_t i = 0; i < a.size(); ++i) a[i] = amplitudes_[i] / total;
+    return LifetimeSpectrum(a, rate_constants_, exact_);
+}
+
+void LifetimeSpectrum::decay(const std::vector<double>& time,
+                             double** out_view, int* n_out_view) const {
+    lifetime_spectrum_decay(amplitudes_, rate_constants_, time,
+                            out_view, n_out_view);
+}
+
+LifetimeSpectrum LifetimeSpectrum::coarse_grain(int n_bins) const {
+    std::vector<double> rates;
+    std::vector<double> amps = lifetime_spectrum_coarse_grain(
+            amplitudes_, rate_constants_, n_bins, rates);
+    // Exact only if nothing was actually merged. The reduction preserves the
+    // population and the initial slope for any n_bins, but not the curvature,
+    // so a spectrum that lost species is an approximation and says so.
+    const bool still_exact =
+            exact_ && amps.size() == amplitudes_.size();
+    return LifetimeSpectrum(amps, rates, still_exact);
+}
+
+double fret_efficiency_from_lifetimes(const LifetimeSpectrum& donor_only,
+                                      const LifetimeSpectrum& donor_acceptor) {
+    const double tau_d = donor_only.get_species_averaged_lifetime();
+    if (tau_d <= 0.0 || !std::isfinite(tau_d)) return 0.0;
+    return 1.0 - donor_acceptor.get_species_averaged_lifetime() / tau_d;
 }
 
 IMPBFF_END_NAMESPACE
