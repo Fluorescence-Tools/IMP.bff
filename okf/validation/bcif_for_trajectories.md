@@ -95,9 +95,32 @@ with a real coordinate codec rather than with a bare array.
 > 12 MB". That was arithmetic done from a single file's ratio rather than the
 > corpus, and it is wrong: the measured figure is **17.99 MB**.
 
+## Reading it
+
+`IMP::bff::read_bcif_trajectory` (`include/IMP/bff/TrajectoryIO.h`) is the
+reader, in C++, over the vendored parser. It takes only the header — the
+symbols come from `libimp_atom`, which `bff` already links and which exports
+them because `IMP::atom::read_mmcif` compiles the same reader in. Compiling
+`ihm_format.c` into `bff` as well would also work and would duplicate it.
+
+Storage is atom-major so the deltas run along an atom's own frame series; the
+reader returns frame-major, because every consumer wants `(frame, atom, 3)` and
+the storage order exists to make the deltas small rather than to match anyone's
+indexing.
+
+Gated against the DCD reader on `A64_C2R_cutoff10` (798 frames × 122 atoms):
+identical shape, agreement with the quantised DCD to **3.6e-15 Å**, and a
+maximum deviation from the raw DCD of **0.050 Å** — exactly half the grid,
+which is the most a 0.1 Å rounding can be wrong by. Read time is **2.9 ms
+either way**, from a file a quarter the size.
+
 ## Status
 
-**BinaryCIF is the trajectory format from 2026-08-19.** `traj.xtc` and the 95
-DCD files remain in place and remain what the package reads; they are marked
-for removal, and nothing has been deleted. What is still open is the reader
-path in `IMP.bff.io` and the conversion of the shipped data.
+**BinaryCIF is the trajectory format from 2026-08-19.** The encoder
+(`scripts/trajectory_to_bcif.py`), the C++ reader and their tests
+(`test/io/test_bcif_trajectory.py`) are in place.
+
+`traj.xtc` and the 95 DCD files remain in the repository and remain what the
+shipped code paths read; they are marked for removal and nothing has been
+deleted. What is still open is converting the shipped corpus and repointing
+`read_rotamer_library` at the converted files.
