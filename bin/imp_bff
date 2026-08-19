@@ -925,7 +925,7 @@ def label_fp(pdb_id_or_path, site, output):
 @click.option("--output", help="Output labeled PDB")
 def label_fusion(pdb_path, chain, output):
     """Automatically detect and label FPs in a fusion protein."""
-    from IMP.bff.cgdye.sampling import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
+    from IMP.bff.label import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
     model = IMP.Model()
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
 
