@@ -94,7 +94,7 @@ not even import. Both were fixed then; the four jitted kernels became C++ in
 stage 4d and now live in ``OrientationFactor.h``.
 
 .. warning::
-   **The port found that** :func:`kappa2_distribution_all` **was returning half the right
+   **The port found that** :func:`kappa2_distribution_wobbling_in_cone` **was returning half the right
    answer.** It drew dipole directions with ``np.random.random(3)`` and
    normalised them, which does not sample the sphere: it fills only the
    positive octant of the unit cube, and non-uniformly at that. In the rigid
@@ -107,7 +107,7 @@ stage 4d and now live in ``OrientationFactor.h``.
    take them again.
 
 The isotropic average is the only analytic check this module has, so it is
-worth stating why it exists: :func:`kappa2_distribution_all` at ``sD2 = sA2 = 0`` returns
+worth stating why it exists: :func:`kappa2_distribution_wobbling_in_cone` at ``sD2 = sA2 = 0`` returns
 exactly :math:`2/3` for every sample (freely rotating dyes have no orientation
 preference at all), and at ``sD2 = sA2 = 1`` -- rigid dyes, random mutual
 orientation -- the *mean* is :math:`2/3` while individual values span
@@ -119,18 +119,30 @@ two transition dipoles and a separation vector into a number -- is in
 questions and now live side by side rather than in unrelated packages.
 """
 
-def kappa2_distribution_dynamic(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
+def kappa2_distribution_diffusion_with_traps(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
                 k2_min=0.0, k2_max=4.0, seed=-1):
-    """p(kappa^2) for a dynamic pair, conditioned on a measured efficiency.
+    """p(kappa^2) for **diffusion with traps**, given a measured efficiency.
 
-    **C++** (:func:`IMP.bff.dynamic_kappa2_distribution`). The Python drew
+    Each dye is either freely diffusing -- rotating fast enough to average its
+    orientation, contributing kappa^2 = 2/3 -- or *trapped*, wobbling in a cone
+    set by its order parameter. ``sD2`` and ``sA2`` are the trapped fractions,
+    so the pair splits into four sub-populations: free/free, trapped/trapped,
+    trapped/free and free/trapped. Their efficiencies are combined and the
+    result inverted into the single kappa^2 that would have produced it.
+
+    The name matters. This was called ``kappa2_distribution_dynamic``, and
+    "dynamic" in kappa^2 usage means the fast-rotation limit where kappa^2
+    collapses to 2/3 -- which is only the free/free term here. Naming the whole
+    model after the one part that has no traps in it is backwards.
+
+    **C++** (:func:`IMP.bff.sample_kappa2_diffusion_with_traps`). The Python drew
     10 000 orientation pairs in an explicit loop and called ``kappasq`` three
     times per sample: 128.6 ms against 3.02 ms for 20 000 samples, 43x.
 
     :returns: ``(bin_edges, counts, samples)`` -- the three arrays the loop
         built, split out of the one buffer the kernel publishes.
     """
-    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+    out = np.asarray(IMP.bff.sample_kappa2_diffusion_with_traps(
         float(sD2), float(sA2), float(fret_efficiency), int(n_samples),
         int(n_bins), float(k2_min), float(k2_max), int(seed)))
     n_edges = int(n_bins)
@@ -254,7 +266,7 @@ def kappasq_all_delta(
             k2)
 
 
-def kappa2_distribution_all(
+def kappa2_distribution_wobbling_in_cone(
         sD2: float,
         sA2: float,
         n_bins: int = 81,
@@ -299,7 +311,7 @@ def kappa2_distribution_all(
     Examples
     --------
     >>> from scikit_fluorescence.modeling.kappa2 import kappasq_all_delta
-    >>> k2_scale, k2_hist, k2 = kappa2_distribution_all(
+    >>> k2_scale, k2_hist, k2 = kappa2_distribution_wobbling_in_cone(
     ...     sD2=0.3,
     ...     sA2=0.5,
     ...     n_bins=31,
@@ -448,13 +460,21 @@ def kappa(
     )
 
 
-def kappa2_order_parameters(
+def s2_delta_from_anisotropy(
         s2_donor: float,
         s2_acceptor: float,
         r_inf_AD: float,
         r_0: float = 0.38
 ) -> typing.Tuple[float, float]:
-    r"""Calculate kappa2_order_parameters from the residual anisotropies of the donor and acceptor
+    r"""The order parameter of the inter-dye angle, from the residual anisotropies.
+
+    Returns ``(s2_delta, delta)``: the second-rank order parameter of the
+    angle between the two dyes' symmetry axes, and that angle itself.
+
+    The old name was ``s2delta`` -- accurate domain shorthand for
+    :math:`S^2_\delta`. It was renamed to ``kappa2_order_parameters``,
+    which was wrong twice over: these are the *dyes'* order parameters,
+    not kappa^2's, and the function returns an angle as well.
 
     Parameters
     ----------
@@ -472,19 +492,19 @@ def kappa2_order_parameters(
 
     Returns
     -------
-    kappa2_order_parameters : float
+    s2_delta_from_anisotropy : float
          A second rank order parameter of the angle [1]_ eq. 10
     delta : float
         The angle between the two symmetry axes of the dipols in units of rad.
 
     Examples
     --------
-    >>> from scikit_fluorescence.modeling.kappa2 import kappa2_order_parameters
+    >>> from scikit_fluorescence.modeling.kappa2 import s2_delta_from_anisotropy
     >>> r0 = 0.38
     >>> s2donor = 0.2
     >>> s2acceptor = 0.3
     >>> r_inf_AD = 0.01
-    >>> kappa2_order_parameters(
+    >>> s2_delta_from_anisotropy(
     ...     r_0=r0,
     ...     s2_donor=s2donor,
     ...     s2_acceptor=s2acceptor,

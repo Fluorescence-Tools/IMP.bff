@@ -177,14 +177,14 @@ def test_the_isotropic_limit_is_exactly_two_thirds():
     that caught it: with both order parameters zero there is no wobble at all,
     so every sample must be 2/3 exactly.
     """
-    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+    out = np.asarray(IMP.bff.sample_kappa2_diffusion_with_traps(
         0.0, 0.0, 0.5, 20000, 31, 0.0, 4.0, 7))
     samples = out[61:]
     np.testing.assert_allclose(samples, 2.0 / 3.0, rtol=1e-12)
 
 
 def test_the_fully_trapped_limit_spans_the_whole_range():
-    out = np.asarray(IMP.bff.dynamic_kappa2_distribution(
+    out = np.asarray(IMP.bff.sample_kappa2_diffusion_with_traps(
         1.0, 1.0, 0.5, 50000, 31, 0.0, 4.0, 7))
     samples = out[61:]
     assert samples.min() < 0.05 and samples.max() > 3.9

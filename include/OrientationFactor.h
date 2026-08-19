@@ -91,15 +91,19 @@ IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution(
         std::vector<double>& k2_scale, std::vector<double>& k2_hist);
 
 
-//! \f$p(\kappa^2)\f$ for a *dynamic* pair, conditioned on a measured efficiency.
+//! \f$p(\kappa^2)\f$ for **diffusion with traps**, given a measured efficiency.
 /*!
-    The distribution the "dynamic averaging" model gives: both dipoles wobble in
-    a cone set by their order parameters, and each sampled pair of orientations
-    is converted to the \f$\kappa^2\f$ that would reproduce the *measured*
-    transfer efficiency. That last step is what makes this different from
-    wobbling_kappa2_distribution() -- it does not ask what \f$\kappa^2\f$ the
-    geometry gives, it asks what \f$\kappa^2\f$ the geometry *and the data*
-    together imply.
+    Each dye is either freely diffusing -- rotating fast enough to average its
+    orientation, contributing \f$\kappa^2 = 2/3\f$ -- or *trapped*, wobbling in
+    a cone set by its order parameter. \p sD2 and \p sA2 are the trapped
+    fractions, so the pair splits into four sub-populations: free/free,
+    trapped/trapped, trapped/free and free/trapped. Their efficiencies are
+    combined and the result inverted into the single \f$\kappa^2\f$ that would
+    have produced it.
+
+    That inversion is what separates this from wobbling_kappa2_distribution():
+    it does not ask what \f$\kappa^2\f$ the geometry gives, but what
+    \f$\kappa^2\f$ the geometry *and the measured efficiency* together imply.
 
     Per sample: two isotropic directions are drawn, \f$R_{DA}\f$ is taken along
     x, and the four sub-populations (donor free or trapped, acceptor free or
@@ -123,7 +127,7 @@ IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution(
                 returned as a tuple, concatenated, because a numpy view is one
                 array and the shim splits it at known offsets
 */
-IMPBFFEXPORT void dynamic_kappa2_distribution(
+IMPBFFEXPORT void sample_kappa2_diffusion_with_traps(
         double sD2, double sA2, double fret_efficiency,
         int n_samples, int n_bins, double k2_min, double k2_max, int seed,
         double** out_view, int* n_out_view);

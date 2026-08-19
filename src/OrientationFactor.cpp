@@ -163,7 +163,7 @@ std::vector<double> wobbling_kappa2_distribution(
 }
 
 
-void dynamic_kappa2_distribution(
+void sample_kappa2_diffusion_with_traps(
         double sD2, double sA2, double fret_efficiency,
         int n_samples, int n_bins, double k2_min, double k2_max, int seed,
         double** out_view, int* n_out_view) {
