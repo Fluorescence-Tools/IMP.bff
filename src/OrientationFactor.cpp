@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/OrientationFactor.h>
+#include <IMP/exception.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
@@ -272,6 +273,100 @@ void isotropic_kappa2_density(const std::vector<double>& k2,
             out[i] = 0.0;
         }
     }
+}
+
+
+void kappa2_distance_ratio_transform(const std::vector<double>& k2_amp,
+                              const std::vector<double>& k2_val, int n_bins,
+                              double** out_view, int* n_out_view) {
+    if (k2_amp.size() != k2_val.size()) {
+        IMP_THROW("k2_amp and k2_val must have the same shape.",
+                  IMP::ValueException);
+    }
+    for (std::size_t i = 0; i < k2_val.size(); ++i) {
+        if (k2_val[i] <= 0.0) {
+            IMP_THROW("k2_val must be strictly positive (kappa^2 > 0).",
+                      IMP::ValueException);
+        }
+        if (k2_amp[i] < 0.0) {
+            IMP_THROW("k2_amp must be non-negative.", IMP::ValueException);
+        }
+    }
+    double total = 0.0;
+    for (std::size_t i = 0; i < k2_amp.size(); ++i) total += k2_amp[i];
+    if (total <= 0.0) {
+        IMP_THROW("Total amplitude must be positive.", IMP::ValueException);
+    }
+    if (n_bins < 1) n_bins = 1;
+
+    const std::size_t n = k2_val.size();
+    std::vector<double> w(n), r(n);
+    double k2_mean = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        w[i] = k2_amp[i] / total;
+        k2_mean += w[i] * k2_val[i];
+    }
+    // The change of variable, with its Jacobian. Carrying the weights across
+    // unchanged would be wrong wherever the mapping is non-linear, which is
+    // everywhere: |dk2/dr| = 6 <k2> / r^7.
+    double wj_total = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        r[i] = std::pow(k2_mean / k2_val[i], 1.0 / 6.0);
+        w[i] *= 6.0 * k2_mean / std::pow(r[i], 7.0);
+        wj_total += w[i];
+    }
+    if (wj_total > 0.0) {
+        for (std::size_t i = 0; i < n; ++i) w[i] /= wj_total;
+    }
+
+    std::vector<std::size_t> order(n);
+    for (std::size_t i = 0; i < n; ++i) order[i] = i;
+    std::sort(order.begin(), order.end(),
+              [&r](std::size_t a, std::size_t b) { return r[a] < r[b]; });
+    std::vector<double> rs(n), ws(n);
+    for (std::size_t i = 0; i < n; ++i) { rs[i] = r[order[i]]; ws[i] = w[order[i]]; }
+
+    // A 5 % margin either side, clamped at zero: the transformed points are
+    // not uniformly spaced, and an axis that stopped exactly at the extremes
+    // would put half the end bins' mass outside it.
+    double r_min = rs.front(), r_max = rs.back();
+    const double span = r_max - r_min;
+    r_min = std::max(0.0, r_min - 0.05 * span);
+    r_max = r_max + 0.05 * span;
+
+    double* out = internal::new_double_view(2 * static_cast<std::size_t>(n_bins) + 1,
+                                            out_view, n_out_view);
+    if (out == nullptr) return;
+    double* axis = out;
+    double* interp = out + n_bins;
+    const double step = n_bins > 1 ? (r_max - r_min) / (n_bins - 1) : 0.0;
+    for (int b = 0; b < n_bins; ++b) {
+        const double x = n_bins > 1 ? r_min + step * b : r_min;
+        axis[b] = x;
+        // **Zero** outside the sampled range, not clamped to the end value.
+        // The 5 % margin above puts the first and last bins outside it by
+        // construction, so clamping instead would plant the extreme weight on
+        // a ratio no kappa^2 in the input maps to.
+        if (x < rs.front() || x > rs.back()) {
+            interp[b] = 0.0;
+        } else {
+            const std::size_t hi = static_cast<std::size_t>(
+                    std::upper_bound(rs.begin(), rs.end(), x) - rs.begin());
+            const std::size_t lo = hi - 1;
+            const double dx = rs[hi] - rs[lo];
+            const double t = dx > 0.0 ? (x - rs[lo]) / dx : 0.0;
+            interp[b] = ws[lo] + t * (ws[hi] - ws[lo]);
+        }
+    }
+    // Renormalised *after* interpolation, not before: resampling onto a
+    // uniform axis does not preserve the sum, and the caller is handed a
+    // distribution.
+    double interp_total = 0.0;
+    for (int b = 0; b < n_bins; ++b) interp_total += interp[b];
+    if (interp_total > 0.0) {
+        for (int b = 0; b < n_bins; ++b) interp[b] /= interp_total;
+    }
+    out[2 * n_bins] = k2_mean;
 }
 
 IMPBFF_END_NAMESPACE

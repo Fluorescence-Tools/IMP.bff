@@ -164,6 +164,41 @@ IMPBFFEXPORT void kappa2_dipole_matrix(
 IMPBFFEXPORT void isotropic_kappa2_density(
         const std::vector<double>& k2, double** out_view, int* n_out_view);
 
+
+//! Turn a \f$\kappa^2\f$ distribution into the distance-ratio distribution.
+/*!
+    A FRET measurement does not see \f$\kappa^2\f$; it sees an *apparent*
+    distance. The two are related by
+    \f$R_{app}/R_{DA} = (\langle\kappa^2\rangle/\kappa^2)^{1/6}\f$ -- a low
+    \f$\kappa^2\f$ reads as a longer distance -- and this performs that change
+    of variable, Jacobian included.
+
+    **The Jacobian is the point.** Transforming the abscissa and carrying the
+    weights across unchanged would give a distribution that is wrong wherever
+    the mapping is not linear, which is everywhere: \f$|dк^2/dr| = 6\langle
+    \kappa^2\rangle / r^7\f$. Weights are re-normalised after it is applied.
+
+    The transformed points are then resampled onto a uniform axis by linear
+    interpolation, which is what makes the result convolvable with a distance
+    distribution.
+
+    \param[in] k2_amp amplitudes, non-negative, not required to be normalised
+    \param[in] k2_val \f$\kappa^2\f$ values, strictly positive
+    \param[in] n_bins points on the output axis
+    \param[out] out_view,n_out_view the axis (\p n_bins), then the interpolated
+                weights (\p n_bins), then \f$\langle\kappa^2\rangle\f$ as a
+                single trailing value
+    \throws IMP::ValueException on mismatched lengths, a non-positive
+            \f$\kappa^2\f$, a negative amplitude, or zero total amplitude
+
+    One flat buffer rather than three returns, because a numpy view is one
+    array. ``IMP.bff.photophysics.kappa2_to_distance_ratio`` is the front door
+    and splits it into the `(axis, weights, mean)` tuple callers expect.
+*/
+IMPBFFEXPORT void kappa2_distance_ratio_transform(
+        const std::vector<double>& k2_amp, const std::vector<double>& k2_val,
+        int n_bins, double** out_view, int* n_out_view);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_ORIENTATIONFACTOR_H

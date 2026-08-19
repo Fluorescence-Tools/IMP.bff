@@ -136,47 +136,17 @@ def kappasq_dwt(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
     n_edges = int(n_bins)
     return out[:n_edges], out[n_edges:2 * n_edges - 1], out[2 * n_edges - 1:]
 
-def kappasq_all_delta_new(
-        delta: float,
-        sD2: float,
-        sA2: float,
-        step: float = 0.25,
-        n_bins: int = 31,
-        k2_min: float = 0.0,
-        k2_max: float = 4.0
-) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    ks = list()
-    weights = list()
-    for beta1 in np.arange(0, np.pi/2, step=step / 180. * np.pi):
-        weight_beta1 = np.sin(beta1)
-        for beta2 in np.arange(
-                start=abs(delta - beta1),
-                stop=min(delta + beta1, np.pi / 2.),
-                step=step / 180. * np.pi
-        ):
-            weight_beta2 = np.sin(beta1)
-            weights.append(
-                weight_beta1 * weight_beta2
-            )
-            ks.append(
-                kappasq(
-                    sD2=sD2,
-                    sA2=sA2,
-                    delta=delta,
-                    beta1=beta1,
-                    beta2=beta2
-                )
-            )
-    ks = np.array(ks)
-
-    # histogram bin edges
-    k2_step = (k2_max - k2_min) / (n_bins - 1)
-    k2scale = np.arange(k2_min, k2_max + 1e-14, k2_step, dtype=np.float64)
-
-    k2hist, x = np.histogram(ks, bins=k2scale, weights=weights)
-    return k2scale, k2hist, ks
-
-
+# ``kappasq_all_delta_new`` was **deleted**, not ported.
+#
+# It was an alternative implementation of ``kappasq_all_delta`` -- a nested
+# Python loop over a beta1/beta2 grid -- with no consumer anywhere: not
+# exported through ``api.py``, not imported by any module here, not covered by
+# a test, and not reachable from chisurf, quest, imp-tricks or ucfret. It
+# arrived with the PRD-107 migration and never had one. ChiSurf has its own
+# copy of the same function, which is where the name is still live.
+#
+# The ported one is ``kappasq_all_delta``, over
+# :func:`IMP.bff.wobbling_kappa2_distribution_delta`.
 
 def kappasq_all_delta(
         delta: float,
@@ -647,103 +617,23 @@ def p_isotropic_orientation_factor(k2: np.ndarray,
         r = r / max(1.0, r.sum())
     return r.reshape(np.shape(k2))
 
-def kappa2_to_distance_ratio(k2_amp: np.ndarray, k2_val: np.ndarray, n_bins: int = 32) -> tuple:
-    """Transform κ² distribution to R_app/R_DA distance ratio distribution.
+def kappa2_to_distance_ratio(k2_amp, k2_val, n_bins: int = 32) -> tuple:
+    """Turn a kappa^2 distribution into the distance-ratio distribution. **C++.**
 
-    This transformation is used for FFT-based convolution in static κ² averaging.
-    The relationship is: R_app/R_DA = (⟨κ²⟩/κ²)^(1/6)
+    A FRET measurement does not see ``kappa^2``; it sees an *apparent* distance,
+    related by ``R_app/R_DA = (<kappa^2>/kappa^2)**(1/6)``. This is that change
+    of variable, Jacobian included -- ``|dk2/dr| = 6 <k2> / r**7``, without
+    which the distribution is wrong wherever the mapping is non-linear, which
+    is everywhere.
 
-    Lower κ² → larger apparent distance (R_app > R_DA)
-    Higher κ² → smaller apparent distance (R_app < R_DA)
-
-    Parameters
-    ----------
-    k2_amp : array-like
-        Amplitudes/weights of the κ² distribution (must be non-negative).
-    k2_val : array-like
-        κ² values (must be strictly positive).
-    n_bins : int
-        Number of bins for output linear axis (default 32).
-
-    Returns
-    -------
-    tuple of (r_ratio, weights, k2_mean)
-        r_ratio : array
-            R_app/R_DA linearly spaced ratio bin centers.
-        weights : array
-            Interpolated weights on linear axis.
-        k2_mean : float
-            Mean κ² value ⟨κ²⟩.
-
-    Raises
-    ------
-    ValueError
-        If inputs are invalid (e.g., κ² ≤ 0 or mismatched shapes).
+    :returns: ``(r_ratio, weights, k2_mean)``.
     """
-    import numpy as np
-
-    k2_amp = np.asarray(k2_amp, dtype=float)
-    k2_val = np.asarray(k2_val, dtype=float)
-
-    # Input validation
-    if k2_amp.shape != k2_val.shape:
-        raise ValueError("k2_amp and k2_val must have the same shape.")
-    if np.any(k2_val <= 0):
-        raise ValueError("k2_val must be strictly positive (κ² > 0).")
-    if np.any(k2_amp < 0):
-        raise ValueError("k2_amp must be non-negative.")
-
-    # Normalize amplitudes
-    total = np.sum(k2_amp)
-    if total <= 0:
-        raise ValueError("Total amplitude must be positive.")
-    weights = k2_amp / total
-
-    # Compute mean kappa2
-    k2_mean = float(np.sum(weights * k2_val))
-
-    # Transform to R_app/R_DA ratio: r = (<k2>/k2)^(1/6)
-    r_ratio_points = (k2_mean / k2_val) ** (1.0/6.0)
-
-    # Apply Jacobian transformation
-    jacobian = 6.0 * k2_mean / (r_ratio_points**7)
-    weights_jacobian = weights * jacobian
-
-    # Renormalize the weights
-    total_jacobian = np.sum(weights_jacobian)
-    if total_jacobian > 0:
-        weights_jacobian /= total_jacobian
-
-    # Sort points for interpolation (r_ratio_points may not be sorted)
-    sort_idx = np.argsort(r_ratio_points)
-    r_ratio_points_sorted = r_ratio_points[sort_idx]
-    weights_jacobian_sorted = weights_jacobian[sort_idx]
-
-    # Create a linearly spaced axis for R_app/R_DA
-    r_min = np.min(r_ratio_points_sorted)
-    r_max = np.max(r_ratio_points_sorted)
-    r_range = r_max - r_min
-    r_min = max(0.0, r_min - 0.05 * r_range)  # Ensure non-negative
-    r_max = r_max + 0.05 * r_range
-
-    r_ratio = np.linspace(r_min, r_max, n_bins)
-
-    # Interpolate the transformed weights onto the linear axis
-    # np.interp reproduces interp1d(kind="linear", bounds_error=False,
-    # fill_value=0.0): linear inside the sampled range, zero outside.
-    # IMP.bff carries no dependency beyond IMP, numpy and click.
-    interpolated_weights = np.interp(
-        r_ratio, r_ratio_points_sorted, weights_jacobian_sorted,
-        left=0.0, right=0.0,
-    )
-
-    # Renormalize the interpolated weights
-    total_interp = np.sum(interpolated_weights)
-    if total_interp > 0:
-        interpolated_weights /= total_interp
-
-    return r_ratio, interpolated_weights, k2_mean
-
+    out = np.asarray(IMP.bff.kappa2_distance_ratio_transform(
+        np.ascontiguousarray(np.asarray(k2_amp, dtype=np.float64)).ravel(),
+        np.ascontiguousarray(np.asarray(k2_val, dtype=np.float64)).ravel(),
+        int(n_bins)))
+    nb = int(n_bins)
+    return out[:nb], out[nb:2 * nb], float(out[2 * nb])
 
 def convolve_distance_with_k2_ratio(
     r_da: np.ndarray,
