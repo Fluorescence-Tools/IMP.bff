@@ -131,6 +131,45 @@ class Tests(IMP.test.TestCase):
         self.assertLess(float(checks["fd_check"]), 1e-6)
         self.assertLess(float(checks["dx_check"]), 1e-6)
 
+    def test_bff_loads_an_onnx_model_without_tttrlib(self):
+        """The same bff-only program reads an ONNX file written by PyTorch --
+        tttrlib's committed fixture, with PyTorch's own outputs -- so a network
+        trained anywhere runs inside bff with nothing but the vendored header."""
+        import shutil
+        import subprocess
+        import tempfile
+
+        import numpy as np
+        cxx = shutil.which("c++") or shutil.which("clang++") or shutil.which("g++")
+        if cxx is None:
+            self.skipTest("no C++ compiler on PATH")
+        here = os.path.dirname(os.path.abspath(__file__))
+        repo = os.path.dirname(here)
+        fixtures = os.path.join(os.path.dirname(repo), "tttrlib", "test", "python", "misc", "fixtures", "nn")
+        if not os.path.exists(os.path.join(fixtures, "expected.json")):
+            self.skipTest("../tttrlib fixtures not present")
+        import json
+        with open(os.path.join(fixtures, "expected.json")) as fh:
+            e = json.load(fh)
+        X = np.asarray(e["X"])
+        src = os.path.join(here, "cpp_snippets", "mlpcore_eval.cpp")
+        with tempfile.TemporaryDirectory() as tmp:
+            inc = os.path.join(tmp, "IMP", "bff")
+            os.makedirs(inc)
+            os.symlink(os.path.join(repo, "include", "internal"), os.path.join(inc, "internal"))
+            exe = os.path.join(tmp, "mlpcore_eval")
+            subprocess.check_call([cxx, "-std=c++17", "-O2", "-I", tmp, src, "-o", exe])
+            xfile = os.path.join(tmp, "X.txt")
+            with open(xfile, "w") as fh:
+                fh.write("%d %d\n" % X.shape)
+                for row in X:
+                    fh.write(" ".join("%.17g" % v for v in row) + "\n")
+            for name, key, tol in (("mlp_torch_legacy.onnx", "Y_float32", 1e-6),
+                                   ("mlp_matmul_add.onnx", "Y_double", 1e-12)):
+                out = subprocess.check_output([exe, os.path.join(fixtures, name), xfile], text=True).strip().splitlines()
+                got = np.array([[float(v) for v in line.split()] for line in out[: X.shape[0]]])
+                self.assertLess(np.abs(got - np.asarray(e[key])).max(), tol, name)
+
 
 if __name__ == "__main__":
     IMP.test.main()

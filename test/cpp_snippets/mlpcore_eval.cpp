@@ -2,7 +2,7 @@
 // (internal/json.h + internal/MlpCore.h) -- the proof that a network trained
 // in tttrlib runs, and differentiates, inside bff without linking tttrlib.
 //
-//   mlpcore_eval <model.json> <X.txt>
+//   mlpcore_eval <model.json | model.onnx> <X.txt>
 // X.txt: first line "n_rows n_cols", then row-major doubles. Prints one line
 // per row with the outputs, then a line "fd_check <max|dL/dparams - FD|>" for
 // the loss L = sum(y) over the batch, then "dx_check <max|dL/dx - FD|>".
@@ -20,10 +20,20 @@ using IMP::bff::internal::MlpModel;
 
 int main(int argc, char** argv) {
     if (argc < 3) return 2;
-    std::ifstream fj(argv[1]);
-    nlohmann::json j;
-    fj >> j;
-    MlpModel m = mc::model_from_json(j);
+    // .json: the tttrlib.neural_net document; .onnx: straight from any exporter
+    const std::string path(argv[1]);
+    MlpModel m;
+    if (path.size() > 5 && path.compare(path.size() - 5, 5, ".onnx") == 0) {
+        std::ifstream f(path, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        m = mc::model_from_onnx(ss.str());
+    } else {
+        std::ifstream fj(path);
+        nlohmann::json j;
+        fj >> j;
+        m = mc::model_from_json(j);
+    }
 
     std::ifstream fx(argv[2]);
     int n_rows, n_cols;
