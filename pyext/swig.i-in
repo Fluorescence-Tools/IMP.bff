@@ -68,6 +68,9 @@ import numpy as np
 /* The output contract, a C++ value with a Python surface. */
 %include "IMP_bff.observables.i"
 
+/* The accessible volume as an object, not just a solver. */
+%include "IMP_bff.avmodel.i"
+
 /*
  * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through
  * api.py, which also owns the domain map. Installed here because a SWIG
