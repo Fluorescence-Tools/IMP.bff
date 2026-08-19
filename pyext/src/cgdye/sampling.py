@@ -9,7 +9,7 @@ from __future__ import annotations
 from .topology import parse_dye_mol2, build_graph
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 import json
 import logging
 import math
@@ -17,7 +17,7 @@ import random
 
 import numpy as np
 
-from IMP.bff.scoring import DyeInternalEnergyEvaluator, boltzmann_weights, compute_lj_pair_sites, dye_internal_system, rotamer_cluster_weights, rotamer_mean_field_weights
+from IMP.bff.scoring import DyeInternalEnergyEvaluator, boltzmann_weights, dye_internal_system, rotamer_cluster_weights, rotamer_mean_field_weights
 import IMP
 import IMP.algebra
 import IMP.atom

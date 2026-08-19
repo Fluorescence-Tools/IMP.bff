@@ -13,7 +13,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import json
 import os
 
-import numpy as np
 
 # (was: import fps_schema) -- now in this module
 

@@ -8,7 +8,9 @@ Boltzmann / mean-field / kinetic weights, and the master-equation limits.
 import numpy as np
 import pytest
 
-from IMP.bff.scoring import kappa2_from_dipoles
+# photophysics owns kappa2_from_dipoles; it was reachable through `scoring`
+# only because scoring imported it, and scoring no longer needs it.
+from IMP.bff.photophysics import kappa2_from_dipoles
 from IMP.bff.dye import forster_radius_from_spectra
 from IMP.bff.scoring import boltzmann_weights
 from IMP.bff.cgdye.sampling import rotamer_transition_matrix

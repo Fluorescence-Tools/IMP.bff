@@ -28,13 +28,12 @@ from .fret_trace import fret_rate_pair_trace, fret_rate_trace
 from .grids import grid_center_index, quenching_rate_grid, slow_factor_grid
 from .pet import DEFAULT_DYE_RADIUS, QUENCHER_ATOMS, normalize_amino_acid_quenching
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple, Optional, Sequence
 import os
 
 import numpy as np
 
-from IMP.bff.sampling import simulate_dye_diffusion, simulate_photon_trace
+from IMP.bff.sampling import simulate_photon_trace
 import IMP.bff
 
 __all__ = [

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import numpy as np
 

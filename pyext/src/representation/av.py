@@ -27,7 +27,7 @@ contact and free volumes for a dye that sticks.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
 import json
@@ -38,7 +38,7 @@ import threading
 import numpy as np
 
 import IMP.bff.io.structure as _structure
-from IMP.bff.label import BACKBONE_ATOM_NAMES as _BACKBONE_ATOM_NAMES, default_strip_mask, parse_strip_mask, strip_pdb_lines
+from IMP.bff.label import default_strip_mask, strip_pdb_lines
 # (was: import _kernels) -- now in this module
 from IMP.bff.representation.pathmap import resample_av
 from IMP.bff.representation.distance import AccessibleVolume

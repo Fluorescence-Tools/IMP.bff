@@ -12,16 +12,17 @@ import pytest
 
 
 from IMP.bff.cgdye.topology import (
-    CHARMM36_LJ,
     build_angles,
     build_dihedrals,
     build_dye_topology,
     build_graph,
     find_cycles,
-    lj_cross,
-    lj_params,
 )
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+# CHARMM36_LJ, lj_cross and lj_params are scoring's, and were reached through
+# `cgdye.topology` only because it imports them for its own use. Importing them
+# from their owner is what lets that pass-through go.
+from IMP.bff.scoring import CHARMM36_LJ, lj_cross, lj_params
 from IMP.bff.scoring import (
     build_lj_type_table,
     compute_exclusions,

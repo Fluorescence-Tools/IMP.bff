@@ -2,7 +2,6 @@
 
 import IMP.bff
 import ihm.format
-import json
 import os
 import re
 
@@ -1425,7 +1424,6 @@ def read_dye_template_cif(path):
     Returns dict with: name, features, impropers, center_atom, dipole_atom_1,
                        dipole_atom_2, positive_atoms, negative_atoms
     """
-    from collections import defaultdict
 
     template = {
         "name": os.path.splitext(os.path.basename(path))[0],

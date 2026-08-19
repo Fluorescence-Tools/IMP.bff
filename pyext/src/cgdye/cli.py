@@ -22,7 +22,7 @@ from IMP.bff.sampling import (
 )
 from .sampling import reconstruct_rotamer_trajectory, rotamer_rotational_correlation_time, rotamer_correlation_times
 from .sampling import generate_linker_rotamers
-from IMP.bff.tools import get_template_dir, get_structure_dir, get_output_dir, ensure_dir
+from IMP.bff.tools import get_template_dir, get_structure_dir, ensure_dir
 
 def _chain_sequence(hierarchy, chain_id):
     """One-letter sequence of a chain in an IMP hierarchy.

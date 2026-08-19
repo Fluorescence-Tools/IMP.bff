@@ -21,7 +21,6 @@ from __future__ import annotations
 from pathlib import Path
 import RMF
 import math
-import os
 
 import numpy as np
 

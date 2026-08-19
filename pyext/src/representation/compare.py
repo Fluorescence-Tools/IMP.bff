@@ -8,10 +8,8 @@ the tables.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 import json
-import sys
 
 import numpy as np
 

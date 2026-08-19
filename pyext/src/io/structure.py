@@ -18,7 +18,7 @@ test skips when MDAnalysis is absent (``test/test_dcd_reader.py``).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import RMF
 import ast
 import json
@@ -33,7 +33,6 @@ import ihm.format
 
 import IMP
 import IMP.atom
-import IMP.bff.io.fps as fps_schema
 import IMP.rmf
 
 __all__ = [

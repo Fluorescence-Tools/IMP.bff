@@ -25,7 +25,6 @@ import math
 
 import numpy as np
 
-from IMP.bff.photophysics import kappa2_from_dipoles
 import IMP.bff
 
 __all__ = [

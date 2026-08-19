@@ -1,15 +1,13 @@
 """Topology builders for cgdye."""
 
 from collections import defaultdict
-from pathlib import Path
 import math
 import os
 import re
 
-import numpy as np
 
 from IMP.bff.io.cif import read_component_template_cif, write_dye_forcefield_cif
-from IMP.bff.scoring import CHARMM36_LJ, build_lj_type_table, lj_cross, lj_energy, lj_parameter_arrays, lj_params
+from IMP.bff.scoring import CHARMM36_LJ, build_lj_type_table
 from IMP.bff.tools import import_click
 import IMP
 import IMP.algebra

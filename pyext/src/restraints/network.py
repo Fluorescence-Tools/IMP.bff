@@ -5,7 +5,7 @@ Restraints for handling distances between accessible volumes.
 from __future__ import annotations, print_function
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 import json
 import os
 import pathlib
