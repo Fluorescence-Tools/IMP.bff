@@ -43,6 +43,7 @@ __all__ = [
     'parse_conect_bonds',
     'parse_pdb_atoms',
     'read_dcd',
+    'read_trajectory',
     'read_dcd_header',
     'read_score_series',
     'write_mol2',
@@ -158,6 +159,41 @@ def _parse_header(raw: bytes, path: Path) -> dict:
         "endianness": end,
         "offset": pos,
     }
+
+
+def read_trajectory(path, n_atoms=None, max_frames=None) -> np.ndarray:
+    """Coordinates from a trajectory, whatever format it is in.
+
+    **BinaryCIF is the format this package stores.** The rotamer libraries were
+    re-encoded on 2026-08-19: 44.78 MB of DCD and XTC became 17.99 MB of
+    ``.bcif``, verified exact on a 0.1 A grid, and read through the C parser IMP
+    already vendors. ``okf/validation/bcif_for_trajectories.md`` has the
+    measurements and what the grid costs.
+
+    ``.dcd`` still reads, because the format is not gone from the world -- a
+    user's own library may be one. It is simply not what is shipped any more.
+
+    :param path: a ``.bcif`` or ``.dcd``.
+    :param n_atoms: required for BinaryCIF, which stores one row per
+        (atom, frame) and cannot infer the split. Callers have it from the
+        companion PDB.
+    :param max_frames: stop after this many frames.
+    :returns: ``(n_frames, n_atoms, 3)`` in Angstrom.
+    """
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".bcif":
+        if n_atoms is None:
+            raise ValueError(
+                "reading a BinaryCIF trajectory needs n_atoms: it stores one "
+                "row per (atom, frame) and cannot infer where frames divide")
+        flat = np.asarray(IMP.bff.read_bcif_trajectory(
+            str(path), int(n_atoms), "_rotamer_coord"), dtype=np.float64)
+        coords = flat.reshape(-1, int(n_atoms), 3)
+        return coords if max_frames is None else coords[:int(max_frames)]
+    if suffix == ".dcd":
+        return read_dcd(path, max_frames=max_frames)
+    raise ValueError(f"unsupported trajectory format: {path.suffix}")
 
 
 def read_dcd(path: str | Path, max_frames: int | None = None) -> np.ndarray:

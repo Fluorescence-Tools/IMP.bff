@@ -303,7 +303,7 @@ def load_rotamer_library_dcd(pdb_path, dcd_path, weights_path=None, max_frames=N
     Atom names come from the PDB through IMP.atom and coordinates from the DCD
     through the in-tree reader, so this needs nothing beyond IMP and numpy.
     """
-    from IMP.bff.io.structure import read_dcd
+    from IMP.bff.io.structure import read_trajectory
 
     model = IMP.Model()
     hierarchy = IMP.atom.read_pdb(str(pdb_path), model, IMP.atom.AllPDBSelector())
@@ -312,10 +312,10 @@ def load_rotamer_library_dcd(pdb_path, dcd_path, weights_path=None, max_frames=N
         for leaf in IMP.atom.get_leaves(hierarchy)
     ]
 
-    coords = read_dcd(dcd_path, max_frames=max_frames)
-
+    coords = read_trajectory(dcd_path, n_atoms=len(atom_names),
+                             max_frames=max_frames)
     if coords.shape[0] == 0:
-        raise ValueError(f"No frames found in DCD: {dcd_path}")
+        raise ValueError(f"No frames found in {dcd_path}")
 
     if weights_path is not None and Path(weights_path).exists():
         w = []
@@ -352,7 +352,7 @@ def find_reference_rotamer_files(lib_dir, dye_name, cutoff=30):
     """Return (pdb, dcd, weights) paths for a reference dye+linker name."""
     lib_dir = Path(lib_dir)
     pdb = lib_dir / f"{dye_name}.pdb"
-    dcd = lib_dir / f"{dye_name}_cutoff{cutoff}.dcd"
+    dcd = lib_dir / f"{dye_name}_cutoff{cutoff}.bcif"
     weights = lib_dir / f"{dye_name}_cutoff{cutoff}_weights.txt"
     if not pdb.exists() or not dcd.exists():
         raise FileNotFoundError(f"Missing required reference files for {dye_name}")

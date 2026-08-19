@@ -52,14 +52,15 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
     Every name used to resolve to the cutoff-30 RMF template (33 rotamers for
     Alexa488 C1R), so a cutoff-10 request silently scored 33 rotamers instead
     of 711 -- the pp11 tutorial numbers were off by 0.2 in E. The FRETpredict
-    DCD sets in data/rotamer_library are the canonical libraries now.
+    BinaryCIF sets in data/rotamer_library are the canonical libraries
+        now; they replaced the DCDs on 2026-08-19.
     """
     from IMP.bff.representation.rotamer import resolve_rotamer_library_path
     sizes = {}
     for cutoff in (10, 20, 30):
         name = f"AlexaFluor 488 C1R cutoff{cutoff}"
         path = resolve_rotamer_library_path(name)
-        assert path.name == f"A48_C1R_cutoff{cutoff}.dcd"
+        assert path.name == f"A48_C1R_cutoff{cutoff}.bcif"
         lib = load_rotamer_library(name)
         sizes[cutoff] = lib["coords"].shape[0]
         assert lib["weights"].shape == (sizes[cutoff],)

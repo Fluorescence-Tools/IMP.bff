@@ -22,7 +22,15 @@ from IMP.bff.io.structure import DCDFormatError, read_dcd, read_dcd_header
 
 
 def _library_dir():
-    return IMP.bff.get_data_path("rotamer_library")
+    """`test/input/`, not `data/`.
+
+    The shipped rotamer libraries became BinaryCIF on 2026-08-19 and no `.dcd`
+    is installed any more. The reader stays, because a user's own library may
+    still be one -- so it needs a fixture, and a fixture belongs in
+    `test/input/`, which IMP does not install. That is the whole reason the
+    directory exists: `em` keeps 68 MB there without a single user seeing it.
+    """
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "input")
 
 
 def _dcd_files():

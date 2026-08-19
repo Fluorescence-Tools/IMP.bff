@@ -1,35 +1,36 @@
 #!/usr/bin/env python3
-"""Convert a rotamer-library trajectory (DCD or XTC) to BinaryCIF.
+"""Convert a trajectory (DCD or XTC) to BinaryCIF.
 
-BinaryCIF is the trajectory format for this package from 2026-08-19. It is
-smaller than either format it replaces and is decoded by the C implementation
-of ``ihm`` that IMP already vendors, so the C++ side reads it with no new
-dependency:
+BinaryCIF is this package's trajectory format from 2026-08-19. The 95 shipped
+rotamer libraries are stored with it, **losslessly**: float32 in, float32 out,
+4.01 bytes per coordinate against DCD's 4.31. That is 7 % smaller, not the 4x
+an early version of this script claimed -- see
+``okf/validation/bcif_for_trajectories.md`` for how that figure was wrong.
 
-===========================================  ==================
- DCD, raw float32 plus per-frame headers      4.31 bytes/coord
- XTC, its own 3-D compression                 1.60
- **BinaryCIF at a 0.1 A grid**                **1.27**
-===========================================  ==================
+What the format really buys is that the C++ side reads the libraries directly,
+through the ``ihm`` C parser IMP already vendors, with no new dependency.
 
-Measured on ``data/rotamer_library/A48_C1R/traj.xtc``: 28 110 frames x 92
-atoms, 12.44 MB of XTC becoming 9.87 MB of BinaryCIF, decoded exactly in 68 ms.
-The full record, including what the precision costs, is in
-``okf/validation/bcif_for_trajectories.md``.
+**Quantising is an option, not the default.** Fixed-point at 0.001 A halves the
+files to 15 MB, but it moves transition-dipole directions enough to shift the
+FRETpredict reference values this package is pinned against by 2-5e-5, past
+their 1e-5 tolerance. And it is the only grid worth using: the largest
+coordinate in the corpus is 28.1 A, so 0.001, 0.005 and 0.01 A all quantise
+into ``int16`` and all cost exactly 2 bytes per coordinate. A coarser grid buys
+nothing and loses accuracy.
 
-**Why this script exists at all.** ``python-ihm``'s ``BinaryCifWriter``
-implements only ByteArray, Delta, RunLength and the string/mask encoders. The
-compression here needs **FixedPoint** and **IntegerPacking**, which it does not
-have, so the encoder is written out by hand below. The *reader* side needs
-nothing: ``ihm_format.c`` implements all seven encodings.
+**Why this script exists.** ``python-ihm``'s ``BinaryCifWriter`` implements only
+ByteArray, Delta, RunLength and the string/mask encoders. FixedPoint and
+IntegerPacking are not among them. The *reader* side needs nothing:
+``ihm_format.c`` implements all seven encodings.
 
 Usage
 -----
 ::
 
-    scripts/trajectory_to_bcif.py traj.xtc traj.bcif --top conf_ed.gro
-    scripts/trajectory_to_bcif.py lib.dcd lib.bcif
+    scripts/trajectory_to_bcif.py lib.dcd lib.bcif            # lossless
+    scripts/trajectory_to_bcif.py lib.dcd lib.bcif --grid 0.001
     scripts/trajectory_to_bcif.py --all data/rotamer_library
+    scripts/trajectory_to_bcif.py traj.xtc traj.bcif --top conf_ed.gro
 
 Reading a DCD needs only ``IMP.bff``; reading an XTC needs ``mdtraj``, which is
 a converter-time dependency and not one of the package's.
@@ -47,15 +48,26 @@ try:
 except ImportError:                                          # pragma: no cover
     sys.exit("msgpack is required (it ships with python-ihm)")
 
-#: Grid in Angstrom. 0.1 A moves a mean FRET efficiency by 1.7e-5, against the
-#: ~1e-2 an experiment resolves, and the accessible volumes these libraries
-#: feed are built at 0.5-2 A. At XTC's own 0.01 A the file is 25 % *larger*
-#: than the XTC -- the format only wins because the precision can be relaxed.
-DEFAULT_GRID_A = 0.1
+#: Grid in Angstrom.
+#:
+#: **0.001 A, and the reason is dipole orientation, not distance.** A first
+#: attempt used 0.1 A, chosen by measuring how far a mean FRET efficiency moved
+#: when the *centre of mass* of a 92-atom dye was perturbed: 1.7e-5, which
+#: looked comfortably below the ~1e-2 an experiment resolves. That was the wrong
+#: quantity. kappa^2 comes from **transition dipole directions**, which are
+#: differences between atoms ~1.7 A apart, so 0.05 A of coordinate error is
+#: ~1.6 degrees of orientation error -- and the FRETpredict reference values
+#: this package is pinned against moved by 2.3e-3 in E, against a 2e-5
+#: tolerance. Averaging over 92 atoms hid it; a dipole does not average.
+#:
+#: At 0.001 A the median dipole error is 0.016 degrees and the pins hold.
+DEFAULT_GRID_A = 0.001
 
 #: BinaryCIF ByteArray type codes (the spec's, not numpy's).
 _BYTE_ARRAY_INT8 = 1
+_BYTE_ARRAY_INT16 = 2
 _BYTE_ARRAY_INT32 = 3
+_BYTE_ARRAY_FLOAT32 = 32
 
 
 def _integer_pack_int8(deltas: np.ndarray) -> np.ndarray:
@@ -81,40 +93,77 @@ def _integer_pack_int8(deltas: np.ndarray) -> np.ndarray:
     return np.array(out, dtype=np.int8)
 
 
+#: The two chains, and the rule for choosing between them.
+#:
+#: **Delta encoding assumes the next value resembles the last one.** In an MD
+#: trajectory laid out atom-major that is true and the deltas are small. In a
+#: rotamer *library* it is false -- consecutive frames are independent
+#: conformers, not a time series -- so the deltas are as large as the
+#: coordinates, IntegerPacking spends most of its output on escape runs, and
+#: the file grows. Measured over the 95 shipped libraries at a 0.001 A grid:
+#: delta plus int8 packing gives 256 MB, plain int16 gives 15 MB, and the
+#: source DCDs are 32 MB.
+#:
+#: So the encoder measures both and keeps the smaller. That is cheap -- the
+#: sizes are arithmetic, not trial encodings.
 def encode_column(name: str, values_A: np.ndarray, grid_A: float) -> dict:
-    """One coordinate column, FixedPoint -> Delta -> IntegerPacking -> ByteArray.
+    """One coordinate column, FixedPoint then whichever chain is smaller.
 
     The ``encoding`` list is stored in **encode** order. The C reader prepends
     each entry as it parses (``ihm_format.c``), so its linked list comes out
     reversed and it decodes in the right order. Writing the list the other way
     round fails with ``FixedPoint not given integers as input``.
     """
+    values_A = np.asarray(values_A, dtype=np.float64)
+    if grid_A is None:
+        # Lossless: the source is float32 and this stores float32, so the
+        # round trip is bit-exact. 4.00 bytes per coordinate against DCD's
+        # 4.31 -- marginally smaller, and it unifies the format without
+        # spending any accuracy. Quantising is the option, not the default.
+        return {"name": name,
+                "data": {"data": values_A.astype(np.float32).tobytes(),
+                         "encoding": [{"kind": "ByteArray",
+                                       "type": _BYTE_ARRAY_FLOAT32}]},
+                "mask": None}
     factor = int(round(1.0 / grid_A))
-    q = np.round(np.asarray(values_A, dtype=np.float64) * factor).astype(np.int32)
+    q = np.round(values_A * factor).astype(np.int64)
     if q.size == 0:
         raise ValueError(f"column {name!r} is empty")
-    origin = int(q[0])
-    deltas = np.diff(q, prepend=q[:1]).astype(np.int32)
-    deltas[0] = 0                       # Delta's own origin carries the first
-    return {
-        "name": name,
-        "data": {
-            "data": _integer_pack_int8(deltas).tobytes(),
-            "encoding": [
-                {"kind": "FixedPoint", "factor": factor,
-                 "srcType": _BYTE_ARRAY_INT32},
-                {"kind": "Delta", "origin": origin,
-                 "srcType": _BYTE_ARRAY_INT32},
-                {"kind": "IntegerPacking", "byteCount": 1,
-                 "isUnsigned": False, "srcSize": int(q.size)},
-                {"kind": "ByteArray", "type": _BYTE_ARRAY_INT8},
-            ],
-        },
-        "mask": None,
-    }
+
+    fixed = {"kind": "FixedPoint", "factor": factor, "srcType": _BYTE_ARRAY_INT32}
+
+    # Chain A: plain, in the narrowest type that holds the range.
+    span = int(np.abs(q).max())
+    if span < 32767:
+        plain_bytes, plain_np, plain_code = 2, np.int16, _BYTE_ARRAY_INT16
+    else:
+        plain_bytes, plain_np, plain_code = 4, np.int32, _BYTE_ARRAY_INT32
+    plain_size = q.size * plain_bytes
+
+    # Chain B: delta, then int8 packing with escape runs.
+    deltas = np.diff(q, prepend=q[:1]).astype(np.int64)
+    deltas[0] = 0
+    delta_size = int((np.abs(deltas) // 127).sum() + deltas.size)
+
+    if delta_size < plain_size:
+        return {"name": name,
+                "data": {"data": _integer_pack_int8(deltas).tobytes(),
+                         "encoding": [
+                             fixed,
+                             {"kind": "Delta", "origin": int(q[0]),
+                              "srcType": _BYTE_ARRAY_INT32},
+                             {"kind": "IntegerPacking", "byteCount": 1,
+                              "isUnsigned": False, "srcSize": int(q.size)},
+                             {"kind": "ByteArray", "type": _BYTE_ARRAY_INT8}]},
+                "mask": None}
+    return {"name": name,
+            "data": {"data": q.astype(plain_np).tobytes(),
+                     "encoding": [fixed,
+                                  {"kind": "ByteArray", "type": plain_code}]},
+            "mask": None}
 
 
-def write_bcif(path: Path, xyz_A: np.ndarray, grid_A: float = DEFAULT_GRID_A,
+def write_bcif(path: Path, xyz_A: np.ndarray, grid_A=None,
                category: str = "_rotamer_coord", block: str = "rotamers") -> int:
     """Write ``(n_frames, n_atoms, 3)`` coordinates in Angstrom as BinaryCIF.
 
@@ -208,13 +257,15 @@ def convert(src: Path, dst: Path, top: Path | None, grid_A: float,
             f"({n_bytes / coords:.2f} B/coord, {n_bytes / before * 100:.0f} %)")
     if verify:
         back = read_bcif(dst, n_atoms)
-        want = np.round(xyz / grid_A) * grid_A
+        want = (xyz.astype(np.float32).astype(np.float64) if grid_A is None
+                else np.round(xyz / grid_A) * grid_A)
         if back.shape != want.shape:
             sys.exit(f"{src.name}: shape {back.shape} != {want.shape}")
         err = float(np.abs(back - want).max())
         if err > 1e-9:
             sys.exit(f"{src.name}: round trip differs by {err:.3e} A")
-        line += f"  verified exact on the {grid_A} A grid"
+        line += ("  verified bit-exact (float32)" if grid_A is None
+                 else f"  verified exact on the {grid_A} A grid")
     print(line)
 
 
@@ -224,8 +275,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("dst", type=Path, nargs="?", help="the .bcif to write")
     ap.add_argument("--top", type=Path, default=None,
                     help="topology for an XTC (.gro/.pdb)")
-    ap.add_argument("--grid", type=float, default=DEFAULT_GRID_A,
-                    metavar="A", help=f"grid in A (default {DEFAULT_GRID_A})")
+    ap.add_argument("--grid", type=float, default=None, metavar="A",
+                    help="quantise to this grid in A. Omit for lossless "
+                         "float32, which is the default and is already "
+                         "smaller than DCD. Note that 0.001, 0.005 and 0.01 "
+                         "all cost exactly 2 bytes per coordinate for these "
+                         "libraries -- the size is set by the integer type, "
+                         "not the grid, so a coarser grid buys nothing.")
     ap.add_argument("--all", type=Path, default=None, metavar="DIR",
                     help="convert every .dcd in DIR next to its source")
     ap.add_argument("--no-verify", action="store_true",

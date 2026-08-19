@@ -28,13 +28,17 @@ scripts/trajectory_to_bcif.py lib.dcd lib.bcif
 scripts/trajectory_to_bcif.py --all data/rotamer_library
 ```
 
-Measured over the shipped corpus, every file verified exact on its grid:
+Measured over the shipped corpus, every file verified by decoding it back:
 
 | | before | after | |
 |---|---|---|---|
-| 95 `*.dcd` | 32.33 MB | **8.12 MB** | 4.0× |
-| 1 `traj.xtc` | 12.44 MB | 9.87 MB | 1.26× |
-| total | 44.78 MB | **17.99 MB** | 2.5× |
+| 95 `*.dcd` -> `*.bcif`, lossless float32 | 32.33 MB | **30.05 MB** | 7 % smaller, bit-exact |
+
+Quantising to 0.001 A would halve that to 15 MB, but it shifts the FRETpredict
+reference values past their tolerance, so it is an option and not the default.
+An early version of this table claimed 4x; that number came from a 0.1 A grid
+that breaks kappa^2. See
+[`okf/validation/bcif_for_trajectories.md`](../okf/validation/bcif_for_trajectories.md).
 
 It exists because `python-ihm`'s `BinaryCifWriter` implements only ByteArray,
 Delta, RunLength and the string/mask encoders. The compression here needs

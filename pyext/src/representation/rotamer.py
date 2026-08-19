@@ -568,19 +568,19 @@ def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None =
     stem = filename.split("_cutoff")[0]
 
     # The FRETpredict library files (module data, data/rotamer_library) are the
-    # canonical libraries: <stem>.pdb + <stem>_cutoff<N>.dcd (+ weights) for
+    # canonical libraries: <stem>.pdb + <stem>_cutoff<N>.bcif (+ weights) for
     # each cutoff. They are tried first so that the *requested cutoff* is the
     # one loaded. The RMF templates under templates/rotamer hold only the
     # cutoff-30 clustering, so resolving every name to <stem>.rmf3 silently
     # returned the wrong library for cutoff10/cutoff20 names.
     if lib_dir is None:
-        dcd = _registry_path().parent / f"{filename}.dcd"
+        dcd = _registry_path().parent / f"{filename}.bcif"
         if dcd.exists() and dcd.with_name(f"{stem}.pdb").exists():
             return dcd
 
     template_dir = Path(lib_dir) if lib_dir is not None else get_template_dir("rotamer")
     candidates = [
-        template_dir / f"{filename}.dcd",
+        template_dir / f"{filename}.bcif",
         template_dir / f"{filename}.rmf3",
         template_dir / f"{stem}.rmf3",
         template_dir / f"{stem}.pdb",
@@ -591,7 +591,7 @@ def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None =
             if path.suffix.lower() == ".rmf3" and cutoff not in (None, 30) and path.stem == stem:
                 raise FileNotFoundError(
                     f"{library_name!r}: only the cutoff-30 RMF template {path.name} is available; "
-                    f"the cutoff-{cutoff} library needs {filename}.dcd next to {stem}.pdb")
+                    f"the cutoff-{cutoff} library needs {filename}.bcif next to {stem}.pdb")
             return path
     raise FileNotFoundError(f"No rotamer library found for {library_name!r}")
 
@@ -758,9 +758,11 @@ def load_rotamer_library(
     explicit_path = Path(str(library_name)).exists()
     metadata = rotamer_library_metadata(library_name) if not explicit_path else _metadata_from_path(path)
     suffix = path.suffix.lower()
-    if suffix == ".dcd":
-        # FRETpredict library set: <stem>.pdb (names, residues) + DCD frames +
-        # per-rotamer weights, read with the in-tree DCD reader.
+    if suffix in (".bcif", ".dcd"):
+        # FRETpredict library set: <stem>.pdb (names, residues) + frames +
+        # per-rotamer weights. The shipped libraries are BinaryCIF as of
+        # 2026-08-19; .dcd still reads, because a user's own library may be
+        # one, but it is not what this package stores.
         from IMP.bff.sampling import load_rotamer_library_dcd
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")

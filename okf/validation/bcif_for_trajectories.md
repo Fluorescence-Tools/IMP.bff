@@ -1,126 +1,104 @@
 ---
 type: validation
-title: "BinaryCIF replaces DCD and XTC for the rotamer libraries — measured"
-description: Whether BinaryCIF can carry rotamer-library coordinates in place of the 95 DCD files and the one XTC. It can, at 1.27 bytes per coordinate against DCD's 4.31 and XTC's 1.60, decoded exactly by the C reader IMP already vendors.
+title: "BinaryCIF for the rotamer libraries — what it actually buys, after two wrong answers"
+description: BinaryCIF replaced the 95 DCD rotamer libraries. It is lossless float32 and 7 % smaller, not the 4x a first pass claimed — that figure came from a 0.1 A grid that shifts transition-dipole directions by 1.6 degrees and breaks the FRETpredict pins. The XTC left data/ because nothing reads it, not because BinaryCIF beat it.
 resource: /Users/tpeulen/dev/imp.bff
 tags: [validation, imp.bff, io, bcif, rotamer-library, trajectory, dcd, xtc]
 timestamp: '2026-08-19T00:00:00Z'
 ---
 
-# BinaryCIF for the rotamer-library trajectories
+# BinaryCIF for the rotamer libraries
 
-**Question.** The rotamer libraries ship as 95 `*.dcd` files (32.33 MB) plus one
-`traj.xtc` (12.44 MB). Can BinaryCIF carry the same coordinates, so the package
-reads one format instead of three?
+**BinaryCIF is the trajectory format as of 2026-08-19.** The 95 DCD libraries
+in `data/rotamer_library/` are now `.bcif`, read by
+`IMP::bff::read_bcif_trajectory` through the C parser IMP already vendors.
 
-**Answer: yes, and it is smaller than both.**
+The size result is modest and the road to it went through two wrong answers,
+both recorded here because each was wrong in a way that looked right.
 
-| format | bytes/coordinate | this corpus |
+## What it buys
+
+| | | |
 |---|---|---|
-| DCD, raw float32 + per-frame headers | 4.31 | 32.33 MB, 95 files |
-| XTC, its own 3-D compression | 1.60 | 12.44 MB, 1 file |
-| **BinaryCIF**, FixedPoint→Delta→IntegerPacking→ByteArray | **1.27** | **9.87 MB** measured |
+| 95 DCD libraries | 32.33 MB | 4.31 bytes/coordinate |
+| 95 BinaryCIF, **lossless float32** | **30.05 MB** | 4.01 bytes/coordinate |
 
-Measured on `data/rotamer_library/A48_C1R/traj.xtc`: 28 110 frames × 92 atoms
-× 3 = 2 586 120 coordinates.
+7 % smaller, **bit-exact**, and one format instead of two. That is the whole
+size story for the shipped data. What BinaryCIF really buys here is not bytes:
+it is that the C++ side reads the libraries directly, through a parser that is
+already in the build, with no new dependency.
 
-## It decodes with what IMP already has
+## The first wrong answer: 0.1 A, and 4x
 
-`IMP` vendors the C implementation of `ihm` at
-`modules/core/dependency/python-ihm/src/` (`ihm_format.c` + `cmp.c`), and it
-implements **all seven** BinaryCIF encodings — ByteArray, Delta, FixedPoint,
-IntegerPacking, IntervalQuantization, RunLength, StringArray. `bff`'s
-`src/CMakeLists.txt` already carries `${PYTHON-IHM_INCLUDE_PATH}`, and
-`libimp_atom` already exports the 22 `ihm_*` symbols, so a `bff` translation
-unit can read BinaryCIF with **no build change and no new dependency**.
+A first pass quantised to a 0.1 A grid and reported **8.12 MB, 4.0x smaller**.
+The grid was chosen by measuring how far a mean FRET efficiency moved when the
+*centre of mass* of a 92-atom dye was perturbed: 1.7e-5, comfortably below the
+~1e-2 an experiment resolves.
 
-Verified end to end: the file above was written from Python and read back by a
-C++ program using that reader — **2 586 120 rows in 68.3 ms, exact round trip**
-(`max |decoded - expected| = 0.00 Å`). For comparison, mdtraj loads the XTC in
-115 ms.
+**That was the wrong quantity.** kappa^2 comes from transition-dipole
+*directions*, which are differences between atoms about 1.7 A apart. A 0.05 A
+coordinate error is then ~1.6 degrees of orientation error:
 
-## The precision it costs, and why it does not matter
+| grid | max coordinate error | median dipole angle error |
+|---|---|---|
+| 0.001 A | 0.0005 A | 0.016 deg |
+| 0.01 A | 0.005 A | 0.158 deg |
+| 0.1 A | 0.050 A | **1.582 deg** |
 
-The win comes from a **0.1 Å grid** (`FixedPoint` factor 10 per Å). That is
-lossy where XTC's 0.01 Å is effectively not. It moves nothing that is used:
+The FRETpredict reference values this package is pinned against moved by
+**2.3e-3 in E, against a 2e-5 tolerance**. Averaging over 92 atoms hid it; a
+dipole does not average. The lesson is not "0.1 A is too coarse" — it is that
+a proxy chosen for convenience measured something the code does not compute.
 
-| grid | max coordinate error | Δ⟨R_DA⟩ | Δ⟨E⟩ |
-|---|---|---|---|
-| 0.01 Å | 0.000 Å | 4.8e-7 Å | 1.1e-8 |
-| 0.05 Å | 0.020 Å | 1.5e-7 Å | 1.1e-7 |
-| **0.10 Å** | **0.050 Å** | **8.1e-4 Å** | **1.7e-5** |
-| 0.50 Å | 0.250 Å | 7.7e-4 Å | 1.7e-5 |
+## The second wrong answer: a finer grid
 
-⟨E⟩ moves by 2e-5 at the chosen grid. A FRET efficiency is measured to about
-1e-2, and the accessible-volume grids these libraries feed are built at 0.5–2 Å.
+Refining to 0.001 A brought the pins to within 2.3e-5 to 5.2e-5 — still outside
+their 1e-5 tolerance — and the *file grew to 256 MB*, eight times the DCDs.
 
-At 0.01 Å — XTC's own precision — BinaryCIF is 15.52 MB, **25 % larger** than
-XTC. The format only wins because the precision can be relaxed, and it can be
-relaxed because nothing downstream reads that many digits.
+Delta encoding was the cause. It assumes the next value resembles the last, and
+in a rotamer **library** that is false: consecutive frames are independent
+conformers, not a time series. The deltas are as large as the coordinates,
+IntegerPacking spends its output on escape runs, and the file explodes.
 
-## Two things that will bite whoever writes the encoder
+The encoder now measures both chains and keeps the smaller
+(`scripts/trajectory_to_bcif.py`).
+
+## The thing that made the grid question moot
+
+| grid | max int | type | total | bytes/coordinate |
+|---|---|---|---|---|
+| 0.001 A | 28 089 | int16 | 15.05 MB | 2.01 |
+| 0.005 A | 5 618 | int16 | **15.05 MB** | 2.01 |
+| 0.01 A | 2 809 | int16 | **15.05 MB** | 2.01 |
+
+**The size is set by the integer type, not by the grid.** The largest
+coordinate in the corpus is 28.1 A, so the quantised values fit `int16` at
+every grid from 0.001 A down. Coarsening from 0.001 A to 0.005 A buys **zero
+bytes** and costs five times the error. There is no reason to quantise more
+coarsely than 0.001 A, and no reason to quantise at all unless 15 MB against 30
+matters more than the pins do.
+
+Quantisation is therefore an *option* in the encoder, not the default. The
+shipped libraries are lossless.
+
+## The XTC
+
+`data/rotamer_library/A48_C1R/traj.xtc` (12.44 MB) has left `data/` — **but not
+because BinaryCIF beat it.** It does not: XTC's own coordinate codec gives 1.60
+bytes/coordinate at 0.01 A, and lossless BinaryCIF would be 31 MB, two and a
+half times larger.
+
+It left because **nothing reads it**. It is source material — the MD trajectory
+the library was derived from — and the installed `data/` directory is for what
+the library reads at runtime (see [`../data-layout.md`](../data-layout.md)).
+Recoverable from commit `8fac573`.
+
+## Two traps in the encoding, for whoever touches this next
 
 * **The `encoding` array is stored in *encode* order.** The C reader prepends
-  each entry as it parses (`ihm_format.c:2075`), so its linked list comes out
-  reversed and `decode_bcif_data` walks it forward. Writing the list in decode
-  order fails with `FixedPoint not given integers as input`.
-* **`IntegerPacking`'s sentinel is a real value.** For int8 the decoder treats
-  `127` and `-128` as escape markers, so a *legitimate* delta of exactly ±127
-  must still be emitted as an escape plus a remainder. Using `>` instead of
-  `>=` in the packing loop produced a file whose three columns decoded to three
-  different lengths — `Column size mismatch 2579635 != 2580332`.
-
-`python-ihm`'s own `BinaryCifWriter` implements only ByteArray, Delta,
-RunLength and the string/mask encoders — **no FixedPoint and no
-IntegerPacking** — so it cannot produce this file. The encoder has to be
-written, in Python or C++; the *reader* is free.
-
-## The encoder, and the corpus
-
-`scripts/trajectory_to_bcif.py` writes it. The whole shipped corpus has been
-run through it, every file verified by decoding it back and comparing against
-the quantised input:
-
-| | before | after | |
-|---|---|---|---|
-| 95 `*.dcd` | 32.33 MB | **8.12 MB** | 4.0x |
-| 1 `traj.xtc` | 12.44 MB | 9.87 MB | 1.26x |
-| **total** | **44.78 MB** | **17.99 MB** | **2.5x** |
-
-The DCD files compress far better than the XTC because DCD stores raw float32
-and does nothing else; the XTC is already compressed, so BinaryCIF is competing
-with a real coordinate codec rather than with a bare array.
-
-> **Correction.** An earlier version of this page estimated the total at "about
-> 12 MB". That was arithmetic done from a single file's ratio rather than the
-> corpus, and it is wrong: the measured figure is **17.99 MB**.
-
-## Reading it
-
-`IMP::bff::read_bcif_trajectory` (`include/IMP/bff/TrajectoryIO.h`) is the
-reader, in C++, over the vendored parser. It takes only the header — the
-symbols come from `libimp_atom`, which `bff` already links and which exports
-them because `IMP::atom::read_mmcif` compiles the same reader in. Compiling
-`ihm_format.c` into `bff` as well would also work and would duplicate it.
-
-Storage is atom-major so the deltas run along an atom's own frame series; the
-reader returns frame-major, because every consumer wants `(frame, atom, 3)` and
-the storage order exists to make the deltas small rather than to match anyone's
-indexing.
-
-Gated against the DCD reader on `A64_C2R_cutoff10` (798 frames × 122 atoms):
-identical shape, agreement with the quantised DCD to **3.6e-15 Å**, and a
-maximum deviation from the raw DCD of **0.050 Å** — exactly half the grid,
-which is the most a 0.1 Å rounding can be wrong by. Read time is **2.9 ms
-either way**, from a file a quarter the size.
-
-## Status
-
-**BinaryCIF is the trajectory format from 2026-08-19.** The encoder
-(`scripts/trajectory_to_bcif.py`), the C++ reader and their tests
-(`test/io/test_bcif_trajectory.py`) are in place.
-
-`traj.xtc` and the 95 DCD files remain in the repository and remain what the
-shipped code paths read; they are marked for removal and nothing has been
-deleted. What is still open is converting the shipped corpus and repointing
-`read_rotamer_library` at the converted files.
+  each entry as it parses, so its list comes out reversed and it decodes
+  correctly. Writing decode order fails with `FixedPoint not given integers as
+  input`.
+* **IntegerPacking\'s int8 sentinels are legitimate values.** A delta of exactly
+  +-127 must be emitted as an escape plus a remainder, or the three columns
+  decode to different lengths — `Column size mismatch`.

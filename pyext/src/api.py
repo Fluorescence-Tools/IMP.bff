@@ -61,6 +61,7 @@ BY_DOMAIN = {
     "io": {
         # IMP.bff.io.structure
         "read_dcd": "IMP.bff.io.structure",
+        "read_trajectory": "IMP.bff.io.structure",
         # IMP.bff.io.fps
         "fps_positions_for_docking": "IMP.bff.io.fps",
         "read_fps_json": "IMP.bff.io.fps",
