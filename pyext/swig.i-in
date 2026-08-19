@@ -65,6 +65,12 @@ import numpy as np
 %include "IMP/bff/GreedyOlga.h"
 
 /* What comes out: (amplitude, rate) pairs. */
+/* Bond connectivity, and the angles, torsions and rings that follow from it. */
+%include "IMP/bff/MolecularGraph.h"
+%template(VectorVectorInt) std::vector<std::vector<int> >;
+%template(VectorPairIntInt) std::vector<std::pair<int, int> >;
+%template(PairIntInt) std::pair<int, int>;
+
 /* The coarse-grained system, typed: what cgdye builds and simulates. */
 %include "IMP_bff.forcefield.i"
 

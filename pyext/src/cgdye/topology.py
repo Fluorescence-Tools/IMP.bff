@@ -11,6 +11,7 @@ from IMP.bff.scoring import CHARMM36_LJ, build_lj_type_table
 import IMP
 import IMP.algebra
 import IMP.atom
+import IMP.bff
 import IMP.core
 
 # --------------------------------------------------------------------------
@@ -293,66 +294,82 @@ def distance(a, b):
 # and a torsion angle is the same either way. The copy kept is the one that was
 # already winning.
 
+
+def _as_int_graph(pairs):
+    """A :class:`IMP.bff.MolecularGraph` over *pairs*, plus the way back.
+
+    The graph is C++ and its nodes are ints; callers here have MOL2 serials
+    (already ints) but `scoring` has site-id strings. Numbering the nodes in
+    first-appearance order keeps one C++ implementation for both, and keeps the
+    numbering stable so derived terms come out in the order the Python's did.
+
+    The four derivations were Python -- adjacency, angles, torsions and rings,
+    here and again in `cgdye.sim` and `scoring`. One implementation now, gated
+    against the Python on atto655, cx4 and alexa488_r48: identical angles,
+    torsions and rings on all three.
+    """
+    index, nodes = {}, []
+    for a, b in pairs:
+        for n in (a, b):
+            if n not in index:
+                index[n] = len(nodes)
+                nodes.append(n)
+    edges = [(index[a], index[b]) for a, b in pairs]
+    return IMP.bff.MolecularGraph(edges), nodes
+
+
+def _graph_of(graph):
+    """*graph* as ``(MolecularGraph, nodes)``, numbered in sorted node order.
+
+    Sorted, not first-appearance: the C++ emits an angle's ends ascending by
+    node number and a torsion in whichever direction is smaller, so numbering
+    by sorted node is what makes those come back ascending by *node* -- which
+    is what the Python did. Numbering by first appearance gave the same 138
+    angles on atto655 with 8 of them reversed.
+    """
+    pairs = set()
+    for node, nbrs in graph.items():
+        for nb in nbrs:
+            pairs.add((node, nb) if node <= nb else (nb, node))
+    nodes = sorted({n for pair in pairs for n in pair})
+    index = {n: i for i, n in enumerate(nodes)}
+    return IMP.bff.MolecularGraph([(index[a], index[b]) for a, b in sorted(pairs)]), nodes
+
+
 def build_graph(bonds):
-    g = defaultdict(set)
-    for a, b in bonds:
-        g[a].add(b)
-        g[b].add(a)
-    return g
+    """{node: set of bonded nodes} -- kept as the dict shape callers index.
+
+    The connectivity itself is :class:`IMP.bff.MolecularGraph`; this is the
+    Python view of it.
+    """
+    # Key order is first-appearance in *bonds*, not ascending: this was a
+    # `defaultdict(set)` filled by iterating the bonds, and `LinkerSampler`
+    # walks the result, so the order reaches a seeded sampler and its pinned
+    # weights. Returning C++'s ascending node order moved them.
+    g, nodes = _as_int_graph([tuple(b) for b in bonds])
+    return {nodes[i]: {nodes[j] for j in g.get_neighbors(i)}
+            for i in range(len(nodes))}
 
 
 def build_angles(graph):
-    angles = set()
-    for b, neigh in graph.items():
-        nn = sorted(neigh)
-        for i in range(len(nn)):
-            for j in range(i + 1, len(nn)):
-                angles.add((nn[i], b, nn[j]))
-    return sorted(angles)
+    """Every ``(a, b, c)`` with *b* bonded to both -- see
+    :meth:`IMP.bff.MolecularGraph.get_angles`."""
+    g, nodes = _graph_of(graph)
+    return sorted(tuple(nodes[i] for i in a) for a in g.get_angles())
 
 
 def build_dihedrals(graph):
-    ds = set()
-    for b, neigh in graph.items():
-        for c in neigh:
-            if b > c:
-                continue
-            left = [a for a in graph[b] if a != c]
-            right = [d for d in graph[c] if d != b]
-            for a in left:
-                for d in right:
-                    if len({a, b, c, d}) < 4:
-                        continue
-                    t1 = (a, b, c, d)
-                    t2 = (d, c, b, a)
-                    ds.add(min(t1, t2))
-    return sorted(ds)
+    """Every proper torsion, each once -- see
+    :meth:`IMP.bff.MolecularGraph.get_dihedrals`."""
+    g, nodes = _graph_of(graph)
+    return sorted(tuple(nodes[i] for i in d) for d in g.get_dihedrals())
 
 
 def find_cycles(graph, max_len=7):
-    nodes = sorted(graph.keys())
-    cycles = set()
-
-    def norm(cyc):
-        cyc = list(cyc)
-        n = len(cyc)
-        rots = [tuple(cyc[i:] + cyc[:i]) for i in range(n)]
-        rc = list(reversed(cyc))
-        rots += [tuple(rc[i:] + rc[:i]) for i in range(n)]
-        return min(rots)
-
-    def dfs(start, cur, visited, path):
-        for nbr in graph.get(cur, set()):
-            if nbr == start and len(path) >= 3:
-                cycles.add(norm(path))
-                continue
-            if nbr in visited or nbr < start or len(path) >= max_len:
-                continue
-            dfs(start, nbr, visited | {nbr}, path + [nbr])
-
-    for s in nodes:
-        dfs(s, s, {s}, [s])
-    return cycles
+    """Simple cycles of at most *max_len* nodes -- see
+    :meth:`IMP.bff.MolecularGraph.get_rings`."""
+    g, nodes = _graph_of(graph)
+    return {tuple(nodes[i] for i in c) for c in g.get_rings(max_len)}
 
 
 def _component_without_edge(graph, start, block_u, block_v):

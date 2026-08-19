@@ -327,3 +327,46 @@ def test_the_molecular_graph_is_the_systems_own():
     angle = next(a for a in system.angles if a.site_a != a.site_c)
     assert system.is_within_bonds(angle.site_a, angle.site_c, 2)
     assert not system.is_within_bonds(angle.site_a, angle.site_c, 1)
+
+
+def test_the_molecular_graph_matches_the_python_it_replaced():
+    """`MolecularGraph` against the Python derivations, on three real dyes.
+
+    Adjacency, angles, torsions and rings were Python in three modules. The
+    numbers below were produced by that Python and are what the C++ has to
+    reproduce; the shipped MOL2 files are the fixture because a hand-built
+    graph would not have found the two things that did go wrong -- key order
+    (the Python's `defaultdict` is in bond-insertion order, and a seeded
+    sampler walks it) and node type (`scoring` builds graphs over site-id
+    strings, not MOL2 serials).
+    """
+    import IMP.bff
+    from IMP.bff.tools import get_structure_dir
+    from IMP.bff.cgdye.topology import (
+        build_angles, build_dihedrals, build_graph, find_cycles, parse_dye_mol2)
+
+    expected = {                      # atoms, angles, dihedrals, rings
+        "atto655.mol2": (70, 138, 207, 5),
+        "cx4.mol2": (68, 124, 176, 4),
+        "alexa488_r48.mol2": (83, 151, 218, 5),
+    }
+    for mol2, (n_atoms, n_ang, n_dih, n_ring) in expected.items():
+        atoms, bonds = parse_dye_mol2(str(get_structure_dir(mol2)), "X")
+        assert len(atoms) == n_atoms
+        graph = build_graph(bonds)
+        assert len(build_angles(graph)) == n_ang
+        assert len(build_dihedrals(graph)) == n_dih
+        assert len(find_cycles(graph, max_len=8)) == n_ring
+
+        # and the same through the C++ type directly
+        cpp = IMP.bff.MolecularGraph(sorted(bonds))
+        assert {tuple(a) for a in cpp.get_angles()} == set(build_angles(graph))
+        assert {tuple(d) for d in cpp.get_dihedrals()} == set(build_dihedrals(graph))
+
+    # key order is first-appearance, not ascending
+    bonds = [(9, 4), (4, 7), (7, 1)]
+    assert list(build_graph(bonds)) == [9, 4, 7, 1]
+
+    # nodes need not be integers: scoring builds graphs over site ids
+    named = [("dye:C1", "dye:C2"), ("dye:C2", "dye:C3")]
+    assert build_angles(build_graph(named)) == [("dye:C1", "dye:C2", "dye:C3")]

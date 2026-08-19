@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/DyeForceField.h>
+#include <IMP/bff/MolecularGraph.h>
 
 #include <algorithm>
 #include <set>
@@ -90,61 +91,37 @@ DyeForceFieldSystem::get_exclusions(bool include_impropers) const {
     return std::vector<std::pair<std::string, std::string> >(excl.begin(), excl.end());
 }
 
-namespace {
-//! A cycle's canonical form: the smallest of its rotations and reflections,
-//! which is what makes one ring one entry however it was walked into.
-std::vector<std::string> canonical_cycle(const std::vector<std::string>& cyc) {
-    std::vector<std::string> best;
-    const size_t n = cyc.size();
-    for (int reversed = 0; reversed < 2; ++reversed) {
-        std::vector<std::string> base(cyc);
-        if (reversed) std::reverse(base.begin(), base.end());
-        for (size_t i = 0; i < n; ++i) {
-            std::vector<std::string> rot(base.begin() + i, base.end());
-            rot.insert(rot.end(), base.begin(), base.begin() + i);
-            if (best.empty() || rot < best) best = rot;
-        }
-    }
-    return best;
-}
-
-void ring_dfs(const std::map<std::string, std::vector<std::string> >& adj,
-              const std::string& start, const std::string& cur,
-              std::set<std::string>& visited, std::vector<std::string>& path,
-              int max_len, std::set<std::vector<std::string> >& out) {
-    std::map<std::string, std::vector<std::string> >::const_iterator it = adj.find(cur);
-    if (it == adj.end()) return;
-    for (size_t i = 0; i < it->second.size(); ++i) {
-        const std::string& nbr = it->second[i];
-        if (nbr == start && path.size() >= 3) {
-            out.insert(canonical_cycle(path));
-            continue;
-        }
-        // `nbr < start` keeps each cycle to the walk that begins at its
-        // smallest site, and the depth cap is on the path, not the recursion.
-        if (visited.count(nbr) || nbr < start || (int)path.size() >= max_len) continue;
-        visited.insert(nbr);
-        path.push_back(nbr);
-        ring_dfs(adj, start, nbr, visited, path, max_len, out);
-        path.pop_back();
-        visited.erase(nbr);
-    }
-}
-}
-
 std::vector<std::vector<std::string> >
 DyeForceFieldSystem::find_rings(int max_len) const {
+    // through `MolecularGraph`, so the ring walk exists once: site ids are
+    // numbered in sorted order and mapped back, which is what makes the
+    // canonical form come out ascending by site id rather than by number.
+    std::vector<std::string> ids;
+    std::map<std::string, int> index;
     const std::map<std::string, std::vector<std::string> > adj = get_bonded_neighbors();
-    std::set<std::vector<std::string> > found;
     for (std::map<std::string, std::vector<std::string> >::const_iterator it = adj.begin();
          it != adj.end(); ++it) {
-        std::set<std::string> visited;
-        visited.insert(it->first);
-        std::vector<std::string> path;
-        path.push_back(it->first);
-        ring_dfs(adj, it->first, it->first, visited, path, max_len, found);
+        index[it->first] = (int)ids.size();
+        ids.push_back(it->first);
     }
-    return std::vector<std::vector<std::string> >(found.begin(), found.end());
+    std::vector<std::pair<int, int> > edges;
+    for (size_t i = 0; i < bonds_.size(); ++i) {
+        std::map<std::string, int>::const_iterator a = index.find(bonds_[i].site_a);
+        std::map<std::string, int>::const_iterator b = index.find(bonds_[i].site_b);
+        if (a != index.end() && b != index.end())
+            edges.push_back(std::make_pair(a->second, b->second));
+    }
+    const MolecularGraph g(edges);
+    const std::vector<std::vector<int> > rings = g.get_rings(max_len);
+    std::vector<std::vector<std::string> > out;
+    out.reserve(rings.size());
+    for (size_t i = 0; i < rings.size(); ++i) {
+        std::vector<std::string> r;
+        r.reserve(rings[i].size());
+        for (size_t j = 0; j < rings[i].size(); ++j) r.push_back(ids[rings[i][j]]);
+        out.push_back(r);
+    }
+    return out;
 }
 
 bool DyeForceFieldSystem::is_within_bonds(const std::string& a,
