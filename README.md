@@ -51,6 +51,16 @@ output_objects.append(fret_restraint)
 ```
 
 
+The command tree is one tree. `imp_bff --help` lists every command:
+`flexfit` and `rmsd` fit against distance restraints, `decays` runs the
+automated decay analysis, `dye` is explicit-dye labelling and sampling,
+`rotamer` is rotamer-library FRET, and `av-vs-rotamer` regenerates the
+comparison note. Two of those groups used to live *inside* the package and
+were reachable only as `python -m IMP.bff.cgdye.cli` and
+`python -m IMP.bff.cli`; a click command is a decorated function, so a library
+module carrying one cannot be imported without click, which is why command
+trees belong in `bin/`.
+
 # imp_bff_traj2bcif: convert a trajectory to BinaryCIF {#imp_bff_traj2bcif}
 
 Converts a DCD or XTC trajectory to a BinaryCIF `_atom_site` coordinate

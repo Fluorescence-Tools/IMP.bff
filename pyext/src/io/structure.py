@@ -920,3 +920,57 @@ def convert_pdb_to_cif(pdb_path, cif_path, dye_id=None):
                     B_iso_or_equiv=0.0,
                 )
 
+
+# --------------------------------------------------------------------------
+# flexible-residue / angle file
+#
+# `bin/imp_bff flexfit` starts from this file. It lived in `pyext/src/cli.py`
+# alongside the click commands; the commands moved to `bin/`, and a reader
+# belongs with the other readers rather than in a module named for a CLI.
+# --------------------------------------------------------------------------
+
+
+def read_angle_file(
+        hier: IMP.atom.Hierarchy,
+        flex_dict: dict
+) -> typing.Tuple[
+    typing.List[IMP.atom.Residue],
+    typing.List[IMP.atom.Bond]
+]:
+    flexible_residues = list()
+    bonds = list()
+    for fr in flex_dict["Flexible residues"]:
+        chain_id = fr['chain_identifier']
+        residue_id = fr['residue_seq_number']
+        sel = IMP.atom.Selection(
+            hierarchy=hier,
+            chain_ids=[chain_id],
+            residue_indexes=[residue_id]
+        )
+        flexible_residues.append(
+            sel.get_selected_particles(False)[0]
+        )
+    for bnd in flex_dict["Bonds"]:
+        a1 = bnd[0]
+        a2 = bnd[1]
+        sel1 = IMP.atom.Selection(
+            hierarchy=hier,
+            chain_ids=[a1['chain_identifier']],
+            residue_indexes=[a1['residue_seq_number']],
+            atom_type=IMP.atom.AtomType(a1['atom_name'])
+        )
+        sel2 = IMP.atom.Selection(
+            hierarchy=hier,
+            chain_ids=[a2['chain_identifier']],
+            residue_indexes=[a2['residue_seq_number']],
+            atom_type=IMP.atom.AtomType(a2['atom_name'])
+        )
+        p1 = sel1.get_selected_particles()[0]
+        p2 = sel2.get_selected_particles()[0]
+        b1 = IMP.atom.Bonded(p1)
+        b2 = IMP.atom.Bonded(p2)
+        bonds.append(
+            IMP.atom.create_bond(b1, b2, IMP.atom.Bond.SINGLE)
+        )
+    return flexible_residues, bonds
+

@@ -1,15 +1,19 @@
 import os
 import pytest
 from click.testing import CliRunner
-from IMP.bff.cgdye.cli import dye
 from IMP.bff.tools import get_structure_dir
+
+@pytest.fixture(scope="module")
+def dye(imp_bff_program):
+    return imp_bff_program.dye
+
 
 @pytest.fixture(scope="module")
 def runner():
     return CliRunner()
 
 @pytest.fixture(scope="module")
-def kinetic_lib(tmp_path_factory):
+def kinetic_lib(dye, tmp_path_factory):
     """Generate a small kinetic library for testing other commands."""
     tmp_dir = tmp_path_factory.mktemp("data")
     runner = CliRunner()
@@ -29,11 +33,11 @@ def kinetic_lib(tmp_path_factory):
             return os.path.join(lib_dir, f)
     return None
 
-def test_cli_help(runner):
+def test_cli_help(dye, runner):
     result = runner.invoke(dye, ["--help"])
     assert result.exit_code == 0
 
-def test_cli_label_pdb(runner, tmp_path):
+def test_cli_label_pdb(dye, runner, tmp_path):
     out_pdb = tmp_path / "test_label.pdb"
     result = runner.invoke(dye, [
         "label", str(get_structure_dir("1DG3.pdb")), 
@@ -45,14 +49,14 @@ def test_cli_label_pdb(runner, tmp_path):
     assert result.exit_code == 0
     assert out_pdb.exists()
 
-def test_cli_analyze_tc(runner, kinetic_lib):
+def test_cli_analyze_tc(dye, runner, kinetic_lib):
     if not kinetic_lib:
         pytest.skip("No kinetic library generated")
     result = runner.invoke(dye, ["analyze-tc", kinetic_lib])
     assert result.exit_code == 0
     assert "Slowest TC" in result.output
 
-def test_cli_reconstruct(runner, kinetic_lib, tmp_path):
+def test_cli_reconstruct(dye, runner, kinetic_lib, tmp_path):
     if not kinetic_lib:
         pytest.skip("No kinetic library generated")
     out_rmf = tmp_path / "recon.rmf3"
@@ -65,7 +69,7 @@ def test_cli_reconstruct(runner, kinetic_lib, tmp_path):
     assert result.exit_code == 0
     assert out_rmf.exists()
 
-def test_cli_sample_rotamer(runner, tmp_path):
+def test_cli_sample_rotamer(dye, runner, tmp_path):
     out_rmf = tmp_path / "test_rot.rmf3"
     result = runner.invoke(dye, [
         "sample-rotamer",
@@ -78,7 +82,7 @@ def test_cli_sample_rotamer(runner, tmp_path):
     assert result.exit_code == 0
     assert out_rmf.exists()
 
-def test_cli_label_fp_dual(runner, tmp_path):
+def test_cli_label_fp_dual(dye, runner, tmp_path):
     out_pdb = tmp_path / "dual_fp.pdb"
     result = runner.invoke(dye, [
         "label-fp", str(get_structure_dir("1DG3.pdb")),

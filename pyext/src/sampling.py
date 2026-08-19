@@ -527,3 +527,90 @@ def equilibrium_occupancy(
 # See ``include/IMP/bff/GridDiffusionSolver.h`` and
 # ``pyext/IMP_bff.griddiffusion.i``.
 from IMP.bff import GridDiffusionSolver  # noqa: F401
+
+
+# --------------------------------------------------------------------------
+# Optimizer states that write frames
+#
+# `IMP.OptimizerState` subclasses that `bin/imp_bff flexfit` attaches to write
+# a trajectory as it samples. Sampling machinery, so they sit with the rest of
+# it now that the command that uses them lives in `bin/`.
+# --------------------------------------------------------------------------
+
+
+class WriteRMFFrame(IMP.OptimizerState):
+
+    def __init__(
+            self,
+            filename,
+            root_hier: IMP.atom.Hierarchy,
+            restraints: typing.List[IMP.Restraint],
+            name: str = "WriteRMFFrame"
+    ):
+        model = root_hier.get_model()
+        super().__init__(model, name)
+        self.restraints = restraints
+        fileName, fileExtension = os.path.splitext(filename)
+        fn = pathlib.Path(fileName + ".0.rmf3")
+        if pathlib.Path(fn).exists():
+            for i in range(100):
+                fn = pathlib.Path(fileName + ".{:d}.rmf3".format(i))
+                if not fn.exists():
+                    break
+        self._rmf_filename = str(fn)
+        self._rh = RMF.create_rmf_file(str(fn))
+        IMP.rmf.add_hierarchies(self._rh, [root_hier])
+        IMP.rmf.add_restraints(self._rh, restraints)
+        IMP.rmf.save_frame(self._rh)
+
+    def do_update(self, arg0):
+        #print(*[r.evaluate(False) for r in self.restraints], sep="\t")
+        IMP.rmf.save_frame(self._rh)
+
+
+
+class WritePDBFrame(IMP.OptimizerState):
+
+    def __init__(
+            self,
+            filename,
+            root_hier: IMP.atom.Hierarchy,
+            restraints: typing.List[IMP.Restraint],
+            restraint_filename: str = None,
+            name: str = "WriteDCDFrame",
+            output_objects: typing.List = None,
+            multi_state: bool = False
+    ):
+        model = root_hier.get_model()
+        super().__init__(model, name)
+
+        import os
+        self._pdb_basename = filename
+        if restraint_filename is None:
+            restraint_filename = os.path.splitext(filename)[0] + ".rst.txt"
+        self._restraint_filename = restraint_filename
+        self.restraints = restraints
+        self._hier = root_hier
+        self.frame = 0
+        self.output_objects = output_objects
+        self.multi_state = multi_state
+
+    def do_update(self, arg0):
+        with open(self._restraint_filename, "a+") as fp:
+            fp.write("%s\t" % self.frame)
+            fp.write("\t".join(["{:.3f}".format(r.evaluate(False)) for r in self.restraints]))
+            fp.write("\t")
+            if isinstance(self.output_objects, list):
+                for obj in self.output_objects:
+                    fp.write(str(obj) + "\t")
+            fp.write("\n")
+        lead = os.path.splitext(self._pdb_basename)[0]
+        if not self.multi_state:
+            hiers = [self._hier]
+        else:
+            hiers = self._hier.get_children()
+        for i, hier in enumerate(hiers):
+            out_fn = lead + "_state_" + str(i) + "_" + "{:04d}".format(self.frame) + ".pdb"
+            IMP.atom.write_pdb(hier, out=out_fn)
+        self.frame += 1
+

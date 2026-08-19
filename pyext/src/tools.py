@@ -72,7 +72,7 @@ class _ClickStub:
     """Stand-in for ``click`` so library modules import without it.
 
     ``click`` is a hard dependency of the command-line entry points
-    (``IMP.bff.cgdye.cli``, ``bin/imp_bff``; declared in conda-recipe/meta.yaml)
+    (``bin/imp_bff``; declared in conda-recipe/meta.yaml)
     but not of the library: modules that carry a ``@click.command`` next to
     their functions must still import when click is absent. The stub keeps
     module import working; invoking a stubbed command raises ImportError.

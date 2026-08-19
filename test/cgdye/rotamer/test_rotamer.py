@@ -13,12 +13,12 @@ from IMP.bff.representation.rotamer import read_rotamer_fps, rotamer_fret_from_f
 from IMP.bff.representation.rotamer import RotamerFRET
 from IMP.bff.representation.rotamer import load_protein_frames, load_rotamer_library
 from IMP.bff.dye import forster_radius_from_spectra
-# The rotamer CLI ships with cgdye now; invoking it through imp-tricks'
-# aggregator would make an imp.bff test depend on the layer above it.
-# the command moved to IMP.bff.cli with every other click entry point:
-# a decorated function needs `import click` at module scope, and a
-# library module must import without it.
-from IMP.bff.cli import rotamer as _rotamer_cli
+# Invoking the command through imp-tricks' aggregator would make an imp.bff
+# test depend on the layer above it, so it is invoked directly. The group now
+# lives in `bin/imp_bff` rather than in the package: a decorated function needs
+# `import click` at module scope, so a command tree inside a library module is
+# either an import-time dependency on click or -- as it was -- a tree reachable
+# only through `python -m` and absent from `imp_bff --help`.
 
 def _fixture_pdb(name: str, tmp_path: Path) -> Path:
     """Unpack a bundled (gzip'd) fixture structure into tmp_path and return it."""
@@ -162,15 +162,15 @@ def test_rotamer_fret_from_fps(tmp_path: Path) -> None:
     assert fret.acceptor == "AlexaFluor 568"
 
 
-def test_rotamer_cli_help_and_r0() -> None:
+def test_rotamer_cli_help_and_r0(imp_bff_program) -> None:
     """Rotamer CLI exposes help and R0 subcommand."""
     runner = CliRunner()
-    result = runner.invoke(_rotamer_cli, ["--help"])
+    result = runner.invoke(imp_bff_program.rotamer, ["--help"])
     assert result.exit_code == 0
     assert "predict" in result.output
     assert "r0" in result.output
 
-    result = runner.invoke(_rotamer_cli, ["r0", "--donor", "AlexaFluor 488", "--acceptor", "AlexaFluor 594", "--k2", "0.684587"])
+    result = runner.invoke(imp_bff_program.rotamer, ["r0", "--donor", "AlexaFluor 488", "--acceptor", "AlexaFluor 594", "--k2", "0.684587"])
     assert result.exit_code == 0
     assert float(result.output.split()[0]) == pytest.approx(5.712982, abs=1e-5)
 

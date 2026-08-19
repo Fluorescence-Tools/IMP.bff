@@ -255,3 +255,59 @@ def summary_numbers(per_position: Dict[str, Dict[str, Any]], rows: Sequence[Dict
         "positions": {n: {k: v for k, v in r.items() if k not in ("av", "ensemble")} for n, r in per_position.items()},
         "pairs": [dict(r) for r in rows],
     }
+
+
+# --------------------------------------------------------------------------
+# The two reference comparison cases
+#
+# These lived in `cli.py`, which meant `medium_test_av_vs_rotamer.py` imported
+# them from *here* -- where they were not -- and failed at collection. Nothing
+# noticed: plain `pytest test/` collects `test_*.py`, so a `medium_test_*` file
+# is only ever run by IMP's own runner. They belong with the comparison code
+# they parameterise, not with a command that happens to call it.
+# --------------------------------------------------------------------------
+DONOR_LIB = "AlexaFluor 488 C1R"      # + " cutoff<N>"
+
+
+ACCEPTOR_LIB = "AlexaFluor 594 C1R"
+
+
+R0_A488_A594 = 52.0   # Å, the value the T4L fps.json carries
+
+
+def _libs(cutoff):
+    return f"{DONOR_LIB} cutoff{cutoff}", f"{ACCEPTOR_LIB} cutoff{cutoff}"
+
+
+def hgbp1_case(cutoff=30):
+    """hGBP1 (1DG3, chain A): the fps.json positions of examples/structure/GBP/hGBP1.fps.json on chain A."""
+    import IMP.bff
+    from IMP.bff.tools import get_structure_dir
+    pdb = str(get_structure_dir("1DG3.pdb"))
+    fps = json.load(open(IMP.bff.get_example_path("structure/GBP/hGBP1.fps.json")))
+    # residue 254 is not resolved in 1DG3; the other chain-A sites are
+    positions = {n: p for n, p in fps["Positions"].items()
+                 if p.get("chain_identifier") == "A" and n.endswith("F") and p["residue_seq_number"] != 254}
+    d_lib, a_lib = _libs(cutoff)
+    libraries = {n: (d_lib if p["residue_seq_number"] == 481 else a_lib) for n, p in positions.items()}
+    pairs = [("A481F", n) for n in sorted(positions) if n != "A481F"]
+    return f"hGBP1 1DG3 chain A — donor Alexa488 C1R at 481, acceptor Alexa594 C1R elsewhere (cutoff{cutoff} libraries)", pdb, positions, libraries, pairs, {}
+
+
+def t4l_case(cutoff=30):
+    """T4 lysozyme (3GUN) with the shipped fret.fps.json: D positions Alexa488 C1R, A positions Alexa594 C1R."""
+    import IMP.bff
+    pdb = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
+    fps = json.load(open(IMP.bff.get_example_path("structure/T4L/fret.fps.json")))
+    positions = dict(fps["Positions"])
+    d_lib, a_lib = _libs(cutoff)
+    libraries = {n: (d_lib if n.endswith("D") else a_lib) for n in positions}
+    experimental = {}
+    pairs = []
+    for name, d in fps["Distances"].items():
+        key = (d["position1_name"], d["position2_name"])
+        pairs.append(key)
+        experimental[key] = {"distance": d["distance"], "error_neg": d["error_neg"], "error_pos": d["error_pos"],
+                             "distance_type": d.get("distance_type", "RDAMean"), "name": name}
+    return f"T4L 3GUN — the 99 fps.json distances (D = Alexa488 C1R, A = Alexa594 C1R, cutoff{cutoff} libraries)", pdb, positions, libraries, pairs, experimental
+
