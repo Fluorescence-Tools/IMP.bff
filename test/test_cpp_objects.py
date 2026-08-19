@@ -496,3 +496,43 @@ def test_smith_waterman_matches_the_python_it_replaced():
 
     assert len(IMP.bff.smith_waterman("", "ABC")) == 0
     assert IMP.bff.smith_waterman_score("ABCDEF", "ABCDEF") == 12.0
+
+
+def test_improper_expansion_matches_the_python_it_replaced():
+    """`MolecularGraph.expand_impropers` for all four template kinds.
+
+    The counts are the Python's, on the three shipped dyes. `flat` and `orient`
+    key off the *atom name* starting with S rather than the element -- what the
+    Python did, kept because a MOL2's types are less reliable than its names,
+    and the difference is invisible unless a sulfur is mistyped.
+    """
+    import IMP.bff
+    from IMP.bff.tools import get_structure_dir
+    from IMP.bff.cgdye.topology import parse_dye_mol2
+
+    expected = {
+        "atto655.mol2": {"ring": 20, "pi": 15, "flat": 1, "orient": 1},
+        "cx4.mol2": {"ring": 24, "pi": 24, "flat": 4, "orient": 4},
+        "alexa488_r48.mol2": {"ring": 24, "pi": 27, "flat": 2, "orient": 2},
+    }
+    for mol2, counts in expected.items():
+        atoms, bonds = parse_dye_mol2(str(get_structure_dir(mol2)), "X")
+        nodes = sorted(atoms)
+        graph = IMP.bff.MolecularGraph(sorted(bonds))
+        elements = [atoms[n]["element"] for n in nodes]
+        names = [atoms[n]["atom_name"] for n in nodes]
+        for kind, n_expected in counts.items():
+            quads = graph.expand_impropers(kind, nodes, nodes, elements, names, 8)
+            assert len(quads) == n_expected, (mol2, kind, len(quads))
+            for q in quads:
+                assert len(q) == 4
+                assert len(set(q)) == 4, "four distinct atoms"
+                # the centre is the second entry and is bonded to the rest
+                centre = q[1]
+                for other in (q[0], q[2], q[3]):
+                    assert other in set(graph.get_neighbors(centre))
+
+    # an unknown kind produces nothing rather than raising
+    g = IMP.bff.MolecularGraph([(0, 1), (1, 2)])
+    assert len(g.expand_impropers("nonsense", [1], [0, 1, 2],
+                                  ["C", "C", "C"], ["C1", "C2", "C3"], 8)) == 0

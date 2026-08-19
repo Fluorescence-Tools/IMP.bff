@@ -11,6 +11,7 @@
 #include <IMP/bff/bff_config.h>
 
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -52,6 +53,32 @@ public:
 
     //! Whether `a` reaches `b` in at most `max_depth` bonds.
     bool is_within_bonds(int a, int b, int max_depth) const;
+
+    //! The nodes that lie on any ring of at most `max_len`.
+    std::vector<int> get_ring_nodes(int max_len = 8) const;
+
+    //! Improper quadruples about `centers`, by kind.
+    /** The four kinds a cgdye template can declare, expanded against the bond
+        graph. Each returns `(n1, centre, n2, n3)` quadruples.
+
+        - `ring`   — a centre on a ring: two ring neighbours and a third
+                     substituent, preferring one off the ring.
+        - `pi`     — a three-coordinate C or N: its three neighbours.
+        - `flat`   — a sulfur with at least three oxygens: three of them.
+        - `orient` — a sulfur with exactly one carbon and at least two
+                     oxygens: that carbon and two oxygens.
+
+        `elements` and `atom_names` are parallel to `nodes`: the element and
+        MOL2 atom name of each. `flat` and `orient` key off the *atom name*
+        starting with S rather than the element, which is what the Python did
+        and is not the same test for a MOL2 whose types are unreliable. */
+    std::vector<std::vector<int> > expand_impropers(
+            const std::string& kind,
+            const std::vector<int>& centers,
+            const std::vector<int>& nodes,
+            const std::vector<std::string>& elements,
+            const std::vector<std::string>& atom_names,
+            int max_ring_len = 8) const;
 };
 
 IMPBFF_END_NAMESPACE

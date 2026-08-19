@@ -433,84 +433,48 @@ def _serial_to_site_atom_names(atoms):
 # names. The two builders in this file had one each.
 
 
+def _expand_impropers(kind, graph, serial_to_atom, center_serials):
+    """Improper quadruples of *kind* about *center_serials*.
+
+    :meth:`IMP.bff.MolecularGraph.expand_impropers`. There were four Python
+    functions here -- ring, pi, flat, orient -- reading the same graph and the
+    same per-atom element and name. Gated against them on atto655, cx4 and
+    alexa488_r48: identical quadruples for every kind on all three.
+
+    `flat` and `orient` test the *atom name* starting with S rather than the
+    element, which is what the Python did and is deliberately preserved: a
+    MOL2's types are less reliable than its names.
+    """
+    nodes = sorted(serial_to_atom)
+    g, mapped = _as_int_graph(sorted(
+        (a, b) for a, nbrs in graph.items() for b in nbrs if a < b))
+    index = {n: i for i, n in enumerate(mapped)}
+    keep = [n for n in nodes if n in index]
+    quads = g.expand_impropers(
+        kind,
+        [index[n] for n in sorted(set(center_serials)) if n in index],
+        [index[n] for n in keep],
+        [serial_to_atom[n].get("element", "") for n in keep],
+        [serial_to_atom[n].get("atom_name", "") for n in keep],
+        8,
+    )
+    return [tuple(mapped[i] for i in q) for q in quads]
+
+
 def _build_ring_impropers_from_template(graph, serial_to_atom, center_serials):
-    ring_atoms = ring_atoms_from_graph(graph, serial_to_atom)
-    impropers = []
-    seen = set()
-    all_serials = set(serial_to_atom.keys())
-    for center in sorted(center_serials):
-        if center not in ring_atoms:
-            continue
-        nbrs = sorted(n for n in graph.get(center, set()) if n in all_serials)
-        if len(nbrs) < 3:
-            continue
-        ring_nbrs = [n for n in nbrs if n in ring_atoms]
-        if len(ring_nbrs) < 2:
-            continue
-        n1, n2 = ring_nbrs[:2]
-        n3_choices = [n for n in nbrs if n not in (n1, n2)]
-        if not n3_choices:
-            continue
-        non_ring = [n for n in n3_choices if n not in ring_atoms]
-        n3 = non_ring[0] if non_ring else n3_choices[0]
-        key = (center, frozenset((n1, n2, n3)))
-        if key in seen:
-            continue
-        seen.add(key)
-        impropers.append((n1, center, n2, n3))
-    return impropers
+    return _expand_impropers("ring", graph, serial_to_atom, center_serials)
 
 
 def _build_pi_impropers_from_template(graph, serial_to_atom, center_serials):
-    impropers = []
-    seen = set()
-    all_serials = set(serial_to_atom.keys())
-    for center in sorted(center_serials):
-        atom = serial_to_atom.get(center)
-        if not atom or atom.get("element") not in {"C", "N"}:
-            continue
-        nbrs = sorted(n for n in graph.get(center, set()) if n in all_serials)
-        if len(nbrs) != 3:
-            continue
-        n1, n2, n3 = nbrs
-        key = (center, frozenset((n1, n2, n3)))
-        if key in seen:
-            continue
-        seen.add(key)
-        impropers.append((n1, center, n2, n3))
-    return impropers
+    return _expand_impropers("pi", graph, serial_to_atom, center_serials)
 
 
 def _build_flat_impropers_from_template(graph, serial_to_atom, center_serials):
-    impropers = []
-    for s in sorted(center_serials):
-        atom = serial_to_atom.get(s, {})
-        if not atom.get("atom_name", "").strip().upper().startswith("S"):
-            continue
-        o_nbrs = [
-            n
-            for n in sorted(graph.get(s, set()))
-            if serial_to_atom.get(n, {}).get("element") == "O"
-        ]
-        if len(o_nbrs) < 3:
-            continue
-        impropers.append((o_nbrs[0], s, o_nbrs[1], o_nbrs[2]))
-    return impropers
+    return _expand_impropers("flat", graph, serial_to_atom, center_serials)
 
 
 def _build_orient_impropers_from_template(graph, serial_to_atom, center_serials):
-    impropers = []
-    for s in sorted(center_serials):
-        atom = serial_to_atom.get(s, {})
-        if not atom.get("atom_name", "").strip().upper().startswith("S"):
-            continue
-        nbrs = list(sorted(graph.get(s, set())))
-        c_nbrs = [n for n in nbrs if serial_to_atom.get(n, {}).get("element") == "C"]
-        o_nbrs = [n for n in nbrs if serial_to_atom.get(n, {}).get("element") == "O"]
-        if len(c_nbrs) != 1 or len(o_nbrs) < 2:
-            continue
-        impropers.append((c_nbrs[0], s, o_nbrs[0], o_nbrs[1]))
-    return impropers
+    return _expand_impropers("orient", graph, serial_to_atom, center_serials)
 
 
 def _center_atom_serials_from_template(
