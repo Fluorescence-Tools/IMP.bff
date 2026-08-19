@@ -1010,28 +1010,6 @@ def write_dye_forcefield_cif(path, system):
 
 
 
-class _BaseHandler:
-    not_in_file = object()
-    omitted = object()
-    unknown = object()
-
-
-def _as_str(v, h):
-    if v in (h.not_in_file, h.omitted, h.unknown):
-        return None
-    return str(v)
-
-
-def _as_int(v, h):
-    s = _as_str(v, h)
-    return None if s is None else int(s)
-
-
-def _as_float(v, h):
-    s = _as_str(v, h)
-    return None if s is None else float(s)
-
-
 def _distance_type_to_ihm(distance_type):
     if distance_type == "AtomLowerBound":
         return "lower bound"
@@ -1223,23 +1201,6 @@ def normalize_weights(library):
 #!/usr/bin/env python
 
 
-
-
-class _BaseHandler:
-    not_in_file = object()
-    omitted = object()
-    unknown = object()
-
-
-def _as_str(v, h):
-    if v in (h.not_in_file, h.omitted, h.unknown):
-        return None
-    return str(v)
-
-
-def _as_int(v, h):
-    s = _as_str(v, h)
-    return None if s is None else int(s)
 
 
 def _as_bool(v, h):

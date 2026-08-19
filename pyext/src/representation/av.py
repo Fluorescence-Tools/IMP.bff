@@ -415,7 +415,7 @@ _IMP_BUILD_LOCK = threading.Lock()
 # Result container
 # ---------------------------------------------------------------------------
 
-def _av_imp_bff(
+def _av_from_arrays(
     atoms_xyz: np.ndarray,
     atoms_vdw: np.ndarray,
     source_xyz: np.ndarray,
@@ -618,7 +618,7 @@ def compute_av(
             "IMP.bff's AV decorator is not available in this build; it is the "
             "only accessible-volume backend."
         )
-    return _av_imp_bff(
+    return _av_from_arrays(
         atoms_xyz, atoms_vdw, source_xyz,
         linker_length, linker_width, dye_radii, grid_resolution,
         allowed_sphere_radius,
@@ -656,7 +656,7 @@ def _active_backend_name() -> str:
 # AV computation
 # ---------------------------------------------------------------------------
 
-def _av_imp_bff(
+def _av_from_structure(
     pdb_path: str,
     source_info: Dict,
     linker_length: float,
@@ -787,7 +787,7 @@ def compute_av_from_structure(
             f"source_info declares simulation_grid_resolution={float(declared)} A "
             f"but disc_step={float(disc_step)} A was passed. The AV is built at "
             "disc_step; pass the resolution there, or drop it from source_info.")
-    return _av_imp_bff(
+    return _av_from_structure(
         pdb_path,
         source_info,
         linker_length,

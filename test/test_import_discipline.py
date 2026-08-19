@@ -293,5 +293,56 @@ def test_test_module_basenames_are_unique():
     assert not clashes, clashes
 
 
+def test_no_module_defines_the_same_name_twice():
+    """A merged module can end up with two definitions of one name, and Python
+    keeps the last silently.
+
+    This is the failure mode of consolidating files. ``representation/av.py``
+    carried two ``_av_imp_bff``s -- an array door taking
+    ``(atoms_xyz, atoms_vdw, source_xyz, ...)`` and a structure door taking
+    ``(pdb_path, source_info, ...)``. The second won for the whole module, so
+    ``IMP.bff.compute_av_from_arrays``, a public export, raised
+    ``TypeError: _av_imp_bff() takes 6 positional arguments but 8 were given``
+    on every call. Nothing failed at import and no test covered that door.
+
+    Identical duplicates are caught too: ``io/cif.py`` had three copies each of
+    ``_BaseHandler``, ``_as_str`` and ``_as_int``, which were harmless only by
+    luck -- one edit to the wrong copy and they would not have been.
+    """
+    import ast
+    from collections import defaultdict
+
+    src = Path(__file__).resolve().parent.parent / "pyext" / "src"
+    offenders = {}
+    for path in sorted(src.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        seen = defaultdict(list)
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                seen[node.name].append(node.lineno)
+        dups = {name: lines for name, lines in seen.items() if len(lines) > 1}
+        if dups:
+            offenders[str(path.relative_to(src))] = dups
+    assert not offenders, offenders
+
+
+def test_the_array_door_computes_an_accessible_volume():
+    """``compute_av_from_arrays`` end to end -- the export the shadowed
+    definition had broken. Four atoms and a source between them is enough: the
+    bug was a signature mismatch, so any successful call proves the fix."""
+    import numpy as np
+    import IMP.bff
+
+    av = IMP.bff.compute_av_from_arrays(
+        np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 6.0, 0.0], [0.0, 0.0, 6.0]]),
+        np.array([1.7, 1.7, 1.7, 1.7]),
+        np.array([2.0, 2.0, 2.0]),
+    )
+    assert av.density.ndim == 3
+    assert av.points.shape[0] > 0
+    assert av.mean_position.shape == (3,)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
