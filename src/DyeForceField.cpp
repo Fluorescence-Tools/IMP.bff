@@ -149,4 +149,39 @@ bool DyeForceFieldSystem::is_within_bonds(const std::string& a,
     return false;
 }
 
+std::string DyeForceFieldSystem::get_inconsistency() const {
+    if (components_.empty()) return "system requires components";
+    if (sites_.empty()) return "system requires sites";
+
+    std::set<std::string> ids;
+    for (size_t i = 0; i < sites_.size(); ++i) {
+        if (!ids.insert(sites_[i].id).second)
+            return "duplicate site ids";
+    }
+    for (size_t i = 0; i < sites_.size(); ++i) {
+        if (components_.find(sites_[i].component) == components_.end())
+            return "site " + sites_[i].id + " unknown component " + sites_[i].component;
+    }
+    for (size_t i = 0; i < bonds_.size(); ++i) {
+        if (!ids.count(bonds_[i].site_a) || !ids.count(bonds_[i].site_b))
+            return "bond references unknown site";
+    }
+    for (size_t i = 0; i < angles_.size(); ++i) {
+        if (!ids.count(angles_[i].site_a) || !ids.count(angles_[i].site_b) ||
+            !ids.count(angles_[i].site_c))
+            return "angle references unknown site";
+    }
+    const std::vector<FFTorsion>* blocks[2] = {&dihedrals_, &impropers_};
+    const char* names[2] = {"dihedrals", "impropers"};
+    for (int b = 0; b < 2; ++b) {
+        for (size_t i = 0; i < blocks[b]->size(); ++i) {
+            const FFTorsion& t = (*blocks[b])[i];
+            if (!ids.count(t.site_a) || !ids.count(t.site_b) ||
+                !ids.count(t.site_c) || !ids.count(t.site_d))
+                return std::string(names[b]) + " references unknown site";
+        }
+    }
+    return "";
+}
+
 IMPBFF_END_NAMESPACE

@@ -579,3 +579,44 @@ def test_the_mol2_reader_matches_the_python_it_replaced():
     assert IMP.bff.element_from_atom_name("n1") == "N"
     assert IMP.bff.element_from_atom_name("1HG") == "C"
     assert IMP.bff.element_from_atom_name("") == "C"
+
+
+def test_system_self_consistency_is_the_systems_own_check():
+    """`DyeForceFieldSystem.get_inconsistency`, which `cgdye.sim` used to do.
+
+    It reports rather than raises: what is wrong with a system is a property of
+    the system, and whether that stops the caller is the caller's decision.
+    `cgdye.sim._validate_system` raises; a reader could report instead.
+    """
+    import IMP.bff
+    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff.cgdye.topology import build_dye_protein_system
+
+    def fresh():
+        return build_dye_protein_system(
+            str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
+            "CX4", "atto655",
+            protein_template=str(get_template_dir("cx4.template.cif")),
+            dye_template=str(get_template_dir("atto655.template.cif")))
+
+    assert fresh().get_inconsistency() == ""
+    assert IMP.bff.DyeForceFieldSystem("x").get_inconsistency() == "system requires components"
+
+    dangling = fresh()
+    bond = dangling.bonds[0]
+    bond.site_a = "no-such-site"
+    dangling.bonds = [bond]
+    assert dangling.get_inconsistency() == "bond references unknown site"
+
+    duplicated = fresh()
+    sites = list(duplicated.sites)
+    sites[1].id = sites[0].id
+    duplicated.sites = sites
+    assert duplicated.get_inconsistency() == "duplicate site ids"
+
+    orphan = fresh()
+    sites = list(orphan.sites)
+    sites[0].component = "not-a-component"
+    orphan.sites = sites
+    assert orphan.get_inconsistency().startswith("site ")
+    assert "unknown component" in orphan.get_inconsistency()

@@ -272,6 +272,13 @@ public:
     bool is_within_bonds(const std::string& a, const std::string& b,
                          int max_depth) const;
 
+    //! Why this system is not self-consistent, or an empty string.
+    /** Components and sites present, site ids unique, every site's component
+        declared, and every bonded term referring to sites that exist. The
+        caller decides whether that is an error -- `cgdye.sim` raises; a reader
+        may prefer to report. */
+    std::string get_inconsistency() const;
+
     IMP_SHOWABLE_INLINE(DyeForceFieldSystem,
                         out << "DyeForceFieldSystem(\"" << name_ << "\", "
                             << sites_.size() << " sites, " << bonds_.size()

@@ -57,34 +57,18 @@ def _atom_name(p):
 
 
 def _validate_system(system):
+    """Raise if *system* is not self-consistent.
+
+    :meth:`IMP.bff.DyeForceFieldSystem.get_inconsistency` does the checking --
+    components and sites present, ids unique, every site's component declared,
+    every bonded term referring to sites that exist. It reports rather than
+    raises, because a reader may want to say what is wrong instead of stopping;
+    this caller stops.
+    """
     from IMP.bff.io.cif import as_forcefield_system
-    system = as_forcefield_system(system)
-    if not system.components:
-        raise ValueError("system requires components")
-    if not system.sites:
-        raise ValueError("system requires sites")
-
-    sids = [s.id for s in system.sites]
-    if len(sids) != len(set(sids)):
-        raise ValueError("duplicate site ids")
-    sidset = set(sids)
-
-    for s in system.sites:
-        if s.component not in system.components:
-            raise ValueError(f"site {s.id} unknown component {s.component}")
-
-    for bd in system.bonds:
-        if bd.site_a not in sidset or bd.site_b not in sidset:
-            raise ValueError("bond references unknown site")
-    for an in system.angles:
-        if any(x not in sidset for x in (an.site_a, an.site_b, an.site_c)):
-            raise ValueError("angle references unknown site")
-    for name, block in (("dihedrals", system.dihedrals),
-                        ("impropers", system.impropers)):
-        for to in block:
-            if any(x not in sidset
-                   for x in (to.site_a, to.site_b, to.site_c, to.site_d)):
-                raise ValueError(f"{name} references unknown site")
+    problem = as_forcefield_system(system).get_inconsistency()
+    if problem:
+        raise ValueError(problem)
 
 
 def _group_ids(system, group_name):
