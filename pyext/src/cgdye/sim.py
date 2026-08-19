@@ -1,6 +1,5 @@
 """Simulation runners for cgdye."""
 
-from .system import fixed_components, mobile_components
 from collections import defaultdict
 from pathlib import Path
 import RMF
@@ -139,7 +138,7 @@ def _component_for_group(system, group_name):
 def _infer_fixed_component(system):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    fixed = fixed_components(system)
+    fixed = system.get_fixed_components()
     if fixed:
         return fixed[0]
     raise ValueError("Could not infer fixed component; define role: fixed in system")
@@ -148,7 +147,7 @@ def _infer_fixed_component(system):
 def _infer_mobile_group(system):
     from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
-    mobile = mobile_components(system)
+    mobile = system.get_mobile_components()
     if not mobile:
         raise ValueError("No component with role 'mobile' found in system")
     comp = mobile[0]

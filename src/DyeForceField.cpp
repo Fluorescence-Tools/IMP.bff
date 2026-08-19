@@ -19,4 +19,25 @@ std::vector<int> DyeForceFieldSystem::get_component_sites(
     return out;
 }
 
+namespace {
+std::vector<std::string> with_role(
+        const std::map<std::string, FFComponent>& components,
+        const std::string& role) {
+    std::vector<std::string> out;
+    for (std::map<std::string, FFComponent>::const_iterator it =
+                 components.begin(); it != components.end(); ++it) {
+        if (it->second.role == role) out.push_back(it->first);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<std::string> DyeForceFieldSystem::get_fixed_components() const {
+    return with_role(components_, "fixed");
+}
+
+std::vector<std::string> DyeForceFieldSystem::get_mobile_components() const {
+    return with_role(components_, "mobile");
+}
+
 IMPBFF_END_NAMESPACE

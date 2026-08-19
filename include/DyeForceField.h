@@ -238,6 +238,11 @@ public:
     //! Sites belonging to a component, by name.
     std::vector<int> get_component_sites(const std::string& component) const;
 
+    //! Component names the sampler may **not** move.
+    std::vector<std::string> get_fixed_components() const;
+    //! Component names the sampler may move -- the dyes.
+    std::vector<std::string> get_mobile_components() const;
+
     IMP_SHOWABLE_INLINE(DyeForceFieldSystem,
                         out << "DyeForceFieldSystem(\"" << name_ << "\", "
                             << sites_.size() << " sites, " << bonds_.size()
