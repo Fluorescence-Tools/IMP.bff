@@ -75,9 +75,29 @@ RunLength and the string/mask encoders — **no FixedPoint and no
 IntegerPacking** — so it cannot produce this file. The encoder has to be
 written, in Python or C++; the *reader* is free.
 
+## The encoder, and the corpus
+
+`scripts/trajectory_to_bcif.py` writes it. The whole shipped corpus has been
+run through it, every file verified by decoding it back and comparing against
+the quantised input:
+
+| | before | after | |
+|---|---|---|---|
+| 95 `*.dcd` | 32.33 MB | **8.12 MB** | 4.0x |
+| 1 `traj.xtc` | 12.44 MB | 9.87 MB | 1.26x |
+| **total** | **44.78 MB** | **17.99 MB** | **2.5x** |
+
+The DCD files compress far better than the XTC because DCD stores raw float32
+and does nothing else; the XTC is already compressed, so BinaryCIF is competing
+with a real coordinate codec rather than with a bare array.
+
+> **Correction.** An earlier version of this page estimated the total at "about
+> 12 MB". That was arithmetic done from a single file's ratio rather than the
+> corpus, and it is wrong: the measured figure is **17.99 MB**.
+
 ## Status
 
-Nothing has been converted or deleted. `traj.xtc` and the 95 DCD files are
-**marked for removal**, pending the encoder and a conversion of the shipped
-data. Estimated result: 44.8 MB of trajectory data becomes about 12 MB in one
-format.
+**BinaryCIF is the trajectory format from 2026-08-19.** `traj.xtc` and the 95
+DCD files remain in place and remain what the package reads; they are marked
+for removal, and nothing has been deleted. What is still open is the reader
+path in `IMP.bff.io` and the conversion of the shipped data.
