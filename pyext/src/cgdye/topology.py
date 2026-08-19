@@ -511,6 +511,8 @@ def build_forcefield_system(
     # A dye on its own has no fixed component -- `dye_forcefield_system` builds
     # exactly that. The fixed one is a starting point for the accumulation
     # below, not a requirement of the format.
+    # atoms kept per component, so the sites loop below does not re-read files
+    atoms_by_component = {}
     templates = {}
     all_atoms = {}
     all_site_names = {}
@@ -529,6 +531,7 @@ def build_forcefield_system(
         if fixed_template_path:
             templates[fixed_name] = read_component_template_cif(fixed_template_path)
 
+        atoms_by_component[fixed_name] = fixed_atoms
         all_atoms = {(fixed_name, k): v for k, v in fixed_atoms.items()}
         all_site_names = {fixed_name: fixed_site_names}
         all_graphs = {fixed_name: build_graph(fixed_bonds)}
@@ -543,6 +546,7 @@ def build_forcefield_system(
 
         print(f"Mobile ({name}): {len(atoms)} atoms, {len(bonds)} bonds")
 
+        atoms_by_component[name] = atoms
         all_atoms.update({(name, k): v for k, v in atoms.items()})
         all_site_names[name] = site_names
         all_graphs[name] = build_graph(bonds)
@@ -554,9 +558,10 @@ def build_forcefield_system(
     system_name = "_".join(system_name_parts)
 
     sites = []
-    for comp_name, comp_atoms in ([(fixed_name, fixed_atoms)] if fixed_comps else []) + [
-        (c["name"], parse_dye_mol2(c["mol2"], c["name"])[0]) for c in mobile_comps
-    ]:
+    # every MOL2 was read once above; this loop used to read each mobile one a
+    # second time to get the same atoms back
+    ordered = ([fixed_name] if fixed_comps else []) + [c["name"] for c in mobile_comps]
+    for comp_name, comp_atoms in [(n, atoms_by_component[n]) for n in ordered]:
         for serial in sorted(comp_atoms.keys()):
             atom_name = all_site_names[comp_name][serial]
             sites.append(
