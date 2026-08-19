@@ -68,8 +68,6 @@ BY_DOMAIN = {
         # IMP.bff.io.fps
         "fps_schema_validate": "IMP.bff.io.fps",
         # IMP.bff.io.cif
-        "read_nmr_restraints": "IMP.bff.io.cif",
-        "write_nmr_restraints": "IMP.bff.io.cif",
         # IMP.bff.io.structure
         "read_rotamer_library_rmf": "IMP.bff.io.structure",
         "write_rotamer_library_rmf": "IMP.bff.io.structure",

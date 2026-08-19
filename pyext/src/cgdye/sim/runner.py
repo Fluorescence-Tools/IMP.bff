@@ -21,7 +21,6 @@ import IMP.rmf
 import RMF
 
 from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
-from IMP.bff.io.cif import read_nmr_restraints
 from ..system import fixed_components, mobile_components
 from IMP.bff.scoring import torsion_cosine
 from IMP.bff.tools import import_click
@@ -621,119 +620,6 @@ def _resolve_position_particle(
     return None
 
 
-def _build_nmr_restraints(
-    model,
-    component_hiers,
-    nmr_file,
-    guest_component,
-    nmr_strength,
-    restraint_set,
-    system=None,
-    system_cif=None,
-    use_minimum_restraints=True,
-):
-    if not nmr_file or not os.path.exists(nmr_file):
-        return []
-
-    atom_maps = _build_component_atom_maps(
-        component_hiers, system=system, system_cif=system_cif
-    )
-    host_candidates = [c for c in atom_maps.keys() if c != guest_component]
-    host_component = host_candidates[0] if len(host_candidates) == 1 else None
-
-    data = read_nmr_restraints(nmr_file, fixed_component_name=host_component)
-    distances = data.get("Distances", {})
-    positions = data.get("Positions", {})
-    sets = data.get("restraint_sets", {})
-
-    # Only filter if the user explicitly requested a set. 
-    # Otherwise, we include everything (CSP + all NOE groups).
-    chosen = restraint_set
-    prefix = sets.get(f"{chosen}_prefix", "") if chosen else ""
-    common_prefix = sets.get("common_prefix", "")
-    restraints = []
-
-    noe_groups = defaultdict(list)
-
-    for dname, d in distances.items():
-        if prefix:
-            if not dname.startswith(prefix):
-                if not common_prefix or not dname.startswith(common_prefix):
-                    continue
-
-        p1d = positions.get(d.get("position1_name"))
-        p2d = positions.get(d.get("position2_name"))
-        if not p1d or not p2d:
-            continue
-
-        p1 = _resolve_position_particle(
-            d.get("position1_name"),
-            p1d,
-            guest_component,
-            atom_maps,
-            host_component=host_component,
-        )
-        p2 = _resolve_position_particle(
-            d.get("position2_name"),
-            p2d,
-            guest_component,
-            atom_maps,
-            host_component=host_component,
-        )
-        if p1 is None or p2 is None:
-            continue
-
-        target = float(d.get("distance", 0.0))
-        err_pos = float(d.get("error_pos", 1.0))
-        err_neg = float(d.get("error_neg", 1.0))
-        k_pos = float(nmr_strength) / max(err_pos, 1e-6)
-        k_neg = float(nmr_strength) / max(err_neg, 1e-6)
-        rtype = d.get("distance_type", "AtomDistance")
-
-        # Group NOESY (non-CSP) restraints by their set prefix if requested
-        if use_minimum_restraints and "_RID" in dname and not dname.startswith(common_prefix):
-            peak_id = dname.split("_RID")[0]
-            noe_groups[peak_id].append((p1, p2, target, k_pos, k_neg, rtype, dname))
-            continue
-
-        if rtype in ("AtomDistance", "Atom", "AtomUpperBound"):
-            r = IMP.core.DistanceRestraint(
-                model, IMP.core.HarmonicUpperBound(target, k_pos), p1, p2
-            )
-            r.set_name(f"{dname}_upper")
-            restraints.append(r)
-        if rtype in ("AtomDistance", "Atom", "AtomLowerBound"):
-            r = IMP.core.DistanceRestraint(
-                model, IMP.core.HarmonicLowerBound(target, k_neg), p1, p2
-            )
-            r.set_name(f"{dname}_lower")
-            restraints.append(r)
-
-    # Process grouped NOESY ambiguous restraints
-    for peak_id, items in noe_groups.items():
-        rs = []
-        for (p1, p2, target, k_pos, k_neg, rtype, dname) in items:
-            if rtype in ("AtomDistance", "Atom", "AtomUpperBound"):
-                r = IMP.core.DistanceRestraint(
-                    model, IMP.core.HarmonicUpperBound(target, k_pos), p1, p2
-                )
-                r.set_name(f"{dname}_upper")
-                rs.append(r)
-            if rtype in ("AtomDistance", "Atom", "AtomLowerBound"):
-                r = IMP.core.DistanceRestraint(
-                    model, IMP.core.HarmonicLowerBound(target, k_neg), p1, p2
-                )
-                r.set_name(f"{dname}_lower")
-                rs.append(r)
-        
-        if len(rs) == 1:
-            restraints.append(rs[0])
-        elif len(rs) > 1:
-            mr = IMP.core.MinimumRestraint(1, rs)
-            mr.set_name(peak_id)
-            restraints.append(mr)
-
-    return restraints
 
 
 def _center(ps):
@@ -884,7 +770,6 @@ def _run_simple_md(
     friction_ps,
     timestep_fs,
     log_every_frames,
-    nmr_restraints=None,
 ):
     md = IMP.atom.MolecularDynamics(model)
     md.set_scoring_function(sf)
@@ -908,39 +793,24 @@ def _run_simple_md(
 
     n_frames = max(1, n_steps // max(1, write_every))
     
-    nmr_sf = None
-    if nmr_restraints:
-        nmr_sf = IMP.core.RestraintsScoringFunction(nmr_restraints)
 
-    with open(os.path.join(out_dir, "stat.0.out"), "w") as stat, \
-         open(os.path.join(out_dir, "nmr.0.out"), "w") as nmr_log:
+    with open(os.path.join(out_dir, "stat.0.out"), "w") as stat:
 
-        nmr_names = [r.get_name() for r in nmr_restraints] if nmr_restraints else []
-        if nmr_names:
-            nmr_log.write("frame\t" + "\t".join(nmr_names) + "\n")
 
-        stat.write("frame\tscore\tnmr_score\tkinetic_energy\n")
+        stat.write("frame\tscore\tkinetic_energy\n")
         IMP.rmf.save_frame(rmf_fh, "init")
         init_score = sf.evaluate(False)
-        init_nmr = nmr_sf.evaluate(False) if nmr_sf else 0.0
-        stat.write(f"init\t{init_score:.6f}\t{init_nmr:.6f}\t{md.get_kinetic_energy():.6f}\n")
-        if nmr_names:
-            nmr_scores = [r.evaluate(False) for r in nmr_restraints]
-            nmr_log.write("init\t" + "\t".join(f"{s:.6f}" for s in nmr_scores) + "\n")
+        stat.write(f"init\t{init_score:.6f}\t{md.get_kinetic_energy():.6f}\n")
 
         for frame in range(n_frames):
             md.optimize(write_every)
             score = sf.evaluate(False)
-            nmr_score = nmr_sf.evaluate(False) if nmr_sf else 0.0
             ke = md.get_kinetic_energy()
             IMP.rmf.save_frame(rmf_fh, str(frame))
-            stat.write(f"{frame}\t{score:.6f}\t{nmr_score:.6f}\t{ke:.6f}\n")
-            if nmr_names:
-                nmr_scores = [r.evaluate(False) for r in nmr_restraints]
-                nmr_log.write(f"{frame}\t" + "\t".join(f"{s:.6f}" for s in nmr_scores) + "\n")
+            stat.write(f"{frame}\t{score:.6f}\t{ke:.6f}\n")
 
             if frame % max(1, int(log_every_frames)) == 0:
-                print(f"  frame {frame:5d}/{n_frames} score={score:.2f} nmr={nmr_score:.2f} KE={ke:.2f}")
+                print(f"  frame {frame:5d}/{n_frames} score={score:.2f} KE={ke:.2f}")
 
 
 def _rb_mc_step(
@@ -1031,7 +901,6 @@ def _run_alternating_rb_mc_md(
     fixed_flex_ids,
     mobile_ring_particles=None,
     mobile_linker_particles=None,
-    nmr_restraints=None,
 ):
     # Manual RB-MC: no IMP RigidBody membership so MD can freely integrate all
     # movable particles.  Each MC step applies a random rigid translation+rotation
@@ -1056,9 +925,6 @@ def _run_alternating_rb_mc_md(
         thermo.set_period(1)
         md.add_optimizer_state(thermo)
 
-    nmr_sf = None
-    if nmr_restraints:
-        nmr_sf = IMP.core.RestraintsScoringFunction(nmr_restraints)
 
     init_fh = RMF.create_rmf_file(os.path.join(out_dir, "initial.0.rmf3"))
     IMP.rmf.add_hierarchies(init_fh, [root])
@@ -1105,22 +971,14 @@ def _run_alternating_rb_mc_md(
         flush=True,
     )
 
-    with open(os.path.join(out_dir, "stat.0.out"), "w") as stat, \
-         open(os.path.join(out_dir, "nmr.0.out"), "w") as nmr_log:
+    with open(os.path.join(out_dir, "stat.0.out"), "w") as stat:
 
-        nmr_names = [r.get_name() for r in nmr_restraints] if nmr_restraints else []
-        if nmr_names:
-            nmr_log.write("frame\t" + "\t".join(nmr_names) + "\n")
 
-        stat.write("frame\tscore\tnmr_score\tkinetic_energy\n")
+        stat.write("frame\tscore\tkinetic_energy\n")
         IMP.rmf.save_frame(rmf_fh, "init")
-        init_nmr = nmr_sf.evaluate(False) if nmr_sf else 0.0
         stat.write(
-            f"init\t{full_sf.evaluate(False):.6f}\t{init_nmr:.6f}\t{md.get_kinetic_energy():.6f}\n"
+            f"init\t{full_sf.evaluate(False):.6f}\t{md.get_kinetic_energy():.6f}\n"
         )
-        if nmr_names:
-            nmr_scores = [r.evaluate(False) for r in nmr_restraints]
-            nmr_log.write("init\t" + "\t".join(f"{s:.6f}" for s in nmr_scores) + "\n")
 
         for frame in range(n_frames):
             n_acc, n_prop = _rb_mc_step(
@@ -1135,7 +993,6 @@ def _run_alternating_rb_mc_md(
             prop_total += n_prop
             md.optimize(md_steps_per_block)
             score = full_sf.evaluate(False)
-            nmr_score = nmr_sf.evaluate(False) if nmr_sf else 0.0
             ke = md.get_kinetic_energy()
             rb_com = _center(rb_particles) if rb_particles else rb_com0
             rb_com_disp = IMP.algebra.get_distance(rb_com, rb_com0)
@@ -1159,14 +1016,11 @@ def _run_alternating_rb_mc_md(
                 linker_int_disp = sum(vals) / len(vals)
 
             IMP.rmf.save_frame(rmf_fh, str(frame))
-            stat.write(f"{frame}\t{score:.6f}\t{nmr_score:.6f}\t{ke:.6f}\n")
-            if nmr_names:
-                nmr_scores = [r.evaluate(False) for r in nmr_restraints]
-                nmr_log.write(f"{frame}\t" + "\t".join(f"{s:.6f}" for s in nmr_scores) + "\n")
+            stat.write(f"{frame}\t{score:.6f}\t{ke:.6f}\n")
             if frame % max(1, int(log_every_frames)) == 0:
                 acc_txt = f"{n_acc}/{n_prop}"
                 print(
-                    f"  frame {frame:5d}/{n_frames} score={score:.2f} nmr={nmr_score:.2f} KE={ke:.2f} "
+                    f"  frame {frame:5d}/{n_frames} score={score:.2f} KE={ke:.2f} "
                     f"rbCOM={rb_com_disp:.3f}A linkerInt={linker_int_disp:.3f}A "
                     f"so3Disp={fixed_flex_disp:.3f}A mcAcc={acc_txt}",
                     flush=True,
@@ -1191,17 +1045,12 @@ def _run(
     init_distance_a,
     init_trials,
     init_seed,
-    nmr_file,
-    nmr_strength,
-    no_minimum_restraint,
     com_pull_k,
-    restraint_set,
     go_mobile_k,
     go_fixed_k,
     go_cutoff,
     log_every_frames,
     n_restarts,
-    convergence_threshold=None,
 ):
     model = IMP.Model()
     if mobile_group is None:
@@ -1223,17 +1072,6 @@ def _run(
     run_name = f"{fixed_component}_{mobile_component}"
     out_dir = os.path.join(output_root, f"{run_name}_imp")
     os.makedirs(os.path.join(out_dir, "rmfs"), exist_ok=True)
-    nmr_restraints = _build_nmr_restraints(
-        model,
-        component_hiers,
-        nmr_file,
-        mobile_component,
-        nmr_strength,
-        restraint_set,
-        system=system,
-        system_cif=system_cif,
-        use_minimum_restraints=not no_minimum_restraint,
-    )
     go_restraints = _build_go_restraints(
         model,
         system,
@@ -1265,7 +1103,7 @@ def _run(
             )
             com_pull_restraint.set_name("com_pull")
 
-    all_restraints = restraints + nmr_restraints + go_restraints
+    all_restraints = restraints + go_restraints
     if com_pull_restraint:
         all_restraints.append(com_pull_restraint)
 
@@ -1273,7 +1111,7 @@ def _run(
         IMP.pmi.tools.add_restraint_to_model(model, r)
 
     sf = IMP.core.RestraintsScoringFunction(all_restraints)
-    mc_restraints = list(softsphere_restraints) + list(nmr_restraints)
+    mc_restraints = list(softsphere_restraints)
     if not mc_restraints:
         mc_restraints = all_restraints
     mc_sf = IMP.core.RestraintsScoringFunction(mc_restraints)
@@ -1400,7 +1238,7 @@ def _run(
         f"\n{run_name}: {n_steps} steps, write_every={write_every}, mode={sampling_mode}"
     )
     print(
-        f"Restraints: total={len(all_restraints)} softsphere={len(softsphere_restraints)} nmr={len(nmr_restraints)} go={len(go_restraints)}",
+        f"Restraints: total={len(all_restraints)} softsphere={len(softsphere_restraints)} go={len(go_restraints)}",
         flush=True,
     )
 
@@ -1439,7 +1277,6 @@ def _run(
             fixed_flex_ids,
             mobile_ring_ps,
             mobile_linker_ps,
-            nmr_restraints,
         )
     elif sampling_mode == "multi_restart":
         _run_multi_restart(
@@ -1465,14 +1302,12 @@ def _run(
             fixed_flex_ids,
             mobile_ring_ps,
             mobile_linker_ps,
-            nmr_restraints,
             system,
             mobile_group,
             init_distance_a,
             init_trials,
             init_seed,
             fixed_component,
-            convergence_threshold=convergence_threshold,
         )
     else:
         _run_simple_md(
@@ -1487,7 +1322,6 @@ def _run(
             friction_ps,
             timestep_fs,
             log_every_frames,
-            nmr_restraints=nmr_restraints,
         )
 
 
@@ -1514,19 +1348,15 @@ def _run_multi_restart(
     fixed_flex_ids,
     mobile_ring_particles,
     mobile_linker_particles,
-    nmr_restraints,
     system,
     guest_group,
     init_distance_a,
     init_trials,
     init_seed,
     host_component,
-    convergence_threshold=None,
 ):
     """Run multiple independent restarts of the hybrid MC/MD simulation and collect final states."""
     print(f"Running {n_restarts} independent restarts for multi_restart mode.")
-    if convergence_threshold:
-        print(f"Convergence threshold: {convergence_threshold:.2f}")
     os.makedirs(out_dir, exist_ok=True)
 
     # Collective RMF for final frames
@@ -1547,11 +1377,10 @@ def _run_multi_restart(
         for p in all_ps
     ]
 
-    nmr_scores_history = []
     converged = False
 
     with open(stat_path, "w") as fstats:
-        fstats.write("frame\tscore\tnmr_score\tkinetic_energy\n")
+        fstats.write("frame\tscore\tkinetic_energy\n")
 
         # Reuse MD and Thermostat objects
         md = IMP.atom.MolecularDynamics(model)
@@ -1565,9 +1394,6 @@ def _run_multi_restart(
             thermo.set_period(1)
             md.add_optimizer_state(thermo)
 
-        nmr_sf = None
-        if nmr_restraints:
-            nmr_sf = IMP.core.RestraintsScoringFunction(nmr_restraints)
 
         rb_particles_per_group = [
             [site_particles[sid] for sid in g] for g in rb_site_groups
@@ -1627,29 +1453,19 @@ def _run_multi_restart(
                     IMP.rmf.save_frame(final_rh, f"restart_{i}_block_{b}")
                     if (b + 1) % 50 == 0:
                         score = full_sf.evaluate(False)
-                        nmr_score = nmr_sf.evaluate(False) if nmr_sf else 0.0
-                        print(f"    [Restart {i+1} Block {b+1}/{n_blocks}] score={score:.2f} nmr={nmr_score:.2f}", flush=True)
+                        print(f"    [Restart {i+1} Block {b+1}/{n_blocks}] score={score:.2f}", flush=True)
 
             # Save final frame to collective RMF
             score = full_sf.evaluate(False)
-            nmr_score = nmr_sf.evaluate(False) if nmr_sf else 0.0
             ke = md.get_kinetic_energy()
             
             IMP.rmf.save_frame(final_rh, str(i))
-            fstats.write(f"{i}\t{score:.6f}\t{nmr_score:.6f}\t{ke:.6f}\n")
+            fstats.write(f"{i}\t{score:.6f}\t{ke:.6f}\n")
             fstats.flush()
             
-            nmr_scores_history.append(nmr_score)
-            
             if (i+1) % 100 == 0 or i == 0:
-                print(f"  [Restart {i+1}/{n_restarts}] score={score:.2f} nmr={nmr_score:.2f} KE={ke:.2f}", flush=True)
+                print(f"  [Restart {i+1}/{n_restarts}] score={score:.2f} KE={ke:.2f}", flush=True)
 
-            if convergence_threshold and len(nmr_scores_history) >= 10:
-                recent_avg = sum(nmr_scores_history[-10:]) / 10.0
-                if recent_avg < convergence_threshold:
-                    print(f"Converged at restart {i+1} (average NMR score {recent_avg:.2f} < {convergence_threshold:.2f})")
-                    converged = True
-                    break
 
     if converged:
         print(f"Simulation stopped early due to convergence.")
@@ -1731,31 +1547,7 @@ def _parse_paths(system_cif, systems_dir):
 @click.option("--init-trials", type=int, default=200, show_default=True)
 @click.option("--init-seed", type=int, default=42, show_default=True)
 @click.option(
-    "--nmr-cif",
-    type=click.Path(path_type=str),
-    default=None,
-    show_default=True,
-    help="Path to NMR restraints mmCIF file.",
-)
-@click.option(
-    "--nmr-json",
-    type=click.Path(path_type=str),
-    default=None,
-    show_default=True,
-    help="Legacy fallback only; prefer --nmr-cif.",
-)
-@click.option("--nmr-strength", type=float, default=1.0, show_default=True)
-@click.option(
-    "--no-minimum-restraint/--use-minimum-restraint", default=False, help="Disable MinimumRestraint grouping for NMR."
-)
-@click.option(
     "--com-pull-k", type=float, default=0.0, help="Weak harmonic force pulling guest COM to host COM."
-)
-@click.option(
-    "--restraint-set",
-    type=str,
-    default=None,
-    help="Optional key in restraint_sets from the NMR restraint file",
 )
 @click.option("--go-mobile-k", type=float, default=3.0, show_default=True)
 @click.option("--go-fixed-k", type=float, default=2.0, show_default=True)
@@ -1768,7 +1560,6 @@ def _parse_paths(system_cif, systems_dir):
     help="Progress print frequency in written frames.",
 )
 @click.option("--n-restarts", type=int, default=1, show_default=True, help="Number of independent restarts (for multi_restart mode).")
-@click.option("--convergence-threshold", type=float, default=None, show_default=True, help="Stop multi_restart if average NMR score falls below this value.")
 def main(
     system_cif,
     systems_dir,
@@ -1789,18 +1580,12 @@ def main(
     init_distance_a,
     init_trials,
     init_seed,
-    nmr_cif,
-    nmr_json,
-    nmr_strength,
-    no_minimum_restraint,
     com_pull_k,
-    restraint_set,
     go_mobile_k,
     go_fixed_k,
     go_cutoff,
     log_every_frames,
     n_restarts,
-    convergence_threshold,
 ):
     IMP.setup_from_argv([os.path.basename(__file__)], "IMP FF mmCIF MD (hybrid)")
     IMP.set_check_level(IMP.NONE)
@@ -1808,7 +1593,6 @@ def main(
     if output_root is None:
         output_root = str(Path.cwd() / "output" / "trajs")
 
-    nmr_file = nmr_cif or nmr_json
 
     for path in _parse_paths(system_cif, systems_dir):
         system = read_dye_forcefield_cif(path)
@@ -1836,17 +1620,12 @@ def main(
             init_distance_a,
             init_trials,
             init_seed,
-            nmr_file,
-            nmr_strength,
-            no_minimum_restraint,
             com_pull_k,
-            restraint_set,
             go_mobile_k,
             go_fixed_k,
             go_cutoff,
             log_every_frames,
             n_restarts=n_restarts,
-            convergence_threshold=convergence_threshold,
         )
 
 

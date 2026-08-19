@@ -46,7 +46,6 @@ class TestIntegration(unittest.TestCase):
         cls._tmp.cleanup()
 
     def setUp(self):
-        self.nmr_cif = str(Path(__import__("IMP.bff", fromlist=["x"]).get_data_path("cgdye")) / "inputs" / "restraints" / "nmr.restraints.cif")
         self.script = _cgdye_file("sim", "runner.py")
 
     def run_sim(self, args):
@@ -68,7 +67,6 @@ class TestIntegration(unittest.TestCase):
                 "--sampling-mode", "hybrid_md_mc",
                 "--md-steps", "10",
                 "--write-every", "5",
-                "--nmr-cif", self.nmr_cif,
                 "--com-pull-k", "1.0"
             ]
             result = self.run_sim(args)
@@ -88,8 +86,6 @@ class TestIntegration(unittest.TestCase):
                 "--n-restarts", "2",
                 "--md-steps", "10",
                 "--write-every", "5",
-                "--nmr-cif", self.nmr_cif,
-                "--convergence-threshold", "999999.0" 
             ]
             result = self.run_sim(args)
             self.assertEqual(result.returncode, 0, msg=result.stderr)
