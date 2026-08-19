@@ -19,7 +19,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.sampling import KB_KCAL, make_simulator
+from IMP.bff.cgdye.sampling import KB_KCAL, make_langevin_simulator
 from test_langevin_sampler import _particle, _run
 
 
@@ -64,7 +64,7 @@ def _torsion_hist(integrator):
         m = IMP.Model()
         ps, sf = _torsion_system(m, _TORSION["k"], _TORSION["n"])
         dt, n_steps, seed = (2.0, 2000000, 11) if integrator == "md" else (1.0, 1500000, 5)
-        sim = make_simulator(m, [ps[0], ps[3]], sf, integrator=integrator, temperature=_TORSION["T"],
+        sim = make_langevin_simulator(m, [ps[0], ps[3]], sf, integrator=integrator, temperature=_TORSION["T"],
                              timestep_fs=dt, friction_ps=5.0, seed=seed)
         sim.optimize(5000)
         phis = _run(sim, n_steps, 20, lambda: _phi(ps))

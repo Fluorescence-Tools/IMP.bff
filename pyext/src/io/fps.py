@@ -327,7 +327,7 @@ def read_fps_json(
         payload = json.load(f)
 
     if validate:
-        errors, _warnings = validate_fps(payload)
+        errors, _warnings = fps_schema_validate(payload)
         if errors:
             raise ValueError(
                 f"{path_str} does not conform to the fps.json schema:\n  "
@@ -376,7 +376,7 @@ def write_fps_json(
     if score_sets:
         payload["χ²"] = score_sets
     if validate:
-        errors, _warnings = validate_fps(payload)
+        errors, _warnings = fps_schema_validate(payload)
         if errors:
             raise ValueError(
                 "refusing to write a non-conforming fps.json:\n  "
@@ -912,7 +912,7 @@ def validate_distance(
     return errors, warnings
 
 
-def validate_fps(payload: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+def fps_schema_validate(payload: Dict[str, Any]) -> Tuple[List[str], List[str]]:
     """Validate a parsed network-dialect fps.json payload.
 
     Parameters

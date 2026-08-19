@@ -166,7 +166,7 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     write_rotamer_fps(out, positions, distances)                    # validated on write
     p, dist, _s, _e = read_fps_json(out)
     assert set(p) == {"d1", "a1"} and set(dist) == {"d1_a1"}
-    errors, warnings = fps_schema.validate_fps({"Positions": p, "Distances": dist})
+    errors, warnings = fps_schema.fps_schema_validate({"Positions": p, "Distances": dist})
     assert errors == []
     # what the C++ scorer may see: no R1 positions, no dangling distances
     kept_p, kept_d = fps_positions_for_docking(p, dist)

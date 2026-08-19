@@ -17,7 +17,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.sampling import KB_KCAL, LangevinDyeSampler, make_simulator
+from IMP.bff.cgdye.sampling import KB_KCAL, LangevinDyeSampler, make_langevin_simulator
 
 
 def _particle(m, xyz, radius=1.7, mass=12.0):
@@ -45,7 +45,7 @@ def test_md_harmonic_oscillator_equipartition():
     IMP.core.XYZ(anchor).set_coordinates_are_optimized(False)
     r = IMP.core.DistanceRestraint(m, IMP.core.Harmonic(0.0, k), p, anchor)
     sf = IMP.core.RestraintsScoringFunction([r])
-    sim = make_simulator(m, [p], sf, integrator="md", temperature=T, timestep_fs=2.0, friction_ps=20.0, seed=7)
+    sim = make_langevin_simulator(m, [p], sf, integrator="md", temperature=T, timestep_fs=2.0, friction_ps=20.0, seed=7)
     sim.optimize(2000)   # equilibrate
     samples = _run(sim, 60000, 20, lambda: (sf.evaluate(False), sim.get_kinetic_energy()))
     v_mean = samples[:, 0].mean()
@@ -63,7 +63,7 @@ def test_bd_free_particle_msd_is_6Dt():
     IMP.core.XYZ(far).set_coordinates_are_optimized(False)
     sf = IMP.core.RestraintsScoringFunction([IMP.core.DistanceRestraint(m, IMP.core.Harmonic(0.0, 0.0), p, far)])
     dt = 10.0
-    sim = make_simulator(m, [p], sf, integrator="bd", temperature=T, timestep_fs=dt, seed=3)
+    sim = make_langevin_simulator(m, [p], sf, integrator="bd", temperature=T, timestep_fs=dt, seed=3)
     d_coef = IMP.atom.Diffusion(p).get_diffusion_coefficient()
     assert d_coef == pytest.approx(IMP.atom.get_einstein_diffusion_coefficient(2.0, T))
     n_rep, n_steps = 400, 50

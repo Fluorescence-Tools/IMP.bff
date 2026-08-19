@@ -355,8 +355,8 @@ def main(system, okf_dir, pins, n_samples, temperature, cutoffs):
     for cutoff in [int(c) for c in cutoffs.split(",") if c.strip()]:
         for key in names:
             title, pdb, positions, libraries, pairs, experimental = cases[key](cutoff)
-            per_pos = compare_positions(pdb, positions, libraries, n_samples=n_samples, temperature=temperature)
-            rows = compare_pairs(per_pos, pairs, R0_A488_A594, experimental=experimental, n_samples=n_samples)
+            per_pos = compare_av_and_rotamer_positions(pdb, positions, libraries, n_samples=n_samples, temperature=temperature)
+            rows = compare_av_and_rotamer_pairs(per_pos, pairs, R0_A488_A594, experimental=experimental, n_samples=n_samples)
             md.append(markdown_table(per_pos, rows, title))
             numbers[f"{key}_cutoff{cutoff}"] = summary_numbers(per_pos, rows)
     text = "\n".join(md)

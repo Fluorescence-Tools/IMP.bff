@@ -255,16 +255,27 @@ for _domain, _members in BY_DOMAIN.items():
         EXPORTS[_name] = _module
 del _domain, _members, _name, _module
 
-#: a few exports are attributes with a different name in their module
+#: The two exports whose module name differs from their public one.
+#:
+#: There were ten. Eight were legacy spellings -- ``kappasq_dwt`` for
+#: ``kappa2_distribution_dynamic``, ``s2delta`` for
+#: ``kappa2_order_parameters`` -- which meant the package's own code never read
+#: the way its API did, and a reader following a public name landed on a
+#: different word. Those implementations were renamed to match, and the aliases
+#: deleted.
+#:
+#: These two remain because they are not a spelling difference: they are two
+#: genuinely different functions that a name collision forced apart, and the
+#: flat surface keeps the meaning it always had.
 _SOURCE_NAME = {
-    "kappa2_distribution_dynamic": "kappasq_dwt",
-    "kappa2_distribution_all": "kappasq_all",
-    "kappa2_order_parameters": "s2delta",
-    "kappa2_isotropic_distribution": "p_isotropic_orientation_factor",
-    "fps_schema_validate": "validate_fps",
-    "compare_av_and_rotamer_positions": "compare_positions",
-    "compare_av_and_rotamer_pairs": "compare_pairs",
-    "make_langevin_simulator": "make_simulator",
+    "kappa2_distribution_dynamic": "kappa2_distribution_dynamic",
+    "kappa2_distribution_all": "kappa2_distribution_all",
+    "kappa2_order_parameters": "kappa2_order_parameters",
+    "kappa2_isotropic_distribution": "kappa2_isotropic_distribution",
+    "fps_schema_validate": "fps_schema_validate",
+    "compare_av_and_rotamer_positions": "compare_av_and_rotamer_positions",
+    "compare_av_and_rotamer_pairs": "compare_av_and_rotamer_pairs",
+    "make_langevin_simulator": "make_langevin_simulator",
     # `IMP.bff.compute_av` has always been the *structure* front door -- a PDB
     # plus an fps position definition -- while `IMP.bff.representation.av`
     # exported the *array* one under the same name. The two lived in different

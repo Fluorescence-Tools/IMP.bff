@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.representation.compare import compare_pairs, compare_positions
+from IMP.bff.representation.compare import compare_av_and_rotamer_pairs, compare_av_and_rotamer_positions
 from IMP.bff.representation.compare import R0_A488_A594, hgbp1_case, t4l_case
 
 _PINS = Path(__file__).resolve().parents[2] / "references" / "cgdye_av_vs_rotamer_pins.json"
@@ -33,8 +33,8 @@ def test_av_vs_rotamer_pins_and_sanity(case_name, case):
     pins = _pins()
     settings = pins["settings"]
     title, pdb, positions, libraries, pairs, experimental = case(30)
-    per_pos = compare_positions(pdb, positions, libraries, n_samples=settings["n_samples"], temperature=settings["temperature"])
-    rows = compare_pairs(per_pos, pairs, R0_A488_A594, experimental=experimental, n_samples=settings["n_samples"])
+    per_pos = compare_av_and_rotamer_positions(pdb, positions, libraries, n_samples=settings["n_samples"], temperature=settings["temperature"])
+    rows = compare_av_and_rotamer_pairs(per_pos, pairs, R0_A488_A594, experimental=experimental, n_samples=settings["n_samples"])
     ref = pins[case_name]
 
     # drift pins (deterministic: lattice AV + fixed-seed sampling; full pair matrix)

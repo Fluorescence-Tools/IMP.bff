@@ -21,8 +21,8 @@ from IMP.bff.representation.rotamer import RotamerEnsemble
 
 __all__ = [
     'av_for_position',
-    'compare_pairs',
-    'compare_positions',
+    'compare_av_and_rotamer_pairs',
+    'compare_av_and_rotamer_positions',
     'ensemble_for_position',
     'ensemble_pair_statistics',
     'markdown_table',
@@ -109,7 +109,7 @@ def ensemble_pair_statistics(e1: AccessibleVolume, e2: AccessibleVolume, forster
     return rmp, rda, rda_e, sigma, kappa2_avg
 
 
-def compare_positions(
+def compare_av_and_rotamer_positions(
     pdb: str,
     positions: Dict[str, Dict[str, Any]],
     libraries: Dict[str, str],
@@ -181,7 +181,7 @@ def compare_positions(
 Z_CUTOFF = 0.05
 
 
-def compare_pairs(
+def compare_av_and_rotamer_pairs(
     per_position: Dict[str, Dict[str, Any]],
     pairs: Iterable[Tuple[str, str]],
     forster_radius: float,

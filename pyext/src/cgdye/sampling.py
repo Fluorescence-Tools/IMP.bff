@@ -28,7 +28,7 @@ __all__ = [
     'KB_KCAL',
     'LangevinDyeSampler',
     'LangevinTrajectory',
-    'make_simulator',
+    'make_langevin_simulator',
 ]
 
 # --------------------------------------------------------------------------
@@ -270,7 +270,7 @@ def _prepare_particles(particles, temperature: float, integrator: str, radii=Non
                 IMP.atom.Diffusion(p).set_diffusion_coefficient(d_coef)
 
 
-def make_simulator(
+def make_langevin_simulator(
     model,
     mobile_particles,
     scoring_function,
@@ -456,7 +456,7 @@ class LangevinDyeSampler:
             cbpc = IMP.container.CloseBipartitePairContainer(dye_lc, prot_lc, 3.0, 1.0)
             self.restraints.append(IMP.container.PairsRestraint(IMP.core.SoftSpherePairScore(float(repulsion_k)), cbpc, "dye-protein"))
         self.scoring_function = IMP.core.RestraintsScoringFunction(self.restraints)
-        self.simulator = make_simulator(
+        self.simulator = make_langevin_simulator(
             self.model, self.mobile, self.scoring_function, integrator=integrator,
             temperature=self.temperature, timestep_fs=self.timestep_fs, friction_ps=self.friction_ps, seed=seed)
 

@@ -59,12 +59,12 @@ def test_validate_requires_distance_fields_and_position_refs():
                             "error_pos": 2.0}},
         "χ²": {"s": {"distances": ["d", "missing"]}},
     }
-    errors, _ = fps_schema.validate_fps(payload)
+    errors, _ = fps_schema.fps_schema_validate(payload)
     assert any("ghost" in e for e in errors)
     assert any("missing" in e for e in errors)
     # a required distance field left out
     del payload["Distances"]["d"]["distance"]
-    errors, _ = fps_schema.validate_fps(payload)
+    errors, _ = fps_schema.fps_schema_validate(payload)
     assert any("missing required field 'distance'" in e for e in errors)
 
 

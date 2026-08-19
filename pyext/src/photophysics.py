@@ -94,7 +94,7 @@ not even import. Both were fixed then; the four jitted kernels became C++ in
 stage 4d and now live in ``OrientationFactor.h``.
 
 .. warning::
-   **The port found that** :func:`kappasq_all` **was returning half the right
+   **The port found that** :func:`kappa2_distribution_all` **was returning half the right
    answer.** It drew dipole directions with ``np.random.random(3)`` and
    normalised them, which does not sample the sphere: it fills only the
    positive octant of the unit cube, and non-uniformly at that. In the rigid
@@ -107,7 +107,7 @@ stage 4d and now live in ``OrientationFactor.h``.
    take them again.
 
 The isotropic average is the only analytic check this module has, so it is
-worth stating why it exists: :func:`kappasq_all` at ``sD2 = sA2 = 0`` returns
+worth stating why it exists: :func:`kappa2_distribution_all` at ``sD2 = sA2 = 0`` returns
 exactly :math:`2/3` for every sample (freely rotating dyes have no orientation
 preference at all), and at ``sD2 = sA2 = 1`` -- rigid dyes, random mutual
 orientation -- the *mean* is :math:`2/3` while individual values span
@@ -119,7 +119,7 @@ two transition dipoles and a separation vector into a number -- is in
 questions and now live side by side rather than in unrelated packages.
 """
 
-def kappasq_dwt(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
+def kappa2_distribution_dynamic(sD2, sA2, fret_efficiency, n_samples=10000, n_bins=31,
                 k2_min=0.0, k2_max=4.0, seed=-1):
     """p(kappa^2) for a dynamic pair, conditioned on a measured efficiency.
 
@@ -254,7 +254,7 @@ def kappasq_all_delta(
             k2)
 
 
-def kappasq_all(
+def kappa2_distribution_all(
         sD2: float,
         sA2: float,
         n_bins: int = 81,
@@ -299,7 +299,7 @@ def kappasq_all(
     Examples
     --------
     >>> from scikit_fluorescence.modeling.kappa2 import kappasq_all_delta
-    >>> k2_scale, k2_hist, k2 = kappasq_all(
+    >>> k2_scale, k2_hist, k2 = kappa2_distribution_all(
     ...     sD2=0.3,
     ...     sA2=0.5,
     ...     n_bins=31,
@@ -448,13 +448,13 @@ def kappa(
     )
 
 
-def s2delta(
+def kappa2_order_parameters(
         s2_donor: float,
         s2_acceptor: float,
         r_inf_AD: float,
         r_0: float = 0.38
 ) -> typing.Tuple[float, float]:
-    r"""Calculate s2delta from the residual anisotropies of the donor and acceptor
+    r"""Calculate kappa2_order_parameters from the residual anisotropies of the donor and acceptor
 
     Parameters
     ----------
@@ -472,19 +472,19 @@ def s2delta(
 
     Returns
     -------
-    s2delta : float
+    kappa2_order_parameters : float
          A second rank order parameter of the angle [1]_ eq. 10
     delta : float
         The angle between the two symmetry axes of the dipols in units of rad.
 
     Examples
     --------
-    >>> from scikit_fluorescence.modeling.kappa2 import s2delta
+    >>> from scikit_fluorescence.modeling.kappa2 import kappa2_order_parameters
     >>> r0 = 0.38
     >>> s2donor = 0.2
     >>> s2acceptor = 0.3
     >>> r_inf_AD = 0.01
-    >>> s2delta(
+    >>> kappa2_order_parameters(
     ...     r_0=r0,
     ...     s2_donor=s2donor,
     ...     s2_acceptor=s2acceptor,
@@ -600,7 +600,7 @@ def kappasq(
     return IMP.bff.wobbling_kappa2(delta, sD2, sA2, beta1, beta2)
 
 
-def p_isotropic_orientation_factor(k2: np.ndarray,
+def kappa2_isotropic_distribution(k2: np.ndarray,
                                    normalize: bool = True) -> np.ndarray:
     """``p(kappa^2)`` for isotropically oriented, *static* dipoles. **C++.**
 

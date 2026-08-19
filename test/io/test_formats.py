@@ -104,7 +104,7 @@ def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
     assert score_sets == {} and extra == {}
     # the converted payload conforms to the schema
     import IMP.bff.io.fps as fps_schema
-    errors, _ = fps_schema.validate_fps(
+    errors, _ = fps_schema.fps_schema_validate(
         {"Positions": positions, "Distances": distances})
     assert not errors, errors
 

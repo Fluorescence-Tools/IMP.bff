@@ -3,7 +3,7 @@
 The orientation factor is the dominant systematic in a FRET distance, and it
 has exactly one analytic handle: **the isotropic average is 2/3**. That handle
 is what these tests are built on, and it is what caught a real defect during the
-C++ port -- ``kappasq_all`` sampled dipole directions with ``np.random.random(3)``,
+C++ port -- ``kappa2_distribution_all`` sampled dipole directions with ``np.random.random(3)``,
 which fills the positive octant of the unit cube rather than the sphere, and
 returned 0.333 where the rigid isotropic limit is 0.667.
 
@@ -84,31 +84,31 @@ def test_wobbling_kappa2_matches_the_bare_geometry_when_fully_rigid():
 # --- the distributions -------------------------------------------------------
 
 def test_free_dyes_give_exactly_two_thirds_every_sample():
-    _, _, k2 = o.kappasq_all(0.0, 0.0, n_samples=20000, seed=2)
+    _, _, k2 = o.kappa2_distribution_all(0.0, 0.0, n_samples=20000, seed=2)
     assert np.ptp(k2) == 0.0
     assert k2[0] == pytest.approx(2 / 3)
 
 
 def test_rigid_dyes_average_two_thirds_and_span_the_full_range():
     """The check that caught the octant-sampling defect. Do not loosen it."""
-    _, _, k2 = o.kappasq_all(1.0, 1.0, n_bins=81, n_samples=400000, seed=1)
+    _, _, k2 = o.kappa2_distribution_all(1.0, 1.0, n_bins=81, n_samples=400000, seed=1)
     assert k2.mean() == pytest.approx(2 / 3, abs=0.01)
     assert k2.min() < 0.01 and k2.max() > 3.9, "the sampler is not reaching the sphere"
 
 
 def test_samples_stay_within_the_physical_bounds():
-    _, _, k2 = o.kappasq_all(0.9, 0.9, n_samples=100000, seed=3)
+    _, _, k2 = o.kappa2_distribution_all(0.9, 0.9, n_samples=100000, seed=3)
     assert k2.min() >= 0.0 and k2.max() <= 4.0
 
 
 def test_distribution_is_reproducible_and_seed_dependent():
-    a = o.kappasq_all(0.5, 0.4, n_samples=5000, seed=7)[2]
-    np.testing.assert_array_equal(a, o.kappasq_all(0.5, 0.4, n_samples=5000, seed=7)[2])
-    assert not np.array_equal(a, o.kappasq_all(0.5, 0.4, n_samples=5000, seed=8)[2])
+    a = o.kappa2_distribution_all(0.5, 0.4, n_samples=5000, seed=7)[2]
+    np.testing.assert_array_equal(a, o.kappa2_distribution_all(0.5, 0.4, n_samples=5000, seed=7)[2])
+    assert not np.array_equal(a, o.kappa2_distribution_all(0.5, 0.4, n_samples=5000, seed=8)[2])
 
 
 def test_histogram_and_scale_shapes_are_consistent():
-    scale, hist, k2 = o.kappasq_all(0.3, 0.3, n_bins=81, n_samples=1000, seed=0)
+    scale, hist, k2 = o.kappa2_distribution_all(0.3, 0.3, n_bins=81, n_samples=1000, seed=0)
     assert scale.shape == (81,) and hist.shape == (80,)
     assert hist.sum() == 1000, "every sample must land in a bin, including the top edge"
     assert k2.shape == (1000,)
