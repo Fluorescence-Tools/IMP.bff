@@ -218,4 +218,20 @@ double fret_efficiency_from_lifetimes(const LifetimeSpectrum& donor_only,
     return 1.0 - donor_acceptor.get_species_averaged_lifetime() / tau_d;
 }
 
+LifetimeSpectrum lifetime_spectrum_from_rates(const std::vector<double>& rates,
+                                              const std::vector<double>& weights,
+                                              bool exact) {
+    // An empty weight vector is "uniform", which is a different thing from a
+    // length mismatch: the caller that omits weights means one per species.
+    if (weights.empty()) {
+        return LifetimeSpectrum(std::vector<double>(rates.size(), 1.0), rates,
+                                exact);
+    }
+    if (weights.size() != rates.size()) {
+        IMP_THROW("one weight per rate: " << weights.size() << " against "
+                                          << rates.size(), ValueException);
+    }
+    return LifetimeSpectrum(weights, rates, exact);
+}
+
 IMPBFF_END_NAMESPACE

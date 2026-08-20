@@ -893,7 +893,7 @@ def label_fp(pdb_id_or_path, site, output):
         if len(parts) > 3: anchor = parts[3]
         elif len(parts) > 2 and parts[2] in ("N", "C"): anchor = parts[2]
         
-        fp_path = get_template_dir("fp") / f"{fp_type}.pdb"
+        fp_path = Path(get_template_dir("fp")) / f"{fp_type}.pdb"
         if not fp_path.exists():
             for f in fp_path.parent.glob("*.pdb"):
                 if f.stem.lower() == fp_type.lower():
@@ -978,7 +978,7 @@ def label_fusion(pdb_path, chain, output):
             click.echo(f"  Labeling {fp_name} at residue {seg['start']}...")
             
             # Find matching template
-            template_path = get_template_dir("fp") / f"{fp_name}.pdb"
+            template_path = Path(get_template_dir("fp")) / f"{fp_name}.pdb"
             if not template_path.exists():
                 # Try case-insensitive fallback
                 for f in template_path.parent.glob("*.pdb"):
@@ -2055,7 +2055,7 @@ def analyze_dye_trajectories(
         else:
             # Default: the bundled template, which is IMP module data
             from IMP.bff import get_template_dir
-            tpl = get_template_dir() / f"{mob}.template.cif"
+            tpl = Path(get_template_dir()) / f"{mob}.template.cif"
         template_map[mob] = tpl
 
     for mob in mobiles:

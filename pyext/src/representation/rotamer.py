@@ -579,7 +579,7 @@ def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None =
         if dcd.exists() and dcd.with_name(f"{stem}.pdb").exists():
             return dcd
 
-    template_dir = Path(lib_dir) if lib_dir is not None else get_template_dir("rotamer")
+    template_dir = Path(lib_dir) if lib_dir is not None else Path(get_template_dir("rotamer"))
     candidates = [
         template_dir / f"{filename}.bcif",
         template_dir / f"{filename}.rmf3",

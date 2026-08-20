@@ -123,6 +123,22 @@ IMP_VALUES(LifetimeSpectrum, LifetimeSpectrums);
     \param[in] donor_acceptor the same donor with one
     \return efficiency; 0 if the donor-only lifetime is zero or not finite
 */
+//! One species per rate constant.
+/*!
+    The static limit taken literally: if a population of weight \f$w_i\f$ decays
+    at \f$k_i\f$ and keeps that rate, then \f$F(t) = \sum_i w_i e^{-k_i t}\f$ is
+    the decay, with no fitting and no approximation. Whether that premise holds
+    is the caller's to know, and `exact` records the answer.
+
+    \param[in] rates total deactivation rate per species, 1/ns
+    \param[in] weights population per species; uniform when empty
+    \param[in] exact see LifetimeSpectrum
+*/
+IMPBFFEXPORT LifetimeSpectrum lifetime_spectrum_from_rates(
+        const std::vector<double>& rates,
+        const std::vector<double>& weights = std::vector<double>(),
+        bool exact = true);
+
 IMPBFFEXPORT double fret_efficiency_from_lifetimes(
         const LifetimeSpectrum& donor_only,
         const LifetimeSpectrum& donor_acceptor);

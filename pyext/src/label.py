@@ -1269,8 +1269,9 @@ def segments_from_plddt(
 
 def load_fp_library() -> Dict[str, Dict]:
     """Load the FP library from the bundled JSON file."""
+    import os
     import IMP.bff
-    path = IMP.bff._cgdye_data_root() / "fp_library.json"
+    path = os.path.join(IMP.bff.get_cgdye_data_dir(), "fp_library.json")
     with open(path, "r") as f:
         return json.load(f)
 

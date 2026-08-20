@@ -91,32 +91,12 @@ def __init__(self, *args, **kwargs):
  * Building a spectrum -- the reductions that turn a forward model's internals
  * into the contract the header states.
  *
- * `IMP.bff.observables` was a module for these three functions and a re-export
- * of the two names that had already become C++. What is left is argument
- * marshalling and a shape check, so it lives here rather than in a file of its
- * own.
+ * `lifetime_spectrum_from_rates` is C++, in `LifetimeSpectrum.h` beside the type
+ * it builds. The two below are not yet: they reduce over the `InteractionTerm`
+ * objects, which are still Python, and they follow those to C++ rather than
+ * arriving there first.
  */
 %pythoncode %{
-def lifetime_spectrum_from_rates(rates, weights=None, exact=True):
-    """One species per rate constant.
-
-    The static limit taken literally: if a population of weight ``w_i`` decays
-    at ``k_i`` and keeps that rate, then ``F(t) = sum w_i exp(-k_i t)`` is the
-    decay, with no fitting and no approximation. Whether that premise holds is
-    the caller's to know, and *exact* records the answer.
-
-    :param rates: total deactivation rate per species, 1/ns.
-    :param weights: population per species; uniform if omitted.
-    :param exact: see :class:`LifetimeSpectrum`.
-    """
-    k = np.asarray(rates, dtype=np.float64).ravel()
-    w = (np.ones_like(k) if weights is None
-         else np.asarray(weights, dtype=np.float64).ravel())
-    if w.shape != k.shape:
-        raise ValueError(f"one weight per rate: {w.shape} against {k.shape}")
-    return LifetimeSpectrum(w, k, exact=exact)
-
-
 def rate_constants(terms, *participants, **kwargs):
     """Total deactivation rate per state, in 1/ns.
 

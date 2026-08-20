@@ -12,8 +12,8 @@ from IMP.bff.sampling import apply_rotamer_coordinates, sample_rotamer_index
 from IMP.bff.cgdye.sampling import LinkerSampler
 from IMP.bff import get_template_dir, get_structure_dir
 
-ROTAMER_LIB_DIR = get_template_dir("rotamer")
-STRUCTURES_DIR = get_structure_dir()
+ROTAMER_LIB_DIR = Path(get_template_dir("rotamer"))
+STRUCTURES_DIR = Path(get_structure_dir())
 
 def get_all_dyes():
     dyes = []

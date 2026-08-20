@@ -48,7 +48,7 @@ class TestDyeTemplateRead:
         """Read A48_C1R template and verify structure."""
         from IMP.bff.io.cif import read_dye_template_cif
 
-        template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
+        template_path = str(get_template_dir("dyes/A48_C1R/template.cif"))
 
         if not os.path.exists(template_path):
             pytest.skip("Template file not found")
@@ -75,7 +75,7 @@ class TestDyeTemplateWrite:
         """Write and read back a dye template, verify consistency."""
         from IMP.bff.io.cif import read_dye_template_cif, write_dye_template_cif
 
-        template_path = str(get_template_dir("dyes", "A48_C1R", "template.cif"))
+        template_path = str(get_template_dir("dyes/A48_C1R/template.cif"))
 
         if not os.path.exists(template_path):
             pytest.skip("Template file not found")
@@ -117,7 +117,7 @@ class TestDyeRegistryRead:
     def test_read_dye_registry(self):
         """Read dyes.cif and verify all 33 dyes are present."""
 
-        registry_path = str(get_template_dir("dyes", "dyes.cif"))
+        registry_path = str(get_template_dir("dyes/dyes.cif"))
 
         if not os.path.exists(registry_path):
             pytest.skip("Registry file not found")
