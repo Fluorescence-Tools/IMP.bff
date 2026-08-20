@@ -111,30 +111,6 @@ class PetParameterTests(IMP.test.TestCase):
         self.assertTrue(math.isnan(table["TRP"].quench_radius))
         self.assertTrue(math.isnan(table["TYR"].quench_radius))
 
-    def test_quencher_selection_finds_the_right_atoms(self):
-        atoms = np.zeros(
-            6, dtype=[("res_name", "U4"), ("atom_name", "U4"), ("coord", "f8", 3)]
-        )
-        atoms["res_name"] = ["TRP", "TRP", "MET", "ALA", "MET", "TRP"]
-        atoms["atom_name"] = ["NE1", "CB", "SD", "CB", "CB", "NE1"]
-        atoms["coord"] = np.arange(18).reshape(6, 3)
-        selection = {"TRP": ["NE1"], "MET": ["SD"]}
-        indices = _q.quencher_atom_indices(atoms, selection)
-        self.assertEqual(sorted(indices["TRP"].tolist()), [0, 5])
-        self.assertEqual(indices["MET"].tolist(), [2])
-        centres = _q.quencher_centers(atoms, selection)
-        self.assertEqual(centres["TRP"].shape, (2, 3))
-        self.assertEqual(centres["MET"].shape, (1, 3))
-
-    def test_a_residue_type_that_is_absent_yields_an_empty_selection(self):
-        atoms = np.zeros(
-            1, dtype=[("res_name", "U4"), ("atom_name", "U4"), ("coord", "f8", 3)]
-        )
-        atoms["res_name"] = ["ALA"]
-        atoms["atom_name"] = ["CB"]
-        indices = _q.quencher_atom_indices(atoms, {"TRP": ["NE1"]})
-        self.assertEqual(indices["TRP"].size, 0)
-
 
 class SolventAccessibleSurfaceTests(IMP.test.TestCase):
 

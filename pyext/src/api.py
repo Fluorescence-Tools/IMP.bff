@@ -117,7 +117,6 @@ BY_DOMAIN = {
         "quenching_rate_grid": "IMP.bff.quenching",
         "slow_factor_grid": "IMP.bff.quenching",
         # IMP.bff.quenching
-        "atomic_quenching_parameters": "IMP.bff.quenching",
         "diffusion_coefficient_map": "IMP.bff.quenching",
         "fret_rate_map": "IMP.bff.quenching",
         "quenching_rate_map": "IMP.bff.quenching",
@@ -127,11 +126,7 @@ BY_DOMAIN = {
         "DyeDiffusionSimulation": "IMP.bff.quenching",
         "QuenchedDonorDecay": "IMP.bff.quenching",
         # IMP.bff.quenching
-        "quencher_atom_indices": "IMP.bff.quenching",
-        "quencher_centers": "IMP.bff.quenching",
         # IMP.bff.quenching
-        "ResidueSites": "IMP.bff.quenching",
-        "residue_sites": "IMP.bff.quenching",
     },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {

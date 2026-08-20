@@ -21,6 +21,17 @@ IMP_SWIG_VALUE(IMP::bff, Quencher, Quenchers);
 IMP_SWIG_VALUE(IMP::bff, PETParameters, PETParametersList);
 IMP_SWIG_VALUE(IMP::bff, ResidueQuenching, ResidueQuenchings);
 IMP_SWIG_VALUE(IMP::bff, PETReference, PETReferences);
+IMP_SWIG_VALUE(IMP::bff, ResidueSites, ResidueSitesList);
+
+// Two output views from one call: `atomic_quenching_parameters` returns kQ and
+// rC together because they are read together and looked up once.
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_kQ, int* n_out_kQ)};
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_rC, int* n_out_rC)};
+
+// The atoms, straight from numpy.
+%apply(double* IN_ARRAY2, int DIM1, int DIM2) {
+    (double* coords, int n_atoms, int n_dim)
+};
 
 %attribute_py(IMP::bff::Quencher, bool, is_typed, get_is_typed);
 %attribute_py(IMP::bff::PETParameters, bool, is_transferred, get_is_transferred);
@@ -35,14 +46,40 @@ IMP_SWIG_VALUE(IMP::bff, PETReference, PETReferences);
 %rename(_slow_factors_for_residues) IMP::bff::slow_factors_for_residues;
 %rename(_quenching_rates_for_residues) IMP::bff::quenching_rates_for_residues;
 %rename(_quench_radii_for_residues) IMP::bff::quench_radii_for_residues;
+%rename(_residue_sites) IMP::bff::residue_sites;
+
+// A build helper over raw pointers; nothing Python-side appends to a result.
+%ignore IMP::bff::ResidueSites::add;
 
 %include "IMP/bff/PETQuenching.h"
+
+%extend IMP::bff::ResidueSites {
+    %pythoncode %{
+        @property
+        def slow_centers(self):
+            """``(n, 3)`` -- CB, or CA, or the residue's first atom."""
+            return _IMP_bff.ResidueSites_get_slow_centers(self).reshape(-1, 3)
+
+        @property
+        def quench_centers(self):
+            """``(n, 3)`` -- the centroid of the redox-active atoms."""
+            return _IMP_bff.ResidueSites_get_quench_centers(self).reshape(-1, 3)
+
+        @property
+        def residue_names(self):
+            return list(self.get_residue_names())
+
+        def __len__(self):
+            return int(self.size())
+    %}
+}
 
 %template(QuencherMap) std::map<std::string, IMP::bff::Quencher>;
 %template(PETParametersMap) std::map<std::string, IMP::bff::PETParameters>;
 %template(ResidueQuenchingMap) std::map<std::string, IMP::bff::ResidueQuenching>;
 %template(PETReferenceMap) std::map<std::string, IMP::bff::PETReference>;
 %template(MapStringVectorString) std::map<std::string, std::vector<std::string> >;
+%template(VectorInt2) std::vector<int>;
 
 %pythoncode %{
 def _pet_table(table):
@@ -123,4 +160,19 @@ def quench_radii_for_residues(residue_names, table, critical_distance=0.0):
     return np.asarray(_IMP_bff._quench_radii_for_residues(
         [str(r) for r in residue_names], _pet_table(table),
         float(critical_distance or 0.0)), dtype=np.float64)
+
+
+def residue_sites(chains, res_ids, res_names, atom_names, coords, table=None):
+    """Group atoms by residue and locate its slow and quench centres.
+
+    Residues are keyed by ``(chain, res_id, res_name)``. **Keying on ``res_id``
+    alone is wrong** and was a real defect in QuEst: residue numbers restart per
+    chain, so in a homodimer every number occurs twice and two residues' atoms
+    were folded into one centre.
+    """
+    return _IMP_bff._residue_sites(
+        [str(c) for c in chains], [int(r) for r in res_ids],
+        [str(r) for r in res_names], [str(a) for a in atom_names],
+        np.ascontiguousarray(np.asarray(coords, dtype=np.float64)),
+        _pet_table(table))
 %}

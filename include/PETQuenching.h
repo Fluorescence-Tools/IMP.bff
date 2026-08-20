@@ -216,6 +216,71 @@ IMPBFFEXPORT std::vector<double> quench_radii_for_residues(
         const std::map<std::string, ResidueQuenching>& table,
         double critical_distance = 0.0);
 
+//! One slow centre and one quench centre per residue, plus its type.
+class IMPBFFEXPORT ResidueSites {
+    std::vector<double> slow_centers_;    //!< flat, three per residue
+    std::vector<double> quench_centers_;  //!< flat, three per residue
+    std::vector<std::string> residue_names_;
+
+public:
+    //! Append one residue: its slow centre, its quench centre and its type.
+    void add(const double* slow, const double* quench,
+             const std::string& residue_name);
+
+    unsigned int size() const {
+        return static_cast<unsigned int>(residue_names_.size());
+    }
+    std::vector<std::string> get_residue_names() const { return residue_names_; }
+    //! The centres as numpy views, `(n, 3)` once reshaped.
+    void get_slow_centers(double** out_view, int* n_out_view) const;
+    void get_quench_centers(double** out_view, int* n_out_view) const;
+
+    IMP_SHOWABLE_INLINE(ResidueSites,
+                        out << "ResidueSites(" << residue_names_.size()
+                            << " residues)");
+};
+IMP_VALUES(ResidueSites, ResidueSitesList);
+
+//! Group atoms by residue and locate its slow and quench centres.
+/*!
+    The slow centre is CB, or CA when there is no CB, or the residue's first
+    atom. The quench centre is the centroid of the atoms the table names as
+    redox-active, falling back to the slow centre when the residue has none.
+
+    Residues are keyed by `(chain, res_id, res_name)`. **Keying on `res_id`
+    alone is wrong** and was a real defect in QuEst: residue numbers restart per
+    chain, so in a homodimer every number occurs twice and two residues' atoms
+    were folded into one centre.
+
+    \param[in] chains,res_ids,res_names,atom_names one per atom
+    \param[in] coords,n_atoms,n_dim the atoms, `(N, 3)`
+    \param[in] table whose `quench_atoms` decide the quench centres
+*/
+IMPBFFEXPORT ResidueSites residue_sites(
+        const std::vector<std::string>& chains,
+        const std::vector<int>& res_ids,
+        const std::vector<std::string>& res_names,
+        const std::vector<std::string>& atom_names,
+        double* coords, int n_atoms, int n_dim,
+        const std::map<std::string, ResidueQuenching>& table =
+                std::map<std::string, ResidueQuenching>());
+
+//! Per-atom quenching rate \f$k_Q\f$ and characteristic distance \f$r_C\f$.
+/*!
+    Atoms not named in \p quencher do not quench, and come back as zeros.
+
+    \param[in] res_names,atom_names one per atom
+    \param[in] parameters `{comp_id: PETParameters}` for one dye; an atom
+               quenches when its residue is in here *and* its name is one of
+               that residue's redox-active atoms
+    \param[out] out_kQ,n_out_kQ,out_rC,n_out_rC one value per atom
+*/
+IMPBFFEXPORT void atomic_quenching_parameters(
+        const std::vector<std::string>& res_names,
+        const std::vector<std::string>& atom_names,
+        const std::map<std::string, PETParameters>& parameters,
+        double** out_kQ, int* n_out_kQ, double** out_rC, int* n_out_rC);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_PETQUENCHING_H

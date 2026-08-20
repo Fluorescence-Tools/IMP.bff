@@ -40,6 +40,18 @@ def sphere_density(ng=41, radius_voxels=15):
     return ((x ** 2 + y ** 2 + z ** 2) < radius_voxels ** 2).astype(np.uint8)
 
 
+def _sites(atoms, table=None):
+    """`residue_sites` over a structured array.
+
+    The kernel takes parallel arrays -- a structured dtype is a numpy idea, and
+    the fields it carries are what C++ wants handed to it anyway. Unpacking one
+    is what a caller does, so the tests do it too.
+    """
+    return sites.residue_sites(
+        atoms["chain"], atoms["res_id"], atoms["res_name"], atoms["atom_name"],
+        np.ascontiguousarray(atoms["coord"], dtype=np.float64), table)
+
+
 class ResidueSiteTests(IMP.test.TestCase):
 
     def test_the_slow_centre_is_cb_and_the_quench_centre_the_moiety(self):
@@ -48,21 +60,21 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("A", 1, "TRP", "NE1", [4.0, 0.0, 0.0]),
             ("A", 1, "TRP", "CD2", [6.0, 0.0, 0.0]),
         ])
-        found = sites.residue_sites(atoms)
-        self.assertEqual(found.residue_names, ["TRP"])
+        found = _sites(atoms)
+        self.assertEqual(list(found.get_residue_names()), ["TRP"])
         self.assertTrue(np.allclose(found.slow_centers[0], [0.0, 0.0, 0.0]))
         # The centroid of the PET-active atoms present, not CB.
         self.assertTrue(np.allclose(found.quench_centers[0], [5.0, 0.0, 0.0]))
 
     def test_ca_stands_in_when_there_is_no_cb(self):
         atoms = make_atoms([("A", 1, "GLY", "CA", [1.0, 2.0, 3.0])])
-        found = sites.residue_sites(atoms)
+        found = _sites(atoms)
         self.assertTrue(np.allclose(found.slow_centers[0], [1.0, 2.0, 3.0]))
 
     def test_a_residue_with_no_active_atom_falls_back_to_its_slow_centre(self):
         """So a user-supplied rate still has a well-defined centre."""
         atoms = make_atoms([("A", 1, "TRP", "CB", [1.0, 1.0, 1.0])])
-        found = sites.residue_sites(atoms)
+        found = _sites(atoms)
         self.assertTrue(
             np.allclose(found.quench_centers[0], found.slow_centers[0])
         )
@@ -77,7 +89,7 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("A", 1, "TRP", "CB", [0.0, 0.0, 0.0]),
             ("B", 1, "TRP", "CB", [50.0, 0.0, 0.0]),
         ])
-        found = sites.residue_sites(atoms)
+        found = _sites(atoms)
         self.assertEqual(len(found), 2)
         self.assertAlmostEqual(
             float(np.linalg.norm(found.slow_centers[0] - found.slow_centers[1])),
@@ -90,7 +102,7 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("A", 1, "TRP", "NE1", [4.0, 0.0, 0.0]),
         ])
         table = {"TRP": ResidueQuenching(quench_atoms=["CB"], kQ=1.0)}
-        found = sites.residue_sites(atoms, table)
+        found = _sites(atoms, table)
         self.assertTrue(np.allclose(found.quench_centers[0], [0.0, 0.0, 0.0]))
 
     def test_the_per_residue_lookups_follow_the_name_order(self):

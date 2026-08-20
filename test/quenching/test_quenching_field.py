@@ -10,6 +10,8 @@ three of ChiSurf's kernels were wrong (see :class:`PortedDefectTests`).
 
 import numpy as np
 
+import IMP.bff
+
 import IMP
 import IMP.test
 
@@ -60,14 +62,21 @@ class AtomicQuenchingParameterTests(IMP.test.TestCase):
         self.atoms["atom_name"] = ["NE1", "CB", "CB", "SD"]
 
     def test_only_named_atoms_quench(self):
+        """The atom has to be one the residue's chemistry names as active.
+
+        `CB` on a TRP is not: electron transfer happens at the indole ring, so
+        a rate stamped on CB would sit ~3.3 A from where it belongs.
+        """
         kQ, rC = maps.atomic_quenching_parameters(
-            self.atoms, {"TRP": {"NE1": (3.5, 1.0)}, "MET": {"SD": (1.67, 0.8)}}
-        )
+            self.atoms["res_name"], self.atoms["atom_name"],
+            {"TRP": IMP.bff.PETParameters("D", "TRP", 3.5, 5.0, 1.0),
+             "MET": IMP.bff.PETParameters("D", "MET", 1.67, 3.5, 0.8)})
         self.assertTrue(np.allclose(kQ, [3.5, 0.0, 0.0, 1.67]))
         self.assertTrue(np.allclose(rC, [1.0, 0.0, 0.0, 0.8]))
 
     def test_an_empty_table_quenches_nothing(self):
-        kQ, rC = maps.atomic_quenching_parameters(self.atoms, {})
+        kQ, rC = maps.atomic_quenching_parameters(
+            self.atoms["res_name"], self.atoms["atom_name"], {})
         self.assertEqual(float(kQ.sum()), 0.0)
         self.assertEqual(float(rC.sum()), 0.0)
 

@@ -270,13 +270,20 @@ def solvent_accessible_surface(
 #
 # One shape did not survive: a bare number as a residue's entry, the legacy
 # spelling of a slow factor. It was untyped duck-typing at exactly the boundary
-# this repository is trying to remove.
+# this repository is trying to remove. Nor did ``quencher_atom_indices`` and
+# ``quencher_centers``, whose only consumer anywhere was their own test.
+#
+# The functions that read a *structure* -- ``residue_sites`` and
+# ``atomic_quenching_parameters`` -- take parallel arrays rather than a numpy
+# structured array: a structured dtype is a numpy idea, and the fields it
+# carries are what C++ wants to be handed anyway.
 from IMP.bff import (  # noqa: F401
     DEFAULT_DYE_RADIUS, PETParameters, PETReference, Quencher,
-    ResidueQuenching, amino_acid_quenching_defaults,
-    normalize_amino_acid_quenching, pet_quenching_reference,
-    quench_radii_for_residues, quencher_atoms, quenching_rates_for_residues,
-    reference_pet_parameters, reference_quenchers, slow_factors_for_residues,
+    ResidueQuenching, ResidueSites, amino_acid_quenching_defaults,
+    atomic_quenching_parameters, normalize_amino_acid_quenching,
+    pet_quenching_reference, quench_radii_for_residues, quencher_atoms,
+    quenching_rates_for_residues, reference_pet_parameters,
+    reference_quenchers, residue_sites, slow_factors_for_residues,
     standard_amino_acid_residues,
 )
 
@@ -294,39 +301,6 @@ def _residue_name(value) -> str:
     return str(value).strip().upper()
 
 
-def quencher_atom_indices(atoms, selection):
-    """Atom indices per residue type, for a ``{residue: [atom names]}`` selection.
-
-    *atoms* is a structured array with ``res_name`` and ``atom_name`` fields --
-    the shape QuEst's structure reader and :mod:`IMP.bff.representation.av` both produce.
-    Returns an ``OrderedDict`` keyed the same way as *selection*, with a
-    ``uint32`` index array per residue type (possibly empty).
-    """
-    res_name = atoms["res_name"]
-    atom_name = atoms["atom_name"]
-    indices = OrderedDict()
-    for residue in selection:
-        found = [
-            np.where((res_name == residue) & (atom_name == name))[0]
-            for name in selection[residue]
-        ]
-        if found:
-            indices[residue] = np.array(np.hstack(found), dtype=np.uint32)
-        else:
-            indices[residue] = np.array([], dtype=np.uint32)
-    return indices
-def quencher_centers(atoms, selection):
-    """Quenching-centre coordinates per residue type.
-
-    One row per selected atom, grouped by residue type -- the caller decides
-    whether to average them into a per-residue centroid or to treat each atom as
-    its own centre. Returns an ``OrderedDict`` of ``(n, 3)`` arrays.
-    """
-    indices = quencher_atom_indices(atoms, selection)
-    coord = atoms["coord"]
-    return OrderedDict(
-        (residue, coord[indices[residue]]) for residue in selection
-    )
 def _rate_per_frame(collided, k_quench):
     """Total quenching rate per frame. **C++.**
 
@@ -659,13 +633,14 @@ class DynamicAccessibleVolume:
         return self._diffusion_map
 
     def update_quenching_map(self, quencher, rC: Optional[float] = None) -> np.ndarray:
-        """Build the PET field from per-atom ``(kQ, rC)`` parameters.
+        """Build the PET field from the dye's pair parameters.
 
-        :param quencher: ``{res_name: {atom_name: (kQ, rC)}}``.
+        :param quencher: ``{comp_id: PETParameters}`` for one dye.
         :param rC: overrides every per-atom characteristic distance with one
             electron-transfer length, which is how ChiSurf drove it.
         """
-        kQ, rC_atoms = atomic_quenching_parameters(self.atoms, quencher)
+        kQ, rC_atoms = atomic_quenching_parameters(
+            self.atoms["res_name"], self.atoms["atom_name"], quencher)
         if rC is not None:
             rC_atoms = np.where(kQ > 0.0, float(rC), 0.0)
         self._quenching_rate_map = quenching_rate_map(
@@ -779,28 +754,6 @@ def grid_axis(ng: int, dg: float) -> np.ndarray:
     Brownian walk samples it.
     """
     return (np.arange(int(ng), dtype=np.float64) - (int(ng) - 1) // 2) * float(dg)
-def atomic_quenching_parameters(atoms, quencher):
-    """Per-atom quenching rate ``kQ`` and characteristic distance ``rC``.
-
-    :param atoms: structured array with ``res_name`` and ``atom_name`` fields.
-    :param quencher: ``{res_name: {atom_name: (kQ, rC)}}``. Atoms not named in
-        it do not quench.
-    :returns: ``(kQ, rC)``, each ``(n_atoms,)`` float64, zero where absent.
-    """
-    n = len(atoms)
-    kQ = np.zeros(n, dtype=np.float64)
-    rC = np.zeros(n, dtype=np.float64)
-    res_names = atoms["res_name"]
-    atom_names = atoms["atom_name"]
-    for i in range(n):
-        by_atom = quencher.get(str(res_names[i]))
-        if not by_atom:
-            continue
-        entry = by_atom.get(str(atom_names[i]))
-        if entry is None:
-            continue
-        kQ[i], rC[i] = float(entry[0]), float(entry[1])
-    return kQ, rC
 def _slow_near_atoms(d_map, density, axis, r0, atoms_xyz, min_distance_sq, factor):
     """Slow the mobility wherever the dye contacts an atom. **C++.**
 
@@ -989,75 +942,12 @@ def fret_rate_map(
         float(kf),
         max(1, int(acceptor_step)),
     )
-class ResidueSites(NamedTuple):
-    """One slow centre and one quench centre per residue, plus its type."""
-
-    slow_centers: np.ndarray
-    quench_centers: np.ndarray
-    residue_names: list
-
-    def __len__(self) -> int:
-        return len(self.residue_names)
 def _name(value) -> str:
     if isinstance(value, bytes):
         return value.decode("ascii", errors="ignore").strip().upper()
     return str(value).strip().upper()
-def residue_sites(atoms, quenching_table=None) -> ResidueSites:
-    """Group *atoms* by residue and locate its slow and quench centres.
 
-    :param atoms: structured array with ``chain``, ``res_id``, ``res_name``,
-        ``atom_name`` and ``coord`` fields.
-    :param quenching_table: the per-residue interaction table, whose
-        ``quench_atoms`` decide which atoms define each quench centre. The
-        defaults from :data:`IMP.bff.quencher_atoms` are used when omitted.
 
-    Residues are keyed by ``(chain, res_id, res_name)``. **Keying on ``res_id``
-    alone is wrong** and was a real defect in QuEst: residue numbers restart per
-    chain, so in a homodimer every number occurs twice and two residues' atoms
-    were folded into one centre.
-    """
-    table = normalize_amino_acid_quenching(quenching_table or {})
-
-    def wanted_atoms(residue_name):
-        params = table.get(residue_name)
-        if params is None:
-            return frozenset(QUENCHER_ATOMS.get(residue_name, ("CB",)))
-        return frozenset(params.quench_atoms) or frozenset(("CB",))
-
-    by_residue = OrderedDict()
-    for index, atom in enumerate(atoms):
-        key = (_name(atom["chain"]), int(atom["res_id"]), _name(atom["res_name"]))
-        by_residue.setdefault(key, []).append(index)
-
-    slow_centers = []
-    quench_centers = []
-    residue_names = []
-    for (_chain, _res_id, res_name), indices in by_residue.items():
-        block = atoms[np.asarray(indices, dtype=np.int64)]
-        atom_names = [_name(n) for n in block["atom_name"]]
-        coords = np.asarray(block["coord"], dtype=np.float64)
-        residue_name = _name(res_name)
-
-        if "CB" in atom_names:
-            selected = atom_names.index("CB")
-        elif "CA" in atom_names:
-            selected = atom_names.index("CA")
-        else:
-            selected = 0
-        slow_center = coords[selected]
-
-        matched = [i for i, n in enumerate(atom_names) if n in wanted_atoms(residue_name)]
-        quench_center = coords[matched].mean(axis=0) if matched else slow_center
-
-        slow_centers.append(slow_center)
-        quench_centers.append(quench_center)
-        residue_names.append(residue_name)
-
-    return ResidueSites(
-        np.asarray(slow_centers, dtype=np.float64).reshape(-1, 3),
-        np.asarray(quench_centers, dtype=np.float64).reshape(-1, 3),
-        residue_names,
-    )
 MAX_PARALLEL_TRAJECTORIES = 8
 def _trajectory_seeds(random_seed, n_trajectories):
     """One seed per trajectory, derived from the base seed or drawn freshly."""
@@ -1153,7 +1043,11 @@ class QuenchedDonorDecay:
     def sites(self) -> ResidueSites:
         """The slow and quench centres of every residue in the structure."""
         if self._sites is None:
-            self._sites = residue_sites(self.atoms, self.quenching_table)
+            self._sites = residue_sites(
+                self.atoms["chain"], self.atoms["res_id"],
+                self.atoms["res_name"], self.atoms["atom_name"],
+                np.ascontiguousarray(self.atoms["coord"], dtype=np.float64),
+                self.quenching_table)
         return self._sites
 
     # -- the two grids -------------------------------------------------------

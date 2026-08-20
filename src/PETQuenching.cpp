@@ -7,6 +7,7 @@
 
 #include <IMP/bff/PETQuenching.h>
 
+#include <IMP/bff/internal/OutputView.h>
 #include <IMP/exception.h>
 
 #include <algorithm>
@@ -312,6 +313,156 @@ std::vector<double> quench_radii_for_residues(
         out.push_back(r == r ? r : global);
     }
     return out;
+}
+
+// --------------------------------------------------------------------------
+// residues, and the atoms that quench
+// --------------------------------------------------------------------------
+
+void ResidueSites::add(const double* slow, const double* quench,
+                       const std::string& residue_name) {
+    for (int i = 0; i < 3; ++i) slow_centers_.push_back(slow[i]);
+    for (int i = 0; i < 3; ++i) quench_centers_.push_back(quench[i]);
+    residue_names_.push_back(residue_name);
+}
+
+void ResidueSites::get_slow_centers(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(slow_centers_, out_view, n_out_view);
+}
+
+void ResidueSites::get_quench_centers(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(quench_centers_, out_view, n_out_view);
+}
+
+ResidueSites residue_sites(const std::vector<std::string>& chains,
+                           const std::vector<int>& res_ids,
+                           const std::vector<std::string>& res_names,
+                           const std::vector<std::string>& atom_names,
+                           double* coords, int n_atoms, int n_dim,
+                           const std::map<std::string, ResidueQuenching>& table) {
+    ResidueSites out;
+    if (n_atoms == 0) return out;
+    if (n_dim != 3) {
+        IMP_THROW("atoms must be (N, 3), not (" << n_atoms << ", " << n_dim << ")",
+                  ValueException);
+    }
+    const std::size_t n = static_cast<std::size_t>(n_atoms);
+    if (chains.size() != n || res_ids.size() != n || res_names.size() != n ||
+        atom_names.size() != n) {
+        IMP_THROW("one chain, residue id, residue name and atom name per atom",
+                  ValueException);
+    }
+
+    const std::map<std::string, ResidueQuenching> full =
+            normalize_amino_acid_quenching(table);
+
+    // Insertion order, not sorted: the centres come back in the order the
+    // residues appear in the structure, which is what every consumer indexes
+    // against. A std::map would silently reorder them.
+    typedef std::pair<std::pair<std::string, int>, std::string> Key;
+    std::vector<Key> order;
+    std::map<Key, std::vector<std::size_t> > by_residue;
+    for (std::size_t i = 0; i < n; ++i) {
+        const Key key(std::make_pair(pet::residue_key(chains[i]), res_ids[i]),
+                      pet::residue_key(res_names[i]));
+        if (by_residue.find(key) == by_residue.end()) order.push_back(key);
+        by_residue[key].push_back(i);
+    }
+
+    for (std::size_t r = 0; r < order.size(); ++r) {
+        const std::vector<std::size_t>& indices = by_residue[order[r]];
+        const std::string residue_name = order[r].second;
+
+        std::size_t selected = indices[0];
+        for (std::size_t k = 0; k < indices.size(); ++k) {
+            if (pet::residue_key(atom_names[indices[k]]) == "CB") {
+                selected = indices[k];
+                break;
+            }
+        }
+        if (pet::residue_key(atom_names[selected]) != "CB") {
+            for (std::size_t k = 0; k < indices.size(); ++k) {
+                if (pet::residue_key(atom_names[indices[k]]) == "CA") {
+                    selected = indices[k];
+                    break;
+                }
+            }
+        }
+
+        const double* slow = coords + selected * 3;
+
+        std::vector<std::string> wanted;
+        std::map<std::string, ResidueQuenching>::const_iterator w =
+                full.find(residue_name);
+        wanted = (w == full.end() || w->second.quench_atoms.empty())
+                         ? pet::atoms_of(residue_name)
+                         : w->second.quench_atoms;
+
+        double cx = 0.0, cy = 0.0, cz = 0.0;
+        std::size_t matched = 0;
+        for (std::size_t k = 0; k < indices.size(); ++k) {
+            const std::string name = pet::residue_key(atom_names[indices[k]]);
+            if (std::find(wanted.begin(), wanted.end(), name) == wanted.end()) {
+                continue;
+            }
+            const double* c = coords + indices[k] * 3;
+            cx += c[0]; cy += c[1]; cz += c[2];
+            ++matched;
+        }
+
+        double quench[3];
+        if (matched > 0) {
+            quench[0] = cx / matched;
+            quench[1] = cy / matched;
+            quench[2] = cz / matched;
+        } else {
+            // A residue with no redox-active atom in the structure still has a
+            // position; the slow centre is the honest one to use.
+            quench[0] = slow[0]; quench[1] = slow[1]; quench[2] = slow[2];
+        }
+        out.add(slow, quench, residue_name);
+    }
+    return out;
+}
+
+void atomic_quenching_parameters(
+        const std::vector<std::string>& res_names,
+        const std::vector<std::string>& atom_names,
+        const std::map<std::string, PETParameters>& parameters,
+        double** out_kQ, int* n_out_kQ, double** out_rC, int* n_out_rC) {
+    const std::size_t n = res_names.size();
+    double* kQ = internal::new_double_view(n, out_kQ, n_out_kQ);
+    double* rC = internal::new_double_view(n, out_rC, n_out_rC);
+    if (kQ == NULL || rC == NULL) return;
+    if (atom_names.size() != n) {
+        IMP_THROW("one atom name per residue name: " << atom_names.size()
+                          << " against " << n,
+                  ValueException);
+    }
+
+    const std::map<std::string, std::vector<std::string> > active =
+            quencher_atoms();
+    for (std::size_t i = 0; i < n; ++i) {
+        kQ[i] = 0.0;
+        rC[i] = 0.0;
+        const std::string residue = pet::residue_key(res_names[i]);
+        std::map<std::string, PETParameters>::const_iterator p =
+                parameters.find(residue);
+        if (p == parameters.end()) continue;
+        std::map<std::string, std::vector<std::string> >::const_iterator a =
+                active.find(residue);
+        if (a == active.end()) continue;
+        const std::string atom = pet::residue_key(atom_names[i]);
+        if (std::find(a->second.begin(), a->second.end(), atom) ==
+            a->second.end()) {
+            continue;
+        }
+        kQ[i] = p->second.rate_constant;
+        // An absent or zero attenuation length is a hard contact sphere, which
+        // the exponential form spells as a 1 A decay.
+        const double rc = p->second.attenuation_length;
+        rC[i] = (rc == rc && rc != 0.0) ? rc : 1.0;
+    }
 }
 
 IMPBFF_END_NAMESPACE
