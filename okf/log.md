@@ -1,5 +1,74 @@
 # Update Log
 
+## 2026-08-20 (later) — the keystone, and the three things that were waiting on it
+
+`States`/`AccessibleVolume` (Python, `representation/distance.py`) and
+`BasicAV`/`ACV` (C++, `AVModel.h`) described the same thing: a weighted point
+cloud with a grid. The Python called the C++ for every computation while
+holding its own idea of what the cloud *was*, which is exactly how the two came
+to disagree about the axis order of `density` (PRD-113 stage 3a). There is one
+now — `States` → `AccessibleVolume` → `ACV`, all C++ — and `BasicAV` is retired
+rather than aliased.
+
+What that unblocked, in the order it unblocked it:
+
+* **`Quencher`, `PETParameters`, `ResidueQuenching` and the PET tables** →
+  `PETQuenching.h`. The values were in `label.py` and the tables they read were
+  in `quenching.py`, so `reference_quenchers` crossed a module boundary one way
+  and every consumer crossed a language boundary the other, for a rate that
+  takes two partners to define.
+* **`InteractionTerm` and its three implementations** → `InteractionTerms.h`,
+  as `IMP::Object`s because `total_rate` sums a list of *different* terms.
+  Gated on 40 states against 60 atoms: radiative and FRET identical, PET and
+  the sum to 3.6e-15.
+* **`lifetime_spectrum_from_states`** → `LifetimeSpectrum.h`, which is what
+  `IMP_bff.observables.i` had said it was waiting for.
+* **`residue_sites` and `atomic_quenching_parameters`** → `PETQuenching.h`,
+  on parallel arrays rather than a numpy structured dtype.
+
+Shapes that changed rather than moved, and why:
+
+* **`grid_shape` is derived from the density**, not a constructor argument that
+  had to agree with it. A non-cubic grid is refused now instead of half-believed.
+* **`mean_position` falls back to the attachment point** for an empty or
+  zero-weight cloud. The Python `States` did; the C++ returned the origin. A
+  buried site whose volume came back empty is at its attachment atom.
+* **The structure door stops storing density as float32** — a storage choice of
+  the deleted dataclass, costing seven digits for nothing.
+* **One participant signature for every term.** Python's duck typing let each
+  take what it needed; C++ takes the same two and reports through `arity` which
+  it reads. `PETTerm`'s quenching atoms move into the term, because resolving
+  which of a structure's atoms quench is a function of names and parameters and
+  does not change per call.
+* **NaN is the C++ spelling of `None`** for `quench_radius`, `attenuation_length`
+  and the `Dye` numbers. `FRETTerm` tested its donor's lifetime with
+  `is None or <= 0.0`, which NaN passes; `not (tau0 > 0.0)` is the test that
+  catches all three.
+
+Deleted rather than ported, all of it with no consumer anywhere:
+`quencher_atom_indices`, `quencher_centers`, `rate_constants` (a named
+pass-through to `total_rate`), the legacy bare-number entry in
+`normalize_amino_acid_quenching`, and `BasicAV.save_xyz` — whose test had been
+failing since the C++ port without anything noticing, because
+`pytest test/` does not collect a `medium_test_*` file. Two more in the same
+file called `ACV.from_basic_av` with a signature it never had.
+
+**Where this leaves `pyext/src`:** 30 files / 22,736 lines → 22 / 19,285. The
+remaining order is unchanged apart from the keystone being done:
+
+1. **The fps.json layer** (`io/fps.py`) against `internal/FPSReaderWriter.h`,
+   which already reads the same format in C++ for `AVNetworkRestraint`. Untyped
+   dicts on the Python side; the same treatment `DyeForceFieldSystem` got.
+2. `scoring.py`, `io/cif.py`, `io/structure.py`, `representation/rotamer.py`
+   (its `from_site` and pair physics; the value itself is now a `States`),
+   `representation/av.py`, `cgdye/*`.
+3. **Programs, not ports**: `restraints/docking.py` and `cgdye/sim.py`.
+   `docking.py`'s only consumer is ChiSurf, through a forwarder
+   (`chisurf/plugins/modelling/fret/core/imp_engine.py`) that points at
+   `IMP.bff.fret.imp_engine` — **a module path that no longer exists**, so that
+   bridge is broken today and needs repointing at `IMP.bff.restraints.docking`
+   in that repository.
+
 ## 2026-08-20 — emptying `pyext/src`: the rule, and nine modules gone
 
 **The rule, stated by the user and now the repository's:** *what can be C++
