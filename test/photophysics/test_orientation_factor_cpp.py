@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.photophysics as o
+import IMP.bff as o
 
 
 # --- the geometry ------------------------------------------------------------

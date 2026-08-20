@@ -43,7 +43,7 @@ import numpy as np
 import IMP.bff
 from IMP.bff import grid_center_index
 from collections import OrderedDict
-from IMP.bff.photophysics import kappa2_isotropic
+from IMP.bff import kappa2_isotropic
 from typing import Optional
 from IMP.bff import GridDiffusionSolver, diffusion_stability_limit, equilibrium_occupancy
 from typing import NamedTuple, Optional, Sequence

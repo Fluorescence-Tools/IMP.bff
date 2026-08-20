@@ -203,6 +203,30 @@ IMPBFFEXPORT void kappa2_distance_ratio_transform(
         const std::vector<double>& k2_amp, const std::vector<double>& k2_val,
         int n_bins, double** out_view, int* n_out_view);
 
+//! \f$\langle\kappa^2\rangle\f$ for isotropically and rapidly reorienting
+//! dipoles: 2/3.
+/*! A named constant rather than a literal, because the literal is what makes an
+    isotropic assumption invisible at a call site. */
+IMPBFFEXPORT double kappa2_isotropic();
+
+//! The order parameter of the inter-dye angle, from the residual anisotropies.
+/*!
+    Sindbert et al., JACS 133:2463 (2011), eq. 10.
+
+    \param[in] s2_donor,s2_acceptor second-rank order parameters of the two dyes
+    \param[in] r_inf_AD residual anisotropy of the FRET-sensitised emission
+    \param[in] r_0 fundamental anisotropy
+    \return \f$(S^2_\delta, \delta)\f$ — the order parameter of the angle
+            between the two symmetry axes, and that angle in radians
+
+    The name was `s2delta`, accurate domain shorthand. It was renamed to
+    `kappa2_order_parameters`, which was wrong twice over: these are the *dyes'*
+    order parameters, not \f$\kappa^2\f$'s, and it returns an angle as well.
+*/
+IMPBFFEXPORT std::vector<double> s2_delta_from_anisotropy(
+        double s2_donor, double s2_acceptor, double r_inf_AD,
+        double r_0 = 0.38);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_ORIENTATIONFACTOR_H

@@ -369,4 +369,16 @@ void kappa2_distance_ratio_transform(const std::vector<double>& k2_amp,
     out[2 * n_bins] = k2_mean;
 }
 
+double kappa2_isotropic() { return 2.0 / 3.0; }
+
+std::vector<double> s2_delta_from_anisotropy(double s2_donor,
+                                             double s2_acceptor,
+                                             double r_inf_AD, double r_0) {
+    const double s2_delta = r_inf_AD / (r_0 * s2_donor * s2_acceptor);
+    std::vector<double> out(2);
+    out[0] = s2_delta;
+    out[1] = std::acos(std::sqrt((2.0 * s2_delta + 1.0) / 3.0));
+    return out;
+}
+
 IMPBFF_END_NAMESPACE

@@ -1,7 +1,7 @@
 """The public surface of ``IMP.bff``: domain-scoped, with a flat view over it.
 
 The code is organised by **domain** -- ``dye``, ``label``, ``representation``,
-``photophysics``, ``scoring``, ``observables``,
+``scoring``, ``observables``,
 ``io``, ``restraints`` -- and that organisation is what a reader should learn.
 A domain leaves this map when its last Python module does: the names it carried
 are then attributes of ``IMP.bff`` itself, resolved by SWIG rather than lazily
@@ -84,19 +84,6 @@ BY_DOMAIN = {
         "select_atoms": "IMP.bff.label",
         "strip_hierarchy": "IMP.bff.label",
         "strip_obstacles": "IMP.bff.label",
-    },
-    # -- photophysics -- interaction terms, rate fields, and the orientation factor
-    "photophysics": {
-        # IMP.bff.photophysics
-        "kappa2_from_dipoles": "IMP.bff.photophysics",
-        "kappa2_isotropic": "IMP.bff.photophysics",
-        # IMP.bff.photophysics
-        "kappa2_distribution_wobbling_in_cone": "IMP.bff.photophysics",
-        "kappa2_distribution_diffusion_with_traps": "IMP.bff.photophysics",
-        "kappa2_isotropic_distribution": "IMP.bff.photophysics",
-        "s2_delta_from_anisotropy": "IMP.bff.photophysics",
-        "kappa2_to_distance_ratio": "IMP.bff.photophysics",
-        # IMP.bff.photophysics
     },
     # -- quenching -- the PET model, assembled for one labelling site
     "quenching": {

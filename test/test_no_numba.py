@@ -71,7 +71,7 @@ def test_the_package_works_with_numba_blocked():
         "import numpy as np\n"
         "import IMP.bff\n"
         "import IMP.bff as _kernels\n"
-        "import IMP.bff.photophysics as orientation\n"
+        "import IMP.bff as orientation\n"
         "import IMP.bff as brownian\n"
         "import IMP.bff as excited_state\n"
 

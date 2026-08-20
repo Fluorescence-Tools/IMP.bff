@@ -99,7 +99,7 @@ class Tests(IMP.test.TestCase):
             "            raise ImportError('tttrlib blocked for this test')\n"
             "        return None\n"
             "sys.meta_path.insert(0, Block())\n"
-            "import IMP, IMP.bff, IMP.bff.photophysics\n"
+            "import IMP, IMP.bff\n"
             "m = IMP.Model()\n"
             "assert IMP.bff.AV is not None\n"
             "assert IMP.bff.PathMap is not None\n"

@@ -16,7 +16,7 @@ import IMP.bff
 import IMP.core
 from IMP.bff import find_dye
 from IMP.bff.label import reference_pet_parameters
-from IMP.bff.photophysics import (
+from IMP.bff import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
 

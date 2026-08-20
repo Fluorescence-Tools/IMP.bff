@@ -53,7 +53,6 @@ import numpy as np
 
 /* Distances and orientations over point clouds. */
 %include "IMP_bff.avdistance.i"
-%include "IMP/bff/OrientationFactor.h"
 
 /* Dynamics: the dye's position, then its excited state. */
 %include "IMP/bff/BrownianWalk.h"
@@ -108,6 +107,9 @@ import numpy as np
 
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
 %include "IMP_bff.avbuilder.i"
+
+/* The processes that deactivate or depolarise a dye. */
+%include "IMP_bff.photophysics.i"
 
 /* The channels that deactivate an excited dye. They consume `States`, so they
    come after the object that is one. */

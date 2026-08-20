@@ -3,7 +3,7 @@
 The *system* layer: a :class:`Label` is a dye at a position on a structure, a
 :class:`Quencher` is a moiety that deactivates it. Neither says how the dye's
 positions are enumerated -- that is ``IMP.bff.representation`` -- nor what the
-rates are, which is ``IMP.bff.photophysics``.
+rates are, which is ``IMP.bff``.
 
 Names follow the FLR dictionaries where an item exists, checked against
 ``../mmfdb/src/mmfdb/data/*.dic`` rather than recalled: ``_flr_poly_probe_position``
