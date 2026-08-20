@@ -23,6 +23,7 @@ from IMP.bff.tools import get_template_dir
 import IMP
 import IMP.atom
 import IMP.core
+import IMP.bff
 import IMP.rmf
 
 __all__ = [
@@ -972,18 +973,62 @@ def transform_library_to_site(coords: np.ndarray, ca, n, c) -> np.ndarray:
     return np.tensordot(np.asarray(coords, dtype=np.float64), rotation, axes=([2], [0])) + np.asarray(ca, dtype=np.float64)
 
 
-def selector_atom_indices(atom_names: Sequence[str], selector) -> list[int]:
-    """Indices of the atoms named by a FRETpredict selector (``'C7 and resname A48'``)."""
-    names = [selector] if isinstance(selector, str) else list(selector)
+def selector_atom_indices(
+    atom_names: Sequence[str],
+    selector,
+    resnames: Optional[Sequence[str]] = None,
+) -> list[int]:
+    """Indices of the atoms named by a FRETpredict selector (``'C7 and resname A48'``).
+
+    The ``and resname X`` clause is **honoured** when ``resnames`` is supplied.
+    It has to be: atom names repeat between the dye residue and its linker --
+    ``C13`` is in both ``A48`` and ``C1R``, ``C9`` in both ``A35``/``T48`` and
+    theirs -- and a selector that ignores the residue takes whichever comes
+    first in the atom ordering. That is the dye today only by luck of the
+    ordering; a library written linker-first would silently resolve the
+    transition dipole to two linker atoms and raise nothing.
+
+    Without ``resnames`` the clause cannot be checked and the first name match is
+    returned, as before. Callers that have the residue names should pass them.
+
+    A selector that matches nothing now raises naming **which** item failed. The
+    previous behaviour raised only when *every* item failed, so a two-atom
+    selector with one bad name returned a one-element list, and
+    :meth:`RotamerEnsemble.from_site` then fell back to atoms 0 and 1 -- a
+    silently wrong dipole.
+    """
+    items = [selector] if isinstance(selector, str) else list(selector)
+    if not items:
+        return []
+    upper = [str(n).upper() for n in atom_names]
+    upper_res = [str(r).upper() for r in resnames] if resnames is not None else None
+
     indices: list[int] = []
-    for item in names:
-        wanted = str(item).split(" and ")[0].strip().upper()
-        for i, name in enumerate(atom_names):
-            if str(name).upper() == wanted:
-                indices.append(i)
-                break
-    if not indices:
-        raise ValueError(f"Atom selector {selector!r} not found in rotamer library")
+    for item in items:
+        text = str(item)
+        head, _, tail = text.partition(" and ")
+        wanted = head.strip().upper()
+        want_res = None
+        match = re.search(r"\bresname\s+(\S+)", tail, flags=re.IGNORECASE)
+        if match:
+            want_res = match.group(1).strip().upper()
+
+        found = None
+        for i, name in enumerate(upper):
+            if name != wanted:
+                continue
+            if want_res is not None and upper_res is not None:
+                if i >= len(upper_res) or upper_res[i] != want_res:
+                    continue
+            found = i
+            break
+        if found is None:
+            raise ValueError(
+                f"Atom selector {text!r} matched no atom in the rotamer library"
+                + (f" (residue {want_res} not found with that atom name)"
+                   if want_res and upper_res is not None else "")
+            )
+        indices.append(found)
     return indices
 
 
@@ -1099,8 +1144,9 @@ class RotamerEnsemble(States):
         )
         metadata = dict(lib.get("metadata", {}) or {})
         names = list(lib["atom_names"])
-        centre_idx = selector_atom_indices(names, metadata.get("r", []))[0]
-        mu_idx = selector_atom_indices(names, metadata.get("mu", []))
+        lib_res = lib.get("resnames")
+        centre_idx = selector_atom_indices(names, metadata.get("r", []), lib_res)[0]
+        mu_idx = selector_atom_indices(names, metadata.get("mu", []), lib_res)
         if len(mu_idx) >= 2:
             mu = rotamers[:, mu_idx[1], :] - rotamers[:, mu_idx[0], :]
         else:
@@ -1263,76 +1309,38 @@ class FRETFrameResult:
 
 
 def _weighted_average_sd_se(values: np.ndarray, weights: np.ndarray) -> tuple[float, float, float]:
-    """Compute weighted average, standard deviation, and standard error.
+    """Weighted mean, standard deviation and standard error.
 
-    Parameters
-    ----------
-    values : numpy.ndarray
-        Values to average.
-    weights : numpy.ndarray
-        Weights.
-
-    Returns
-    -------
-    tuple[float, float, float]
-        Average, standard deviation, and standard error.
+    :func:`IMP.bff.weighted_average_sd_se`. Non-finite values and their weights
+    are dropped and the rest renormalised, so a frame where the dye could not
+    be placed contributes nothing rather than poisoning the mean.
     """
-    finite = np.isfinite(values)
-    values = values[finite]
-    weights = weights[finite]
-    if values.size == 0:
-        return (float("nan"), float("nan"), float("nan"))
-    weights = weights / np.sum(weights)
-    avg = float(np.average(values, weights=weights))
-    variance = float(np.average((values - avg) ** 2, weights=weights))
-    return avg, math.sqrt(variance), math.sqrt(variance / values.size)
+    out = IMP.bff.weighted_average_sd_se(
+        np.ascontiguousarray(values, dtype=np.float64),
+        np.ascontiguousarray(weights, dtype=np.float64))
+    return float(out[0]), float(out[1]), float(out[2])
 
 
 def _calculate_ws(z_values: np.ndarray) -> np.ndarray:
-    """Calculate per-frame weights from partition functions.
+    """Per-frame weights from a pair of partition functions.
 
-    Parameters
-    ----------
-    z_values : numpy.ndarray
-        Array with shape ``(n_frames, 2)``.
-
-    Returns
-    -------
-    numpy.ndarray
-        Per-frame weights.
+    :func:`IMP.bff.rotamer_frame_weights`. Uniform when every product is zero:
+    a frame in which neither dye has an accessible conformer says nothing about
+    the others.
     """
     z_values = np.asarray(z_values, dtype=np.float64)
     if z_values.shape == (2,):
         return np.array([1.0], dtype=np.float64)
     if z_values.ndim != 2 or z_values.shape[1] != 2:
         raise ValueError(f"Expected Z array with shape (n_frames, 2), got {z_values.shape}")
-    z_s = z_values[:, 0] * z_values[:, 1]
-    total = np.sum(z_s)
-    if total == 0:
-        return np.ones(z_values.shape[0], dtype=np.float64) / z_values.shape[0]
-    return z_s / total
+    return np.asarray(IMP.bff.rotamer_frame_weights(z_values), dtype=np.float64)
 
 
 def _effective_fraction(weights: np.ndarray) -> float:
-    """Compute the effective fraction of contributing frames.
-
-    Parameters
-    ----------
-    weights : numpy.ndarray
-        Per-frame weights.
-
-    Returns
-    -------
-    float
-        Effective fraction.
-    """
-    weights = np.asarray(weights, dtype=np.float64)
-    weights = weights[weights != 0]
-    if weights.size == 0:
-        return 0.0
-    uniform = np.ones_like(weights) / weights.size
-    entropy = -np.sum(weights * np.log(weights / uniform))
-    return float(np.exp(entropy))
+    """The effective number of contributing frames --
+    :func:`IMP.bff.effective_frame_fraction`."""
+    return float(IMP.bff.effective_frame_fraction(
+        np.ascontiguousarray(weights, dtype=np.float64)))
 
 
 class RotamerFRET:

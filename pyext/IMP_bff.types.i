@@ -192,6 +192,9 @@
 %apply(double* IN_ARRAY1, int DIM1) {(double* r, int n_r)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* kappa2, int n_kappa2)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* coords_a, int n_coords_a)}
+%apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* z_values, int n_frames, int n_pair)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* values, int n_values)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* weights, int n_weights)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* coords_b, int n_coords_b)}
 %apply(int* IN_ARRAY1, int DIM1) {(int* cluster_centers, int n_cluster_centers)}
 // (n_frames, n_atoms, 3): the conformer stack a rotamer library is clustered

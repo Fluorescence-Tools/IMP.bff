@@ -74,6 +74,9 @@ import numpy as np
 %include "IMP/bff/SequenceAlignment.h"
 %template(AlignedBlocks) std::vector<IMP::bff::AlignedBlock>;
 
+/* Weighted averaging over a rotamer ensemble. */
+%include "IMP/bff/RotamerStatistics.h"
+
 /* Leader clustering: how a conformer stack becomes a rotamer library. */
 %include "IMP/bff/Clustering.h"
 
