@@ -3,11 +3,19 @@ import numpy as np
 import IMP
 import IMP.core
 import IMP.algebra
-from IMP.bff.analysis import _compute_fixed_axis, _compute_long_axis, write_radial_histogram
 import tempfile
 import os
 
+import pytest
+
+@pytest.mark.usefixtures("imp_bff_program")
 class TestAnalysis(unittest.TestCase):
+    """The density analysis is a program, so the fixture loads `bin/imp_bff`."""
+
+    @pytest.fixture(autouse=True)
+    def _program(self, imp_bff_program):
+        self.prog = imp_bff_program
+
     def test_compute_fixed_axis(self):
         model = IMP.Model()
         # Create a flat ring of particles in the XY plane
@@ -22,7 +30,7 @@ class TestAnalysis(unittest.TestCase):
             particles.append(p)
         
         # The minimal variance axis for a flat XY ring should be Z (0,0,1)
-        center, axis = _compute_fixed_axis(particles)
+        center, axis = self.prog._compute_fixed_axis(particles)
         
         self.assertAlmostEqual(center[0], 0.0)
         self.assertAlmostEqual(center[1], 0.0)
@@ -44,7 +52,7 @@ class TestAnalysis(unittest.TestCase):
             particles.append(p)
             
         # Long axis (max variance) should be X (1,0,0)
-        axis = _compute_long_axis(particles)
+        axis = self.prog._compute_long_axis(particles)
         self.assertAlmostEqual(abs(axis[0]), 1.0)
         self.assertAlmostEqual(axis[1], 0.0)
         self.assertAlmostEqual(axis[2], 0.0)
@@ -53,7 +61,7 @@ class TestAnalysis(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "hist.csv")
             distances = [1.0, 2.0, 3.0, 1.5]
-            write_radial_histogram(distances, csv_path, bin_width=1.0)
+            self.prog.write_radial_histogram(distances, csv_path, bin_width=1.0)
             
             self.assertTrue(os.path.exists(csv_path))
             with open(csv_path, 'r') as f:

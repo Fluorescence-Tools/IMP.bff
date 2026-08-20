@@ -138,16 +138,17 @@ FAMILIES = ("representation", "restraints", "cgdye", "io")
 def test_the_domains_are_what_we_think_they_are():
     """A guard on the test itself: if this list empties, the rest passes vacuously.
 
-    The four stages -- representation, scoring, sampling, analysis -- plus the
-    things that cut across every model: the species, where it is attached, the
-    photophysics, the output contract, the formats, and scoring against data.
-    Most are now a single module rather than a package; the domain is the name,
-    not the directory.
+    Deliberately **not** a count, and not a list of expected names. The target
+    for `pyext/src` is empty -- kernels to C++, programs to `bin/`, and the
+    Python that is neither into `%pythoncode` in the `.i` files -- so a domain
+    leaving is the work succeeding, and a test that demanded twelve of them
+    would have to be edited to let each one go. What the rest of this file
+    needs is that there is still something to check, and that every name it
+    finds is a real module or package rather than a stray file.
     """
-    assert len(DOMAINS) >= 12, DOMAINS
-    for expected in FAMILIES + ("scoring", "sampling", "analysis", "dye",
-                                "label", "photophysics", "observables"):
-        assert expected in DOMAINS, (expected, DOMAINS)
+    assert DOMAINS, "pyext/src is empty -- delete this file, its job is done"
+    for name in DOMAINS:
+        assert (SOURCE / f"{name}.py").exists() or (SOURCE / name / "__init__.py").exists(), name
 
 
 def test_a_directory_only_exists_where_something_binds_its_submodules():
@@ -160,7 +161,9 @@ def test_a_directory_only_exists_where_something_binds_its_submodules():
     src = SOURCE
     dirs = {p.name for p in src.iterdir()
             if p.is_dir() and p.name != "__pycache__" and (p / "__init__.py").exists()}
-    assert dirs == set(FAMILIES), (sorted(dirs), sorted(FAMILIES))
+    # A subset, not equality: a directory *leaving* is `pyext/src` emptying,
+    # which is the goal. What this catches is a new one appearing.
+    assert dirs <= set(FAMILIES), (sorted(dirs - set(FAMILIES)), sorted(FAMILIES))
 
 
 def test_the_subpackage_graph_is_acyclic():

@@ -90,7 +90,7 @@ question from stage 2's "is this configuration allowed".
 ## What is here now
 
 * **Stages**: `representation/` (`av.py`, `rotamer.py`, `distance.py`,
-  `pathmap.py`), `scoring.py`, `sampling.py`, `analysis.py`
+  `pathmap.py`), `scoring.py`, `sampling.py`
 * **Across the stages**: `dye.py`, `label.py`, `photophysics.py`,
   `observables.py`
 * **Formats and data**: `io/` (`cif.py`, `fps.py`, `structure.py`),

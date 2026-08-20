@@ -87,8 +87,7 @@ def test_library_imports_without_click():
     code = (
         "import sys; sys.modules['click'] = None\n"
         "import IMP.bff.cgdye\n"
-        "import IMP.bff.analysis, IMP.bff.cgdye.topology, "
-        "IMP.bff.cgdye.sim\n"
+        "import IMP.bff.cgdye.topology, IMP.bff.cgdye.sim\n"
         "print('ok')\n"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
