@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff import BasicAV
+from IMP.bff import AccessibleVolume
 from IMP.bff.restraints import (
     SimpleAVNetworkRestraint,
     AVMeasurement,
@@ -44,8 +44,8 @@ class TestSimpleAVNetworkRestraint:
         pts2 = rng.randn(300, 4).astype(np.float64)
         pts2[:, 3] = np.abs(pts2[:, 3]) + 0.01
         pts2[:, 0] += 50.0  # shift → ~50 Å apart
-        av1 = BasicAV(points=pts1.ravel(), position_name="donor")
-        av2 = BasicAV(points=pts2.ravel(), position_name="acceptor")
+        av1 = AccessibleVolume(points=pts1.ravel(), position_name="donor")
+        av2 = AccessibleVolume(points=pts2.ravel(), position_name="acceptor")
         return av1, av2
 
     def _rmp(self, r, distance=50.0, error=3.0):

@@ -67,10 +67,18 @@ def test_the_full_library_is_screened(pair):
     assert d.atoms.shape[1] == len(d.atom_names)
     assert d.weights.sum() == pytest.approx(1.0)
     np.testing.assert_allclose(np.linalg.norm(d.mu, axis=1), 1.0)
-    # `mu` and the representation-agnostic `orientations` are one array, so a
+    # `mu` and the representation-agnostic `orientations` are one array -- `mu`
+    # is a property over `States.orientations`, not a second copy -- so a
     # consumer written against States sees the dipoles a rotamer library has and
-    # an accessible volume has not.
-    assert d.orientations is d.mu and d.has_orientations
+    # an accessible volume has not. Each read is a fresh view over the C++
+    # buffer, so the check is that a write through one is seen through the
+    # other, which is what "one array" has to mean here.
+    np.testing.assert_array_equal(d.orientations, d.mu)
+    assert d.has_orientations
+    probe = -d.mu
+    d.mu = probe
+    np.testing.assert_array_equal(d.orientations, probe)
+    d.mu = -probe                                    # put the fixture back
     assert d.params["simulation_type"] == "R1" and d.library == "AlexaFluor 594 C1R cutoff30"
     assert d.chain == "A" and d.residue == 452
     # centres sit within a linker length of the attachment CA
@@ -114,8 +122,8 @@ def test_pair_distribution_is_the_full_matrix(pair):
     assert out["weight"].sum() == pytest.approx(1.0)
     np.testing.assert_allclose(np.outer(d.weights, a.weights), out["weight"], atol=1e-12)
     # kappa2 against a plain AV is isotropic
-    plain = AccessibleVolume(points=a.points.copy(), density=np.zeros((0, 0, 0), np.float32),
-                             grid_origin=a.attachment_point, grid_step=0.0, grid_shape=(0, 0, 0),
+    plain = AccessibleVolume(points=a.points.copy(),
+                             grid_origin=a.attachment_point, grid_step=0.0,
                              attachment_point=a.attachment_point)
     assert np.all(d.pair_geometry(plain)["kappa2"] == 2.0 / 3.0)
 

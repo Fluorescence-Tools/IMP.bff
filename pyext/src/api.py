@@ -7,8 +7,8 @@ A domain leaves this map when its last Python module does: the names it carried
 are then attributes of ``IMP.bff`` itself, resolved by SWIG rather than lazily
 here. ``observables`` was the first to go that way.
 A domain is a *name*, not necessarily a directory: most are one flat module,
-and the handful that are still packages earned it (see ``pyext/src/README.md``). ``IMP.bff.representation.AccessibleVolume``
-says where a name lives and what it is about; ``IMP.bff.AccessibleVolume`` is a
+and the handful that are still packages earned it (see ``pyext/src/README.md``). ``IMP.bff.representation.rotamer.RotamerEnsemble``
+says where a name lives and what it is about; ``IMP.bff.RotamerEnsemble`` is a
 convenience over it.
 
 So the domains are the authored thing here (:data:`BY_DOMAIN`) and the flat map
@@ -188,9 +188,7 @@ BY_DOMAIN = {
         "rotamer_library_metadata": "IMP.bff.representation.rotamer",
         "rotamer_library_registry": "IMP.bff.representation.rotamer",
         # IMP.bff.representation.distance
-        "States": "IMP.bff.representation.distance",
         # IMP.bff.representation.distance
-        "AccessibleVolume": "IMP.bff.representation.distance",
     },
     # -- sampling -- stage 3 -- how configurations are drawn: walks, densities, library screening
     "sampling": {

@@ -74,7 +74,7 @@ class TestLabelDistributionAV:
         assert dd.position_name == ""
         np.testing.assert_allclose(dd.origin, [0.0, 0.0, 0.0], atol=1e-6)
 
-    def test_get_basic_av_raises_without_backend(self, monkeypatch):
+    def test_get_accessible_volume_raises_without_backend(self, monkeypatch):
         """Accessing the AV without a backend should raise."""
         xyz = np.array([[0.0, 0.0, 0.0],
                         [5.0, 0.0, 0.0]], dtype=np.float64)
@@ -92,7 +92,7 @@ class TestLabelDistributionAV:
 
         monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
         with pytest.raises(ImportError):
-            dd.get_basic_av()
+            dd.get_accessible_volume()
 
     def test_lazy_computation(self):
         """AV is not computed until accessed."""

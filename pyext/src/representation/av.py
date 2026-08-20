@@ -20,7 +20,7 @@ build/resample lock split, the structure door has the ``disc_step`` trap and
 source clearance. PRD-113 stage 3 set out to merge them and did not; what it did
 do is put them side by side, which is the precondition.
 
-:class:`~IMP.bff.representation.av.basic.BasicAV` is the point cloud with its
+:class:`IMP.bff.AccessibleVolume` is the point cloud with its
 distance methods, and :class:`~IMP.bff.representation.av.acv.ACV` splits it into
 contact and free volumes for a dye that sticks.
 """
@@ -41,7 +41,6 @@ import IMP.bff.io.structure as _structure
 from IMP.bff.label import default_strip_mask, strip_pdb_lines
 # (was: import _kernels) -- now in this module
 from IMP.bff.representation.pathmap import resample_av
-from IMP.bff.representation.distance import AccessibleVolume
 import IMP
 import IMP.algebra
 import IMP.atom
@@ -52,7 +51,6 @@ import IMP.em
 __all__ = [
     'ACV',
     'AccessibleVolume',
-    'BasicAV',
     'compute_av',
 ]
 
@@ -317,12 +315,12 @@ def split_av_acv(
 # --------------------------------------------------------------------------
 # basic
 # --------------------------------------------------------------------------
-"""BasicAV — accessible volume for a single dye labelling site.
-
-BasicAV stores the accessible volume as a point cloud and provides
-distance calculations (R_DA, R_mp, R_E, pRDA) and I/O methods.
-"""
-
+# ``States``, ``AccessibleVolume`` and ``ACV`` are **C++**
+# (``include/IMP/bff/AVModel.h``, ``pyext/IMP_bff.avmodel.i``). This module
+# builds them; it does not define them.
+#
+# ``BasicAV`` was the name the C++ half used for the volume while the Python
+# half called the same thing ``AccessibleVolume``. One object, one name now.
 BACKENDS_AVAILABLE = False
 try:
     import IMP
@@ -331,30 +329,7 @@ try:
 except ImportError:
     pass
 
-
-# ``BasicAV`` and ``ACV`` are **C++**.
-#
-# They were 362 lines here holding a point cloud and a density grid as numpy
-# arrays and calling C++ for every actual computation -- the arithmetic was
-# already across the boundary, the *object* was not, and that is what keeps a
-# module Python-carried rather than C++-carried.
-#
-# The surface is unchanged: keyword construction, ``points`` as ``(n, 4)``,
-# ``density`` as ``(ng, ng, ng)`` or ``None``, ``mean_position``, ``n_points``,
-# ``dRmp`` / ``dRDA`` / ``dRDAE`` / ``pRDA``, and ``ACV.from_basic_av``. Gated
-# against the Python it replaces: points and all three distances bit-identical,
-# the ACV density to 1e-14, ``pRDA`` to 2e-15 (a different accumulation order in
-# the histogram).
-#
-# One thing did *not* survive, deliberately. The Python kept ``_padded_points``
-# alongside ``n_points`` because the numba kernel it once called returned a
-# grid-sized buffer with unused trailing rows. ``density_to_points`` has
-# returned exactly the points it found since it started publishing a numpy
-# view, so the two could no longer disagree and the count is simply the cloud's
-# length.
-#
-# See ``include/IMP/bff/AVModel.h`` and ``pyext/IMP_bff.avmodel.i``.
-from IMP.bff import ACV, BasicAV  # noqa: F401
+from IMP.bff import ACV, AccessibleVolume  # noqa: F401
 
 
 # --------------------------------------------------------------------------
@@ -509,12 +484,11 @@ def _av_from_arrays(
         allowed_sphere_radius=allowed_sphere_radius,
         search_stencil=search_stencil,
     )
-    nx = reading.shape[0]
     origin = reading.origin
     xyz_density = reading.points_xyzw
-    # This door's conventions: float64, and the point weights are whatever IMP
-    # reported. The structure door in `IMP.bff.representation.av.structure`
-    # keeps the raw float32 values and forces the weights to one.
+    # This door's conventions: the point weights are whatever IMP reported.
+    # The structure door forces them to one. Both carry the density as float64
+    # now.
     #
     # The density used to be **binarised** here, `np.where(d > 0, 1, 0)`. For
     # AV1 that is a no-op -- the carve already emits exactly 0 or 1 -- but it
@@ -526,8 +500,6 @@ def _av_from_arrays(
     # like it worked. The raw values are kept, so AV1 is unchanged and AV3 means
     # something.
     density = np.ascontiguousarray(np.asarray(reading.density, dtype=float))
-
-    shape = (nx, nx, nx)
     voxel_size = float(grid_resolution)
 
     if xyz_density.size:
@@ -542,7 +514,6 @@ def _av_from_arrays(
         density=density,
         grid_origin=origin,
         grid_step=voxel_size,
-        grid_shape=shape,
         attachment_point=source_xyz,
         params={
             "backend": "imp_bff",
@@ -729,12 +700,13 @@ def _av_from_structure(
         contact_volume_trapped_fraction=float(
             source_info.get("contact_volume_trapped_fraction", -1)),
     )
-    nx, ny, nz = reading.shape
-    # This door's conventions, deliberately kept as they were: float32 density
-    # values (not binarised) and uniform point weights. The array door in
-    # `IMP.bff.representation.av.compute` chooses differently on both counts; reconciling them
-    # is a behaviour change and belongs to a later stage, not to this move.
-    density = np.ascontiguousarray(reading.density, dtype=np.float32)
+    # This door's conventions: the density is not binarised, and the point
+    # weights are forced to one. It also used to store the density as
+    # **float32**, which was a storage choice of the Python dataclass and
+    # nothing else -- the reading is float64 and so is every consumer, so the
+    # cast only lost about seven digits on the way through. Both doors now
+    # carry the same float64 values the path map reported.
+    density = np.ascontiguousarray(reading.density, dtype=np.float64)
     points = (
         np.column_stack([reading.points_xyzw[:, :3],
                          np.ones(reading.points_xyzw.shape[0])])
@@ -748,7 +720,6 @@ def _av_from_structure(
         density=density,
         grid_origin=origin,
         grid_step=float(step),
-        grid_shape=(nx, ny, nz),
         attachment_point=att_xyz,
     )
 
@@ -861,10 +832,9 @@ def compute_avs_for_structure(
         if source_xyz is None:
             avs[pname] = AccessibleVolume(
                 points=np.zeros((0, 4), dtype=np.float64),
-                density=np.zeros((1, 1, 1), dtype=np.float32),
+                density=np.zeros((1, 1, 1)),
                 grid_origin=np.zeros(3),
                 grid_step=ds,
-                grid_shape=(1, 1, 1),
                 attachment_point=np.zeros(3),
                 position_name=pname,
             )

@@ -90,7 +90,7 @@ IMP_VALUES(LabelingSite, LabelingSites);
 class IMPBFFEXPORT SimpleAVNetworkRestraint {
     std::string name_;
     double weight_;
-    std::map<std::string, BasicAV> avs_;
+    std::map<std::string, AccessibleVolume> avs_;
     std::vector<AVMeasurement> measurements_;
 
     double model_distance(const AVMeasurement& m) const;
@@ -100,7 +100,7 @@ public:
         : name_(name), weight_(1.0) {}
 
     //! Register a pre-computed accessible volume under a name.
-    void add_av(std::string name, const BasicAV& av) { avs_[name] = av; }
+    void add_av(std::string name, const AccessibleVolume& av) { avs_[name] = av; }
 
     void add_measurement(const AVMeasurement& measurement) {
         measurements_.push_back(measurement);

@@ -11,7 +11,7 @@ import os
 import numpy as np
 import pytest
 
-from IMP.bff.representation.av import BasicAV, ACV, compute_av, AccessibleVolume
+from IMP.bff.representation.av import AccessibleVolume, ACV, compute_av
 from IMP.bff.representation.av import (
     random_distances,
     density2points,
@@ -22,12 +22,12 @@ from IMP.bff.representation.av import (
 )
 
 
-class TestBasicAV:
-    """Test the BasicAV class."""
+class TestAccessibleVolumeCloud:
+    """The cloud half: points, mean position, and the three distances."""
 
     def test_create_empty(self):
         """An AV with no points is valid but empty."""
-        av = BasicAV(position_name="empty")
+        av = AccessibleVolume(position_name="empty")
         assert av.n_points == 0
         assert av.points.shape == (0, 4)
 
@@ -36,7 +36,7 @@ class TestBasicAV:
         n = 100
         pts = np.random.RandomState(0).randn(n, 4).astype(np.float64)
         pts[:, 3] = np.abs(pts[:, 3]) + 0.01  # positive weights
-        av = BasicAV(points=pts, position_name="test")
+        av = AccessibleVolume(points=pts, position_name="test")
         assert av.n_points == n
         assert av.position_name == "test"
 
@@ -46,22 +46,22 @@ class TestBasicAV:
             [0.0, 0.0, 0.0, 1.0],
             [2.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av = BasicAV(points=pts)
+        av = AccessibleVolume(points=pts)
         mp = av.mean_position
         np.testing.assert_allclose(mp, [1.0, 0.0, 0.0], atol=1e-12)
 
     def test_mean_position_single_point(self):
         """Single point has that point as mean."""
         pts = np.array([[1.5, 2.5, 3.5, 1.0]], dtype=np.float64)
-        av = BasicAV(points=pts)
+        av = AccessibleVolume(points=pts)
         np.testing.assert_allclose(av.mean_position, [1.5, 2.5, 3.5], atol=1e-12)
 
     def test_dRmp(self):
         """Distance between mean positions is correct."""
         pts1 = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
         pts2 = np.array([[3.0, 4.0, 0.0, 1.0]], dtype=np.float64)
-        av1 = BasicAV(points=pts1)
-        av2 = BasicAV(points=pts2)
+        av1 = AccessibleVolume(points=pts1)
+        av2 = AccessibleVolume(points=pts2)
         assert av1.dRmp(av2) == pytest.approx(5.0, abs=1e-10)
 
     def test_dRDA(self):
@@ -70,16 +70,16 @@ class TestBasicAV:
             [0.0, 0.0, 0.0, 1.0],
             [1.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av1 = BasicAV(points=pts)
-        av2 = BasicAV(points=pts)
+        av1 = AccessibleVolume(points=pts)
+        av2 = AccessibleVolume(points=pts)
         d = av1.dRDA(av2, n_samples=20000)
         assert d > 0.0
 
     def test_dRDAE(self):
         """FRET-averaged distance from identical pts gives < 1 Å."""
         pts = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
-        av1 = BasicAV(points=pts)
-        av2 = BasicAV(points=pts)
+        av1 = AccessibleVolume(points=pts)
+        av2 = AccessibleVolume(points=pts)
         r = av1.dRDAE(av2, forster_radius=52.0, n_samples=10000)
         assert r >= 0.0
 
@@ -89,23 +89,13 @@ class TestBasicAV:
             [0.0, 0.0, 0.0, 1.0],
             [10.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av1 = BasicAV(points=pts)
-        av2 = BasicAV(points=pts)
+        av1 = AccessibleVolume(points=pts)
+        av2 = AccessibleVolume(points=pts)
         y, x = av1.pRDA(av2, n_samples=10000)
         assert y.ndim == 1
         assert x.ndim == 1
         assert len(y) == len(x)
         assert abs(y.sum() - 1.0) < 0.01
-
-    def test_save_xyz_roundtrip(self, tmp_path):
-        """Saving and loading XYZ preserves point count."""
-        pts = np.random.RandomState(42).randn(50, 4).astype(np.float64)
-        pts[:, 3] = np.abs(pts[:, 3]) + 0.01
-        av = BasicAV(points=pts)
-        p = tmp_path / "test.xyz"
-        av.save_xyz(str(p))
-        loaded = np.loadtxt(str(p), skiprows=1)
-        assert loaded.shape[0] == 50
 
 
 class TestKernels:
@@ -138,8 +128,8 @@ class TestKernels:
         np.testing.assert_allclose(pts[0, :3], [1.0, 1.0, 1.0], atol=1e-6)
 
 
-class TestAccessibleVolume:
-    """AccessibleVolume dataclass."""
+class TestAccessibleVolumeStates:
+    """The states half: the grid is derived, and an empty cloud has a position."""
 
     def test_empty(self):
         av = AccessibleVolume(
@@ -147,11 +137,12 @@ class TestAccessibleVolume:
             density=np.zeros((3, 3, 3)),
             grid_origin=np.zeros(3),
             grid_step=1.0,
-            grid_shape=(3, 3, 3),
-            attachment_point=np.zeros(3),
+            attachment_point=np.array([1.0, 2.0, 3.0]),
         )
         assert not av.has_volume
         assert av.n_points == 0
+        # A label whose volume came back empty is at its attachment atom, not
+        # at the origin.
         np.testing.assert_allclose(av.mean_position, av.attachment_point)
 
     def test_non_empty(self):
@@ -161,11 +152,20 @@ class TestAccessibleVolume:
             density=np.zeros((3, 3, 3)),
             grid_origin=np.zeros(3),
             grid_step=1.0,
-            grid_shape=(3, 3, 3),
             attachment_point=np.array([0.0, 0.0, 0.0]),
         )
         assert av.has_volume
         assert av.n_points == 1
+
+    def test_the_grid_shape_is_derived_from_the_density(self):
+        """It was a constructor argument that had to agree with the array."""
+        av = AccessibleVolume(density=np.zeros((3, 3, 3)), grid_origin=np.zeros(3))
+        assert av.grid_shape == (3, 3, 3)
+        assert AccessibleVolume().grid_shape == (0, 0, 0)
+
+    def test_a_non_cubic_grid_is_refused(self):
+        with pytest.raises(ValueError):
+            AccessibleVolume(density=np.zeros((2, 3, 4)), grid_origin=np.zeros(3))
 
 
 class TestSplitAVACV:
@@ -198,29 +198,29 @@ class TestACV:
         acv = ACV(position_name="empty")
         assert acv.n_points == 0
 
-    def test_from_basic_av_with_slow_centers(self):
+    def test_from_accessible_volume_with_slow_centers(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         origin = np.array([0.0, 0.0, 0.0])
-        av = BasicAV(
+        av = AccessibleVolume(
             density=density,
             grid_origin=origin,
             grid_step=1.0,
         )
         slow = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
-        acv = ACV.from_basic_av(av, slow_centers=slow, trapped_fraction=0.5)
+        acv = ACV.from_accessible_volume(av, slow_centers=slow, trapped_fraction=0.5)
         assert isinstance(acv, ACV)
         assert acv.trapped_fraction == 0.5
 
     def test_slow_radius_broadcast(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         origin = np.array([0.0, 0.0, 0.0])
-        av = BasicAV(
+        av = AccessibleVolume(
             density=density,
             grid_origin=origin,
             grid_step=1.0,
         )
         slow = np.array([[0.0, 0.0, 0.0], [4.0, 4.0, 4.0]], dtype=np.float64)
-        acv = ACV.from_basic_av(av, slow_centers=slow, slow_radius=10.0)
+        acv = ACV.from_accessible_volume(av, slow_centers=slow, slow_radius=10.0)
         # scalar is stored as (1,) array; broadcasting happens in kernel
         assert acv.slow_radius[0] == 10.0
 

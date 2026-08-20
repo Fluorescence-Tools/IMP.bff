@@ -14,10 +14,9 @@ def _point_av(xyz):
     pts = np.array([[xyz[0], xyz[1], xyz[2], 1.0]] * 4, dtype=np.float64)
     return AccessibleVolume(
         points=pts,
-        density=np.zeros((1, 1, 1), dtype=np.float32),
+        density=np.zeros((1, 1, 1)),
         grid_origin=np.zeros(3),
         grid_step=1.0,
-        grid_shape=(1, 1, 1),
         attachment_point=np.asarray(xyz, dtype=np.float64),
     )
 

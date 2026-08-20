@@ -1,19 +1,8 @@
-"""States: positions, weights and orientations -- what every representation supplies.
+"""Distances between two labels, whatever represents them.
 
-An accessible-volume grid point, a rotamer, a coarse-grained conformer and an MD
-frame are the same kind of thing: *a state the dye can occupy, with a weight, a
-position and possibly an orientation*. What differs is only how the states were
-generated. Everything downstream -- distances, kappa^2, the interaction terms --
-consumes states, so it is written once and works for all of them.
-
-This is the abstraction that was missing. ``RotamerEnsemble`` inherited from the
-concrete :class:`~IMP.bff.representation.AccessibleVolume` instead, which is why
-distance code happened to work for rotamers: by inheritance, not by design. The
-cost showed up in the fields a rotamer library then had to carry and could not
-fill -- ``density=zeros((0, 0, 0))``, ``grid_step=0.0``, ``grid_shape=(0, 0, 0)``
--- placeholders for a grid that does not exist. No consumer ever read them:
-every one of them used ``points``, ``mean_position``, ``n_points`` or
-``has_volume``, which is exactly this surface.
+The states themselves -- positions, weights and orientations -- are C++
+(:class:`IMP.bff.States`); this module is what is asked *of* them, and the
+label distributions that produce them from a structure.
 """
 
 from __future__ import annotations
@@ -43,106 +32,25 @@ __all__ = [
 # --------------------------------------------------------------------------
 # states
 # --------------------------------------------------------------------------
-"""States: positions, weights and orientations -- what every representation supplies.
-
-An accessible-volume grid point, a rotamer, a coarse-grained conformer and an MD
-frame are the same kind of thing: *a state the dye can occupy, with a weight, a
-position and possibly an orientation*. What differs is only how the states were
-generated. Everything downstream -- distances, kappa^2, the interaction terms --
-consumes states, so it is written once and works for all of them.
-
-This is the abstraction that was missing. ``RotamerEnsemble`` inherited from the
-concrete :class:`~IMP.bff.representation.AccessibleVolume` instead, which is why
-distance code happened to work for rotamers: by inheritance, not by design. The
-cost showed up in the fields a rotamer library then had to carry and could not
-fill -- ``density=zeros((0, 0, 0))``, ``grid_step=0.0``, ``grid_shape=(0, 0, 0)``
--- placeholders for a grid that does not exist. No consumer ever read them:
-every one of them used ``points``, ``mean_position``, ``n_points`` or
-``has_volume``, which is exactly this surface.
-"""
-
-@dataclass(kw_only=True)
-class States:
-    """A weighted set of states of one label.
-
-    :param points: ``(N, 4)`` -- ``x, y, z, weight``. One row per state.
-    :param attachment_point: ``(3,)`` where the label is tied to the structure.
-    :param orientations: ``(N, 3)`` transition dipoles, when the representation
-        resolves them. ``None`` for a positional-only model such as an AV, which
-        is why kappa^2 from an AV needs an isotropic assumption and kappa^2 from
-        a rotamer library does not.
-    :param position_name: human-readable label for the site.
-    :param params: how these states were produced -- representation parameters,
-        not dye or site properties.
-    """
-
-    points: np.ndarray
-    attachment_point: np.ndarray
-    orientations: Optional[np.ndarray] = None
-    position_name: str = ""
-    params: Dict = field(default_factory=dict)
-
-    @property
-    def positions(self) -> np.ndarray:
-        """``(N, 3)`` state coordinates."""
-        return self.points[:, :3]
-
-    @property
-    def weights(self) -> np.ndarray:
-        """``(N,)`` state weights, unnormalised."""
-        return self.points[:, 3]
-
-    @property
-    def n_points(self) -> int:
-        return self.points.shape[0] if self.points.ndim == 2 else 0
-
-    @property
-    def has_volume(self) -> bool:
-        return self.n_points > 0
-
-    @property
-    def has_orientations(self) -> bool:
-        return self.orientations is not None and len(self.orientations) > 0
-
-    @property
-    def mean_position(self) -> np.ndarray:
-        """Weight-averaged position, falling back to the attachment point."""
-        if self.n_points == 0:
-            return np.asarray(self.attachment_point).copy()
-        w = self.points[:, 3]
-        if w.sum() == 0:
-            return np.asarray(self.attachment_point).copy()
-        return np.average(self.points[:, :3], axis=0, weights=w)
-
-
-# --------------------------------------------------------------------------
-# types
-# --------------------------------------------------------------------------
-"""The accessible volume: a region a dye can reach, as one of several representations."""
-
-@dataclass(kw_only=True)
-class AccessibleVolume(States):
-    """States enumerated as a voxel grid, plus the grid itself.
-
-    One definition. There were two identical ones -- ``IMP.bff.representation.av`` and
-    ``IMP.bff.representation.av``, same seven fields in the same order -- which is how they
-    came to disagree about the axis order of ``density`` without anything
-    noticing (PRD-113 stage 3a).
-
-    :param density: ``(nx, ny, nz)`` accessible density, in the **coordinate**
-        axis order. IMP orders its flat tile values with *x* fastest; a C-order
-        reshape into ``(nx, ny, nz)`` returns the volume transposed, and a
-        mirrored volume has the right voxel count, bounding box and total volume,
-        so only a voxel-by-voxel comparison against ``points`` catches it.
-    :param grid_origin: ``(3,)`` coordinate of the first voxel centre.
-    :param grid_step: voxel edge in Angstrom.
-    :param grid_shape: ``(nx, ny, nz)``.
-    """
-
-    density: np.ndarray
-    grid_origin: np.ndarray
-    grid_step: float
-    grid_shape: Tuple[int, int, int]
+# ``States``, ``AccessibleVolume`` and ``ACV`` are **C++**
+# (``include/IMP/bff/AVModel.h``).
+#
+# They were a Python dataclass hierarchy here *and* a C++ one in `AVModel.h`
+# describing the same cloud -- `AccessibleVolume`/`ACV`, which the Python called for
+# every actual computation. Two objects for one thing is how the two came to
+# disagree about the axis order of ``density`` without anything noticing
+# (PRD-113 stage 3a): the arithmetic was already across the boundary, the
+# *object* was not, and each side held its own idea of what it was looking at.
+#
+# There is one now, and the surface is the one that was authored here:
+# ``points`` as ``(n, 4)``, ``positions``, ``weights``, ``orientations`` (or
+# ``None``), ``attachment_point``, ``mean_position`` falling back to it,
+# ``n_points``, ``has_volume``, ``params``, and ``dRmp``/``dRDA``/``dRDAE``/
+# ``pRDA``. ``AccessibleVolume`` adds the grid; ``AccessibleVolume`` was the name the
+# C++ half used for it and is retired.
+#
+# See ``pyext/IMP_bff.avmodel.i``.
+from IMP.bff import ACV, AccessibleVolume, States  # noqa: F401
 
 
 # --------------------------------------------------------------------------
@@ -809,18 +717,18 @@ meant both, which is the kind of collision this restructure exists to remove.
    :class:`~IMP.bff.representation.States` surface (``points``,
    ``mean_position``, ``n_points``) and carry a **fourth** copy of the distance
    layer (``dRmp``/``dRDA``/``dRDAE``/``pRDA``, duplicated across both concrete
-   classes, and again in ``BasicAV`` and in ``fret/distance.py``). The
+   classes, and again in ``AccessibleVolume`` and in ``fret/distance.py``). The
    :attr:`LabelDistribution.states` view below is the bridge; folding the four
    distance layers into one is PRD-113 stage 4, and is a behaviour change that
    does not belong in a move.
 """
 
 if TYPE_CHECKING:  # names for annotations only; see _av_types() below
-    from IMP.bff.representation.av import ACV, BasicAV
+    from IMP.bff.representation.av import ACV, AccessibleVolume
 
 
 def _av_types():
-    """``(BasicAV, ACV, compute_av)``, imported on first use rather than on import.
+    """``(AccessibleVolume, ACV, compute_av)``, imported on first use rather than on import.
 
     The layering here runs ``representation.types`` -> ``av`` ->
     ``representation.label_distribution``: this module *builds* accessible volumes, so
@@ -831,8 +739,8 @@ def _av_types():
     break it. ``import IMP.bff.representation.av`` as a process's first import raised
     ImportError until this was deferred (PRD-113 stage 3).
     """
-    from IMP.bff.representation.av import ACV, BasicAV, compute_av
-    return BasicAV, ACV, compute_av
+    from IMP.bff.representation.av import ACV, AccessibleVolume, compute_av
+    return AccessibleVolume, ACV, compute_av
 
 # ---------------------------------------------------------------------------
 # Helper: find an atom in a coordinate array
@@ -911,34 +819,34 @@ class LabelDistribution(abc.ABC):
         self.simulation_grid_resolution = simulation_grid_resolution
         self.position_name = position_name
         self.verbose = verbose
-        self._av: Optional["BasicAV"] = None
+        self._av: Optional["AccessibleVolume"] = None
 
     @abc.abstractmethod
     def _compute(self):
         """Compute or recompute the underlying accessible volume."""
         ...
 
-    def get_basic_av(self) -> "BasicAV":
-        """Return (or create) the underlying ``BasicAV``.
+    def get_accessible_volume(self) -> "AccessibleVolume":
+        """Return (or create) the underlying ``AccessibleVolume``.
 
         Returns
         -------
-        BasicAV
+        AccessibleVolume
         """
         if self._av is None:
             self._compute()
         return self._av  # type: ignore
 
-    # Convenience accessors that delegate to BasicAV
+    # Convenience accessors that delegate to AccessibleVolume
     @property
     def points(self) -> np.ndarray:
         """Point cloud ``(N, 4)`` of the dye distribution."""
-        return self.get_basic_av().points
+        return self.get_accessible_volume().points
 
     @property
     def mean_position(self) -> np.ndarray:
         """Weighted mean position ``(3,)``."""
-        return self.get_basic_av().mean_position
+        return self.get_accessible_volume().mean_position
 
     @property
     def states(self) -> "States":
@@ -957,7 +865,7 @@ class LabelDistribution(abc.ABC):
     @property
     def n_points(self) -> int:
         """Number of points in the dye distribution."""
-        return self.get_basic_av().n_points
+        return self.get_accessible_volume().n_points
 
 
 # ---------------------------------------------------------------------------
@@ -1026,7 +934,7 @@ class LabelDistributionAV(LabelDistribution):
             verbose=verbose,
         )
         self.origin = atoms_xyz[self._attachment_index].copy()
-        # AV is lazily computed in get_basic_av()
+        # AV is lazily computed in get_accessible_volume()
 
     def _compute(self):
         """Compute the AV for this label."""
@@ -1034,7 +942,7 @@ class LabelDistributionAV(LabelDistribution):
             return
         source_xyz = self.atoms_xyz[self._attachment_index]
 
-        BasicAV, _, compute_av = _av_types()
+        AccessibleVolume, _, compute_av = _av_types()
         av_result = compute_av(
             self.atoms_xyz, self.atoms_vdw, source_xyz,
             linker_length=self.linker_length,
@@ -1043,7 +951,7 @@ class LabelDistributionAV(LabelDistribution):
             grid_resolution=self.simulation_grid_resolution,
         )
         self.density = av_result.density
-        self._av = BasicAV(
+        self._av = AccessibleVolume(
             points=av_result.points,
             density=av_result.density,
             grid_origin=av_result.grid_origin,
@@ -1054,25 +962,25 @@ class LabelDistributionAV(LabelDistribution):
     # Distance methods
     def dRmp(self, other: "LabelDistributionAV") -> float:
         """:math:`R_{\\mathrm{mp}}` distance to another label."""
-        return self.get_basic_av().dRmp(other.get_basic_av())
+        return self.get_accessible_volume().dRmp(other.get_accessible_volume())
 
     def dRDA(self, other: "LabelDistributionAV", n_samples: int = 50000) -> float:
         """:math:`\\langle R_{DA}\\rangle` mean distance."""
-        return self.get_basic_av().dRDA(other.get_basic_av(), n_samples)
+        return self.get_accessible_volume().dRDA(other.get_accessible_volume(), n_samples)
 
     def dRDAE(self, other: "LabelDistributionAV",
               forster_radius: float = 52.0, n_samples: int = 50000) -> float:
         """:math:`R_E` FRET-averaged distance."""
-        return self.get_basic_av().dRDAE(
-            other.get_basic_av(), forster_radius, n_samples
+        return self.get_accessible_volume().dRDAE(
+            other.get_accessible_volume(), forster_radius, n_samples
         )
 
     def pRDA(self, other: "LabelDistributionAV",
              axis: Optional[np.ndarray] = None,
              n_samples: int = 50000) -> tuple[np.ndarray, np.ndarray]:
         """Distance distribution :math:`p(R_{DA})`."""
-        return self.get_basic_av().pRDA(
-            other.get_basic_av(), axis, n_samples
+        return self.get_accessible_volume().pRDA(
+            other.get_accessible_volume(), axis, n_samples
         )
 
 
@@ -1124,31 +1032,31 @@ class DyeDistributionNormal(LabelDistribution):
         r2 = np.sum(centered ** 2, axis=1)
         pts[:, 3] = np.exp(-0.5 * r2 / (self.width ** 2))
         pts[:, 3] /= pts[:, 3].sum()
-        BasicAV, _, _ = _av_types()
-        self._av = BasicAV(
+        AccessibleVolume, _, _ = _av_types()
+        self._av = AccessibleVolume(
             points=pts,
             position_name=self.position_name,
         )
 
     def dRmp(self, other: "DyeDistributionNormal") -> float:
-        return self.get_basic_av().dRmp(other.get_basic_av())
+        return self.get_accessible_volume().dRmp(other.get_accessible_volume())
 
     def dRDA(self, other: "DyeDistributionNormal",
              n_samples: int = 50000) -> float:
-        return self.get_basic_av().dRDA(other.get_basic_av(), n_samples)
+        return self.get_accessible_volume().dRDA(other.get_accessible_volume(), n_samples)
 
     def dRDAE(self, other: "DyeDistributionNormal",
               forster_radius: float = 52.0,
               n_samples: int = 50000) -> float:
-        return self.get_basic_av().dRDAE(
-            other.get_basic_av(), forster_radius, n_samples
+        return self.get_accessible_volume().dRDAE(
+            other.get_accessible_volume(), forster_radius, n_samples
         )
 
     def pRDA(self, other: "DyeDistributionNormal",
              axis: Optional[np.ndarray] = None,
              n_samples: int = 50000) -> tuple[np.ndarray, np.ndarray]:
-        return self.get_basic_av().pRDA(
-            other.get_basic_av(), axis, n_samples
+        return self.get_accessible_volume().pRDA(
+            other.get_accessible_volume(), axis, n_samples
         )
 
 

@@ -1,7 +1,7 @@
 """The model objects that moved to C++, and the things that moved with them.
 
 Four objects left Python for C++ over 2026-08-19: ``LifetimeSpectrum``,
-``BasicAV``/``ACV``, ``DyeDiffusionSimulation`` and ``GridDiffusionSolver``,
+``AccessibleVolume``/``ACV``, ``DyeDiffusionSimulation`` and ``GridDiffusionSolver``,
 along with the kappa^2 sampler. Each was gated against the Python it replaced
 *before* that Python was deleted -- but a gate against code that no longer
 exists cannot be re-run, so what it established has to be written down as
@@ -249,7 +249,7 @@ def test_a_spectrum_is_a_value_not_a_handle():
 def test_an_av_carries_no_grid_when_it_was_built_from_points():
     """``density`` is ``None``, not an empty array: every consumer tests it."""
     pts = np.ascontiguousarray(np.random.default_rng(0).random((40, 4)))
-    av = IMP.bff.BasicAV(points=pts, position_name="donor")
+    av = IMP.bff.AccessibleVolume(points=pts, position_name="donor")
     assert av.density is None
     assert av.grid_origin is None
     assert av.n_points == 40
