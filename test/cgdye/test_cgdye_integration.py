@@ -6,7 +6,7 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from IMP.bff.tools import get_output_dir, get_structure_dir
+from IMP.bff import get_output_dir, get_structure_dir
 
 def _cgdye_file(*parts):
     """A path inside the installed IMP.bff.cgdye package.
@@ -28,7 +28,7 @@ class TestIntegration(unittest.TestCase):
         # test used to skip everywhere the build-system task had not run.
         from IMP.bff.io.cif import write_dye_forcefield_cif
         from IMP.bff.cgdye.topology import build_dye_protein_system
-        from IMP.bff.tools import get_template_dir
+        from IMP.bff import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()
         system = build_dye_protein_system(
             str(get_structure_dir("cx4.mol2")),

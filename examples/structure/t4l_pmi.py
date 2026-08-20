@@ -18,7 +18,6 @@ import RMF
 import IMP.atom
 import IMP.bff
 import IMP.bff.representation.av
-import IMP.bff.tools
 import IMP.bff.restraints
 
 import IMP.rmf

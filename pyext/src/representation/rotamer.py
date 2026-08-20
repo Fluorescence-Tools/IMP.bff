@@ -19,7 +19,7 @@ from IMP.bff.io.structure import read_rotamer_library_rmf
 from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff.representation.distance import States
 from IMP.bff.scoring import compute_rotamer_score, selector_resnames
-from IMP.bff.tools import get_template_dir
+from IMP.bff import get_template_dir
 import IMP
 import IMP.atom
 import IMP.core

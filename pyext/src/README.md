@@ -100,8 +100,6 @@ question from stage 2's "is this configuration allowed".
   themselves: `quenching/` (the PET model for one site), `cgdye/` (explicit
   all-atom dye MD, off the domain layout — nothing in the package imports it at
   module scope)
-* **Utility**: `tools.py` (paths to shipped data), `cli.py` (every click entry
-  point outside `cgdye`)
 * `api.py` — the public surface. `BY_DOMAIN` is authored; `EXPORTS` is derived.
 
 ## What holds it together

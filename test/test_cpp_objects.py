@@ -274,7 +274,7 @@ def test_the_molecular_graph_is_the_systems_own():
     The numbers here are the Python's, recorded when it was replaced.
     """
     import IMP.bff
-    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff import get_template_dir, get_structure_dir
     from IMP.bff.cgdye.topology import build_dye_protein_system, build_graph, find_cycles
 
     system = build_dye_protein_system(
@@ -341,7 +341,7 @@ def test_the_molecular_graph_matches_the_python_it_replaced():
     strings, not MOL2 serials).
     """
     import IMP.bff
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     from IMP.bff.cgdye.topology import (
         build_angles, build_dihedrals, build_graph, find_cycles, parse_dye_mol2)
 
@@ -507,7 +507,7 @@ def test_improper_expansion_matches_the_python_it_replaced():
     and the difference is invisible unless a sulfur is mistyped.
     """
     import IMP.bff
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     from IMP.bff.cgdye.topology import parse_dye_mol2
 
     expected = {
@@ -548,7 +548,7 @@ def test_the_mol2_reader_matches_the_python_it_replaced():
     derived from it.
     """
     import IMP.bff
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     from IMP.bff.cgdye.topology import parse_dye_mol2
 
     for mol2, n_atoms, n_bonds in (("atto655.mol2", 70, 74),
@@ -589,7 +589,7 @@ def test_system_self_consistency_is_the_systems_own_check():
     `cgdye.sim._validate_system` raises; a reader could report instead.
     """
     import IMP.bff
-    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff import get_template_dir, get_structure_dir
     from IMP.bff.cgdye.topology import build_dye_protein_system
 
     def fresh():
@@ -635,7 +635,7 @@ def test_linker_geometry_matches_the_python_it_replaced():
     import IMP
     import IMP.algebra
     import IMP.core
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     from IMP.bff.cgdye.sampling import LinkerSampler
 
     sampler = LinkerSampler(str(get_structure_dir("alexa488_r48.mol2")))

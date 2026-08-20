@@ -16,6 +16,9 @@ import numpy as np
 /* STL templates and the numpy typemaps everything below depends on. */
 %include "IMP_bff.types.i"
 
+/* Where the shipped cgdye data lives. Path arithmetic, so it stays Python. */
+%include "IMP_bff.datapaths.i"
+
 /*
  * Headers are %include'd directly here, which is IMP's own convention -- see
  * modules/core/pyext/swig.i-in, which does the same for 101 of them. A separate

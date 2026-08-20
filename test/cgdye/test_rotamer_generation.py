@@ -77,7 +77,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         from IMP.bff.cgdye.topology import parse_dye_mol2
         from IMP.bff.scoring import (
             DyeInternalEnergyEvaluator, dye_internal_system)
-        from IMP.bff.tools import get_structure_dir
+        from IMP.bff import get_structure_dir
         atoms, bonds = parse_dye_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
         system = dye_internal_system(atoms, bonds)
         self.assertEqual(len(system["sites"]), len(atoms))
@@ -107,7 +107,7 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         import json
         from pathlib import Path
         from IMP.bff.cgdye.sampling import generate_linker_rotamers
-        from IMP.bff.tools import get_structure_dir
+        from IMP.bff import get_structure_dir
         pins_path = Path(__file__).resolve().parents[1] / "references" / "cgdye_sampler_pins.json"
         with open(pins_path) as fh:
             pins = json.load(fh)

@@ -676,7 +676,7 @@ def analyze_dye_trajectories(
             tpl = Path(tpl_list[i])
         else:
             # Default: the bundled template, which is IMP module data
-            from IMP.bff.tools import get_template_dir
+            from IMP.bff import get_template_dir
             tpl = get_template_dir() / f"{mob}.template.cif"
         template_map[mob] = tpl
 

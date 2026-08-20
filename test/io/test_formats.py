@@ -148,7 +148,7 @@ def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
     """
     import IMP.bff
     from IMP.bff.io.cif import write_dye_forcefield_cif
-    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff import get_template_dir, get_structure_dir
     from IMP.bff.cgdye.topology import build_dye_protein_system
 
     system = build_dye_protein_system(

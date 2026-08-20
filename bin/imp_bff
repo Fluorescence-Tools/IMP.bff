@@ -44,7 +44,7 @@ from IMP.bff.cgdye.sampling import (
     rotamer_correlation_times,
     rotamer_rotational_correlation_time,
 )
-from IMP.bff.tools import get_template_dir, get_structure_dir, ensure_dir
+from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff.dye import forster_radius_from_spectra
 from IMP.bff.analysis import DEFAULT_TRAJ_ROOT, DEFAULT_OUTPUT_DIR
 

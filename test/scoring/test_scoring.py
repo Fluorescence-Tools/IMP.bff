@@ -101,7 +101,7 @@ def test_improper_restraints_are_built_from_a_typed_system():
     import IMP
     import IMP.bff
     import IMP.atom
-    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff import get_template_dir, get_structure_dir
     from IMP.bff.cgdye.topology import build_dye_protein_system
     from IMP.bff.scoring import build_dye_restraints
 

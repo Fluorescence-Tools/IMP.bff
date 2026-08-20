@@ -70,7 +70,7 @@ Reorganising is the smaller half of the problem. Re-encoding is the larger one.
 * **The 17.3 MB archive.** Unreferenced and installed. It may be a deliberate
   reference dataset for a publication, which is why it has not been touched.
 * **`data/cgdye/inputs/structures/`.** The CLI defaults to reading `1DG3.pdb`
-  and `alexa488_r48.mol2` from there through `IMP.bff.tools.get_structure_dir`.
+  and `alexa488_r48.mol2` from there through `IMP.bff.get_structure_dir`.
   Under IMP's convention those are example inputs, but moving them changes what
   `get_structure_dir()` means and touches both CLIs, so it is a code change
   rather than a file move.

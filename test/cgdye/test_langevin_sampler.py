@@ -77,7 +77,7 @@ def test_bd_free_particle_msd_is_6Dt():
 
 def test_attached_dye_sampler_hgbp1_481():
     from IMP.bff.label import attach_dyes
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     for integrator in ("md", "bd"):
         m = IMP.Model()
         prot = IMP.atom.read_pdb(str(get_structure_dir("1DG3.pdb")), m, IMP.atom.NonWaterPDBSelector())

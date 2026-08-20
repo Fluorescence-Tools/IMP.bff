@@ -286,7 +286,7 @@ def _libs(cutoff):
 def hgbp1_case(cutoff=30):
     """hGBP1 (1DG3, chain A): the fps.json positions of examples/structure/GBP/hGBP1.fps.json on chain A."""
     import IMP.bff
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     pdb = str(get_structure_dir("1DG3.pdb"))
     fps = json.load(open(IMP.bff.get_example_path("structure/GBP/hGBP1.fps.json")))
     # residue 254 is not resolved in 1DG3; the other chain-A sites are

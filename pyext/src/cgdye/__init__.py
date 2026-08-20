@@ -29,7 +29,7 @@ was                                          is
 ``cgdye.sampling.rotamer``                   ``IMP.bff.sampling``
 ``cgdye.labeling``                           ``IMP.bff.label`` / ``.backbone_frame``
 ``cgdye.io.*`` (all of it)             ``IMP.bff.io.*``
-``cgdye.utils``                              ``IMP.bff.tools``
+``cgdye.utils``                              ``IMP.bff`` (the data-path helpers)
 ``cgdye.topology.dye`` LJ table and kernel   ``IMP.bff.scoring``
 ===========================================  =============================================
 

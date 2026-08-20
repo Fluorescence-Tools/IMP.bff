@@ -133,7 +133,7 @@ def test_find_atom_matches_the_full_scan_it_replaced():
     """
     import IMP
     import IMP.atom
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
     from IMP.bff.label import _find_atom, _atom_name, _atom_type_from_name
 
     def exhaustive(hierarchy, chain_id, resnum, atom_name):

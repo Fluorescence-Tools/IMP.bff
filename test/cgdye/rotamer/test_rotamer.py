@@ -183,7 +183,7 @@ def test_load_protein_frames_from_rmf_trajectory(tmp_path: Path) -> None:
     import IMP.algebra
     import IMP.rmf
     import RMF
-    from IMP.bff.tools import get_structure_dir
+    from IMP.bff import get_structure_dir
 
     # Two-frame RMF written on the fly from 148L: frame 1 is frame 0
     # translated by 1 Angstrom along x.

@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from IMP.bff.tools import get_template_dir, get_structure_dir
+from IMP.bff import get_template_dir, get_structure_dir
 
 
 import pytest

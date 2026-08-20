@@ -1,7 +1,7 @@
 import os
 import pytest
 from click.testing import CliRunner
-from IMP.bff.tools import get_structure_dir
+from IMP.bff import get_structure_dir
 
 @pytest.fixture(scope="module")
 def dye(imp_bff_program):
