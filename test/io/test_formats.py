@@ -135,3 +135,63 @@ def test_write_rmf_is_self_contained(tmp_path):
     fh = RMF.open_rmf_file_read_only(str(out))
     assert fh.get_number_of_frames() == 1
     assert "origin" in fh.get_description()
+
+
+def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
+    """`IMP.bff.read_forcefield_cif` against the 470-line Python it replaced.
+
+    The Python is gone, so the reference here is a *round trip*: build a system,
+    write it, read it back, and check every field of every category survives.
+    That is what the old reader was checked against too, and it catches the one
+    thing a count comparison does not -- the compact site-number scheme, where a
+    term may name a number whose `_ff_site` row appears later in the file.
+    """
+    import IMP.bff
+    from IMP.bff.io.cif import write_dye_forcefield_cif
+    from IMP.bff.tools import get_template_dir, get_structure_dir
+    from IMP.bff.cgdye.topology import build_dye_protein_system
+
+    system = build_dye_protein_system(
+        str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
+        "CX4", "atto655",
+        protein_template=str(get_template_dir("cx4.template.cif")),
+        dye_template=str(get_template_dir("atto655.template.cif")),
+    )
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "system.cif")
+        write_dye_forcefield_cif(path, system)
+        back = IMP.bff.read_forcefield_cif(path)
+
+    assert back.name == system.name
+    assert len(back.sites) == len(system.sites) == 138
+    assert len(back.bonds) == len(system.bonds) == 146
+    assert len(back.angles) == len(system.angles) == 262
+    assert len(back.dihedrals) == len(system.dihedrals) == 207
+    assert len(back.impropers) == len(system.impropers) == 81
+
+    for a, b in zip(system.sites, back.sites):
+        assert (a.id, a.component, a.atom_name, a.site_serial) == \
+               (b.id, b.component, b.atom_name, b.site_serial)
+        # the writer omits these when uniform, so absent must mean the default
+        assert abs(a.radius - b.radius) < 1e-12 and b.radius > 0.0
+        assert abs(a.mass - b.mass) < 1e-12 and b.mass > 0.0
+    # 5e-4, not 1e-9: `ihm`'s writer emits three decimals ("1.635"), so a round
+    # trip is exact only to half of the last place it wrote. That is the file's
+    # precision, not the reader's -- reading the same file twice is identical.
+    for a, b in zip(system.bonds, back.bonds):
+        assert (a.site_a, a.site_b, a.type_id) == (b.site_a, b.site_b, b.type_id)
+        assert abs(a.length - b.length) < 5e-4
+    for a, b in zip(system.angles, back.angles):
+        assert (a.site_a, a.site_b, a.site_c) == (b.site_a, b.site_b, b.site_c)
+        assert abs(a.theta - b.theta) < 5e-4
+    for name in ("dihedrals", "impropers"):
+        for a, b in zip(getattr(system, name), getattr(back, name)):
+            assert (a.site_a, a.site_b, a.site_c, a.site_d, a.type_id) == \
+                   (b.site_a, b.site_b, b.site_c, b.site_d, b.type_id)
+    assert sorted(back.groups) == sorted(system.groups)
+    assert sorted(back.lj_types) == sorted(system.lj_types)
+    assert sorted(back.improper_types) == sorted(system.improper_types)
+    assert back.nonbonded.enabled == system.nonbonded.enabled
+    assert abs(back.nonbonded.cutoff - system.nonbonded.cutoff) < 1e-12
+    assert back.sampling.n_steps == system.sampling.n_steps

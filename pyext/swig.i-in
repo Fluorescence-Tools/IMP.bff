@@ -86,6 +86,9 @@ import numpy as np
 /* The coarse-grained system, typed: what cgdye builds and simulates. */
 %include "IMP_bff.forcefield.i"
 
+/* The force-field system in, through the ihm C reader IMP vendors. */
+%include "IMP/bff/ForceFieldCIF.h"
+
 /* Trajectories: BinaryCIF, through the reader IMP already vendors. */
 %include "IMP/bff/TrajectoryIO.h"
 
