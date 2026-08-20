@@ -176,9 +176,6 @@ BY_DOMAIN = {
         "compute_av": "IMP.bff.representation.av",
         "compute_av_from_arrays": "IMP.bff.representation.av",
         "compute_avs_for_structure": "IMP.bff.representation.av",
-        # IMP.bff.representation.compare
-        "compare_av_and_rotamer_pairs": "IMP.bff.representation.compare",
-        "compare_av_and_rotamer_positions": "IMP.bff.representation.compare",
         # IMP.bff.representation.distance
         "av_pair_statistics": "IMP.bff.representation.distance",
         "distance_from_fret_efficiency": "IMP.bff.representation.distance",

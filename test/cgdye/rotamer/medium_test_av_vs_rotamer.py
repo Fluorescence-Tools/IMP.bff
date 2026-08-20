@@ -17,9 +17,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff.representation.compare import compare_av_and_rotamer_pairs, compare_av_and_rotamer_positions
-from IMP.bff.representation.compare import R0_A488_A594, hgbp1_case, t4l_case
-
 _PINS = Path(__file__).resolve().parents[2] / "references" / "cgdye_av_vs_rotamer_pins.json"
 
 
@@ -28,13 +25,16 @@ def _pins():
         return json.load(fh)
 
 
-@pytest.mark.parametrize("case_name,case", [("hgbp1_cutoff30", hgbp1_case), ("t4l_cutoff30", t4l_case)])
-def test_av_vs_rotamer_pins_and_sanity(case_name, case):
+@pytest.mark.parametrize("case_name,case_fn", [("hgbp1_cutoff30", "hgbp1_case"), ("t4l_cutoff30", "t4l_case")])
+def test_av_vs_rotamer_pins_and_sanity(case_name, case_fn, imp_bff_program):
+    # The comparison is a validation tool, so it lives in `bin/imp_bff` beside
+    # the command that drives it rather than in the package.
+    prog = imp_bff_program
     pins = _pins()
     settings = pins["settings"]
-    title, pdb, positions, libraries, pairs, experimental = case(30)
-    per_pos = compare_av_and_rotamer_positions(pdb, positions, libraries, n_samples=settings["n_samples"], temperature=settings["temperature"])
-    rows = compare_av_and_rotamer_pairs(per_pos, pairs, R0_A488_A594, experimental=experimental, n_samples=settings["n_samples"])
+    title, pdb, positions, libraries, pairs, experimental = getattr(prog, case_fn)(30)
+    per_pos = prog.compare_av_and_rotamer_positions(pdb, positions, libraries, n_samples=settings["n_samples"], temperature=settings["temperature"])
+    rows = prog.compare_av_and_rotamer_pairs(per_pos, pairs, prog.R0_A488_A594, experimental=experimental, n_samples=settings["n_samples"])
     ref = pins[case_name]
 
     # drift pins (deterministic: lattice AV + fixed-seed sampling; full pair matrix)
@@ -51,7 +51,7 @@ def test_av_vs_rotamer_pins_and_sanity(case_name, case):
 
     # sanity: two models of the same label (skipping sites the rotamer model
     # finds buried, Z < 0.05 -- FRETpredict's uniform fallback)
-    from IMP.bff.representation.compare import Z_CUTOFF
+    Z_CUTOFF = prog.Z_CUTOFF
     for name, got in per_pos.items():
         assert got["av_n_points"] > 0 and got["n_rotamers"] > 0
         if got["partition"] < Z_CUTOFF:
