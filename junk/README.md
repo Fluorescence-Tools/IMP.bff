@@ -26,6 +26,7 @@ What is here, and where its capability went:
 
 | here | what it was | where the capability lives now |
 |---|---|---|
+| `ported-to-cpp/` | Python whose job moved into C++ | the C++ named in each file's docstring. **Not a retirement**: the capability is in the module, gated against exactly this code. Kept because the edge cases are the part worth re-reading -- what `_calculate_ws` does when every partition function is zero, what `_weighted_average_sd_se` does with a NaN frame |
 | `distance_metrics.py` | six functions sharing names with `representation.distance`, three of them genuinely different questions | `IMP.bff.representation.distance` — `polynomial_transfer_ascending`, `distance_sample_statistics`, `mean_position_distance`; the rest were verified identical and deleted |
 | `cgdye-scripts/` | 24 one-off driver and analysis scripts, mostly for a single system (`hgbp1_site481`) | the library functions they called are all still in `IMP.bff.cgdye`. **One exception**: writing mol2 existed *only* in `pdb_to_mol2.py`, so it was lifted into `IMP.bff.cgdye.io.mol2` (`write_mol2`, `parse_pdb_atoms`, `parse_conect_bonds`, `infer_bonds`) before the script moved |
 | `fret_distance_shim.py` | a 28-line re-export of `representation.distance` left behind by PRD-113 stage 4b | `IMP.bff.representation.distance`, which is where it pointed |
