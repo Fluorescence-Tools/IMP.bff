@@ -620,3 +620,71 @@ def test_system_self_consistency_is_the_systems_own_check():
     orphan.sites = sites
     assert orphan.get_inconsistency().startswith("site ")
     assert "unknown component" in orphan.get_inconsistency()
+
+
+def test_linker_geometry_matches_the_python_it_replaced():
+    """`LinkerGeometry.apply` against the per-atom IMP transform loop.
+
+    The reference is the old implementation kept verbatim, and the property it
+    protects is the *sequencing*: the rotations are applied one after another,
+    each about the axis as it stands after the previous one. Applying them all
+    to the reference geometry independently gives a different structure and the
+    same number of degrees of freedom, so a test on shapes would not notice.
+    """
+    import numpy as np
+    import IMP
+    import IMP.algebra
+    import IMP.core
+    from IMP.bff.tools import get_structure_dir
+    from IMP.bff.cgdye.sampling import LinkerSampler
+
+    sampler = LinkerSampler(str(get_structure_dir("alexa488_r48.mol2")))
+    n_dof = len(sampler.rot_bonds) + len(sampler.rot_angles)
+    assert n_dof > 20, n_dof
+
+    def reference(cfg):
+        for i, p in sampler.idx_to_particle.items():
+            IMP.core.XYZ(p).set_coordinates(sampler.serial_to_pos0[i])
+        n_dih = len(sampler.rot_bonds)
+        for angle, (fixed_idx, moving_idx, moving_ids) in zip(cfg[:n_dih], sampler.rot_bonds):
+            cf = IMP.core.XYZ(sampler.idx_to_particle[fixed_idx]).get_coordinates()
+            cm = IMP.core.XYZ(sampler.idx_to_particle[moving_idx]).get_coordinates()
+            axis = cm - cf
+            if axis.get_magnitude() < 1e-8:
+                continue
+            tf = IMP.algebra.get_rotation_about_point(
+                cf, IMP.algebra.get_rotation_about_axis(axis, angle))
+            for mid in moving_ids:
+                p = sampler.idx_to_particle[mid]
+                IMP.core.XYZ(p).set_coordinates(
+                    tf.get_transformed(IMP.core.XYZ(p).get_coordinates()))
+        for angle, (b_idx, c_idx, a_idx, moving_ids) in zip(cfg[n_dih:], sampler.rot_angles):
+            cb = IMP.core.XYZ(sampler.idx_to_particle[b_idx]).get_coordinates()
+            cc = IMP.core.XYZ(sampler.idx_to_particle[c_idx]).get_coordinates()
+            ca = IMP.core.XYZ(sampler.idx_to_particle[a_idx]).get_coordinates()
+            axis = IMP.algebra.get_vector_product(ca - cb, cc - cb)
+            if axis.get_magnitude() < 1e-8:
+                continue
+            tf = IMP.algebra.get_rotation_about_point(
+                cb, IMP.algebra.get_rotation_about_axis(axis, angle))
+            for mid in moving_ids:
+                p = sampler.idx_to_particle[mid]
+                IMP.core.XYZ(p).set_coordinates(
+                    tf.get_transformed(IMP.core.XYZ(p).get_coordinates()))
+
+    def snapshot():
+        return np.array([list(IMP.core.XYZ(sampler.idx_to_particle[k]).get_coordinates())
+                         for k in sorted(sampler.idx_to_particle)])
+
+    rng = np.random.default_rng(21)
+    for _ in range(10):
+        cfg = list(rng.normal(scale=0.8, size=n_dof))
+        reference(cfg)
+        want = snapshot()
+        sampler.apply_config(cfg)
+        assert np.max(np.abs(want - snapshot())) < 1e-9
+
+    # the all-zero configuration is the reference geometry itself
+    sampler.apply_config([0.0] * n_dof)
+    base = np.array([list(sampler.serial_to_pos0[k]) for k in sorted(sampler.idx_to_particle)])
+    assert np.max(np.abs(snapshot() - base)) < 1e-12

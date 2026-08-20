@@ -565,40 +565,47 @@ class LinkerSampler:
                             fixed_neighbor = a if moving_idx == c else c
                             self.rot_angles.append((center_idx, moving_idx, fixed_neighbor, moving_ids))
 
+    def _linker_geometry(self):
+        """The rotatable topology as an :class:`IMP.bff.LinkerGeometry`.
+
+        Built once: which atoms move when a torsion or bond angle turns does
+        not change over a sampling run, only the configuration does. The
+        geometry indexes rows of a coordinate array, so the MOL2 serials this
+        class is keyed on are mapped to rows here and nowhere else.
+        """
+        if getattr(self, "_geometry", None) is None:
+            serials = sorted(self.idx_to_particle)
+            self._geometry_rows = serials
+            row = {s: i for i, s in enumerate(serials)}
+            g = IMP.bff.LinkerGeometry()
+            base = []
+            for s in serials:
+                c = self.serial_to_pos0[s]
+                base += [float(c[0]), float(c[1]), float(c[2])]
+            g.set_coordinates(base)
+            for fixed_idx, moving_idx, moving_ids in self.rot_bonds:
+                g.add_torsion(row[fixed_idx], row[moving_idx],
+                              [row[m] for m in moving_ids])
+            for b_idx, c_idx, a_idx, moving_ids in self.rot_angles:
+                g.add_angle(row[b_idx], row[c_idx], row[a_idx],
+                            [row[m] for m in moving_ids])
+            self._geometry = g
+        return self._geometry
+
     def apply_config(self, cfg):
-        for i, p in self.idx_to_particle.items():
-            IMP.core.XYZ(p).set_coordinates(self.serial_to_pos0[i])
-        
-        n_dih = len(self.rot_bonds)
-        dih_cfg = cfg[:n_dih]
-        ang_cfg = cfg[n_dih:]
+        """Set the particles to the reference geometry with *cfg* applied.
 
-        # Apply torsion rotations sequentially
-        for angle, (fixed_idx, moving_idx, moving_ids) in zip(dih_cfg, self.rot_bonds):
-            pf, pm = self.idx_to_particle[fixed_idx], self.idx_to_particle[moving_idx]
-            cf, cm = IMP.core.XYZ(pf).get_coordinates(), IMP.core.XYZ(pm).get_coordinates()
-            axis = cm - cf
-            if axis.get_magnitude() < 1e-8: continue
-            rot = IMP.algebra.get_rotation_about_axis(axis, angle)
-            tf = IMP.algebra.get_rotation_about_point(cf, rot)
-            for mid in moving_ids:
-                p = self.idx_to_particle[mid]
-                c = IMP.core.XYZ(p).get_coordinates()
-                IMP.core.XYZ(p).set_coordinates(tf.get_transformed(c))
-
-        # Apply angle rotations sequentially
-        for angle, (b_idx, c_idx, a_idx, moving_ids) in zip(ang_cfg, self.rot_angles):
-            pb, pc, pa = self.idx_to_particle[b_idx], self.idx_to_particle[c_idx], self.idx_to_particle[a_idx]
-            cb, cc, ca = [IMP.core.XYZ(p).get_coordinates() for p in [pb, pc, pa]]
-            v_ba, v_bc = ca - cb, cc - cb
-            axis = IMP.algebra.get_vector_product(v_ba, v_bc)
-            if axis.get_magnitude() < 1e-8: continue
-            rot = IMP.algebra.get_rotation_about_axis(axis, angle)
-            tf = IMP.algebra.get_rotation_about_point(cb, rot)
-            for mid in moving_ids:
-                p = self.idx_to_particle[mid]
-                c = IMP.core.XYZ(p).get_coordinates()
-                IMP.core.XYZ(p).set_coordinates(tf.get_transformed(c))
+        The rotations are :meth:`IMP.bff.LinkerGeometry.apply`. This used to
+        rebuild an ``IMP.core.XYZ`` decorator and cross into C++ twice per
+        moving atom per rotation -- thousands of crossings per configuration,
+        and the largest remaining Python cost in the suite. Now it is one call
+        and one write-back per atom.
+        """
+        geometry = self._linker_geometry()
+        coords = geometry.apply([float(x) for x in cfg])
+        for i, serial in enumerate(self._geometry_rows):
+            IMP.core.XYZ(self.idx_to_particle[serial]).set_coordinates(
+                IMP.algebra.Vector3D(coords[3 * i], coords[3 * i + 1], coords[3 * i + 2]))
 
     def sample(self, n_steps=1000, write_every=10, step_size_dih=0.1, step_size_ang=0.02, temperature=298.15, seed=None):
         if seed is not None:
