@@ -7,7 +7,6 @@ import IMP.bff
 
 from IMP.bff import AccessibleVolume
 import IMP.bff as fdist
-from IMP.bff.restraints.network import DistanceRestraint, RigidBody
 
 
 def _point_av(xyz):
@@ -51,26 +50,28 @@ def test_fret_efficiency_roundtrip():
         e, forster_radius=52.0) == pytest.approx(52.0)
 
 
-def test_rigid_body_global_coords_and_restraint():
-    body = RigidBody(
-        name="b",
-        atoms_local=np.array([[1.0, 0.0, 0.0, 1.7]]),
-        com=np.array([10.0, 0.0, 0.0]),
-        rotation=np.eye(3),
-        translation=np.array([10.0, 0.0, 0.0]),
-    )
-    assert body.global_coords()[0] == pytest.approx([11.0, 0.0, 0.0])
-    r = DistanceRestraint(
-        name="d", body_a=0, offset_a=np.zeros(3), body_b=0,
-        offset_b=np.zeros(3), distance_exp=40.0, error_neg=2.0,
-        error_pos=2.0, transfer_function_type="None")
-    assert r.get_effective_distance(40.0) == pytest.approx(40.0)
-    r.transfer_function_type = "Gaussian"
-    r.sigma_rda = 6.0
+def test_the_named_transfer_functions_dispatch():
+    """The dispatch an fps.json calibration names, in one place.
+
+    It used to be a method on a `DistanceRestraint` dataclass whose only other
+    consumer was a rigid-body docking engine that had already been removed.
+    """
+    assert fdist.effective_distance(40.0, "None", 6.0) == pytest.approx(40.0)
     # sigma is the per-component width of the separation vector, so the
     # correction is s^2/Rmp -- settled 2026-08-18. This read 36/80, i.e. half.
-    assert r.get_effective_distance(40.0) == pytest.approx(
+    assert fdist.effective_distance(40.0, "Gaussian", 6.0) == pytest.approx(
         40.0 + 36.0 / 40.0)
+    # Coefficients run lowest power first here, as a hand-written calibration
+    # does; `polynomial_transfer` is the highest-power-first sibling.
+    assert fdist.effective_distance(
+        40.0, "Polynomial", 6.0, [0.0, 1.0, 0.02]) == pytest.approx(
+            40.0 + 0.02 * 1600.0)
+    # A calibration that names a polynomial and carries none has not been
+    # fitted; sigma is the parametric stand-in.
+    assert fdist.effective_distance(40.0, "Polynomial", 6.0) == pytest.approx(
+        40.0 + 36.0 / 40.0)
+    # A transfer function nobody implements is no transfer function.
+    assert fdist.effective_distance(40.0, "Spline", 6.0) == pytest.approx(40.0)
 
 
 def test_select_informative_pairs_prefers_discriminating_pair():

@@ -1288,11 +1288,9 @@ def _model_uncertainty(details, pdb_paths, params, output_dir):
     if len(best_pdbs) < 2:
         return None
     try:
-        from . import network as _unc
         fixed_idx = int(params.fixed_body) if int(params.fixed_body) < len(pdb_paths) else 0
-        _lines, _xyz, fchains = _unc._read_pdb_atoms(pdb_paths[fixed_idx])
-        return _unc.estimate_position_uncertainty(
-            best_pdbs, sorted(set(fchains.tolist())),
+        return IMP.bff.estimate_position_uncertainty(
+            best_pdbs, IMP.bff.pdb_chain_ids(pdb_paths[fixed_idx]),
             out_pdb=os.path.join(output_dir, "uncertainty.pdb"),
             out_csv=os.path.join(output_dir, "uncertainty.csv"))
     except Exception:

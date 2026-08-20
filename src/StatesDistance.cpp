@@ -527,4 +527,21 @@ double FRETDistanceConverter::get_effective_distance(double value,
               ValueException);
 }
 
+double effective_distance(double rmp,
+                          const std::string& transfer_function_type,
+                          double sigma_rda,
+                          const std::vector<double>& coeffs) {
+    if (transfer_function_type == "None") return rmp;
+    if (transfer_function_type == "Gaussian") {
+        return sigma_rda > 0.0 ? gaussian_rmp_to_rda_mean(rmp, sigma_rda) : rmp;
+    }
+    if (transfer_function_type == "Polynomial") {
+        if (!coeffs.empty()) return polynomial_transfer_ascending(rmp, coeffs);
+        // A calibration that names a polynomial and carries no coefficients has
+        // not been fitted; sigma is the parametric stand-in.
+        return sigma_rda > 0.0 ? gaussian_rmp_to_rda_mean(rmp, sigma_rda) : rmp;
+    }
+    return rmp;
+}
+
 IMPBFF_END_NAMESPACE

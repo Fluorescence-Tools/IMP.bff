@@ -16,6 +16,12 @@ import numpy as np
 /* STL templates and the numpy typemaps everything below depends on. */
 %include "IMP_bff.types.i"
 
+/* Names that cannot be defined at import time -- see `__getattr__` at the foot
+   of this file. Declared here so any `.i` below can register into it. */
+%pythoncode %{
+_LAZY = {}
+%}
+
 /* Where the shipped cgdye data lives. */
 %include "IMP/bff/DataPaths.h"
 
@@ -122,6 +128,10 @@ import numpy as np
 /* Chi-squared scoring of labelling data, with and without volumes. */
 %include "IMP_bff.labelingrestraints.i"
 
+/* The mean-position FRET restraint, and what repeated docking says about a
+   model's precision. */
+%include "IMP_bff.avmeandistance.i"
+
 /* The particle picture of a tethered dye. */
 %include "IMP_bff.dyediffusion.i"
 
@@ -142,5 +152,26 @@ import numpy as np
  * why there isn't one.
  */
 %pythoncode %{
-from .api import module_getattr as __getattr__, module_dir as __dir__
+from .api import module_getattr as _api_getattr, public_names as _api_names
+
+
+def __getattr__(name):
+    """PEP 562 hook: the lazily-built names first, then the domain map.
+
+    `_LAZY` holds the handful of names that cannot be defined at import time --
+    today only the IMP.pmi restraint wrapper, because defining it would make
+    `import IMP.bff` require a module this one does not depend on.
+    """
+    builder = _LAZY.get(name)
+    if builder is None:
+        return _api_getattr(name)
+    import IMP.bff as _self
+    value = builder()
+    setattr(_self, name, value)
+    return value
+
+
+def __dir__():
+    import IMP.bff as _self
+    return sorted(set(vars(_self)) | set(_api_names()) | set(_LAZY))
 %}

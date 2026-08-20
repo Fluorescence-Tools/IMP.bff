@@ -130,6 +130,29 @@ IMPBFFEXPORT double gaussian_rmp_to_rda_mean(double rmp, double sigma);
 IMPBFFEXPORT double polynomial_transfer_ascending(
         double rmp, const std::vector<double>& coeffs);
 
+//! Apply a named transfer function to a mean-position distance.
+/*!
+    The dispatch an fps.json calibration names, in one place. `"None"` and the
+    `Rmp` convention return \p rmp untouched; `"Gaussian"` applies
+    gaussian_rmp_to_rda_mean(); `"Polynomial"` evaluates \p coeffs through
+    polynomial_transfer_ascending() and **falls back to the Gaussian** when no
+    coefficients were given -- a calibration that names a polynomial and carries
+    none is a calibration that has not been fitted yet, and \p sigma_rda is the
+    parametric stand-in for it.
+
+    \param[in] rmp distance between the two mean positions, A
+    \param[in] transfer_function_type `"None"`, `"Gaussian"` or `"Polynomial"`;
+               an unrecognised name returns \p rmp, because a transfer function
+               nobody implements is no transfer function
+    \param[in] sigma_rda per-component width of the separation vector; a
+               non-positive value disables the Gaussian correction
+    \param[in] coeffs polynomial coefficients, **lowest power first**
+*/
+IMPBFFEXPORT double effective_distance(
+        double rmp, const std::string& transfer_function_type,
+        double sigma_rda = 0.0,
+        const std::vector<double>& coeffs = std::vector<double>());
+
 //! \f$R_{mp}\f$ between two **point clouds**, rather than two `States`.
 /*!
     Written over arrays so a rotamer library, a coarse-grained ensemble or an MD

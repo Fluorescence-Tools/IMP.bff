@@ -1,5 +1,57 @@
 # Update Log
 
+## 2026-08-20 (still later) — `restraints/network.py`, and two copies of one restraint
+
+Gone (682 lines). What was in it:
+
+* **`AVMeanDistanceRestraint`** → `include/IMP/bff/AVMeanDistanceRestraint.h`.
+  There were **two** Python copies of this class — one here without
+  derivatives, one in `restraints/docking.py` with them — and the PMI wrapper
+  used the one without, so an fps.json-driven docking could be sampled but never
+  minimised. There is one now and it computes the gradient; the branch costs
+  nothing when no accumulator is passed.
+* **`estimate_position_uncertainty`** → `include/IMP/bff/ModelPrecision.h`, with
+  `pdb_chain_ids`, `write_position_uncertainty_pdb` and
+  `write_position_uncertainty_csv`. Gated against the Python: `n_models` exact,
+  the three RMSF summaries agree to 5e-15, the B-factor PDB is byte-identical,
+  and the CSV agrees row for row (its bytes differ: `\n` rather than the `\r\n`
+  Python's `csv` dialect emits, and `0.000` rather than `0.0` — nothing in the
+  stack parses the file).
+* **The transfer-function dispatch** — `"None"` / `"Gaussian"` / `"Polynomial"`
+  over `gaussian_rmp_to_rda_mean` and `polynomial_transfer_ascending` — became
+  `IMP::bff::effective_distance` in `StatesDistance.h`, next to the kernels it
+  dispatches over.
+* **`AVNetworkRestraintWrapper`** stays Python, in
+  `pyext/IMP_bff.avmeandistance.i`. It subclasses
+  `IMP.pmi.restraints.RestraintBase`, a Python class, and IMP.pmi is **not** in
+  this module's `required_modules` — so it is built **lazily** through a new
+  `_LAZY` table and a `__getattr__` that consults it before the domain map.
+  Asserted: `import IMP.bff` does not pull IMP.pmi; naming the wrapper does.
+
+### Deleted rather than ported
+
+* `XLinkScore` and `ScoreXlinkSurfaceDistance` (~170 lines) called
+  `get_path_length`, `get_obstacles` and `OBSTACLES_KEYS_FORMATS` — **none of
+  which is defined anywhere in the stack** — and built a `np.float` array, a
+  name numpy removed in 1.24. Nothing referenced either class. It could not have
+  run since before the numpy bump.
+* `SpringParameters`, `RigidBody`, `DistanceRestraint`, `_rotation_matrix`,
+  `_rotate_vector`: the data classes of a hand-rolled spring/Verlet docking
+  engine whose own docstring said the engine "has been removed". Their only
+  consumer was their own test. `RigidBody` reimplemented `IMP::core::RigidBody`.
+  The one piece of live physics in them was the transfer dispatch, which moved
+  to C++ above; the test was rewritten against it.
+
+### Also repaired
+
+`restraints/docking.py` reached into `network._read_pdb_atoms` for the fixed
+body's chain identifiers — a private of another module, and the reason the whole
+call sat inside a bare `except Exception: return None`. It calls
+`IMP.bff.pdb_chain_ids` now.
+
+`pyext/src`: **12,674 lines in 15 files**. Suite green.
+
+
 ## 2026-08-20 (later still) — the PET quenching model, both pictures, to C++
 
 `pyext/src/quenching.py` (1,349 lines) is gone. It was the last file that held

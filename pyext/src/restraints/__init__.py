@@ -1,15 +1,19 @@
 """IMP.bff.restraints — scoring restraints for FRET and labeling data.
 
-Three restraints, all scoring a *structure* against derived fluorescence
-observables, which is what IMP.bff is for. One is Python, because what it is
-*for* is IMP.pmi: :class:`AVNetworkRestraintWrapper`, the fps.json-driven AV
-network.
+**Nothing is defined here.** Every restraint in this package is C++ and lives on
+the flat surface; this module re-exports the four names under the path they have
+always had, so `IMP.bff.restraints.AVNetworkRestraintWrapper` keeps resolving.
 
-The other two are C++ and reachable as ``IMP.bff.SimpleAVNetworkRestraint`` and
-``IMP.bff.DirectLabelingRestraint`` -- chi-squared over a network of AV-pair
-distances without an fps.json, and chi-squared over attachment-atom distances
-with no volume at all. They are re-exported here because this is still where
-the name says they are.
+- :class:`AVNetworkRestraintWrapper` — the fps.json-driven AV network, wrapped
+  for IMP.pmi. The wrapper is `%pythoncode` in `pyext/IMP_bff.avmeandistance.i`
+  and is built **lazily**, because it subclasses `IMP.pmi.restraints.RestraintBase`
+  and IMP.pmi is not one of this module's `required_modules`.
+- :class:`SimpleAVNetworkRestraint` — chi-squared over a network of AV-pair
+  distances, with no fps.json.
+- :class:`DirectLabelingRestraint` — chi-squared over attachment-atom distances,
+  with no volume at all.
+- :class:`AVMeanDistanceRestraint` — the separation of two mean dye positions,
+  with derivatives.
 
 They arrived from imp-tricks in 2026-08, shipped there as additions to this
 package: legal under the add-never-replace rule, but it put half of one
@@ -22,16 +26,15 @@ was unreachable and recorded as a deleted upstream API. Everything under
 from __future__ import annotations
 
 from IMP.bff import (
-    AVMeasurement, DirectLabelingRestraint, LabelingSite,
-    SimpleAVNetworkRestraint,
+    AVMeanDistanceRestraint, AVMeasurement, AVNetworkRestraintWrapper,
+    DirectLabelingRestraint, LabelingSite, SimpleAVNetworkRestraint,
 )
 
-from .network import AVNetworkRestraintWrapper
-
 __all__ = [
-    "AVNetworkRestraintWrapper",
-    "SimpleAVNetworkRestraint",
+    "AVMeanDistanceRestraint",
     "AVMeasurement",
+    "AVNetworkRestraintWrapper",
     "DirectLabelingRestraint",
     "LabelingSite",
+    "SimpleAVNetworkRestraint",
 ]
