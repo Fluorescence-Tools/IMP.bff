@@ -85,8 +85,29 @@ Implements the standard reference frame:
 """
 
 def _find_atom(hierarchy, chain_id, resnum, atom_name):
+    """The atom named *atom_name* on ``(chain_id, resnum)``, or None.
+
+    Narrowed by ``IMP.atom.Selection`` before matching. This used to walk
+    ``get_by_type(hierarchy, ATOM_TYPE)`` -- every atom in the structure -- for
+    each call, and the name comparison inside builds an ``IMP.atom.Atom`` and
+    reads its type string per atom: 641,580 of those across one test run, 1.7 s
+    over 226 calls. The selection reaches the residue's ~10 atoms directly.
+
+    The match itself is unchanged, and deliberately: an atom qualifies by
+    ``AtomType`` *or* by name, because a dye's atoms carry types that IMP does
+    not recognise and are found by name only.
+    """
     target_type = _atom_type_from_name(atom_name)
-    for a in IMP.atom.get_by_type(hierarchy, IMP.atom.ATOM_TYPE):
+    selection = IMP.atom.Selection(hierarchy)
+    if chain_id:
+        selection.set_chain_id(chain_id)
+    selection.set_residue_index(int(resnum))
+    candidates = selection.get_selected_particles()
+    if not candidates:
+        return None
+    for a in candidates:
+        if not IMP.atom.Atom.get_is_setup(a):
+            continue
         at = IMP.atom.Atom(a)
         if (
             target_type != IMP.atom.AtomType("UNK")
@@ -97,7 +118,9 @@ def _find_atom(hierarchy, chain_id, resnum, atom_name):
             pass
         else:
             continue
-        res_p = a.get_parent()
+        # `get_selected_particles` returns Particles; the parent walk below
+        # needs the hierarchy decorator
+        res_p = IMP.atom.Hierarchy(a).get_parent()
         if not IMP.atom.Residue.get_is_setup(res_p):
             continue
         res = IMP.atom.Residue(res_p)

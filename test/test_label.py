@@ -116,3 +116,68 @@ if __name__ == "__main__":
         print("pytest not installed; skipping", __file__)
         sys.exit(0)
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+def test_find_atom_matches_the_full_scan_it_replaced():
+    """`label._find_atom` against the exhaustive scan, on a real structure.
+
+    The reference is the old implementation kept verbatim, because the risk is
+    not "does it find an atom" but *which* atom: the match qualifies an atom by
+    `AtomType` **or** by name -- a dye's atoms carry types IMP does not
+    recognise and are found by name only -- and the scan returned the first in
+    hierarchy order. A selection that reordered or over-selected would still
+    find something.
+
+    Includes a name that is in no residue ("ZZZ"), so the not-found path is
+    covered too.
+    """
+    import IMP
+    import IMP.atom
+    from IMP.bff.tools import get_structure_dir
+    from IMP.bff.label import _find_atom, _atom_name, _atom_type_from_name
+
+    def exhaustive(hierarchy, chain_id, resnum, atom_name):
+        target = _atom_type_from_name(atom_name)
+        for a in IMP.atom.get_by_type(hierarchy, IMP.atom.ATOM_TYPE):
+            at = IMP.atom.Atom(a)
+            if target != IMP.atom.AtomType("UNK") and at.get_atom_type() == target:
+                pass
+            elif _atom_name(a).upper() == atom_name.upper():
+                pass
+            else:
+                continue
+            res_p = a.get_parent()
+            if not IMP.atom.Residue.get_is_setup(res_p):
+                continue
+            if IMP.atom.Residue(res_p).get_index() != resnum:
+                continue
+            chain_p = res_p.get_parent()
+            if not IMP.atom.Chain.get_is_setup(chain_p):
+                continue
+            if IMP.atom.Chain(chain_p).get_id() != chain_id:
+                continue
+            return a
+        return None
+
+    model = IMP.Model()
+    IMP.set_log_level(IMP.SILENT)
+    hierarchy = IMP.atom.read_pdb(
+        str(get_structure_dir("1DG3.pdb")), model, IMP.atom.NonWaterPDBSelector())
+    chain = IMP.atom.Chain(
+        IMP.atom.get_by_type(hierarchy, IMP.atom.CHAIN_TYPE)[0]).get_id()
+    residues = [IMP.atom.Residue(r)
+                for r in IMP.atom.get_by_type(hierarchy, IMP.atom.RESIDUE_TYPE)][:40]
+
+    found = 0
+    for residue in residues:
+        for name in ("CA", "N", "C", "CB", "O", "ZZZ"):
+            want = exhaustive(hierarchy, chain, residue.get_index(), name)
+            got = _find_atom(hierarchy, chain, residue.get_index(), name)
+            if want is None:
+                assert got is None, (residue.get_index(), name)
+                continue
+            assert got is not None, (residue.get_index(), name)
+            assert (IMP.atom.Hierarchy(got).get_particle()
+                    == IMP.atom.Hierarchy(want).get_particle())
+            found += 1
+    assert found > 100, found
