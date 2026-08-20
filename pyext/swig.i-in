@@ -38,8 +38,6 @@ import numpy as np
 %include "IMP/bff/HierarchyFrame.h"
 
 /* Plain functions over arrays. Ordered as the physics stacks up. */
-%include "IMP/bff/Distributions.h"
-%include "IMP/bff/PolymerChain.h"
 %include "IMP/bff/SolventAccessibleSurface.h"
 
 /* PET: which moieties quench a dye, and how hard. */
@@ -55,7 +53,6 @@ import numpy as np
 
 /* Distances and orientations over point clouds. */
 %include "IMP_bff.avdistance.i"
-%include "IMP/bff/DistanceCalibration.h"
 %include "IMP/bff/OrientationFactor.h"
 
 /* Dynamics: the dye's position, then its excited state. */
@@ -64,8 +61,7 @@ import numpy as np
 %include "IMP/bff/PhotonSimulation.h"
 %include "IMP/bff/QuenchedDecay.h"
 
-/* FRET over every pair of two labelled ensembles. */
-%include "IMP/bff/FRETPair.h"
+
 
 /* Scoring: how hard a conformer collides with its structure. */
 %include "IMP/bff/RotamerEnergy.h"
@@ -120,6 +116,10 @@ import numpy as np
 /* The output contract, a C++ value with a Python surface. Its `from_states`
    reduction sums the terms, so it comes after them. */
 %include "IMP_bff.observables.i"
+
+/* FRET over every pair of two labelled ensembles, and the distances a pair of
+   labels is asked for. Both consume `States`. */
+%include "IMP_bff.statesdistance.i"
 
 /* Chi-squared scoring of labelling data, with and without volumes. */
 %include "IMP_bff.labelingrestraints.i"

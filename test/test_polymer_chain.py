@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.representation.distance import (
+from IMP.bff import (
     gaussian_chain, gaussian_chain_ree, worm_like_chain, worm_like_chain_linker,
 )
 

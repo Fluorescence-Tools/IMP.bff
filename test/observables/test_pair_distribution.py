@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from IMP.bff.representation.distance import fret_pair_distribution, fret_pair_efficiencies, fret_pair_geometry
+from IMP.bff import fret_pair_distribution, fret_pair_efficiencies, fret_pair_geometry
 
 
 def test_isotropic_fallback_and_shapes():

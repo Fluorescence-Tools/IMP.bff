@@ -16,15 +16,14 @@ properties of the dye (``IMP.bff.Dye``) or of where it is attached
 
 from __future__ import annotations
 
-from IMP.bff import (
-    ACV, AccessibleVolume, States, compute_av, compute_av_from_structure,
-    compute_avs_for_structure, resample_av,
-)
-
-from .distance import (
-    DyeDistributionNormal, LabelDistribution, LabelDistributionAV,
-    av_pair_statistics, average_distance, distance_between_mean_positions,
-    histogram_rda, mean_fret_distance, standard_deviation_of_distances,
+from IMP.bff import (  # noqa: F401
+    ACV, AccessibleVolume, DyeDistributionNormal, LabelDistribution,
+    LabelDistributionAV, States, av_pair_statistics, compute_av,
+    compute_av_from_structure, compute_avs_for_structure,
+    distance_between_mean_positions, histogram_rda, resample_av,
+    standard_deviation_of_distances,
+    states_average_distance as average_distance,
+    states_mean_fret_distance as mean_fret_distance,
 )
 
 __all__ = [

@@ -1,7 +1,7 @@
 """One reduction behind four statistics, and the two disagreements it did not resolve.
 
 ``distance_sample_statistics`` replaced three separate reductions -- in
-``distance_metrics`` (since retired to ``junk/``), in ``representation.distance``, and inside
+``distance_metrics`` (since retired to ``junk/``), in ``IMP.bff``, and inside
 ``av/_kernels`` -- that computed the same four numbers and disagreed at the
 limits. The tests here pin the limits, because that is where they differed.
 
@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.representation.distance as rd
+import IMP.bff as rd
 
 dm = rd   # the two modules are one now; kept so the assertions below read unchanged
 

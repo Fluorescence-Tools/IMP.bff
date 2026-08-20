@@ -19,7 +19,6 @@ import IMP.atom
 import IMP.bayesianem
 import IMP.bff
 import IMP.bff.io.structure
-import IMP.bff.representation.distance
 import IMP.container
 import IMP.core
 import IMP.isd
@@ -59,7 +58,7 @@ class AVMeanDistanceRestraint(IMP.Restraint):
         self.d2 = IMP.core.XYZ(av2)
         forster_radius = dist.forster_radius
         distance_range = (1, 2.5 * forster_radius)
-        self.dc = IMP.bff.representation.distance.FRETDistanceConverter(
+        self.dc = IMP.bff.FRETDistanceConverter(
             forster_radius=forster_radius,
             sigma=sigma,
             distance_range=distance_range
@@ -451,18 +450,17 @@ class DistanceRestraint:
         float
             Effective distance.
         """
-        import IMP.bff.representation.distance as _dist
         if self.distance_type == "Rmp" or self.transfer_function_type == "None":
             return rmp
         elif self.transfer_function_type == "Gaussian":
             if self.sigma_rda > 0.0:
-                return float(_dist.gaussian_rmp_to_rda_mean(rmp, self.sigma_rda))
+                return float(IMP.bff.gaussian_rmp_to_rda_mean(rmp, self.sigma_rda))
             return rmp
         elif self.transfer_function_type == "Polynomial":
             if self.convfun is not None:
-                return float(_dist.polynomial_transfer(rmp, self.convfun))
+                return float(IMP.bff.polynomial_transfer(rmp, self.convfun))
             if self.sigma_rda > 0.0:
-                return float(_dist.gaussian_rmp_to_rda_mean(rmp, self.sigma_rda))
+                return float(IMP.bff.gaussian_rmp_to_rda_mean(rmp, self.sigma_rda))
             return rmp
         return rmp
 

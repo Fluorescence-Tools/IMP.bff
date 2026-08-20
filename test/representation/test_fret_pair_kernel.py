@@ -40,7 +40,7 @@ import pytest
 
 import IMP.bff
 from IMP.bff.photophysics import kappa2_from_dipoles
-from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
+from IMP.bff import fret_pair_efficiencies, fret_pair_geometry
 
 
 def _reference(p1, w1, p2, w2, mu1=None, mu2=None):
@@ -122,8 +122,11 @@ def test_coincident_states_mean_complete_transfer():
 def test_r_vectors_is_gone():
     """It was the largest allocation in the call and had no reader."""
     g = fret_pair_geometry(np.zeros((2, 3)), [1, 1], np.ones((2, 3)), [1, 1])
-    assert "r_vectors" not in g
-    assert set(g) == {"R", "kappa2", "weight", "kappa2_avg"}
+    assert not hasattr(g, "r_vectors")
+    with pytest.raises(KeyError):
+        g["r_vectors"]
+    for key in ("R", "kappa2", "weight", "kappa2_avg"):
+        assert g[key] is not None
 
 
 # --- the hazards of a numpy view --------------------------------------------

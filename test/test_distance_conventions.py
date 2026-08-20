@@ -1,17 +1,17 @@
 """The distance conventions that used to share names across two modules.
 
 ``IMP.bff.distance_metrics`` held six functions with the same names as
-``IMP.bff.representation.distance``, three of which answered genuinely
+``IMP.bff``, three of which answered genuinely
 different questions and three of which were verified identical. The module was
 retired in the PRD-113 cleanup (2026-08-18) and moved to ``junk/`` for
 reference; its three distinct functions were folded into the canonical module
 under names that say which question they answer:
 
 ===================================  ===============================================
-was ``distance_metrics.``            is now ``representation.distance.``
+was ``distance_metrics.``            is now ``IMP.bff.``
 ===================================  ===============================================
 ``polynomial_transfer`` (ascending)  ``polynomial_transfer_ascending``
-``av_pair_statistics`` (a sample)    ``distance_sample_statistics``
+``av_pair_statistics`` (the clouds)  ``distance_sample_statistics`` (a sample)
 ``mean_position_distance`` (clouds)  ``mean_position_distance`` (unchanged)
 ===================================  ===============================================
 
@@ -26,11 +26,11 @@ import math
 import numpy as np
 import pytest
 
-from IMP.bff.representation.distance import (
+from IMP.bff import (
     av_pair_statistics as _av_pair_statistics_from_volumes,  # noqa: F401
     chi2_score,
     distance_from_fret_efficiency,
-    distance_sample_statistics as av_pair_statistics,
+    distance_sample_statistics,
     fret_efficiency,
     gaussian_rmp_to_rda_mean,
     mean_position_distance,
@@ -111,30 +111,29 @@ class TestAvPairStatistics:
     def test_uniform_weights(self):
         dists = np.array([40.0, 50.0, 60.0], dtype=np.float64)
         weights = np.ones(3, dtype=np.float64)
-        r_da, r_mp, r_e, mean_e = av_pair_statistics(dists, weights)
+        r_da, r_e, mean_e, sigma = distance_sample_statistics(dists, weights)
         assert r_da == pytest.approx(50.0, abs=1e-9)
         assert 0.0 < mean_e < 1.0
-        assert r_e > 0.0
+        assert r_e > 0.0 and sigma > 0.0
 
-    def test_r_mp_is_not_computable_from_pair_distances(self):
-        """Slot 1 is NaN, and that is the contract.
+    def test_r_mp_is_not_in_the_tuple(self):
+        """A sample of pair distances cannot produce R_mp, so it is not offered.
 
-        It asserted ``r_mp == 50.0`` here, which passed only *because* the
-        function returned ``r_da_mean`` under that name. R_mp is the distance
-        between the clouds' mean positions, and |<a> - <b>| is not a function
-        of the distribution of |a - b| -- so no implementation taking only
-        distances can produce it. Measured on 148l E15/E90: 47.65 A true
-        against 51.53 A returned, 8 % apart, under the right name.
+        The tuple carried a second slot for it, always NaN, because an earlier
+        version had returned ``r_da_mean`` under that name -- and measured on
+        148l E15/E90 the two are 47.65 A against 51.53 A, 8 % apart. R_mp is
+        the distance between the clouds' *mean positions*, and
+        ``|<a> - <b>|`` is not a function of the distribution of ``|a - b|``.
+        The slot is gone; :func:`mean_position_distance` takes the clouds.
         """
         dists = np.array([40.0, 50.0, 60.0], dtype=np.float64)
         weights = np.ones(3, dtype=np.float64)
-        _, r_mp, _, _ = av_pair_statistics(dists, weights)
-        assert math.isnan(r_mp)
+        assert len(distance_sample_statistics(dists, weights)) == 4
 
     def test_mean_position_distance_takes_the_clouds(self):
         a = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
         b = np.array([[10.0, 0.0, 0.0], [12.0, 0.0, 0.0]])
-        assert mean_position_distance(a, b) == pytest.approx(10.0)
+        assert mean_position_distance(a.ravel(), b.ravel()) == pytest.approx(10.0)
 
     def test_mean_position_distance_is_not_the_mean_pair_distance(self):
         """The two differ whenever the clouds are extended, which is always."""
@@ -142,7 +141,7 @@ class TestAvPairStatistics:
         a = rng.normal(0.0, 5.0, size=(500, 3))
         b = rng.normal(0.0, 5.0, size=(500, 3)) + np.array([30.0, 0.0, 0.0])
 
-        r_mp = mean_position_distance(a, b)
+        r_mp = mean_position_distance(a.ravel(), b.ravel())
         pair = np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1).ravel()
         r_da_mean = float(pair.mean())
 
@@ -156,7 +155,7 @@ class TestAvPairStatistics:
     def test_zero_weights(self):
         dists = np.array([40.0, 50.0], dtype=np.float64)
         weights = np.zeros(2, dtype=np.float64)
-        r_da, r_mp, r_e, mean_e = av_pair_statistics(dists, weights)
+        r_da, r_e, mean_e, sigma = distance_sample_statistics(dists, weights)
         assert r_da == pytest.approx(0.0, abs=1e-12)
 
 

@@ -52,7 +52,7 @@ from IMP.bff import forster_radius_from_spectra
 from IMP.bff.io.cif import (
     read_component_template_cif, read_dye_forcefield_cif, region_features)
 from IMP.bff import AccessibleVolume, compute_av_from_structure
-from IMP.bff.representation.distance import (
+from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
 from IMP.bff.representation.rotamer import RotamerEnsemble
 

@@ -16,7 +16,7 @@ import numpy as np
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff.io.fps import read_fps_json
 from IMP.bff.io.structure import read_rotamer_library_rmf
-from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
+from IMP.bff import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff import States
 from IMP.bff.scoring import compute_rotamer_score, selector_resnames
 from IMP.bff import get_template_dir
@@ -359,7 +359,6 @@ def distances_from_ensembles(
     """
     if kappa2 not in ("isotropic", "dipoles"):
         raise ValueError("kappa2 must be 'isotropic' or 'dipoles'")
-    from IMP.bff.representation.distance import fret_pair_geometry, fret_pair_efficiencies
 
     if distance_type not in ("RDAMean", "RDAMeanE", "Rmp"):
         raise ValueError(f"unknown distance_type {distance_type!r}")
@@ -920,7 +919,7 @@ labels needs (R_ij, κ²_ij, w_i·w_j), not just a mean position.
 It subclasses :class:`IMP.bff.AccessibleVolume` with ``points`` =
 (N, 4) centre + weight, so every AV helper in ``fret`` (``av_pair_statistics``,
 ``histogram_rda``, ``mean_fret_distance``, ...) accepts it unchanged; the pair
-kernels live in :mod:`IMP.bff.representation.distance` (``fret_pair_geometry``,
+kernels live in ``IMP.bff`` (``fret_pair_geometry``,
 ``fret_pair_efficiencies``).
 """
 
@@ -1238,9 +1237,7 @@ class RotamerEnsemble(States):
         ``forster_radius`` in Å for κ² = 2/3.
         """
         geometry = self.pair_geometry(other)
-        out = fret_pair_efficiencies(geometry, forster_radius, tau0)
-        out["kappa2"] = geometry["kappa2"]
-        return out
+        return fret_pair_efficiencies(geometry, forster_radius, tau0)
 
     def fret_efficiencies(
         self,
@@ -1263,9 +1260,7 @@ class RotamerEnsemble(States):
             # FRETpredict applies its k2-dependent R0 with the isotropic formula
             # 1/(1 + (2/3/k2)(r/R0)^6); fret_pair_efficiencies expects R0 at k2 = 2/3
             forster_radius = r0_nm * 10.0
-            out = fret_pair_efficiencies(geometry, forster_radius)
-            out["forster_radius_nm"] = r0_nm
-            return out
+            return fret_pair_efficiencies(geometry, forster_radius)
         return fret_pair_efficiencies(geometry, forster_radius)
 
 

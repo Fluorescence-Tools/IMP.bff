@@ -74,7 +74,7 @@ def test_the_package_works_with_numba_blocked():
         "import IMP.bff.photophysics as orientation\n"
         "import IMP.bff.sampling as brownian\n"
         "import IMP.bff.sampling as excited_state\n"
-        "import IMP.bff.representation.distance as distance\n"
+
         "assert 'numba' not in [m for m in sys.modules if sys.modules[m] is not None "
         "and m == 'numba']\n"
         # exercise one kernel from each ported domain

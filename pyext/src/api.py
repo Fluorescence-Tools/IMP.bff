@@ -126,17 +126,6 @@ BY_DOMAIN = {
     },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {
-        # IMP.bff.representation.distance
-        "av_pair_statistics": "IMP.bff.representation.distance",
-        "distance_from_fret_efficiency": "IMP.bff.representation.distance",
-        "fret_efficiency": "IMP.bff.representation.distance",
-        "fret_pair_distribution": "IMP.bff.representation.distance",
-        "fret_pair_efficiencies": "IMP.bff.representation.distance",
-        "fret_pair_geometry": "IMP.bff.representation.distance",
-        # IMP.bff.representation.distance
-        "DyeDistributionNormal": "IMP.bff.representation.distance",
-        "LabelDistribution": "IMP.bff.representation.distance",
-        "LabelDistributionAV": "IMP.bff.representation.distance",
         # IMP.bff.representation.rotamer
         "RotamerEnsemble": "IMP.bff.representation.rotamer",
         "SIMULATION_TYPE_R1": "IMP.bff.representation.rotamer",
@@ -158,8 +147,6 @@ BY_DOMAIN = {
         "resolve_rotamer_library_path": "IMP.bff.representation.rotamer",
         "rotamer_library_metadata": "IMP.bff.representation.rotamer",
         "rotamer_library_registry": "IMP.bff.representation.rotamer",
-        # IMP.bff.representation.distance
-        # IMP.bff.representation.distance
     },
     # -- sampling -- stage 3 -- how configurations are drawn: walks, densities, library screening
     "sampling": {

@@ -9,11 +9,11 @@ from IMP.bff.representation import LabelDistribution, LabelDistributionAV, DyeDi
 
 
 class TestLabelDistribution:
-    """Abstract base class."""
+    """The base a label distribution shares."""
 
     def test_cannot_instantiate(self):
-        """LabelDistribution is abstract."""
-        with pytest.raises(TypeError):
+        """It has a pure virtual `do_compute`, so SWIG gives it no constructor."""
+        with pytest.raises((TypeError, AttributeError)):
             LabelDistribution()
 
 
@@ -66,24 +66,31 @@ class TestLabelDistributionAV:
         xyz = np.array([[0.0, 0.0, 0.0],
                         [5.0, 0.0, 0.0]], dtype=np.float64)
         vdw = np.array([1.5, 1.5], dtype=np.float64)
-        dd = LabelDistributionAV(
-            atoms_xyz=xyz, atoms_vdw=vdw,
-            residue_seq_number=0, atom_name="CB",
-            linker_length=10.0,
-        )
+        dd = LabelDistributionAV(atoms_xyz=xyz, atoms_vdw=vdw,
+                                 linker_length=10.0)
         assert dd.position_name == ""
+        # No `source_xyz` means the first obstacle. The Python this replaces
+        # took a residue number and an atom name and then ignored both,
+        # returning index 0 from a loop whose body was a comment saying so.
         np.testing.assert_allclose(dd.origin, [0.0, 0.0, 0.0], atol=1e-6)
 
 
     def test_lazy_computation(self):
-        """AV is not computed until accessed."""
+        """The volume is not built until it is asked for.
+
+        Building one is the expensive thing a label does, and a caller often
+        holds several before asking any of them anything. The check is that
+        constructing is fast -- the private flag it used to read is now on the
+        C++ side.
+        """
+        import time
+
         xyz = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
         vdw = np.array([1.5], dtype=np.float64)
-        dd = LabelDistributionAV(
-            atoms_xyz=xyz, atoms_vdw=vdw,
-            residue_seq_number=0, atom_name="CB",
-        )
-        assert dd._av is None  # not computed yet
+        t0 = time.perf_counter()
+        dd = LabelDistributionAV(atoms_xyz=xyz, atoms_vdw=vdw)
+        assert time.perf_counter() - t0 < 0.05
+        assert dd.n_points > 0
 
 
 # IMP runs every .py under test/ as a standalone script; a file of bare pytest

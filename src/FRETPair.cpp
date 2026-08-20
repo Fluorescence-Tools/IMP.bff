@@ -127,4 +127,135 @@ void fret_pair_efficiency_matrices(
     }
 }
 
+void FRETPairGeometry::get_R(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(R, out_view, n_out_view);
+}
+void FRETPairGeometry::get_kappa2(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(kappa2, out_view, n_out_view);
+}
+void FRETPairGeometry::get_weight(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(weight, out_view, n_out_view);
+}
+
+void FRETPairEfficiencies::get_E(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(E, out_view, n_out_view);
+}
+void FRETPairEfficiencies::get_rate_ratio(double** out_view,
+                                          int* n_out_view) const {
+    internal::copy_to_view(rate_ratio, out_view, n_out_view);
+}
+void FRETPairEfficiencies::get_k_fret(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(k_fret, out_view, n_out_view);
+}
+void FRETPairEfficiencies::get_R(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(R, out_view, n_out_view);
+}
+void FRETPairEfficiencies::get_kappa2(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(kappa2, out_view, n_out_view);
+}
+void FRETPairEfficiencies::get_weight(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(weight, out_view, n_out_view);
+}
+
+FRETPairGeometry fret_pair_geometry(const std::vector<double>& points1,
+                                    const std::vector<double>& weights1,
+                                    const std::vector<double>& points2,
+                                    const std::vector<double>& weights2,
+                                    const std::vector<double>& mu1,
+                                    const std::vector<double>& mu2) {
+    FRETPairGeometry out;
+    out.n1 = static_cast<int>(points1.size() / 3);
+    out.n2 = static_cast<int>(points2.size() / 3);
+    const std::size_t n = static_cast<std::size_t>(out.n1) * out.n2;
+    if (n == 0) return out;
+
+    double* packed = NULL;
+    int n_packed = 0;
+    // The kernel takes raw pointers because SWIG hands it numpy buffers; the
+    // casts are the same buffers, const-stripped for that signature.
+    fret_pair_matrices(const_cast<double*>(points1.data()),
+                       static_cast<int>(points1.size()),
+                       const_cast<double*>(points2.data()),
+                       static_cast<int>(points2.size()),
+                       mu1.empty() ? NULL : const_cast<double*>(mu1.data()),
+                       static_cast<int>(mu1.size()),
+                       mu2.empty() ? NULL : const_cast<double*>(mu2.data()),
+                       static_cast<int>(mu2.size()),
+                       out.n1, out.n2, &packed, &n_packed);
+    out.R.assign(packed, packed + n);
+    out.kappa2.assign(packed + n, packed + 2 * n);
+    std::free(packed);
+
+    out.weight.resize(n);
+    double total = 0.0;
+    for (int i = 0; i < out.n1; ++i) {
+        for (int j = 0; j < out.n2; ++j) {
+            const double w = weights1[i] * weights2[j];
+            out.weight[static_cast<std::size_t>(i) * out.n2 + j] = w;
+            total += w;
+        }
+    }
+    if (total > 0.0) {
+        for (std::size_t i = 0; i < n; ++i) out.weight[i] /= total;
+    }
+    out.kappa2_avg = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        out.kappa2_avg += out.kappa2[i] * out.weight[i];
+    }
+    return out;
+}
+
+FRETPairEfficiencies fret_pair_efficiencies(const FRETPairGeometry& geometry,
+                                            double forster_radius,
+                                            double tau0) {
+    FRETPairEfficiencies out;
+    out.n1 = geometry.n1;
+    out.n2 = geometry.n2;
+    out.kappa2_avg = geometry.kappa2_avg;
+    out.forster_radius = forster_radius;
+    out.R = geometry.R;
+    out.kappa2 = geometry.kappa2;
+    out.weight = geometry.weight;
+    const std::size_t n = geometry.R.size();
+    if (n == 0) return out;
+
+    double* packed = NULL;
+    int n_packed = 0;
+    fret_pair_efficiency_matrices(
+            const_cast<double*>(geometry.R.data()),
+            static_cast<int>(geometry.R.size()),
+            const_cast<double*>(geometry.kappa2.data()),
+            static_cast<int>(geometry.kappa2.size()), forster_radius, &packed,
+            &n_packed);
+    out.E.assign(packed, packed + n);
+    out.rate_ratio.assign(packed + n, packed + 2 * n);
+    std::free(packed);
+
+    double e_static = 0.0, e_dyn1 = 0.0, rate_avg = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        e_static += out.E[i] * geometry.weight[i];
+        // `dynamic1` uses the *ensemble* kappa^2 rather than the per-pair one,
+        // so it is a different expression from `E` and is formed here.
+        const double x = geometry.R[i] / forster_radius;
+        const double x3 = x * x * x;
+        const double ratio6 = x3 * x3;
+        double d1 = 1.0;
+        if (out.kappa2_avg > 0.0 && std::isfinite(ratio6)) {
+            d1 = 1.0 / (1.0 + (2.0 / 3.0) / out.kappa2_avg * ratio6);
+        }
+        e_dyn1 += d1 * geometry.weight[i];
+        if (std::isfinite(out.rate_ratio[i])) {
+            rate_avg += out.rate_ratio[i] * geometry.weight[i];
+        }
+    }
+    out.static_efficiency = e_static;
+    out.dynamic1 = e_dyn1;
+    out.dynamic2 = rate_avg / (rate_avg + 1.0);
+    if (tau0 > 0.0) {
+        out.k_fret.resize(n);
+        for (std::size_t i = 0; i < n; ++i) out.k_fret[i] = out.rate_ratio[i] / tau0;
+    }
+    return out;
+}
+
 IMPBFF_END_NAMESPACE

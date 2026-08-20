@@ -1,4 +1,4 @@
-"""IMP.bff.representation.distance / fret.engine / greedy Olga — algorithm sanity checks."""
+"""IMP.bff distances / fret.engine / greedy Olga — algorithm sanity checks."""
 
 import numpy as np
 import pytest
@@ -6,7 +6,7 @@ import pytest
 import IMP.bff
 
 from IMP.bff import AccessibleVolume
-import IMP.bff.representation.distance as fdist
+import IMP.bff as fdist
 from IMP.bff.restraints.network import DistanceRestraint, RigidBody
 
 
@@ -25,12 +25,11 @@ def test_point_cloud_distances_match_geometry():
     av1 = _point_av([0.0, 0.0, 0.0])
     av2 = _point_av([50.0, 0.0, 0.0])
     assert fdist.distance_between_mean_positions(av1, av2) == pytest.approx(50.0)
-    assert fdist.average_distance(av1, av2, n_samples=200) == pytest.approx(50.0)
-    r_e = fdist.mean_fret_distance(av1, av2, forster_radius=52.0,
-                                   n_samples=200)
+    assert fdist.states_average_distance(av1, av2, 200) == pytest.approx(50.0)
+    r_e = fdist.states_mean_fret_distance(av1, av2, 52.0, 200)
     assert r_e == pytest.approx(50.0, abs=1e-6)
     assert fdist.standard_deviation_of_distances(
-        av1, av2, n_samples=200) == pytest.approx(0.0, abs=1e-9)
+        av1, av2, 200) == pytest.approx(0.0, abs=1e-9)
 
 
 def test_model_distance_types_and_chi2():
