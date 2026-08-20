@@ -1,4 +1,10 @@
-# `pyext/src` — the Python side
+# `pyext/src` — the Python side, and why it is shrinking
+
+**The rule for this repository is that what can be C++ must be C++** (see
+[`AGENTS.md`](../../AGENTS.md)). So this directory has a target, and the target
+is **empty**: kernels and value types to C++, programs to `bin/`, and what is
+genuinely neither into `%pythoncode` in a `pyext/*.i` file. Everything below
+describes the shape on the way there, not a destination.
 
 ## The shape
 
@@ -11,7 +17,8 @@ Every other IMP module has one of two shapes:
 | `npctransport` | 168 | 1 | 0 | 8,835 |
 | `isd` | 5,407 | 13 | 0 | 7,387 |
 | `pmi` (the most Python-heavy in IMP) | 23,394 | 26 | 5 | 530 |
-| **`bff` (here)** | **~26,900** | **50** | **6** | **~6,000** |
+| `bff`, 2026-08-18 | ~26,900 | 50 | 6 | ~6,000 |
+| **`bff` (here), 2026-08-20** | **19,936** | **22** | **4** | **43,068** |
 
 **C++-carried** — `atom`, `core`, `em`, `isd`: Python is a 1–13 file shim over
 7–13k lines of C++. **Python-carried** — `pmi`: 26 files and five
@@ -20,9 +27,10 @@ subdirectories, each a genuine family (`dof io plotting restraints topology`).
 `bff` used to be neither: **113 files averaging 236 lines**, against `pmi`'s 26
 averaging 900, at a similar total. The tree was deep because the files were
 fragmented, and no choice of directory scheme fixes that — so the files were
-merged rather than re-filed. It is now 50 files averaging ~510, which is the
-`pmi` shape; the target remains the C++-carried one, and it gets closer every
-time a kernel moves.
+merged rather than re-filed. That got it to the `pmi` shape; since then the
+Python has been leaving rather than being rearranged, and the C++ is already
+larger than `atom`'s. The end state is not a shape in this table — it is no
+row here at all.
 
 ### What decided each case
 

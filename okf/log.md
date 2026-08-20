@@ -1,5 +1,303 @@
 # Update Log
 
+## 2026-08-20 — emptying `pyext/src`: the rule, and nine modules gone
+
+**The rule, stated by the user and now the repository's:** *what can be C++
+must be C++ in `imp.bff`.* Tests, examples and documentation are Python;
+`prototypes/` is exempt. The motivation is not performance — it is to minimise
+the number of places a value has to change language, because every one of those
+is a marshalling convention that can drift.
+
+The corollary for `pyext/src` is that its target is **empty**: kernels and
+value types to C++, programs to `bin/`, and only what genuinely cannot be
+either into `%pythoncode` in a `.i` file. It went 30 files / 22,736 lines →
+22 files / 19,936 lines in this pass.
+
+What moved, and what each move found:
+
+* **`restraints/greedy_olga.py` → C++.** Only the greedy loop was left; the
+  kernels had moved already. `select_informative_pairs` joins them, so the
+  per-step chi-squared accumulation no longer crosses SWIG `max_pairs` times.
+* **`tools.py` → `DataPaths.h`.** Five path joins over `get_data_path("cgdye")`.
+  Landed first as `%pythoncode` on the reasoning that `pathlib` reads better;
+  the rule above says otherwise, and it was redone in C++ the same day.
+* **`representation/compare.py` → `bin/imp_bff`.** A validation tool, and
+  **both** of its entry points were dead: `rotamer compare-av` imported a `main`
+  that was never written, and `av-vs-rotamer` called nine names it never
+  imported. Neither has a `test_*.py`, and the module's own test is a
+  `medium_test_*`, which plain `pytest test/` does not collect.
+* **`analysis.py` → `bin/imp_bff`.** A program end to end; its two path
+  defaults pointed at the *package* directory, which an installed module may
+  not write to.
+* **`observables.py` → C++ and `.i`.** Two names were already C++ and the module
+  re-exported them. `compute_distance_distributions` was filed under the
+  output contract but wrote a CSV, which that contract explicitly excludes; its
+  only caller anywhere is `restraints/docking.py`, where it now lives.
+  `test_no_convolution_anywhere_in_the_observables_package` globbed
+  `pyext/src/observables/*.py`, a directory that stopped existing when the
+  package became one module — it had been scanning nothing and passing.
+* **`dye.py` → `DyeLibrary.h`.** `Dye` and `Spectrum` as C++ values, the
+  `_bff_dye` CIF read through the vendored `ihm` C reader, the mtime cache with
+  it. Gated against the Python over all 38 bundled dyes: identical spectra,
+  worst relative overlap difference 4.3e-15, worst R0 difference 4.4e-15 nm.
+  An unknown number is NaN now, and `FRETTerm`'s `is None or <= 0.0` test did
+  not catch it — `not (tau0 > 0.0)` does.
+* **`restraints/simple_av_network.py`, `restraints/direct_labeling.py` →
+  `LabelingRestraints.h`.** `BasicAV` was already C++, so the network restraint
+  holds the volumes rather than proxies for them. `chi2_score`,
+  `fret_efficiency` and `distance_from_fret_efficiency` went to `AVDistance.h`
+  with them.
+
+Three guards in the test suite had to change, because each turned a module
+*leaving* `pyext/src` into a test edit: `len(DOMAINS) >= 12`, an exact set of
+subpackage directories, and `len(modules) > 25`. They now check that what is
+there is well-formed and that nothing new appears, so the list is free to
+shrink to nothing.
+
+**Still to do**, in dependency order — the keystone first:
+
+1. **`States`/`AccessibleVolume` (`representation/distance.py`) against
+   `BasicAV` (`AVModel.h`).** These are two descriptions of the same thing: a
+   weighted point cloud with an attachment point, one in Python and one in C++.
+   Nothing above them can move until they are one. `States` adds
+   `orientations` and a free-form `params` dict; `BasicAV` adds the density
+   grid and the three distances.
+2. **The interaction terms** (`photophysics.py`) — they consume `States`, so
+   they follow it. `rate_constants` and `lifetime_spectrum_from_states` are
+   parked in `IMP_bff.observables.i` waiting on exactly this.
+3. **The fps.json layer** (`io/fps.py`) against `internal/FPSReaderWriter.h`,
+   which already reads the same format in C++ for `AVNetworkRestraint`. The
+   Python side is untyped dicts; the same treatment `DyeForceFieldSystem` got.
+4. **The quenching tables** (`quenching.py`) — `QUENCHER_ATOMS`,
+   `PET_QUENCHING_REFERENCE` and the per-residue normalisation, then
+   `Quencher`/`PETParameters` in `label.py` that read them.
+5. `scoring.py`, `io/cif.py`, `io/structure.py`, `representation/rotamer.py`,
+   `representation/av.py`, `cgdye/*`.
+6. **Programs, not ports**: `restraints/docking.py` and `cgdye/sim.py` are
+   driver code. `docking.py`'s only consumer is ChiSurf, through a forwarder
+   (`chisurf/plugins/modelling/fret/core/imp_engine.py`) that points at
+   `IMP.bff.fret.imp_engine` — **a module path that no longer exists**, so that
+   bridge is broken today and needs repointing at
+   `IMP.bff.restraints.docking` in that repository.
+
+## 2026-08-19 — AV3 was AV1 with two ignored numbers; now it is Olga's AV3
+
+`get_radii()` dropping `radius2` (below) turned out to be the small half of the
+problem. **The geometry never read `radius2` or `radius3` at all.**
+`src/AV.cpp` carved by `get_radius1()` in every path (`:355`, `:424`, `:527`), so
+an `AV3` position produced the AV1 volume of whichever radius happened to be
+first — and was therefore order-dependent, where the reference is not.
+
+Measured on T4L 172L site 22, before:
+
+| radii | bff voxels | densities |
+|---|---|---|
+| `(3.5, 0, 0)` | 14252 | {1} |
+| `(3.5, 2.5, 1.0)` | **14252** | {1} |
+| `(1.0, 2.5, 3.5)` | **18890** | {1} |
+
+AV3 identical to AV1, and the answer changing when the same three radii are
+listed in a different order.
+
+### What the reference actually does
+
+Read from LabelLib's source, not inferred from its behaviour —
+`Grid3DExt::excludeConcentricSpheres`, `FlexLabel/src/FlexLabel.cxx:235`
+(LabelLib 2af43ac, vendored at `../chisurf/junk/LabelLib`):
+
+```cpp
+std::sort(effR.data(), effR.data() + numClashes);
+const VectorXf rhos = VectorXf::LinSpaced(numClashes + 1, 0.0f, maxRho);
+...
+for (iClash...) for (; neighbours[iNei].r <= curR; ++iNei) ref = min(ref, rhos[iClash]);
+```
+
+The radii are **sorted**, `rhos` is `{0, 1/3, 2/3, 1}`, and each atom writes
+`min(ref, rhos[i])` over the shell between consecutive `atom_vdW + radius[i]`.
+So the density is **the fraction of probe radii that fit**, and the sort is why
+the result cannot depend on their order. `dyeDensity` builds the AV1 case by
+passing a one-element vector to the same routine, so AV1 and AV3 are one
+algorithm there, not two.
+
+A consequence worth stating because bff's convention differs: **a zero radius is
+a real probe**, one that fits everywhere. `dyeDensityAV3(3.5, 0, 0)` is *not*
+`dyeDensityAV1(3.5)` — measured, 21625 voxels against 16370, densities {2/3, 1}.
+bff writes AV1 as `(r, 0, 0)` and the fps schema requires `radius2`/`radius3`
+positive for an `AV3` position (`io/fps.py:888`), so bff selects the **positive**
+radii: one gives the AV1 carve, three give the AV3 carve. That reproduces both
+conventions without changing any existing AV1 result.
+
+### The change
+
+* `AV::get_active_radii()` — the positive radii, with the zero-sentinel
+  reasoning recorded on it.
+* `PathMap::carve_lattice_fractional()` — density `k/n` from one occupancy-count
+  array per radius. `n == 1` reproduces `carve_lattice()` exactly, so AV1 is
+  untouched.
+* `AVLatticeState` carries one occupancy source per dye radius (registry-backed
+  and private branches both), and the carve reads them all.
+* `resample_legacy` gets the same treatment, so both dispatch paths agree.
+* **`compute_av` stopped binarising the density.** It did `np.where(d > 0, 1, 0)`,
+  which is a no-op for AV1 and destroys AV3 — it returns the AV1 volume of the
+  *smallest* radius and silently discards the other two. Same defect as
+  `get_radii()`: an AV3 that looks like it worked. Every existing consumer
+  (`compare.py`, `distance.py`, `simple_av_network.py`) passes AV1 radii, where
+  the carve already emits exactly 0 or 1, so nothing else moves.
+
+After: `(3.5, 2.5, 1.0)` → 18890 voxels, densities **{1/3, 2/3, 1}**, and the
+three permutations of those radii are identical.
+
+`test_av3_matches_labellib_rule` pins the four properties the rule implies, each
+of which failed before: density is the mean of the per-radius indicators; the
+level set at `k/n` equals the AV1 volume of the k-th largest radius;
+`AV3(r,r,r) == AV1(r)`; and the order of the radii does not matter.
+
+### The search metric: the default is now LabelLib's, with a speed option
+
+bff's AV and LabelLib's differed by ~15 % **before any dye radius is applied**, so
+this was the core search, not the carve. With **no obstacles at all** and a 20 Å
+linker, where the answer must be a sphere and needs no reference to check:
+
+| | voxels | vs LabelLib |
+|---|---|---|
+| analytic sphere | 33510 | — |
+| LabelLib | 30688 | 1.0000 |
+| bff, stencil 26 | 26146 | 0.8520 |
+| **bff, stencil 74 (now default)** | **30682** | **0.9998** |
+
+**Cause.** LabelLib's `essentialNeighbours()` (`FlexLabel.cxx:149`) keeps the
+shells with squared offset length {1,2,3,5,6} — 74 edges — noting that a shorter
+list gives "isopath surfaces that are cubic instead of spherical". bff had
+{1,2,3}. It did not lose volume at the rim; it lost it in *every* shell,
+under-reaching along the diagonals. `set_search_stencil(74)` sets the neighbour
+radius to √6, which also admits the six squared-length-4 axis jumps — exactly
+redundant, since their cost equals two unit steps — so the path lengths are
+LabelLib's.
+
+**Three things now exist that did not.**
+
+1. **The stencil is an option in the Python API.** It was reachable only on the
+   decorator, so `compute_av` / `compute_av_from_structure` could not select it
+   at all; both now take `search_stencil`, and it is recorded in the returned
+   `params`.
+2. **74 is the default.** The reference metric is what you get unless you ask
+   otherwise.
+3. **26 is the speed option, and it is a real one**: on T4L site 22 at 1.0 Å a
+   re-resample is 1.7 ms against 3.5 ms.
+
+**Compensation, so the speed option is not also a volume option.** A coarse
+stencil overestimates path length, so its volume is that of a *shorter* linker —
+and the bias is a property of the stencil, not the structure. Measured
+obstacle-free over L = 12–25 Å and dye radii 1.0–3.5 Å, the linker-length scale
+that makes 26 reproduce 74 is **1.0551 ± 0.0021** (range 1.0526–1.0592); stencil
+30 measures the same, being 26's asymmetric variant. Applying it:
+
+| config | voxels (T4L 22) | vs reference | time |
+|---|---|---|---|
+| 74, reference | 19155 | 1.000 | 3.5 ms |
+| 26, raw | 15996 | 0.835 | 1.7 ms |
+| **26, compensated** | **19068** | **0.995** | **2.1 ms** |
+
+So the speed option costs ~0.5 % of the volume rather than ~16 %, at 60 % of the
+runtime. `set_compensate_stencil()` is **opt-in**: asking for a stencil gives
+that stencil's own answer unless compensation is requested. That is not
+fastidiousness — the first version defaulted it on and broke
+`test_search_stencil_and_grid_factor_options`, which pins the *historical*
+stencil-30 metric and is entitled to get it.
+
+**What moved, and it is not small.** Changing the default changes every AV.
+Pinned values updated with the reason recorded beside each: mean AV position by
+up to **2.6 Å**, ⟨R_DA⟩ from 54.56 to **55.86 Å**, R_E from 53.78 to **54.82 Å**,
+FRET efficiency from 0.450 to **0.421**, and the R_DA distribution regenerated
+(as the mean of 15 × 10k runs, so the reference is not itself one noisy draw).
+Anything that compared bff numbers to previously recorded ones must be re-read.
+
+**The cost of the default, stated plainly.** 74's longest jump is √6 ≈ 2.45
+voxels, so it **crosses gaps thinner than that**, which 26 (√3 ≈ 1.73) cannot.
+`test_empty_av_gives_nan` was a concrete instance: a site sealed at 1.5 Å spacing
+with `linker_width` 0.5 returned 27 voxels 16–20 Å away. LabelLib has the same
+property — it is what the reference metric *is* — so a grid coarse enough to
+leave an obstacle layer under ~2.5 voxels is unsafe with either. That test now
+makes its empty AV with a linker too short to reach anywhere, which is
+stencil-independent, and the tunnelling is documented on
+`AV::get_search_stencil` rather than hidden behind a passing test.
+
+### Still open on the AV, and not chased
+
+A residual gap remains **with obstacles**: at T4L 22 the default now gives 22374
+voxels against LabelLib's 21348 — 4.8 % *larger*, where obstacle-free the two
+agree to 0.02 %. The sign and the dependence on obstacles point at the linker
+contour-length cutoff (bff blocks beyond a Euclidean sphere of the linker length;
+LabelLib thresholds on the Dijkstra **path length**, `setAboveThreshold(linkerLength, -4)`),
+which would keep voxels LabelLib drops. Not investigated further.
+
+**Consequence to know about:** `prototypes/quench_pinn` builds its AVs with
+LabelLib directly, so it is unaffected by any of this; but its volumes and bff's
+are now within ~5 % rather than ~15 %.
+
+### Two things this leaves open
+
+**Duplication.** LabelLib already implements this, and bff now implements it
+again — PRD-112 stage 1 removed LabelLib as a backend on 2026-08-11, so the
+duplication is that decision's cost, not something introduced here. It is worth
+revisiting deliberately rather than by drift: the alternative is that AV1/AV3
+geometry is *one* implementation somewhere and bff consumes it.
+
+**AV3 is still untested in practice.** Nothing in either repo *uses* AV3 — no
+`fps.json` in the tree sets `simulation_type: "AV3"`, and no LabelLib AV3 call
+existed anywhere. That is why both defects survived. One fix plus one unit test
+does not make the path exercised; a real AV3 position in an example or a
+regression fixture is what would.
+
+Verification: `ninja IMP.bff` clean; full suite **902 passed, 3 xfailed, 30
+subtests** (`medium_test_av.py` excluded — it has 3 failures that pre-date this,
+`BasicAV.save_xyz` missing from the source entirely and `ACV.from_basic_av`'s
+signature drifted, neither reachable from this change).
+
+## 2026-08-19 — `AV::get_radii()` never returned `radius2`
+
+`include/AV.h:316` built its result from `radius3` twice:
+
+```cpp
+return IMP::algebra::Vector3D({get_radius1(), get_radius3(), get_radius3()});
+```
+
+so **`radius2` was never returned**, contradicting the method's own docstring two
+lines above it. `get_parameter()` at `:145` reads all three correctly, which is
+what made the discrepancy visible at all.
+
+**Why it survived.** The only consumer is
+`pyext/src/restraints/network.py:118`, `r_mean = max(av.get_radii())`, so the bug
+is invisible unless `radius2` is the strict maximum — which needs an AV3 dye, and
+**nothing in the repo uses AV3**. Every current path is AV1, where
+`radius2 == radius3 == 0` and the duplication cannot be seen. The existing
+assertion in `test_AccessibleVolume.py` pinned exactly that case,
+`get_radii() == (3.5, 0, 0)`, so it passed either way.
+
+That is the general shape of it: AV3 is implemented end to end —
+`compute_av_from_structure(radii=(r1, r2, r3))`
+(`pyext/src/representation/av.py:441`), the fps schema (`pyext/src/io/fps.py:537`,
+`radius2`/`radius3` validated positive at `:888`), and the decorator
+(`include/AV.h:194`, `src/AV.cpp:804`) — but it is **untested in practice**, so a
+defect on that path had nothing to trip over.
+
+**Fixed**, and pinned with a test that fails on the old code rather than one that
+merely passes on the new: `test_get_radii_returns_all_three` sets three
+**distinct** radii (5.0 / 4.5 / 1.5, and a case with `radius2` largest so the
+`max()` consumer is exercised). Verified in both directions by reverting the
+header, rebuilding, and watching it fail with
+`ACTUAL [5.0, 1.5, 1.5]` against `DESIRED [5.0, 4.5, 1.5]`.
+
+Found while reviewing whether AV3 could give the prototype's flat dye a
+three-radius representation — see
+`prototypes/quench_pinn/okf/validation/s20-dye-model-review.md`. **AV3 should not
+be trusted until this is in**, and it is worth treating the absence of any AV3
+test as the real gap: one fix does not make an untested path safe.
+
+Verification: `ninja IMP.bff` clean; `test_AccessibleVolume.py`,
+`test_av_lattice.py`, `test_label.py`, `io/test_formats.py` — 58 passed,
+3 xfailed, 30 subtests passed.
+
 ## 2026-08-19 (the objects move to C++: bff starts becoming C++-carried)
 
 pmi's shape was a waypoint, not the target. `atom` is 314 lines of Python over

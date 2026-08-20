@@ -22,6 +22,30 @@ The layering is **tttrlib → imp.bff → imp-tricks → chisurf**; the placemen
 test is *what is the input* (photons/curves → tttrlib, coordinates → imp.bff,
 neither → chisurf). See `../chisurf/okf/prds/prd-93.md`.
 
+## What language a thing is written in
+
+**What can be C++ must be C++.** Not for speed — to minimise the number of
+places a value changes language, because every one of those is a marshalling
+convention that can drift. This repository has paid for that twice already: a
+density that a C-order reshape returned transposed, and a `radius1` the C++
+wrote into all three radii while the Python believed otherwise. Both survived
+because the two sides each held their own idea of the same object.
+
+The exceptions are exact:
+
+* **tests, examples and documentation** are Python;
+* **`prototypes/`** is exempt entirely — it is where an idea is tried, not
+  where it ships;
+* **programs** live in `bin/`, and a program is Python because a `click`
+  command is;
+* what is genuinely neither — a `%pythoncode` shim restoring a caller's array
+  shape, a table of dictionary item names — goes in a `pyext/*.i` file.
+
+The consequence is that **`pyext/src` is meant to end up empty**: kernels and
+value types to C++, programs to `bin/`, the remainder into the `.i` files. See
+[`okf/log.md`](okf/log.md) for what has moved and what is next, and
+[`pyext/src/README.md`](pyext/src/README.md) for the shape that is left.
+
 ## Two bundles, one scope rule
 
 This repository has a small OKF bundle of its own at [`okf/`](okf/index.md) —
