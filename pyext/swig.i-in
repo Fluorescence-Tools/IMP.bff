@@ -42,6 +42,9 @@ import numpy as np
 %include "IMP/bff/PolymerChain.h"
 %include "IMP/bff/SolventAccessibleSurface.h"
 
+/* PET: which moieties quench a dye, and how hard. */
+%include "IMP_bff.petquenching.i"
+
 /* Fields stamped on the accessible-volume grid. */
 %include "IMP/bff/QuenchingGrid.h"
 %include "IMP/bff/QuenchingMap.h"

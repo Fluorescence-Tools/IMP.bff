@@ -77,10 +77,6 @@ BY_DOMAIN = {
         "backbone_transformation": "IMP.bff.label",
         "backbone_transformation_from_coords": "IMP.bff.label",
         # IMP.bff.label
-        "PETParameters": "IMP.bff.label",
-        "Quencher": "IMP.bff.label",
-        "reference_pet_parameters": "IMP.bff.label",
-        "reference_quenchers": "IMP.bff.label",
         # IMP.bff.label
         "FLUOROPHORE_TYPES": "IMP.bff.label",
         "Label": "IMP.bff.label",
@@ -136,18 +132,11 @@ BY_DOMAIN = {
         "DyeDiffusionSimulation": "IMP.bff.quenching",
         "QuenchedDonorDecay": "IMP.bff.quenching",
         # IMP.bff.quenching
-        "PET_QUENCHING_REFERENCE": "IMP.bff.quenching",
-        "QUENCHER_ATOMS": "IMP.bff.quenching",
-        "amino_acid_quenching_defaults": "IMP.bff.quenching",
-        "normalize_amino_acid_quenching": "IMP.bff.quenching",
         "quencher_atom_indices": "IMP.bff.quenching",
         "quencher_centers": "IMP.bff.quenching",
         # IMP.bff.quenching
         "ResidueSites": "IMP.bff.quenching",
-        "quench_radii_for_residues": "IMP.bff.quenching",
-        "quenching_rates_for_residues": "IMP.bff.quenching",
         "residue_sites": "IMP.bff.quenching",
-        "slow_factors_for_residues": "IMP.bff.quenching",
     },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {

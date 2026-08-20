@@ -94,9 +94,9 @@ class TestQuencher:
         params = reference_pet_parameters()
         assert set(params) == set(PET_QUENCHING_REFERENCE)
         for comp_id, entry in PET_QUENCHING_REFERENCE.items():
-            assert params[comp_id].rate_constant == pytest.approx(entry["kQ"])
+            assert params[comp_id].rate_constant == pytest.approx(entry.kQ)
             assert params[comp_id].contact_distance == pytest.approx(
-                entry["contact_distance"])
+                entry.contact_distance)
 
     def test_the_rate_is_the_knob_a_calibration_turns(self):
         """The published kQ are starting values, not constants."""

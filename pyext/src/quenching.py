@@ -255,155 +255,45 @@ def solvent_accessible_surface(
 # pet -- Photo-induced electron transfer (PET) quenching of a tethered dye.
 # --------------------------------------------------------------------------
 
-STANDARD_AMINO_ACID_RESIDUES = (
-    "ALA", "ARG", "ASN", "ASP", "CYS",
-    "GLN", "GLU", "GLY", "HIS", "ILE",
-    "LEU", "LYS", "MET", "PHE", "PRO",
-    "SER", "THR", "TRP", "TYR", "VAL",
+# The PET chemistry -- ``QUENCHER_ATOMS``, ``PET_QUENCHING_REFERENCE``,
+# ``STANDARD_AMINO_ACID_RESIDUES``, ``DEFAULT_DYE_RADIUS``, the per-residue
+# ``ResidueQuenching`` value and everything that builds or reads a table of
+# them -- is **C++** (``include/IMP/bff/PETQuenching.h``). So are ``Quencher``
+# and ``PETParameters``, which were in ``label.py`` reading these tables across
+# a module boundary; a rate that takes two partners to define cannot live in
+# only one of them.
+#
+# The table is ``{residue: ResidueQuenching}`` rather than
+# ``{residue: {"kQ": ..., ...}}``: ``params.kQ``, not ``params["kQ"]``. A
+# ``quench_radius`` of **NaN** is what ``None`` was -- "inherit the model-wide
+# critical distance".
+#
+# One shape did not survive: a bare number as a residue's entry, the legacy
+# spelling of a slow factor. It was untyped duck-typing at exactly the boundary
+# this repository is trying to remove.
+from IMP.bff import (  # noqa: F401
+    DEFAULT_DYE_RADIUS, PETParameters, PETReference, Quencher,
+    ResidueQuenching, amino_acid_quenching_defaults,
+    normalize_amino_acid_quenching, pet_quenching_reference,
+    quench_radii_for_residues, quencher_atoms, quenching_rates_for_residues,
+    reference_pet_parameters, reference_quenchers, slow_factors_for_residues,
+    standard_amino_acid_residues,
 )
-QUENCHER_ATOMS = OrderedDict((
-    ("ALA", ("CB",)),
-    ("ARG", ("CZ", "NE", "NH1", "NH2")),
-    ("ASN", ("CG", "OD1", "ND2")),
-    ("ASP", ("CG", "OD1", "OD2")),
-    ("CYS", ("SG",)),
-    ("GLN", ("CD", "OE1", "NE2")),
-    ("GLU", ("CD", "OE1", "OE2")),
-    ("GLY", ("CA",)),
-    ("HIS", ("CG", "ND1", "CD2", "CE1", "NE2")),
-    ("ILE", ("CB",)),
-    ("LEU", ("CB",)),
-    ("LYS", ("NZ",)),
-    ("MET", ("SD",)),
-    ("PHE", ("CG", "CD1", "CD2", "CE1", "CE2", "CZ")),
-    ("PRO", ("N", "CB", "CG", "CD")),
-    ("SER", ("OG",)),
-    ("THR", ("OG1",)),
-    ("TRP", ("CD2", "CE2", "CE3", "CZ2", "CZ3", "CH2", "NE1", "CG", "CD1")),
-    ("TYR", ("CG", "CD1", "CD2", "CE1", "CE2", "CZ", "OH")),
-    ("VAL", ("CB",)),
-))
-DEFAULT_DYE_RADIUS = 3.5
-PET_QUENCHING_REFERENCE = OrderedDict((
-    ("TRP", {"kQ": 3.5, "contact_distance": 5.0}),
-    ("TYR", {"kQ": 2.0, "contact_distance": 5.0}),
-    ("MET", {"kQ": 1.67, "contact_distance": 3.5}),
-    ("HIS", {"kQ": 1.0, "contact_distance": 4.7}),
-    ("CYS", {"kQ": 0.8, "contact_distance": 3.5}),
-    ("PRO", {"kQ": 2.0, "contact_distance": 4.0}),
-))
-_DEFAULT_TABLE = OrderedDict(
-    (
-        res,
-        {
-            "slow_factor": 1.0,
-            "kQ": 0.0,
-            # ``None`` means "inherit the model-wide critical distance".
-            "quench_radius": None,
-            "quench_atoms": list(QUENCHER_ATOMS[res]),
-        },
-    )
-    for res in STANDARD_AMINO_ACID_RESIDUES
-)
+
+#: The redox-active atoms per residue, as a mapping. The C++ returns a fresh
+#: one per call; this is read on every ``residue_sites`` and is not worth
+#: rebuilding.
+QUENCHER_ATOMS = {k: tuple(v) for k, v in dict(quencher_atoms()).items()}
+STANDARD_AMINO_ACID_RESIDUES = tuple(standard_amino_acid_residues())
+PET_QUENCHING_REFERENCE = dict(pet_quenching_reference())
+
+
 def _residue_name(value) -> str:
     if isinstance(value, bytes):
         return value.decode("ascii", errors="ignore").strip().upper()
     return str(value).strip().upper()
-def _clamp_slow_factor(value) -> float:
-    return min(1.0, max(0.0, float(value)))
-def _quench_radius(value):
-    """A positive quench radius, or ``None`` to inherit the global one."""
-    if value is None:
-        return None
-    try:
-        radius = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not np.isfinite(radius) or radius <= 0.0:
-        return None
-    return radius
-def _quench_atoms(value, default):
-    """A de-duplicated list of atom names, falling back to *default*."""
-    if value is None:
-        return list(default)
-    if isinstance(value, (str, bytes)):
-        value = [value]
-    atoms = []
-    for atom in value:
-        name = _residue_name(atom)
-        if name and name not in atoms:
-            atoms.append(name)
-    return atoms or list(default)
-def normalize_amino_acid_quenching(table=None):
-    """The full per-residue interaction table, with defaults filled in.
 
-    Accepts a partial table keyed by residue name, and the legacy shape where
-    a bare number meant the slow factor. Unknown residue names are kept, so a
-    non-standard residue can be given a rate.
-    """
-    normalized = OrderedDict(
-        (res, dict(params, quench_atoms=list(params["quench_atoms"])))
-        for res, params in _DEFAULT_TABLE.items()
-    )
-    if not table:
-        return normalized
-    for residue, params in table.items():
-        name = _residue_name(residue)
-        defaults = normalized.get(name) or {
-            "slow_factor": 1.0,
-            "kQ": 0.0,
-            "quench_radius": None,
-            "quench_atoms": list(QUENCHER_ATOMS.get(name, ("CB",))),
-        }
-        if isinstance(params, dict):
-            slow_factor = params.get("slow_factor", defaults["slow_factor"])
-            kQ = params.get("kQ", defaults["kQ"])
-            quench_radius = params.get("quench_radius", defaults["quench_radius"])
-            quench_atoms = params.get("quench_atoms", defaults["quench_atoms"])
-        else:
-            # Legacy format: a bare number meant the slow factor.
-            slow_factor = params
-            kQ = defaults["kQ"]
-            quench_radius = defaults["quench_radius"]
-            quench_atoms = defaults["quench_atoms"]
-        normalized[name] = {
-            "slow_factor": _clamp_slow_factor(slow_factor),
-            "kQ": max(0.0, float(kQ)),
-            "quench_radius": _quench_radius(quench_radius),
-            "quench_atoms": _quench_atoms(
-                quench_atoms, QUENCHER_ATOMS.get(name, ("CB",))
-            ),
-        }
-    return normalized
-def amino_acid_quenching_defaults(
-    kQ_scale: float = 1.0,
-    slow_factor: float = 1.0,
-    dye_radius: float = DEFAULT_DYE_RADIUS,
-):
-    """A full interaction table built from :data:`PET_QUENCHING_REFERENCE`.
 
-    :param kQ_scale:
-        Dye-specific multiplier applied to every reference ``kQ``. Dyes that are
-        harder to reduce or oxidise use a value below one.
-    :param slow_factor:
-        Diffusion scaling applied near every residue (unspecific stickiness).
-    :param dye_radius:
-        Radius of the dye sphere in Angstrom. The trajectory tracks the dye
-        *centre*, so the reference surface contact distances are offset by this
-        radius to give centre-to-centre quench radii.
-    """
-    radius = max(0.0, float(dye_radius))
-    table = normalize_amino_acid_quenching()
-    for residue, params in table.items():
-        params["slow_factor"] = _clamp_slow_factor(slow_factor)
-        reference = PET_QUENCHING_REFERENCE.get(residue)
-        if reference is None:
-            continue
-        params["kQ"] = max(0.0, float(reference["kQ"]) * float(kQ_scale))
-        params["quench_radius"] = _quench_radius(
-            radius + float(reference["contact_distance"])
-        )
-    return table
 def quencher_atom_indices(atoms, selection):
     """Atom indices per residue type, for a ``{residue: [atom names]}`` selection.
 
@@ -1099,12 +989,6 @@ def fret_rate_map(
         float(kf),
         max(1, int(acceptor_step)),
     )
-_FALLBACK = {
-    "slow_factor": 1.0,
-    "kQ": 0.0,
-    "quench_radius": None,
-    "quench_atoms": ("CB",),
-}
 class ResidueSites(NamedTuple):
     """One slow centre and one quench centre per residue, plus its type."""
 
@@ -1125,20 +1009,20 @@ def residue_sites(atoms, quenching_table=None) -> ResidueSites:
         ``atom_name`` and ``coord`` fields.
     :param quenching_table: the per-residue interaction table, whose
         ``quench_atoms`` decide which atoms define each quench centre. The
-        defaults from :data:`IMP.bff.QUENCHER_ATOMS` are used when omitted.
+        defaults from :data:`IMP.bff.quencher_atoms` are used when omitted.
 
     Residues are keyed by ``(chain, res_id, res_name)``. **Keying on ``res_id``
     alone is wrong** and was a real defect in QuEst: residue numbers restart per
     chain, so in a homodimer every number occurs twice and two residues' atoms
     were folded into one centre.
     """
-    table = normalize_amino_acid_quenching(quenching_table)
+    table = normalize_amino_acid_quenching(quenching_table or {})
 
     def wanted_atoms(residue_name):
         params = table.get(residue_name)
         if params is None:
             return frozenset(QUENCHER_ATOMS.get(residue_name, ("CB",)))
-        return frozenset(params.get("quench_atoms") or ("CB",))
+        return frozenset(params.quench_atoms) or frozenset(("CB",))
 
     by_residue = OrderedDict()
     for index, atom in enumerate(atoms):
@@ -1174,33 +1058,6 @@ def residue_sites(atoms, quenching_table=None) -> ResidueSites:
         np.asarray(quench_centers, dtype=np.float64).reshape(-1, 3),
         residue_names,
     )
-def _lookup(table, residue_name):
-    return table.get(_name(residue_name), _FALLBACK)
-def slow_factors_for_residues(residue_names: Sequence[str], table) -> np.ndarray:
-    """The stickiness factor of each residue, in ``residue_names`` order."""
-    return np.asarray(
-        [_lookup(table, r)["slow_factor"] for r in residue_names], dtype=np.float64
-    )
-def quenching_rates_for_residues(residue_names: Sequence[str], table) -> np.ndarray:
-    """The quenching rate (1/ns) of each residue."""
-    return np.asarray(
-        [_lookup(table, r)["kQ"] for r in residue_names], dtype=np.float64
-    )
-def quench_radii_for_residues(
-    residue_names: Sequence[str], table, critical_distance: float = 0.0
-) -> np.ndarray:
-    """The contact radius of each residue, inheriting *critical_distance*.
-
-    A ``quench_radius`` of ``None`` in the table means "use the model-wide
-    critical distance", which is how a project sets one radius for everything
-    and overrides it per residue type where it matters.
-    """
-    default = float(critical_distance or 0.0)
-    radii = []
-    for residue in residue_names:
-        value = _lookup(table, residue).get("quench_radius")
-        radii.append(default if value is None else float(value))
-    return np.asarray(radii, dtype=np.float64)
 MAX_PARALLEL_TRAJECTORIES = 8
 def _trajectory_seeds(random_seed, n_trajectories):
     """One seed per trajectory, derived from the base seed or drawn freshly."""
@@ -1259,7 +1116,8 @@ class QuenchedDonorDecay:
         self.av = av
         self.atoms = atoms
         self.tau0 = float(tau0)
-        self.quenching_table = normalize_amino_acid_quenching(quenching_table)
+        self.quenching_table = normalize_amino_acid_quenching(
+            quenching_table or {})
         self.critical_distance = float(critical_distance)
         self.slow_radius = float(slow_radius)
         self.dye_radius = float(dye_radius)

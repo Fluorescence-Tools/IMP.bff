@@ -14,6 +14,8 @@ one way.
 
 import unittest
 
+import math
+
 import numpy as np
 
 import IMP
@@ -47,7 +49,7 @@ class PetParameterTests(IMP.test.TestCase):
 
     def test_the_reference_chemistry_orders_the_quenchers(self):
         """TRP > PRO ~ TYR > MET > HIS > CYS."""
-        kq = {r: p["kQ"] for r, p in _q.PET_QUENCHING_REFERENCE.items()}
+        kq = {r: p.kQ for r, p in _q.PET_QUENCHING_REFERENCE.items()}
         self.assertGreater(kq["TRP"], kq["TYR"])
         self.assertAlmostEqual(kq["PRO"], kq["TYR"])
         self.assertGreater(kq["TYR"], kq["MET"])
@@ -58,12 +60,10 @@ class PetParameterTests(IMP.test.TestCase):
         table = _q.amino_acid_quenching_defaults()
         self.assertEqual(set(table), set(_q.STANDARD_AMINO_ACID_RESIDUES))
         for residue, params in table.items():
-            self.assertEqual(
-                set(params), {"slow_factor", "kQ", "quench_radius", "quench_atoms"}
-            )
             if residue not in _q.PET_QUENCHING_REFERENCE:
-                self.assertEqual(params["kQ"], 0.0)
-                self.assertIsNone(params["quench_radius"])
+                self.assertEqual(params.kQ, 0.0)
+                # NaN is what `None` was: inherit the model-wide distance.
+                self.assertTrue(math.isnan(params.quench_radius))
 
     def test_the_dye_radius_offsets_the_surface_contact_distance(self):
         """The table is quoted dye-surface-to-quencher; the walk tracks centres."""
@@ -71,8 +71,8 @@ class PetParameterTests(IMP.test.TestCase):
         table = _q.amino_acid_quenching_defaults(dye_radius=radius)
         for residue, reference in _q.PET_QUENCHING_REFERENCE.items():
             self.assertAlmostEqual(
-                table[residue]["quench_radius"],
-                radius + reference["contact_distance"],
+                table[residue].quench_radius,
+                radius + reference.contact_distance,
             )
 
     def test_kq_scale_is_a_plain_multiplier(self):
@@ -80,31 +80,36 @@ class PetParameterTests(IMP.test.TestCase):
         plain = _q.amino_acid_quenching_defaults()
         for residue in _q.PET_QUENCHING_REFERENCE:
             self.assertAlmostEqual(
-                scaled[residue]["kQ"], 0.4 * plain[residue]["kQ"]
+                scaled[residue].kQ, 0.4 * plain[residue].kQ
             )
 
     def test_normalisation_is_forgiving_about_shape(self):
-        table = _q.normalize_amino_acid_quenching(
-            {"trp": {"kQ": 9.0}, "TYR": 0.3, "ZZZ": {"kQ": 1.0}}
-        )
-        self.assertEqual(table["TRP"]["kQ"], 9.0)
-        # A bare number is the legacy spelling of a slow factor.
-        self.assertEqual(table["TYR"]["slow_factor"], 0.3)
-        # An unknown residue is kept, so a non-standard one can be given a rate.
-        self.assertEqual(table["ZZZ"]["kQ"], 1.0)
-        self.assertEqual(table["ZZZ"]["quench_atoms"], ["CB"])
+        table = _q.normalize_amino_acid_quenching({
+            "trp": _q.ResidueQuenching(kQ=9.0),
+            "TYR": _q.ResidueQuenching(slow_factor=0.3),
+            "ZZZ": _q.ResidueQuenching(kQ=1.0),
+        })
+        # The residue name is normalised, so a lower-case key still lands.
+        self.assertEqual(table["TRP"].kQ, 9.0)
+        self.assertEqual(table["TYR"].slow_factor, 0.3)
+        # An unknown residue is kept, so a non-standard one can be given a rate,
+        # and it falls back to CB for its quenching centre.
+        self.assertEqual(table["ZZZ"].kQ, 1.0)
+        self.assertEqual(list(table["ZZZ"].quench_atoms), ["CB"])
 
     def test_slow_factors_are_clamped_and_radii_sanitised(self):
-        table = _q.normalize_amino_acid_quenching(
-            {"TRP": {"slow_factor": 5.0, "quench_radius": -3.0, "kQ": -1.0},
-             "TYR": {"slow_factor": -2.0, "quench_radius": float("nan")}}
-        )
-        self.assertEqual(table["TRP"]["slow_factor"], 1.0)
-        self.assertEqual(table["TYR"]["slow_factor"], 0.0)
-        self.assertEqual(table["TRP"]["kQ"], 0.0)
+        table = _q.normalize_amino_acid_quenching({
+            "TRP": _q.ResidueQuenching(slow_factor=5.0, kQ=-1.0,
+                                       quench_radius=-3.0),
+            "TYR": _q.ResidueQuenching(slow_factor=-2.0,
+                                       quench_radius=float("nan")),
+        })
+        self.assertEqual(table["TRP"].slow_factor, 1.0)
+        self.assertEqual(table["TYR"].slow_factor, 0.0)
+        self.assertEqual(table["TRP"].kQ, 0.0)
         # A non-positive or non-finite radius means "inherit the global one".
-        self.assertIsNone(table["TRP"]["quench_radius"])
-        self.assertIsNone(table["TYR"]["quench_radius"])
+        self.assertTrue(math.isnan(table["TRP"].quench_radius))
+        self.assertTrue(math.isnan(table["TYR"].quench_radius))
 
     def test_quencher_selection_finds_the_right_atoms(self):
         atoms = np.zeros(

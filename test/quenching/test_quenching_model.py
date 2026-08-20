@@ -17,6 +17,7 @@ from IMP.bff.quenching import (
     _resolve_parallel,
     _trajectory_seeds,
 )
+from IMP.bff import ResidueQuenching
 from IMP.bff.quenching import amino_acid_quenching_defaults
 
 
@@ -88,7 +89,7 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("A", 1, "TRP", "CB", [0.0, 0.0, 0.0]),
             ("A", 1, "TRP", "NE1", [4.0, 0.0, 0.0]),
         ])
-        table = {"TRP": {"quench_atoms": ["CB"], "kQ": 1.0}}
+        table = {"TRP": ResidueQuenching(quench_atoms=["CB"], kQ=1.0)}
         found = sites.residue_sites(atoms, table)
         self.assertTrue(np.allclose(found.quench_centers[0], [0.0, 0.0, 0.0]))
 
@@ -102,8 +103,8 @@ class ResidueSiteTests(IMP.test.TestCase):
         self.assertGreater(rates[0], rates[2])
 
     def test_an_unset_radius_inherits_the_critical_distance(self):
-        table = {"TRP": {"kQ": 1.0, "quench_radius": None},
-                 "TYR": {"kQ": 1.0, "quench_radius": 9.0}}
+        table = {"TRP": ResidueQuenching(kQ=1.0),          # radius: inherit
+                 "TYR": ResidueQuenching(kQ=1.0, quench_radius=9.0)}
         radii = sites.quench_radii_for_residues(["TRP", "TYR"], table, 6.5)
         self.assertAlmostEqual(radii[0], 6.5)
         self.assertAlmostEqual(radii[1], 9.0)
@@ -259,7 +260,7 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
         self.assertGreater(float(rate_map.max()), 0.0)
         # TRP's rate, not ALA's zero.
         table = amino_acid_quenching_defaults()
-        self.assertAlmostEqual(float(rate_map.max()), table["TRP"]["kQ"], places=6)
+        self.assertAlmostEqual(float(rate_map.max()), table["TRP"].kQ, places=6)
 
     def test_quenching_lowers_the_quantum_yield_and_the_lifetime(self):
         quenched = self.model()
@@ -274,8 +275,8 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
         self.assertAlmostEqual(free.fluorescence_lifetime, 4.0, delta=0.05)
 
     def test_a_stronger_quencher_quenches_more(self):
-        weak = self.model(quenching_table={"TRP": {"kQ": 0.1}})
-        strong = self.model(quenching_table={"TRP": {"kQ": 20.0}})
+        weak = self.model(quenching_table={"TRP": ResidueQuenching(kQ=0.1)})
+        strong = self.model(quenching_table={"TRP": ResidueQuenching(kQ=20.0)})
         self.assertGreater(weak.quantum_yield, strong.quantum_yield)
 
     def test_the_histogram_counts_only_emitted_photons(self):

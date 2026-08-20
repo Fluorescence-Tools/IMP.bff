@@ -84,7 +84,7 @@ class TestPET:
         density = np.ones((ng, ng, ng))
         axis = maps.grid_axis(ng, dg)
         table = {c: {a: (p.rate_constant, p.attenuation_length)
-                     for a in IMP.bff.QUENCHER_ATOMS[c]}
+                     for a in IMP.bff.quencher_atoms()[c]}
                  for c, p in params.items()}
         kQ, rC = maps.atomic_quenching_parameters(atoms, table)
         tau0 = 4.0
