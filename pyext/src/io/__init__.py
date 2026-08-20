@@ -15,7 +15,10 @@ dialects of one format come to exist without anyone deciding.
   should write them again.
 * :mod:`IMP.bff.io.cif` -- BinaryCIF and mmCIF for dye templates and force
   fields.
-* :mod:`IMP.bff.io.structure` -- PDB and RMF, and coordinate comparison.
+* PDB, MOL2, mmCIF, DCD and coordinate comparison -- C++, in
+  `include/IMP/bff/StructureIO.h` and `TrajectoryIO.h`. The **RMF** door stays
+  Python, lazily: writing RMF needs `IMP.rmf`, which is not one of this module's
+  `required_modules`.
 
 Moved out of ``fret/`` by PRD-113 stage 7 and split three ways there. One module
 held all of it, which is how ``fret/io.py`` came to be the thing that writes
@@ -34,10 +37,12 @@ from IMP.bff import (  # noqa: F401
     write_evaluators_json,
     write_fps_json,
 )
-from IMP.bff.io.structure import (  # noqa: F401
+from IMP.bff import (  # noqa: F401
     compute_rmsd,
     load_structure,
     load_structure_with_particles,
+    read_dcd,
+    read_trajectory,
     write_pdb,
     write_rmf,
 )
@@ -48,5 +53,5 @@ __all__ = [
     "read_old_distances_txt", "read_old_lps_txt", "write_evaluators_json",
     "write_fps_json",
     "compute_rmsd", "load_structure", "load_structure_with_particles",
-    "write_pdb", "write_rmf",
+    "read_dcd", "read_trajectory", "write_pdb", "write_rmf",
 ]

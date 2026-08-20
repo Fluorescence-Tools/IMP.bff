@@ -72,13 +72,21 @@ IMPBFFEXPORT std::map<int, double> vdw_radii();
 IMPBFFEXPORT std::string element_symbol_from_pdb_line(const std::string& line);
 
 //! One ATOM/HETATM record: where it is, how big, and what names it.
+/*! Every field a reader in this package wanted of one. There were **two** such
+    records until 2026-08-20 — this one, and a serial/element-carrying twin the
+    MOL2 writer used — with two parsers behind them, only one of them cached. */
 struct IMPBFFEXPORT PDBAtomRecord {
+    //! The atom serial, columns 7-11. What `CONECT` records refer to.
+    int serial;
     std::string chain;
     int resseq;
-    std::string atom_name;
+    std::string res_name, atom_name;
     double x, y, z;
     double vdw_radius;
-    PDBAtomRecord() : resseq(0), x(0), y(0), z(0), vdw_radius(1.70) {}
+    //! The element symbol — see #IMP::bff::element_symbol_from_pdb_line.
+    std::string element;
+    PDBAtomRecord()
+        : serial(0), resseq(0), x(0), y(0), z(0), vdw_radius(1.70) {}
     IMP_SHOWABLE_INLINE(PDBAtomRecord,
                         out << "PDBAtomRecord(" << chain << resseq << ":"
                             << atom_name << ")");

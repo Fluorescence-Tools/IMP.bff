@@ -231,7 +231,7 @@ def read_bcif(path: Path, n_atoms: int, category: str = "_rotamer_coord") -> np.
 def load_trajectory(path: Path, top: Path | None) -> np.ndarray:
     """Coordinates in **Angstrom** from a DCD or an XTC."""
     if path.suffix.lower() == ".dcd":
-        import IMP.bff.io.structure as ios
+        import IMP.bff as ios
         return np.asarray(ios.read_dcd(str(path)), dtype=np.float64)   # already A
     if path.suffix.lower() in (".xtc", ".trr"):
         try:

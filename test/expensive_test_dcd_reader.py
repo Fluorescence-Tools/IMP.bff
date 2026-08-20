@@ -18,7 +18,7 @@ import numpy as np
 import IMP
 import IMP.bff
 import IMP.test
-from IMP.bff.io.structure import read_dcd, read_dcd_header
+from IMP.bff import read_dcd, read_dcd_header
 
 
 def _library_dir():

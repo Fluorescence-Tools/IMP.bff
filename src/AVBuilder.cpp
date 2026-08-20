@@ -122,9 +122,19 @@ std::vector<PDBAtomRecord> parse_pdb(const std::string& path) {
         row.z = std::strtod(zs.c_str(), &end); if (*end != '\0') continue;
         row.chain = trim(line.substr(21, 1));
         row.atom_name = trim(line.substr(12, 4));
+        row.res_name = trim(line.substr(17, 3));
+        // The serial is what CONECT records refer to. A record whose serial
+        // does not parse keeps 0 rather than being dropped: the coordinates are
+        // what most callers want, and only the bond reader needs the serial.
+        const std::string serial = trim(line.substr(6, 5));
+        char* serial_end = 0;
+        const long value = std::strtol(serial.c_str(), &serial_end, 10);
+        if (serial_end != serial.c_str() && *serial_end == '\0') {
+            row.serial = static_cast<int>(value);
+        }
 
-        const std::string element = element_symbol_from_pdb_line(line);
-        std::map<std::string, int>::const_iterator n = numbers.find(element);
+        row.element = element_symbol_from_pdb_line(line);
+        std::map<std::string, int>::const_iterator n = numbers.find(row.element);
         const int atomic_number = n == numbers.end() ? 0 : n->second;
         std::map<int, double>::const_iterator r = radii.find(atomic_number);
         row.vdw_radius = r == radii.end() ? DEFAULT_VDW : r->second;

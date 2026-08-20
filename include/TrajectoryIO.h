@@ -22,6 +22,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <string>
 #include <vector>
 
@@ -53,6 +56,67 @@ IMPBFFEXPORT void read_bcif_trajectory(
 */
 IMPBFFEXPORT int bcif_trajectory_rows(const std::string& path,
                                       const std::string& category);
+
+//! What a DCD header says, without loading any coordinates.
+struct IMPBFFEXPORT DCDHeader {
+    int n_frames, n_atoms, first_step, step_stride, charmm_version;
+    double time_step;
+    bool has_unit_cell;
+    //! `"<"` for little-endian, `">"` for big — the struct prefix Python used.
+    std::string endianness;
+    //! Byte offset at which frame data begins.
+    int offset;
+
+    DCDHeader()
+        : n_frames(0), n_atoms(0), first_step(0), step_stride(0),
+          charmm_version(0), time_step(0.0), has_unit_cell(false),
+          endianness("<"), offset(0) {}
+
+    IMP_SHOWABLE_INLINE(DCDHeader, out << "DCDHeader(" << n_frames
+                                       << " frames, " << n_atoms << " atoms)");
+};
+IMP_VALUES(DCDHeader, DCDHeaders);
+
+//! Read a DCD header without loading coordinates.
+/*!
+    DCD carries no magic number for endianness; the convention is to read the
+    leading Fortran record length and see which byte order makes it the expected
+    84.
+
+    Only what the rotamer libraries need is implemented — fixed atom counts, no
+    velocity blocks, no four-dimensional trajectories. Anything outside that
+    throws rather than guessing, because a trajectory silently read as the wrong
+    shape is worse than one that refuses.
+
+    \throw ValueException when the file is not a DCD this reader handles
+    \throw IOException when it cannot be read
+*/
+IMPBFFEXPORT DCDHeader read_dcd_header(const std::string& path);
+
+//! Read coordinates from a DCD trajectory.
+/*! \param[in] max_frames stop after this many; negative reads all of them
+    \param[out] out_view,n_out_view `n_frames * n_atoms * 3`, in the file's own
+                units (Angstrom for the bundled libraries) */
+IMPBFFEXPORT void read_dcd(const std::string& path, int max_frames,
+                           double** out_view, int* n_out_view);
+
+//! Coordinates from a trajectory, whatever format it is in.
+/*!
+    **BinaryCIF is the format this package stores.** The rotamer libraries were
+    re-encoded on 2026-08-19: 44.78 MB of DCD and XTC became 17.99 MB of
+    `.bcif`, verified exact on a 0.1 A grid, and read through the C parser IMP
+    already vendors. `.dcd` still reads, because the format is not gone from the
+    world — a user's own library may be one. It is simply not what is shipped.
+
+    \param[in] n_atoms required for BinaryCIF, which stores one row per
+               (atom, frame) and cannot infer the split; callers have it from
+               the companion PDB. Ignored for DCD, which carries its own.
+    \throw ValueException for any other suffix, or for a BinaryCIF with no
+           \p n_atoms
+*/
+IMPBFFEXPORT void read_trajectory(const std::string& path, int n_atoms,
+                                  int max_frames, double** out_view,
+                                  int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

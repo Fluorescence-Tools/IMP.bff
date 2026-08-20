@@ -1,5 +1,72 @@
 # Update Log
 
+## 2026-08-20 (night) — `io/structure.py`, and the mmCIF writer that typed every atom as element A
+
+Gone (1,011 lines): the DCD reader, the PDB→MOL2 path, the PMI stat reader, the
+PDB/RMSD/mmCIF doors and the two tables beside a structure.
+
+* **DCD** joined `TrajectoryIO.h`, next to the BinaryCIF reader it replaced —
+  `read_dcd_header`, `read_dcd`, `read_trajectory`.
+* **Everything else** is `include/IMP/bff/StructureIO.h`: `parse_conect_bonds`,
+  `infer_bonds`, `write_mol2`, `count_frames`, `read_score_series`,
+  `write_pdb`, `apply_transform`, `read_pdb_hierarchy`,
+  `structure_coordinates`, `load_structure`, `compute_rmsd`,
+  `convert_pdb_to_cif`, `read_xlink_table`, `select_flexible_residues`,
+  `create_named_bonds`.
+
+**The RMF door stays Python**, lazily, through the `_LAZY` table the PMI
+restraint wrapper introduced this morning: `write_rmf`,
+`write_rotamer_library_rmf` and `read_rotamer_library_rmf` need `IMP.rmf`, which
+is not one of this module's `required_modules`. The decision not to widen that
+graph was already taken for the trajectory frame writers; three library
+functions are not a reason to reverse it. `import IMP.bff` still does not pull
+RMF.
+
+### Two readers of one file format
+
+`parse_pdb_atoms` was a **second** PDB parser, with a second record type
+(`PDBAtom`) behind it, beside `read_pdb_records`/`PDBAtomRecord` in
+`AVBuilder.h` — and only one of the two was cached on (path, mtime, size). One
+record now, carrying the fields both wanted: `serial`, `res_name` and `element`
+joined `chain`, `resseq`, `atom_name`, the coordinates and `vdw_radius`.
+`parse_pdb_atoms` is a view over the cached reader.
+
+The element that survives is `element_symbol_from_pdb_line`'s, which reads
+columns 77-78 properly and falls back to the atom name; the MOL2 path's own was
+"the first alphabetic character, uppercased", so a chlorine typed as `C.3`. Every
+shipped rotamer library is C/H/N/O/S only, so nothing shipped changes.
+
+### The bug the port surfaced
+
+**`convert_pdb_to_cif` wrote every atom's `type_symbol` as `A`.** It read the
+atom name with `IMP.atom.Atom(a).get_name()` — the *particle* name, which IMP
+spells `"Atom C1 of residue 2"` — so `label_atom_id` was that sentence, and the
+element heuristic (`^[A-Za-z]+` then first character) turned it into `A`. Both
+columns are right now: `C1` and `C`. The test that covers this function counts
+the string `HETATM` and asserts there are at least fifty, which is why nothing
+noticed.
+
+`DCDFormatError` is gone with it. `IMP_THROW` raises `IMP::ValueException`,
+itself a `ValueError`, and there is no way to raise a module-defined Python class
+from C++ without a custom exception typemap; nothing but the reader's own test
+ever named it.
+
+### The gate
+
+The bundled DCD (header, full read, capped read) and the BinaryCIF beside it;
+four rotamer-library PDBs through `parse_pdb_atoms`, `parse_conect_bonds`,
+`infer_bonds` and `write_mol2` (byte-identical output); a PMI stat file with a
+parseable and an unparseable header, a renumbered-column header, a `frame,score`
+CSV and a missing file; `write_pdb` under no transform, a translation, a rotation
+and a homogeneous 4x4 (byte-identical); `load_structure`,
+`load_structure_with_particles` and four `compute_rmsd` modes (to 2e-15, a
+summation-order difference); the crosslink table with a malformed row.
+**All identical.** The mmCIF comparison is per-column, and the eleven columns
+that were right agree exactly.
+
+`pyext/src`: **10,686 lines in 13 files**. Suite green (802).
+
+
 ## 2026-08-20 (evening) — `io/fps.py`: the format, defined in C++
 
 Gone (972 lines): the fps.json field tables, the JSON-Schema derivation, the

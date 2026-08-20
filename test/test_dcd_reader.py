@@ -18,7 +18,7 @@ import numpy as np
 import IMP
 import IMP.bff
 import IMP.test
-from IMP.bff.io.structure import DCDFormatError, read_dcd, read_dcd_header
+from IMP.bff import read_dcd, read_dcd_header
 
 
 def _library_dir():
@@ -76,7 +76,10 @@ class Tests(IMP.test.TestCase):
             bogus = os.path.join(tmp, "not.dcd")
             with open(bogus, "wb") as fh:
                 fh.write(b"\x00" * 512)
-            self.assertRaises(DCDFormatError, read_dcd, bogus)
+            # `IMP::ValueException` is itself a `ValueError`, and the Python's
+            # own `DCDFormatError` was a `ValueError` subclass that nothing but
+            # this test ever named.
+            self.assertRaises(ValueError, read_dcd, bogus)
 
 if __name__ == '__main__':
     IMP.test.main()

@@ -104,14 +104,16 @@ _LAZY = {}
 /* The force-field system in, through the ihm C reader IMP vendors. */
 %include "IMP/bff/ForceFieldCIF.h"
 
-/* Trajectories: BinaryCIF, through the reader IMP already vendors. */
-%include "IMP/bff/TrajectoryIO.h"
-
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
 %include "IMP_bff.avbuilder.i"
+
+/* Structures and trajectories in and out: PDB, MOL2, mmCIF, BinaryCIF, DCD.
+   After `avbuilder.i`, which declares the `PDBAtomRecord` the MOL2 writer takes
+   -- SWIG resolves a type at the point of use. */
+%include "IMP_bff.structureio.i"
 
 /* The processes that deactivate or depolarise a dye. */
 %include "IMP_bff.photophysics.i"

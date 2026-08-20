@@ -15,7 +15,7 @@ import numpy as np
 
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff import read_fps_json
-from IMP.bff.io.structure import read_rotamer_library_rmf
+from IMP.bff import read_rotamer_library_rmf
 from IMP.bff import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff import States
 from IMP.bff.scoring import compute_rotamer_score, selector_resnames

@@ -139,7 +139,9 @@ def test_cgdye_is_off_the_public_surface():
     # and the harvested pieces landed where they were supposed to
     assert api.domain_of("RotamerFRET") == "representation"
     assert api.domain_of("attach_dyes") == "label"
-    assert api.domain_of("read_rotamer_library_rmf") == "io"
+    # The io half is C++ now and is not in `BY_DOMAIN` at all, so this asks
+    # only that it is reachable -- which is the claim the harvest made.
+    assert IMP.bff.read_rotamer_library_rmf
 
 
 def test_nothing_in_the_package_imports_cgdye_at_module_scope():

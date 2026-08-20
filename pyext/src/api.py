@@ -47,13 +47,7 @@ import importlib
 BY_DOMAIN = {
     # -- io -- the formats: fps.json, its legacy ancestors, structures, templates
     "io": {
-        # IMP.bff.io.structure
-        "read_dcd": "IMP.bff.io.structure",
-        "read_trajectory": "IMP.bff.io.structure",
         # IMP.bff.io.cif
-        # IMP.bff.io.structure
-        "read_rotamer_library_rmf": "IMP.bff.io.structure",
-        "write_rotamer_library_rmf": "IMP.bff.io.structure",
     },
     # -- label -- a dye attached at a site, its linker and frame, and the quenchers it sees
     "label": {

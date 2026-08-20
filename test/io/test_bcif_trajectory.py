@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.io.structure as ios
+import IMP.bff as ios
 
 REPO = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO / "bin" / "imp_bff_traj2bcif"
