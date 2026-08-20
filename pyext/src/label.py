@@ -1034,7 +1034,7 @@ class Label:
     :param seq_id: residue sequence number.
     :param atom_id: attachment atom, e.g. ``"CB"``.
     :param comp_id: residue name, when known.
-    :param dye: the :class:`IMP.bff.dye.Dye` species, when known. A label whose
+    :param dye: the :class:`IMP.bff.Dye` species, when known. A label whose
         dye is unknown is still a usable site -- it just cannot derive R0 or a
         rotational correlation time.
     :param fluorophore_type: ``donor``, ``acceptor`` or ``unspecified``.

@@ -12,7 +12,7 @@ import IMP.bff.io.fps as fps
 from IMP.bff.representation.rotamer import read_rotamer_fps, rotamer_fret_from_fps
 from IMP.bff.representation.rotamer import RotamerFRET
 from IMP.bff.representation.rotamer import load_protein_frames, load_rotamer_library
-from IMP.bff.dye import forster_radius_from_spectra
+from IMP.bff import forster_radius_from_spectra
 # Invoking the command through imp-tricks' aggregator would make an imp.bff
 # test depend on the layer above it, so it is invoked directly. The group now
 # lives in `bin/imp_bff` rather than in the package: a decorated function needs

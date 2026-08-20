@@ -47,6 +47,9 @@ import numpy as np
 %include "IMP/bff/QuenchingMap.h"
 %include "IMP/bff/FRETRateTrace.h"
 
+/* The dye as a species: its spectra, and the Förster radius they give. */
+%include "IMP_bff.dye.i"
+
 /* Distances and orientations over point clouds. */
 %include "IMP/bff/AVDistance.h"
 %include "IMP/bff/DistanceCalibration.h"

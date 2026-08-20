@@ -16,7 +16,7 @@ import IMP
 import IMP.atom
 import IMP.bff
 import IMP.core
-from IMP.bff.dye import find_dye
+from IMP.bff import find_dye
 from IMP.bff.label import reference_pet_parameters
 from IMP.bff.photophysics import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
@@ -126,11 +126,13 @@ class TestFRET:
 
     def test_it_reproduces_the_trace_kernel(self):
         from IMP.bff.quenching import fret_rate_trace
-        # `replace`, not `object.__setattr__`: Dye is frozen, and the library
-        # is cached, so writing through the freeze edits the species for every
-        # later reader. That is how this test used to leak a lifetime into
+        # `find_dye` returns a copy out of the cached library, so setting a
+        # lifetime on it is local to this test. It was `dataclasses.replace`
+        # over a frozen dataclass for the same reason, and before that an
+        # `object.__setattr__` that leaked a lifetime into
         # `test_a_dye_without_a_lifetime_is_refused`.
-        d = dataclasses.replace(find_dye("AlexaFluor 488"), lifetime=4.0)
+        d = find_dye("AlexaFluor 488")
+        d.lifetime = 4.0
         a = find_dye("AlexaFluor 594")
         term = FRETTerm(donor=d, acceptor=a)
         donor, acceptor = _states(32, 1), _states(48, 2)

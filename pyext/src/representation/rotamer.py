@@ -13,7 +13,7 @@ import re
 
 import numpy as np
 
-from IMP.bff.dye import forster_radius_from_spectra
+from IMP.bff import forster_radius_from_spectra
 from IMP.bff.io.fps import read_fps_json
 from IMP.bff.io.structure import read_rotamer_library_rmf
 from IMP.bff.representation.distance import fret_pair_efficiencies, fret_pair_geometry
@@ -1473,7 +1473,8 @@ class RotamerFRET:
         geometry = donor.pair_geometry(acceptor)
         k2_avg = geometry["kappa2_avg"]
         if not self.fixed_R0:
-            self.r0 = forster_radius_from_spectra(self.donor, self.acceptor, k2_avg, r0_dir=self.r0lib)
+            self.r0 = forster_radius_from_spectra(self.donor, self.acceptor, k2_avg,
+                                                  library_cif="" if self.r0lib is None else str(self.r0lib))
             if self.r0 == 0:
                 return FRETFrameResult((donor.partition, acceptor.partition), float("nan"), float("nan"), float("nan"), float("nan"))
         eff = fret_pair_efficiencies(geometry, float(self.r0) * 10.0)   # r0 in nm, geometry in A

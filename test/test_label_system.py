@@ -13,7 +13,7 @@ Names follow the FLR dictionaries where an item exists (checked against
 
 import pytest
 
-from IMP.bff.dye import find_dye
+from IMP.bff import find_dye
 from IMP.bff.label import (
     Label, Quencher, PETParameters, reference_quenchers,
     reference_pet_parameters, REFERENCE_DYE, FLUOROPHORE_TYPES,

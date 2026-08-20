@@ -18,7 +18,7 @@ Moved out of ``fret/`` by PRD-113 stage 7 and split three ways there. One module
 held all of it, which is how ``fret/io.py`` came to be the thing that writes
 PDBs -- and why ``IMP.bff.fret.read_fps_json`` no longer exists. The dye
 templates and spectra readers belong here too and have not moved yet; they are
-still in :mod:`IMP.bff.dye`, next to the ``Dye`` they build.
+in ``include/IMP/bff/DyeLibrary.h``, next to the ``Dye`` they build.
 """
 
 from IMP.bff.io.fps import (  # noqa: F401

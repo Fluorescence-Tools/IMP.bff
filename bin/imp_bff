@@ -48,7 +48,7 @@ from IMP.bff.cgdye.sampling import (
     rotamer_rotational_correlation_time,
 )
 from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
-from IMP.bff.dye import forster_radius_from_spectra
+from IMP.bff import forster_radius_from_spectra
 from IMP.bff.io.cif import (
     read_component_template_cif, read_dye_forcefield_cif, region_features)
 from IMP.bff.representation.av import AccessibleVolume, compute_av_from_structure

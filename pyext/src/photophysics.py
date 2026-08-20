@@ -848,7 +848,7 @@ class FRETTerm(InteractionTerm):
     quantum yield, the medium's refractive index and kappa^2. Passing it in was
     how ``forster_radius=52.0`` came to be a default in a dozen signatures.
 
-    :param donor, acceptor: :class:`~IMP.bff.dye.Dye` species.
+    :param donor, acceptor: :class:`~IMP.bff.Dye` species.
     :param refractive_index: of the medium between them.
     :param kappa2: orientation factor. ``None`` resolves it from the
         participants' orientations when both have them, and falls back to the
@@ -869,7 +869,7 @@ class FRETTerm(InteractionTerm):
     @property
     def forster_radius(self) -> float:
         """R0 in Angstrom, derived from the pair and the medium."""
-        from IMP.bff.dye import forster_radius
+        from IMP.bff import forster_radius
         k2 = 2.0 / 3.0 if self.kappa2 is None else float(self.kappa2)
         return 10.0 * forster_radius(
             self.donor, self.acceptor, k2, self.refractive_index)
@@ -879,7 +879,9 @@ class FRETTerm(InteractionTerm):
         from IMP.bff.quenching import fret_rate_trace
 
         tau0 = self.donor.lifetime
-        if tau0 is None or tau0 <= 0.0:
+        # An unknown lifetime is NaN, which is neither None nor <= 0 -- so the
+        # test is the one that catches all three.
+        if tau0 is None or not (tau0 > 0.0):
             raise ValueError(
                 f"{self.donor.name} has no lifetime, so a FRET rate cannot be "
                 "expressed as 1/tau0 * (R0/r)^6")

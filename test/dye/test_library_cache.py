@@ -10,13 +10,13 @@ editing the file during a session must be picked up, and only an edit changing
 neither timestamp nor size would be missed, which is not something that happens
 to a data file.
 
-Each call gets a **fresh mapping** over the **same** ``Dye`` values, so the
-identity to test is the values'. A caller that adds or drops an entry edits only
-its own dict; the species are shared, which is safe because ``Dye`` is frozen.
-Reaching around that with ``object.__setattr__`` corrupts the library for every
-later reader -- which is what a test in ``test_photophysics_terms`` was doing on
-the day this cache landed, and it only surfaced because the cache made the
-corruption persist.
+Each call gets a **fresh mapping**, so a caller that adds or drops an entry
+edits only its own copy of the library.
+
+The cache lives in C++ now, so what a test can see of it is that a repeat read
+is fast, that an edited file is re-read, that two paths do not share an entry,
+and that a missing file leaves no entry behind -- not Python object identity,
+which was the old implementation showing through.
 """
 
 import shutil
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 import IMP.bff
-from IMP.bff.dye import DYE_LIBRARY_CIF, _LIBRARY_CACHE, read_dye_library
+from IMP.bff import DYE_LIBRARY_CIF, dye_library_cache_size, read_dye_library
 
 
 def _bundled_path():
@@ -34,11 +34,11 @@ def _bundled_path():
 
 
 def test_the_bundled_library_is_parsed_once():
+    read_dye_library()
+    before = dye_library_cache_size()
     first = read_dye_library()
-    second = read_dye_library()
     assert len(first) > 0
-    name = next(iter(first))
-    assert first[name] is second[name], "a second read must not re-parse"
+    assert dye_library_cache_size() == before, "a second read must not re-parse"
 
 
 def test_each_caller_gets_its_own_mapping():
@@ -46,7 +46,7 @@ def test_each_caller_gets_its_own_mapping():
     first = read_dye_library()
     second = read_dye_library()
     assert first is not second
-    first.pop(next(iter(first)))
+    del first[next(iter(first))]
     assert len(read_dye_library()) == len(second)
 
 
@@ -63,30 +63,35 @@ def test_an_edited_file_is_reread(tmp_path):
     copy = tmp_path / "dye_library.cif"
     shutil.copy(_bundled_path(), copy)
 
-    first = read_dye_library(copy)
-    name = next(iter(first))
-    assert read_dye_library(copy)[name] is first[name]
+    first = read_dye_library(str(copy))
+    before = dye_library_cache_size()
+    assert len(read_dye_library(str(copy))) == len(first)
+    assert dye_library_cache_size() == before, "an unedited file must not re-parse"
 
     with copy.open("a") as handle:      # changes both mtime and size
         handle.write("\n#\n")
-    assert read_dye_library(copy)[name] is not first[name], \
-        "an edited file must be parsed again"
+    read_dye_library(str(copy))
+    assert dye_library_cache_size() == before + 1, \
+        "an edited file must be parsed again, under a key of its own"
 
 
 def test_two_files_do_not_share_a_cache_entry(tmp_path):
     a, b = tmp_path / "a.cif", tmp_path / "b.cif"
     shutil.copy(_bundled_path(), a)
     shutil.copy(_bundled_path(), b)
-    name = next(iter(read_dye_library(a)))
-    assert read_dye_library(a)[name] is not read_dye_library(b)[name]
-    assert read_dye_library(a)[name] is read_dye_library(a)[name]
+    before = dye_library_cache_size()
+    read_dye_library(str(a))
+    read_dye_library(str(b))
+    assert dye_library_cache_size() == before + 2, "one cache entry per file"
+    read_dye_library(str(a))
+    assert dye_library_cache_size() == before + 2, "and no more on a repeat"
 
 
 def test_a_missing_file_is_not_cached(tmp_path):
-    before = len(_LIBRARY_CACHE)
-    with pytest.raises((FileNotFoundError, OSError)):
-        read_dye_library(tmp_path / "nope.cif")
-    assert len(_LIBRARY_CACHE) == before
+    before = dye_library_cache_size()
+    with pytest.raises(Exception):
+        read_dye_library(str(tmp_path / "nope.cif"))
+    assert dye_library_cache_size() == before
 
 
 def test_the_atom_type_lookup_is_memoised():

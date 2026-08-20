@@ -10,7 +10,7 @@ written once and work for all of them.
 Only the *representation* parameters live here. ``linker_length``,
 ``allowed_sphere_radius`` and ``simulation_grid_resolution`` belong to the
 accessible volume; a rotamer library has none of them, and none of them are
-properties of the dye (``IMP.bff.dye``) or of where it is attached
+properties of the dye (``IMP.bff.Dye``) or of where it is attached
 (``IMP.bff.label``).
 """
 

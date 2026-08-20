@@ -45,21 +45,6 @@ import importlib
 
 #: domain -> {public name -> the module that defines it}. **The authored map.**
 BY_DOMAIN = {
-    # -- dye -- the species: spectra, photophysics parameters, topology, the library
-    "dye": {
-        # IMP.bff.dye
-        "read_dye_library": "IMP.bff.dye",
-        # IMP.bff.dye
-        "available_dyes": "IMP.bff.dye",
-        "find_dye": "IMP.bff.dye",
-        # IMP.bff.dye
-        "Dye": "IMP.bff.dye",
-        "Spectrum": "IMP.bff.dye",
-        # IMP.bff.dye
-        "forster_radius": "IMP.bff.dye",
-        "forster_radius_from_spectra": "IMP.bff.dye",
-        "spectral_overlap": "IMP.bff.dye",
-    },
     # -- io -- the formats: fps.json, its legacy ancestors, structures, templates
     "io": {
         # IMP.bff.io.structure

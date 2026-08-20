@@ -91,7 +91,7 @@ question from stage 2's "is this configuration allowed".
 
 * **Stages**: `representation/` (`av.py`, `rotamer.py`, `distance.py`,
   `pathmap.py`), `scoring.py`, `sampling.py`
-* **Across the stages**: `dye.py`, `label.py`, `photophysics.py`
+* **Across the stages**: `label.py`, `photophysics.py`
 * **Formats and data**: `io/` (`cif.py`, `fps.py`, `structure.py`),
   `restraints/` (`docking.py`, `network.py`,
   `simple_av_network.py`, `direct_labeling.py`)
