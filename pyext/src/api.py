@@ -101,11 +101,6 @@ BY_DOMAIN = {
         "s2_delta_from_anisotropy": "IMP.bff.photophysics",
         "kappa2_to_distance_ratio": "IMP.bff.photophysics",
         # IMP.bff.photophysics
-        "FRETTerm": "IMP.bff.photophysics",
-        "InteractionTerm": "IMP.bff.photophysics",
-        "PETTerm": "IMP.bff.photophysics",
-        "RadiativeTerm": "IMP.bff.photophysics",
-        "total_rate": "IMP.bff.photophysics",
     },
     # -- quenching -- the PET model, assembled for one labelling site
     "quenching": {

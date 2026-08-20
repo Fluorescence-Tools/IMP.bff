@@ -7,8 +7,6 @@ parallel implementation -- each is checked against the kernel it wraps, so the
 kernels can later move underneath the terms without changing an answer.
 """
 
-import dataclasses
-
 import numpy as np
 import pytest
 
@@ -21,6 +19,18 @@ from IMP.bff.label import reference_pet_parameters
 from IMP.bff.photophysics import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
+
+
+def _pet(atoms, parameters, dye_radius=3.5):
+    """A PET term over ``atoms``.
+
+    The quenching atoms are the term's, not a per-call argument: which of a
+    structure's atoms quench and how hard is a function of their names and the
+    pair parameters, and it does not change from one set of dye states to the
+    next.
+    """
+    return PETTerm(parameters, list(atoms["res_name"]), list(atoms["atom_name"]),
+                   np.ascontiguousarray(atoms["coord"]), dye_radius=dye_radius)
 import IMP.bff.quenching as maps
 from IMP.bff.representation import States
 
@@ -56,13 +66,13 @@ class TestRadiative:
 
     def test_it_is_one_over_tau0_everywhere(self):
         states = _states(16)
-        rates = RadiativeTerm(lifetime=4.0).rate_constants(states)
+        rates = np.asarray(RadiativeTerm(4.0).rate_constants(states))
         assert rates.shape == (16,)
         np.testing.assert_allclose(rates, 0.25)
 
     def test_a_nonpositive_lifetime_is_refused(self):
         with pytest.raises(ValueError, match="lifetime"):
-            RadiativeTerm(lifetime=0.0).rate_constants(_states(4))
+            RadiativeTerm(0.0).rate_constants(_states(4))
 
 
 class TestPET:
@@ -77,7 +87,7 @@ class TestPET:
         point of having terms at all.
         """
         params = reference_pet_parameters("AlexaFluor488", attenuation_length=1.5)
-        term = PETTerm(parameters=params, dye_radius=3.5)
+        term = _pet(atoms, params)
 
         ng, dg = 9, 2.0
         r0 = np.array([30.0, 20.0, 10.0])
@@ -101,25 +111,26 @@ class TestPET:
                     expect.append(grid[i, j, k] - 1.0 / tau0)
         states = States(points=np.column_stack([np.array(pts), np.ones(len(pts))]),
                         attachment_point=r0)
-        got = term.rate_constants(states, atoms)
+        got = np.asarray(term.rate_constants(states))
         np.testing.assert_allclose(got, np.array(expect), rtol=1e-9, atol=1e-12)
 
     def test_it_is_a_pair_property(self, atoms):
         """Scaling the pair parameters scales the rate."""
-        base = PETTerm(reference_pet_parameters("AlexaFluor488", attenuation_length=1.5))
-        half = PETTerm({c: p.scaled(0.5) for c, p in
-                        reference_pet_parameters("AlexaFluor488", attenuation_length=1.5).items()})
+        params = reference_pet_parameters("AlexaFluor488", attenuation_length=1.5)
+        base = _pet(atoms, params)
+        half = _pet(atoms, {c: p.scaled(0.5) for c, p in params.items()})
         s = _states(24)
-        np.testing.assert_allclose(half.rate_constants(s, atoms),
-                                   0.5 * base.rate_constants(s, atoms), rtol=1e-12)
+        np.testing.assert_allclose(np.asarray(half.rate_constants(s)),
+                                   0.5 * np.asarray(base.rate_constants(s)),
+                                   rtol=1e-12)
 
 
 class TestFRET:
 
     def test_r0_is_derived_from_the_pair_and_the_medium(self):
         d, a = find_dye("AlexaFluor 488"), find_dye("AlexaFluor 594")
-        term = FRETTerm(donor=d, acceptor=a, refractive_index=1.4)
-        water = FRETTerm(donor=d, acceptor=a, refractive_index=1.33)
+        term = FRETTerm(d, a, refractive_index=1.4)
+        water = FRETTerm(d, a, refractive_index=1.33)
         assert 40.0 < term.forster_radius < 70.0            # Angstrom
         assert water.forster_radius > term.forster_radius   # lower n, larger R0
         assert term.used_isotropic_kappa2
@@ -134,9 +145,9 @@ class TestFRET:
         d = find_dye("AlexaFluor 488")
         d.lifetime = 4.0
         a = find_dye("AlexaFluor 594")
-        term = FRETTerm(donor=d, acceptor=a)
+        term = FRETTerm(d, a)
         donor, acceptor = _states(32, 1), _states(48, 2)
-        got = term.rate_constants(donor, acceptor)
+        got = np.asarray(term.rate_constants(donor, acceptor))
         want = fret_rate_trace(
             np.ascontiguousarray(donor.positions),
             np.ascontiguousarray(acceptor.positions),
@@ -146,7 +157,7 @@ class TestFRET:
     def test_a_dye_without_a_lifetime_is_refused(self):
         d, a = find_dye("AlexaFluor 488"), find_dye("AlexaFluor 594")
         with pytest.raises(ValueError, match="lifetime"):
-            FRETTerm(donor=d, acceptor=a).rate_constants(_states(4), _states(4))
+            FRETTerm(d, a).rate_constants(_states(4), _states(4))
 
 
 class TestAdditivity:
@@ -154,19 +165,23 @@ class TestAdditivity:
     def test_rates_add(self, atoms):
         """Parallel channels add -- the property the field solver relies on."""
         states = _states(40)
-        radiative = RadiativeTerm(lifetime=4.0)
-        pet = PETTerm(reference_pet_parameters("AlexaFluor488", attenuation_length=1.5))
-        total = total_rate([radiative, pet], states, atoms)
+        radiative = RadiativeTerm(4.0)
+        pet = _pet(atoms, reference_pet_parameters("AlexaFluor488",
+                                                   attenuation_length=1.5))
+        total = np.asarray(total_rate([radiative, pet], states))
         np.testing.assert_allclose(
-            total, radiative.rate_constants(states) + pet.rate_constants(states, atoms),
+            total,
+            np.asarray(radiative.rate_constants(states))
+            + np.asarray(pet.rate_constants(states)),
             rtol=1e-12)
 
     def test_the_sum_is_at_least_the_radiative_floor(self, atoms):
         states = _states(40)
-        total = total_rate(
-            [RadiativeTerm(lifetime=4.0),
-             PETTerm(reference_pet_parameters("AlexaFluor488", attenuation_length=1.5))],
-            states, atoms)
+        total = np.asarray(total_rate(
+            [RadiativeTerm(4.0),
+             _pet(atoms, reference_pet_parameters("AlexaFluor488",
+                                                  attenuation_length=1.5))],
+            states))
         assert np.all(total >= 0.25 - 1e-12)
 
     def test_no_terms_is_an_error_not_a_zero(self):

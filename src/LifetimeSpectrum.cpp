@@ -6,6 +6,7 @@
  */
 #include <IMP/bff/LifetimeSpectrum.h>
 #include <IMP/exception.h>
+#include <cstdlib>
 #include <limits>
 #include <IMP/bff/internal/OutputView.h>
 
@@ -232,6 +233,25 @@ LifetimeSpectrum lifetime_spectrum_from_rates(const std::vector<double>& rates,
                                           << rates.size(), ValueException);
     }
     return LifetimeSpectrum(weights, rates, exact);
+}
+
+LifetimeSpectrum lifetime_spectrum_from_states(
+        const InteractionTerms& terms, const States& first,
+        const States& second, const std::vector<double>& weights, bool exact) {
+    const std::vector<double> k = total_rate(terms, first, second);
+    if (!weights.empty()) return lifetime_spectrum_from_rates(k, weights, exact);
+
+    // The first participant's own weights are the populations: an accessible
+    // volume's occupancy already is one, and a rotamer ensemble's are its
+    // Boltzmann weights.
+    double* points = nullptr;
+    int n_points = 0;
+    first.get_points(&points, &n_points);
+    std::vector<double> w;
+    w.reserve(static_cast<std::size_t>(n_points) / 4);
+    for (int i = 3; i < n_points; i += 4) w.push_back(points[i]);
+    std::free(points);
+    return lifetime_spectrum_from_rates(k, w, exact);
 }
 
 IMPBFF_END_NAMESPACE

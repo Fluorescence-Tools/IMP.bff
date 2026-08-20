@@ -23,6 +23,7 @@
 #define IMPBFF_LIFETIMESPECTRUM_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/InteractionTerms.h>
 
 #include <IMP/value_macros.h>
 #include <IMP/showable_macros.h>
@@ -136,6 +137,36 @@ IMP_VALUES(LifetimeSpectrum, LifetimeSpectrums);
 */
 IMPBFFEXPORT LifetimeSpectrum lifetime_spectrum_from_rates(
         const std::vector<double>& rates,
+        const std::vector<double>& weights = std::vector<double>(),
+        bool exact = true);
+
+//! The spectrum of a state ensemble under a set of interaction terms.
+/*!
+    One species per state -- per accessible-volume point, per rotamer, per
+    conformer -- carrying the summed rate of every channel acting on it. This is
+    the reduction that connects a representation and the photophysics to an
+    experiment-neutral answer, and it is representation-agnostic for the same
+    reason the terms are: it consumes states.
+
+    \warning This is the **static** limit. It is exact when each state holds its
+    rate for the whole excited-state lifetime, and wrong when the dye
+    reorganises fast enough to average over rates -- then the decay is not a sum
+    of exponentials at all and the population has to be propagated instead
+    (#IMP::bff::GridDiffusionSolver, or the Brownian walk). Pass `exact = false`
+    when using it outside that limit, so the spectrum says what it is.
+
+    \param[in] terms the interaction terms to sum
+    \param[in] first the dye whose states are being rated; its weights are the
+               populations unless `weights` overrides them
+    \param[in] second the second participant, for the 2-body terms
+    \param[in] weights population per state; the first participant's own
+               weights when empty, which is what an accessible volume's
+               occupancy already is
+    \param[in] exact see LifetimeSpectrum
+*/
+IMPBFFEXPORT LifetimeSpectrum lifetime_spectrum_from_states(
+        const InteractionTerms& terms, const States& first,
+        const States& second = IMP::bff::States(),
         const std::vector<double>& weights = std::vector<double>(),
         bool exact = true);
 
