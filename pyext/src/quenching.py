@@ -1492,7 +1492,7 @@ class QuenchedDonorDecay:
         Prefer this to :meth:`decay_histogram`. A spectrum carries no bin width
         and no time range, so whatever owns the instrument can convolve, bin and
         add noise on its own terms; a histogram has already chosen all three.
-        See :mod:`IMP.bff.observables` for the contract.
+        See ``include/IMP/bff/LifetimeSpectrum.h`` for the contract.
 
         Built from the *per-frame* total rate along the trajectory: each frame
         is a state the dye occupies, weighted equally because the walk visits
@@ -1507,7 +1507,7 @@ class QuenchedDonorDecay:
             trajectory has one state per frame -- often 10^5 -- and almost none
             are distinguishable.
         """
-        from IMP.bff.observables import lifetime_spectrum_from_rates
+        from IMP.bff import lifetime_spectrum_from_rates
 
         k = np.asarray(self.k_quench, dtype=np.float64).ravel()
         if k.size == 0:

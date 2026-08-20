@@ -33,6 +33,7 @@ References
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 from dataclasses import dataclass, field
@@ -1067,10 +1068,9 @@ def dock_minimize(
     if params.save_distributions and not stopped:
         try:
             import IMP.bff.representation.av as _av
-            import IMP.bff.observables as _distr
             _av.select_backend(params.av_backend)
             positions, dists, _ss = _read_positions(ensure_fps_json(fps_json_path, pdb_paths))
-            res = _distr.compute_distance_distributions(
+            res = _compute_distance_distributions(
                 out_pdb, positions, dists,
                 out_csv=os.path.join(output_dir, "distance_distributions.csv"))
             extra["distributions_csv"] = res.get("distributions_csv")
@@ -1366,6 +1366,83 @@ def _run_trials_parallel(args, n_workers, stop_check=None):
 # ---------------------------------------------------------------------------
 # Small filesystem helpers
 # ---------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------
+# P(R_DA) per pair -- was `IMP.bff.observables.compute_distance_distributions`
+#
+# Filed under the observables contract, but nothing else ever called it: this
+# module is its only consumer, through `save_distributions` below. It writes a
+# CSV, which the contract module explicitly is not for.
+# --------------------------------------------------------------------------
+def _compute_distance_distributions(
+    pdb_path: str,
+    positions: Dict,
+    distances: Dict,
+    out_csv: Optional[str] = None,
+    *,
+    rda_min: float = 1.0,
+    rda_max: float = 200.0,
+    n_bins: int = 100,
+) -> Dict:
+    """Return per-pair ``P(R_DA)`` distributions for the structure at ``pdb_path``.
+
+    Parameters
+    ----------
+    pdb_path : str
+        Structure (e.g. a docked PDB) on which to compute the AVs.
+    positions, distances : dict
+        The ``Positions`` / ``Distances`` sections of the fps.json.
+    out_csv : str, optional
+        Write a table with an ``R_DA`` column plus one probability column per
+        pair.
+
+    Returns
+    -------
+    dict
+        ``{"rda_axis": [...], "pairs": {name: {"p": [...], "mean": float}},
+        "distributions_csv": path}``.
+    """
+    import numpy as np
+
+    import IMP.bff.representation.av as _av
+    import IMP.bff.representation.distance as _dist
+
+    atoms = _av.load_structure_with_vdw(pdb_path)
+    avs = _av.compute_avs_for_structure(atoms, positions, pdb_path=pdb_path)
+
+    rda_axis = None
+    pairs: Dict[str, Dict] = {}
+    for name, d in distances.items():
+        av1 = avs.get(d.get("position1_name"))
+        av2 = avs.get(d.get("position2_name"))
+        if av1 is None or av2 is None or not av1.has_volume or not av2.has_volume:
+            continue
+        # histogram_rda returns (histogram, bin_edges)
+        p, edges = _dist.histogram_rda(
+            av1, av2, rda_min=rda_min, rda_max=rda_max, n_rda_bins=n_bins,
+            normalize=True)
+        centers = 0.5 * (np.asarray(edges[:-1]) + np.asarray(edges[1:]))
+        rda_axis = centers
+        p = np.asarray(p, dtype=float)
+        total = float(p.sum())
+        mean = float(np.sum(centers * p) / total) if total > 0 else float("nan")
+        pairs[name] = {"p": p.tolist(), "mean": mean}
+
+    if out_csv and pairs and rda_axis is not None:
+        names = list(pairs)
+        with open(out_csv, "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["R_DA"] + names)
+            for i, r in enumerate(rda_axis):
+                w.writerow([round(float(r), 2)]
+                           + [round(pairs[n]["p"][i], 6) for n in names])
+
+    return {
+        "rda_axis": rda_axis.tolist() if rda_axis is not None else [],
+        "pairs": pairs,
+        "distributions_csv": out_csv if (out_csv and pairs) else None,
+    }
 
 
 def _find_first(directory: str, suffixes: Tuple[str, ...]) -> Optional[str]:

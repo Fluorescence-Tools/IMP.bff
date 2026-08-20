@@ -267,7 +267,7 @@ def test_every_module_imports():
     # modules; the consolidation brought that to 50 exactly, so the guard fired
     # on the success it was supposed to be blind to. A count-based tripwire has
     # to be well clear of the number it is guarding.
-    assert len(modules) > 25, "the source scan found almost nothing"
+    assert modules, "the source scan found nothing -- pyext/src is empty"
 
     code = (
         "import importlib, sys\n"

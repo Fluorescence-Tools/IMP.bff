@@ -3,9 +3,12 @@
 The code is organised by **domain** -- ``dye``, ``label``, ``representation``,
 ``photophysics``, ``sampling``, ``scoring``, ``analysis``, ``observables``,
 ``io``, ``restraints`` -- and that organisation is what a reader should learn.
+A domain leaves this map when its last Python module does: the names it carried
+are then attributes of ``IMP.bff`` itself, resolved by SWIG rather than lazily
+here. ``observables`` was the first to go that way.
 A domain is a *name*, not necessarily a directory: most are one flat module,
-and the handful that are still packages earned it (see ``pyext/src/README.md``). ``IMP.bff.observables.LifetimeSpectrum``
-says where a name lives and what it is about; ``IMP.bff.LifetimeSpectrum`` is a
+and the handful that are still packages earned it (see ``pyext/src/README.md``). ``IMP.bff.representation.AccessibleVolume``
+says where a name lives and what it is about; ``IMP.bff.AccessibleVolume`` is a
 convenience over it.
 
 So the domains are the authored thing here (:data:`BY_DOMAIN`) and the flat map
@@ -104,15 +107,6 @@ BY_DOMAIN = {
         "strip_hierarchy": "IMP.bff.label",
         "strip_obstacles": "IMP.bff.label",
         "strip_pdb_lines": "IMP.bff.label",
-    },
-    # -- observables -- stage 4b -- the projection onto an experiment: (amplitude, rate) pairs
-    "observables": {
-        # IMP.bff.observables
-        "lifetime_spectrum_from_rates": "IMP.bff.observables",
-        "lifetime_spectrum_from_states": "IMP.bff.observables",
-        # IMP.bff.observables
-        "LifetimeSpectrum": "IMP.bff.observables",
-        "fret_efficiency_from_lifetimes": "IMP.bff.observables",
     },
     # -- photophysics -- interaction terms, rate fields, and the orientation factor
     "photophysics": {

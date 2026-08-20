@@ -14,11 +14,13 @@ different kinds of claim:
   ``exact`` flag is a checked claim rather than a docstring.
 """
 
+import textwrap
+
 import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.observables import (
+from IMP.bff import (
     LifetimeSpectrum,
     fret_efficiency_from_lifetimes,
     lifetime_spectrum_from_rates,
@@ -222,20 +224,42 @@ def test_a_moving_rate_breaks_the_static_limit_measurably():
 
 
 def test_no_convolution_anywhere_in_the_observables_package():
-    """The contract, checked as code rather than trusted as prose."""
+    """The contract, checked as code rather than trusted as prose.
+
+    The check used to glob ``pyext/src/observables/*.py`` -- a directory that
+    stopped existing when the package became one module, so it scanned nothing
+    and passed on an empty loop. The contract now lives in
+    ``pyext/IMP_bff.observables.i`` and its header, so those are what it reads.
+
+    Prose is exempt on purpose, and has to be: the header *states* the contract
+    by naming what it excludes ("folding an IRF into it belongs to whatever owns
+    the instrument"), and `decay()` documents itself as **unconvolved**. What
+    must not appear is a *call*.
+    """
     import ast
-    import inspect
+    import re
     from pathlib import Path
 
-    import IMP.bff.observables as obs
-
-    root = Path(__file__).resolve().parent.parent.parent / "pyext" / "src" / "observables"
+    root = Path(__file__).resolve().parents[2]
     banned = {"convolve", "fftconvolve", "irf", "pileup"}
-    for path in sorted(root.glob("*.py")):
-        tree = ast.parse(path.read_text())
+
+    # The Python surface: names and attributes, so docstrings do not count.
+    swig = (root / "pyext" / "IMP_bff.observables.i").read_text()
+    blocks = re.findall(r"%pythoncode\s*%\{(.*?)%\}", swig, re.S)
+    assert blocks, "no %pythoncode in IMP_bff.observables.i"
+    for block in blocks:
+        tree = ast.parse(textwrap.dedent(block))
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         names |= {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-        assert not (names & banned), (path.name, names & banned)
+        assert not (names & {b.lower() for b in banned}), names & banned
+
+    # The C++ side: comments stripped, then whole identifiers.
+    for name in ("include/LifetimeSpectrum.h", "src/LifetimeSpectrum.cpp"):
+        path = root / name
+        assert path.exists(), path
+        code = re.sub(r"//[^\n]*|/\*.*?\*/", " ", path.read_text(), flags=re.S).lower()
+        for word in banned:
+            assert not re.search(rf"\b{word}\b", code), (name, word)
 
 
 if __name__ == "__main__":
