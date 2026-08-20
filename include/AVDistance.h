@@ -108,6 +108,24 @@ IMPBFFEXPORT std::vector<double> distance_sample_statistics(
         double forster_radius = 52.0
 );
 
+//! Asymmetric chi-squared contribution of one distance restraint.
+/*!
+    \f$\chi^2 = (d_m - d_e)^2 / \sigma^2\f$, with \f$\sigma\f$ taken from
+    whichever side of the experimental value the model falls on. A non-positive
+    error contributes nothing rather than dividing by zero.
+*/
+IMPBFFEXPORT double chi2_score(double model_distance,
+                               double experimental_distance,
+                               double error_neg, double error_pos);
+
+//! Single-pair FRET efficiency \f$1/(1 + (r/R_0)^6)\f$.
+IMPBFFEXPORT double fret_efficiency(double distance,
+                                    double forster_radius = 52.0);
+
+//! The distance a single-pair FRET efficiency implies.
+IMPBFFEXPORT double distance_from_fret_efficiency(
+        double efficiency, double forster_radius = 52.0);
+
 //! Occupied voxels of a density as a weighted point cloud.
 /*!
     \param[in] density flat, nx*ny*nz

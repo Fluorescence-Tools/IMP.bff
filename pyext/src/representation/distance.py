@@ -554,33 +554,14 @@ def model_distance(
         raise ValueError(f"Unknown distance type: {distance_type}")
 
 
-def chi2_score(
-    model_distance: float,
-    experimental_distance: float,
-    error_neg: float,
-    error_pos: float,
-) -> float:
-    """Asymmetric chi-squared contribution for one distance restraint.
-
-    ``chi2 = (d_m - d_e)^2 / error^2`` with asymmetric errors.
-    """
-    delta = model_distance - experimental_distance
-    err = error_neg if delta < 0 else error_pos
-    if err <= 0:
-        return 0.0
-    return (delta / err) ** 2
-
-
-def fret_efficiency(distance: float, forster_radius: float = 52.0) -> float:
-    """Single-pair FRET efficiency."""
-    return 1.0 / (1.0 + (distance / forster_radius) ** 6.0)
-
-
-def distance_from_fret_efficiency(
-    efficiency: float, forster_radius: float = 52.0
-) -> float:
-    """Convert FRET efficiency back to distance."""
-    return forster_radius * (1.0 / efficiency - 1.0) ** (1.0 / 6.0)
+# ``chi2_score``, ``fret_efficiency`` and ``distance_from_fret_efficiency`` are
+# **C++** (``include/IMP/bff/AVDistance.h``). They are four lines of scalar
+# arithmetic each, which is exactly why they had drifted into three modules
+# before PRD-113 stage 4b; there is one of each now, and it is on the same side
+# of the boundary as the distances it scores.
+from IMP.bff import (  # noqa: F401
+    chi2_score, distance_from_fret_efficiency, fret_efficiency,
+)
 
 
 # ---------------------------------------------------------------------------

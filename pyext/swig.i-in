@@ -110,6 +110,9 @@ import numpy as np
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
+/* Chi-squared scoring of labelling data, with and without volumes. */
+%include "IMP_bff.labelingrestraints.i"
+
 /* The particle picture of a tethered dye. */
 %include "IMP_bff.dyediffusion.i"
 

@@ -205,4 +205,23 @@ void split_contact_volume(
 
 }
 
+double chi2_score(double model_distance, double experimental_distance,
+                  double error_neg, double error_pos) {
+    const double delta = model_distance - experimental_distance;
+    const double err = delta < 0.0 ? error_neg : error_pos;
+    if (err <= 0.0) return 0.0;
+    const double z = delta / err;
+    return z * z;
+}
+
+double fret_efficiency(double distance, double forster_radius) {
+    const double x = distance / forster_radius;
+    const double x3 = x * x * x;
+    return 1.0 / (1.0 + x3 * x3);
+}
+
+double distance_from_fret_efficiency(double efficiency, double forster_radius) {
+    return forster_radius * std::pow(1.0 / efficiency - 1.0, 1.0 / 6.0);
+}
+
 IMPBFF_END_NAMESPACE

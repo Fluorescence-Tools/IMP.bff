@@ -157,7 +157,7 @@ def test_the_correction_grows_the_distance_and_fades_with_range():
 
 
 def test_chi2_score_is_one_function_now():
-    assert dm.chi2_score is rd.chi2_score
+    assert dm.chi2_score is rd.chi2_score is IMP.bff.chi2_score
     assert dm.chi2_score(45.0, 40.0, 2.0, 5.0) == pytest.approx(1.0)
     assert dm.chi2_score(35.0, 40.0, 5.0, 2.0) == pytest.approx(1.0)
     assert dm.chi2_score(50.0, 50.0, 0.0, 0.0) == 0.0, "a zero error must not divide"
