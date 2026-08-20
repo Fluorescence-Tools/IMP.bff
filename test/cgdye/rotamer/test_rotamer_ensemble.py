@@ -150,8 +150,8 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     """R1 entries write, validate, read back; the docking filter drops them."""
     from IMP.bff.representation.rotamer import (
         distances_from_ensembles, rotamer_ensemble_payload, write_rotamer_fps)
-    import IMP.bff.io.fps as fps_schema
-    from IMP.bff.io.fps import fps_positions_for_docking, read_fps_json
+    import IMP.bff as fps_schema
+    from IMP.bff import fps_positions_for_docking, read_fps_json
 
     d, a = pair
     positions = {"d1": rotamer_ensemble_payload(d), "a1": rotamer_ensemble_payload(a)}
@@ -197,7 +197,7 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
 
 
 def test_r1_requires_a_library():
-    import IMP.bff.io.fps as fps_schema
+    import IMP.bff as fps_schema
     errors, _ = fps_schema.validate_position({"chain_identifier": "A", "residue_seq_number": 1,
                                               "atom_name": "CA", "simulation_type": "R1"}, "x")
     assert any("rotamer_library" in e for e in errors)

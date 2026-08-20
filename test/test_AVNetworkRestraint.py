@@ -113,7 +113,7 @@ class R1PositionsTests(unittest.TestCase):
     """fps.json rotamer-ensemble positions (R1, PRD-108) and the C++ scorer."""
 
     def test_r1_position_warns_and_the_docking_filter_removes_it(self):
-        import IMP.bff.io.fps as fio
+        import IMP.bff as fio
         payload = json.load(open(IMP.bff.get_example_path("structure/T4L/fret.fps.json")))
         positions, distances = payload["Positions"], payload["Distances"]
         first_pos = next(iter(positions))

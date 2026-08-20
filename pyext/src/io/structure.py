@@ -627,7 +627,7 @@ def read_rotamer_library_rmf(path):
 """Structure readers and writers: PDB, RMF, and coordinate comparison.
 
 Nothing here is about fluorescence. It sits in :mod:`IMP.bff.io` because it is
-serialisation, and it is a separate module from :mod:`IMP.bff.io.fps` because a
+serialisation, and it is a separate module from the fps.json reader (`include/IMP/bff/FPSIO.h`) because a
 labelling file and a coordinate file are different formats that change for
 different reasons -- they shared one module until PRD-113 stage 7, which is how
 ``fret/io.py`` came to be the thing that writes PDBs.

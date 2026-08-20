@@ -68,7 +68,6 @@ def __init__(self, points=None, density=None, grid_origin=None, grid_step=1.5,
 
 %include "IMP/bff/AVModel.h"
 
-%template(MapStringString) std::map<std::string, std::string>;
 
 %pythoncode %{
 def _av_flat(a):

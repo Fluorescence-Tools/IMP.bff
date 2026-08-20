@@ -1,5 +1,61 @@
 # Update Log
 
+## 2026-08-20 (evening) — `io/fps.py`: the format, defined in C++
+
+Gone (972 lines): the fps.json field tables, the JSON-Schema derivation, the
+validator, the reader, the writer, and both legacy C# FPS `.txt` readers.
+
+* `include/IMP/bff/FPSSchema.h` — `FPSField`, the three field tables,
+  `fps_json_schema()`, `validate_position`, `validate_distance`,
+  `fps_schema_validate`. Validation stays self-contained: no JSON-Schema library
+  is involved, and files are checked against these tables rather than against
+  another parser.
+* `include/IMP/bff/FPSIO.h` — `read_fps_json`, `write_fps_json`,
+  `fps_positions_for_docking`, the evaluator list, and the read-only
+  `read_old_lps_txt` / `read_old_distances_txt`.
+
+**Everything speaks JSON text across the boundary, and that is not laziness.**
+An fps.json position carries an open set of keys whose types differ per key and
+whose unknown members survive the round trip — that is a JSON object, and a
+`dict` is what Python calls one. Turning it into a struct in C++ would either
+drop the unknown keys or reinvent the object; the shim in
+`pyext/IMP_bff.fps.i` is one `json.loads`/`json.dumps` per crossing.
+
+`read_evaluators_json`'s `factory` stays Python, for the reason
+`radial_diffusion_map` did: it is a Python callable, and this module defines the
+*format* — what an evaluator *is* belongs to the application that passes it.
+
+### The gate
+
+Every shipped fps.json in the repo (T4L, mGBP2, hGBP1, TG2, and both templates)
+read, validated position-by-position and distance-by-distance, written back and
+re-read; the derived JSON-Schema document; eleven hand-made validator edge cases
+(wrong types, unknown enum, `bool` where a number is expected, missing XYZ
+coordinate, blank R1 library, AV3 with a zero radius, unknown key); dangling
+score-set and position references; the evaluator list with and without a
+factory, and against a missing and an unparseable file. **All identical**, error
+strings included.
+
+One difference, and it is the table's own: `SCORE_SET_FIELDS["distances"]` had
+**no** `dialects` key at all — the Python `dict(...)` call omitted it where every
+other field has one — and the C++ table gives it the empty tuple its absence
+meant. `_field_to_property` already read it as `spec.get("dialects", ())`, so the
+derived schema is unchanged and the drift test still passes. Nothing in the stack
+reads the key.
+
+### Also
+
+`%template(MapStringString)` moved from `IMP_bff.avmodel.i` to
+`IMP_bff.types.i`. SWIG resolves a template at the point of use, so the first
+`.i` that needs a `std::map<std::string, std::string>` must be *after* the
+instantiation — and `IMP_bff.fps.i` is before `avmodel.i`. The symptom is a bare
+`SwigPyObject` where a mapping was expected, not a build error.
+
+`pyext/src`: **11,698 lines in 14 files**. Suite green (806; four fewer than
+before because `test_public_api_names` is parametrised over `api.BY_DOMAIN` and
+the four fps names left it for the flat surface).
+
+
 ## 2026-08-20 (still later) — `restraints/network.py`, and two copies of one restraint
 
 Gone (682 lines). What was in it:

@@ -50,12 +50,6 @@ BY_DOMAIN = {
         # IMP.bff.io.structure
         "read_dcd": "IMP.bff.io.structure",
         "read_trajectory": "IMP.bff.io.structure",
-        # IMP.bff.io.fps
-        "fps_positions_for_docking": "IMP.bff.io.fps",
-        "read_fps_json": "IMP.bff.io.fps",
-        "write_fps_json": "IMP.bff.io.fps",
-        # IMP.bff.io.fps
-        "fps_schema_validate": "IMP.bff.io.fps",
         # IMP.bff.io.cif
         # IMP.bff.io.structure
         "read_rotamer_library_rmf": "IMP.bff.io.structure",

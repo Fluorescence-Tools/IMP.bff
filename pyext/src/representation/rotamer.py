@@ -14,7 +14,7 @@ import re
 import numpy as np
 
 from IMP.bff import forster_radius_from_spectra
-from IMP.bff.io.fps import read_fps_json
+from IMP.bff import read_fps_json
 from IMP.bff.io.structure import read_rotamer_library_rmf
 from IMP.bff import fret_pair_efficiencies, fret_pair_geometry
 from IMP.bff import States
@@ -411,7 +411,7 @@ def write_rotamer_fps(
     the new ones added (same names overwrite). The payload is validated
     against the fps.json schema before writing.
     """
-    from IMP.bff.io.fps import read_fps_json, write_fps_json
+    from IMP.bff import read_fps_json, write_fps_json
 
     all_positions: dict[str, Any] = {}
     all_distances: dict[str, Any] = {}
@@ -1279,7 +1279,7 @@ def rotamer_ensembles_from_fps(
     for AV-only files. Positions without a library are skipped. ``kwargs`` go
     to :meth:`RotamerEnsemble.from_site`.
     """
-    from IMP.bff.io.fps import read_fps_json
+    from IMP.bff import read_fps_json
     # (was: from .fps import ...) -- now in this module
 
     positions, _distances, _score_sets, _extra = read_fps_json(fps_json)

@@ -203,6 +203,13 @@
 %apply(long long* IN_ARRAY1, int DIM1) {(long long *input, int n_input)}
 %apply(unsigned long long* IN_ARRAY1, int DIM1) {(unsigned long long *input, int n_input)}
 
+// `std::map<std::string, std::string>` -- an AV's `params`, a distance-type
+// table, anything keyed and valued by name. Instantiated here rather than in
+// the first `.i` that happens to need it, because SWIG resolves a template at
+// the point of use and a second consumer earlier in the include order gets a
+// bare `SwigPyObject` instead of a mapping.
+%template(MapStringString) std::map<std::string, std::string>;
+
 // Output arrays views
 /*---------------------*/
 // floating points

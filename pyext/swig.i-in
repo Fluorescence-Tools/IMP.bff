@@ -50,6 +50,9 @@ _LAZY = {}
    solvent-accessible surface that says how buried a quencher is. */
 %include "IMP_bff.quenching.i"
 
+/* fps.json: the definition, the reader, the writer. */
+%include "IMP_bff.fps.i"
+
 /* The dye as a species: its spectra, and the Förster radius they give. */
 %include "IMP_bff.dye.i"
 

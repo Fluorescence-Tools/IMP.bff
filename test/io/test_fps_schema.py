@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import IMP.bff
-import IMP.bff.io.fps as fps_schema
+import IMP.bff as fps_schema
 
 REPO = Path(__file__).resolve().parents[2]
 

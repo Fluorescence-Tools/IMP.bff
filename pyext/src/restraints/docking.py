@@ -20,7 +20,7 @@ with a real IMP model:
   annealing), which natively writes RMF trajectories and best-scoring PDBs;
 * ``ConjugateGradients`` provides local refinement.
 
-The single input format is ``fps.json`` (see :mod:`IMP.bff.io.fps` for the
+The single input format is ``fps.json`` (see the fps.json reader (`include/IMP/bff/FPSIO.h`) for the
 authored definition and :mod:`.io` for the reader). ``IMP.bff`` parses it
 natively for scoring, so the path is passed straight through.
 

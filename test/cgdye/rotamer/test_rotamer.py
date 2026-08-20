@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from click.testing import CliRunner
-import IMP.bff.io.fps as fps
+import IMP.bff as fps
 from IMP.bff.representation.rotamer import read_rotamer_fps, rotamer_fret_from_fps
 from IMP.bff.representation.rotamer import RotamerFRET
 from IMP.bff.representation.rotamer import load_protein_frames, load_rotamer_library
