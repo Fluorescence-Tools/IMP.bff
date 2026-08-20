@@ -31,7 +31,7 @@ def _pet(atoms, parameters, dye_radius=3.5):
     """
     return PETTerm(parameters, list(atoms["res_name"]), list(atoms["atom_name"]),
                    np.ascontiguousarray(atoms["coord"]), dye_radius=dye_radius)
-import IMP.bff.quenching as maps
+import IMP.bff as maps
 from IMP.bff.representation import States
 
 
@@ -134,7 +134,7 @@ class TestFRET:
         assert term.used_isotropic_kappa2
 
     def test_it_reproduces_the_trace_kernel(self):
-        from IMP.bff.quenching import fret_rate_trace
+        from IMP.bff import fret_rate_trace
         # `find_dye` returns a copy out of the cached library, so setting a
         # lifetime on it is local to this test. It was `dataclasses.replace`
         # over a frozen dataclass for the same reason, and before that an

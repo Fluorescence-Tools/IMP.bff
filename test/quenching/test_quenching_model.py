@@ -9,16 +9,16 @@ import numpy as np
 import IMP
 import IMP.test
 
-import IMP.bff.quenching as sites
-from IMP.bff.quenching import grid_center_index, quenching_rate_grid
-from IMP.bff.quenching import (
+import IMP.bff as sites
+from IMP.bff import grid_center_index, quenching_rate_grid
+from IMP.bff import (
     DyeDiffusionSimulation,
     QuenchedDonorDecay,
-    _resolve_parallel,
-    _trajectory_seeds,
+    resolve_trajectory_count,
+    trajectory_seeds,
 )
 from IMP.bff import ResidueQuenching
-from IMP.bff.quenching import amino_acid_quenching_defaults
+from IMP.bff import amino_acid_quenching_defaults
 
 
 ATOM_DTYPE = [
@@ -125,22 +125,25 @@ class ResidueSiteTests(IMP.test.TestCase):
 class TrajectorySeedTests(IMP.test.TestCase):
 
     def test_a_base_seed_gives_distinct_reproducible_seeds(self):
-        first = _trajectory_seeds(11, 4)
-        self.assertEqual(first, _trajectory_seeds(11, 4))
+        first = list(trajectory_seeds(11, 4))
+        self.assertEqual(first, list(trajectory_seeds(11, 4)))
         self.assertEqual(len(set(first)), 4)
 
     def test_no_seed_gives_fresh_ones_each_time(self):
-        self.assertNotEqual(_trajectory_seeds(None, 4), _trajectory_seeds(None, 4))
+        # A negative seed is "draw freely" -- the C++ spelling of ``None``.
+        self.assertNotEqual(list(trajectory_seeds(-1, 4)),
+                            list(trajectory_seeds(-1, 4)))
 
     def test_no_seed_and_one_trajectory_stays_unseeded(self):
-        self.assertEqual(_trajectory_seeds(None, 1), [None])
+        self.assertEqual(list(trajectory_seeds(-1, 1)), [-1])
 
     def test_the_trajectory_count_is_capped(self):
-        from IMP.bff.quenching import MAX_PARALLEL_TRAJECTORIES
-        self.assertEqual(_resolve_parallel(100), MAX_PARALLEL_TRAJECTORIES)
-        self.assertEqual(_resolve_parallel(2), 2)
-        self.assertGreaterEqual(_resolve_parallel(-1), 1)
-        self.assertEqual(_resolve_parallel(0), 1)
+        from IMP.bff import MAX_PARALLEL_TRAJECTORIES
+        self.assertEqual(resolve_trajectory_count(100),
+                         MAX_PARALLEL_TRAJECTORIES)
+        self.assertEqual(resolve_trajectory_count(2), 2)
+        self.assertGreaterEqual(resolve_trajectory_count(-1), 1)
+        self.assertEqual(resolve_trajectory_count(0), 1)
 
 
 class DyeDiffusionSimulationTests(IMP.test.TestCase):
@@ -314,8 +317,10 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
     def test_the_photon_seed_differs_from_the_walk_seed(self):
         """Or the photon draws replay the trajectory they are scored against."""
         model = self.model(random_seed=11)
-        self.assertNotEqual(model._photon_seed(), 11)
-        self.assertIsNone(self.model(random_seed=None)._photon_seed())
+        self.assertNotEqual(model.get_photon_seed(), 11)
+        # -1 is the C++ spelling of "draw freely": an unseeded model must not
+        # derive a seed from the one it does not have.
+        self.assertEqual(self.model(random_seed=None).get_photon_seed(), -1)
 
     def test_sites_are_cached_across_uses(self):
         model = self.model()

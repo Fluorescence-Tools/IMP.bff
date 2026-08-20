@@ -23,7 +23,7 @@ import IMP.test
 
 # quenching is one module now, so its parts are named directly rather than
 # through the submodules the six-file subpackage used to have.
-import IMP.bff.quenching as _q
+import IMP.bff as _q
 import IMP.bff as diffusion
 
 

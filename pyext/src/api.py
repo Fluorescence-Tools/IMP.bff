@@ -85,32 +85,6 @@ BY_DOMAIN = {
         "strip_hierarchy": "IMP.bff.label",
         "strip_obstacles": "IMP.bff.label",
     },
-    # -- quenching -- the PET model, assembled for one labelling site
-    "quenching": {
-        # IMP.bff.quenching
-        "solvent_accessible_surface": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        "DynamicAccessibleVolume": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        "fret_rate_pair_trace": "IMP.bff.quenching",
-        "fret_rate_trace": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        "av_contact_mask": "IMP.bff.quenching",
-        "grid_center_index": "IMP.bff.quenching",
-        "quenching_rate_grid": "IMP.bff.quenching",
-        "slow_factor_grid": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        "diffusion_coefficient_map": "IMP.bff.quenching",
-        "fret_rate_map": "IMP.bff.quenching",
-        "quenching_rate_map": "IMP.bff.quenching",
-        "radial_diffusion_map": "IMP.bff.quenching",
-        "slow_diffusion_near_atoms": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        "DyeDiffusionSimulation": "IMP.bff.quenching",
-        "QuenchedDonorDecay": "IMP.bff.quenching",
-        # IMP.bff.quenching
-        # IMP.bff.quenching
-    },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {
         # IMP.bff.representation.rotamer

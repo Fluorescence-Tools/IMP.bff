@@ -40,8 +40,8 @@ import IMP
 import IMP.atom
 import IMP.bff
 import IMP.core
-from IMP.bff.quenching import maps
-from IMP.bff.sampling.smoluchowski import (
+import IMP.bff as maps
+from IMP.bff import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,
@@ -85,7 +85,7 @@ N_TIME = 64
 
 
 def load_atoms(pdb_path):
-    """The obstacle atoms, in the field layout `IMP.bff.quenching` reads."""
+    """The obstacle atoms, in the field layout the quenching model reads."""
     model = IMP.Model()
     hierarchy = IMP.atom.read_pdb(
         pdb_path, model, IMP.atom.NonWaterNonHydrogenPDBSelector())
@@ -108,19 +108,13 @@ def load_atoms(pdb_path):
 
 
 def quencher_table(kQ_scale: float, rC: float):
-    """Per-atom `(kQ, rC)`, keyed the way `atomic_quenching_parameters` wants.
+    """`{comp_id: PETParameters}`, the way `atomic_quenching_parameters` wants.
 
     Built from the same reference chemistry the contact-sphere model uses, so
     the two formulations are calibrated against comparable numbers.
     """
-    table = {}
-    for residue, reference in IMP.bff.PET_QUENCHING_REFERENCE.items():
-        rate = float(reference["kQ"]) * kQ_scale
-        table[residue] = {
-            atom: (rate, rC)
-            for atom in IMP.bff.QUENCHER_ATOMS[residue]
-        }
-    return table
+    return IMP.bff.reference_pet_parameters(
+        rate_scale=kQ_scale, attenuation_length=rC)
 
 
 class Site:
@@ -210,7 +204,8 @@ class Site:
             slow_factor=slow_factor,
         )
         kQ, rC_atoms = maps.atomic_quenching_parameters(
-            self.atoms, quencher_table(kQ_scale, rC))
+            self.atoms["res_name"], self.atoms["atom_name"],
+            quencher_table(kQ_scale, rC))
         rate = maps.quenching_rate_map(
             self.density, self.x0, self.dg, self.xyz, kQ, rC_atoms,
             tau0=TAU0, dye_radius=3.5,

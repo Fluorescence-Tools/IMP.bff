@@ -72,6 +72,23 @@ IMPBFFEXPORT std::vector<double> quenching_rate_per_frame(
         const std::vector<double>& k_quench
 );
 
+//! The default number of unit-sphere samples per atom.
+extern IMPBFFEXPORT const int DEFAULT_SPHERE_POINTS;
+
+//! Accessible surface area of the selected atoms, with the default sampling.
+/*!
+    solvent_accessible_surface_area() with sphere_points(DEFAULT_SPHERE_POINTS)
+    when \p points is empty -- which is how every caller wants it.
+*/
+IMPBFFEXPORT std::vector<double> solvent_accessible_surface(
+        const std::vector<double>& xyz,
+        const std::vector<double>& vdw,
+        const std::vector<int>& probe_atom_indices,
+        const std::vector<double>& points = std::vector<double>(),
+        double probe = 1.0,
+        double radius = 2.5
+);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_SOLVENTACCESSIBLESURFACE_H

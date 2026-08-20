@@ -23,8 +23,8 @@ import time
 import numpy as np
 import pytest
 
-from IMP.bff.quenching import QuenchedDonorDecay
-from IMP.bff.quenching import amino_acid_quenching_defaults
+from IMP.bff import QuenchedDonorDecay
+from IMP.bff import amino_acid_quenching_defaults
 
 ATOM_DTYPE = [
     ("chain", "U4"), ("res_id", "i8"), ("res_name", "U4"),
@@ -58,8 +58,8 @@ def _atoms():
     return a
 
 
-def _model(**kw):
-    av = _FakeAV(_sphere(), 1.0, np.zeros(3))
+def _model(av=None, **kw):
+    av = _FakeAV(_sphere(), 1.0, np.zeros(3)) if av is None else av
     options = dict(
         tau0=4.0, quenching_table=amino_acid_quenching_defaults(),
         critical_distance=7.0, slow_radius=10.0,
@@ -92,16 +92,16 @@ def test_fused_reports_the_statistics_the_trajectory_would_have_given():
     fast = _model()
     fast.photons_fused()
 
-    assert fast._fused_stats["n_frames"] == walk.n_frames
+    assert fast.n_frames == walk.n_frames
     # Exactly, because the fused kernel holds the rate trace as float32 too.
     # It did not at first, and the mean came out 2.6e-8 off -- harmless in
     # itself, but it meant the two paths could in principle disagree about a
     # photon. Matching `sample_grid`'s float32 removed that and halved the
     # memory the photon race walks, which is the bottleneck at long
     # trajectories: two reasons pointing the same way.
-    assert fast._fused_stats["mean_k_quench"] == pytest.approx(
-        float(walk.k_quench.mean()), rel=1e-12)
-    assert fast._fused_stats["collision_fraction"] == pytest.approx(
+    assert fast.mean_k_quench == pytest.approx(
+        float(np.float32(walk.k_quench).mean()), rel=1e-12)
+    assert fast.collision_fraction == pytest.approx(
         walk.collision_fraction, rel=1e-12)
     assert fast.diffusion.n_accepted == walk.n_accepted
     assert fast.diffusion.n_rejected == walk.n_rejected
@@ -158,10 +158,10 @@ def test_the_quantum_yield_and_lifetime_come_out_the_same():
 
 
 def test_an_empty_volume_yields_no_photons_either_way():
+    """No accessible voxel means no walk, and a walk that never started emits
+    nothing -- rather than a trace of zeros the caller would histogram."""
     empty = np.zeros((21, 21, 21), dtype=np.uint8)
-    m = _model()
-    m.diffusion.density = empty
-    m._quenching_rate_map = np.zeros((21, 21, 21))
+    m = _model(av=_FakeAV(empty, 1.0, np.zeros(3)))
     delays, emitted = m.photons_fused()
     assert delays.size == 0 and emitted.size == 0
 
@@ -209,11 +209,13 @@ def test_fused_does_not_run_the_walk_twice():
     """``self.diffusion`` runs the split walk on first access. Reading it inside
     the fused path made it do both, and only a benchmark caught that."""
     m = _model()
-    assert m._diffusion is None
+    assert not m.has_walk
     m.photons_fused()
-    # a simulation object exists, but it was never asked to produce a trajectory
-    assert m._diffusion is not None
-    assert m._diffusion.trajectory is None
+    # the walk is recorded -- the counts and the mean rate came back -- but it
+    # was never asked to produce a trajectory
+    assert m.has_walk
+    assert m.n_frames > 0
+    assert m.diffusion.trajectory is None
 
 
 if __name__ == "__main__":

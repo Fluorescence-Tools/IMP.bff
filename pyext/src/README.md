@@ -18,7 +18,8 @@ Every other IMP module has one of two shapes:
 | `isd` | 5,407 | 13 | 0 | 7,387 |
 | `pmi` (the most Python-heavy in IMP) | 23,394 | 26 | 5 | 530 |
 | `bff`, 2026-08-18 | ~26,900 | 50 | 6 | ~6,000 |
-| **`bff` (here), 2026-08-20** | **19,936** | **22** | **4** | **43,068** |
+| `bff`, 2026-08-20 (morning) | 19,936 | 22 | 4 | 43,068 |
+| **`bff` (here), 2026-08-20** | **13,355** | **16** | **4** | **49,037** |
 
 **C++-carried** — `atom`, `core`, `em`, `isd`: Python is a 1–13 file shim over
 7–13k lines of C++. **Python-carried** — `pmi`: 26 files and five
@@ -39,8 +40,9 @@ counted:
 
 * **Something binds its submodules by path.** Of the 99 dotted `IMP.bff.*`
   names referenced across `chisurf`, `imp-tricks`, `quest` and `ucfret`, only
-  19 still resolve — and they are concentrated in `quenching`, `restraints` and
-  `cgdye`. Those stayed packages.
+  19 still resolved — and they were concentrated in `quenching`, `restraints`
+  and `cgdye`. Those stayed packages. `quenching` has since gone to C++
+  entirely, so its consumers import `IMP.bff` flat.
 * **Size.** `representation` is 4,900 lines and `io` is 3,800; one module each
   would be larger than anything in IMP (`pmi/macros.py`, at 2,803, is the
   biggest). They stayed packages holding a handful of substantial modules.
@@ -97,15 +99,15 @@ question from stage 2's "is this configuration allowed".
 
 ## What is here now
 
-* **Stages**: `representation/` (`av.py`, `rotamer.py`, `distance.py`,
-  `pathmap.py`), `scoring.py`, `sampling.py`
-* **Across the stages**: `label.py`, `photophysics.py`
+* **Stages**: `representation/` (`rotamer.py`), `scoring.py`
+* **Across the stages**: `label.py`
 * **Formats and data**: `io/` (`cif.py`, `fps.py`, `structure.py`),
   `restraints/` (`docking.py`, `network.py`)
 * **Assembled models**, applications of the stages rather than stages
-  themselves: `quenching/` (the PET model for one site), `cgdye/` (explicit
-  all-atom dye MD, off the domain layout — nothing in the package imports it at
-  module scope)
+  themselves: `cgdye/` (explicit all-atom dye MD, off the domain layout —
+  nothing in the package imports it at module scope). The PET model for one
+  site left on 2026-08-20: `include/IMP/bff/QuenchingModel.h` carries both
+  pictures of it, and `pyext/IMP_bff.quenching*.i` the marshalling.
 * `api.py` — the public surface. `BY_DOMAIN` is authored; `EXPORTS` is derived.
 
 ## What holds it together

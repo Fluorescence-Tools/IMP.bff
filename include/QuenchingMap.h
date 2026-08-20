@@ -99,6 +99,89 @@ IMPBFFEXPORT void fret_map(
         double** out_view, int* n_out_view
 );
 
+//! Voxel-centre offsets from the grid anchor, in Angstrom.
+/*!
+    \f$(i - (ng-1)/2)\,dg\f$ with the **integer** centre offset, the same one
+    grid_center_index() uses, so a map built here indexes the way the Brownian
+    walk samples it.
+*/
+IMPBFFEXPORT std::vector<double> grid_axis(int ng, double dg);
+
+//! The mobility field: a base coefficient, slowed by nearby atoms.
+/*!
+    \param[in] density binary occupancy of the accessible volume, flat ng^3
+    \param[in] r0 the grid anchor
+    \param[in] dg voxel edge, A
+    \param[in] atoms_xyz obstacle coordinates, flat
+    \param[in] free_diffusion the unhindered dye diffusion coefficient, A^2/ns,
+               used wherever \p base is not given
+    \param[in] min_distance contact distance, roughly dye radius + 2 vdW
+    \param[in] slow_factor factor applied once per contacting atom, in [0, 1]
+    \param[in] base an optional per-voxel base coefficient replacing the
+               constant \p free_diffusion -- a radial profile, say. Length 0
+               takes the constant.
+*/
+IMPBFFEXPORT void diffusion_coefficient_map(
+        const std::vector<double>& density,
+        const std::vector<double>& r0,
+        double dg,
+        const std::vector<double>& atoms_xyz,
+        double free_diffusion,
+        double min_distance,
+        double slow_factor,
+        const std::vector<double>& base,
+        double** out_view, int* n_out_view);
+
+//! Total decay rate per voxel: intrinsic plus exponential PET.
+/*!
+    \f$k(r) = 1/\tau_0 + \sum_a k_{Q,a}\,e^{-(|r - r_a| - r_{dye})/r_{C,a}}\f$
+
+    The distance is measured from the dye **surface**. Unlike the contact-sphere
+    law in quenching_rate_grid() there is no cut-off: a distant atom contributes
+    exponentially little rather than nothing. Voxels outside the accessible
+    volume stay at zero -- **not** at \f$1/\tau_0\f$; the solver reads this as
+    the rate field on a domain masked by the same occupancy, so an unreachable
+    voxel carries no rate at all.
+
+    \param[in] tau0 unquenched lifetime, ns; non-positive drops the floor
+*/
+IMPBFFEXPORT void quenching_rate_map(
+        const std::vector<double>& density,
+        const std::vector<double>& r0,
+        double dg,
+        const std::vector<double>& atoms_xyz,
+        const std::vector<double>& kQ,
+        const std::vector<double>& rC,
+        double tau0,
+        double dye_radius,
+        double** out_view, int* n_out_view);
+
+//! An effective FRET rate for every donor voxel, from the acceptor cloud.
+/*!
+    A fixed donor position does not have *a* FRET rate: it has a distribution of
+    them, one per accessible acceptor position. This approximates that sum by a
+    single exponential whose rate is the reciprocal of the **mean transfer
+    time** -- the *harmonic* mean, dominated by the slow, distant acceptor
+    positions. fret_rate_trace() takes the arithmetic mean instead, because it
+    models a fast-exchanging acceptor where the *rates* average.
+
+    \param[in] kf the donor's radiative rate, \f$1/\tau_0\f$
+    \param[in] acceptor_step stride over the acceptor grid; the cost is the
+               product of the two grids' sizes
+    \throw ValueException for a non-positive \p kf
+*/
+IMPBFFEXPORT void fret_rate_map(
+        const std::vector<double>& density_donor,
+        const std::vector<double>& density_acceptor,
+        const std::vector<double>& r0_donor,
+        const std::vector<double>& r0_acceptor,
+        double dg_donor,
+        double dg_acceptor,
+        double forster_radius,
+        double kf,
+        int acceptor_step,
+        double** out_view, int* n_out_view);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_QUENCHINGMAP_H

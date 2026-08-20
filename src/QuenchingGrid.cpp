@@ -5,10 +5,13 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/QuenchingGrid.h>
+
+#include <IMP/bff/AVDistance.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -100,6 +103,43 @@ void stamp_spheres(const std::vector<double>& density, int ng,
         const std::vector<double>& values, int combine, double** out_view, int* n_out_view) {
     internal::copy_to_view(stamp_spheres_impl(density, ng, radius, rs, r0, dg, values, combine),
                            out_view, n_out_view);
+}
+
+void slow_factor_grid(const std::vector<double>& density, int ng, double dg,
+                      const std::vector<double>& slow_radius,
+                      const std::vector<double>& rs,
+                      const std::vector<double>& r0,
+                      const std::vector<double>& slow_fact,
+                      double** out_view, int* n_out_view) {
+    stamp_spheres(density, ng, slow_radius, rs, r0, dg, slow_fact,
+                  GRID_COMBINE_MULTIPLY, out_view, n_out_view);
+}
+
+void quenching_rate_grid(const std::vector<double>& density, int ng, double dg,
+                         const std::vector<double>& radius,
+                         const std::vector<double>& rs,
+                         const std::vector<double>& r0,
+                         const std::vector<double>& values,
+                         double** out_view, int* n_out_view) {
+    stamp_spheres(density, ng, radius, rs, r0, dg, values, GRID_COMBINE_ADD,
+                  out_view, n_out_view);
+}
+
+void av_contact_mask(const std::vector<double>& density, int ng, double dg,
+                     const std::vector<double>& slow_radius,
+                     const std::vector<double>& rs,
+                     const std::vector<double>& r0,
+                     int** out_view_i, int* n_out_view_i) {
+    int* labels = nullptr;
+    int n_labels = 0;
+    split_contact_volume(density, ng, dg, slow_radius, rs, r0, &labels,
+                         &n_labels);
+    int* out = internal::new_int_view(n_labels, out_view_i, n_out_view_i);
+    if (out == nullptr) { std::free(labels); return; }
+    for (int i = 0; i < n_labels; ++i) {
+        out[i] = labels[i] == AV_VOXEL_CONTACT ? 1 : 0;
+    }
+    std::free(labels);
 }
 
 IMPBFF_END_NAMESPACE

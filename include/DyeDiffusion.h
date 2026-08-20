@@ -47,6 +47,26 @@ inline int grid_center_index(int ng) { return (ng - 1) / 2; }
 */
 IMPBFFEXPORT int default_trajectory_count();
 
+//! The cap default_trajectory_count() and resolve_trajectory_count() obey.
+extern IMPBFFEXPORT const int MAX_PARALLEL_TRAJECTORIES;
+
+//! How many walks to run for a request of \p requested.
+/*! Negative asks for the default; anything else is clamped to
+    [1, MAX_PARALLEL_TRAJECTORIES]. */
+IMPBFFEXPORT int resolve_trajectory_count(int requested);
+
+//! One seed per trajectory, derived from a base seed or drawn freshly.
+/*!
+    Derived seeds step by a large prime rather than by one, so trajectories from
+    a single base do not share the low-order pattern `base + i` would give them.
+
+    \param[in] random_seed negative draws freshly, and a single trajectory then
+               gets -1 -- "draw freely" -- rather than a seed of its own
+    \param[in] n_trajectories how many seeds are wanted
+*/
+IMPBFFEXPORT std::vector<int> trajectory_seeds(int random_seed,
+                                               int n_trajectories);
+
 //! A dye's Brownian walk in its accessible volume, and the field it samples.
 /*!
     \param density binary occupancy of the accessible volume, flat `ng^3`
@@ -154,6 +174,10 @@ public:
                      double** out_view, int* n_out_view) const;
 
     //! The quenching rate the dye experiences, frame by frame, 1/ns.
+    //! The quenching rate the dye sees, frame by frame, 1/ns.
+    /*! Rounded through `float`: the fused kernel holds its own trace at that
+        width, so the two paths see bit-identical rates. See the note in
+        get_k_quench()'s body. */
     void get_k_quench(double** out_view, int* n_out_view) const;
 
     //! The fraction of frames spent in contact with a quencher.

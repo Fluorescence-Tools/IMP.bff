@@ -5,7 +5,10 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/FRETRateTrace.h>
+#include <IMP/bff/OrientationFactor.h>
 #include <IMP/bff/internal/OutputView.h>
+
+#include <IMP/exception.h>
 
 #include <cmath>
 
@@ -57,6 +60,94 @@ void fret_rate_pair_trace_kernel(
         if (r2 < r_min2) r2 = r_min2;
         rates[f] = inv_tau0 * R0_6 / (r2 * r2 * r2);
     }
+}
+
+const double MAX_KAPPA2 = 4.0;
+
+double kappa2_scale(double kappa2) {
+    const double value = kappa2;
+    // `>=` and `<=` negated rather than `<`/`>`, so NaN fails both: a NaN from a
+    // failed orientation calculation must raise, not be answered with 2/3.
+    if (!(value >= 0.0) || !(value <= MAX_KAPPA2)) {
+        IMP_THROW("kappa2 must be in [0, " << MAX_KAPPA2
+                          << "] (0 = perpendicular dipoles, 4 = collinear); got "
+                          << kappa2,
+                  ValueException);
+    }
+    return value / kappa2_isotropic();
+}
+
+void fret_rate_trace(const std::vector<double>& trajectory,
+                     const std::vector<double>& acceptor_points, double R0,
+                     double tau0, double r_min, int max_acceptor_points,
+                     double kappa2, double** out_view, int* n_out_view) {
+    const std::size_t n_points = acceptor_points.size() / 3;
+    if (n_points == 0) {
+        IMP_THROW("Acceptor accessible volume is empty; cannot compute FRET "
+                  "rates.",
+                  ValueException);
+    }
+    if (!(tau0 > 0.0)) {
+        IMP_THROW("tau0 must be positive to derive a FRET rate, not " << tau0,
+                  ValueException);
+    }
+    // The scale is validated before any striding, so a bad kappa2 raises
+    // whether or not the cloud needed thinning.
+    const double scale = kappa2_scale(kappa2);
+
+    const std::vector<double>* points = &acceptor_points;
+    std::vector<double> strided;
+    if (max_acceptor_points > 0 &&
+        n_points > static_cast<std::size_t>(max_acceptor_points)) {
+        const std::size_t stride =
+                (n_points + max_acceptor_points - 1) / max_acceptor_points;
+        strided.reserve(3 * (n_points / stride + 1));
+        for (std::size_t i = 0; i < n_points; i += stride) {
+            strided.push_back(acceptor_points[3 * i + 0]);
+            strided.push_back(acceptor_points[3 * i + 1]);
+            strided.push_back(acceptor_points[3 * i + 2]);
+        }
+        points = &strided;
+    }
+    const double floor_r = r_min > 1e-6 ? r_min : 1e-6;
+    fret_rate_trace_kernel(trajectory, *points, R0, tau0, floor_r * floor_r,
+                           scale, out_view, n_out_view);
+}
+
+void fret_rate_pair_trace(const std::vector<double>& donor_trajectory,
+                          const std::vector<double>& acceptor_trajectory,
+                          double R0, double tau0, double r_min, double kappa2,
+                          double** out_view, int* n_out_view) {
+    const std::size_t nd = donor_trajectory.size() / 3;
+    const std::size_t na = acceptor_trajectory.size() / 3;
+    if (nd == 0 || na == 0) {
+        IMP_THROW("Both trajectories must have frames to pair.", ValueException);
+    }
+    if (!(tau0 > 0.0)) {
+        IMP_THROW("tau0 must be positive to derive a FRET rate, not " << tau0,
+                  ValueException);
+    }
+    if (nd != na) {
+        IMP_THROW(
+                "Donor and acceptor trajectories must have the same number of "
+                "frames to pair ("
+                        << nd << " vs " << na
+                        << "). This is expected whenever the two dyes are "
+                           "quenched differently -- they sit at different sites "
+                           "-- so they need different numbers of excitations for "
+                           "the same photon count. Simulate the same number of "
+                           "*walks* for both dyes; t_max and t_step are usually "
+                           "already shared and are not the lever. Truncating "
+                           "here is refused because a trajectory concatenates "
+                           "one walk per excitation, so an arbitrary cut splits "
+                           "a walk and pairs one excitation's tail against "
+                           "another's head.",
+                ValueException);
+    }
+    const double floor_r = r_min > 1e-6 ? r_min : 1e-6;
+    fret_rate_pair_trace_kernel(donor_trajectory, acceptor_trajectory, R0, tau0,
+                                floor_r * floor_r, kappa2_scale(kappa2),
+                                out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

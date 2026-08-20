@@ -125,13 +125,13 @@ def _graph():
 #:   module each would be larger than anything in IMP; ``pmi/macros.py``, the
 #:   biggest, is 2,803.
 #:
-#: ``quenching`` left on 2026-08-19. It had six modules averaging 320 lines and
-#: exactly three internal edges, all from ``model``; the other five did not
-#: refer to each other at all, so the directory separated nothing. It failed
-#: the size test too, at 1,924 lines -- smaller than ``io/cif.py`` alone. The
-#: external references that had justified it were five dotted paths in chisurf
-#: and quest, and two of quest's three named files that had already stopped
-#: existing. Both repos now import ``IMP.bff.quenching`` itself.
+#: ``quenching`` left twice. As a *directory* on 2026-08-19: six modules
+#: averaging 320 lines and exactly three internal edges, all from ``model``, so
+#: the directory separated nothing, and at 1,924 lines it failed the size test
+#: too -- smaller than ``io/cif.py`` alone. As a *module* on 2026-08-20, to C++:
+#: ``QuenchingModel.h`` carries both pictures of the PET model and the field
+#: functions are named compositions in the headers that already held their
+#: kernels. Its consumers import ``IMP.bff`` flat.
 FAMILIES = ("representation", "restraints", "cgdye", "io")
 
 

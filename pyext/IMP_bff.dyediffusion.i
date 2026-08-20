@@ -145,6 +145,11 @@ def __init__(self, density=None, dg=0.5, x0=None, slow_density=None,
             float32 carries seven. The fused kernel holds its trace at the same
             width, which is what lets the fused and three-call paths be
             compared for *equality* rather than to a tolerance.
+
+            The **rounding** is the kernel's, not this cast's -- `get_k_quench`
+            already returns float-rounded values, so that a C++ caller and a
+            Python one race against the same rates. This narrows the dtype and
+            changes no value.
             """
             return _IMP_bff.DyeDiffusionSimulation_get_k_quench(self).astype(np.float32)
 

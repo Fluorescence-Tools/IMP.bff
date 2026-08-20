@@ -90,7 +90,7 @@ class TestQuencher:
         assert not hasattr(trp, "attenuation_length")
 
     def test_it_reads_the_one_table_rather_than_restating_it(self):
-        from IMP.bff.quenching import PET_QUENCHING_REFERENCE
+        from IMP.bff import PET_QUENCHING_REFERENCE
         params = reference_pet_parameters()
         assert set(params) == set(PET_QUENCHING_REFERENCE)
         for comp_id, entry in PET_QUENCHING_REFERENCE.items():

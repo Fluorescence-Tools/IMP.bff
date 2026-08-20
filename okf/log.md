@@ -1,5 +1,79 @@
 # Update Log
 
+## 2026-08-20 (later still) — the PET quenching model, both pictures, to C++
+
+`pyext/src/quenching.py` (1,349 lines) is gone. It was the last file that held
+*physics* rather than orchestration, and what it held was two models of the same
+thing:
+
+* **the field picture** (`DynamicAccessibleVolume`) — stamp a mobility field, a
+  PET field and a FRET field on the accessible-volume grid, then integrate the
+  excited-state population on it;
+* **the particle picture** (`QuenchedDonorDecay`) — walk a dye sphere through
+  the volume, read the quenching rate along the walk, race photons against it.
+
+Both are now C++ (`include/IMP/bff/QuenchingModel.h`,
+`src/QuenchingModel.cpp`), and the fourteen field/trace functions that fed them
+are named compositions in the headers that already carried their kernels —
+`QuenchingGrid.h`, `QuenchingMap.h`, `FRETRateTrace.h`,
+`SolventAccessibleSurface.h`. `pyext/IMP_bff.quenching.i` and
+`IMP_bff.quenchingmodel.i` carry the marshalling and nothing else.
+
+**One function stayed Python**, in the `.i`: `radial_diffusion_map` takes a
+*callable* of the distance from the anchor, and there is no C++ spelling of a
+Python function that does not amount to calling back into the interpreter per
+voxel. `diffusion_coefficient_map` takes an optional per-voxel base map instead,
+so the C++ never sees the callable.
+
+### The gate
+
+Every kernel and both classes were compared against the deleted Python on the
+same inputs: **all bit-identical** (`max|d| = 0`) across the grids, the maps,
+the traces, the walk, the rate trace, the photon draws, the spectrum, the
+histogram, the fused path and both FRET routes. Three things moved, all
+deliberately:
+
+* `solvent_accessible_surface` was **more accurate**, not different: the Python
+  cast its inputs to `float32` before calling and the C++ does not. Feeding
+  float32-rounded inputs to the new one reproduces the old exactly (`max|d| =
+  0`); left alone the two differ by 4e-8 relative, in the new one's favour.
+* `fluorescence_lifetime` differs at 1e-15 — a running sum against numpy's
+  pairwise `mean`.
+* **`kappa2 = NaN` raises rather than defaulting.** The repo's convention is
+  that NaN is the C++ spelling of Python's `None`, and here it cannot be:
+  \f$\kappa^2\f$ is physically in [0, 4] and a NaN arriving from a failed
+  orientation calculation must not be silently answered with the isotropic 2/3.
+  The `None` default is resolved in the shim, which is what a default *is*.
+
+### What the port fixed
+
+**The float32 rate trace was a Python-side convention, and only Python obeyed
+it.** `DyeDiffusionSimulation.k_quench` cast to `float32` in the `.i`; the fused
+kernel holds its own trace as `std::vector<float>` *precisely so the two paths
+see bit-identical rates*, and the comment in `QuenchedDecay.cpp` says so. But
+`get_k_quench` returned `double`, so a C++ caller — which the new
+`QuenchedDonorDecay::simulate_photons` is — would have raced against unrounded
+rates and could in principle have disagreed with the fused path about a photon.
+The rounding moved into `get_k_quench`, where the invariant it defends lives.
+
+`benchmark/quenching_identifiability.py` was dead: it imported
+`IMP.bff.quenching.maps` and `IMP.bff.sampling.smoluchowski`, neither of which
+has existed since the consolidation, and its `quencher_table` built the
+pre-C++ nested-dict shape. Repaired on the way past.
+
+### `pyext/src` now
+
+**13,355 lines in 16 files** (was 19,936 in 22 this morning, ~26,900 in 50 on
+2026-08-18); C++ is 49,037. What is left is **two programs** for `bin/`
+(`cgdye/sim.py`, `restraints/docking.py`), **nine kernel modules** for C++
+(`cgdye/sampling.py`, `cgdye/topology.py`, `io/cif.py`, `io/fps.py`,
+`io/structure.py`, `label.py`, `representation/rotamer.py`,
+`restraints/network.py`, `scoring.py`), three `__init__.py` that go with their
+packages, and `api.py`, which disappears when `BY_DOMAIN` empties.
+
+Suite: green.
+
+
 ## 2026-08-20 (later) — the keystone, and the three things that were waiting on it
 
 `States`/`AccessibleVolume` (Python, `representation/distance.py`) and

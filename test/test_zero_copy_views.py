@@ -29,7 +29,7 @@ import pytest
 
 import IMP.bff
 import IMP.bff as _kernels
-import IMP.bff.quenching as qmaps
+import IMP.bff as qmaps
 
 
 def rss_mb():
@@ -73,8 +73,8 @@ def call_quenching_map():
     d = grid(ng)
     axis = np.array([float(ng), float(ng), float(ng)])
     atoms = np.array([1.0, 2.0, 3.0, -4.0, 0.5, 2.0])
-    return qmaps._quenching_map(
-        d, axis, np.zeros(3), atoms,
+    return qmaps.quenching_map(
+        d.ravel(), axis, np.zeros(3), atoms,
         np.array([1.0, 2.0]), np.array([1.5, 1.5]), 1.5, 1.0 / 4.0), (d, atoms)
 
 
@@ -84,16 +84,17 @@ def call_slow_near_atoms():
     dmap = np.full((ng, ng, ng), 8.0)
     axis = np.array([float(ng), float(ng), float(ng)])
     atoms = np.array([1.0, 2.0, 3.0, -4.0, 0.5, 2.0])
-    return qmaps._slow_near_atoms(
-        dmap, d, axis, np.zeros(3), atoms, 36.0, 0.985), (d, dmap, atoms)
+    return qmaps.slow_near_atoms(
+        dmap.ravel(), d.ravel(), axis, np.zeros(3), atoms, 36.0,
+        0.985), (d, dmap, atoms)
 
 
 def call_fret_map():
     ng = 21
     dd, da = grid(ng, 0), grid(ng, 1)
     axis = np.array([float(ng), float(ng), float(ng)])
-    return qmaps._fret_map(dd, da, axis, axis, np.zeros(3), np.zeros(3),
-                           52.0 ** 6, 1.0 / 4.0, 2), (dd, da)
+    return qmaps.fret_map(dd.ravel(), da.ravel(), axis, axis, np.zeros(3),
+                          np.zeros(3), 52.0 ** 6, 1.0 / 4.0, 2), (dd, da)
 
 
 def call_fret_pair_matrices():

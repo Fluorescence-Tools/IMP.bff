@@ -95,4 +95,16 @@ std::vector<double> quenching_rate_per_frame(
     return out;
 }
 
+const int DEFAULT_SPHERE_POINTS = 590;
+
+std::vector<double> solvent_accessible_surface(
+        const std::vector<double>& xyz, const std::vector<double>& vdw,
+        const std::vector<int>& probe_atom_indices,
+        const std::vector<double>& points, double probe, double radius) {
+    return solvent_accessible_surface_area(
+            xyz, vdw, probe_atom_indices,
+            points.empty() ? sphere_points(DEFAULT_SPHERE_POINTS) : points,
+            probe, radius);
+}
+
 IMPBFF_END_NAMESPACE

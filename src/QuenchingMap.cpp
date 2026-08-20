@@ -7,9 +7,23 @@
 #include <IMP/bff/QuenchingMap.h>
 #include <IMP/bff/internal/OutputView.h>
 
+#include <IMP/exception.h>
+
 #include <cmath>
 
 IMPBFF_BEGIN_NAMESPACE
+
+// Named, not anonymous: IMP compiles this module as one translation unit.
+namespace qmap {
+
+//! The side of a cube of `n` voxels, rounded to the nearest integer.
+/*! `cbrt` of a perfect cube can land a hair below it in double arithmetic, and
+    truncating then gives `ng - 1` -- one axis short of the grid. */
+int grid_side(std::size_t n) {
+    return static_cast<int>(std::floor(std::cbrt(static_cast<double>(n)) + 0.5));
+}
+
+}  // namespace qmap
 
 void slow_near_atoms(
         const std::vector<double>& d_map, const std::vector<double>& density,
@@ -120,6 +134,67 @@ void fret_map(
             }
         }
     }
+}
+
+std::vector<double> grid_axis(int ng, double dg) {
+    std::vector<double> axis(ng > 0 ? ng : 0);
+    const int centre = (ng - 1) / 2;
+    for (int i = 0; i < ng; ++i) axis[i] = (i - centre) * dg;
+    return axis;
+}
+
+void diffusion_coefficient_map(const std::vector<double>& density,
+                               const std::vector<double>& r0, double dg,
+                               const std::vector<double>& atoms_xyz,
+                               double free_diffusion, double min_distance,
+                               double slow_factor,
+                               const std::vector<double>& base,
+                               double** out_view, int* n_out_view) {
+    const int ng = qmap::grid_side(density.size());
+    std::vector<double> d_map;
+    if (base.empty()) {
+        d_map.assign(density.size(), free_diffusion);
+    } else {
+        if (base.size() != density.size()) {
+            IMP_THROW("the base coefficient map must have as many voxels as the "
+                      "density: " << base.size() << " against " << density.size(),
+                      ValueException);
+        }
+        d_map = base;
+    }
+    slow_near_atoms(d_map, density, grid_axis(ng, dg), r0, atoms_xyz,
+                    min_distance * min_distance, slow_factor, out_view,
+                    n_out_view);
+}
+
+void quenching_rate_map(const std::vector<double>& density,
+                        const std::vector<double>& r0, double dg,
+                        const std::vector<double>& atoms_xyz,
+                        const std::vector<double>& kQ,
+                        const std::vector<double>& rC, double tau0,
+                        double dye_radius, double** out_view,
+                        int* n_out_view) {
+    const int ng = qmap::grid_side(density.size());
+    quenching_map(density, grid_axis(ng, dg), r0, atoms_xyz, kQ, rC, dye_radius,
+                  tau0 > 0.0 ? 1.0 / tau0 : 0.0, out_view, n_out_view);
+}
+
+void fret_rate_map(const std::vector<double>& density_donor,
+                   const std::vector<double>& density_acceptor,
+                   const std::vector<double>& r0_donor,
+                   const std::vector<double>& r0_acceptor, double dg_donor,
+                   double dg_acceptor, double forster_radius, double kf,
+                   int acceptor_step, double** out_view, int* n_out_view) {
+    if (!(kf > 0.0)) {
+        IMP_THROW("kf (the donor's radiative rate) must be positive, not " << kf,
+                  ValueException);
+    }
+    const double r0_6 = std::pow(forster_radius, 6);
+    fret_map(density_donor, density_acceptor,
+             grid_axis(qmap::grid_side(density_donor.size()), dg_donor),
+             grid_axis(qmap::grid_side(density_acceptor.size()), dg_acceptor),
+             r0_donor, r0_acceptor, r0_6, kf,
+             acceptor_step > 1 ? acceptor_step : 1, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

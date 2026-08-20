@@ -82,6 +82,14 @@ IMP_SWIG_VALUE(IMP::bff, ResidueSites, ResidueSitesList);
 %template(VectorInt2) std::vector<int>;
 
 %pythoncode %{
+#: The redox-active atoms per residue, as a mapping. The C++ returns a fresh
+#: one per call; this is read on every ``residue_sites`` and is not worth
+#: rebuilding.
+QUENCHER_ATOMS = {k: tuple(v) for k, v in dict(_IMP_bff._quencher_atoms()).items()}
+STANDARD_AMINO_ACID_RESIDUES = tuple(_IMP_bff.standard_amino_acid_residues())
+PET_QUENCHING_REFERENCE = dict(_IMP_bff._pet_quenching_reference())
+
+
 def _pet_table(table):
     """A per-residue table as `{name: ResidueQuenching}`.
 

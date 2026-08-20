@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.quenching import _asa, sphere_points
-from IMP.bff.quenching import quenching_rate_per_frame
+from IMP.bff import solvent_accessible_surface, sphere_points
+from IMP.bff import quenching_rate_per_frame
 
 
 class TestSpherePoints:
@@ -53,7 +53,7 @@ class TestSolventAccessibleSurface:
         xyz = np.zeros((1, 3))
         vdw = np.array([2.0])
         pts = sphere_points(2000)
-        area = _asa(xyz, vdw, np.array([0], dtype=np.uint32), pts, 1.4, 2.5)
+        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32), pts, 1.4, 2.5)
         assert area[0] == pytest.approx(4.0 * np.pi * vdw[0] ** 2, rel=1e-12)
 
     def test_a_buried_atom_has_no_area(self):
@@ -61,7 +61,7 @@ class TestSolventAccessibleSurface:
         shell = sphere_points(300) * 3.0
         xyz = np.vstack([np.zeros(3), shell])
         vdw = np.full(len(xyz), 2.0)
-        area = _asa(xyz, vdw, np.array([0], dtype=np.uint32),
+        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32),
                     sphere_points(500), 1.4, 2.5)
         assert area[0] == 0.0
 
@@ -74,7 +74,7 @@ class TestSolventAccessibleSurface:
         """
         xyz = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]])
         vdw = np.array([2.0, 2.0])
-        area = _asa(xyz, vdw, np.array([0], dtype=np.uint32),
+        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32),
                     sphere_points(2000), 1.4, 2.5)
         full = 4.0 * np.pi * vdw[0] ** 2
         assert area[0] < full, "the occluder at 5 A was not seen"

@@ -37,16 +37,12 @@ import numpy as np
 /* Reading a frame out of a hierarchy without a SWIG call per atom. */
 %include "IMP/bff/HierarchyFrame.h"
 
-/* Plain functions over arrays. Ordered as the physics stacks up. */
-%include "IMP/bff/SolventAccessibleSurface.h"
-
 /* PET: which moieties quench a dye, and how hard. */
 %include "IMP_bff.petquenching.i"
 
-/* Fields stamped on the accessible-volume grid. */
-%include "IMP/bff/QuenchingGrid.h"
-%include "IMP/bff/QuenchingMap.h"
-%include "IMP/bff/FRETRateTrace.h"
+/* The fields a quenched dye lives in: stickiness, PET rate, FRET rate, and the
+   solvent-accessible surface that says how buried a quencher is. */
+%include "IMP_bff.quenching.i"
 
 /* The dye as a species: its spectra, and the Förster radius they give. */
 %include "IMP_bff.dye.i"
@@ -134,6 +130,10 @@ import numpy as np
 
 /* ...and the field picture. */
 %include "IMP_bff.griddiffusion.i"
+
+/* One labelled site's donor decay, both ways. Last of the physics: it consumes
+   an accessible volume, the PET tables, the walk and the grid solver. */
+%include "IMP_bff.quenchingmodel.i"
 
 /*
  * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through

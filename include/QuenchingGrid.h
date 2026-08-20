@@ -91,6 +91,64 @@ IMPBFFEXPORT void stamp_spheres(
 ,
         double** out_view, int* n_out_view);
 
+//! Per-voxel diffusion scaling from overlapping sticky spheres.
+/*!
+    Stickiness **multiplies** where spheres overlap. Voxels outside the
+    accessible volume keep 1.0, so the factor is only meaningful where the walk
+    can go.
+
+    \param[in] density binary occupancy of the accessible volume, flat ng^3
+    \param[in] ng voxels per axis
+    \param[in] dg voxel edge, A
+    \param[in] slow_radius radius of each sticky sphere
+    \param[in] rs sphere centres, flat
+    \param[in] r0 the grid anchor
+    \param[in] slow_fact factor in [0, 1] per centre
+*/
+IMPBFFEXPORT void slow_factor_grid(
+        const std::vector<double>& density,
+        int ng,
+        double dg,
+        const std::vector<double>& slow_radius,
+        const std::vector<double>& rs,
+        const std::vector<double>& r0,
+        const std::vector<double>& slow_fact,
+        double** out_view, int* n_out_view);
+
+//! Per-voxel quenching rate (1/ns) from overlapping quencher spheres.
+/*!
+    Rates **add** where contact spheres overlap, which is the composition rule
+    for independent PET channels. Same geometry and the same indexing as
+    slow_factor_grid(); only the accumulator differs.
+
+    \param[in] values per-centre rate constant, 1/ns
+*/
+IMPBFFEXPORT void quenching_rate_grid(
+        const std::vector<double>& density,
+        int ng,
+        double dg,
+        const std::vector<double>& radius,
+        const std::vector<double>& rs,
+        const std::vector<double>& r0,
+        const std::vector<double>& values,
+        double** out_view, int* n_out_view);
+
+//! The contact ("slow") part of an accessible volume, as a binary mask.
+/*!
+    A thin composition over split_contact_volume(), which labels every voxel;
+    for a binary density the contact part is what the PET model wants.
+
+    \param[out] out_view_i,n_out_view_i flat ng^3, 1 in contact and 0 elsewhere
+*/
+IMPBFFEXPORT void av_contact_mask(
+        const std::vector<double>& density,
+        int ng,
+        double dg,
+        const std::vector<double>& slow_radius,
+        const std::vector<double>& rs,
+        const std::vector<double>& r0,
+        int** out_view_i, int* n_out_view_i);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_QUENCHINGGRID_H

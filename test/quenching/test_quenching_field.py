@@ -15,7 +15,7 @@ import IMP.bff
 import IMP
 import IMP.test
 
-import IMP.bff.quenching as maps
+import IMP.bff as maps
 from IMP.bff import (
     GridDiffusionSolver,
     diffusion_stability_limit,
@@ -40,7 +40,7 @@ def point_source(ng=41):
 class GridAxisTests(IMP.test.TestCase):
 
     def test_the_axis_uses_the_same_centre_as_every_other_map(self):
-        from IMP.bff.quenching import grid_center_index
+        from IMP.bff import grid_center_index
         for ng in (31, 46, 92):
             axis = maps.grid_axis(ng, 0.5)
             self.assertEqual(axis.size, ng)

@@ -17,10 +17,44 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+const int MAX_PARALLEL_TRAJECTORIES = 8;
+
 int default_trajectory_count() {
     const unsigned n = std::thread::hardware_concurrency();
-    const unsigned capped = n == 0 ? 1u : (n < 8u ? n : 8u);
+    const unsigned cap = static_cast<unsigned>(MAX_PARALLEL_TRAJECTORIES);
+    const unsigned capped = n == 0 ? 1u : (n < cap ? n : cap);
     return static_cast<int>(capped);
+}
+
+int resolve_trajectory_count(int requested) {
+    if (requested < 0) return default_trajectory_count();
+    if (requested < 1) return 1;
+    return requested < MAX_PARALLEL_TRAJECTORIES ? requested
+                                                 : MAX_PARALLEL_TRAJECTORIES;
+}
+
+std::vector<int> trajectory_seeds(int random_seed, int n_trajectories) {
+    const int n = n_trajectories > 0 ? n_trajectories : 1;
+    std::vector<int> seeds;
+    seeds.reserve(n);
+    if (random_seed < 0) {
+        // One walk gets -1 -- "draw freely" -- rather than a seed of its own,
+        // so an unseeded single walk stays as unconstrained as it was.
+        if (n <= 1) { seeds.push_back(-1); return seeds; }
+        std::random_device source;
+        for (int i = 0; i < n; ++i) {
+            seeds.push_back(static_cast<int>(source() & 0x7fffffffu));
+        }
+        return seeds;
+    }
+    // A large prime stride, so trajectories from one base seed do not share the
+    // low-order pattern `base + i` would give them.
+    const long long max_seed = (1LL << 31) - 1;
+    for (int i = 0; i < n; ++i) {
+        seeds.push_back(static_cast<int>(
+                (static_cast<long long>(random_seed) + i * 104729LL) % max_seed));
+    }
+    return seeds;
 }
 
 DyeDiffusionSimulation::DyeDiffusionSimulation(
@@ -238,6 +272,22 @@ void DyeDiffusionSimulation::get_k_quench(double** out_view,
     }
     sample_grid(quenching_rate_map_, internal::cube_side(quenching_rate_map_.size()),
                 out_view, n_out_view);
+    // Rounded through `float`, and deliberately. The fused kernel holds its own
+    // trace as `std::vector<float>` -- it halves the memory the photon race
+    // walks, and that race makes tens of millions of random reads into it -- so
+    // the two paths see bit-identical rates rather than rates that agree to
+    // 2.6e-8 and could in principle disagree about a photon. The precision costs
+    // nothing real: a PET rate constant is a transferable starting value known
+    // to perhaps two significant figures, and float carries seven.
+    //
+    // Here rather than in the Python property that used to do it, because both
+    // the C++ and the Python consumers need the same rates for the equality to
+    // hold, and only one of them went through Python.
+    if (*out_view != nullptr) {
+        for (int i = 0; i < *n_out_view; ++i) {
+            (*out_view)[i] = static_cast<float>((*out_view)[i]);
+        }
+    }
 }
 
 double DyeDiffusionSimulation::get_collision_fraction() const {
