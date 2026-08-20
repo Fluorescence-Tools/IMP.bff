@@ -30,9 +30,9 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.sampling as dif
-import IMP.bff.sampling as ph
-from IMP.bff.sampling import GridDiffusionSolver, diffusion_stability_limit
+import IMP.bff as dif
+import IMP.bff as ph
+from IMP.bff import GridDiffusionSolver, diffusion_stability_limit
 
 
 def _ball(ng, radius):

@@ -763,7 +763,7 @@ def load_rotamer_library(
         # per-rotamer weights. The shipped libraries are BinaryCIF as of
         # 2026-08-19; .dcd still reads, because a user's own library may be
         # one, but it is not what this package stores.
-        from IMP.bff.sampling import load_rotamer_library_dcd
+        from IMP.bff import load_rotamer_library_dcd
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")
         weights_path = path.with_name(f"{path.stem}_weights.txt")

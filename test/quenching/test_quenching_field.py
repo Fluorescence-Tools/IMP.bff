@@ -16,7 +16,7 @@ import IMP
 import IMP.test
 
 import IMP.bff.quenching as maps
-from IMP.bff.sampling import (
+from IMP.bff import (
     GridDiffusionSolver,
     diffusion_stability_limit,
     equilibrium_occupancy,

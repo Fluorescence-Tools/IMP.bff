@@ -127,6 +127,9 @@ import numpy as np
 /* The particle picture of a tethered dye. */
 %include "IMP_bff.dyediffusion.i"
 
+/* Sampling a tethered dye: the walk, the photons, the equilibrium. */
+%include "IMP_bff.dyesampling.i"
+
 /* ...and the field picture. */
 %include "IMP_bff.griddiffusion.i"
 

@@ -23,7 +23,7 @@ import numpy as np
 import IMP
 import IMP.test
 
-from IMP.bff.sampling import (
+from IMP.bff import (
     GridDiffusionGradient,
     GridDiffusionSolver,
     diffusion_stability_limit,

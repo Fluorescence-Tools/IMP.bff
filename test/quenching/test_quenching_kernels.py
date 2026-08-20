@@ -24,7 +24,7 @@ import IMP.test
 # quenching is one module now, so its parts are named directly rather than
 # through the submodules the six-file subpackage used to have.
 import IMP.bff.quenching as _q
-import IMP.bff.sampling as diffusion
+import IMP.bff as diffusion
 
 
 def sphere_grid(ng=40, radius_voxels=15, slow_voxels=8):

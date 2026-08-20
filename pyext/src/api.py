@@ -1,7 +1,7 @@
 """The public surface of ``IMP.bff``: domain-scoped, with a flat view over it.
 
 The code is organised by **domain** -- ``dye``, ``label``, ``representation``,
-``photophysics``, ``sampling``, ``scoring``, ``analysis``, ``observables``,
+``photophysics``, ``scoring``, ``observables``,
 ``io``, ``restraints`` -- and that organisation is what a reader should learn.
 A domain leaves this map when its last Python module does: the names it carried
 are then attributes of ``IMP.bff`` itself, resolved by SWIG rather than lazily
@@ -147,25 +147,6 @@ BY_DOMAIN = {
         "resolve_rotamer_library_path": "IMP.bff.representation.rotamer",
         "rotamer_library_metadata": "IMP.bff.representation.rotamer",
         "rotamer_library_registry": "IMP.bff.representation.rotamer",
-    },
-    # -- sampling -- stage 3 -- how configurations are drawn: walks, densities, library screening
-    "sampling": {
-        # IMP.bff.sampling
-        "DyeDiffusionTrajectory": "IMP.bff.sampling",
-        "simulate_dye_diffusion": "IMP.bff.sampling",
-        # IMP.bff.sampling
-        "simulate_photon_trace": "IMP.bff.sampling",
-        "simulate_quenched_decay": "IMP.bff.sampling",
-        # IMP.bff.sampling
-        "apply_rotamer_coordinates": "IMP.bff.sampling",
-        "load_rotamer_library_dcd": "IMP.bff.sampling",
-        "sample_rotamer_index": "IMP.bff.sampling",
-        # IMP.bff.sampling
-        "GridDiffusionGradient": "IMP.bff.sampling",
-        "GridDiffusionResult": "IMP.bff.sampling",
-        "GridDiffusionSolver": "IMP.bff.sampling",
-        "diffusion_stability_limit": "IMP.bff.sampling",
-        "equilibrium_occupancy": "IMP.bff.sampling",
     },
     # -- scoring -- stage 2 -- is this configuration allowed, and how heavily weighted
     "scoring": {

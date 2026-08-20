@@ -21,7 +21,7 @@ Three layers, each usable on its own:
 
 The **integrators moved out** in PRD-113 stage 7. The Brownian walk, the
 Smoluchowski field solver and the excited-state Monte Carlo are now
-:mod:`IMP.bff.sampling`: none of them is specific to PET quenching -- a Brownian
+``IMP.bff``: none of them is specific to PET quenching -- a Brownian
 walk in a volume is a Brownian walk in a volume -- and filing a general
 integrator under the first physics that used it is how it comes to look like a
 detail of one model.
@@ -45,10 +45,10 @@ from IMP.bff import grid_center_index
 from collections import OrderedDict
 from IMP.bff.photophysics import kappa2_isotropic
 from typing import Optional
-from IMP.bff.sampling import GridDiffusionSolver, diffusion_stability_limit, equilibrium_occupancy
+from IMP.bff import GridDiffusionSolver, diffusion_stability_limit, equilibrium_occupancy
 from typing import NamedTuple, Optional, Sequence
 import os
-from IMP.bff.sampling import simulate_photon_trace
+from IMP.bff import simulate_photon_trace
 from IMP.bff import DyeDiffusionSimulation
 
 __all__ = [
@@ -560,7 +560,7 @@ class DynamicAccessibleVolume:
             raise ValueError(
                 f"flux_form must be 'smoluchowski' or 'ito', not {flux_form!r}")
         #: Where the dye sits at equilibrium. See
-        #: :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy`.
+        #: :func:`IMP.bff.equilibrium_occupancy`.
         self.flux_form = flux_form
 
         self._diffusion_map: Optional[np.ndarray] = None
@@ -702,7 +702,7 @@ class DynamicAccessibleVolume:
         mobility -- equilibrium is thermodynamics, mobility is kinetics, and a
         dye slowed by friction with no attraction is still found everywhere it
         can reach. Under ``"ito"`` it is ``p ∝ 1/D``: see
-        :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy` for why that is
+        :func:`IMP.bff.equilibrium_occupancy` for why that is
         the inherited behaviour rather than the physics.
         """
         if self._occupancy is None:
@@ -714,7 +714,7 @@ class DynamicAccessibleVolume:
 
         Uniform on the accessible domain under the default flux form,
         ``p ∝ 1/D`` under ``"ito"`` — see
-        :func:`IMP.bff.sampling.smoluchowski.equilibrium_occupancy`. Propagating to it
+        :func:`IMP.bff.equilibrium_occupancy`. Propagating to it
         instead is possible but slow and, in the ``"ito"`` form on a real site
         where the compounding slow factor makes ``D`` span orders of magnitude,
         may not converge at all: on T4L site 132 it was still drifting after
@@ -733,7 +733,7 @@ class DynamicAccessibleVolume:
     ):
         """Integrate the donor decay on the grid, from the equilibrium start.
 
-        :returns: a :class:`IMP.bff.sampling.smoluchowski.GridDiffusionResult` --
+        :returns: a :class:`IMP.bff.GridDiffusionResult` --
             time axis in ns, surviving excited-state fraction, final density.
         """
         start = self.occupancy

@@ -26,7 +26,7 @@ What was taken out of it first, because it was not molecular mechanics:
 was                                          is
 ===========================================  =============================================
 ``cgdye.rotamer``                            ``IMP.bff.representation.rotamer``
-``cgdye.sampling.rotamer``                   ``IMP.bff.sampling``
+``cgdye.sampling.rotamer``                   ``IMP.bff`` (the rotamer library)
 ``cgdye.labeling``                           ``IMP.bff.label`` / ``.backbone_frame``
 ``cgdye.io.*`` (all of it)             ``IMP.bff.io.*``
 ``cgdye.utils``                              ``IMP.bff`` (the data-path helpers)

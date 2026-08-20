@@ -16,7 +16,7 @@ import numpy as np
 import IMP
 import IMP.test
 
-import IMP.bff.sampling as photon
+import IMP.bff as photon
 
 try:
     import numba

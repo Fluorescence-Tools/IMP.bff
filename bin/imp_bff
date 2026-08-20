@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import typing
 import tqdm
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 import pathlib
@@ -31,7 +32,6 @@ import IMP.bff
 import IMP.bff.restraints
 
 from IMP.bff.io.structure import read_angle_file
-from IMP.bff.sampling import WriteRMFFrame, WritePDBFrame
 import random
 import urllib.request
 from pathlib import Path
@@ -40,7 +40,7 @@ import IMP.rmf
 
 from IMP.bff.label import attach_dyes, place_dye_from_coords, resolve_dye_site
 from IMP.bff.io.structure import read_rotamer_library_rmf, write_rotamer_library_rmf
-from IMP.bff.sampling import apply_rotamer_coordinates, sample_rotamer_index
+from IMP.bff import apply_rotamer_coordinates, sample_rotamer_index
 from IMP.bff.cgdye.sampling import (
     generate_linker_rotamers,
     reconstruct_rotamer_trajectory,
@@ -55,6 +55,91 @@ from IMP.bff import AccessibleVolume, compute_av_from_structure
 from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
 from IMP.bff.representation.rotamer import RotamerEnsemble
+
+
+# --------------------------------------------------------------------------
+# Frame writers -- were `IMP.bff.sampling`
+#
+# `IMP.OptimizerState` subclasses that `flexfit` attaches to write a trajectory
+# as it samples. They could be C++, but writing RMF needs `IMP.rmf`, and
+# widening the module's dependency graph for a program's convenience is the
+# wrong trade -- this program already imports RMF.
+# --------------------------------------------------------------------------
+class WriteRMFFrame(IMP.OptimizerState):
+
+    def __init__(
+            self,
+            filename,
+            root_hier: IMP.atom.Hierarchy,
+            restraints: typing.List[IMP.Restraint],
+            name: str = "WriteRMFFrame"
+    ):
+        model = root_hier.get_model()
+        super().__init__(model, name)
+        self.restraints = restraints
+        fileName, fileExtension = os.path.splitext(filename)
+        fn = pathlib.Path(fileName + ".0.rmf3")
+        if pathlib.Path(fn).exists():
+            for i in range(100):
+                fn = pathlib.Path(fileName + ".{:d}.rmf3".format(i))
+                if not fn.exists():
+                    break
+        self._rmf_filename = str(fn)
+        self._rh = RMF.create_rmf_file(str(fn))
+        IMP.rmf.add_hierarchies(self._rh, [root_hier])
+        IMP.rmf.add_restraints(self._rh, restraints)
+        IMP.rmf.save_frame(self._rh)
+
+    def do_update(self, arg0):
+        #print(*[r.evaluate(False) for r in self.restraints], sep="\t")
+        IMP.rmf.save_frame(self._rh)
+
+
+
+class WritePDBFrame(IMP.OptimizerState):
+
+    def __init__(
+            self,
+            filename,
+            root_hier: IMP.atom.Hierarchy,
+            restraints: typing.List[IMP.Restraint],
+            restraint_filename: str = None,
+            name: str = "WriteDCDFrame",
+            output_objects: typing.List = None,
+            multi_state: bool = False
+    ):
+        model = root_hier.get_model()
+        super().__init__(model, name)
+
+        import os
+        self._pdb_basename = filename
+        if restraint_filename is None:
+            restraint_filename = os.path.splitext(filename)[0] + ".rst.txt"
+        self._restraint_filename = restraint_filename
+        self.restraints = restraints
+        self._hier = root_hier
+        self.frame = 0
+        self.output_objects = output_objects
+        self.multi_state = multi_state
+
+    def do_update(self, arg0):
+        with open(self._restraint_filename, "a+") as fp:
+            fp.write("%s\t" % self.frame)
+            fp.write("\t".join(["{:.3f}".format(r.evaluate(False)) for r in self.restraints]))
+            fp.write("\t")
+            if isinstance(self.output_objects, list):
+                for obj in self.output_objects:
+                    fp.write(str(obj) + "\t")
+            fp.write("\n")
+        lead = os.path.splitext(self._pdb_basename)[0]
+        if not self.multi_state:
+            hiers = [self._hier]
+        else:
+            hiers = self._hier.get_children()
+        for i, hier in enumerate(hiers):
+            out_fn = lead + "_state_" + str(i) + "_" + "{:04d}".format(self.frame) + ".pdb"
+            IMP.atom.write_pdb(hier, out=out_fn)
+        self.frame += 1
 
 
 @click.command(

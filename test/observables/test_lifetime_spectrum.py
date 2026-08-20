@@ -187,7 +187,7 @@ def test_the_static_limit_is_exact_when_the_rate_does_not_move():
     changes there is nothing to average over, so the sum of exponentials is the
     decay and the simulation must reproduce it.
     """
-    import IMP.bff.sampling as photon
+    import IMP.bff as photon
 
     tau0, kq_val, t_step = 4.0, 0.5, 0.01
     dts, emitted = photon.simulate_photon_trace(
@@ -205,7 +205,7 @@ def test_a_moving_rate_breaks_the_static_limit_measurably():
     They differ, which is why the spectrum built from a trajectory is marked
     inexact -- and why a diffusion simulation exists at all.
     """
-    import IMP.bff.sampling as photon
+    import IMP.bff as photon
 
     tau0, t_step = 4.0, 0.01
     slow, fast = 0.05, 3.0
