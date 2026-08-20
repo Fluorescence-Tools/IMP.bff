@@ -16,17 +16,20 @@ properties of the dye (``IMP.bff.Dye``) or of where it is attached
 
 from __future__ import annotations
 
-from IMP.bff import ACV, AccessibleVolume, States
+from IMP.bff import (
+    ACV, AccessibleVolume, States, compute_av, compute_av_from_structure,
+    compute_avs_for_structure, resample_av,
+)
 
 from .distance import (
     DyeDistributionNormal, LabelDistribution, LabelDistributionAV,
     av_pair_statistics, average_distance, distance_between_mean_positions,
     histogram_rda, mean_fret_distance, standard_deviation_of_distances,
 )
-from .pathmap import PathMapReading, resample_av
 
 __all__ = [
-    "States", "AccessibleVolume", "ACV", "PathMapReading", "resample_av",
+    "States", "AccessibleVolume", "ACV", "resample_av",
+    "compute_av", "compute_av_from_structure", "compute_avs_for_structure",
     "LabelDistribution", "LabelDistributionAV", "DyeDistributionNormal",
     "av_pair_statistics", "average_distance",
     "distance_between_mean_positions", "histogram_rda",

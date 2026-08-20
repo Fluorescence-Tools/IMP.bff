@@ -12,7 +12,7 @@ the volume transposed. Of 2180 cloud points on T4L A132 at 1.5 Å, 1548 (71 %)
 landed on a voxel the density called occupied. Downstream, on the same site at
 2.0 Å, the mean donor lifetime came out 3.3974 ns instead of 3.5626 ns.
 
-The array path in ``IMP.bff.representation.av`` had found and fixed this already, and
+The array path in ``IMP.bff.compute_av`` had found and fixed this already, and
 its test is the model for this one: it reads the point cloud from IMP rather
 than deriving it from the grid, precisely so the two are independent readings.
 Two readings can disagree; one cannot.
@@ -22,12 +22,11 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.representation.av import compute_av_from_structure
+from IMP.bff import compute_av_from_structure
 
 _SITE = dict(chain_identifier="A", residue_seq_number=132, atom_name="CB",
              simulation_type="AV1", linker_length=20.0, linker_width=0.5,
              radius1=3.5, allowed_sphere_radius=2.1)
-_ARGS = (np.zeros((1, 4)), np.zeros(3), 20.0, 0.5, (3.5, 0.0, 0.0))
 
 
 @pytest.fixture(scope="module")
@@ -36,8 +35,7 @@ def pdb_path():
 
 
 def _build(pdb_path, resolution):
-    return compute_av_from_structure(*_ARGS, disc_step=resolution, pdb_path=pdb_path,
-                      source_info=dict(_SITE))
+    return compute_av_from_structure(pdb_path, dict(_SITE), disc_step=resolution)
 
 
 def _voxel_indices(av):

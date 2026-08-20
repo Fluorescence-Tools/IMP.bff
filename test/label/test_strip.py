@@ -39,11 +39,14 @@ def _names(lines, chain, resi):
 
 def test_grammar():
     sel = strip.parse_strip_mask("chain A and resid 3 and not name N+CA+C+O")
-    assert sel.chain == "A" and sel.resids == (3,) and sel.negate
+    assert (sel.get_chain() == "A" and list(sel.get_resids()) == [3]
+            and sel.get_negate())
     assert sel.matches("A", 3, "CB") and not sel.matches("A", 3, "CA")
     assert not sel.matches("B", 3, "CB") and not sel.matches("A", 4, "CB")
     sel = strip.parse_strip_mask("resi 3 and name CB")
-    assert sel.chain is None and sel.matches("B", 3, "cb")
+    # An unstated chain is empty rather than `None`: a C++ string has no
+    # third state, and "any chain" is what both spellings meant.
+    assert sel.get_chain() == "" and sel.matches("B", 3, "cb")
     for bad in ("chain A or resid 3", "(resid 3)", "resid 3 and name CA CB", "resname HOH"):
         with pytest.raises(ValueError):
             strip.parse_strip_mask(bad)
@@ -61,7 +64,7 @@ def test_pdb_lines_and_attachment_protection():
     kept = strip.strip_pdb_lines(_LINES, "chain A and resid 3 and not name N+CA+C+O")
     assert _names(kept, "A", 3) == ["N", "CA", "C", "O"]
     assert _names(kept, "A", 4) == ["N", "CA"] and _names(kept, "B", 3) == ["N", "CB"]
-    kept = strip.strip_pdb_lines(_LINES, "chain A and resid 3", keep_attachment=("A", 3, "CB"))
+    kept = strip.strip_pdb_lines(_LINES, "chain A and resid 3", "A", 3, "CB")
     assert _names(kept, "A", 3) == ["CB"]
     kept = strip.strip_pdb_lines(_LINES, "resid 3 and name CB")  # any chain
     assert _names(kept, "A", 3) == ["N", "CA", "C", "O", "CG1", "CG2", "CD1"]

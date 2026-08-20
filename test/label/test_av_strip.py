@@ -11,7 +11,7 @@ anything outside the dialect is refused loudly, never silently ignored.
 import numpy as np
 import pytest
 
-import IMP.bff.representation.av as av
+import IMP.bff as av
 
 _PDB = """\
 ATOM      1  N   ILE A   3      11.104   6.134  -6.504  1.00  0.00           N
@@ -50,23 +50,23 @@ def test_the_default_strip_removes_the_side_chain_not_the_backbone(pdb):
     assert av.default_strip_mask("A", 3, "CB") == (
         "chain A and resid 3 and not name N+CA+C+O+CB"
     )
-    stripped = av._stripped_pdb_for(pdb, "A", 3, "CB")
+    stripped = av.stripped_pdb_for(pdb, "A", 3, "CB")
     assert _kept_names(stripped) == ["N", "CA", "C", "O", "CB"]
 
 
 def test_a_declared_mask_is_honoured_as_given(pdb):
-    stripped = av._stripped_pdb_for(
+    stripped = av.stripped_pdb_for(
         pdb, "A", 3, "CB", "chain A and resid 3 and not name CA+CB+C+N+O"
     )
     assert _kept_names(stripped) == ["N", "CA", "C", "O", "CB"]
     # A whole-residue mask leaves only the attachment atom.
-    whole = av._stripped_pdb_for(pdb, "A", 3, "CB", "chain A and resid 3")
+    whole = av.stripped_pdb_for(pdb, "A", 3, "CB", "chain A and resid 3")
     assert _kept_names(whole) == ["CB"]
 
 
 def test_the_attachment_atom_survives_any_mask(pdb):
     """The attachment is resolved from this file; it is never stripped."""
-    survived = av._stripped_pdb_for(pdb, "A", 3, "CB", "name CB")
+    survived = av.stripped_pdb_for(pdb, "A", 3, "CB", "name CB")
     assert _kept_names(survived) == ["N", "CA", "C", "O", "CB", "CG1", "CG2", "CD1"]
 
 
@@ -82,21 +82,21 @@ def test_the_attachment_atom_survives_any_mask(pdb):
 )
 def test_a_mask_outside_the_dialect_is_refused_loudly(pdb, mask):
     with pytest.raises(ValueError, match="strip_mask"):
-        av._stripped_pdb_for(pdb, "A", 3, "CB", mask)
+        av.stripped_pdb_for(pdb, "A", 3, "CB", mask)
 
 
 def test_a_mask_never_silently_selects_nothing(pdb):
     """A well-formed mask naming a absent residue strips nothing -- but the
     attachment atom is still kept and the file is still valid."""
-    stripped = av._stripped_pdb_for(
+    stripped = av.stripped_pdb_for(
         pdb, "A", 3, "CB", "chain A and resid 99 and name N"
     )
     assert _kept_names(stripped) == ["N", "CA", "C", "O", "CB", "CG1", "CG2", "CD1"]
 
 
 def test_the_strip_cache_answers_the_same_file_per_site_and_mask(pdb):
-    assert av._stripped_pdb_for(pdb, "A", 3, "CB") == av._stripped_pdb_for(
+    assert av.stripped_pdb_for(pdb, "A", 3, "CB") == av.stripped_pdb_for(
         pdb, "A", 3, "CB"
     )
-    other = av._stripped_pdb_for(pdb, "A", 3, "CB", "chain A and resid 3")
-    assert other != av._stripped_pdb_for(pdb, "A", 3, "CB")
+    other = av.stripped_pdb_for(pdb, "A", 3, "CB", "chain A and resid 3")
+    assert other != av.stripped_pdb_for(pdb, "A", 3, "CB")

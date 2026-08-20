@@ -1,6 +1,6 @@
 """The subpackage import graph: acyclic, standalone, and no reaching into privates.
 
-This is the test that should have existed already. `import IMP.bff.representation.av` as a
+This is the test that should have existed already. `import IMP.bff.representation.distance` as a
 process's first import raised ImportError at every commit before 2026-08-18 --
 ``representation/__init__`` imports ``distribution``, which imports ``av``,
 which imports ``representation`` -- and nothing in 676 tests caught it, because
@@ -312,7 +312,7 @@ def test_no_module_defines_the_same_name_twice():
     carried two ``_av_imp_bff``s -- an array door taking
     ``(atoms_xyz, atoms_vdw, source_xyz, ...)`` and a structure door taking
     ``(pdb_path, source_info, ...)``. The second won for the whole module, so
-    ``IMP.bff.compute_av_from_arrays``, a public export, raised
+    ``IMP.bff.compute_av``, a public export, raised
     ``TypeError: _av_imp_bff() takes 6 positional arguments but 8 were given``
     on every call. Nothing failed at import and no test covered that door.
 
@@ -339,13 +339,13 @@ def test_no_module_defines_the_same_name_twice():
 
 
 def test_the_array_door_computes_an_accessible_volume():
-    """``compute_av_from_arrays`` end to end -- the export the shadowed
+    """``compute_av`` end to end -- the export the shadowed
     definition had broken. Four atoms and a source between them is enough: the
     bug was a signature mismatch, so any successful call proves the fix."""
     import numpy as np
     import IMP.bff
 
-    av = IMP.bff.compute_av_from_arrays(
+    av = IMP.bff.compute_av(
         np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 6.0, 0.0], [0.0, 0.0, 6.0]]),
         np.array([1.7, 1.7, 1.7, 1.7]),
         np.array([2.0, 2.0, 2.0]),

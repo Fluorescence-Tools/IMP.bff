@@ -70,7 +70,7 @@ def test_the_package_works_with_numba_blocked():
         "sys.modules['numba'] = None\n"
         "import numpy as np\n"
         "import IMP.bff\n"
-        "import IMP.bff.representation.av as _kernels\n"
+        "import IMP.bff as _kernels\n"
         "import IMP.bff.photophysics as orientation\n"
         "import IMP.bff.sampling as brownian\n"
         "import IMP.bff.sampling as excited_state\n"
@@ -79,7 +79,7 @@ def test_the_package_works_with_numba_blocked():
         "and m == 'numba']\n"
         # exercise one kernel from each ported domain
         "pts = np.array([[0., 0., 0., 1.], [2., 0., 0., 1.]])\n"
-        "assert _kernels.weighted_mean(pts, 2)[0] == 1.0\n"
+        "assert _kernels.points_weighted_mean(pts.ravel())[0] == 1.0\n"
         "assert abs(orientation.kappasq(0.0, 0.0, 0.0, 0.0, 0.0) - 2/3) < 1e-12\n"
         "d, _ = excited_state.simulate_photon_trace(100, np.zeros(10), 0.01, 4.0, random_seed=1)\n"
         "assert (d >= 0).all()\n"

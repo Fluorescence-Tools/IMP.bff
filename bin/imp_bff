@@ -51,7 +51,7 @@ from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff.io.cif import (
     read_component_template_cif, read_dye_forcefield_cif, region_features)
-from IMP.bff.representation.av import AccessibleVolume, compute_av_from_structure
+from IMP.bff import AccessibleVolume, compute_av_from_structure
 from IMP.bff.representation.distance import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
 from IMP.bff.representation.rotamer import RotamerEnsemble
@@ -1115,15 +1115,7 @@ def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = 
     """The accessible volume of one fps.json position on ``pdb``."""
     p = _av_position(pos)
     ds = float(disc_step or p.get("simulation_grid_resolution", 1.5))
-    # the structure door -- this passed `pdb_path`/`source_info` to the *array*
-    # door, a signature that stopped existing when the two were separated. The
-    # only test that reached it could not be collected at the time, so nothing
-    # said so.
-    return compute_av_from_structure(
-        np.zeros((0, 4)), np.zeros(3),
-        float(p.get("linker_length", 20.0)), float(p.get("linker_width", 1.0)),
-        (float(p.get("radius1", 3.5)), float(p.get("radius2", 0.0)), float(p.get("radius3", 0.0))),
-        disc_step=ds, pdb_path=pdb, source_info=p)
+    return compute_av_from_structure(pdb, p, disc_step=ds)
 
 
 def ensemble_for_position(pdb: str, pos: Dict[str, Any], library: str, **kwargs) -> RotamerEnsemble:

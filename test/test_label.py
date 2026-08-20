@@ -74,25 +74,6 @@ class TestLabelDistributionAV:
         assert dd.position_name == ""
         np.testing.assert_allclose(dd.origin, [0.0, 0.0, 0.0], atol=1e-6)
 
-    def test_get_accessible_volume_raises_without_backend(self, monkeypatch):
-        """Accessing the AV without a backend should raise."""
-        xyz = np.array([[0.0, 0.0, 0.0],
-                        [5.0, 0.0, 0.0]], dtype=np.float64)
-        vdw = np.array([1.5, 1.5], dtype=np.float64)
-        dd = LabelDistributionAV(
-            atoms_xyz=xyz, atoms_vdw=vdw,
-            residue_seq_number=0, atom_name="CB",
-        )
-        # Force the condition the test is about: a build without IMP.bff's AV
-        # decorator, which since PRD-112 stage 1 is the only backend. This
-        # used to pass only because `_HAS_LABELLIB` was wrongly False on
-        # machines that *did* have a working LabelLib — the check looked for
-        # `LabelLib.AV`, which current builds do not expose.
-        import IMP.bff.representation.av as _compute
-
-        monkeypatch.setattr(_compute, "_HAS_IMP_BFF", False, raising=False)
-        with pytest.raises(ImportError):
-            dd.get_accessible_volume()
 
     def test_lazy_computation(self):
         """AV is not computed until accessed."""

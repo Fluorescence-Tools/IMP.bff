@@ -5,7 +5,7 @@ import pytest
 
 import IMP.bff
 
-from IMP.bff.representation.av import AccessibleVolume
+from IMP.bff import AccessibleVolume
 import IMP.bff.representation.distance as fdist
 from IMP.bff.restraints.network import DistanceRestraint, RigidBody
 

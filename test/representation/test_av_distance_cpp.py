@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.representation.av as _kernels
+import IMP.bff as _kernels
 
 
 def test_split_is_exact_and_complementary():
@@ -31,8 +31,9 @@ def test_split_is_exact_and_complementary():
     rng = np.random.default_rng(3)
     density = np.where(rng.random((ng, ng, ng)) > 0.4, 1.0, 0.0)
     rs = np.array([[0.0, 0.0, 0.0], [2.0, -3.0, 1.0]])
-    n_c, n_f, contact, free = _kernels.split_av_acv(
+    contact, free = _kernels.split_contact_volume_masks(
         density, 1.0, np.array([2.0, 1.5]), rs, np.zeros(3))
+    n_c, n_f = int(contact.sum()), int(free.sum())
 
     occupied = int((density > 0).sum())
     assert n_c + n_f == occupied, "every occupied voxel is contact or free, and only one"
@@ -76,7 +77,8 @@ def test_density2points_places_voxels_where_the_grid_says():
     r0 = np.array([2.0, -1.0, 7.5])
     density = np.zeros((ng, ng, ng))
     density[1, 2, 3] = 0.75
-    n, pts = _kernels.density2points(ng, ng, ng, dg, density, r0)
+    pts = _kernels.density_to_points(density, dg, r0)
+    n = pts.shape[0]
     assert n == 1
     assert pts[0, 3] == 0.75
     np.testing.assert_allclose(pts[0, :3], r0 + dg * np.array([1, 2, 3]), atol=1e-12)
@@ -84,8 +86,10 @@ def test_density2points_places_voxels_where_the_grid_says():
 
 def test_weighted_mean_and_its_empty_case():
     pts = np.array([[0.0, 0.0, 0.0, 3.0], [4.0, 0.0, 0.0, 1.0]])
-    np.testing.assert_allclose(_kernels.weighted_mean(pts, 2), [1.0, 0.0, 0.0], atol=1e-12)
-    np.testing.assert_array_equal(_kernels.weighted_mean(np.empty((0, 4)), 0), np.zeros(3))
+    np.testing.assert_allclose(_kernels.points_weighted_mean(pts.ravel()),
+                               [1.0, 0.0, 0.0], atol=1e-12)
+    np.testing.assert_array_equal(
+        _kernels.points_weighted_mean(np.empty(0)), np.zeros(3))
 
 
 def test_random_distances_is_reproducible_but_seed_dependent():
@@ -107,8 +111,8 @@ def test_sampled_distances_converge_on_the_analytic_answer():
     """
     a = np.array([[0.0, 0.0, 0.0, 1.0]])
     b = np.array([[30.0, 40.0, 0.0, 1.0]])
-    assert _kernels.average_distance(a, 1, b, 1, n_samples=64) == pytest.approx(50.0)
-    assert _kernels.mean_fret_distance(a, 1, b, 1, 50.0, n_samples=64) == pytest.approx(50.0)
+    assert _kernels.average_distance(a.ravel(), b.ravel(), n_samples=64) == pytest.approx(50.0)
+    assert _kernels.mean_fret_distance(a.ravel(), b.ravel(), 50.0, n_samples=64) == pytest.approx(50.0)
 
     rng = np.random.default_rng(2)
     n = 2000
@@ -117,7 +121,7 @@ def test_sampled_distances_converge_on_the_analytic_answer():
     exact = np.linalg.norm(
         c1[:, None, :3] - c2[rng.integers(0, n, 400), None, :3].reshape(-1, 1, 3).transpose(1, 0, 2),
         axis=-1).mean()
-    got = _kernels.average_distance(c1, n, c2, n, n_samples=400000)
+    got = _kernels.average_distance(c1.ravel(), c2.ravel(), n_samples=400000)
     assert abs(got - exact) < 0.1, f"{got} vs {exact}"
 
 
@@ -127,48 +131,55 @@ def test_fret_average_is_shorter_than_the_plain_average():
     n = 1500
     c1 = np.column_stack([rng.normal(0, 8, (n, 3)), np.ones(n)])
     c2 = np.column_stack([rng.normal([52, 0, 0], 8, (n, 3)), np.ones(n)])
-    r_da = _kernels.average_distance(c1, n, c2, n, n_samples=200000)
-    r_e = _kernels.mean_fret_distance(c1, n, c2, n, 52.0, n_samples=200000)
+    r_da = _kernels.average_distance(c1.ravel(), c2.ravel(), n_samples=200000)
+    r_e = _kernels.mean_fret_distance(c1.ravel(), c2.ravel(), 52.0, n_samples=200000)
     assert r_e < r_da
 
 
 def test_fret_distance_limits():
     one = np.array([[0.0, 0.0, 0.0, 1.0]])
-    assert _kernels.mean_fret_distance(one, 1, one, 1, 52.0, 100) == 0.0
+    assert _kernels.mean_fret_distance(one.ravel(), one.ravel(), 52.0, 100) == 0.0
     zero_weight = np.array([[0.0, 0.0, 0.0, 0.0]])
-    assert np.isinf(_kernels.mean_fret_distance(one, 1, zero_weight, 1, 52.0, 100))
+    assert np.isinf(_kernels.mean_fret_distance(one.ravel(), zero_weight.ravel(), 52.0, 100))
 
 
-def test_kernels_carry_no_numba():
-    """The code, not the prose -- the docstrings say "numba" precisely because
-    they record what these used to be."""
+def test_the_kernels_are_not_python_at_all():
+    """The strongest form of "numba is gone": there is no Python to jit.
+
+    This scanned `av/_kernels.py` for `@njit` and for a numba import. That
+    module was the array adapter over these kernels and it no longer exists --
+    the shapes are stated on the kernels themselves. What is left to check is
+    that each one is `IMP.bff`'s own and that nothing under `pyext/src` still
+    carries a compiler decorator.
+    """
     import ast
-    import inspect
-    import types
+    from pathlib import Path
 
-    tree = ast.parse(inspect.getsource(_kernels))
-    imported = {
-        n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module
-    } | {
-        a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
-    }
-    assert not any("numba" in m or m.endswith("_jit") for m in imported), imported
-    compiled = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
+    for name in ("random_distances", "density_to_points", "points_weighted_mean",
+                 "average_distance", "mean_fret_distance",
+                 "split_contact_volume_masks"):
+        fn = getattr(IMP.bff, name)
+        assert callable(fn), name
+        assert getattr(fn, "__module__", "IMP.bff") == "IMP.bff", name
+
+    src = Path(IMP.bff.__file__).resolve().parent
+    for path in sorted(src.rglob("*.py")):
+        if not path.exists():
             continue
-        for dec in node.decorator_list:
-            text = ast.unparse(dec)
-            if any(w in text for w in ("njit", "jit", "vectorize", "guvectorize")):
-                compiled.append((node.name, text))
-    # "no decorated function at all" was the proxy for "@njit is gone". It
-    # stopped meaning that when av/ merged into one module and brought
-    # @property and @lru_cache with it. Name the thing instead.
-    assert not compiled, compiled
-    for name in ("random_distances", "density2points", "weighted_mean",
-                 "average_distance", "mean_fret_distance", "split_av_acv"):
-        fn = getattr(_kernels, name)
-        assert isinstance(fn, types.FunctionType), f"{name} is {type(fn)}, not a plain function"
+        tree = ast.parse(path.read_text())
+        imported = {n.module for n in ast.walk(tree)
+                    if isinstance(n, ast.ImportFrom) and n.module}
+        imported |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import)
+                     for a in n.names}
+        assert not any("numba" in m for m in imported), (path.name, imported)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for dec in node.decorator_list:
+                text = ast.unparse(dec)
+                assert not any(w in text for w in
+                               ("njit", "vectorize", "guvectorize")), (
+                    path.name, node.name, text)
 
 
 if __name__ == "__main__":

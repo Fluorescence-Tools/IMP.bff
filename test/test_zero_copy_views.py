@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-import IMP.bff.representation.av as _kernels
+import IMP.bff as _kernels
 import IMP.bff.quenching as qmaps
 
 
@@ -54,7 +54,7 @@ def call_random_distances():
 
 def call_density_to_points():
     d = grid(21)
-    n, pts = _kernels.density2points(21, 21, 21, 1.0, d, np.zeros(3), 0.0)
+    pts = _kernels.density_to_points(d, 1.0, np.zeros(3), 0.0)
     return pts, (d,)
 
 
@@ -229,9 +229,8 @@ def test_a_zero_length_view_is_an_empty_array_not_a_null_pointer():
     empty = np.zeros(0)
     out = np.asarray(IMP.bff.random_distances(empty, empty, 0, 0))
     assert out.size == 0
-    n, pts = _kernels.density2points(2, 2, 2, 1.0, np.zeros((2, 2, 2)),
-                                     np.zeros(3), 0.0)
-    assert n == 0 and pts.size == 0
+    pts = _kernels.density_to_points(np.zeros((2, 2, 2)), 1.0, np.zeros(3), 0.0)
+    assert pts.size == 0
 
 
 if __name__ == "__main__":

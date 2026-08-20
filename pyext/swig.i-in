@@ -54,7 +54,7 @@ import numpy as np
 %include "IMP_bff.dye.i"
 
 /* Distances and orientations over point clouds. */
-%include "IMP/bff/AVDistance.h"
+%include "IMP_bff.avdistance.i"
 %include "IMP/bff/DistanceCalibration.h"
 %include "IMP/bff/OrientationFactor.h"
 
@@ -109,6 +109,9 @@ import numpy as np
 
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
+
+/* Building an accessible volume: the two doors, the PDB read and the strip. */
+%include "IMP_bff.avbuilder.i"
 
 /* The channels that deactivate an excited dye. They consume `States`, so they
    come after the object that is one. */

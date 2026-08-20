@@ -1,4 +1,4 @@
-"""Tests for ``IMP.bff.representation.av`` — accessible volume infrastructure.
+"""Tests for ``IMP.bff``'s accessible volume infrastructure.
 
 All tests in this file run in **standalone mode** (no IMP
 required) and use the Numba kernels directly.
@@ -11,14 +11,18 @@ import os
 import numpy as np
 import pytest
 
-from IMP.bff.representation.av import AccessibleVolume, ACV, compute_av
-from IMP.bff.representation.av import (
-    random_distances,
-    density2points,
-    weighted_mean,
+import IMP.bff
+
+from IMP.bff import (
+    ACV,
+    AccessibleVolume,
     average_distance,
+    compute_av,
+    density_to_points,
     mean_fret_distance,
-    split_av_acv,
+    points_weighted_mean,
+    random_distances,
+    split_contact_volume_masks,
 )
 
 
@@ -116,14 +120,15 @@ class TestKernels:
     def test_weighted_mean(self):
         pts = np.array([[0.0, 0.0, 0.0, 2.0],
                         [2.0, 0.0, 0.0, 2.0]], dtype=np.float64)
-        m = weighted_mean(pts, 2)
+        m = points_weighted_mean(pts.ravel())
         np.testing.assert_allclose(m, [1.0, 0.0, 0.0], atol=1e-12)
 
     def test_density2points(self):
         density = np.zeros((3, 3, 3), dtype=np.float64)
         density[1, 1, 1] = 1.0
         origin = np.array([0.0, 0.0, 0.0])
-        n, pts = density2points(3, 3, 3, 1.0, density, origin)
+        pts = density_to_points(density, 1.0, origin)
+        n = pts.shape[0]
         assert n == 1
         np.testing.assert_allclose(pts[0, :3], [1.0, 1.0, 1.0], atol=1e-6)
 
@@ -168,27 +173,27 @@ class TestAccessibleVolumeStates:
             AccessibleVolume(density=np.zeros((2, 3, 4)), grid_origin=np.zeros(3))
 
 
-class TestSplitAVACV:
-    """split_av_acv kernel."""
+class TestSplitContactVolume:
+    """The contact/free split of a density grid."""
 
     def test_all_non_contact_no_centers(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         rs = np.array([[100.0, 100.0, 100.0]], dtype=np.float64)
         radius = np.array([1.0], dtype=np.float64)
         r0 = np.zeros(3, dtype=np.float64)
-        nc, nn, c, nc_mask = split_av_acv(density, 1.0, radius, rs, r0)
-        assert nc == 0
-        assert nn > 0
+        contact, free = split_contact_volume_masks(density, 1.0, radius, rs, r0)
+        assert contact.sum() == 0
+        assert free.sum() > 0
 
     def test_some_contact(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         rs = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
         radius = np.array([1.5], dtype=np.float64)
         r0 = np.zeros(3, dtype=np.float64)
-        nc, nn, c, nc_mask = split_av_acv(density, 1.0, radius, rs, r0)
-        assert nc > 0
-        assert nn > 0
-        assert nc + nn == 5 * 5 * 5
+        contact, free = split_contact_volume_masks(density, 1.0, radius, rs, r0)
+        assert contact.sum() > 0
+        assert free.sum() > 0
+        assert contact.sum() + free.sum() == 5 * 5 * 5
 
 
 class TestACV:
@@ -265,9 +270,7 @@ class TestComputeAvBackends:
         rather than skipped, which also applies the owner's 2026-08-11 rule that
         IMP.bff's AV is the only backend.
         """
-        import IMP.bff.representation.av as compute
-
-        return ["imp_bff"] if compute._HAS_IMP_BFF else []
+        return ["imp_bff"] if hasattr(IMP.bff, "AV") else []
 
     def test_it_returns_a_volume(self):
         if not self._available():

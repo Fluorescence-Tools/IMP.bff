@@ -1067,8 +1067,6 @@ def dock_minimize(
              "stopped": stopped, "trajectory": traj_frames}
     if params.save_distributions and not stopped:
         try:
-            import IMP.bff.representation.av as _av
-            _av.select_backend(params.av_backend)
             positions, dists, _ss = _read_positions(ensure_fps_json(fps_json_path, pdb_paths))
             res = _compute_distance_distributions(
                 out_pdb, positions, dists,
@@ -1408,8 +1406,7 @@ def _compute_distance_distributions(
     import IMP.bff.representation.av as _av
     import IMP.bff.representation.distance as _dist
 
-    atoms = _av.load_structure_with_vdw(pdb_path)
-    avs = _av.compute_avs_for_structure(atoms, positions, pdb_path=pdb_path)
+    avs = IMP.bff.compute_avs_for_structure(positions, pdb_path)
 
     rda_axis = None
     pairs: Dict[str, Dict] = {}

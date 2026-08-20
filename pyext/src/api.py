@@ -81,13 +81,9 @@ BY_DOMAIN = {
         "FLUOROPHORE_TYPES": "IMP.bff.label",
         "Label": "IMP.bff.label",
         # IMP.bff.label
-        "default_strip_mask": "IMP.bff.label",
-        "parse_strip_mask": "IMP.bff.label",
         "select_atoms": "IMP.bff.label",
-        "site_strip_mask": "IMP.bff.label",
         "strip_hierarchy": "IMP.bff.label",
         "strip_obstacles": "IMP.bff.label",
-        "strip_pdb_lines": "IMP.bff.label",
     },
     # -- photophysics -- interaction terms, rate fields, and the orientation factor
     "photophysics": {
@@ -130,10 +126,6 @@ BY_DOMAIN = {
     },
     # -- representation -- stage 1 -- where the dye can be: accessible volume, rotamer library, distributions
     "representation": {
-        # IMP.bff.representation.av
-        "compute_av": "IMP.bff.representation.av",
-        "compute_av_from_arrays": "IMP.bff.representation.av",
-        "compute_avs_for_structure": "IMP.bff.representation.av",
         # IMP.bff.representation.distance
         "av_pair_statistics": "IMP.bff.representation.distance",
         "distance_from_fret_efficiency": "IMP.bff.representation.distance",
@@ -220,16 +212,11 @@ del _domain, _members, _name, _module
 #: These two remain because they are not a spelling difference: they are two
 #: genuinely different functions that a name collision forced apart, and the
 #: flat surface keeps the meaning it always had.
-_SOURCE_NAME = {
-    # `IMP.bff.compute_av` has always been the *structure* front door -- a PDB
-    # plus an fps position definition -- while `IMP.bff.representation.av`
-    # exported the *array* one under the same name. The two lived in different
-    # modules of `representation/av/` and were only distinguishable by the route
-    # taken to them; merging those modules made the collision visible and forced
-    # the second a name of its own. The flat name keeps its meaning.
-    "compute_av": "compute_av_from_structure",
-    "compute_av_from_arrays": "compute_av",
-}
+#: Names whose module spelling differs from their public one. Empty: the two
+#: that were here were the two `compute_av`s, an *array* door and a *structure*
+#: door that a name collision had forced apart. Both are C++ now, under the two
+#: names they always meant.
+_SOURCE_NAME = {}
 
 
 def domain_of(name: str) -> str:

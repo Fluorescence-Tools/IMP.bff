@@ -639,7 +639,7 @@ def distance_sample_statistics(
 
     The sibling of :func:`av_pair_statistics`, which takes the two *clouds*.
     This one takes distances that have already been drawn -- from
-    :func:`IMP.bff.representation.av._kernels.random_distances`, from a trajectory, or from a
+    :func:`IMP.bff.random_distances`, from a trajectory, or from a
     measurement -- and is the right entry point when the clouds are not at hand.
 
     :returns: ``(r_da_mean, r_mp, r_e, mean_efficiency)``.
@@ -724,7 +724,7 @@ meant both, which is the kind of collision this restructure exists to remove.
 """
 
 if TYPE_CHECKING:  # names for annotations only; see _av_types() below
-    from IMP.bff.representation.av import ACV, AccessibleVolume
+    from IMP.bff import ACV, AccessibleVolume
 
 
 def _av_types():
@@ -739,7 +739,7 @@ def _av_types():
     break it. ``import IMP.bff.representation.av`` as a process's first import raised
     ImportError until this was deferred (PRD-113 stage 3).
     """
-    from IMP.bff.representation.av import ACV, AccessibleVolume, compute_av
+    from IMP.bff import ACV, AccessibleVolume, compute_av
     return AccessibleVolume, ACV, compute_av
 
 # ---------------------------------------------------------------------------
