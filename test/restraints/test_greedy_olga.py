@@ -24,9 +24,59 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.restraints import greedy_olga as go
 
 scipy_special = pytest.importorskip("scipy.special")
+
+
+def _chisq_rt_cdf(chisq, ndof):
+    """The kernel, on the caller's shape."""
+    arr = np.asarray(chisq, dtype=np.float64)
+    flat = IMP.bff.chi2_right_tail(np.ascontiguousarray(arr).ravel(), int(ndof))
+    return np.asarray(flat, dtype=np.float64).reshape(arr.shape)
+
+
+def _chisq_rt_cdf_reference(chisq, ndof):
+    """The vectorised Python the kernel replaced, kept verbatim as the check.
+
+    The half-integer branch is the reason it is worth keeping: Olga takes the
+    expansion from Boost, whose loop is ``for (n = 2; n < a; ++n)`` with ``a`` a
+    half-integer, and the first port wrote ``range(2, int(a))`` -- one iteration
+    short on every odd ``ndof``, which at ``ndof = 5``, ``chisq = 3.008``
+    returned ``0.3903934`` for a true ``0.6987524``. ``ndof`` is the number of
+    pairs chosen so far, so it is odd on every other greedy step.
+    """
+    x = 0.5 * np.asarray(chisq, dtype=np.float64)
+    a = 0.5 * ndof
+
+    if a > 100.0:
+        # Olga approximates this tail with a normal, which is off by up to
+        # 1.3e-2 near the median. The series would need ~a terms here, but this
+        # branch is reached only past 200 selected pairs.
+        return scipy_special.gammaincc(a, x)
+
+    if ndof % 2 == 0:
+        # a is an integer: Q(a, x) = exp(-x) * sum_{n=0}^{a-1} x**n / n!
+        term = np.exp(-x)
+        total = term.copy()
+        for n in range(1, int(a)):
+            term = term * x / n
+            total += term
+        return total
+
+    # a is a half-integer: Q(a, x) = erfc(sqrt(x)) + exp(-x)/sqrt(pi x) * series
+    total = scipy_special.erfc(np.sqrt(x))
+    if a > 1.0:
+        positive = x > 0.0
+        xp = np.where(positive, x, 1.0)
+        term = np.exp(-xp) / np.sqrt(np.pi * xp) * xp / 0.5
+        series = term.copy()
+        n = 2
+        while n < a:
+            term = term / (n - 0.5) * xp
+            series += term
+            n += 1
+        total = total + np.where(positive, series, 0.0)
+    return total
 
 
 # --- the chi-squared right tail ---------------------------------------------
@@ -41,15 +91,15 @@ def test_the_tail_matches_the_reference_series_and_scipy(ndof):
     """
     rng = np.random.default_rng(5)
     x = np.concatenate([[0.0], rng.uniform(0.0, 900.0, 2000)])
-    got = go._chisq_rt_cdf(x, ndof)
-    np.testing.assert_allclose(got, go._chisq_rt_cdf_python(x, ndof), atol=1e-12)
+    got = _chisq_rt_cdf(x, ndof)
+    np.testing.assert_allclose(got, _chisq_rt_cdf_reference(x, ndof), atol=1e-12)
     np.testing.assert_allclose(got, scipy_special.gammaincc(0.5 * ndof, 0.5 * x),
                                atol=1e-12)
 
 
 def test_the_tail_is_one_at_zero_and_falls_monotonically():
     for ndof in (1, 2, 5, 40):
-        v = go._chisq_rt_cdf(np.array([0.0, 1.0, 5.0, 20.0, 100.0]), ndof)
+        v = _chisq_rt_cdf(np.array([0.0, 1.0, 5.0, 20.0, 100.0]), ndof)
         assert v[0] == 1.0
         assert np.all(np.diff(v) <= 0.0)
         assert np.all((v >= 0.0) & (v <= 1.0))
@@ -64,7 +114,7 @@ def test_the_large_ndof_branch_needs_both_series_and_continued_fraction():
     """
     ndof = 201
     x = np.array([0.5, 5.0, 50.0, 150.0])          # all well below a + 1 = 101.5
-    got = go._chisq_rt_cdf(x, ndof)
+    got = _chisq_rt_cdf(x, ndof)
     assert np.all(got > 0.99), "these are far into the tail; Q must be near 1"
     assert not np.all(got == 1.0), "but not exactly 1 -- that was the bug"
     np.testing.assert_allclose(got, scipy_special.gammaincc(0.5 * ndof, 0.5 * x),
@@ -80,7 +130,7 @@ def _reference(effs, rmsds, chi2, inv, ndof, dw):
     np.square(c, out=c)
     c *= inv
     c += chi2
-    w = go._chisq_rt_cdf_python(c, ndof)
+    w = _chisq_rt_cdf_reference(c, ndof)
     sw = w.sum(axis=-2)
     return (np.einsum('kij,ij->kj', w, rmsds) / (sw - 1.0 + dw)).mean(axis=-1)
 
@@ -131,9 +181,7 @@ def test_the_greedy_selection_still_runs_end_to_end():
     n, m = 30, 12
     effs = rng.random((n, m))
     rmsds = _symmetric(rng, n, 8.0)
-    out = go.select_informative_pairs(effs, rmsds, err=0.05, max_pairs=4)
-    idx = out[0] if isinstance(out, tuple) else out
-    idx = np.asarray(idx).ravel()
+    idx, _ = IMP.bff.select_informative_pairs(effs, rmsds, err=0.05, max_pairs=4)
     assert idx.size == 4
     assert len(set(idx.tolist())) == 4, "greedy with unique_only must not repeat"
     assert np.all((idx >= 0) & (idx < m))

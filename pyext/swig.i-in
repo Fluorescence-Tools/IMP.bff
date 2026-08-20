@@ -62,7 +62,7 @@ import numpy as np
 %include "IMP/bff/RotamerEnergy.h"
 
 /* Greedy Olga: which pair to measure next. */
-%include "IMP/bff/GreedyOlga.h"
+%include "IMP_bff.greedyolga.i"
 
 /* What comes out: (amplitude, rate) pairs. */
 /* MOL2 in: the atoms and bonds a force-field component is built from. */

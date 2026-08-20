@@ -94,7 +94,7 @@ question from stage 2's "is this configuration allowed".
 * **Across the stages**: `dye.py`, `label.py`, `photophysics.py`,
   `observables.py`
 * **Formats and data**: `io/` (`cif.py`, `fps.py`, `structure.py`),
-  `restraints/` (`docking.py`, `greedy_olga.py`, `network.py`,
+  `restraints/` (`docking.py`, `network.py`,
   `simple_av_network.py`, `direct_labeling.py`)
 * **Assembled models**, applications of the stages rather than stages
   themselves: `quenching/` (the PET model for one site), `cgdye/` (explicit

@@ -1,12 +1,13 @@
-"""IMP.bff.representation.distance / fret.engine / greedy_olga — algorithm sanity checks."""
+"""IMP.bff.representation.distance / fret.engine / greedy Olga — algorithm sanity checks."""
 
 import numpy as np
 import pytest
 
+import IMP.bff
+
 from IMP.bff.representation.av import AccessibleVolume
 import IMP.bff.representation.distance as fdist
 from IMP.bff.restraints.network import DistanceRestraint, RigidBody
-from IMP.bff.restraints.greedy_olga import select_informative_pairs
 
 
 def _point_av(xyz):
@@ -83,7 +84,7 @@ def test_select_informative_pairs_prefers_discriminating_pair():
     effs[:, 0] = 0.2 + 0.6 * labels + rng.normal(0, 0.01, n_frames)
     effs[:, 1] = 0.5 + rng.normal(0, 0.01, n_frames)
     rmsds = np.abs(labels[:, None] - labels[None, :]) * 10.0
-    selected, decay = select_informative_pairs(
+    selected, decay = IMP.bff.select_informative_pairs(
         effs, rmsds, err=0.05, max_pairs=2)
     assert selected[0] == 0
     assert decay.shape == (2,)

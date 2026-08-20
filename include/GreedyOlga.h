@@ -64,6 +64,52 @@ IMPBFFEXPORT std::vector<double> expected_rmsd_after_adding(
         double inv_err_sq, int ndof, double diag_weight,
         int n_frames, int n_candidates);
 
+//! Expected mean RMSD given the chi-squared accumulated so far.
+/*!
+    Olga's `rmsdMeanMean(...)`: the right-tail probability of `chi2` weights the
+    pairwise RMSDs, and the column means are averaged.
+
+    \param[in] rmsds pairwise RMSD between frames, flat `n * n`
+    \param[in] chi2 accumulated chi-squared, flat `n * n`
+    \param[in] ndof degrees of freedom
+    \param[in] diag_weight Olga's diagonal correction on the denominator
+    \param[in] n_frames shape
+    \return the expected mean RMSD
+*/
+IMPBFFEXPORT double expected_rmsd(
+        const std::vector<double>& rmsds, const std::vector<double>& chi2,
+        int ndof, double diag_weight, int n_frames);
+
+//! What a greedy selection leaves behind: the pairs, and the precision decay.
+struct IMPBFFEXPORT GreedyPairSelection {
+    //! Indices into the pair axis of `effs`, in selection order.
+    std::vector<int> pairs;
+    //! Expected mean RMSD after each step, same length as `pairs`.
+    std::vector<double> decay;
+};
+
+//! Olga-style greedy informative pair selection.
+/*!
+    Repeatedly adds the candidate pair that leaves the smallest expected mean
+    RMSD, then reports the precision decay over the selection.
+
+    `effs` is expected to be finite: Olga's GUI does its NaN filtering before
+    calling the selector, and so must a caller here.
+
+    \param[in] effs,n_frames,n_pairs FRET efficiency per frame and pair
+    \param[in] rmsds,n_rmsd_rows,n_rmsd_cols pairwise RMSD between frames
+    \param[in] err expected absolute error in FRET efficiency
+    \param[in] max_pairs how many to select; capped at `n_pairs`
+    \param[in] unique_only a candidate may be selected at most once
+    \param[in] diag_weight Olga's diagonal correction on the denominator
+    \return the selected pairs and the expected mean RMSD after each of them
+*/
+IMPBFFEXPORT GreedyPairSelection select_informative_pairs(
+        double* effs, int n_frames, int n_pairs,
+        double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
+        double err, int max_pairs,
+        bool unique_only = true, double diag_weight = 0.99);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_GREEDYOLGA_H
