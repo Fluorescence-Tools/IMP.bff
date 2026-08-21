@@ -70,6 +70,9 @@ _LAZY = {}
 /* Scoring: how hard a conformer collides with its structure. */
 %include "IMP/bff/RotamerEnergy.h"
 
+/* Scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, rotamer score. */
+%include "IMP_bff.scoring.i"
+
 /* Greedy Olga: which pair to measure next. */
 %include "IMP_bff.greedyolga.i"
 
