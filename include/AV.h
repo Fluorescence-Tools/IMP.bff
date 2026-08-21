@@ -313,7 +313,69 @@ public:
      * @return A Vector3D object representing the radii of the object.
      */
     IMP::algebra::Vector3D get_radii(){
-        return IMP::algebra::Vector3D({get_radius1(), get_radius3(), get_radius3()});
+        return IMP::algebra::Vector3D({get_radius1(), get_radius2(), get_radius3()});
+    }
+
+    /**
+     * @brief The dye radii that actually take part in the carve.
+     *
+     * `radius1` always; `radius2` and `radius3` only when positive. **Zero is
+     * this library's sentinel for "unused", not a sphere of radius zero**, and
+     * the difference matters: LabelLib sorts the radii it is given and grades by
+     * all of them (`FlexLabel/src/FlexLabel.cxx:235`), so a zero radius is a real
+     * probe that fits everywhere and `dyeDensityAV3(r, 0, 0)` is *not*
+     * `dyeDensityAV1(r)` -- it is `(1 + 1 + [r fits])/3`, measured here as 21625
+     * voxels against AV1's 16370. bff writes AV1 as `(r, 0, 0)` and the fps
+     * schema requires `radius2`/`radius3` to be positive for an `AV3` position
+     * (`io/fps.py:888`), so selecting the positive radii reproduces both
+     * conventions: one radius gives the AV1 carve, three give the AV3 carve.
+     */
+    /**
+     * @brief Linker-length scale that removes a stencil's path-length bias.
+     *
+     * A coarse stencil overestimates path length, so the accessible volume it
+     * returns is that of a **shorter** linker. The bias is a property of the
+     * stencil, not of the structure: measured obstacle-free over linker lengths
+     * 12-25 A and dye radii 1.0-3.5 A, the scale that makes the 26 stencil
+     * reproduce the 74 stencil's volume is **1.0551 +/- 0.0021** (range
+     * 1.0526-1.0592). Stencil 30 measures the same, being 26's asymmetric
+     * variant.
+     *
+     * Applying it recovers the volume without paying for the finer search: on
+     * T4L 172L site 22 the 26 stencil gives 0.835-0.844 of the reference volume
+     * uncompensated and **0.995** compensated, and obstacle-free it is within
+     * 0.8 % at every length tested.
+     *
+     * 1.0 for the reference stencil, so the default configuration is untouched.
+     */
+    double get_stencil_length_compensation() const {
+        if(!get_compensate_stencil()) return 1.0;
+        switch(get_search_stencil()){
+            case 26: case 30: return 1.0551;
+            default: return 1.0;          // 74 is the reference
+        }
+    }
+
+    //! Linker length the search actually uses: nominal, times the stencil
+    //! compensation. Equal to get_linker_length() for the default stencil.
+    double get_effective_linker_length() const {
+        return get_linker_length() * get_stencil_length_compensation();
+    }
+
+    //! Whether to correct a coarse stencil's volume bias. **Default false**:
+    //! selecting stencil 26 or 30 gives that stencil's own answer, so a caller
+    //! pinning the historical metric keeps it. Turn it on when 26 is chosen for
+    //! speed and the reference volume is still wanted. A no-op on stencil 74.
+    bool get_compensate_stencil() const;
+    void set_compensate_stencil(bool tf);
+    static IntKey get_compensate_stencil_key();
+
+    std::vector<double> get_active_radii() const {
+        std::vector<double> r;
+        r.push_back(get_radius1());
+        if(get_radius2() > 0.0) r.push_back(get_radius2());
+        if(get_radius3() > 0.0) r.push_back(get_radius3());
+        return r;
     }
 
     //! Get whether the coordinates are optimized

@@ -838,6 +838,25 @@ void PathMap::carve_lattice(const int32_t *occupancy){
     rms_calculated_ = false;
 }
 
+void PathMap::carve_lattice_fractional(const int32_t *const *occupancy, int n){
+    long n_voxel = get_number_of_voxels();
+    density_soa_.resize(n_voxel);
+    if(n < 1) n = 1;
+    const double inv = 1.0 / (double) n;
+    for(long i = 0; i < n_voxel; i++){
+        int k = 0;
+        for(int j = 0; j < n; j++){
+            if(!((double) occupancy[j][i] > TILE_OBSTACLE_THRESHOLD)) k++;
+        }
+        // data_ keeps the largest probe's counts so downstream consumers that
+        // read the map data see the same thing the AV1 path gave them.
+        data_[i] = (double) occupancy[0][i];
+        density_soa_[i] = (float) (k * inv);
+    }
+    normalized_ = false;
+    rms_calculated_ = false;
+}
+
 void PathMap::carve_lattice(){
     long n_voxel = get_number_of_voxels();
     density_soa_.resize(n_voxel);

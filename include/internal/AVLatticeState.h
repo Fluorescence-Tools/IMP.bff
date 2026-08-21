@@ -89,6 +89,11 @@ struct AVLatticeState {
     IMP::algebra::Vector3D pending_grid_origin;
     AVOccupancyMap *pending_occ1 = nullptr;
     AVOccupancyMap *pending_occ2 = nullptr;
+    //! AV3: the extra dye-radius occupancy sources (`pending_occ2` is the
+    //! first). Empty for AV1, so that path allocates and reads nothing new.
+    std::vector<AVOccupancyMap *> pending_occ_dye;
+    std::vector<int32_t> window_counts_dye;   //!< AV3 scratch, radii 2..n
+    std::vector<IMP::Pointer<AVOccupancyMap> > private_dye;
     unsigned long pending_gen1 = 0, pending_gen2 = 0;
 
     // Coarse search grid (search_grid_factor > 1): a small PathMap on the

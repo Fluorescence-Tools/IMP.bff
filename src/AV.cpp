@@ -267,12 +267,33 @@ int AV::get_search_stencil() const{
     if(get_model()->get_has_attribute(get_search_stencil_key(), get_particle_index())){
         return get_model()->get_attribute(get_search_stencil_key(), get_particle_index());
     }
-    return 26;
+    // **74 by default: the reference metric.** LabelLib's `essentialNeighbours()`
+    // (`FlexLabel/src/FlexLabel.cxx:149`) keeps the shells with squared offset
+    // length {1,2,3,5,6}; bff reaches the same path lengths with a sqrt(6)
+    // neighbour radius. Measured with no obstacles at all, where the accessible
+    // volume must be a sphere: 74 gives 30682 voxels for a 20 A linker against
+    // LabelLib's 30688 and an analytic 33510 -- 0.02 %. The 26 stencil
+    // ({1,2,3}) gives 26146, and the 15 % it loses is not at the rim but in
+    // every shell, because its isopath surface is cubic rather than spherical.
+    //
+    // **26 is the speed option**, and it is a real one: on T4L site 22 at 1.0 A
+    // a re-resample is 1.8 ms against 3.4 ms, so ~1.9x, for ~20 % less volume.
+    // Choose it where throughput matters more than the metric.
+    //
+    // The cost of the default: 74's longest jump is sqrt(6) ~ 2.45 voxels, so it
+    // **can tunnel through walls thinner than that**, which 26 (sqrt(3) ~ 1.73)
+    // cannot. LabelLib has the same property -- this is what the reference
+    // metric is -- and it is why a grid coarse enough to make an obstacle layer
+    // thinner than ~2.5 voxels is not safe with either. `test_empty_av_gives_nan`
+    // records a concrete instance at 1.5 A spacing with `linker_width` 0.5.
+    return 74;
 }
 
 void AV::set_search_stencil(int stencil){
-    IMP_USAGE_CHECK(stencil == 26 || stencil == 30,
-                    "AV: search stencil must be 26 (symmetric) or 30 (historical)");
+    IMP_USAGE_CHECK(stencil == 26 || stencil == 30 || stencil == 74,
+                    "AV: search stencil must be 74 (default, the LabelLib "
+                    "reference metric), 26 (the speed option, ~1.9x faster for "
+                    "~20 % less volume) or 30 (historical)");
     if(get_model()->get_has_attribute(get_search_stencil_key(), get_particle_index())){
         get_model()->set_attribute(get_search_stencil_key(), get_particle_index(), stencil);
     } else {
@@ -280,6 +301,35 @@ void AV::set_search_stencil(int stencil){
     }
     if(av_map_){
         av_map_ = nullptr;      // header radius and offsets change: rebuild
+        if(state_){ state_->have_result = false; state_->coarse_map = nullptr; }
+    }
+}
+
+IntKey AV::get_compensate_stencil_key(){
+    static const IntKey k("av_compensate_stencil");
+    return k;
+}
+
+bool AV::get_compensate_stencil() const{
+    if(get_model()->get_has_attribute(get_compensate_stencil_key(), get_particle_index())){
+        return get_model()->get_attribute(get_compensate_stencil_key(), get_particle_index()) != 0;
+    }
+    // **Opt-in, not default.** Asking for stencil 26 or 30 should give that
+    // stencil's own answer -- a caller pinning the historical 30 metric gets it
+    // unchanged. Compensation is for the case where 26 is chosen *for speed* and
+    // the reference volume is still wanted; it is then an explicit request.
+    return false;
+}
+
+void AV::set_compensate_stencil(bool tf){
+    int v = tf ? 1 : 0;
+    if(get_model()->get_has_attribute(get_compensate_stencil_key(), get_particle_index())){
+        get_model()->set_attribute(get_compensate_stencil_key(), get_particle_index(), v);
+    } else {
+        get_model()->add_attribute(get_compensate_stencil_key(), get_particle_index(), v);
+    }
+    if(av_map_){
+        av_map_ = nullptr;              // the path threshold changes: rebuild
         if(state_){ state_->have_result = false; state_->coarse_map = nullptr; }
     }
 }
@@ -348,7 +398,7 @@ void AV::prepare_lattice_window(){
     if(!get_space_fixed() || !state_ || !state_->registry) return;
     const double h = get_simulation_grid_resolution();
     int k0[3]; int n;
-    lattice_window(get_source_coordinates(), get_linker_length(), h, k0, n);
+    lattice_window(get_source_coordinates(), get_effective_linker_length(), h, k0, n);
     auto &st = get_state();
     st.registry->get_map(h, get_linker_width() * 0.5)
         ->request_window(k0[0], k0[1], k0[2], n, n, n);
@@ -359,7 +409,10 @@ void AV::prepare_lattice_window(){
 void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
-    if(get_space_fixed() && get_search_stencil() == 26) av_map_->set_symmetric_stencil(true);
+    if(get_space_fixed() && (get_search_stencil() == 26
+                            || get_search_stencil() == 74)){
+        av_map_->set_symmetric_stencil(true);
+    }
     if(get_space_fixed()) av_map_->set_euclidean_search(get_search_mode() == "euclidean");
     IMP::Particle* parent = get_model()->get_particle(get_particle_index(0));
 
@@ -408,7 +461,7 @@ void AV::resample_legacy(bool shift_xyz){
 
     // 2. Block voxels further away from source than linker length
     double critical_radius;
-    critical_radius = get_linker_length();
+    critical_radius = get_effective_linker_length();
     map->fill_sphere(source, critical_radius, TILE_PENALTY_THRESHOLD, true);
 
     // 3.1 Unblock voxels in initial sphere
@@ -483,7 +536,7 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending = false;
 
     const double h = get_simulation_grid_resolution();
-    const double ll = get_linker_length();
+    const double ll = get_effective_linker_length();
     const IMP::algebra::Vector3D source = get_source_coordinates();
     const IMP::algebra::VectorD<9> parameter = get_parameter();
 
@@ -523,14 +576,27 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.have_window = true;
 
     // 1. Occupancy sources for the two passes
+    //
+    // The second pass carves by the dye radius. AV3 carries three of them, so
+    // it needs one occupancy source per radius: the density is the fraction of
+    // probes that fit, which is what LabelLib/Olga's dyeDensityAV3 computes.
+    // AV1 has a single active radius and takes exactly the path it always did.
     const double extra1 = get_linker_width() * 0.5;
-    const double extra2 = get_radius1();
+    const std::vector<double> dye_radii = get_active_radii();
+    const double extra2 = dye_radii[0];
     AVOccupancyMap *occ1; AVOccupancyMap *occ2;
+    st.pending_occ_dye.clear();
     if(st.registry){
         occ1 = st.registry->get_map(h, extra1);
         occ2 = st.registry->get_map(h, extra2);
         occ1->request_window(k0[0], k0[1], k0[2], n, n, n);
         occ2->request_window(k0[0], k0[1], k0[2], n, n, n);
+        st.pending_occ_dye.push_back(occ2);
+        for(size_t i = 1; i < dye_radii.size(); i++){
+            AVOccupancyMap *o = st.registry->get_map(h, dye_radii[i]);
+            o->request_window(k0[0], k0[1], k0[2], n, n, n);
+            st.pending_occ_dye.push_back(o);
+        }
     } else {
         IMP::ParticlesTemp ps(map->ps_.begin(), map->ps_.end());
         if(!st.private1 || st.private1->get_extra_radius() != extra1
@@ -547,10 +613,25 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         occ2 = st.private2.get();
         occ1->set_window(k0[0], k0[1], k0[2], n, n, n);
         occ2->set_window(k0[0], k0[1], k0[2], n, n, n);
+        st.pending_occ_dye.push_back(occ2);
+        // AV3 without a shared registry: one private source per extra radius
+        st.private_dye.resize(dye_radii.size() > 1 ? dye_radii.size() - 1 : 0);
+        for(size_t i = 1; i < dye_radii.size(); i++){
+            IMP::Pointer<AVOccupancyMap> &pm = st.private_dye[i - 1];
+            if(!pm || pm->get_extra_radius() != dye_radii[i]
+                   || pm->get_spacing() != h){
+                pm = new AVOccupancyMap(h, dye_radii[i], ps);
+                pm->set_was_used(true);
+            }
+            pm->set_window(k0[0], k0[1], k0[2], n, n, n);
+            st.pending_occ_dye.push_back(pm.get());
+        }
     }
     if(!(st.registry && st.registry_driven_externally)){
         occ1->update(force_full);
-        occ2->update(force_full);
+        for(size_t i = 0; i < st.pending_occ_dye.size(); i++){
+            st.pending_occ_dye[i]->update(force_full);
+        }
     }
 
     // 2. Nothing that feeds the search changed: keep the tiles
@@ -626,6 +707,7 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending_grid_origin = grid_origin;
     st.pending_occ1 = occ1;
     st.pending_occ2 = occ2;
+    if(st.pending_occ_dye.empty()) st.pending_occ_dye.push_back(occ2);
     st.pending_gen1 = occ1->get_generation_after_pending();
     st.pending_gen2 = occ2->get_generation_after_pending();
     st.last_parameter = parameter;
@@ -761,7 +843,25 @@ void AV::resample_lattice_compute_carve(){
     if(st.window_counts.size() != (size_t) nvox) st.window_counts.resize(nvox);
     int32_t *counts = st.window_counts.data();
     st.pending_occ2->read_window_counts(k0[0], k0[1], k0[2], n, n, n, counts);
-    map->carve_lattice(counts);
+    const size_t n_dye = st.pending_occ_dye.empty() ? 1 : st.pending_occ_dye.size();
+    if(n_dye <= 1){
+        map->carve_lattice(counts);
+    } else {
+        // AV3: the density is the fraction of dye radii that fit, which is
+        // LabelLib/Olga's dyeDensityAV3. `counts` is already the first radius.
+        if(st.window_counts_dye.size() != (n_dye - 1) * (size_t) nvox){
+            st.window_counts_dye.resize((n_dye - 1) * (size_t) nvox);
+        }
+        std::vector<const int32_t *> src(n_dye);
+        src[0] = counts;
+        for(size_t i = 1; i < n_dye; i++){
+            int32_t *c = st.window_counts_dye.data() + (i - 1) * (size_t) nvox;
+            st.pending_occ_dye[i]->read_window_counts(k0[0], k0[1], k0[2],
+                                                     n, n, n, c);
+            src[i] = c;
+        }
+        map->carve_lattice_fractional(src.data(), (int) n_dye);
+    }
     (void) data;
 
     st.have_result = true;
@@ -830,7 +930,7 @@ void AV::set_av_parameter(const nlohmann::json &j){
 
 IMP::bff::PathMapHeader AV::create_path_map_header(){
     // create PathMapHeader
-    double ll = get_linker_length();
+    double ll = get_effective_linker_length();
     double dg = get_simulation_grid_resolution();
     IMP::bff::PathMapHeader path_map_header(ll, dg);
     if(get_space_fixed()){
@@ -841,6 +941,22 @@ IMP::bff::PathMapHeader AV::create_path_map_header(){
             // face, edge, corner neighbours: no length-2 axis jumps, so a
             // path cannot tunnel through a one-voxel wall
             path_map_header.set_neighbor_radius(std::sqrt(3.0) + 1e-6);
+        } else if(get_search_stencil() == 74){
+            // The reference metric. LabelLib's `essentialNeighbours()`
+            // (`FlexLabel/src/FlexLabel.cxx:149`) keeps the shells with squared
+            // offset length {1, 2, 3, 5, 6} -- 74 edges -- and notes that a
+            // shorter list gives "isopath surfaces that are cubic instead of
+            // spherical". The 26 stencil is {1, 2, 3}, and it costs real volume:
+            // with no obstacles at all, where the answer must be a sphere, 26
+            // returns 26146 voxels against LabelLib's 30688 for a 20 A linker.
+            //
+            // A radius of sqrt(6) admits {1, 2, 3, 4, 5, 6} = 80 edges. The six
+            // extra are the squared-length-4 axis jumps (2,0,0), which are
+            // exactly redundant -- their cost 2.0 equals two unit steps -- so
+            // Dijkstra returns the same path lengths as LabelLib's 74. They are
+            // left in rather than special-cased: the stencil stays a radius
+            // rule, and the cost is six offsets.
+            path_map_header.set_neighbor_radius(std::sqrt(6.0) + 1e-6);
         }
     }
     return path_map_header;

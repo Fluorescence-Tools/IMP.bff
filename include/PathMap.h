@@ -494,6 +494,30 @@ public:
     //! the map data (like the second raster of the historical path)
     void carve_lattice(const int32_t *occupancy);
 
+    /**
+     * @brief AV3 carve: density is the fraction of dye radii that fit.
+     *
+     * One occupancy-count array per radius. A voxel gets `k/n` where `k` of the
+     * `n` probes clear the obstacles there.
+     *
+     * This is LabelLib's rule, taken from its source rather than inferred:
+     * `Grid3DExt::excludeConcentricSpheres` (`FlexLabel/src/FlexLabel.cxx:235`,
+     * LabelLib 2af43ac) **sorts** the radii, builds
+     * `rhos = LinSpaced(n + 1, 0, 1)` -- `{0, 1/3, 2/3, 1}` for AV3 -- and for
+     * each atom writes `ref = min(ref, rhos[iClash])` over the shell between
+     * consecutive `atom_vdW + radius[iClash]`. A voxel inside the smallest probe
+     * is 0, inside the middle one 1/3, inside the largest 2/3, outside all of
+     * them 1: the fraction of probes that fit. `min` means the nearest atom
+     * wins, which the per-radius occupancy counts reproduce.
+     *
+     * The sort is why the result does not depend on the order of the radii, and
+     * it is checked against LabelLib directly in `test_av3_matches_labellib`.
+     *
+     * `n == 1` reproduces carve_lattice(const int32_t*) exactly, so the AV1
+     * path is unchanged.
+     */
+    void carve_lattice_fractional(const int32_t *const *occupancy, int n);
+
     //! get_xyz_density() as four arrays (x, y, z, density), appended to the
     //! given vectors after clearing them; same tiles, same order, same values.
     void get_xyz_density_soa(std::vector<float> &x, std::vector<float> &y,

@@ -541,7 +541,18 @@ class TestQuadratureAccuracy(unittest.TestCase):
                                                  IMP.bff.DYE_PAIR_DISTANCE_MP, 1))
 
     def test_empty_av_gives_nan(self):
-        par = dict(self.PAR, allowed_sphere_radius=1.0)
+        # An empty AV is made here by a linker too short to reach anywhere, which
+        # is **stencil-independent**. It used to be made by sealing the source
+        # with allowed_sphere_radius=1.0, and that stopped being empty when the
+        # default search stencil became 74: the reference metric's longest jump
+        # is sqrt(6) ~ 2.45 voxels against sqrt(3) ~ 1.73, so it crosses gaps the
+        # 26 stencil cannot and reaches 27 voxels 16-20 A from the source.
+        # LabelLib has the same property -- it is what the reference metric is --
+        # and it is why a grid coarse enough to leave an obstacle layer thinner
+        # than ~2.5 voxels (here 1.5 A spacing with linker_width 0.5) is not safe
+        # with either. The test's subject is NaN propagation, so it should not
+        # depend on that.
+        par = dict(self.PAR, linker_length=1.0)
         av3 = make_av(self.mdl, self.hier, 99, par)
         self.assertEqual(len(av3.get_map().get_xyz_density()), 0)
         v = IMP.bff.av_distance_quadrature(self.av1, av3, 52.0,
