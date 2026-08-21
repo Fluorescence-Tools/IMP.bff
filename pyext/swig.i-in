@@ -119,6 +119,15 @@ _LAZY = {}
 /* The rotamer library, ensemble, and FRET driver. */
 %include "IMP_bff.rotamer.i"
 
+/* The cgdye samplers: linker Metropolis, rotamer libraries, RRT, kinetics. */
+%include "IMP_bff.sampling.i"
+
+/* The cgdye MD runner: IMP MD/MC driver. */
+%include "IMP_bff.sim.i"
+
+/* The FRET-restrained docking engine. */
+%include "IMP_bff.docking.i"
+
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
