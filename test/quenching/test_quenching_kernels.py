@@ -41,15 +41,17 @@ class PetParameterTests(IMP.test.TestCase):
 
     def test_quenching_centres_sit_on_the_redox_active_moiety(self):
         """Not on CB -- for TRP that is ~3.3 A away, and contact is a few A."""
-        self.assertEqual(_q.QUENCHER_ATOMS["MET"], ("SD",))
-        self.assertEqual(_q.QUENCHER_ATOMS["CYS"], ("SG",))
-        self.assertIn("NE1", _q.QUENCHER_ATOMS["TRP"])
-        self.assertIn("OH", _q.QUENCHER_ATOMS["TYR"])
-        self.assertNotIn("CB", _q.QUENCHER_ATOMS["TRP"])
+        qa = _q.quencher_atoms()
+        self.assertEqual(tuple(qa["MET"]), ("SD",))
+        self.assertEqual(tuple(qa["CYS"]), ("SG",))
+        self.assertIn("NE1", qa["TRP"])
+        self.assertIn("OH", qa["TYR"])
+        self.assertNotIn("CB", qa["TRP"])
 
     def test_the_reference_chemistry_orders_the_quenchers(self):
         """TRP > PRO ~ TYR > MET > HIS > CYS."""
-        kq = {r: p.kQ for r, p in _q.PET_QUENCHING_REFERENCE.items()}
+        reference = _q.pet_quenching_reference()
+        kq = {r: p.kQ for r, p in reference.items()}
         self.assertGreater(kq["TRP"], kq["TYR"])
         self.assertAlmostEqual(kq["PRO"], kq["TYR"])
         self.assertGreater(kq["TYR"], kq["MET"])
@@ -58,9 +60,11 @@ class PetParameterTests(IMP.test.TestCase):
 
     def test_defaults_cover_every_standard_residue(self):
         table = _q.amino_acid_quenching_defaults()
-        self.assertEqual(set(table), set(_q.STANDARD_AMINO_ACID_RESIDUES))
+        standards = _q.standard_amino_acid_residues()
+        self.assertEqual(set(table), set(standards))
+        reference = _q.pet_quenching_reference()
         for residue, params in table.items():
-            if residue not in _q.PET_QUENCHING_REFERENCE:
+            if residue not in reference:
                 self.assertEqual(params.kQ, 0.0)
                 # NaN is what `None` was: inherit the model-wide distance.
                 self.assertTrue(math.isnan(params.quench_radius))
@@ -69,16 +73,18 @@ class PetParameterTests(IMP.test.TestCase):
         """The table is quoted dye-surface-to-quencher; the walk tracks centres."""
         radius = 5.0
         table = _q.amino_acid_quenching_defaults(dye_radius=radius)
-        for residue, reference in _q.PET_QUENCHING_REFERENCE.items():
+        reference = _q.pet_quenching_reference()
+        for residue, ref in reference.items():
             self.assertAlmostEqual(
                 table[residue].quench_radius,
-                radius + reference.contact_distance,
+                radius + ref.contact_distance,
             )
 
     def test_kq_scale_is_a_plain_multiplier(self):
         scaled = _q.amino_acid_quenching_defaults(kQ_scale=0.4)
         plain = _q.amino_acid_quenching_defaults()
-        for residue in _q.PET_QUENCHING_REFERENCE:
+        reference = _q.pet_quenching_reference()
+        for residue in reference:
             self.assertAlmostEqual(
                 scaled[residue].kQ, 0.4 * plain[residue].kQ
             )

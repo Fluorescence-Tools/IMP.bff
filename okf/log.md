@@ -1,5 +1,39 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 1, batch 7: `petquenching.i` to C++
+
+`pyext/IMP_bff.petquenching.i` lost its two `%pythoncode` blocks (the
+`_pet_table`/`QUENCHER_ATOMS`/`PET_QUENCHING_REFERENCE`/
+`STANDARD_AMINO_ACID_RESIDUES` constants-and-shims and the `ResidueSites`
+`%extend` properties), the nine `_function` renames, and the two
+`%attribute_py` (themselves `%pythoncode` macros — replaced with plain
+`%attribute`). The C++ `quencher_atoms`, `pet_quenching_reference`,
+`reference_*, normalize_*, *_for_residues`, `residue_sites` are now the public
+SWIG surface, returning `std::map`/`std::vector` proxies and flat numpy views.
+
+Interfaces that changed (prerelease; callers migrated):
+
+- `QUENCHER_ATOMS`, `PET_QUENCHING_REFERENCE`, `STANDARD_AMINO_ACID_RESIDUES`
+  module constants are gone — call the functions
+  (`quencher_atoms()`, `pet_quenching_reference()`,
+  `standard_amino_acid_residues()`). Their SWIG maps iterate and support `[]`,
+  `in`, `len()`, `items()` but not `.get()`.
+- `ResidueSites`: `.slow_centers`/`.quench_centers` properties are now
+  `get_slow_centers()`/`get_quench_centers()` flat views (caller reshapes to
+  `(n, 3)`); `len(found)` is `found.size()`.
+- `residue_sites(..., table=None)` no longer accepts `None` for the table —
+  the `%pythoncode` `_pet_table` shim that turned `None` into an empty map is
+  gone; omit the argument instead.
+- `Quencher.is_typed` / `PETParameters.is_transferred` are `%attribute`s now;
+  `get_is_typed()`/`get_is_transferred()` methods are suppressed.
+
+Migrated: `test/quenching/test_quenching_kernels.py`,
+`test/quenching/test_quenching_model.py`, `test/test_label_system.py`
+(`pet_quenching_reference` added to the `IMP.bff.label` shim).
+
+Verification: `ninja IMP.bff` clean; non-medium suite **652 passed, 3 xfailed**,
+only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 1, batch 6: `avbuilder.i` to C++
 
 The last of the phase-1 five. `pyext/IMP_bff.avbuilder.i` lost all three

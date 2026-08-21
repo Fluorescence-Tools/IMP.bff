@@ -48,10 +48,13 @@ def sphere_density(ng=41, radius_voxels=15):
 
 def _sites(atoms, table=None):
     """`residue_sites` over an :class:`ObstacleAtoms` value."""
+    kwargs = {}
+    if table is not None:
+        kwargs["table"] = table
     return sites.residue_sites(
         atoms.chains, atoms.res_ids, atoms.res_names, atoms.atom_names,
         np.ascontiguousarray(atoms.coords, dtype=np.float64).reshape(-1, 3),
-        table)
+        **kwargs)
 
 
 class ResidueSiteTests(IMP.test.TestCase):
@@ -62,23 +65,27 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("A", 1, "TRP", "NE1", [4.0, 0.0, 0.0]),
             ("A", 1, "TRP", "CD2", [6.0, 0.0, 0.0]),
         ])
-        found = _sites(atoms)
-        self.assertEqual(list(found.get_residue_names()), ["TRP"])
-        self.assertTrue(np.allclose(found.slow_centers[0], [0.0, 0.0, 0.0]))
+        found = _sites(atoms).get_slow_centers().reshape(-1, 3)
+        slow = found
+        quench = _sites(atoms).get_quench_centers().reshape(-1, 3)
+        self.assertEqual(list(_sites(atoms).get_residue_names()), ["TRP"])
+        self.assertTrue(np.allclose(slow[0], [0.0, 0.0, 0.0]))
         # The centroid of the PET-active atoms present, not CB.
-        self.assertTrue(np.allclose(found.quench_centers[0], [5.0, 0.0, 0.0]))
+        self.assertTrue(np.allclose(quench[0], [5.0, 0.0, 0.0]))
 
     def test_ca_stands_in_when_there_is_no_cb(self):
         atoms = make_atoms([("A", 1, "GLY", "CA", [1.0, 2.0, 3.0])])
-        found = _sites(atoms)
-        self.assertTrue(np.allclose(found.slow_centers[0], [1.0, 2.0, 3.0]))
+        sites_value = _sites(atoms)
+        self.assertTrue(
+            np.allclose(sites_value.get_slow_centers()[0:3], [1.0, 2.0, 3.0]))
 
     def test_a_residue_with_no_active_atom_falls_back_to_its_slow_centre(self):
         """So a user-supplied rate still has a well-defined centre."""
         atoms = make_atoms([("A", 1, "TRP", "CB", [1.0, 1.0, 1.0])])
         found = _sites(atoms)
         self.assertTrue(
-            np.allclose(found.quench_centers[0], found.slow_centers[0])
+            np.allclose(found.get_quench_centers(),
+                        found.get_slow_centers())
         )
 
     def test_residues_are_keyed_by_chain_as_well_as_number(self):
@@ -92,9 +99,10 @@ class ResidueSiteTests(IMP.test.TestCase):
             ("B", 1, "TRP", "CB", [50.0, 0.0, 0.0]),
         ])
         found = _sites(atoms)
-        self.assertEqual(len(found), 2)
+        self.assertEqual(found.size(), 2)
+        slow = found.get_slow_centers().reshape(-1, 3)
         self.assertAlmostEqual(
-            float(np.linalg.norm(found.slow_centers[0] - found.slow_centers[1])),
+            float(np.linalg.norm(slow[0] - slow[1])),
             50.0,
         )
 
@@ -105,7 +113,8 @@ class ResidueSiteTests(IMP.test.TestCase):
         ])
         table = {"TRP": ResidueQuenching(quench_atoms=["CB"], kQ=1.0)}
         found = _sites(atoms, table)
-        self.assertTrue(np.allclose(found.quench_centers[0], [0.0, 0.0, 0.0]))
+        self.assertTrue(
+            np.allclose(found.get_quench_centers()[0:3], [0.0, 0.0, 0.0]))
 
     def test_the_per_residue_lookups_follow_the_name_order(self):
         table = amino_acid_quenching_defaults()

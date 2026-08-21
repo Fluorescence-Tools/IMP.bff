@@ -15,8 +15,9 @@ import pytest
 
 from IMP.bff import find_dye
 from IMP.bff.label import (
-    Label, Quencher, PETParameters, reference_quenchers,
-    reference_pet_parameters, REFERENCE_DYE, FLUOROPHORE_TYPES,
+    Label, Quencher, PETParameters, pet_quenching_reference,
+    reference_quenchers, reference_pet_parameters, REFERENCE_DYE,
+    FLUOROPHORE_TYPES,
 )
 from IMP.bff.label import LABEL_FLRCIF_ITEMS as SITE_ITEMS
 from IMP.bff.label import QUENCHER_FLRCIF_ITEMS as QUENCHER_ITEMS
@@ -90,10 +91,10 @@ class TestQuencher:
         assert not hasattr(trp, "attenuation_length")
 
     def test_it_reads_the_one_table_rather_than_restating_it(self):
-        from IMP.bff import PET_QUENCHING_REFERENCE
+        reference = pet_quenching_reference()
         params = reference_pet_parameters()
-        assert set(params) == set(PET_QUENCHING_REFERENCE)
-        for comp_id, entry in PET_QUENCHING_REFERENCE.items():
+        assert set(params) == set(reference)
+        for comp_id, entry in reference.items():
             assert params[comp_id].rate_constant == pytest.approx(entry.kQ)
             assert params[comp_id].contact_distance == pytest.approx(
                 entry.contact_distance)
