@@ -176,6 +176,17 @@ IMPBFFEXPORT FRETPairEfficiencies fret_pair_efficiencies(
         const FRETPairGeometry& geometry, double forster_radius,
         double tau0 = -1.0);
 
+//! `fret_pair_geometry` followed by `fret_pair_efficiencies`, in one call.
+/*! Convenience for a caller who wants the efficiencies and does not need the
+    intermediate geometry. */
+IMPBFFEXPORT FRETPairEfficiencies fret_pair_distribution(
+        const std::vector<double>& points1, const std::vector<double>& weights1,
+        const std::vector<double>& points2, const std::vector<double>& weights2,
+        double forster_radius,
+        const std::vector<double>& mu1 = std::vector<double>(),
+        const std::vector<double>& mu2 = std::vector<double>(),
+        double tau0 = -1.0);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_FRETPAIR_H

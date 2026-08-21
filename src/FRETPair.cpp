@@ -258,4 +258,15 @@ FRETPairEfficiencies fret_pair_efficiencies(const FRETPairGeometry& geometry,
     return out;
 }
 
+FRETPairEfficiencies fret_pair_distribution(
+        const std::vector<double>& points1, const std::vector<double>& weights1,
+        const std::vector<double>& points2, const std::vector<double>& weights2,
+        double forster_radius, const std::vector<double>& mu1,
+        const std::vector<double>& mu2, double tau0) {
+    return fret_pair_efficiencies(fret_pair_geometry(points1, weights1,
+                                                     points2, weights2, mu1,
+                                                     mu2),
+                                  forster_radius, tau0);
+}
+
 IMPBFF_END_NAMESPACE
