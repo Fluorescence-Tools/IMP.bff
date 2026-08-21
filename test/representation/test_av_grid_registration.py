@@ -18,6 +18,8 @@ than deriving it from the grid, precisely so the two are independent readings.
 Two readings can disagree; one cannot.
 """
 
+import json
+
 import numpy as np
 import pytest
 
@@ -35,7 +37,8 @@ def pdb_path():
 
 
 def _build(pdb_path, resolution):
-    return compute_av_from_structure(pdb_path, dict(_SITE), disc_step=resolution)
+    return compute_av_from_structure(pdb_path, json.dumps(dict(_SITE)),
+                                     resolution)
 
 
 def _voxel_indices(av):

@@ -1200,7 +1200,7 @@ def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = 
     """The accessible volume of one fps.json position on ``pdb``."""
     p = _av_position(pos)
     ds = float(disc_step or p.get("simulation_grid_resolution", 1.5))
-    return compute_av_from_structure(pdb, p, disc_step=ds)
+    return compute_av_from_structure(pdb, json.dumps(p), ds)
 
 
 def ensemble_for_position(pdb: str, pos: Dict[str, Any], library: str, **kwargs) -> RotamerEnsemble:

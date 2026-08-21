@@ -33,6 +33,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
 
+
 #include <IMP/value_macros.h>
 #include <IMP/showable_macros.h>
 
@@ -209,6 +210,43 @@ IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
         double allowed_sphere_radius = -1.0,
         double contact_volume_thickness = 0.0,
         double contact_volume_trapped_fraction = -1.0);
+
+//! The same front door, from an fps.json `Positions` entry.
+/*!
+    A position is data, so this takes it as data (a nlohmann JSON value), not
+    as separate keywords. The entry's fields -- chain_identifier,
+    residue_seq_number, atom_name, linker_length, linker_width, radius1..
+    radius3, strip_mask, allowed_sphere_radius, contact_volume_*, and
+    simulation_grid_resolution -- are read the way the fps dictionary states
+    them, and a declared `simulation_grid_resolution` that disagrees with
+    \p disc_step raises: that field is *written into* the particle from
+    \p disc_step, so a caller who declares it and omits the step would silently
+    build at 1.5 A.
+
+    \param[in] position_json one entry of an fps.json `Positions` section,
+               serialised as JSON text
+    \param[in] disc_step the voxel spacing, A; `<= 0` derives it from the entry's
+               `simulation_grid_resolution` and then refuses a declared one that
+               disagrees
+    \throw ValueException on a disagreeing resolution or a missing attachment site
+*/
+IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
+        const std::string& pdb_path, const std::string& position_json,
+        double disc_step = -1.0);
+
+//! Every position of an fps.json `Positions` section, keyed by name.
+/*!
+    \p pdb_path may be one path or a JSON array of paths; a position's
+    `body_id` indexes into it, which is how a docking run gives each rigid body
+    its own structure. A position whose attachment atom is not in its structure
+    comes back as an **empty** volume rather than one computed at a guessed
+    coordinate. \p positions_json is the section serialised as JSON text.
+
+    \return `{name: AccessibleVolume}`, one per key of \p positions_json
+*/
+IMPBFFEXPORT std::map<std::string, AccessibleVolume> compute_avs_for_structure(
+        const std::string& positions_json, const std::string& pdb_path,
+        double disc_step = -1.0);
 
 IMPBFF_END_NAMESPACE
 

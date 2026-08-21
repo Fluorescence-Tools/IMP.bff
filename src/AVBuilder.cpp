@@ -12,6 +12,7 @@
 #include <IMP/bff/PathMapHeader.h>
 #include <IMP/bff/StripMask.h>
 #include <IMP/bff/internal/OutputView.h>
+#include <IMP/bff/internal/json.h>
 
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/atom/Atom.h>
@@ -23,10 +24,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <string>
 #include <sys/stat.h>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -449,6 +452,127 @@ AccessibleVolume compute_av_from_structure(
     std::free(points);
     av.set_points(uniform);
     return av;
+}
+
+namespace {
+//! One fps.json `Positions` entry, as the typed call.
+/*! Reads the fields the fps dictionary states for a position. A declared
+    `simulation_grid_resolution` that disagrees with `disc_step` raises: that
+    field is *written into* the particle from `disc_step`, so a caller who
+    declares it and omits the step would silently build at the 1.5 A default. */
+AccessibleVolume av_from_position(const std::string& pdb_path,
+                                  const nlohmann::json& position,
+                                  double disc_step) {
+    const std::string chain = position.value("chain_identifier", "");
+    const int resseq = position.value("residue_seq_number", 0);
+    const std::string atom = position.value("atom_name", "CA");
+    const double linker_length = position.value("linker_length", 20.0);
+    const double linker_width = position.value("linker_width", 1.0);
+    const double r1 = position.value("radius1", 3.5);
+    const double r2 = position.value("radius2", 0.0);
+    const double r3 = position.value("radius3", 0.0);
+    const double declared =
+            position.contains("simulation_grid_resolution")
+                    ? position.at("simulation_grid_resolution").get<double>()
+                    : 0.0;
+    double step = 1.5;
+    if (disc_step > 0.0) {
+        step = disc_step;
+        if (position.contains("simulation_grid_resolution") &&
+            std::abs(declared - step) > 1e-9) {
+            IMP_THROW("simulation_grid_resolution=" << declared
+                              << " in the position disagrees with disc_step="
+                              << step,
+                      ValueException);
+        }
+    } else if (position.contains("simulation_grid_resolution")) {
+        IMP_THROW("the position declares simulation_grid_resolution="
+                          << declared
+                          << " but no disc_step was given, so the AV would be "
+                             "built at disc_step=1.5",
+                  ValueException);
+    }
+    return compute_av_from_structure(
+            pdb_path, chain, resseq, atom, linker_length, linker_width, r1, r2,
+            r3, step, position.value("strip_mask", ""),
+            position.contains("allowed_sphere_radius")
+                    ? position.at("allowed_sphere_radius").get<double>()
+                    : -1.0,
+            position.value("contact_volume_thickness", 0.0),
+            position.value("contact_volume_trapped_fraction", -1.0));
+}
+}
+
+AccessibleVolume compute_av_from_structure(
+        const std::string& pdb_path, const std::string& position_json,
+        double disc_step) {
+    return av_from_position(pdb_path, nlohmann::json::parse(position_json),
+                            disc_step);
+}
+
+std::map<std::string, AccessibleVolume> compute_avs_for_structure(
+        const std::string& positions_json, const std::string& pdb_path_or_json,
+        double disc_step) {
+    const nlohmann::json positions = nlohmann::json::parse(positions_json);
+    std::vector<std::string> paths;
+    if (!pdb_path_or_json.empty() && pdb_path_or_json[0] == '[') {
+        const nlohmann::json arr = nlohmann::json::parse(pdb_path_or_json);
+        for (const auto& p : arr) paths.push_back(p.get<std::string>());
+    } else {
+        // One path, or a comma-separated list (the historical spelling).
+        std::string cur;
+        for (std::size_t i = 0; i <= pdb_path_or_json.size(); ++i) {
+            const char c = i < pdb_path_or_json.size() ? pdb_path_or_json[i] : ',';
+            if (c == ',') {
+                if (!cur.empty()) paths.push_back(cur);
+                cur.clear();
+            } else {
+                cur += c;
+            }
+        }
+    }
+
+    std::map<std::string, AccessibleVolume> out;
+    if (!positions.is_object()) {
+        IMP_THROW("positions must be a JSON object keyed by name",
+                  ValueException);
+    }
+    for (auto it = positions.begin(); it != positions.end(); ++it) {
+        const std::string& name = it.key();
+        const nlohmann::json& p = it.value();
+        const int body = p.value("body_id", 0);
+        const std::string path =
+                paths.empty() ? "" : paths[static_cast<std::size_t>(body) <
+                                                   paths.size()
+                                           ? body
+                                           : 0];
+        const double step = disc_step > 0.0
+                ? disc_step
+                : p.contains("simulation_grid_resolution")
+                          ? p.at("simulation_grid_resolution").get<double>()
+                          : 1.5;
+        double* found = NULL;
+        int n_found = 0;
+        find_attachment_point(path, p.value("chain_identifier", ""),
+                              static_cast<int>(p.value("residue_seq_number", 0)),
+                              p.value("atom_name", "CA"), &found, &n_found);
+        if (found == NULL || n_found == 0) {
+            out[name] = AccessibleVolume(std::vector<double>(),
+                                         std::vector<double>(),
+                                         std::vector<double>(), step, name);
+        } else {
+            std::free(found);
+            AccessibleVolume av = av_from_position(path, p, step);
+            av.set_position_name(name);
+            std::map<std::string, std::string> params;
+            for (auto it2 = p.begin(); it2 != p.end(); ++it2) {
+                params[it2.key()] = it2.value().dump();
+            }
+            av.set_params(params);
+            out[name] = av;
+        }
+    }
+    return out;
 }
 
 IMPBFF_END_NAMESPACE

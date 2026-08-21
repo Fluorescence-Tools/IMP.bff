@@ -1,6 +1,59 @@
 # Update Log
 
-## 2026-08-21 — PRD-117 Phase 1, batch 1: `avdistance.i` reshape wrappers to C++
+## 2026-08-21 — PRD-117 phase 1, batch 6: `avbuilder.i` to C++
+
+The last of the phase-1 five. `pyext/IMP_bff.avbuilder.i` lost all three
+`%pythoncode` blocks and the `_compute_av`/`_compute_av_from_structure`
+renames; `compute_av`, `compute_av_from_structure` and
+`compute_avs_for_structure` are now the C++ functions SWIG exposes directly.
+
+Two nlohmann JSON bridges were added to `AVBuilder.h`/`AVBuilder.cpp`
+(vendored `internal/json.h`): the structure door takes one fps.json position
+entry, and the batch door takes a whole `Positions` section, both serialised as
+JSON text. Interfaces that changed (prerelease, callers migrated):
+
+- `compute_av(atoms_xyzr, source_xyz, ...)` takes the `(N, 4)` x/y/z/vdW
+  column stack directly instead of `(atoms_xyz, atoms_vdw, source_xyz, ...)` —
+  the `%apply(double* IN_ARRAY2, …)` `(n_atoms, n_cols)` typemap collapses the
+  three raw args into one 2-D view, and the pythoncode no longer
+  `column_stack`s.
+- `compute_av_from_structure(pdb, position_json, disc_step=-1.0)` takes a JSON
+  **string**, not a dict; `disc_step <= 0` derives it from the position's
+  `simulation_grid_resolution` and still refuses a declared one that disagrees
+  (positions carrying `simulation_grid_resolution` without `disc_step`). The
+  overload is SWIG-marshalled, so `disc_step` is positional (keywords vanish on
+  overloads).
+- `compute_avs_for_structure(positions_json, pdb_path, disc_step=-1.0)` returns
+  `MapStringAccessibleVolume`; `pdb_path` may be a JSON array of paths indexed
+  by `body_id`. Missing attachment sites come back as empty volumes, as before.
+
+Callers migrated to `json.dumps(...)`: `test/representation/test_av_resolution.py`,
+`test/representation/test_av_grid_registration.py`, and `bin/imp_bff:av_for_position`.
+`pyext/src/representation/__init__.py` port-status note updated (15/17 covered).
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** — only the pre-existing `test_access_av_feature` failure
+(`references/av_reference_0.mrc` data missing, unrelated to the port) remains,
+same as before this batch.
+
+## 2026-08-21 — FASPR cloned into `junk/` as a possible rotamer / side-chain source
+
+Cloned https://github.com/tommyhuangthu/FASPR into `junk/FASPR/` (Huang's fast
+protein side-chain packing, Bioinformatics 2020; packs a backbone against the
+Dunbrack 2010 rotamer library `dun2010bbdep.bin`, vendored). Two candidate uses
+for imp.bff, recorded so they are not forgotten:
+
+1. **Rotamer library** — an alternative/additional source to the FRETpredict
+   rotamer libraries in `data/rotamer_library` screened by `RotamerFRET`.
+2. **Side-chain sampling for dye-quencher accuracy** — pack real side-chain
+   conformers (FASPR's job) so the dye–quencher interaction sees the actual
+   residue geometry instead of only the stripped single-chain / AV
+   approximation.
+
+Nothing about it is imported, built or tested — it is a third-party reference
+fit, per `junk/README.md`. Free to academic users; see `junk/FASPR/README.md`.
+
+## 2026-08-21 — PRD-117 phase 1, batch 1: `avdistance.i` reshape wrappers to C++
 
 The four AV kernels (`random_distances`, `density_to_points`,
 `split_contact_volume`, `split_contact_volume_masks`) lost their Python reshape

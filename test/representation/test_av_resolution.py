@@ -16,6 +16,8 @@ but a resolution being wrong is invisible in the result, which is exactly what
 makes it worth refusing loudly.
 """
 
+import json
+
 import numpy as np
 import pytest
 
@@ -39,14 +41,14 @@ def _density(av):
 
 @pytest.mark.parametrize("disc_step", [1.5, 2.0, 2.5])
 def test_disc_step_sets_the_grid_spacing(pdb_path, disc_step):
-    av = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE),
-                                           disc_step=disc_step)
+    av = IMP.bff.compute_av_from_structure(pdb_path, json.dumps(dict(_SOURCE)),
+                                           disc_step)
     assert av.get_grid_step() == pytest.approx(disc_step)
 
 
 def test_a_coarser_grid_is_a_smaller_array(pdb_path):
-    fine = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE), disc_step=1.5)
-    coarse = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE), disc_step=2.5)
+    fine = IMP.bff.compute_av_from_structure(pdb_path, json.dumps(dict(_SOURCE)), 1.5)
+    coarse = IMP.bff.compute_av_from_structure(pdb_path, json.dumps(dict(_SOURCE)), 2.5)
     assert np.prod(_density(coarse).shape) < np.prod(_density(fine).shape)
     # Same cloud, so the physical extent survives the coarsening.
     fine_extent = np.array(_density(fine).shape) * fine.get_grid_step()
@@ -56,21 +58,21 @@ def test_a_coarser_grid_is_a_smaller_array(pdb_path):
 
 def test_an_agreeing_declaration_is_accepted(pdb_path):
     av = IMP.bff.compute_av_from_structure(
-        pdb_path, dict(_SOURCE, simulation_grid_resolution=2.0), disc_step=2.0)
+        pdb_path, json.dumps(dict(_SOURCE, simulation_grid_resolution=2.0)), 2.0)
     assert av.get_grid_step() == pytest.approx(2.0)
 
 
 def test_a_disagreeing_declaration_raises(pdb_path):
     with pytest.raises(ValueError, match="simulation_grid_resolution"):
         IMP.bff.compute_av_from_structure(
-            pdb_path, dict(_SOURCE, simulation_grid_resolution=2.5), disc_step=1.5)
+            pdb_path, json.dumps(dict(_SOURCE, simulation_grid_resolution=2.5)), 1.5)
 
 
 def test_the_default_is_not_silently_imposed_on_a_declared_resolution(pdb_path):
     """The exact shape of the bug: declare 2.5, pass no disc_step, get 1.5."""
     with pytest.raises(ValueError, match="disc_step=1.5"):
         IMP.bff.compute_av_from_structure(
-            pdb_path, dict(_SOURCE, simulation_grid_resolution=2.5))
+            pdb_path, json.dumps(dict(_SOURCE, simulation_grid_resolution=2.5)))
 
 
 if __name__ == "__main__":

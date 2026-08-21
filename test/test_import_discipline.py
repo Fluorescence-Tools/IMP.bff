@@ -346,8 +346,11 @@ def test_the_array_door_computes_an_accessible_volume():
     import IMP.bff
 
     av = IMP.bff.compute_av(
-        np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 6.0, 0.0], [0.0, 0.0, 6.0]]),
-        np.array([1.7, 1.7, 1.7, 1.7]),
+        np.column_stack([
+            np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 6.0, 0.0],
+                      [0.0, 0.0, 6.0]]),
+            np.array([1.7, 1.7, 1.7, 1.7]),
+        ]),
         np.array([2.0, 2.0, 2.0]),
     )
     assert av.get_density().reshape((av.get_ng(),) * 3).ndim == 3

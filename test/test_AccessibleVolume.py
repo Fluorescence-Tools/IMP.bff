@@ -149,9 +149,10 @@ class Tests(unittest.TestCase):
                   grid_resolution=1.0, allowed_sphere_radius=2.55)
 
         def dens(radii):
-            av = compute_av(xyz, vdw, source, kw["linker_length"],
-                            kw["linker_width"], radii, kw["grid_resolution"],
-                            kw["allowed_sphere_radius"])
+            av = compute_av(
+                np.column_stack([xyz, vdw]), source, kw["linker_length"],
+                kw["linker_width"], radii[0], radii[1], radii[2],
+                kw["grid_resolution"], kw["allowed_sphere_radius"])
             ng = av.get_ng()
             return np.asarray(av.get_density(), dtype=float).reshape(ng, ng, ng)
 
