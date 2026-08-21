@@ -116,6 +116,9 @@ _LAZY = {}
 /* The cgdye topology builder: force-field system assembly, graph helpers. */
 %include "IMP_bff.topology.i"
 
+/* The rotamer library, ensemble, and FRET driver. */
+%include "IMP_bff.rotamer.i"
+
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
@@ -161,6 +164,10 @@ _LAZY = {}
 /* One labelled site's donor decay, both ways. Last of the physics: it consumes
    an accessible volume, the PET tables, the walk and the grid solver. */
 %include "IMP_bff.quenchingmodel.i"
+
+/* RotamerEnsemble subclasses States (a SWIG value type), so it is defined
+   here -- after all SWIG types -- rather than in the main rotamer.i block. */
+%include "IMP_bff.rotamer_ensemble.i"
 
 /*
  * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through
