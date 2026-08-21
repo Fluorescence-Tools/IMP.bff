@@ -14,8 +14,11 @@
 #include <IMP/atom/Atom.h>
 #include <IMP/atom/Hierarchy.h>
 #include <IMP/atom/pdb.h>
+#include <IMP/algebra/Vector3D.h>
+#include <IMP/core/XYZ.h>
 #include <IMP/exception.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <random>
@@ -44,18 +47,61 @@ double DyeDiffusionTrajectory::get_acceptance_ratio() const {
     return total > 0 ? static_cast<double>(n_accepted_) / total : 0.0;
 }
 
-DyeDiffusionTrajectory simulate_dye_diffusion(int* density, int n_density,
-                                              double* mobility, int n_mobility,
-                                              int ng, double dg, double t_max,
-                                              double t_step,
-                                              double diffusion_coefficient,
-                                              int seed) {
+namespace {
+//! `ng` from a flat `ng^3` density; 0 when not a perfect cube.
+int grid_side(const std::vector<int>& density) {
+    const std::size_t n = density.size();
+    const long side =
+            static_cast<long>(std::lround(std::cbrt(static_cast<double>(n))));
+    if (side <= 0 || static_cast<std::size_t>(side) * side * side != n) return 0;
+    return static_cast<int>(side);
+}
+}  // namespace
+
+DyeDiffusionTrajectory simulate_dye_diffusion(
+        const std::vector<int>& density, const std::vector<int>& slow_density,
+        double dg, double t_max, double t_step, double D,
+        const std::vector<double>& slow_fact, int random_seed) {
+    const int ng = grid_side(density);
+    if (ng == 0) {
+        IMP_THROW("the density must be a flat cube of accessible voxels, "
+                          "nonempty with an integer cube-root side",
+                  ValueException);
+    }
+    const std::size_t n_vox = static_cast<std::size_t>(ng) * ng * ng;
+    if (!slow_density.empty() && slow_density.size() != n_vox) {
+        IMP_THROW("slow_density has "
+                          << slow_density.size() << " entries against density "
+                          << density.size(),
+                  ValueException);
+    }
+    if (slow_fact.size() > 1 && slow_fact.size() != n_vox) {
+        IMP_THROW("slow_fact has " << slow_fact.size()
+                                   << " entries and must be the flat ng^3 field "
+                                      "or one scalar",
+                  ValueException);
+    }
+
+    std::vector<double> mobility;
+    if (slow_fact.size() > 1) {
+        mobility = slow_fact;
+    } else {
+        const double scalar = slow_fact.empty() ? 1.0 : slow_fact[0];
+        if (scalar != 1.0 && !slow_density.empty()) {
+            mobility.resize(n_vox);
+            for (std::size_t i = 0; i < n_vox; ++i)
+                mobility[i] = slow_density[i] != 0 ? scalar : 1.0;
+        }
+    }
+
     std::vector<int> counts;
     double* packed = NULL;
     int n_packed = 0;
-    brownian_walk_in_volume(density, n_density, mobility, n_mobility, ng, dg,
-                            t_max, t_step, diffusion_coefficient, seed, counts,
-                            &packed, &n_packed);
+    brownian_walk_in_volume(
+            density.empty() ? NULL : const_cast<int*>(&density[0]),
+            static_cast<int>(density.size()), mobility.data(),
+            static_cast<int>(mobility.size()), ng, dg, t_max, t_step, D,
+            random_seed, counts, &packed, &n_packed);
 
     std::vector<double> xyz;
     std::vector<int> accepted;
@@ -84,8 +130,8 @@ DyeDiffusionTrajectory simulate_dye_diffusion(int* density, int n_density,
     return DyeDiffusionTrajectory(xyz, accepted, n_accepted, n_rejected);
 }
 
-void equilibrium_occupancy(double* diffusion_map, int n_diffusion_map,
-                           int* bounds, int n_bounds,
+void equilibrium_occupancy(const std::vector<double>& diffusion_map,
+                           const std::vector<int>& bounds,
                            const std::string& flux_form, double** out_view,
                            int* n_out_view) {
     const bool smoluchowski = flux_form == "smoluchowski";
@@ -94,17 +140,18 @@ void equilibrium_occupancy(double* diffusion_map, int n_diffusion_map,
                           << flux_form << "'",
                   ValueException);
     }
-    if (n_bounds != n_diffusion_map) {
+    if (diffusion_map.size() != bounds.size()) {
         IMP_THROW("the bounds and the diffusion map must have the same shape: "
-                          << n_bounds << " against " << n_diffusion_map,
+                          << bounds.size() << " against " << diffusion_map.size(),
                   ValueException);
     }
 
-    double* out = internal::new_double_view(n_diffusion_map, out_view, n_out_view);
+    const int n = static_cast<int>(diffusion_map.size());
+    double* out = internal::new_double_view(n, out_view, n_out_view);
     if (out == NULL) return;
 
     double total = 0.0;
-    for (int i = 0; i < n_diffusion_map; ++i) {
+    for (int i = 0; i < n; ++i) {
         out[i] = 0.0;
         if (bounds[i] <= 0) continue;
         if (smoluchowski) {
@@ -115,7 +162,7 @@ void equilibrium_occupancy(double* diffusion_map, int n_diffusion_map,
         total += out[i];
     }
     if (total > 0.0) {
-        for (int i = 0; i < n_diffusion_map; ++i) out[i] /= total;
+        for (int i = 0; i < n; ++i) out[i] /= total;
     }
 }
 
@@ -239,6 +286,22 @@ int sample_rotamer_index(const std::vector<double>& weights, int seed) {
                                  : static_cast<unsigned int>(seed));
     std::discrete_distribution<int> draw(weights.begin(), weights.end());
     return draw(engine);
+}
+
+void apply_rotamer_coordinates(const IMP::atom::Hierarchy hierarchy,
+                               const std::vector<double>& coords) {
+    IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
+    const std::size_t n_atoms = leaves.size();
+    if (coords.size() != n_atoms * 3) {
+        IMP_THROW("Atom count mismatch: coords=" << coords.size() / 3
+                          << " hierarchy=" << n_atoms,
+                  ValueException);
+    }
+    for (std::size_t i = 0; i < n_atoms; ++i) {
+        IMP::core::XYZ atom(leaves[i]);
+        atom.set_coordinates(IMP::algebra::Vector3D(
+                coords[3 * i], coords[3 * i + 1], coords[3 * i + 2]));
+    }
 }
 
 IMPBFF_END_NAMESPACE

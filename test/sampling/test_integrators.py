@@ -42,6 +42,16 @@ def _ball(ng, radius):
     return (((x - c) ** 2 + (y - c) ** 2 + (z - c) ** 2) < radius ** 2).astype(np.uint8)
 
 
+def _xyz(t):
+    """The trajectory as an ``(n_frames, 3)`` array."""
+    return t.get_xyz().reshape(-1, 3)
+
+
+def _accepted(t):
+    """The per-step accept flag, as the uint8 the trajectory used to pack."""
+    return t.get_accepted().astype(np.uint8)
+
+
 # --- the walk ----------------------------------------------------------------
 
 def test_free_walk_step_variance_is_2Ddt_per_component():
@@ -59,7 +69,7 @@ def test_free_walk_step_variance_is_2Ddt_per_component():
     """
     D, t_step = 8.0, 0.005
     box = np.ones((45, 45, 45), dtype=np.uint8)
-    steps = [np.diff(t.xyz, axis=0) for t in
+    steps = [np.diff(_xyz(t), axis=0) for t in
              (dif.simulate_dye_diffusion(box, dg=1.0, t_max=4000 * t_step,
                                          t_step=t_step, D=D, random_seed=s)
               for s in range(40))
@@ -78,7 +88,8 @@ def test_free_walk_diffuses_at_the_stated_D():
         t = dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step,
                                        t_step=t_step, D=D, random_seed=seed)
         if t.acceptance_ratio > 0.999:      # untouched by the walls
-            d.append(t.xyz[n - 1] - t.xyz[0])
+            xy = _xyz(t)
+            d.append(xy[n - 1] - xy[0])
     per_component = (np.array(d) ** 2).mean(axis=0).mean()
     assert per_component == pytest.approx(2 * D * n * t_step, rel=0.15)
 
@@ -107,10 +118,12 @@ def test_the_two_models_agree_on_D():
     """
     D, t_step, n = 8.0, 0.005, 60
     box = np.ones((45, 45, 45), dtype=np.uint8)
-    d = [t.xyz[n - 1] - t.xyz[0] for t in
-         (dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
-                                     D=D, random_seed=s) for s in range(300))
-         if t.acceptance_ratio > 0.999]
+    d = []
+    for t in (dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
+                                         D=D, random_seed=s) for s in range(300)):
+        if t.acceptance_ratio > 0.999:
+            xy = _xyz(t)
+            d.append(xy[n - 1] - xy[0])
     walk_msd = (np.array(d) ** 2).mean(axis=0).mean()
 
     ng, dg = 81, 1.0
@@ -136,7 +149,7 @@ def test_walk_never_leaves_the_accessible_region():
     ball = _ball(ng, 12)
     t = dif.simulate_dye_diffusion(ball, dg=1.0, t_max=2000.0, t_step=0.005,
                                    D=8.0, random_seed=1)
-    idx = np.floor(t.xyz).astype(int) + (ng - 1) // 2
+    idx = np.floor(_xyz(t)).astype(int) + (ng - 1) // 2
     inside = ball[np.clip(idx[:, 0], 0, ng - 1),
                   np.clip(idx[:, 1], 0, ng - 1),
                   np.clip(idx[:, 2], 0, ng - 1)]
@@ -151,7 +164,7 @@ def test_confined_walk_samples_the_region_uniformly():
     """
     t = dif.simulate_dye_diffusion(_ball(31, 12), dg=1.0, t_max=4000.0,
                                    t_step=0.005, D=8.0, random_seed=1)
-    r = np.linalg.norm(t.xyz, axis=1)
+    r = np.linalg.norm(_xyz(t), axis=1)
     assert r.mean() == pytest.approx(0.75 * 12.0, abs=1.5)
 
 
@@ -159,7 +172,7 @@ def test_walk_emits_one_frame_per_step_accepted_or_not():
     t = dif.simulate_dye_diffusion(_ball(21, 4), dg=1.0, t_max=100.0,
                                    t_step=0.01, D=40.0, random_seed=2)
     assert t.n_frames == 10000
-    assert t.accepted.shape == (10000,)
+    assert _accepted(t).shape == (10000,)
     assert t.n_accepted + t.n_rejected == 10000
     assert 0.0 < t.acceptance_ratio < 1.0, "a small ball must reject some steps"
 
@@ -169,10 +182,10 @@ def test_walk_is_reproducible_and_seed_dependent():
     ball = _ball(31, 12)
     a = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
     b = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
-    np.testing.assert_array_equal(a.xyz, b.xyz)
+    np.testing.assert_array_equal(_xyz(a), _xyz(b))
     assert a.n_accepted == b.n_accepted
     c = dif.simulate_dye_diffusion(ball, random_seed=6, **kw)
-    assert not np.array_equal(a.xyz, c.xyz)
+    assert not np.array_equal(_xyz(a), _xyz(c))
 
 
 def test_mobility_field_and_scalar_mask_agree():
@@ -185,10 +198,10 @@ def test_mobility_field_and_scalar_mask_agree():
 
     field = dif.simulate_dye_diffusion(ball, slow_fact=np.where(outer, 0.1, 1.0), **kw)
     scalar = dif.simulate_dye_diffusion(ball, slow_density=outer.astype(np.uint8),
-                                        slow_fact=0.1, **kw)
+                                        slow_fact=[0.1], **kw)
     free = dif.simulate_dye_diffusion(ball, **kw)
 
-    step = lambda t: np.linalg.norm(np.diff(t.xyz, axis=0), axis=1).mean()
+    step = lambda t: np.linalg.norm(np.diff(_xyz(t), axis=0), axis=1).mean()
     assert step(field) == pytest.approx(step(scalar), rel=0.05)
     assert step(field) < step(free), "a slow region must shorten the mean step"
 
@@ -198,7 +211,7 @@ def test_no_accessible_voxel_gives_an_empty_trajectory():
                                    dg=1.0, t_max=10.0, t_step=0.01, D=8.0, random_seed=1)
     assert t.n_accepted == 0 and t.n_rejected == 0
     assert t.acceptance_ratio == 0.0
-    assert not t.xyz.any()
+    assert not _xyz(t).any()
 
 
 # --- photons -----------------------------------------------------------------
@@ -327,14 +340,16 @@ def test_the_accept_flag_rides_in_the_returned_array():
     """
     t = dif.simulate_dye_diffusion(_ball(21, 6), dg=1.0, t_max=200.0,
                                    t_step=0.01, D=40.0, random_seed=3)
-    assert t.xyz.shape == (20000, 3)
-    assert t.accepted.shape == (20000,)
-    assert t.accepted.dtype == np.uint8
-    assert set(np.unique(t.accepted)) <= {0, 1}
+    xyz = _xyz(t)
+    accepted = _accepted(t)
+    assert xyz.shape == (20000, 3)
+    assert accepted.shape == (20000,)
+    assert accepted.dtype == np.uint8
+    assert set(np.unique(accepted)) <= {0, 1}
     # the flag agrees with the trajectory: a rejected step does not move
-    moved = np.any(np.diff(t.xyz, axis=0) != 0.0, axis=1)
-    np.testing.assert_array_equal(moved, t.accepted[1:].astype(bool))
-    assert int(t.accepted.sum()) == t.n_accepted
+    moved = np.any(np.diff(xyz, axis=0) != 0.0, axis=1)
+    np.testing.assert_array_equal(moved, accepted[1:].astype(bool))
+    assert int(accepted.sum()) == t.n_accepted
 
 
 def test_the_grid_goes_through_without_being_copied():
@@ -363,12 +378,12 @@ def test_the_grid_goes_through_without_being_copied():
     np.testing.assert_array_equal(ball, original)
 
     second = dif.simulate_dye_diffusion(ball, **kw)
-    np.testing.assert_array_equal(first.xyz, second.xyz)
+    np.testing.assert_array_equal(_xyz(first), _xyz(second))
     assert first.n_accepted == second.n_accepted
 
     awkward = np.asfortranarray(ball).astype(np.float32)
     third = dif.simulate_dye_diffusion(awkward, **kw)
-    np.testing.assert_array_equal(first.xyz, third.xyz)
+    np.testing.assert_array_equal(_xyz(first), _xyz(third))
 
 
 def test_a_short_walk_on_a_large_grid_is_no_longer_dominated_by_the_grid():

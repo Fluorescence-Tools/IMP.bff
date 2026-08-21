@@ -90,6 +90,21 @@ inline int* new_int_view(std::size_t n, int** out_view, int* n_out_view) {
     return buffer;
 }
 
+//! The same, for a per-event byte flag.
+inline unsigned char* new_uchar_view(std::size_t n, unsigned char** out_view,
+                                     int* n_out_view) {
+    unsigned char* buffer =
+            static_cast<unsigned char*>(std::calloc(n ? n : 1, sizeof(char)));
+    if (buffer == nullptr) {
+        *out_view = static_cast<unsigned char*>(std::calloc(1, sizeof(char)));
+        *n_out_view = 0;
+        return nullptr;
+    }
+    *out_view = buffer;
+    *n_out_view = static_cast<int>(n);
+    return buffer;
+}
+
 //! Publish a copy of a vector the kernel had to build anyway.
 /*! For kernels whose algorithm needs its own buffer — a double-buffered sweep
     cannot know in advance which of the two holds the answer — copying once at

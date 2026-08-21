@@ -192,11 +192,17 @@ class QuenchedDecayTests(IMP.test.TestCase):
         centroid = lambda d: float((d * np.arange(d.size)).sum() / d.sum())
         self.assertLess(centroid(quenched), centroid(unquenched))
 
-    def test_a_non_float64_output_array_is_still_filled(self):
-        """`np.asarray(..., dtype=float64)` copies, and QuEst filled the copy."""
+    def test_a_float32_output_array_is_rejected(self):
+        """The accumulation is in place into the caller's float64 buffer.
+
+        The Python wrapper used to compute the curve in float64 and *add* it
+        into whatever dtype the caller passed; the C++ version accumulates
+        directly, so a float32 histogram is no longer silently upcast -- the
+        histogram dtype is now part of the contract.
+        """
         decay = np.zeros(128, dtype=np.float32)
-        photon.simulate_quenched_decay(100, decay, 0.032, constant_rate(), 0.01, 4.0)
-        self.assertGreater(float(decay.sum()), 0.0)
+        with self.assertRaises(TypeError):
+            photon.simulate_quenched_decay(100, decay, 0.032, constant_rate(), 0.01, 4.0)
 
     def test_degenerate_inputs_are_no_ops(self):
         for n_curves, size, rate in ((0, 64, 100), (10, 0, 100), (10, 64, 0)):

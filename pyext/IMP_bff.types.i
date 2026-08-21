@@ -143,54 +143,39 @@
 // `freearg` frees ones it no longer declares, so it has to go with it.
 %typemap(freearg) const std::vector<double>& {}
 
-// The int sibling: an occupancy/field grid `std::vector<int>`. Any contiguous
-// int32 (or uint8 mask) array is copied row-major; `None` is the empty vector.
+// The int sibling: an occupancy/field grid `std::vector<int>`. Anything
+// array-like is converted through `PyArray_FromAny` to a flat C-contiguous
+// int32 copy, mirroring what the Python wrappers' `astype(int32)` did -- so a
+// uint8 mask, a float grid, or an F-contiguous float32 layout all land here as
+// one flat int vector (zeros where a value does not cast). `None` is the empty
+// vector; an already-wrapped `std::vector<int>` passes through untouched.
 %typemap(in, fragment="NumPy_Macros")
         const std::vector<int>& (std::vector<int> imp_bff_tmp,
-                                 std::vector<int>* imp_bff_ptr = 0,
-                                 int imp_bff_res = 0) {
-    if (is_numpy_array($input) && array_is_contiguous($input)) {
-        const int typ = array_type($input);
-        if (typ == NPY_INT32 || typ == NPY_UINT32 || typ == NPY_INT64 ||
-            typ == NPY_UINT8 || typ == NPY_INT8) {
-            const npy_intp n = PyArray_SIZE((PyArrayObject*)$input);
-            const void* data = array_data($input);
-            imp_bff_tmp.resize(static_cast<std::size_t>(n));
-            for (npy_intp i = 0; i < n; ++i) {
-                imp_bff_tmp[static_cast<std::size_t>(i)] =
-                    typ == NPY_INT64
-                        ? static_cast<int>(((npy_int64*)data)[i])
-                        : typ == NPY_UINT32
-                              ? static_cast<int>(((npy_uint32*)data)[i])
-                              : typ == NPY_UINT8
-                                    ? static_cast<int>(((npy_uint8*)data)[i])
-                                    : typ == NPY_INT8
-                                          ? static_cast<int>(((npy_int8*)data)[i])
-                                          : ((npy_int32*)data)[i];
-            }
-            $1 = &imp_bff_tmp;
-        } else {
-            imp_bff_res = swig::asptr($input, &imp_bff_ptr);
-            if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
-                SWIG_exception_fail(
-                    SWIG_ArgError(imp_bff_res),
-                    "in method '$symname', argument $argnum of type '$1_type'");
-            }
-            imp_bff_tmp = *imp_bff_ptr;
-            if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
-            $1 = &imp_bff_tmp;
-        }
-    } else if ($input == Py_None) {
+                                 std::vector<int>* imp_bff_ptr = 0) {
+    if ($input == Py_None) {
         $1 = &imp_bff_tmp;
+    } else if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**) &imp_bff_ptr,
+                                         $descriptor(std::vector<int>*), 0))
+               && imp_bff_ptr) {
+        $1 = imp_bff_ptr;
     } else {
-        imp_bff_res = swig::asptr($input, &imp_bff_ptr);
-        if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
+        PyArrayObject* imp_bff_arr_tmp = (PyArrayObject*) PyArray_FROMANY(
+                $input, NPY_INT, 0, 0,
+                NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_FORCECAST |
+                        NPY_ARRAY_ENSUREARRAY);
+        if (imp_bff_arr_tmp == NULL) {
             SWIG_exception_fail(
-                SWIG_ArgError(imp_bff_res),
+                SWIG_ValueError,
                 "in method '$symname', argument $argnum of type '$1_type'");
         }
-        imp_bff_tmp = *imp_bff_ptr;
-        if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
+        const npy_intp imp_bff_n = PyArray_SIZE(imp_bff_arr_tmp);
+        const int* imp_bff_src = (const int*) PyArray_DATA(imp_bff_arr_tmp);
+        imp_bff_tmp.resize(static_cast<std::size_t>(imp_bff_n));
+        for (npy_intp imp_bff_i = 0; imp_bff_i < imp_bff_n; ++imp_bff_i) {
+            imp_bff_tmp[static_cast<std::size_t>(imp_bff_i)] =
+                    imp_bff_src[imp_bff_i];
+        }
+        Py_DECREF(imp_bff_arr_tmp);
         $1 = &imp_bff_tmp;
     }
 }

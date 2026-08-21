@@ -30,6 +30,13 @@ def open_box(ng=41):
     return bounds
 
 
+def closed_occupancy(diffusion_map, bounds, flux_form="smoluchowski"):
+    """The equilibrium map as a cube: it comes back flat, one entry per voxel."""
+    out = equilibrium_occupancy(diffusion_map, bounds, flux_form)
+    side = round(float(len(out)) ** (1.0 / 3.0))
+    return np.asarray(out, dtype=float).reshape(side, side, side)
+
+
 def point_source(ng=41):
     p = np.zeros((ng,) * 3)
     c = (ng - 1) // 2
@@ -361,13 +368,13 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         self.d_map = np.where(self.bounds > 0, 2.0 + 1.5 * np.cos(axis * 0.3), 0.0)
 
     def test_the_closed_form_is_normalised_and_masked(self):
-        occupancy = equilibrium_occupancy(self.d_map, self.bounds)
+        occupancy = closed_occupancy(self.d_map, self.bounds)
         self.assertAlmostEqual(float(occupancy.sum()), 1.0, places=12)
         self.assertTrue(np.all(occupancy[self.bounds == 0] == 0.0))
 
     def test_d_times_p_is_constant(self):
         """The defining property of the ``"ito"`` branch, and only of it."""
-        occupancy = equilibrium_occupancy(self.d_map, self.bounds, "ito")
+        occupancy = closed_occupancy(self.d_map, self.bounds, "ito")
         inside = self.bounds > 0
         product = self.d_map[inside] * occupancy[inside]
         self.assertLess(float(product.std() / product.mean()), 1e-12)
@@ -381,14 +388,14 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         )
         iterated = solver.equilibrium(n_steps=200000, tolerance=1e-14, n_check=1000)
         iterated = iterated.reshape(self.ng, self.ng, self.ng)
-        closed = equilibrium_occupancy(self.d_map, self.bounds, "ito")
+        closed = closed_occupancy(self.d_map, self.bounds, "ito")
         inside = self.bounds > 0
         deviation = np.max(np.abs(iterated[inside] - closed[inside]) / closed[inside])
         self.assertLess(float(deviation), 1e-10)
 
     def test_a_uniform_mobility_gives_a_uniform_occupancy(self):
         uniform = np.where(self.bounds > 0, 3.0, 0.0)
-        occupancy = equilibrium_occupancy(uniform, self.bounds)
+        occupancy = closed_occupancy(uniform, self.bounds)
         inside = occupancy[self.bounds > 0]
         self.assertLess(float(inside.std() / inside.mean()), 1e-12)
 
@@ -397,17 +404,17 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
         d_map = np.where(self.bounds > 0, 4.0, 0.0)
         half = self.ng // 2
         d_map[:half] = np.where(self.bounds[:half] > 0, 0.25, 0.0)
-        uniform = equilibrium_occupancy(d_map, self.bounds)
+        uniform = closed_occupancy(d_map, self.bounds)
         self.assertAlmostEqual(
             float(uniform[self.bounds > 0].std()), 0.0, delta=1e-18)
-        occupancy = equilibrium_occupancy(d_map, self.bounds, "ito")
+        occupancy = closed_occupancy(d_map, self.bounds, "ito")
         slow = occupancy[:half][self.bounds[:half] > 0].mean()
         fast = occupancy[half:][self.bounds[half:] > 0].mean()
         self.assertAlmostEqual(float(slow / fast), 16.0, delta=1e-9)
 
     def test_an_empty_domain_is_not_an_error(self):
         empty = np.zeros((self.ng,) * 3)
-        self.assertEqual(float(equilibrium_occupancy(empty, empty).sum()), 0.0)
+        self.assertEqual(float(closed_occupancy(empty, empty).sum()), 0.0)
 
 
 class PortedDefectTests(IMP.test.TestCase):
@@ -492,7 +499,7 @@ class FluxFormTests(IMP.test.TestCase):
 
     def test_smoluchowski_equilibrium_is_uniform_whatever_the_mobility(self):
         bounds, d_map, _ = self.slab()
-        occupancy = equilibrium_occupancy(d_map, bounds, "smoluchowski")
+        occupancy = closed_occupancy(d_map, bounds, "smoluchowski")
         inside = occupancy[bounds > 0]
         self.assertAlmostEqual(float(inside.max() / inside.min()), 1.0, delta=1e-12)
         self.assertAlmostEqual(float(occupancy.sum()), 1.0, delta=1e-12)
@@ -500,7 +507,7 @@ class FluxFormTests(IMP.test.TestCase):
 
     def test_ito_equilibrium_is_one_over_D(self):
         bounds, d_map, contrast = self.slab()
-        occupancy = equilibrium_occupancy(d_map, bounds, "ito")
+        occupancy = closed_occupancy(d_map, bounds, "ito")
         inside = occupancy[bounds > 0]
         self.assertAlmostEqual(float(inside.max() / inside.min()), contrast, delta=1e-9)
 
@@ -508,8 +515,8 @@ class FluxFormTests(IMP.test.TestCase):
         ng = 15
         bounds = open_box(ng)
         d_map = np.full((ng,) * 3, 4.0)
-        a = equilibrium_occupancy(d_map, bounds, "smoluchowski")
-        b = equilibrium_occupancy(d_map, bounds, "ito")
+        a = closed_occupancy(d_map, bounds, "smoluchowski")
+        b = closed_occupancy(d_map, bounds, "ito")
         self.assertLess(float(np.abs(a - b).max()), 1e-15)
 
     def test_the_iterated_solver_reproduces_each_closed_form(self):
@@ -523,7 +530,7 @@ class FluxFormTests(IMP.test.TestCase):
             )
             iterated = solver.equilibrium(n_steps=60000, tolerance=1e-13)
             iterated = iterated.reshape(bounds.shape)
-            closed = equilibrium_occupancy(d_map, bounds, form)
+            closed = closed_occupancy(d_map, bounds, form)
             inside = bounds > 0
             deviation = float(
                 np.abs(iterated[inside] - closed[inside]).max() / closed[inside].max())

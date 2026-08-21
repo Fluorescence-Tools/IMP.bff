@@ -46,6 +46,38 @@ void photon_trace(int n_ph, const std::vector<double>& k_quench,
                            out_view, n_out_view);
 }
 
+void simulate_photon_trace(int n_ph, const std::vector<double>& k_quench,
+                           double t_step, double tau0, int random_seed,
+                           double** out_delays, int* n_delays,
+                           unsigned char** out_emitted, int* n_emitted) {
+    const std::vector<double> flat =
+            photon_trace_impl(n_ph, k_quench, t_step, tau0, random_seed);
+    const int n = n_ph > 0 ? n_ph : 0;
+    if (out_delays != NULL && n_delays != NULL) {
+        double* delays = internal::new_double_view(n, out_delays, n_delays);
+        if (delays != NULL) {
+            for (int i = 0; i < n; ++i) delays[i] = flat[2 * i + 0];
+        }
+    }
+    if (out_emitted != NULL && n_emitted != NULL) {
+        unsigned char* emitted =
+                internal::new_uchar_view(n, out_emitted, n_emitted);
+        if (emitted != NULL) {
+            for (int i = 0; i < n; ++i)
+                emitted[i] = flat[2 * i + 1] != 0.0 ? 1 : 0;
+        }
+    }
+}
+
+void simulate_quenched_decay(int n_curves, double* decay, int n_decay,
+                             double dt_tac, const std::vector<double>& k_quench,
+                             double t_step, double tau0, int random_seed) {
+    const std::vector<double> curve = quenched_decay(
+            n_curves, n_decay, dt_tac, k_quench, t_step, tau0, random_seed);
+    for (int i = 0; i < n_decay && i < static_cast<int>(curve.size()); ++i)
+        decay[i] += curve[i];
+}
+
 std::vector<double> quenched_decay(
         int n_curves, int n_bins, double dt_tac,
         const std::vector<double>& k_quench,

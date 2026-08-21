@@ -92,6 +92,48 @@ IMPBFFEXPORT std::vector<double> quenched_decay(
         const std::vector<double>& k_quench,
         double t_step, double tau0, int seed);
 
+//! Trajectory-driven fluorescence decay, without shot noise.
+/*!
+    For each virtual trajectory a random starting frame is chosen and the
+    excited-state population is propagated under
+    \f$1/\tau_0 + k_q(\text{frame})\f$, the emitted intensity accumulating into
+    TAC bins.
+
+    Accumulation is blocked, one private histogram per block reduced in block
+    order. That is a correctness requirement, not a tuning knob: the bin index
+    is data-dependent, so accumulating into a shared histogram from parallel
+    iterations loses updates. Measured on the numba ancestor with 8 threads and
+    200 curves, sums scattered over 196.73-200.61 against a stable single-thread
+    200.612864255 -- up to 2 % of the emitted intensity dropped, differently
+    each run.
+
+    The caller's \p decay histogram is accumulated **in place**, so several
+    virtual-trajectory groups can fill one experiment.
+
+    \param[in] n_curves virtual trajectories to average
+    \param[in,out] decay,n_decay the histogram, \p n_decay entries, float64
+    \param[in] dt_tac TAC bin width, ns
+    \param[in] k_quench per-frame quenching rate, 1/ns
+    \param[in] t_step trajectory time step, ns
+    \param[in] tau0 intrinsic lifetime, ns
+    \param[in] random_seed reproducible when non-negative; drawn freely otherwise
+*/
+IMPBFFEXPORT void simulate_quenched_decay(
+        int n_curves, double* decay, int n_decay, double dt_tac,
+        const std::vector<double>& k_quench, double t_step, double tau0,
+        int random_seed = -1);
+
+//! A Monte-Carlo photon trace, split into delay and emitted-flag views.
+/*! The sampling is #photon_trace's; this is the shape its callers asked for: a
+    delay time per event and a separate emitted-flag. \p out_delays holds
+    \p n_ph doubles (0.0 for a quenched event) and \p out_emitted holds \p n_ph
+    bytes, 1 or 0. `random_seed < 0` draws freely. */
+IMPBFFEXPORT void simulate_photon_trace(
+        int n_ph, const std::vector<double>& k_quench, double t_step = 0.01,
+        double tau0 = 0.25, int random_seed = -1, double** out_delays = NULL,
+        int* n_delays = NULL, unsigned char** out_emitted = NULL,
+        int* n_emitted = NULL);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_PHOTONSIMULATION_H

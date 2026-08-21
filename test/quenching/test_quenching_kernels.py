@@ -279,12 +279,16 @@ class DyeDiffusionTests(IMP.test.TestCase):
 
     def run_walk(self, **kwargs):
         options = dict(
-            t_max=200.0, t_step=0.002, D=40.0, slow_fact=0.1, random_seed=7
+            t_max=200.0, t_step=0.002, D=40.0, slow_fact=[0.1], random_seed=7
         )
         options.update(kwargs)
         return diffusion.simulate_dye_diffusion(
             self.density, self.slow, self.dg, **options
         )
+
+    @staticmethod
+    def _xyz(walk):
+        return walk.get_xyz().reshape(-1, 3)
 
     def test_frozen_reference(self):
         """The walk's *statistics*, since the exact trace can no longer be pinned.
@@ -323,27 +327,28 @@ class DyeDiffusionTests(IMP.test.TestCase):
     def test_the_walk_is_reproducible_for_a_seed(self):
         first = self.run_walk()
         second = self.run_walk()
-        self.assertTrue(np.array_equal(first.xyz, second.xyz))
+        self.assertTrue(np.array_equal(self._xyz(first), self._xyz(second)))
 
     def test_different_seeds_give_different_walks(self):
         self.assertFalse(
-            np.array_equal(self.run_walk(random_seed=1).xyz,
-                           self.run_walk(random_seed=2).xyz)
+            np.array_equal(self._xyz(self.run_walk(random_seed=1)),
+                           self._xyz(self.run_walk(random_seed=2)))
         )
 
     def test_the_walk_never_leaves_the_accessible_volume(self):
         """Every accepted position must sit on an occupied voxel."""
         walk = self.run_walk()
         ng = self.density.shape[0]
-        idx = np.floor(walk.xyz / self.dg).astype(int) + _q.grid_center_index(ng)
+        xyz = self._xyz(walk)
+        idx = np.floor(xyz / self.dg).astype(int) + _q.grid_center_index(ng)
         self.assertTrue(np.all((idx >= 0) & (idx < ng)))
         self.assertTrue(np.all(self.density[idx[:, 0], idx[:, 1], idx[:, 2]] > 0))
 
     def test_stickiness_slows_the_dye_down(self):
         """Halving the step width inside the core must shorten the mean step."""
-        free = self.run_walk(slow_fact=1.0)
-        sticky = self.run_walk(slow_fact=0.01)
-        step = lambda w: np.linalg.norm(np.diff(w.xyz, axis=0), axis=1).mean()
+        free = self.run_walk(slow_fact=[1.0])
+        sticky = self.run_walk(slow_fact=[0.01])
+        step = lambda w: np.linalg.norm(np.diff(self._xyz(w), axis=0), axis=1).mean()
         self.assertLess(step(sticky), step(free))
 
     def test_a_per_voxel_factor_grid_is_accepted(self):
@@ -365,9 +370,9 @@ class DyeDiffusionTests(IMP.test.TestCase):
         self.assertEqual(walk.acceptance_ratio, 0.0)
 
     def test_a_larger_diffusion_coefficient_explores_further(self):
-        slow = self.run_walk(D=1.0, slow_fact=1.0)
-        fast = self.run_walk(D=100.0, slow_fact=1.0)
-        spread = lambda w: float(np.linalg.norm(w.xyz.std(axis=0)))
+        slow = self.run_walk(D=1.0, slow_fact=[1.0])
+        fast = self.run_walk(D=100.0, slow_fact=[1.0])
+        spread = lambda w: float(np.linalg.norm(self._xyz(w).std(axis=0)))
         self.assertGreater(spread(fast), spread(slow))
 
 

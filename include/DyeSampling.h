@@ -26,6 +26,8 @@
 #include <IMP/showable_macros.h>
 #include <IMP/value_macros.h>
 
+#include <IMP/atom/Hierarchy.h>
+
 #include <string>
 #include <vector>
 
@@ -65,33 +67,43 @@ IMP_VALUES(DyeDiffusionTrajectory, DyeDiffusionTrajectories);
 
 //! One Brownian trajectory of the dye centre in its accessible volume.
 /*!
-    Mobility is a **field**: one scaling per voxel. The scalar-plus-mask form is
-    one way to build it, and building it here is what collapsed two
-    near-identical kernels into one.
+    Mobility is a **field**: one per-voxel scaling of the step variance. This
+    function builds that field from the two cheaper spellings a caller has and
+    runs the walk on it:
 
-    \param[in] density,n_density binary occupancy of the volume, flat `ng^3`
-    \param[in] mobility,n_mobility per-voxel mobility, or length 0 for a uniform
-               medium
-    \param[in] ng grid side
+    - \p slow_fact with more than one entry is the field directly;
+    - otherwise \p slow_fact (empty means 1.0) is a scalar, applied wherever
+      \p slow_density is nonzero; an empty \p slow_density or a scalar of 1.0
+      means a uniform medium.
+
+    \warning This replaced a function that took the finished field only. The
+    field-building is now here, in C++, so the two spellings cannot disagree
+    the way the Python kernels they replaced did.
+
+    \param[in] density flat `ng^3` binary occupancy of the volume; `ng` is its
+               cube root
+    \param[in] slow_density flat `ng^3` binary contact grid, or empty for none;
+               used only when \p slow_fact is not itself a field
     \param[in] dg voxel edge, A
     \param[in] t_max,t_step total time and step, ns
-    \param[in] diffusion_coefficient \f$A^2/ns\f$, in the standard convention:
-               the per-Cartesian-component step variance is \f$2Ddt\f$, so
-               \f$\langle dx^2\rangle = 2Dt\f$ — the same D
-               #IMP::bff::GridDiffusionSolver takes.
-
-               The width was \f$\sqrt{2D \cdot 3 \cdot dt}\f$ per component
-               until 2026-08-18 — the three-dimensional MSD used as one
-               component's width, so the walk diffused at 3D. The tempting
-               inference, that D had been calibrated around it, is false: no
-               calibration of D exists anywhere in this stack, and every
-               document calls these uncalibrated transferable starting values.
-    \param[in] seed negative draws freely
+    \param[in] D diffusion coefficient, A^2/ns, in the standard convention: the
+               per-Cartesian-component step variance is `2 D dt`, so
+               `\langle dx^2\rangle = 2Dt`. The width was
+               `sqrt(2D * 3 * dt)` per component until 2026-08-18 -- the
+               three-dimensional MSD used as one component's width, so the walk
+               diffused at 3D. No calibration of D exists anywhere in this
+               stack; the documents call these uncalibrated transferable
+               starting values.
+    \param[in] slow_fact scalar or per-voxel field, see the mobility rule above
+    \param[in] random_seed negative draws freely
+    \throw ValueException when the density has no integer cube root
 */
 IMPBFFEXPORT DyeDiffusionTrajectory simulate_dye_diffusion(
-        int* density, int n_density, double* mobility, int n_mobility, int ng,
-        double dg = 0.5, double t_max = 10000.0, double t_step = 0.002,
-        double diffusion_coefficient = 40.0, int seed = -1);
+        const std::vector<int>& density,
+        const std::vector<int>& slow_density = std::vector<int>(), double dg = 0.5,
+        double t_max = 10000.0, double t_step = 0.002, double D = 40.0,
+        const std::vector<double>& slow_fact = std::vector<double>(),
+        int random_seed = -1);
 
 //! The stationary occupancy of the volume, in closed form.
 /*!
@@ -114,8 +126,10 @@ IMPBFFEXPORT DyeDiffusionTrajectory simulate_dye_diffusion(
     \throw ValueException for any other \p flux_form
 */
 IMPBFFEXPORT void equilibrium_occupancy(
-        double* diffusion_map, int n_diffusion_map, int* bounds, int n_bounds,
-        const std::string& flux_form, double** out_view, int* n_out_view);
+        const std::vector<double>& diffusion_map,
+        const std::vector<int>& bounds,
+        const std::string& flux_form = "smoluchowski", double** out_view = NULL,
+        int* n_out_view = NULL);
 
 //! A reference rotamer library: conformer coordinates, weights and atom names.
 struct IMPBFFEXPORT RotamerLibrary {
@@ -166,6 +180,14 @@ IMPBFFEXPORT std::vector<std::string> find_reference_rotamer_files(
     \param[in] seed negative draws freely */
 IMPBFFEXPORT int sample_rotamer_index(const std::vector<double>& weights,
                                       int seed = -1);
+
+//! Put one rotamer's coordinates onto a dye hierarchy, in place.
+/*!
+    The hierarchy's leaves must be the dye's atoms and \p coords three values
+    per leaf. \throw ValueException on an atom-count mismatch.
+*/
+IMPBFFEXPORT void apply_rotamer_coordinates(const IMP::atom::Hierarchy hierarchy,
+                                            const std::vector<double>& coords);
 
 // The two frame writers that were here are in `bin/imp_bff`, with the one
 // command that attaches them. They are `IMP::OptimizerState`s, so they could be

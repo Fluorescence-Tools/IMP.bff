@@ -1,5 +1,68 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 1, batch 8: `dyesampling.i` to C++
+
+`pyext/IMP_bff.dyesampling.i` lost its three `%pythoncode` blocks (the
+`simulate_*` wrappers) and both `%extend` property blocks; the field-building,
+the photon-trace split, and the in-place decay accumulation moved into C++.
+Interfaces that changed (prerelease; callers migrated in `test/sampling/`,
+`test/quenching/`):
+
+- `simulate_dye_diffusion(density, slow_density=(), dg=0.5, t_max, t_step, D,
+  slow_fact=(), random_seed=-1)` now builds the mobility **field in C++**: a
+  length-`ng^3` `slow_fact` is the field, otherwise it is a scalar (applied
+  where `slow_density` is nonzero) or empty (= uniform). A scalar `slow_fact`
+  must be passed as `[x]`. The density is validated to be a perfect cube.
+- `simulate_photon_trace(n_ph, k_quench, t_step=0.01, tau0=0.25,
+  random_seed=-1)` returns `(delays, emitted)` as two views from one call.
+- `simulate_quenched_decay(n_curves, decay, dt_tac, k_quench, t_step, tau0,
+  random_seed=-1)` accumulates **in place** into the float64 histogram; a
+  float32 histogram now raises rather than silently upcasts.
+- `equilibrium_occupancy(diffusion_map, bounds, flux_form="smoluchowski")`
+  returns a **flat** view; callers reshape to the cube (`closed_occupancy`).
+- The trajectory's `.xyz`/`.accepted` are now `get_xyz()`/`get_accepted()`
+  (flat; caller reshapes / casts to uint8); `.n_frames`, `.n_accepted`,
+  `.n_rejected`, `.acceptance_ratio` are read-only `%attribute`s.
+- `apply_rotamer_coordinates(hierarchy, coords)` moved to C++ (IMP::atom
+  leaves -> IMP::core::XYZ), keeping the name `bin/imp_bff` imports.
+
+Two shared typemaps were widened in `pyext/IMP_bff.types.i`: `const
+std::vector<int>&` now converts any array-like through
+`PyArray_FROMANY(..., FORCECAST)` to a flat int32 copy (float64 bounds, uint8
+masks and F-contiguous float32 all land), and `swig.i-in` gained the
+`INPLACE_ARRAY1` apply for the decay histogram before `PhotonSimulation.h`.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** — only the pre-existing `test_access_av_feature` data failure.
+
+## 2026-08-21 — PRD-118: dihedral rotamer libraries (`.drot`) prototype + Dunbrack side-chain sampler
+
+Wrote [PRD-118](prds/prd-118.md) and built the prototype in
+`prototypes/drot_rotlib/` (python/numba; C++ port deferred — `src/` is in
+flux under PRD-117). Two capabilities:
+
+1. **`.drot` house format (driver a).** A library becomes a rigid template +
+   the frame's own Z-matrix base/θ/φ + weights, with FASPR-style
+   `Internal2Cartesian` reconstruction. Verified end to end on 5 recovered
+   `.dcd`s (from git `8fac573`). **First pass stored only the moving dihedrals
+   and looked like a hard 2-5 A / ~20 deg floor** — it was a format gap, not a
+   limit: this MD also flexes bond angles (~3 deg/row), so the second pass
+   stores base + θ + φ per row and is **lossless to the int grid** —
+   reconstruction RMSD 0.009-0.015 A, transition-dipole error 0.09-0.13 deg
+   median across five libs, `.drot` 0.33x the `.dcd` size. `.drot` is now a
+   candidate drop-in for `.bcif`; remaining work is the C++ port + pin
+   re-derivation. Table in `prototypes/drot_rotlib/results_validation.json`.
+2. **Dunbrack side-chain sampler (driver b).** `dunbrack_sidechains.py` reads `junk/FASPR/dun2010bbdep.bin` directly and
+   packs native side chains (`pack_protein_residue`) or continuous chi
+   (`build_sidechain`) — PHE/GLU/TYR/ARG/ASN on 3GUN reproduce their chi to
+   ~0.5°, PRO excluded (ring). Acknowledges FASPR (Bioinformatics 2020;
+   36:3758-3765; github.com/tommyhuangthu/FASPR) in the PRD + prototype.
+
+Found on the way: `import IMP.bff` is currently broken against the build tree
+(`_IMP_bff.so` references a `compute_av_from_structure` overload the rebuilt
+`libimp_bff` no longer exports) — the prototype therefore ships a standalone
+DCD reader (`dcd.py`, bit-identical to IMP's on `A48_C1R_cutoff10`).
+
 ## 2026-08-21 — PRD-117 phase 1, batch 7: `petquenching.i` to C++
 
 `pyext/IMP_bff.petquenching.i` lost its two `%pythoncode` blocks (the
