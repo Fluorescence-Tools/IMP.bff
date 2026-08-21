@@ -143,6 +143,70 @@
 // `freearg` frees ones it no longer declares, so it has to go with it.
 %typemap(freearg) const std::vector<double>& {}
 
+// The int sibling: an occupancy/field grid `std::vector<int>`. Any contiguous
+// int32 (or uint8 mask) array is copied row-major; `None` is the empty vector.
+%typemap(in, fragment="NumPy_Macros")
+        const std::vector<int>& (std::vector<int> imp_bff_tmp,
+                                 std::vector<int>* imp_bff_ptr = 0,
+                                 int imp_bff_res = 0) {
+    if (is_numpy_array($input) && array_is_contiguous($input)) {
+        const int typ = array_type($input);
+        if (typ == NPY_INT32 || typ == NPY_UINT32 || typ == NPY_INT64 ||
+            typ == NPY_UINT8 || typ == NPY_INT8) {
+            const npy_intp n = PyArray_SIZE((PyArrayObject*)$input);
+            const void* data = array_data($input);
+            imp_bff_tmp.resize(static_cast<std::size_t>(n));
+            for (npy_intp i = 0; i < n; ++i) {
+                imp_bff_tmp[static_cast<std::size_t>(i)] =
+                    typ == NPY_INT64
+                        ? static_cast<int>(((npy_int64*)data)[i])
+                        : typ == NPY_UINT32
+                              ? static_cast<int>(((npy_uint32*)data)[i])
+                              : typ == NPY_UINT8
+                                    ? static_cast<int>(((npy_uint8*)data)[i])
+                                    : typ == NPY_INT8
+                                          ? static_cast<int>(((npy_int8*)data)[i])
+                                          : ((npy_int32*)data)[i];
+            }
+            $1 = &imp_bff_tmp;
+        } else {
+            imp_bff_res = swig::asptr($input, &imp_bff_ptr);
+            if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
+                SWIG_exception_fail(
+                    SWIG_ArgError(imp_bff_res),
+                    "in method '$symname', argument $argnum of type '$1_type'");
+            }
+            imp_bff_tmp = *imp_bff_ptr;
+            if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
+            $1 = &imp_bff_tmp;
+        }
+    } else if ($input == Py_None) {
+        $1 = &imp_bff_tmp;
+    } else {
+        imp_bff_res = swig::asptr($input, &imp_bff_ptr);
+        if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
+            SWIG_exception_fail(
+                SWIG_ArgError(imp_bff_res),
+                "in method '$symname', argument $argnum of type '$1_type'");
+        }
+        imp_bff_tmp = *imp_bff_ptr;
+        if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
+        $1 = &imp_bff_tmp;
+    }
+}
+
+%typemap(freearg) const std::vector<int>& {}
+
+%typemap(typecheck, precedence=SWIG_TYPECHECK_VECTOR, fragment="NumPy_Macros")
+        const std::vector<int>& {
+    void* imp_bff_vp = 0;
+    $1 = (is_numpy_array($input) && array_is_contiguous($input)) ? 1
+       : ($input == Py_None) ? 1
+       : SWIG_IsOK(SWIG_ConvertPtr($input, &imp_bff_vp,
+                                   $descriptor(std::vector<int>*), 0)) ? 1
+       : (PySequence_Check($input) ? 1 : 0);
+}
+
 %typemap(typecheck, precedence=SWIG_TYPECHECK_VECTOR, fragment="NumPy_Macros")
         const std::vector<double>& {
     void* imp_bff_vp = 0;

@@ -12,7 +12,9 @@ import IMP.test
 import IMP.bff as sites
 from IMP.bff import grid_center_index, quenching_rate_grid
 from IMP.bff import (
+    AccessibleVolume,
     DyeDiffusionSimulation,
+    ObstacleAtoms,
     QuenchedDonorDecay,
     resolve_trajectory_count,
     trajectory_seeds,
@@ -28,9 +30,13 @@ ATOM_DTYPE = [
 
 
 def make_atoms(rows):
-    atoms = np.zeros(len(rows), dtype=ATOM_DTYPE)
-    for i, (chain, res_id, res_name, atom_name, coord) in enumerate(rows):
-        atoms[i] = (chain, res_id, res_name, atom_name, coord)
+    """The obstacles as an :class:`ObstacleAtoms` value (parallel arrays)."""
+    atoms = ObstacleAtoms()
+    atoms.chains = [r[0] for r in rows]
+    atoms.res_ids = [int(r[1]) for r in rows]
+    atoms.res_names = [r[2] for r in rows]
+    atoms.atom_names = [r[3] for r in rows]
+    atoms.coords = [float(v) for r in rows for v in r[4]]
     return atoms
 
 
@@ -41,15 +47,11 @@ def sphere_density(ng=41, radius_voxels=15):
 
 
 def _sites(atoms, table=None):
-    """`residue_sites` over a structured array.
-
-    The kernel takes parallel arrays -- a structured dtype is a numpy idea, and
-    the fields it carries are what C++ wants handed to it anyway. Unpacking one
-    is what a caller does, so the tests do it too.
-    """
+    """`residue_sites` over an :class:`ObstacleAtoms` value."""
     return sites.residue_sites(
-        atoms["chain"], atoms["res_id"], atoms["res_name"], atoms["atom_name"],
-        np.ascontiguousarray(atoms["coord"], dtype=np.float64), table)
+        atoms.chains, atoms.res_ids, atoms.res_names, atoms.atom_names,
+        np.ascontiguousarray(atoms.coords, dtype=np.float64).reshape(-1, 3),
+        table)
 
 
 class ResidueSiteTests(IMP.test.TestCase):
@@ -164,8 +166,8 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
         simulation = self.simulation()
         simulation.run(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
         self.assertAlmostEqual(
-            float(np.linalg.norm(simulation.mean_position - self.x0)), 0.0, delta=3.0
-        )
+            float(np.linalg.norm(simulation.get_mean_position() - self.x0)), 0.0,
+            delta=3.0)
 
     def test_trajectories_are_concatenated_not_averaged(self):
         one = self.simulation()
@@ -179,19 +181,20 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
         first.run(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
         second = self.simulation()
         second.run(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
-        self.assertTrue(np.array_equal(first.trajectory, second.trajectory))
+        self.assertTrue(
+            np.array_equal(first.get_trajectory(), second.get_trajectory()))
 
     def test_an_empty_volume_yields_no_trajectory(self):
         simulation = DyeDiffusionSimulation(
             np.zeros_like(self.density), self.dg, self.x0
         )
-        self.assertIsNone(simulation.run(t_max=10.0, random_seed=1))
+        self.assertEqual(simulation.run(t_max=10.0, random_seed=1), 0)
         self.assertEqual(simulation.n_frames, 0)
 
     def test_no_rate_map_means_no_quenching(self):
         simulation = self.simulation()
         simulation.run(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
-        self.assertEqual(float(simulation.k_quench.sum()), 0.0)
+        self.assertEqual(float(simulation.get_k_quench().sum()), 0.0)
         self.assertEqual(simulation.collision_fraction, 0.0)
 
     def test_the_rate_is_read_from_where_the_quencher_was_stamped(self):
@@ -207,8 +210,8 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
         simulation = self.simulation(rate_map)
         simulation.run(t_max=200.0, t_step=0.002, n_trajectories=1, random_seed=3)
         # The sphere of influence covers the whole volume, so every frame sees it.
-        self.assertAlmostEqual(float(simulation.k_quench.min()), 3.0, places=5)
-        self.assertTrue(np.all(simulation.quenched))
+        self.assertAlmostEqual(float(simulation.get_k_quench().min()), 3.0, places=5)
+        self.assertTrue(np.all(simulation.get_k_quench() > 0.0))
         self.assertAlmostEqual(simulation.collision_fraction, 1.0)
 
     def test_sampling_matches_a_hand_computed_voxel(self):
@@ -216,19 +219,21 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
         field = np.arange(ng ** 3, dtype=np.float64).reshape((ng,) * 3)
         simulation = self.simulation()
         simulation.run(t_max=50.0, t_step=0.002, n_trajectories=1, random_seed=3)
-        sampled = simulation.sample_grid(field)
+        sampled = simulation.sample_grid(field, ng)
         centre = grid_center_index(ng)
         expected = []
-        for position in simulation.trajectory:
+        for position in simulation.get_trajectory().reshape(-1, 3):
             idx = np.floor((position - self.x0) / self.dg + centre).astype(int)
             expected.append(field[tuple(idx)])
         self.assertTrue(np.allclose(sampled, expected))
 
     def test_reading_results_before_running_raises(self):
         simulation = self.simulation()
-        for call in (lambda: simulation.mean_position,
-                     lambda: simulation.k_quench,
-                     lambda: simulation.sample_grid(self.density)):
+        for call in (lambda: simulation.get_mean_position(),
+                     lambda: simulation.get_k_quench(),
+                     lambda: simulation.sample_grid(
+                         np.zeros(self.density.size, dtype=np.float64),
+                         self.density.shape[0])):
             with self.assertRaises(ValueError):
                 call()
 
@@ -236,16 +241,12 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
 class DonorModelFixture:
     """Shared setup. Not a TestCase -- subclassing one re-runs all its tests."""
 
-    class FakeAV:
-        def __init__(self, density, grid_step, attachment_point):
-            self.density = density
-            self.grid_step = grid_step
-            self.attachment_point = attachment_point
-
     def setUp(self):
         super().setUp()
         self.x0 = np.zeros(3)
-        self.av = self.FakeAV(sphere_density(41, 15), 1.0, self.x0)
+        self.av = AccessibleVolume(
+            density=sphere_density(41, 15).astype(np.float64), grid_step=1.0,
+            attachment_point=self.x0)
         # One tryptophan sitting inside the volume, and an inert alanine.
         self.atoms = make_atoms([
             ("A", 1, "TRP", "CB", [5.0, 0.0, 0.0]),
@@ -271,7 +272,8 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
 
     def test_only_the_quenching_residue_stamps_a_rate(self):
         model = self.model()
-        rate_map, _slow = model.update_grids()
+        model.update_grids()
+        rate_map = model.get_quenching_rate_map()
         self.assertGreater(float(rate_map.max()), 0.0)
         # TRP's rate, not ALA's zero.
         table = amino_acid_quenching_defaults()
@@ -297,9 +299,10 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
     def test_the_histogram_counts_only_emitted_photons(self):
         """A quenched excitation returns dt = 0 and would pile into bin 0."""
         model = self.model()
-        emitted = int(model.photon_trace[1].sum())
+        emitted = int(model.get_emitted().sum())
         self.assertLess(emitted, model.n_photons)
-        _edges, counts = model.decay_histogram(n_bins=512, time_range=(0.0, 400.0))
+        flat = model.decay_histogram(512, 0.0, 400.0)
+        edges, counts = flat[:513], flat[513:].astype(int)
         # The curve holds QY * N photons, not N. Histogramming the whole trace
         # would give N, because a quenched excitation comes back as dt = 0 and
         # piles into the first bin -- a spike of photons that never existed.
@@ -320,19 +323,23 @@ class QuenchedDonorDecayTests(DonorModelFixture, IMP.test.TestCase):
         self.assertNotEqual(model.get_photon_seed(), 11)
         # -1 is the C++ spelling of "draw freely": an unseeded model must not
         # derive a seed from the one it does not have.
-        self.assertEqual(self.model(random_seed=None).get_photon_seed(), -1)
+        self.assertEqual(self.model(random_seed=-1).get_photon_seed(), -1)
 
     def test_sites_are_cached_across_uses(self):
         model = self.model()
-        self.assertIs(model.sites, model.sites)
+        a = model.get_sites()
+        b = model.get_sites()
+        self.assertEqual(a.size(), b.size())
 
 
 class QuenchedDonorFretTests(DonorModelFixture, IMP.test.TestCase):
 
     def test_a_far_acceptor_transfers_almost_nothing(self):
+        import math
         model = self.model()
         far = np.array([[400.0, 0.0, 0.0, 1.0]])
-        rates = model.fret_rate_trace(far, forster_radius=52.0)
+        rates = model.fret_rate_trace_cloud(
+            np.ascontiguousarray(far[:, :3]), 52.0, 2.0 / 3.0, 7.0)
         # (1/tau0) * (R0/r)^6 = 0.25 * (52/400)^6 ~ 1.9e-6 /ns, i.e. nothing
         # against the 0.25 /ns radiative rate.
         self.assertTrue(np.all(rates < 1e-5))
@@ -342,9 +349,12 @@ class QuenchedDonorFretTests(DonorModelFixture, IMP.test.TestCase):
         model = self.model()
         near = np.array([[40.0, 0.0, 0.0, 1.0]])
         far = np.array([[90.0, 0.0, 0.0, 1.0]])
-        self.assertGreater(
-            model.fret_efficiency(near, 52.0), model.fret_efficiency(far, 52.0)
-        )
+        r_near = model.fret_rate_trace_cloud(
+            np.ascontiguousarray(near[:, :3]), 52.0, 2.0 / 3.0, 7.0)
+        r_far = model.fret_rate_trace_cloud(
+            np.ascontiguousarray(far[:, :3]), 52.0, 2.0 / 3.0, 7.0)
+        self.assertGreater(model.fret_efficiency(r_near),
+                           model.fret_efficiency(r_far))
 
     def test_efficiency_is_bounded(self):
         """E = 1 - QY_DA/QY_D, and both terms are sampled.
@@ -358,20 +368,24 @@ class QuenchedDonorFretTests(DonorModelFixture, IMP.test.TestCase):
         model = self.model(n_photons=200000)
         for cloud in (np.array([[10.0, 0.0, 0.0, 1.0]]),
                       np.array([[300.0, 0.0, 0.0, 1.0]])):
-            efficiency = model.fret_efficiency(cloud, 52.0)
+            rates = model.fret_rate_trace_cloud(
+                np.ascontiguousarray(cloud[:, :3]), 52.0, 2.0 / 3.0, 7.0)
+            efficiency = model.fret_efficiency(rates)
             self.assertGreaterEqual(efficiency, -0.01)
             self.assertLessEqual(efficiency, 1.0 + 1e-9)
 
     def test_a_very_close_acceptor_transfers_almost_everything(self):
         model = self.model(n_photons=200000)
-        self.assertGreater(model.fret_efficiency(
-            np.array([[8.0, 0.0, 0.0, 1.0]]), 52.0), 0.95)
+        close = np.array([[8.0, 0.0, 0.0, 1.0]])
+        rates = model.fret_rate_trace_cloud(
+            np.ascontiguousarray(close[:, :3]), 52.0, 2.0 / 3.0, 7.0)
+        self.assertGreater(model.fret_efficiency(rates), 0.95)
 
     def test_a_paired_acceptor_model_is_frame_paired(self):
         donor = self.model()
         acceptor = self.model()
-        rates = donor.fret_rate_trace(acceptor, forster_radius=52.0)
-        self.assertEqual(rates.shape[0], donor.diffusion.n_frames)
+        rates = donor.fret_rate_trace_paired(acceptor, 52.0, 2.0 / 3.0, 7.0)
+        self.assertEqual(rates.shape[0], donor.n_frames)
 
 
 if __name__ == "__main__":

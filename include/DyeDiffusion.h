@@ -113,7 +113,8 @@ public:
                 -- an empty accessible volume
     */
     int run(double D = 40.0, double slow_fact = 0.01, double t_step = 0.002,
-            double t_max = 10000.0, int n_trajectories = 1, int seed = -1);
+            double t_max = 10000.0, int n_trajectories = 1,
+            int random_seed = -1);
 
     //! `(n_frames, 3)` positions in Angstrom, as a numpy view.
     void get_trajectory(double** out_view, int* n_out_view) const;

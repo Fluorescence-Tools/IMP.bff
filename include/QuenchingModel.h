@@ -261,6 +261,8 @@ public:
     void update_grids();
     void get_quenching_rate_map(double** out_view, int* n_out_view) const;
     void get_slow_factor_map(double** out_view, int* n_out_view) const;
+    //! Replace the stickiness field directly (what update_grids() stamps).
+    void set_slow_factor_map(const std::vector<double>& m);
 
     //! The photon seed, distinct from the walk's so the draws are not a replay.
     int get_photon_seed() const;

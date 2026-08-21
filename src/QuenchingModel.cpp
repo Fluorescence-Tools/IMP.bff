@@ -389,6 +389,13 @@ void QuenchedDonorDecay::get_slow_factor_map(double** out_view,
     internal::copy_to_view(slow_factor_map_, out_view, n_out_view);
 }
 
+void QuenchedDonorDecay::set_slow_factor_map(
+        const std::vector<double>& m) {
+    slow_factor_map_ = m;
+    has_grids_ = true;
+    has_walk_ = false;   // a changed mobility means any previous walk is stale
+}
+
 bool QuenchedDonorDecay::simulate_diffusion() {
     ensure_grids();
     walk_ = DyeDiffusionSimulation(density(), av_.get_grid_step(), x0(),

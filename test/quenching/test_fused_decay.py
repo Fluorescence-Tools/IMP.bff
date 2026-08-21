@@ -23,20 +23,9 @@ import time
 import numpy as np
 import pytest
 
-from IMP.bff import QuenchedDonorDecay
+from IMP.bff import AccessibleVolume, ObstacleAtoms, QuenchedDonorDecay
 from IMP.bff import amino_acid_quenching_defaults
 
-ATOM_DTYPE = [
-    ("chain", "U4"), ("res_id", "i8"), ("res_name", "U4"),
-    ("atom_name", "U4"), ("coord", "f8", 3),
-]
-
-
-class _FakeAV:
-    def __init__(self, density, grid_step, attachment_point):
-        self.density = density
-        self.grid_step = grid_step
-        self.attachment_point = attachment_point
 
 
 def _sphere(ng=41, radius=15):
@@ -52,14 +41,23 @@ def _atoms():
         ("A", 1, "TRP", "CD2", [7.0, 1.0, 0.0]),
         ("A", 2, "ALA", "CB", [-6.0, 0.0, 0.0]),
     ]
-    a = np.zeros(len(rows), dtype=ATOM_DTYPE)
-    for i, r in enumerate(rows):
-        a[i] = r
-    return a
+    atoms = ObstacleAtoms()
+    atoms.chains = [r[0] for r in rows]
+    atoms.res_ids = [int(r[1]) for r in rows]
+    atoms.res_names = [r[2] for r in rows]
+    atoms.atom_names = [r[3] for r in rows]
+    atoms.coords = [float(v) for r in rows for v in r[4]]
+    return atoms
+
+
+def _av(density=None):
+    d = _sphere() if density is None else density
+    return AccessibleVolume(density=np.asarray(d, dtype=np.float64),
+                            grid_step=1.0, attachment_point=np.zeros(3))
 
 
 def _model(av=None, **kw):
-    av = _FakeAV(_sphere(), 1.0, np.zeros(3)) if av is None else av
+    av = _av() if av is None else av
     options = dict(
         tau0=4.0, quenching_table=amino_acid_quenching_defaults(),
         critical_distance=7.0, slow_radius=10.0,
@@ -74,10 +72,12 @@ def test_fused_reproduces_the_three_call_path_photon_for_photon():
     """The claim. Not a tolerance -- the same walk, the same draws."""
     slow = _model()
     slow.simulate_diffusion()
-    delays_a, emitted_a = slow.simulate_photons()
+    slow.simulate_photons()
+    delays_a, emitted_a = slow.get_delays(), slow.get_emitted()
 
     fast = _model()
-    delays_b, emitted_b = fast.photons_fused()
+    fast.photons_fused()
+    delays_b, emitted_b = fast.get_delays(), fast.get_emitted()
 
     np.testing.assert_array_equal(emitted_a, emitted_b)
     np.testing.assert_array_equal(delays_a, delays_b)
@@ -87,7 +87,7 @@ def test_fused_reports_the_statistics_the_trajectory_would_have_given():
     """It skips the coordinates, so it has to hand back what they were read for."""
     slow = _model()
     slow.simulate_diffusion()
-    walk = slow.diffusion
+    walk = slow.get_diffusion()
 
     fast = _model()
     fast.photons_fused()
@@ -100,21 +100,23 @@ def test_fused_reports_the_statistics_the_trajectory_would_have_given():
     # memory the photon race walks, which is the bottleneck at long
     # trajectories: two reasons pointing the same way.
     assert fast.mean_k_quench == pytest.approx(
-        float(np.float32(walk.k_quench).mean()), rel=1e-12)
+        float(np.float32(walk.get_k_quench()).mean()), rel=1e-12)
     assert fast.collision_fraction == pytest.approx(
         walk.collision_fraction, rel=1e-12)
-    assert fast.diffusion.n_accepted == walk.n_accepted
-    assert fast.diffusion.n_rejected == walk.n_rejected
+    assert fast.get_diffusion().n_accepted == walk.n_accepted
+    assert fast.get_diffusion().n_rejected == walk.n_rejected
 
 
 def test_fused_agrees_across_several_trajectories():
     """Concatenation, not averaging: each photon draws its own start frame."""
     slow = _model(n_trajectories=3)
     slow.simulate_diffusion()
-    delays_a, emitted_a = slow.simulate_photons()
+    slow.simulate_photons()
+    delays_a, emitted_a = slow.get_delays(), slow.get_emitted()
 
     fast = _model(n_trajectories=3)
-    delays_b, emitted_b = fast.photons_fused()
+    fast.photons_fused()
+    delays_b, emitted_b = fast.get_delays(), fast.get_emitted()
 
     np.testing.assert_array_equal(emitted_a, emitted_b)
     np.testing.assert_array_equal(delays_a, delays_b)
@@ -131,14 +133,16 @@ def test_fused_agrees_with_a_per_voxel_mobility_field():
 
     slow = _model()
     slow.update_grids()
-    slow._slow_factor_map = slow_map
+    slow.set_slow_factor_map(np.ascontiguousarray(np.asarray(slow_map, dtype=np.float64)).ravel())
     slow.simulate_diffusion()
-    delays_a, emitted_a = slow.simulate_photons()
+    slow.simulate_photons()
+    delays_a, emitted_a = slow.get_delays(), slow.get_emitted()
 
     fast = _model()
     fast.update_grids()
-    fast._slow_factor_map = slow_map
-    delays_b, emitted_b = fast.photons_fused()
+    fast.set_slow_factor_map(np.ascontiguousarray(np.asarray(slow_map, dtype=np.float64)).ravel())
+    fast.photons_fused()
+    delays_b, emitted_b = fast.get_delays(), fast.get_emitted()
 
     np.testing.assert_array_equal(emitted_a, emitted_b)
     np.testing.assert_array_equal(delays_a, delays_b)
@@ -161,8 +165,9 @@ def test_an_empty_volume_yields_no_photons_either_way():
     """No accessible voxel means no walk, and a walk that never started emits
     nothing -- rather than a trace of zeros the caller would histogram."""
     empty = np.zeros((21, 21, 21), dtype=np.uint8)
-    m = _model(av=_FakeAV(empty, 1.0, np.zeros(3)))
-    delays, emitted = m.photons_fused()
+    m = _model(av=_av(empty))
+    m.photons_fused()
+    delays, emitted = m.get_delays(), m.get_emitted()
     assert delays.size == 0 and emitted.size == 0
 
 
@@ -201,7 +206,7 @@ def test_fused_is_faster():
     b.photons_fused()
     t_fused = time.perf_counter() - t0
 
-    np.testing.assert_array_equal(a.photon_trace[0], b.photon_trace[0])
+    np.testing.assert_array_equal(a.get_delays(), b.get_delays())
     assert t_fused < t_split, f"fused {t_fused:.3f}s vs split {t_split:.3f}s"
 
 
@@ -215,7 +220,7 @@ def test_fused_does_not_run_the_walk_twice():
     # was never asked to produce a trajectory
     assert m.has_walk
     assert m.n_frames > 0
-    assert m.diffusion.trajectory is None
+    assert m.get_diffusion().get_trajectory().size == 0
 
 
 if __name__ == "__main__":

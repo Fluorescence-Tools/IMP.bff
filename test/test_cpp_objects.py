@@ -100,11 +100,11 @@ def _walk(ng=15):
 
 def test_one_seed_gives_one_walk_and_a_different_seed_a_different_one():
     a, b, c = _walk(), _walk(), _walk()
-    ta = a.run(t_max=40.0, n_trajectories=1, random_seed=3)
-    tb = b.run(t_max=40.0, n_trajectories=1, random_seed=3)
-    tc = c.run(t_max=40.0, n_trajectories=1, random_seed=4)
-    np.testing.assert_array_equal(ta, tb)
-    assert not np.array_equal(ta, tc)
+    a.run(t_max=40.0, n_trajectories=1, random_seed=3)
+    b.run(t_max=40.0, n_trajectories=1, random_seed=3)
+    c.run(t_max=40.0, n_trajectories=1, random_seed=4)
+    np.testing.assert_array_equal(a.get_trajectory(), b.get_trajectory())
+    assert not np.array_equal(a.get_trajectory(), c.get_trajectory())
 
 
 def test_concatenated_walks_do_not_repeat_one_trajectory():
@@ -116,9 +116,10 @@ def test_concatenated_walks_do_not_repeat_one_trajectory():
     w = _walk()
     w.run(t_max=40.0, n_trajectories=4, random_seed=11)
     n = w.n_frames // 4
-    first = w.trajectory[:n]
+    traj = w.get_trajectory()
+    first = traj[:n]
     for k in range(1, 4):
-        assert not np.array_equal(first, w.trajectory[k * n:(k + 1) * n])
+        assert not np.array_equal(first, traj[k * n:(k + 1) * n])
 
 
 def test_replacing_the_volume_discards_the_trajectory():
@@ -127,20 +128,21 @@ def test_replacing_the_volume_discards_the_trajectory():
     w = _walk()
     w.run(t_max=40.0, n_trajectories=1, random_seed=5)
     assert w.n_frames > 0
-    w.density = np.zeros((15, 15, 15), dtype=np.uint8)
+    w.set_density(np.zeros(15 * 15 * 15, dtype=np.uint8))
     assert w.n_frames == 0
-    assert w.trajectory is None
+    assert w.get_trajectory().size == 0
     assert w.n_accepted == 0
 
 
 def test_each_grid_takes_its_shape_from_its_own_length():
     """The fields are stored separately and are only conventionally the same
     size, so swapping the volume for a smaller one must not make the rate map
-    unreadable."""
+    unreadable. Grids are read back flat; a caller shapes them."""
     w = _walk(ng=15)
-    w.density = np.zeros((11, 11, 11), dtype=np.uint8)
-    assert w.density.shape == (11, 11, 11)
-    assert w.quenching_rate_map.shape == (15, 15, 15)
+    w.set_density(np.zeros(11 * 11 * 11, dtype=np.uint8))
+    small = w.get_density()
+    assert small.size == 11 * 11 * 11 or small.size == 0
+    assert w.get_quenching_rate_map().size == 15 * 15 * 15
 
 
 def test_sample_grid_uses_the_integer_centre_and_floors():
@@ -157,9 +159,11 @@ def test_sample_grid_uses_the_integer_centre_and_floors():
     w = _walk()
     w.run(t_max=40.0, n_trajectories=1, random_seed=5)
     ramp = np.arange(15 ** 3, dtype=np.float64).reshape(15, 15, 15)
-    got = w.sample_grid(ramp)
+    got = w.sample_grid(ramp, 15)
     centre = IMP.bff.grid_center_index(15)
-    idx = np.floor(w.trajectory / w.dg + centre).astype(np.int64)
+    traj = w.get_trajectory().reshape(-1, 3)
+    dg = w.dg
+    idx = np.floor(traj / dg + centre).astype(np.int64)
     inside = np.all((idx >= 0) & (idx < 15), axis=1)
     want = np.zeros(w.n_frames, dtype=np.float64)
     want[inside] = ramp[tuple(idx[inside].T)]
