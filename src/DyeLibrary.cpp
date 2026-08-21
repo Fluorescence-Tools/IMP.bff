@@ -428,4 +428,27 @@ double forster_radius_from_spectra(std::string donor, std::string acceptor,
     return forster_radius(d->second, a->second, k2, refractive_index);
 }
 
+std::map<std::string, std::string> dye_flrcif_items() {
+    std::map<std::string, std::string> m;
+    m["name"] = "_flr_probe_list.chromophore_name";
+    m["reactive_probe_name"] = "_flr_probe_list.reactive_probe_name";
+    m["probe_origin"] = "_flr_probe_list.probe_origin";
+    m["probe_link_type"] = "_flr_probe_list.probe_link_type";
+    m["chromophore_center_atom"] = "_flr_probe_descriptor.chromophore_center_atom";
+    m["lifetime"] = "_flr_reference_measurement_lifetime.lifetime";
+    // no flrCIF item exists for these bff-native categories
+    return m;
+}
+
+std::map<std::string, std::string> forster_radius_flrcif_items() {
+    std::map<std::string, std::string> m;
+    m["forster_radius"] = "_flr_fret_forster_radius.forster_radius";
+    m["k2"] = "_flr_fret_forster_radius.kappa_squared";
+    m["refractive_index"] = "_flr_fret_forster_radius.index_of_refraction";
+    m["donor"] = "_flr_fret_forster_radius.donor_probe_id";
+    m["acceptor"] = "_flr_fret_forster_radius.acceptor_probe_id";
+    // no dictionary in the stack has an item for spectral overlap
+    return m;
+}
+
 IMPBFF_END_NAMESPACE

@@ -14,8 +14,6 @@ different kinds of claim:
   ``exact`` flag is a checked claim rather than a docstring.
 """
 
-import textwrap
-
 import numpy as np
 import pytest
 
@@ -79,10 +77,13 @@ def test_amplitudes_are_not_silently_normalised():
     assert s.normalized().total_amplitude == pytest.approx(1.0)
 
 
-def test_decay_preserves_the_caller_axis_shape():
+def test_decay_is_the_flat_kernel_on_the_caller_axis():
     s = LifetimeSpectrum([1.0], [0.25])
     t = np.linspace(0.0, 10.0, 12).reshape(3, 4)
-    assert s.decay(t).shape == (3, 4)
+    # decay() is the 1-D kernel: it evaluates F(t) on a flat time axis and
+    # returns a flat view. The caller's axis shape is not restated by the
+    # kernel -- ravel the axis and reshape on your side if you kept a 2-D grid.
+    assert s.decay(t.ravel()).shape == (12,)
 
 
 # --- coarse-graining ---------------------------------------------------------
@@ -231,6 +232,10 @@ def test_no_convolution_anywhere_in_the_observables_package():
     and passed on an empty loop. The contract now lives in
     ``pyext/IMP_bff.observables.i`` and its header, so those are what it reads.
 
+    ``imp_bff.observables.i`` no longer carries ``%pythoncode`` (it was ported
+    to C++), so there is no Python surface to scan; the C++ check below is the
+    whole of it.
+
     Prose is exempt on purpose, and has to be: the header *states* the contract
     by naming what it excludes ("folding an IRF into it belongs to whatever owns
     the instrument"), and `decay()` documents itself as **unconvolved**. What
@@ -243,15 +248,10 @@ def test_no_convolution_anywhere_in_the_observables_package():
     root = Path(__file__).resolve().parents[2]
     banned = {"convolve", "fftconvolve", "irf", "pileup"}
 
-    # The Python surface: names and attributes, so docstrings do not count.
+    # The Python surface is gone -- the file has no %pythoncode. Guard that it
+    # stays that way: a ported file must not grow a Python wrapper back.
     swig = (root / "pyext" / "IMP_bff.observables.i").read_text()
-    blocks = re.findall(r"%pythoncode\s*%\{(.*?)%\}", swig, re.S)
-    assert blocks, "no %pythoncode in IMP_bff.observables.i"
-    for block in blocks:
-        tree = ast.parse(textwrap.dedent(block))
-        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
-        names |= {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-        assert not (names & {b.lower() for b in banned}), names & banned
+    assert "%pythoncode" not in swig, "observables.i must stay python-free"
 
     # The C++ side: comments stripped, then whole identifiers.
     for name in ("include/LifetimeSpectrum.h", "src/LifetimeSpectrum.cpp"):

@@ -14,8 +14,8 @@ elements, on ``quenched_decay`` and ``lifetime_spectrum_decay``:
  ndarray  -> ``(double*, int)`` (IN_ARRAY1)    free
 ===========================================  ==================
 
-``IMP_bff.types.i`` now carries an ``in`` typemap that takes one memcpy when the
-argument is a 1-D contiguous float64 array: **4.4 ns/element**, and
+``IMP_bff.types.i`` now carries an ``in`` typemap that one memcpy when the
+argument is a contiguous float64 array: **4.4 ns/element**, and
 ``diffusion_propagate`` -- four ``ng^3`` grids in, one out -- went from 9.54 ms
 to 0.296 ms of pure boundary crossing at ``ng = 41``. That is the cost of 53
 solver steps recovered on every call, and ``equilibrium_occupancy`` makes up to
@@ -111,12 +111,14 @@ def test_an_empty_array_is_accepted():
     assert decay(np.zeros(0), np.zeros(0), np.linspace(0, 1, 8)).size == 8
 
 
-def test_a_two_dimensional_array_falls_back_and_does_not_crash():
-    """``array_numdims == 1`` guards the fast path; 2-D goes to the sequence
-    converter, which sees a sequence of rows and refuses."""
+def test_a_contiguous_two_dimensional_array_is_flattened():
+    """A contiguous float64 array of any shape is copied row-major -- which is
+    exactly the ``.ravel()`` the Python grid adapters used to do before calling
+    a kernel. A 2-D axis is therefore accepted and flattens to the 1-D answer.
+    """
     t = np.linspace(0.0, 20.0, 512).reshape(2, 256)
-    with pytest.raises(TypeError):
-        decay(AMP, RATE, t)
+    np.testing.assert_array_equal(decay(AMP, RATE, t),
+                                  decay(AMP, RATE, t.ravel()))
 
 
 def test_the_kernel_does_not_write_through_the_copy():

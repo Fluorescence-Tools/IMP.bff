@@ -7,19 +7,18 @@
 #include <IMP/bff/PolymerChain.h>
 #include <IMP/bff/Distributions.h>
 #include <IMP/bff/internal/Normalize.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 IMPBFF_BEGIN_NAMESPACE
 
-double gaussian_chain_ree(double segment_length, int number_of_segments) {
-    return segment_length * std::sqrt(static_cast<double>(number_of_segments));
-}
-
-std::vector<double> gaussian_chain(
-        const std::vector<double>& distances, double segment_length,
-        int number_of_segments) {
+//! The ideal-chain kernel as a buffer, for the view-publishing wrapper.
+std::vector<double> gaussian_chain_impl(const std::vector<double>& distances,
+                                        double segment_length,
+                                        int number_of_segments) {
     const double ree = gaussian_chain_ree(segment_length, number_of_segments);
     const double r2_mean = ree * ree;
     std::vector<double> out(distances.size(), 0.0);
@@ -32,9 +31,10 @@ std::vector<double> gaussian_chain(
     return out;
 }
 
-std::vector<double> worm_like_chain(
-        const std::vector<double>& distances, double kappa, double chain_length,
-        bool normalize, bool distance) {
+//! The worm-like-chain kernel as a buffer (the wrapper publishes a view).
+std::vector<double> worm_like_chain_impl(const std::vector<double>& distances,
+                                         double kappa, double chain_length,
+                                         bool normalize, bool distance) {
     std::vector<double> pr(distances.size(), 0.0);
     if (distances.empty()) return pr;
     if (chain_length == 0.0) {
@@ -79,20 +79,42 @@ std::vector<double> worm_like_chain(
     return pr;
 }
 
-std::vector<double> worm_like_chain_linker(
-        const std::vector<double>& distances, double kappa, double chain_length,
-        double sigma, bool normalize) {
-    const std::vector<double> pr =
-            worm_like_chain(distances, kappa, chain_length, normalize, true);
+double gaussian_chain_ree(double segment_length, int number_of_segments) {
+    return segment_length * std::sqrt(static_cast<double>(number_of_segments));
+}
+
+void gaussian_chain(const std::vector<double>& distances,
+                    double segment_length, int number_of_segments,
+                    double** out_view, int* n_out_view) {
+    internal::copy_to_view(
+            gaussian_chain_impl(distances, segment_length, number_of_segments),
+            out_view, n_out_view);
+}
+
+void worm_like_chain(const std::vector<double>& distances, double kappa,
+                     double chain_length, bool normalize, bool distance,
+                     double** out_view, int* n_out_view) {
+    internal::copy_to_view(
+            worm_like_chain_impl(distances, kappa, chain_length, normalize, distance),
+            out_view, n_out_view);
+}
+
+void worm_like_chain_linker(const std::vector<double>& distances, double kappa,
+                            double chain_length, double sigma, bool normalize,
+                            double** out_view, int* n_out_view) {
     std::vector<double> pn(distances.size(), 0.0);
-    for (std::size_t i = 0; i < distances.size(); ++i) {
-        if (pr[i] == 0.0) continue;
-        const std::vector<double> broad =
-                normal_distribution(distances, distances[i], sigma, false);
-        for (std::size_t j = 0; j < pn.size(); ++j) pn[j] += pr[i] * broad[j];
+    if (sigma != 0.0) {
+        const std::vector<double> pr =
+                worm_like_chain_impl(distances, kappa, chain_length, normalize, true);
+        for (std::size_t i = 0; i < distances.size(); ++i) {
+            if (pr[i] == 0.0) continue;
+            const std::vector<double> broad =
+                    normal_density(distances, distances[i], sigma);
+            for (std::size_t j = 0; j < pn.size(); ++j) pn[j] += pr[i] * broad[j];
+        }
+        if (normalize) internal::normalize_sum(pn);
     }
-    if (normalize) internal::normalize_sum(pn);
-    return pn;
+    internal::copy_to_view(pn, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

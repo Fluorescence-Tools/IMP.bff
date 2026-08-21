@@ -3,6 +3,11 @@
 The C++ kernels (FRETPair, RotamerEnergy, States, RotamerStatistics) are in
 their own headers. The rotamer library IO, ensemble, and FRET driver are in
 :file:`pyext/IMP_bff.rotamer.i` as %pythoncode. This module re-exports the surface.
+
+Port status (PRD-117): 1 of 20 names is C++-covered; the remaining 19 (the
+rotamer library IO, ``RotamerEnsemble``/``RotamerFRET``, ``*_fps`` and
+``rotamer_*`` payload/registry helpers) are %pythoncode in
+``rotamer.i``/``rotamer_ensemble.i`` and still to port. Pure re-export.
 """
 
 from IMP.bff import (

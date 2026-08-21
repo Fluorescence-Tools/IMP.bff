@@ -21,6 +21,11 @@ namespace in another repository -- and a subpackage resolves to the first
 matching directory and stops, so for five days ``AVNetworkRestraintWrapper``
 was unreachable and recorded as a deleted upstream API. Everything under
 ``IMP.bff`` now ships from imp.bff.
+
+Port status (PRD-117): 6 of 7 names are C++-covered (the restraints and
+``LabelingSite``/``AVMeasurement``); only ``AVNetworkRestraintWrapper`` remains
+%pythoncode (lazily) in ``avmeandistance.i`` because it subclasses an IMP.pmi
+class. Pure re-export -- holds no logic of its own to move.
 """
 
 from __future__ import annotations

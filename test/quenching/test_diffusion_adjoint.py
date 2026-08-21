@@ -49,14 +49,16 @@ def make_solver(rng, ng=15, flux_form="smoluchowski", dg=1.5):
     k = 0.25 + 1.5 * rng.uniform(size=(ng,) * 3)          # 1/ns
     p0 = bounds * (0.5 + rng.uniform(size=(ng,) * 3))
     dt = 0.5 * diffusion_stability_limit(D.max(), dg)
-    return GridDiffusionSolver(D, bounds, p0, rate_map=k, t_step=dt, dg=dg,
+    # The solver's grids are flat `ng^3`; callers ravel their cubes.
+    return GridDiffusionSolver(D.ravel(), bounds.ravel(), p0.ravel(),
+                               rate_map=k.ravel(), t_step=dt, dg=dg,
                                flux_form=flux_form), p0
 
 
-def loss(solver, p0, w, n_steps, n_out):
-    """L = <w, F> for a fresh run from p0 (run() mutates the density)."""
-    solver.density = p0.copy()
-    return float(np.dot(w, solver.run(n_steps, n_out).fluorescence))
+def loss(solver, p0f, w, n_steps, n_out):
+    """L = <w, F> for a fresh run from a (flat) p0 -- run() mutates density."""
+    solver.set_density(p0f.copy())
+    return float(np.dot(w, solver.run(n_steps, n_out).get_fluorescence()))
 
 
 class DotProductIdentityTests(IMP.test.TestCase):
@@ -64,35 +66,38 @@ class DotProductIdentityTests(IMP.test.TestCase):
     def _check(self, flux_form, n_steps, n_out, seed):
         rng = np.random.default_rng(seed)
         solver, p0 = make_solver(rng, flux_form=flux_form)
+        p0f = p0.ravel()
         n_reports = n_steps // n_out + 1
         w = rng.uniform(-1, 1, size=n_reports)
 
-        g = solver.gradient(w, n_steps, n_out, density=p0)
+        g = solver.gradient(w, n_steps, n_out, density=p0f)
         self.assertIsInstance(g, GridDiffusionGradient)
         for name in ("d_diffusion", "d_rate", "d_density"):
-            self.assertEqual(getattr(g, name).shape, p0.shape)
+            self.assertEqual(getattr(g, "get_" + name)().shape, p0f.shape)
 
         h = 1e-4
-        for name, field, attr, scale in (
-            ("D", solver.diffusion_map, "diffusion_map", 1.0),
-            ("k", solver.rate_map, "rate_map", 0.1),
-            ("p0", p0, None, 1.0),
+        for name, field, setter, scale in (
+            ("D", solver.get_diffusion_map(), "set_diffusion_map", 1.0),
+            ("k", solver.get_rate_map(), "set_rate_map", 0.1),
+            ("p0", p0f, None, 1.0),
         ):
             v = rng.uniform(-1, 1, size=field.shape) * scale
-            if attr is None:
-                v = v * solver.bounds
+            if setter is None:
+                v = v * solver.get_bounds()
             base = field.copy()
-            if attr is not None:
-                setattr(solver, attr, base + h * v)
-                lp = loss(solver, p0, w, n_steps, n_out)
-                setattr(solver, attr, base - h * v)
-                lm = loss(solver, p0, w, n_steps, n_out)
-                setattr(solver, attr, base)
+            if setter is not None:
+                getattr(solver, setter)(base + h * v)
+                lp = loss(solver, p0f, w, n_steps, n_out)
+                getattr(solver, setter)(base - h * v)
+                lm = loss(solver, p0f, w, n_steps, n_out)
+                getattr(solver, setter)(base)
             else:
-                lp = loss(solver, p0 + h * v, w, n_steps, n_out)
-                lm = loss(solver, p0 - h * v, w, n_steps, n_out)
+                lp = loss(solver, p0f + h * v, w, n_steps, n_out)
+                lm = loss(solver, p0f - h * v, w, n_steps, n_out)
             fd = (lp - lm) / (2 * h)
-            adj = float(np.sum(getattr(g, {"D": "d_diffusion", "k": "d_rate", "p0": "d_density"}[name]) * v))
+            adj = float(np.sum(getattr(
+                g, {"D": "get_d_diffusion", "k": "get_d_rate",
+                    "p0": "get_d_density"}[name])() * v))
             self.assertAlmostEqual(
                 adj, fd, delta=1e-7 * (1.0 + abs(fd)),
                 msg=f"{flux_form} {name}: adjoint {adj:.12g} vs FD {fd:.12g} "
@@ -114,7 +119,7 @@ class DotProductIdentityTests(IMP.test.TestCase):
         rng = np.random.default_rng(5)
         solver, p0 = make_solver(rng)
         with self.assertRaises(ValueError):
-            solver.gradient(np.ones(3), 100, 10, density=p0)
+            solver.gradient(np.ones(3), 100, 10, density=p0.ravel())
 
 
 class ParameterJacobianTests(IMP.test.TestCase):
@@ -157,8 +162,9 @@ class ParameterJacobianTests(IMP.test.TestCase):
 
         def decay(theta):
             D, k = fields(theta)
-            s = GridDiffusionSolver(D, bounds, p0.copy(), rate_map=k, t_step=dt, dg=dg)
-            return s.run(n_steps, n_out).fluorescence
+            s = GridDiffusionSolver(D.ravel(), bounds.ravel(), p0.copy().ravel(),
+                                    rate_map=k.ravel(), t_step=dt, dg=dg)
+            return s.run(n_steps, n_out).get_fluorescence()
 
         F0 = decay(theta0)
         w = rng.uniform(-1, 1, size=F0.shape)
@@ -167,8 +173,9 @@ class ParameterJacobianTests(IMP.test.TestCase):
         # finite differences of the *maps* (cheap: no solve) -- the solver
         # gradient is the expensive, tested part.
         D0, k0 = fields(theta0)
-        s = GridDiffusionSolver(D0, bounds, p0.copy(), rate_map=k0, t_step=dt, dg=dg)
-        g = s.gradient(w, n_steps, n_out, density=p0)
+        s = GridDiffusionSolver(D0.ravel(), bounds.ravel(), p0.copy().ravel(),
+                                rate_map=k0.ravel(), t_step=dt, dg=dg)
+        g = s.gradient(w, n_steps, n_out, density=p0.ravel())
         grad_adj = np.zeros(5)
         for i in range(5):
             h = 1e-6 * max(1.0, abs(theta0[i]))
@@ -177,7 +184,8 @@ class ParameterJacobianTests(IMP.test.TestCase):
             tm[i] -= h
             Dp, kp = fields(tp)
             Dm, km = fields(tm)
-            grad_adj[i] = (np.sum(g.d_diffusion * (Dp - Dm)) + np.sum(g.d_rate * (kp - km))) / (2 * h)
+            grad_adj[i] = (np.sum(g.get_d_diffusion() * (Dp - Dm).ravel())
+                           + np.sum(g.get_d_rate() * (kp - km).ravel())) / (2 * h)
 
         # the benchmark's way: central differences of the whole solve
         grad_fd = np.zeros(5)

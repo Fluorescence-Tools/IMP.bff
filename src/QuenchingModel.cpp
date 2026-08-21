@@ -238,9 +238,9 @@ void DynamicAccessibleVolume::update_occupancy_by_iteration(double t_step,
     if (diffusion_map_.empty()) update_diffusion_map();
     const std::vector<double> b = bounds();
     GridDiffusionSolver solver(
-            b, b, diffusion_map_, std::vector<double>(diffusion_map_.size(), 0.0),
-            av_.get_grid_step(), resolve_t_step(t_step),
-            flux_form_ == "ito" ? FLUX_ITO : FLUX_SMOLUCHOWSKI, true);
+            diffusion_map_, b, b,
+            std::vector<double>(diffusion_map_.size(), 0.0),
+            av_.get_grid_step(), resolve_t_step(t_step), flux_form_, true);
     double* out = NULL;
     int n_out = 0;
     solver.equilibrium(n_steps, tolerance, n_check, &out, &n_out);
@@ -255,9 +255,8 @@ void DynamicAccessibleVolume::get_occupancy(double** out_view,
     internal::copy_to_view(occupancy_, out_view, n_out_view);
 }
 
-void DynamicAccessibleVolume::donor_decay(double t_max, double t_step,
-                                          int n_out, double** out_view,
-                                          int* n_out_view) const {
+GridDiffusionResult DynamicAccessibleVolume::donor_decay(
+        double t_max, double t_step, int n_out) const {
     DynamicAccessibleVolume* self = const_cast<DynamicAccessibleVolume*>(this);
     if (occupancy_.empty()) self->update_occupancy();
     if (diffusion_map_.empty()) self->update_diffusion_map();
@@ -269,21 +268,13 @@ void DynamicAccessibleVolume::donor_decay(double t_max, double t_step,
 
     const double step = resolve_t_step(t_step);
     GridDiffusionSolver solver(
-            occupancy_, bounds(), diffusion_map_, rate_map, av_.get_grid_step(),
-            step, flux_form_ == "ito" ? FLUX_ITO : FLUX_SMOLUCHOWSKI, true);
+            diffusion_map_, bounds(), occupancy_, rate_map, av_.get_grid_step(),
+            step, flux_form_, true);
     const int n_steps = std::max(1, static_cast<int>(t_max / step));
 
-    double* run = NULL;
-    int n_run = 0;
-    solver.run(n_steps, std::max(1, n_out), &run, &n_run);
-
-    // The resolved step leads, because the caller cannot build the time axis
-    // without it and may not have chosen it.
-    double* out = internal::new_double_view(n_run + 1, out_view, n_out_view);
-    if (out == NULL) { std::free(run); return; }
-    out[0] = step;
-    for (int i = 0; i < n_run; ++i) out[i + 1] = run[i];
-    std::free(run);
+    // run() builds the time axis from the resolved step, so this is the decay
+    // as a GridDiffusionResult -- no lead-step buffer to split.
+    return solver.run(n_steps, std::max(1, n_out));
 }
 
 // --------------------------------------------------------------------------

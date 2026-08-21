@@ -106,10 +106,17 @@
                                     std::vector<double>* imp_bff_ptr = 0,
                                     int imp_bff_res = 0) {
     if (is_numpy_array($input) && array_type($input) == NPY_DOUBLE &&
-        array_numdims($input) == 1 && array_is_contiguous($input)) {
+        array_is_contiguous($input)) {
         const double* imp_bff_data = (const double*) array_data($input);
-        imp_bff_tmp.assign(imp_bff_data,
-                           imp_bff_data + array_size($input, 0));
+        const npy_intp imp_bff_n = PyArray_SIZE((PyArrayObject*)$input);
+        // Grid kernels take a flat `ng^3` buffer; a caller's cube is C-
+        // contiguous, so copying it row-major is exactly the ravel the Python
+        // wrappers used to do. Any-dimensional, contiguous, and flat out.
+        imp_bff_tmp.assign(imp_bff_data, imp_bff_data + imp_bff_n);
+        $1 = &imp_bff_tmp;
+    } else if ($input == Py_None) {
+        // An absent optional grid (the Python wrappers spelled it `None` for
+        // "use the default"). The empty vector is what the kernels expect.
         $1 = &imp_bff_tmp;
     } else if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**) &imp_bff_ptr,
                                          $descriptor(std::vector<double>*), 0))
@@ -140,7 +147,8 @@
         const std::vector<double>& {
     void* imp_bff_vp = 0;
     $1 = (is_numpy_array($input) && array_type($input) == NPY_DOUBLE &&
-          array_numdims($input) == 1) ? 1
+          array_is_contiguous($input)) ? 1
+       : ($input == Py_None) ? 1
        : SWIG_IsOK(SWIG_ConvertPtr($input, &imp_bff_vp,
                                    $descriptor(std::vector<double>*), 0)) ? 1
        : (PySequence_Check($input) ? 1 : 0);

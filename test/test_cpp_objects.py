@@ -49,7 +49,7 @@ def test_the_stability_bound_does_not_include_the_rate():
     for k in (0.0, 96.0):                 # a rate that would fail the wrong bound
         rate = k * bounds
         solver = IMP.bff.GridDiffusionSolver(
-            dmap, bounds, bounds / bounds.sum(), rate, dt, 1.0)
+            dmap, bounds, bounds / bounds.sum(), rate, 1.0, dt)
         solver.run(10, 5)                 # must not raise
 
 
@@ -73,8 +73,8 @@ def test_the_constructor_takes_the_diffusion_map_first():
     bounds = (_grid(ng) < ng / 3.0).astype(np.float64)
     dmap = 8.0 * bounds
     solver = IMP.bff.GridDiffusionSolver(dmap, bounds, bounds / bounds.sum())
-    np.testing.assert_allclose(solver.diffusion_map, dmap)
-    np.testing.assert_allclose(solver.bounds, bounds)
+    np.testing.assert_allclose(solver.get_diffusion_map(), dmap.ravel())
+    np.testing.assert_allclose(solver.get_bounds(), bounds.ravel())
 
 
 def test_a_domain_touching_the_outer_shell_raises():

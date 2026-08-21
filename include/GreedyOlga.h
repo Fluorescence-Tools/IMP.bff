@@ -80,14 +80,6 @@ IMPBFFEXPORT double expected_rmsd(
         const std::vector<double>& rmsds, const std::vector<double>& chi2,
         int ndof, double diag_weight, int n_frames);
 
-//! What a greedy selection leaves behind: the pairs, and the precision decay.
-struct IMPBFFEXPORT GreedyPairSelection {
-    //! Indices into the pair axis of `effs`, in selection order.
-    std::vector<int> pairs;
-    //! Expected mean RMSD after each step, same length as `pairs`.
-    std::vector<double> decay;
-};
-
 //! Olga-style greedy informative pair selection.
 /*!
     Repeatedly adds the candidate pair that leaves the smallest expected mean
@@ -96,19 +88,27 @@ struct IMPBFFEXPORT GreedyPairSelection {
     `effs` is expected to be finite: Olga's GUI does its NaN filtering before
     calling the selector, and so must a caller here.
 
+    The result is published as two managed numpy views: the selected pair
+    indices in selection order, and the expected mean RMSD after each of them
+    (same length). Shapes are part of the contract, stated once here rather
+    than by a Python wrapper that split a struct into two arrays.
+
     \param[in] effs,n_frames,n_pairs FRET efficiency per frame and pair
     \param[in] rmsds,n_rmsd_rows,n_rmsd_cols pairwise RMSD between frames
     \param[in] err expected absolute error in FRET efficiency
     \param[in] max_pairs how many to select; capped at `n_pairs`
     \param[in] unique_only a candidate may be selected at most once
     \param[in] diag_weight Olga's diagonal correction on the denominator
-    \return the selected pairs and the expected mean RMSD after each of them
+    \param[out] out_pairs,n_out_pairs selected pair indices (int view)
+    \param[out] out_decay,n_out_decay expected mean RMSD after each (double view)
 */
-IMPBFFEXPORT GreedyPairSelection select_informative_pairs(
+IMPBFFEXPORT void select_informative_pairs(
         double* effs, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
         double err, int max_pairs,
-        bool unique_only = true, double diag_weight = 0.99);
+        bool unique_only = true, double diag_weight = 0.99,
+        int** out_pairs = 0, int* n_out_pairs = 0,
+        double** out_decay = 0, int* n_out_decay = 0);
 
 IMPBFF_END_NAMESPACE
 

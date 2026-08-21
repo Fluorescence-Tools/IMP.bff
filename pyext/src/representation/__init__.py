@@ -12,6 +12,13 @@ Only the *representation* parameters live here. ``linker_length``,
 accessible volume; a rotamer library has none of them, and none of them are
 properties of the dye (``IMP.bff.Dye``) or of where it is attached
 (``IMP.bff.label``).
+
+Port status (PRD-117): 12 of 17 names are C++-covered (the rotamer ensemble,
+``RotamerDistance``/``RotamerPosition``, ``distances_from_ensembles``,
+``load_rotamer_library``/``*_fps``, etc.); the remaining 5 (``compute_av``,
+``compute_av_from_structure``, ``compute_avs_for_structure``,
+``av_pair_statistics``, ``histogram_rda``) are %pythoncode in
+``avmodel.i``/``avbuilder.i`` and still to port. Pure re-export.
 """
 
 from __future__ import annotations

@@ -26,6 +26,7 @@
 #include <IMP/showable_macros.h>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -261,8 +262,11 @@ public:
         their a-c, a-d and b-d pairs when `include_impropers` is true, which is
         the one place the Python copies disagreed -- and only in principle,
         since no builder of a combined system fills `impropers`. See
-        okf/validation/impropers_are_dropped.md. */
-    std::vector<std::pair<std::string, std::string> > get_exclusions(
+        okf/validation/impropers_are_dropped.md.
+
+        A `std::set`, not a vector: its caller tests membership and takes
+        subsets, and a deduplicated, sorted container is what the answer is. */
+    std::set<std::pair<std::string, std::string> > get_exclusions(
             bool include_impropers = true) const;
 
     //! Simple cycles of at most `max_len` sites, each as sorted site ids.

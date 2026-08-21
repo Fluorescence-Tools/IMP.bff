@@ -22,6 +22,7 @@
 #include <IMP/showable_macros.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -37,6 +38,63 @@ IMPBFF_BEGIN_NAMESPACE
     \param flux_form FLUX_SMOLUCHOWSKI or FLUX_ITO
     \param check_stability refuse a step past the explicit scheme's limit
 */
+
+//! The donor decay `run()` leaves behind.
+/*!
+    A value carrying the time axis, the surviving excited-state fraction at
+    each reported step, and the final density. Its arrays are read back as
+    managed numpy views through the `get_*()` methods (ARGOUTVIEWM_ARRAY1), so
+    a caller treats `result.get_time()`, `result.get_fluorescence()` and
+    `result.get_density()` as ndarrays.
+*/
+class IMPBFFEXPORT GridDiffusionResult {
+    std::vector<double> time_;
+    std::vector<double> fluorescence_;
+    std::vector<double> density_;
+
+public:
+    GridDiffusionResult() {}
+    GridDiffusionResult(std::vector<double> time, std::vector<double> fluorescence,
+                        std::vector<double> density)
+        : time_(std::move(time)), fluorescence_(std::move(fluorescence)),
+          density_(std::move(density)) {}
+
+    void get_time(double** out_view, int* n_out_view) const;
+    void get_fluorescence(double** out_view, int* n_out_view) const;
+    void get_density(double** out_view, int* n_out_view) const;
+
+    IMP_SHOWABLE_INLINE(
+            GridDiffusionResult,
+            out << "GridDiffusionResult(" << time_.size() << " points, "
+                << density_.size() << " density voxels)");
+};
+IMP_VALUES(GridDiffusionResult, GridDiffusionResults);
+
+//! What `gradient()` returns: dL/dD, dL/dk and dL/dp0, per voxel.
+class IMPBFFEXPORT GridDiffusionGradient {
+    std::vector<double> d_diffusion_;
+    std::vector<double> d_rate_;
+    std::vector<double> d_density_;
+
+public:
+    GridDiffusionGradient() {}
+    GridDiffusionGradient(std::vector<double> d_diffusion,
+                          std::vector<double> d_rate,
+                          std::vector<double> d_density)
+        : d_diffusion_(std::move(d_diffusion)), d_rate_(std::move(d_rate)),
+          d_density_(std::move(d_density)) {}
+
+    void get_d_diffusion(double** out_view, int* n_out_view) const;
+    void get_d_rate(double** out_view, int* n_out_view) const;
+    void get_d_density(double** out_view, int* n_out_view) const;
+
+    IMP_SHOWABLE_INLINE(
+            GridDiffusionGradient,
+            out << "GridDiffusionGradient(" << d_diffusion_.size()
+                << " voxels)");
+};
+IMP_VALUES(GridDiffusionGradient, GridDiffusionGradients);
+
 class IMPBFFEXPORT GridDiffusionSolver {
     std::vector<double> density_;
     std::vector<double> bounds_;
@@ -59,21 +117,22 @@ class IMPBFFEXPORT GridDiffusionSolver {
 
 public:
     GridDiffusionSolver(
-            const std::vector<double>& density = std::vector<double>(),
-            const std::vector<double>& bounds = std::vector<double>(),
             const std::vector<double>& diffusion_map = std::vector<double>(),
+            const std::vector<double>& bounds = std::vector<double>(),
+            const std::vector<double>& density = std::vector<double>(),
             const std::vector<double>& rate_map = std::vector<double>(),
             double dg = 1.0, double t_step = 0.01,
-            int flux_form = FLUX_SMOLUCHOWSKI, bool check_stability = true);
+            const std::string& flux_form = "smoluchowski",
+            bool check_stability = true);
 
     //! Integrate \p n_steps steps, reporting every \p n_out.
     /*!
-        \param[out] out_view,n_out_view the surviving fraction at each reported
-                    step -- the donor decay -- followed by the final density.
-                    One buffer rather than two returns, because a numpy view is
-                    one array; the shim splits it.
+        \return a #GridDiffusionResult: the time axis in ns, the surviving
+                excited-state fraction at each reported step, and the final
+                density -- the same three arrays `run()` used to hand back as
+                one flat buffer for Python to split.
     */
-    void run(int n_steps, int n_out, double** out_view, int* n_out_view);
+    GridDiffusionResult run(int n_steps, int n_out = 1);
 
     //! Adjoint of run(): the gradient of a loss on the decay, every voxel at once.
     /*!
@@ -89,20 +148,19 @@ public:
         \param[in] density the start of the run being differentiated; run()
                    replaces the solver's own with the final one, so a completed
                    run has to be handed the density it began with
-        \param[out] out_view,n_out_view three concatenated `ng^3` blocks:
-                    dL/dD, dL/dk, dL/dp0
+        \return a #GridDiffusionGradient of dL/dD, dL/dk and dL/dp0, per voxel
     */
-    void gradient(const std::vector<double>& dL_dF, int n_steps, int n_out,
-                  const std::vector<double>& density,
-                  double** out_view, int* n_out_view);
+    GridDiffusionGradient gradient(const std::vector<double>& dL_dF,
+                                   int n_steps, int n_out,
+                                   const std::vector<double>& density);
 
     //! Propagate with no decay until the occupancy stops moving.
     /*! Prefer equilibrium_occupancy(), which is the same answer in closed form.
         This iterates toward it, and on a real site -- where `D` spans orders of
         magnitude through the compounding slow factor -- it can fail to converge
         in any practical number of steps. */
-    void equilibrium(int n_steps, double tolerance, int n_check,
-                     double** out_view, int* n_out_view);
+    void equilibrium(int n_steps, double tolerance, int n_check = 100,
+                     double** out_view = 0, int* n_out_view = 0);
 
     void get_density(double** out_view, int* n_out_view) const;
     void set_density(const std::vector<double>& d) { density_ = d; }
@@ -116,7 +174,9 @@ public:
     double get_dg() const { return dg_; }
     double get_t_step() const { return t_step_; }
     int get_n_iterations() const { return n_iterations_; }
-    int get_flux_form() const { return flux_form_; }
+    std::string get_flux_form() const {
+        return flux_form_ == FLUX_ITO ? "ito" : "smoluchowski";
+    }
 
     IMP_SHOWABLE_INLINE(GridDiffusionSolver,
                         out << "GridDiffusionSolver(ng = " << ng_

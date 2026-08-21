@@ -40,10 +40,11 @@ IMPBFFEXPORT double gaussian_chain_ree(
     \param[in] segment_length Kuhn segment length
     \param[in] number_of_segments number of Kuhn segments
 */
-IMPBFFEXPORT std::vector<double> gaussian_chain(
+IMPBFFEXPORT void gaussian_chain(
         const std::vector<double>& distances,
         double segment_length,
-        int number_of_segments
+        int number_of_segments,
+        double** out_view, int* n_out_view
 );
 
 //! Radial distribution of a worm-like chain.
@@ -62,13 +63,15 @@ IMPBFFEXPORT std::vector<double> gaussian_chain(
     \param[in] normalize divide by the sum
     \param[in] distance multiply by \f$r^2\f$, giving a distance distribution
         rather than a density in space
+    \param[out] out_view,n_out_view the distribution as a managed view
 */
-IMPBFFEXPORT std::vector<double> worm_like_chain(
+IMPBFFEXPORT void worm_like_chain(
         const std::vector<double>& distances,
         double kappa,
         double chain_length = 0.0,
         bool normalize = true,
-        bool distance = true
+        bool distance = true,
+        double** out_view = 0, int* n_out_view = 0
 );
 
 //! Worm-like chain broadened by the dye linkers at each end.
@@ -80,16 +83,18 @@ IMPBFFEXPORT std::vector<double> worm_like_chain(
 
     \param[in] distances the r axis
     \param[in] kappa dimensionless persistence length
-    \param[in] chain_length contour length; 0 takes the largest r on the axis
+    \param[in] chain_length total length; 0 takes the largest r on the axis
     \param[in] sigma linker broadening in Angstrom
     \param[in] normalize divide by the sum
+    \param[out] out_view,n_out_view the broadened ring as a managed view
 */
-IMPBFFEXPORT std::vector<double> worm_like_chain_linker(
+IMPBFFEXPORT void worm_like_chain_linker(
         const std::vector<double>& distances,
         double kappa,
         double chain_length = 0.0,
         double sigma = 6.0,
-        bool normalize = true
+        bool normalize = true,
+        double** out_view = 0, int* n_out_view = 0
 );
 
 IMPBFF_END_NAMESPACE

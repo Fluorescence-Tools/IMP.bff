@@ -3,6 +3,10 @@
 The C++ kernels (Clustering, LinkerGeometry) are in their own headers. The
 samplers (LangevinDyeSampler, LinkerSampler, RRT) and kinetic helpers are in
 :file:`pyext/IMP_bff.sampling.i` as %pythoncode. This module re-exports the surface.
+
+Port status (PRD-117): 1 of 24 names is C++-covered; the remaining 23 (all the
+samplers and RRT/kinetic helpers) are %pythoncode here and still to port. Pure
+re-export -- no logic of its own to move.
 """
 
 from IMP.bff import (

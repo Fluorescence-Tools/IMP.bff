@@ -56,23 +56,7 @@ def __init__(self, donor, acceptor, refractive_index=1.4, kappa2=None,
 
 %include "IMP/bff/InteractionTerms.h"
 
-%extend IMP::bff::PETTerm {
-    %pythoncode %{
-        @property
-        def kQ(self):
-            """Per-atom quenching rate, 1/ns. Zero where the atom is inert."""
-            return _IMP_bff.PETTerm_get_kQ(self)
-
-        @property
-        def rC(self):
-            """Per-atom attenuation length, A."""
-            return _IMP_bff.PETTerm_get_rC(self)
-    %}
-}
-
-%pythoncode %{
-def _term_rates(term, first, second=None):
-    """A term's rate constants as a numpy array."""
-    return np.asarray(term.rate_constants(first, second if second is not None
-                                          else States()), dtype=np.float64)
-%}
+// `get_kQ`/`get_rC` publish managed numpy views (ARGOUTVIEWM_ARRAY1); a
+// property over them hands the array straight back, no Python in between.
+%attribute_py(IMP::bff::PETTerm, PyObject*, kQ, get_kQ);
+%attribute_py(IMP::bff::PETTerm, PyObject*, rC, get_rC);

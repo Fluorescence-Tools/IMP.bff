@@ -5,11 +5,14 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/GreedyOlga.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/exception.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -196,68 +199,83 @@ double expected_rmsd(const std::vector<double>& rmsds,
                                 static_cast<std::size_t>(n_frames));
 }
 
-GreedyPairSelection select_informative_pairs(
+void select_informative_pairs(
         double* effs, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
-        double err, int max_pairs, bool unique_only, double diag_weight) {
-    GreedyPairSelection out;
+        double err, int max_pairs, bool unique_only, double diag_weight,
+        int** out_pairs, int* n_out_pairs,
+        double** out_decay, int* n_out_decay) {
     if (n_rmsd_rows != n_rmsd_cols || n_rmsd_rows != n_frames) {
         IMP_THROW("rmsds must be square and match the frame count of effs",
                   ValueException);
     }
     const int n_take = std::min(max_pairs, n_pairs);
-    if (n_frames <= 0 || n_pairs <= 0 || n_take <= 0) return out;
+    std::vector<int> pairs;
+    std::vector<double> decay;
+    if (n_frames > 0 && n_pairs > 0 && n_take > 0) {
+        const std::size_t n = static_cast<std::size_t>(n_frames);
+        const std::size_t m = static_cast<std::size_t>(n_pairs);
+        const double inv_err_sq = 1.0 / (err * err);
 
-    const std::size_t n = static_cast<std::size_t>(n_frames);
-    const std::size_t m = static_cast<std::size_t>(n_pairs);
-    const double inv_err_sq = 1.0 / (err * err);
-
-    // Candidate-major, transposed once: the scorer reads one candidate's frames
-    // contiguously, and every step would otherwise stride through `effs`.
-    std::vector<double> e_t(m * n);
-    for (std::size_t i = 0; i < n; ++i) {
-        for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = effs[i * m + k];
-    }
-
-    std::vector<double> chi2(n * n, 0.0);
-    std::vector<double> scores(m, 0.0);
-    std::vector<char> taken(m, 0);
-    out.pairs.reserve(static_cast<std::size_t>(n_take));
-
-    for (int step = 0; step < n_take; ++step) {
-        // ndof is clamped at the first two steps: zero degrees of freedom is
-        // not a chi-squared distribution.
-        const int ndof = std::max(step - 1, 1);
-        score_candidates(rmsds, chi2.data(), e_t.data(), inv_err_sq, ndof,
-                         diag_weight, n, n_pairs, scores.data());
-        int best = -1;
-        for (std::size_t k = 0; k < m; ++k) {
-            if (unique_only && taken[k]) continue;
-            if (best < 0 || scores[k] < scores[static_cast<std::size_t>(best)]) {
-                best = static_cast<int>(k);
-            }
+        // Candidate-major, transposed once: the scorer reads one candidate's
+        // frames contiguously, and every step would otherwise stride through
+        // `effs`.
+        std::vector<double> e_t(m * n);
+        for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = effs[i * m + k];
         }
-        if (best < 0) break;   // unique_only, and every candidate is spent
-        out.pairs.push_back(best);
-        taken[static_cast<std::size_t>(best)] = 1;
-        add_pair_to_chi2(chi2, &e_t[static_cast<std::size_t>(best) * n],
-                         inv_err_sq, n);
+
+        std::vector<double> chi2(n * n, 0.0);
+        std::vector<double> scores(m, 0.0);
+        std::vector<char> taken(m, 0);
+        pairs.reserve(static_cast<std::size_t>(n_take));
+
+        for (int step = 0; step < n_take; ++step) {
+            // ndof is clamped at the first two steps: zero degrees of freedom
+            // is not a chi-squared distribution.
+            const int ndof = std::max(step - 1, 1);
+            score_candidates(rmsds, chi2.data(), e_t.data(), inv_err_sq, ndof,
+                             diag_weight, n, n_pairs, scores.data());
+            int best = -1;
+            for (std::size_t k = 0; k < m; ++k) {
+                if (unique_only && taken[k]) continue;
+                if (best < 0 ||
+                    scores[k] < scores[static_cast<std::size_t>(best)]) {
+                    best = static_cast<int>(k);
+                }
+            }
+            if (best < 0) break;   // unique_only, and every candidate is spent
+            pairs.push_back(best);
+            taken[static_cast<std::size_t>(best)] = 1;
+            add_pair_to_chi2(chi2, &e_t[static_cast<std::size_t>(best) * n],
+                             inv_err_sq, n);
+        }
+
+        // The decay is a second pass from a zeroed chi-squared: it reports
+        // what each step left behind, and its `ndof` counts the pairs added
+        // so far rather than the selector's clamped one.
+        std::vector<double> decay_chi2(n * n, 0.0);
+        decay.reserve(pairs.size());
+        for (std::size_t s = 0; s < pairs.size(); ++s) {
+            add_pair_to_chi2(decay_chi2,
+                             &e_t[static_cast<std::size_t>(pairs[s]) * n],
+                             inv_err_sq, n);
+            decay.push_back(weighted_column_mean(
+                    rmsds, decay_chi2.data(), static_cast<int>(s) + 1,
+                    diag_weight, n));
+        }
     }
 
-    // The decay is a second pass from a zeroed chi-squared: it reports what
-    // each step left behind, and its `ndof` counts the pairs added so far
-    // rather than the selector's clamped one.
-    std::vector<double> decay_chi2(n * n, 0.0);
-    out.decay.reserve(out.pairs.size());
-    for (std::size_t s = 0; s < out.pairs.size(); ++s) {
-        add_pair_to_chi2(decay_chi2,
-                         &e_t[static_cast<std::size_t>(out.pairs[s]) * n],
-                         inv_err_sq, n);
-        out.decay.push_back(weighted_column_mean(
-                rmsds, decay_chi2.data(), static_cast<int>(s) + 1,
-                diag_weight, n));
+    // Publish both views; the kernel's vectors are copied out exactly once.
+    const std::size_t n_sel = pairs.size();
+    internal::new_int_view(n_sel, out_pairs, n_out_pairs);
+    if (*out_pairs != nullptr && !pairs.empty()) {
+        std::memcpy(*out_pairs, pairs.data(), n_sel * sizeof(int));
     }
-    return out;
+    internal::new_double_view(n_sel, out_decay, n_out_decay);
+    if (*out_decay != nullptr && !decay.empty()) {
+        std::memcpy(*out_decay, decay.data(), n_sel * sizeof(double));
+    }
 }
 
 IMPBFF_END_NAMESPACE

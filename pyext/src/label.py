@@ -6,6 +6,12 @@ SequenceAlignment) are in their own headers; the IMP API glue (backbone_frame,
 attach_dyes, strip_hierarchy) and the Label dataclass are in
 :file:`pyext/IMP_bff.label.i` as %pythoncode. This module re-exports the surface
 so ``from IMP.bff.label import ...`` keeps working.
+
+Port status (PRD-117): 13 of 42 names are already C++-covered; the remaining 29
+(``attach_dyes``, ``strip_hierarchy``, ``Label``, the ``place_dye*`` and
+``strip_*`` families, the ``*frame*``/``backbone_*`` geometry) are %pythoncode
+here and still to port. This module only re-exports -- it holds no logic of its
+own to move.
 """
 
 from IMP.bff import (

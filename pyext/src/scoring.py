@@ -1,5 +1,10 @@
 """Stage 2 -- is this dye configuration allowed, and how heavily does it count?
 
+<!-- port-status: PRD-117. 1 of 34 re-exported names are C++-covered already
+     (``compute_rotamer_score`` et al. -- the other 33 are %pythoncode in
+     ``pyext/IMP_bff.scoring.i`` and remain to be ported). This module is pure
+     re-export; the port just deletes more of the surface it copies. -->
+
 The score of a *configuration*, from the structure alone. A rotamer that clashes
 with the backbone is not a rotamer the dye adopts; a conformer at high internal
 energy is one it adopts rarely. This is what turns a raw set of candidate

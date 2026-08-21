@@ -10,20 +10,28 @@
 #include <IMP/exception.h>
 
 #include <algorithm>
+#include <string>
+#include <utility>
 #include <cmath>
 #include <cstdlib>
 
 IMPBFF_BEGIN_NAMESPACE
 
 GridDiffusionSolver::GridDiffusionSolver(
-        const std::vector<double>& density, const std::vector<double>& bounds,
         const std::vector<double>& diffusion_map,
+        const std::vector<double>& bounds, const std::vector<double>& density,
         const std::vector<double>& rate_map, double dg, double t_step,
-        int flux_form, bool check_stability)
-        : density_(density), bounds_(bounds), diffusion_map_(diffusion_map),
-          rate_map_(rate_map), dg_(dg), t_step_(t_step),
-          ng_(internal::cube_side(bounds.size())), flux_form_(flux_form),
+        const std::string& flux_form, bool check_stability)
+        : density_(density), bounds_(bounds),
+          diffusion_map_(diffusion_map), rate_map_(rate_map), dg_(dg),
+          t_step_(t_step),
+          ng_(internal::cube_side(bounds.size())),
           check_stability_(check_stability), n_iterations_(0) {
+    if (flux_form != "smoluchowski" && flux_form != "ito") {
+        IMP_THROW("flux_form must be 'smoluchowski' or 'ito', not '"
+                          << flux_form << "'", IMP::ValueException);
+    }
+    flux_form_ = flux_form == "ito" ? FLUX_ITO : FLUX_SMOLUCHOWSKI;
     if (!bounds_.empty() && ng_ == 0) {
         IMP_THROW("the bounds grid must be cubic; " << bounds_.size()
                           << " values are not a whole cube",
@@ -97,8 +105,7 @@ std::vector<double> GridDiffusionSolver::start_density(
     return cur;
 }
 
-void GridDiffusionSolver::run(int n_steps, int n_out, double** out_view,
-                              int* n_out_view) {
+GridDiffusionResult GridDiffusionSolver::run(int n_steps, int n_out) {
     validate();
     if (n_out < 1) n_out = 1;
     const std::vector<double> cur = start_density(density_);
@@ -125,25 +132,27 @@ void GridDiffusionSolver::run(int n_steps, int n_out, double** out_view,
     const std::size_t n_fluo =
             std::min<std::size_t>(fluorescence.size(),
                                   static_cast<std::size_t>(std::max(0, n_reports)));
-    // One buffer: the decay, then the final density. A numpy view is one array,
-    // and splitting it costs the caller two slices rather than a second call.
-    double* out = internal::new_double_view(
-            n_fluo + static_cast<std::size_t>(std::max(0, n_final)),
-            out_view, n_out_view);
-    if (out != nullptr) {
-        for (std::size_t i = 0; i < n_fluo; ++i) out[i] = fluorescence[i];
-        for (int i = 0; i < n_final; ++i) out[n_fluo + i] = final_density[i];
+
+    // The time axis is the caller's report grid, in ns.
+    std::vector<double> time;
+    time.reserve(n_fluo);
+    for (std::size_t i = 0; i < n_fluo; ++i) {
+        time.push_back(static_cast<double>(i) * t_step_ * n_out);
     }
+    std::vector<double> final(final_density,
+                              final_density + std::max(n_final, 0));
     if (final_density != nullptr) {
         density_.assign(final_density, final_density + n_final);
         std::free(final_density);
     }
+    fluorescence.resize(n_fluo);
+    return GridDiffusionResult(std::move(time), std::move(fluorescence),
+                               std::move(final));
 }
 
-void GridDiffusionSolver::gradient(const std::vector<double>& dL_dF,
-                                   int n_steps, int n_out,
-                                   const std::vector<double>& density,
-                                   double** out_view, int* n_out_view) {
+GridDiffusionGradient GridDiffusionSolver::gradient(
+        const std::vector<double>& dL_dF, int n_steps, int n_out,
+        const std::vector<double>& density) {
     validate();
     if (n_out < 1) n_out = 1;
     const int n_reports = n_steps / n_out + 1;
@@ -173,25 +182,22 @@ void GridDiffusionSolver::gradient(const std::vector<double>& dL_dF,
     diffusion_propagate_adjoint(cur, d, decay, bounds_, ng_, flux_form_,
                                 n_steps, n_out, dL_dF, &g, &ng3);
     const std::size_t nv = density_.size();
-    double* out = internal::new_double_view(3 * nv, out_view, n_out_view);
-    if (out == nullptr || g == nullptr) {
-        if (g) std::free(g);
-        return;
+    std::vector<double> gd(nv, 0.0), gk(nv, 0.0), gp(nv, 0.0);
+    if (g != nullptr) {
+        // The chain rule through the folding run() applies:
+        //   d = D dt/dg^2      -> dL/dD  = dL/dd * dt/dg^2
+        //   decay = exp(-k dt) -> dL/dk  = dL/ddecay * (-dt) * decay
+        //   cur = p b / sum(p b) -> dL/dp = b (g - <g, cur>) / total
+        double dot = 0.0;
+        for (std::size_t i = 0; i < nv; ++i) dot += g[2 * nv + i] * cur[i];
+        for (std::size_t i = 0; i < nv; ++i) {
+            gd[i] = g[i] * scale;
+            gk[i] = g[nv + i] * (-t_step_) * decay[i];
+            gp[i] = total > 0.0 ? bounds_[i] * (g[2 * nv + i] - dot) / total : 0.0;
+        }
+        std::free(g);
     }
-    // The chain rule through the folding run() applies:
-    //   d = D dt/dg^2      -> dL/dD  = dL/dd * dt/dg^2
-    //   decay = exp(-k dt) -> dL/dk  = dL/ddecay * (-dt) * decay
-    //   cur = p b / sum(p b) -> dL/dp = b (g - <g, cur>) / total
-    double dot = 0.0;
-    for (std::size_t i = 0; i < nv; ++i) dot += g[2 * nv + i] * cur[i];
-    for (std::size_t i = 0; i < nv; ++i) {
-        out[i] = g[i] * scale;
-        out[nv + i] = g[nv + i] * (-t_step_) * decay[i];
-        out[2 * nv + i] = total > 0.0
-                                  ? bounds_[i] * (g[2 * nv + i] - dot) / total
-                                  : 0.0;
-    }
-    std::free(g);
+    return GridDiffusionGradient(std::move(gd), std::move(gk), std::move(gp));
 }
 
 void GridDiffusionSolver::equilibrium(int n_steps, double tolerance,
@@ -246,6 +252,26 @@ void GridDiffusionSolver::get_diffusion_map(double** o, int* n) const {
 }
 void GridDiffusionSolver::get_rate_map(double** o, int* n) const {
     internal::copy_to_view(rate_map_, o, n);
+}
+
+void GridDiffusionResult::get_time(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(time_, out_view, n_out_view);
+}
+void GridDiffusionResult::get_fluorescence(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(fluorescence_, out_view, n_out_view);
+}
+void GridDiffusionResult::get_density(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(density_, out_view, n_out_view);
+}
+
+void GridDiffusionGradient::get_d_diffusion(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(d_diffusion_, out_view, n_out_view);
+}
+void GridDiffusionGradient::get_d_rate(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(d_rate_, out_view, n_out_view);
+}
+void GridDiffusionGradient::get_d_density(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(d_density_, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

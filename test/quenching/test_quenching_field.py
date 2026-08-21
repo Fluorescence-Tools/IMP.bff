@@ -264,28 +264,30 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
         n_steps = 200
         result = self.solver(point_source(self.ng)).run(n_steps, n_out=n_steps)
         axis = maps.grid_axis(self.ng, self.dg)
-        density = result.density
+        density = result.get_density().reshape(self.ng, self.ng, self.ng)
         variance = float((density * axis[:, None, None] ** 2).sum() / density.sum())
         expected = 2.0 * self.D * n_steps * self.t_step
         self.assertAlmostEqual(variance / expected, 1.0, delta=0.01)
 
     def test_mass_is_conserved_without_decay(self):
         result = self.solver(point_source(self.ng)).run(200, n_out=50)
-        self.assertAlmostEqual(float(result.density.sum()), 1.0, places=9)
-        self.assertTrue(np.allclose(result.fluorescence, 1.0, atol=1e-9))
+        self.assertAlmostEqual(float(result.get_density().sum()), 1.0, places=9)
+        self.assertTrue(np.allclose(result.get_fluorescence(), 1.0, atol=1e-9))
 
     def test_a_uniform_rate_gives_a_single_exponential(self):
         rate = 0.25
         result = self.solver(
             self.bounds.copy(), np.full((self.ng,) * 3, rate)
         ).run(400, n_out=20)
-        slope = np.polyfit(result.time, np.log(result.fluorescence), 1)[0]
+        slope = np.polyfit(result.get_time(), np.log(result.get_fluorescence()), 1)[0]
         # Explicit Euler is first order in dt, hence the 2% tolerance.
         self.assertAlmostEqual(-slope, rate, delta=0.02 * rate)
 
     def test_nothing_leaks_outside_the_domain(self):
         result = self.solver(point_source(self.ng)).run(300, n_out=300)
-        self.assertTrue(np.all(result.density[self.bounds == 0] == 0.0))
+        self.assertTrue(np.all(
+            result.get_density().reshape(self.ng, self.ng, self.ng)
+            [self.bounds == 0] == 0.0))
 
     def test_a_domain_touching_the_grid_edge_raises(self):
         """The stencil cannot be evaluated there, so population would vanish."""
@@ -312,7 +314,7 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
     def test_equilibrium_is_flat_where_the_mobility_is_flat(self):
         solver = self.solver(point_source(self.ng))
         equilibrium = solver.equilibrium(n_steps=6000, tolerance=1e-10)
-        interior = equilibrium[self.bounds > 0]
+        interior = equilibrium.reshape(self.ng, self.ng, self.ng)[self.bounds > 0]
         self.assertAlmostEqual(float(equilibrium.sum()), 1.0, places=9)
         self.assertLess(float(interior.std() / interior.mean()), 0.05)
 
@@ -334,8 +336,9 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
             dg=self.dg, flux_form="ito",
         )
         equilibrium = solver.equilibrium(n_steps=20000, tolerance=1e-12)
-        slow = float(equilibrium[:half][self.bounds[:half] > 0].mean())
-        fast = float(equilibrium[half:][self.bounds[half:] > 0].mean())
+        eq = equilibrium.reshape(self.ng, self.ng, self.ng)
+        slow = float(eq[:half][self.bounds[:half] > 0].mean())
+        fast = float(eq[half:][self.bounds[half:] > 0].mean())
         self.assertGreater(slow, fast)
 
 
@@ -377,6 +380,7 @@ class EquilibriumOccupancyTests(IMP.test.TestCase):
             dg=self.dg, flux_form="ito",
         )
         iterated = solver.equilibrium(n_steps=200000, tolerance=1e-14, n_check=1000)
+        iterated = iterated.reshape(self.ng, self.ng, self.ng)
         closed = equilibrium_occupancy(self.d_map, self.bounds, "ito")
         inside = self.bounds > 0
         deviation = np.max(np.abs(iterated[inside] - closed[inside]) / closed[inside])
@@ -436,8 +440,9 @@ class PortedDefectTests(IMP.test.TestCase):
             t_step=t_step, dg=dg,
         ).run(n_steps, n_out=n_steps)
         axis = maps.grid_axis(ng, dg)
+        density = result.get_density().reshape(ng, ng, ng)
         variance = float(
-            (result.density * axis[:, None, None] ** 2).sum() / result.density.sum()
+            (density * axis[:, None, None] ** 2).sum() / density.sum()
         )
         ratio = variance / (2.0 * D * n_steps * t_step)
         self.assertAlmostEqual(ratio, 1.0, delta=0.01)
@@ -452,7 +457,7 @@ class PortedDefectTests(IMP.test.TestCase):
             t_step=0.5 * diffusion_stability_limit(1.0, 1.0), dg=1.0,
         )
         result = solver.run(101, n_out=101)  # odd, so the buffers end swapped
-        shell = result.density.copy()
+        shell = result.get_density().reshape(ng, ng, ng).copy()
         shell[1:-1, 1:-1, 1:-1] = 0.0
         self.assertEqual(float(shell.sum()), 0.0)
 
@@ -517,6 +522,7 @@ class FluxFormTests(IMP.test.TestCase):
                 t_step=0.5 * diffusion_stability_limit(float(d_map.max()), 1.0),
             )
             iterated = solver.equilibrium(n_steps=60000, tolerance=1e-13)
+            iterated = iterated.reshape(bounds.shape)
             closed = equilibrium_occupancy(d_map, bounds, form)
             inside = bounds > 0
             deviation = float(
@@ -531,7 +537,7 @@ class FluxFormTests(IMP.test.TestCase):
             t_step=0.5 * diffusion_stability_limit(float(d_map.max()), 1.0),
         )
         result = solver.run(400, n_out=40)
-        self.assertAlmostEqual(float(result.density.sum()), 1.0, delta=1e-10)
+        self.assertAlmostEqual(float(result.get_density().sum()), 1.0, delta=1e-10)
 
     def test_smoluchowski_free_diffusion_still_spreads_as_two_D_t(self):
         """A uniform mobility must give textbook diffusion under either form."""
@@ -543,7 +549,8 @@ class FluxFormTests(IMP.test.TestCase):
             np.full((ng,) * 3, d), open_box(ng), point_source(ng),
             t_step=t_step, dg=dg, flux_form="smoluchowski",
         )
-        density = solver.run(n_steps, n_out=n_steps).density
+        density = solver.run(n_steps, n_out=n_steps).get_density().reshape(
+            ng, ng, ng)
         axis = (np.arange(ng) - (ng - 1) // 2) * dg
         profile = density.sum(axis=(1, 2))
         variance = float((profile * axis ** 2).sum() / profile.sum())
@@ -555,7 +562,7 @@ class FluxFormTests(IMP.test.TestCase):
             ValueError, equilibrium_occupancy, d_map, bounds, "stratonovich")
         self.assertRaises(
             ValueError, GridDiffusionSolver, d_map, bounds, bounds,
-            None, 1e-3, 1.0, True, "stratonovich")
+            None, 1e-3, 1.0, "stratonovich", True)
 
 
 class RateStabilityTests(IMP.test.TestCase):
@@ -604,10 +611,11 @@ class RateStabilityTests(IMP.test.TestCase):
             d_map, self.bounds, self.bounds / self.bounds.sum(), rate,
             t_step=t_step, dg=self.dg)
         result = solver.run(400, n_out=40)
-        self.assertTrue(np.all(np.isfinite(result.fluorescence)))
-        self.assertTrue(np.all(result.fluorescence >= 0.0))
-        self.assertTrue(np.all(np.diff(result.fluorescence) <= 1e-12))
-        self.assertGreaterEqual(float(result.density.min()), 0.0)
+        fluo = result.get_fluorescence()
+        self.assertTrue(np.all(np.isfinite(fluo)))
+        self.assertTrue(np.all(fluo >= 0.0))
+        self.assertTrue(np.all(np.diff(fluo) <= 1e-12))
+        self.assertGreaterEqual(float(result.get_density().min()), 0.0)
 
     def test_a_uniform_rate_is_exact_whatever_the_step(self):
         """With ``k`` uniform the answer is ``exp(-k t)`` -- to round-off."""
@@ -622,7 +630,7 @@ class RateStabilityTests(IMP.test.TestCase):
         result = solver.run(n_steps, n_out=n_steps)
         expected = np.exp(-k * n_steps * t_step)
         self.assertAlmostEqual(
-            float(result.fluorescence[-1]) / expected, 1.0, delta=1e-10)
+            float(result.get_fluorescence()[-1]) / expected, 1.0, delta=1e-10)
 
 
 if __name__ == "__main__":

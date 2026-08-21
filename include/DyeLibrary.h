@@ -200,6 +200,21 @@ IMPBFFEXPORT double forster_radius_from_spectra(
     that does not split is returned three times with its spaces removed. */
 IMPBFFEXPORT std::vector<std::string> normalize_dye_name(std::string dye_name);
 
+//! The flrCIF item for each `Dye` field, or empty where none exists.
+/*!
+    flrCIF's word for a dye is "probe", and for the fluorescent moiety
+    "chromophore". Quantum yield, extinction coefficient and a spectrum have no
+    dictionary item in the stack -- a bff-native category -- so those keys map
+    to the empty string, not to a fabricated item.
+*/
+IMPBFFEXPORT std::map<std::string, std::string> dye_flrcif_items();
+
+//! The flrCIF items for an R0 derivation's inputs and output.
+/*! `index_of_refraction` and `kappa_squared` are not in the upstream IHM-FLR
+    dictionary -- they are added by `mmfdb_flr_ext.dic`, which is what makes a
+    stored R0 reproducible rather than a bare number. */
+IMPBFFEXPORT std::map<std::string, std::string> forster_radius_flrcif_items();
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_DYELIBRARY_H

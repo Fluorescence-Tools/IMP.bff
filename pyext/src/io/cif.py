@@ -6,6 +6,11 @@ wrapped through :file:`pyext/IMP_bff.cif.i`. The FF reader is in
 as %pythoncode in the .i file (it returns dicts and uses ihm.format, which is
 Python-only). This module re-exports the Python surface so
 ``from IMP.bff.io.cif import ...`` keeps working.
+
+Port status (PRD-117): 4 of 21 names are C++-covered; the remaining 17 (the
+``*_cif`` readers/writers, ``forcefield_system_from_dict``, ``region_features``,
+the template/rotamer library IO) are %pythoncode in ``pyext/IMP_bff.cif.i`` and
+still to port. Pure re-export.
 """
 
 from IMP.bff import (

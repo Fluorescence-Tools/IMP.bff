@@ -39,6 +39,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/DyeDiffusion.h>
+#include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/LifetimeSpectrum.h>
 #include <IMP/bff/PETQuenching.h>
 
@@ -177,14 +178,12 @@ public:
     /*!
         \param[in] t_step negative takes half the explicit stability limit —
                    stable with room for the map to change
-        \param[out] out_view,n_out_view one buffer: the resolved time step, then
-                    the surviving excited-state fraction at each reported step,
-                    then the final `ng^3` density. One buffer rather than three
-                    returns, because a numpy view is one array; the shim splits
-                    it and builds the time axis from the step.
+        \return a #GridDiffusionResult whose `time` axis is built from the
+                *resolved* step actually integrated, so no caller has to parse a
+                step out of a flat buffer.
     */
-    void donor_decay(double t_max, double t_step, int n_out, double** out_view,
-                     int* n_out_view) const;
+    GridDiffusionResult donor_decay(double t_max, double t_step,
+                                    int n_out) const;
 
     IMP_SHOWABLE_INLINE(DynamicAccessibleVolume,
                         out << "DynamicAccessibleVolume(ng=" << av_.get_ng()

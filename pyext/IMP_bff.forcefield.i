@@ -24,6 +24,22 @@ IMP_SWIG_VALUE(IMP::bff, FFNonbonded, FFNonbondeds);
 IMP_SWIG_VALUE(IMP::bff, FFSampling, FFSamplings);
 IMP_SWIG_VALUE(IMP::bff, DyeForceFieldSystem, DyeForceFieldSystems);
 
+// The molecular graph's return types, declared before the header so the
+// `std::set` below is already a known template when the method is read.
+%template(PairStringString) std::pair<std::string, std::string>;
+%template(VectorPairStringString) std::vector<std::pair<std::string, std::string> >;
+%template(VectorVectorString) std::vector<std::vector<std::string> >;
+
+// `std_set.i`+`std_pair.i` (in types.i) turn this into a native Python `set`
+// of `(a, b)` tuples -- exactly the surface a caller expects from a set of
+// excluded pairs -- with no hand-written typemap.
+%template(SetPairStringString)
+        std::set<std::pair<std::string, std::string> >;
+
+// The Python surface spells it `exclusions` (it names the pairs, not the
+// getter), so rename before the header declares the method.
+%rename(exclusions) IMP::bff::DyeForceFieldSystem::get_exclusions;
+
 %include "IMP/bff/DyeForceField.h"
 
 // The containers, instantiated *after* the header so their element types are
@@ -44,27 +60,6 @@ IMP_SWIG_VALUE(IMP::bff, DyeForceFieldSystem, DyeForceFieldSystems);
 %template(PairStringString) std::pair<std::string, std::string>;
 %template(VectorPairStringString) std::vector<std::pair<std::string, std::string> >;
 %template(VectorVectorString) std::vector<std::vector<std::string> >;
-
-// One Python-side method, because one is needed. `get_bonded_neighbors` and
-// `find_rings` return containers a caller can use directly -- the map indexes
-// and the list iterates -- so they get no wrapper. `exclusions` does: its
-// caller tests membership inside an O(n^2) loop over site pairs, and a SWIG
-// vector would make each test a linear scan.
-%extend IMP::bff::DyeForceFieldSystem {
-  %pythoncode %{
-    def exclusions(self, include_impropers=True):
-        """The 1-2, 1-3 and 1-4 pairs as a set of sorted ``(a, b)`` tuples.
-
-        ``include_impropers`` adds each improper's a-c, a-d and b-d pairs. It
-        is the one thing the Python copies disagreed on, and only in principle:
-        no builder of a combined system fills ``impropers``. See
-        okf/validation/impropers_are_dropped.md.
-        """
-        return {(a, b) for a, b in self.get_exclusions(include_impropers)}
-
-  %}
-}
-
 
 // Read-only properties, so `system.sites` reads like the dictionary it
 // replaces without `.get()` and without a default that can never be needed.

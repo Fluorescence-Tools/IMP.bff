@@ -4,6 +4,11 @@ The graph primitives (MolecularGraph) are C++ (``include/IMP/bff/MolecularGraph.
 The builder stays as %pythoncode in :file:`pyext/IMP_bff.topology.i` because it
 calls ``read_component_template_cif`` (Python, ``ihm.format``) and assembles
 the typed ``DyeForceFieldSystem``. This module re-exports the surface.
+
+Port status (PRD-117): 0 of 16 names are C++-covered; all 16 (``build_*``
+assemblers, ``build_dye_protein_system``, graph/angle/dihedral helpers,
+``parse_dye_mol2``) are %pythoncode in ``pyext/IMP_bff.topology.i`` and still to
+port. Pure re-export.
 """
 
 from IMP.bff import (

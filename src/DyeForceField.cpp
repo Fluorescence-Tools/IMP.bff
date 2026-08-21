@@ -71,7 +71,7 @@ std::pair<std::string, std::string> ordered_pair(const std::string& a,
 }
 }
 
-std::vector<std::pair<std::string, std::string> >
+std::set<std::pair<std::string, std::string> >
 DyeForceFieldSystem::get_exclusions(bool include_impropers) const {
     std::set<std::pair<std::string, std::string> > excl;
     for (size_t i = 0; i < bonds_.size(); ++i)
@@ -88,7 +88,7 @@ DyeForceFieldSystem::get_exclusions(bool include_impropers) const {
             excl.insert(ordered_pair(t.site_b, t.site_d));
         }
     }
-    return std::vector<std::pair<std::string, std::string> >(excl.begin(), excl.end());
+    return excl;
 }
 
 std::vector<std::vector<std::string> >

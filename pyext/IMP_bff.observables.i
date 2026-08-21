@@ -66,23 +66,8 @@ def __init__(self, *args, **kwargs):
 
 %include "IMP/bff/LifetimeSpectrum.h"
 
+// `decay` publishes a flat managed view (ARGOUTVIEWM_ARRAY1) whose 1-D shape is
+// the kernel's own; the caller's time axis shape is not restated here.
 %extend IMP::bff::LifetimeSpectrum {
-    %pythoncode %{
-        def __len__(self):
-            return self.get_n_species()
-
-        def decay(self, time):
-            """``F(t) = sum_i a_i exp(-k_i t)`` on the caller's axis. **Unconvolved.**
-
-            The reshape is the whole reason this is not the raw C++ method: a
-            caller handing in a ``(3, 4)`` time array expects a ``(3, 4)``
-            decay, and a numpy view over a flat buffer is flat. The kernel
-            stays 1-D; the shape is the caller's, so restoring it belongs on
-            this side of the boundary.
-            """
-            t = np.asarray(time, dtype=np.float64)
-            out = _IMP_bff.LifetimeSpectrum_decay(
-                self, np.ascontiguousarray(t.ravel()))
-            return out.reshape(t.shape)
-    %}
+    int __len__() { return $self->get_n_species(); }
 }

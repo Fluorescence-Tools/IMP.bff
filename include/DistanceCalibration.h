@@ -33,9 +33,12 @@ IMPBFF_BEGIN_NAMESPACE
 IMPBFFEXPORT double polynomial_transfer(
         double x, const std::vector<double>& coefficients);
 
-//! Evaluate a polynomial at many abscissae.
-IMPBFFEXPORT std::vector<double> polynomial_transfer_vector(
-        const std::vector<double>& x, const std::vector<double>& coefficients);
+//! Evaluate a polynomial at many abscissae, as a managed view.
+/*! The direct vector form; a caller with many abscissae uses this rather than
+    dispatching a scalar across them. */
+IMPBFFEXPORT void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

@@ -44,6 +44,11 @@ Reach what remains by its module path::
 
     from IMP.bff.cgdye.sampling import LangevinDyeSampler
     from IMP.bff.cgdye.topology import build_dye_topology
+
+Port status (PRD-117): the submodules ``sampling.py``/``sim.py``/``topology.py``
+all re-export the names defined as %pythoncode in ``sampling.i``/``sim.i``/
+``topology.i``; none is C++-covered yet. This ``__init__`` itself holds no
+re-exports and nothing to port.
 """
 
 from __future__ import annotations

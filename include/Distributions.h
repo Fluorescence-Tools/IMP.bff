@@ -26,9 +26,10 @@ IMPBFF_BEGIN_NAMESPACE
 
     \param[in] lam rate parameter
     \param[in] n number of terms
-    \return the n probabilities
+    \param[out] out_view,n_out_view the n probabilities as a managed view
 */
-IMPBFFEXPORT std::vector<double> poisson_0toN(double lam, int n);
+IMPBFFEXPORT void poisson_0toN(double lam, int n,
+                              double** out_view, int* n_out_view);
 
 //! Normal probability density on a given axis.
 /*!
@@ -36,12 +37,14 @@ IMPBFFEXPORT std::vector<double> poisson_0toN(double lam, int n);
     \param[in] loc mean
     \param[in] scale standard deviation; must be > 0
     \param[in] norm divide by the sum, so the discretised density sums to one
+    \param[out] out_view,n_out_view the density as a managed view, one per x
 */
-IMPBFFEXPORT std::vector<double> normal_distribution(
+IMPBFFEXPORT void normal_distribution(
         const std::vector<double>& x,
         double loc = 0.0,
         double scale = 1.0,
-        bool norm = false
+        bool norm = false,
+        double** out_view = 0, int* n_out_view = 0
 );
 
 //! Generalized normal density with a **skew** parameter.
@@ -58,13 +61,15 @@ IMPBFFEXPORT std::vector<double> normal_distribution(
     \param[in] scale scale
     \param[in] shape skewness; 0 gives a normal density
     \param[in] norm divide by the sum
+    \param[out] out_view,n_out_view the density as a managed view, one per x
 */
-IMPBFFEXPORT std::vector<double> generalized_normal_distribution(
+IMPBFFEXPORT void generalized_normal_distribution(
         const std::vector<double>& x,
         double loc = 0.0,
         double scale = 1.0,
         double shape = 0.0,
-        bool norm = true
+        bool norm = true,
+        double** out_view = 0, int* n_out_view = 0
 );
 
 //! Distance distribution between two isotropic 3-D Gaussians.
@@ -78,13 +83,23 @@ IMPBFFEXPORT std::vector<double> generalized_normal_distribution(
     \param[in] separation_distance between the two means
     \param[in] sigma per-component width, shared by both Gaussians
     \param[in] normalize divide by the sum
+    \param[out] out_view,n_out_view the distance distribution as a managed view
 */
-IMPBFFEXPORT std::vector<double> distance_between_gaussian(
+IMPBFFEXPORT void distance_between_gaussian(
         const std::vector<double>& distances,
         double separation_distance,
         double sigma,
-        bool normalize = false
+        bool normalize = false,
+        double** out_view = 0, int* n_out_view = 0
 );
+
+//! The normal density at a mean and width, as a bare buffer (no view).
+/*! Shared by the skew and two-Gaussian kernels, which build on the normal
+    density without each allocating a second managed view. Not part of the
+    public surface -- callers that handed the result back used to wrap it in
+    `np.asarray`, and this helper keeps that to C++. */
+IMPBFFEXPORT std::vector<double> normal_density(
+        const std::vector<double>& x, double loc, double scale);
 
 IMPBFF_END_NAMESPACE
 

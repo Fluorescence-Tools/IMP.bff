@@ -23,6 +23,12 @@ dialects of one format come to exist without anyone deciding.
 Moved out of ``fret/`` by PRD-113 stage 7 and split three ways there. One module
 held all of it, which is how ``fret/io.py`` came to be the thing that writes
 PDBs -- and why ``IMP.bff.fret.read_fps_json`` no longer exists.
+
+Port status (PRD-117): 3 of 17 names are C++-covered (``AV_SIMULATION_TYPES``
+et al.); the remaining 14 (``read_fps_json``/``write_*``, ``load_structure*``,
+``read_dcd``/``read_trajectory``, ``write_pdb``, the evaluators, ``compute_rmsd``)
+are %pythoncode across ``fps.i``/``cif.i``/``structureio.i`` and still to port.
+Pure re-export -- holds no logic of its own to move.
 """
 
 from IMP.bff import (  # noqa: F401

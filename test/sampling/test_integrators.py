@@ -92,7 +92,7 @@ def test_grid_solver_uses_the_standard_convention():
     s = GridDiffusionSolver(diffusion_map=np.full((ng, ng, ng), D), bounds=bounds,
                             density=density, t_step=t_step, dg=dg)
     s.run(300, n_out=1)
-    p = np.asarray(s.density).reshape(ng, ng, ng)
+    p = np.asarray(s.get_density()).reshape(ng, ng, ng)
     p = p / p.sum()
     axis = (np.arange(ng) - 40) * dg
     msd_x = (p.sum(axis=(1, 2)) * axis ** 2).sum()
@@ -120,7 +120,7 @@ def test_the_two_models_agree_on_D():
     solver = GridDiffusionSolver(diffusion_map=np.full((ng, ng, ng), D), bounds=bounds,
                                  density=density, t_step=solver_step, dg=dg)
     solver.run(300, n_out=1)
-    p = np.asarray(solver.density).reshape(ng, ng, ng)
+    p = np.asarray(solver.get_density()).reshape(ng, ng, ng)
     p = p / p.sum()
     axis = (np.arange(ng) - 40) * dg
     field_msd = (p.sum(axis=(1, 2)) * axis ** 2).sum()

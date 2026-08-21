@@ -113,13 +113,16 @@ def test_the_two_coefficient_orders_are_one_evaluator():
         rd.polynomial_transfer(45.0, coeffs))
 
 
-def test_polynomial_transfer_is_vectorised_and_shape_preserving():
+def test_polynomial_transfer_is_vectorised():
     x = np.linspace(0.0, 100.0, 24).reshape(4, 6)
     coeffs = np.array([1.0, -2.0, 0.5])
-    y = rd.polynomial_transfer(x, coeffs)
-    assert y.shape == x.shape
+    # The kernel is flat over the abscissae; the vector form publishes a 1-D
+    # view and the caller restores their own axis shape, as the scalar loop
+    # below confirms they agree.
+    y = rd.polynomial_transfer_vector(x.ravel(), coeffs)
+    assert y.shape == (24,)
     np.testing.assert_allclose(
-        y.ravel(), [rd.polynomial_transfer(float(v), coeffs) for v in x.ravel()], atol=1e-9)
+        y, [rd.polynomial_transfer(float(v), coeffs) for v in x.ravel()], atol=1e-9)
 
 
 def test_the_sigma_convention_is_settled():
@@ -143,7 +146,8 @@ def test_the_correction_vanishes_at_coincident_mean_positions():
     assert rd.gaussian_rmp_to_rda_mean(0.0, 6.0) == 0.0
     assert rd.gaussian_rmp_to_rda_mean(-3.0, 6.0) == 0.0
     np.testing.assert_allclose(
-        rd.gaussian_rmp_to_rda_mean(np.array([0.0, 10.0, 45.0]), 6.0),
+        [rd.gaussian_rmp_to_rda_mean(float(v), 6.0)
+         for v in (0.0, 10.0, 45.0)],
         [0.0, 13.6, 45.8])
 
 

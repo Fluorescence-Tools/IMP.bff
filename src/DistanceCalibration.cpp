@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/DistanceCalibration.h>
+#include <IMP/bff/internal/OutputView.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -16,13 +17,14 @@ double polynomial_transfer(double x, const std::vector<double>& coefficients) {
     return y;
 }
 
-std::vector<double> polynomial_transfer_vector(
-        const std::vector<double>& x, const std::vector<double>& coefficients) {
+void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view) {
     std::vector<double> y(x.size());
     for (std::size_t i = 0; i < x.size(); ++i) {
         y[i] = polynomial_transfer(x[i], coefficients);
     }
-    return y;
+    internal::copy_to_view(y, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE
