@@ -227,7 +227,7 @@ def test_a_zero_length_view_is_an_empty_array_not_a_null_pointer():
     """A null buffer would become an ndarray over address zero, and reading it
     is a segfault, not an exception. Every kernel allocates at least one
     element for this reason."""
-    empty = np.zeros(0)
+    empty = np.zeros((0, 4))
     out = np.asarray(IMP.bff.random_distances(empty, empty, 0, 0))
     assert out.size == 0
     pts = _kernels.density_to_points(np.zeros((2, 2, 2)), 1.0, np.zeros(3), 0.0)

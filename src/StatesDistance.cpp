@@ -49,10 +49,16 @@ std::vector<double> sample(const States& s1, const States& s2, int n_samples) {
         IMP_THROW("cannot sample a distance: one or both labels have no states",
                   ValueException);
     }
+    const std::vector<double> c1 = cloud(s1);
+    const std::vector<double> c2 = cloud(s2);
     double* out = NULL;
-    int n = 0;
-    random_distances(cloud(s1), cloud(s2), n_samples, 0, &out, &n);
-    std::vector<double> pairs(out, out + n);
+    int n = 0, nc = 0;
+    random_distances(const_cast<double*>(c1.data()),
+                     static_cast<int>(c1.size()) / 4, 4,
+                     const_cast<double*>(c2.data()),
+                     static_cast<int>(c2.size()) / 4, 4,
+                     n_samples, 0, &out, &n, &nc);
+    std::vector<double> pairs(out, out + static_cast<std::size_t>(n) * nc);
     std::free(out);
     return pairs;
 }

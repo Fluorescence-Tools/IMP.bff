@@ -131,12 +131,13 @@ void av_contact_mask(const std::vector<double>& density, int ng, double dg,
                      const std::vector<double>& r0,
                      int** out_view_i, int* n_out_view_i) {
     int* labels = nullptr;
-    int n_labels = 0;
+    int n_labels = 0, d2 = 0, d3 = 0;
     split_contact_volume(density, ng, dg, slow_radius, rs, r0, &labels,
-                         &n_labels);
-    int* out = internal::new_int_view(n_labels, out_view_i, n_out_view_i);
+                         &n_labels, &d2, &d3);
+    const std::size_t total = static_cast<std::size_t>(n_labels) * d2 * d3;
+    int* out = internal::new_int_view(total, out_view_i, n_out_view_i);
     if (out == nullptr) { std::free(labels); return; }
-    for (int i = 0; i < n_labels; ++i) {
+    for (std::size_t i = 0; i < total; ++i) {
         out[i] = labels[i] == AV_VOXEL_CONTACT ? 1 : 0;
     }
     std::free(labels);

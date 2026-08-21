@@ -1,5 +1,30 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 Phase 1, batch 1: `avdistance.i` reshape wrappers to C++
+
+The four AV kernels (`random_distances`, `density_to_points`,
+`split_contact_volume`, `split_contact_volume_masks`) lost their Python reshape
+wrappers and now publish their shape from C++. The shape is part of each
+kernel's contract: an `(n, 2)` distance-weight view, an `(n, 4)` point cloud,
+an `(ng, ng, ng)` label cube, and a pair of `(ng, ng, ng)` uint8 masks. The
+internal callers (`AVModel.cpp`, `StatesDistance.cpp`, `QuenchingGrid.cpp`)
+were updated to the same signatures; `split_contact_volume_masks` is now a real
+kernel in `AVDistance.cpp` rather than masks derived from labels in Python.
+
+**The lesson this batch bought, once.** The first binding attempt used a
+hand-written `%typemap(in, fragment="NumPy_Macros")` to let `random_distances`
+accept the flat buffer the old Python `.ravel()`'d. It failed three ways in
+generated code (`PyArray_SIZE` on a `PyObject *`, `$2 = &local` into a
+by-value `int`, and a leak the stock `freearg` owns). The fix was to delete the
+custom typemap and use the stock numpy.i suites via `%apply` — the approach IMP
+core uses — stating the `(n, 4)` shape on the kernel and updating the empty
+1-D contract test to `np.zeros((0, 4))`. Written up in the shared
+[imp-module-conventions](../../../chisurf/okf/subsystems/imp-module-conventions.md)
+so no module re-buys the same two build cycles.
+
+Verification: `ninja IMP.bff` clean; `test/representation/test_av_distance_cpp.py`
++ `test/test_zero_copy_views.py` **47 passed**.
+
 ## 2026-08-21 — PRD-117: `%pythoncode` to C++ porting plan
 
 Documented the full port of 11,607 lines of `%pythoncode` across 29 `.i` files

@@ -58,17 +58,26 @@ void sample_pairs(const std::vector<double>& p1, const std::vector<double>& p2,
 }  // namespace
 
 void random_distances(
-        const std::vector<double>& p1, const std::vector<double>& p2,
-        int n_samples, int seed, double** out_view, int* n_out_view) {
+        double* p1, int n_p1, int n_p1c,
+        double* p2, int n_p2, int n_p2c,
+        int n_samples, int seed, double** output, int* n_output1,
+        int* n_output2) {
     // **Not bit-comparable with the numba it replaces.** numba draws from its
     // own Mersenne stream, which no other generator reproduces, so a sampled
     // estimator can only be checked distributionally -- two estimates of the
     // same quantity, agreeing to the sampling error of ~1/sqrt(n_samples).
+    const std::vector<double> v1(p1, p1 + static_cast<std::size_t>(n_p1) * n_p1c);
+    const std::vector<double> v2(p2, p2 + static_cast<std::size_t>(n_p2) * n_p2c);
+    const int ns = std::max(0, n_samples);
+    // `new_double_view` sizes the flat buffer; the published shape is (ns, 2),
+    // so dim1 is the sample count, not the element count.
+    int flat = 0;
     double* out = internal::new_double_view(
-            static_cast<std::size_t>(std::max(0, n_samples)) * 2,
-            out_view, n_out_view);
-    if (out == nullptr) return;
-    sample_pairs(p1, p2, n_samples, seed, out);
+            static_cast<std::size_t>(ns) * 2, output, &flat);
+    if (out == nullptr) { *n_output1 = 0; *n_output2 = 2; return; }
+    *n_output1 = ns;
+    *n_output2 = 2;
+    sample_pairs(v1, v2, ns, seed, out);
 }
 
 double average_distance(const std::vector<double>& p1,
@@ -135,26 +144,32 @@ std::vector<double> distance_sample_statistics(
 }
 
 void density_to_points(
-        const std::vector<double>& density, int nx, int ny, int nz, double dg,
+        double* density, int nx, int ny, int nz, double dg,
         const std::vector<double>& r0, double threshold,
-        double** out_view, int* n_out_view) {
+        double** output, int* n_output1, int* n_output2) {
+    const std::size_t n_total =
+            static_cast<std::size_t>(nx) * ny * nz;
+    const std::vector<double> dens(density, density + n_total);
     // Two passes. A view has to be sized before it is filled, and the count of
     // occupied voxels is not known in advance -- so count, allocate exactly,
     // then fill. The counting pass is a scan with no writes and is far cheaper
     // than the growth it replaces.
     std::size_t kept = 0;
-    for (std::size_t k = 0; k < density.size(); ++k) {
-        if (density[k] > threshold) ++kept;
+    for (std::size_t k = 0; k < dens.size(); ++k) {
+        if (dens[k] > threshold) ++kept;
     }
-    double* points = internal::new_double_view(kept * 4, out_view, n_out_view);
-    if (points == nullptr) return;
+    double* points = internal::new_double_view(kept * 4, output, n_output1);
+    if (points == nullptr) { *n_output1 = 0; *n_output2 = 4; return; }
+    // Shape (kept, 4): dim1 is the point count, not the element count.
+    *n_output1 = static_cast<int>(kept);
+    *n_output2 = 4;
     std::size_t w = 0;
     for (int ix = 0; ix < nx; ++ix) {
         const double x = dg * ix + r0[0];
         for (int iy = 0; iy < ny; ++iy) {
             const double y = dg * iy + r0[1];
             for (int iz = 0; iz < nz; ++iz) {
-                const double v = density[(static_cast<std::size_t>(ix) * ny + iy) * nz + iz];
+                const double v = dens[(static_cast<std::size_t>(ix) * ny + iy) * nz + iz];
                 if (v > threshold) {
                     points[w++] = x;
                     points[w++] = y;
@@ -169,10 +184,15 @@ void density_to_points(
 void split_contact_volume(
         const std::vector<double>& density, int ng, double dg,
         const std::vector<double>& rad, const std::vector<double>& rs,
-        const std::vector<double>& r0, int** out_view_i, int* n_out_view_i) {
+        const std::vector<double>& r0, int** output_i, int* dim1, int* dim2,
+        int* dim3) {
     const std::size_t n = static_cast<std::size_t>(ng);
-    int* label = internal::new_int_view(n * n * n, out_view_i, n_out_view_i);
-    if (label == nullptr) return;
+    int* label = internal::new_int_view(n * n * n, output_i, dim1);
+    if (label == nullptr) { *dim1 = *dim2 = *dim3 = ng; return; }
+    // Shape (ng, ng, ng): dim1 is the cube side, not the element count.
+    *dim1 = ng;
+    *dim2 = ng;
+    *dim3 = ng;
     const std::size_t n_centre = rad.size();
     // Integer offset and `floor`, both deliberate: see the header. Hoisted out
     // of the voxel loop -- they depend only on the centre.
@@ -203,6 +223,46 @@ void split_contact_volume(
         }
     }
 
+}
+
+void split_contact_volume_masks(
+        double* density, int ng, int ng2, int ng3, double dg,
+        const std::vector<double>& radius, double* rs, int n_rs, int n_rsc,
+        const std::vector<double>& r0, unsigned char** contact,
+        int* contact_dim1, int* contact_dim2, int* contact_dim3,
+        unsigned char** free, int* free_dim1, int* free_dim2, int* free_dim3) {
+    const std::size_t n_centre = static_cast<std::size_t>(n_rs) * n_rsc / 3;
+    std::vector<double> rad = radius;
+    if (rad.size() != n_centre) {
+        // A scalar radius broadcast over every centre: the Python this replaces
+        // did `np.full(n_centre, r[0])` when the counts disagreed.
+        const double r0_val = rad.empty() ? 0.0 : rad[0];
+        rad.assign(n_centre, r0_val);
+    }
+    const std::size_t n_voxels =
+            static_cast<std::size_t>(ng) * ng2 * ng3;
+    const std::vector<double> centres(rs, rs + n_centre * 3);
+
+    int* label = nullptr;
+    int n = 0, d2 = 0, d3 = 0;
+    split_contact_volume(std::vector<double>(density, density + n_voxels), ng,
+                         dg, rad, centres, r0, &label, &n, &d2, &d3);
+    unsigned char* c = static_cast<unsigned char*>(
+            std::calloc(n_voxels ? n_voxels : 1, sizeof(unsigned char)));
+    unsigned char* f = static_cast<unsigned char*>(
+            std::calloc(n_voxels ? n_voxels : 1, sizeof(unsigned char)));
+    *contact = c;
+    *free = f;
+    *contact_dim1 = *free_dim1 = ng;
+    *contact_dim2 = *free_dim2 = ng2;
+    *contact_dim3 = *free_dim3 = ng3;
+    if (c != nullptr && f != nullptr && label != nullptr) {
+        for (std::size_t i = 0; i < n_voxels; ++i) {
+            if (label[i] == AV_VOXEL_CONTACT) c[i] = 1;
+            else if (label[i] == AV_VOXEL_FREE) f[i] = 1;
+        }
+    }
+    std::free(label);
 }
 
 double chi2_score(double model_distance, double experimental_distance,

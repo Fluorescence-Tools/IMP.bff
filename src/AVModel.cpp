@@ -144,12 +144,16 @@ void States::pRDA(const States& other, const std::vector<double>& axis,
     if (out == nullptr || n_bins == 0) return;
 
     double* d = nullptr;
-    int n = 0;
-    random_distances(points_, other.points_, n_samples, 0, &d, &n);
+    int n = 0, nc = 0;
+    random_distances(const_cast<double*>(points_.data()),
+                     static_cast<int>(points_.size()) / 4, 4,
+                     const_cast<double*>(other.points_.data()),
+                     static_cast<int>(other.points_.size()) / 4, 4,
+                     n_samples, 0, &d, &n, &nc);
     if (d == nullptr) return;
 
     double total = 0.0;
-    for (int i = 0; i < n / 2; ++i) {
+    for (int i = 0; i < n; ++i) {
         const double r = d[2 * i + 0], w = d[2 * i + 1];
         if (r < axis.front() || r > axis.back()) continue;
         // Upper edge closed, as numpy's histogram has it: a sample exactly at
@@ -205,10 +209,12 @@ void AccessibleVolume::update_points() {
         IMP_THROW("no density grid available to convert", IMP::ValueException);
     }
     double* buf = nullptr;
-    int n = 0;
-    density_to_points(density_, ng_, ng_, ng_, grid_step_, grid_origin_, 0.0,
-                      &buf, &n);
-    set_points(std::vector<double>(buf, buf + n));
+    int n = 0, nc = 0;
+    const int ng = ng_;
+    density_to_points(
+            const_cast<double*>(density_.data()), ng, ng, ng,
+            grid_step_, grid_origin_, 0.0, &buf, &n, &nc);
+    set_points(std::vector<double>(buf, buf + static_cast<std::size_t>(n) * nc));
     std::free(buf);       // the view was never published; this side owns it
 }
 
@@ -263,13 +269,15 @@ void ACV::update_contact_density() {
     if (radius.empty()) radius.assign(n_centre, 10.0);
     if (radius.size() != n_centre) radius.assign(n_centre, radius[0]);
 
-    int* label = nullptr; int n_label = 0;
+    int* label = nullptr; int n_label = 0, d2 = 0, d3 = 0;
     split_contact_volume(density_, ng_, grid_step_, radius, slow_centers_,
-                         grid_origin_, &label, &n_label);
+                         grid_origin_, &label, &n_label, &d2, &d3);
     if (label == nullptr) return;
+    const std::size_t n_labels =
+            static_cast<std::size_t>(n_label) * d2 * d3;
 
     std::size_t n_contact = 0, n_free = 0;
-    for (int i = 0; i < n_label; ++i) {
+    for (std::size_t i = 0; i < n_labels; ++i) {
         if (label[i] == AV_VOXEL_CONTACT) ++n_contact;
         else if (label[i] == AV_VOXEL_FREE) ++n_free;
     }

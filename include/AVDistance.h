@@ -43,18 +43,26 @@ IMPBFFEXPORT std::vector<double> points_weighted_mean(
     Draws one point from each cloud per sample. **The two clouds are
     independent**, so any pairing samples the joint distribution.
 
-    \param[in] p1,p2 flat clouds, four per point
+    The clouds arrive straight from numpy, one `(n, 4)` array per cloud via
+    IN_ARRAY2. The result is published as an `(n_samples, 2)` managed numpy
+    view: column 0 is the distance, column 1 the weight product. Both shapes
+    are part of the contract -- they used to be applied by Python `.ravel()` /
+    `.reshape()` over the flat buffers, and the caller's picture of the data is
+    not something a second side should state a second time.
+
+    \param[in] p1,p2 flat clouds, four per point. Via IN_ARRAY2, carrying the
+                (n, 4) shape; the values are read as `4 * n` in row order.
     \param[in] n_samples samples to draw
     \param[in] seed for reproducibility
-    \param[out] out_view,n_out_view flat, two per sample: distance, weight
-                product. A numpy view over the kernel's buffer.
+    \param[out] output,n_output1,n_output2 `(n_samples, 2)` view. The buffer
+                is malloc'd and numpy adopts it.
 */
 IMPBFFEXPORT void random_distances(
-        const std::vector<double>& p1,
-        const std::vector<double>& p2,
+        double* p1, int n_p1, int n_p1c,
+        double* p2, int n_p2, int n_p2c,
         int n_samples,
         int seed,
-        double** out_view, int* n_out_view
+        double** output, int* n_output1, int* n_output2
 );
 
 //! Weighted mean inter-point distance \f$\langle R_{DA}\rangle\f$.
@@ -128,22 +136,24 @@ IMPBFFEXPORT double distance_from_fret_efficiency(
 
 //! Occupied voxels of a density as a weighted point cloud.
 /*!
-    \param[in] density flat, nx*ny*nz
+    Published as an `(n, 4)` managed numpy view: x, y, z, density. The shape is
+    part of the contract, stated once here rather than by a Python `.reshape()`.
+
+    \param[in] density `(nx, ny, nz)` numpy grid, via IN_ARRAY3
     \param[in] nx,ny,nz grid shape
     \param[in] dg voxel edge
     \param[in] r0 grid anchor
     \param[in] threshold keep voxels strictly above this
-    \param[out] out_view,n_out_view flat, four per kept point
+    \param[out] output,n_output1,n_output2 `(n, 4)` view; the buffer is
+                malloc'd and numpy adopts it.
 */
 IMPBFFEXPORT void density_to_points(
-        const std::vector<double>& density,
-        int nx, int ny, int nz,
+        double* density, int nx, int ny, int nz,
         double dg,
         const std::vector<double>& r0,
-        double threshold,
-        double** out_view, int* n_out_view
+        double threshold = 0.0,
+        double** output = 0, int* n_output1 = 0, int* n_output2 = 0
 );
-
 //! Label each voxel of an accessible volume contact, free, or empty.
 /*!
     A voxel is *contact* when it lies inside any slow centre's sphere. One
@@ -163,7 +173,8 @@ IMPBFFEXPORT void density_to_points(
     \param[in] rad per-centre slow radius
     \param[in] rs centre coordinates, flat
     \param[in] r0 grid anchor
-    \param[out] out_view_i,n_out_view_i flat ng^3 of #AVVoxel
+    \param[out] output_i,dim1,dim2,dim3 an `(ng, ng, ng)` #AVVoxel view; the
+                buffer is malloc'd and numpy adopts it.
 */
 IMPBFFEXPORT void split_contact_volume(
         const std::vector<double>& density,
@@ -172,7 +183,33 @@ IMPBFFEXPORT void split_contact_volume(
         const std::vector<double>& rad,
         const std::vector<double>& rs,
         const std::vector<double>& r0,
-        int** out_view_i, int* n_out_view_i
+        int** output_i, int* dim1, int* dim2, int* dim3
+);
+
+//! The contact and free regions of an accessible volume, as two uint8 masks.
+/*!
+    A voxel is *contact* when it lies inside any slow centre's sphere. The two
+    masks are complementary within the occupied volume; returning both invites
+    them to disagree, which is why this is one call publishing the pair.
+
+    `uint8`, not `float64`: at `ng = 92` a float64 pair costs 12.5 MB per
+    labelling site against 1.6 MB. A residue scan builds one per site.
+
+    \param[in] density `(ng, ng, ng)`, straight from numpy via IN_ARRAY3
+    \param[in] radius a scalar slow radius, broadcast over every centre, or one
+                value per centre
+    \param[out] contact,free each `(ng, ng, ng)` uint8 views; both buffers are
+                malloc'd and numpy adopts them
+*/
+IMPBFFEXPORT void split_contact_volume_masks(
+        double* density, int ng, int ng2, int ng3,
+        double dg,
+        const std::vector<double>& radius,
+        double* rs, int n_rs, int n_rsc,
+        const std::vector<double>& r0,
+        unsigned char** contact, int* contact_dim1, int* contact_dim2,
+        int* contact_dim3,
+        unsigned char** free, int* free_dim1, int* free_dim2, int* free_dim3
 );
 
 IMPBFF_END_NAMESPACE

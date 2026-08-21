@@ -18,7 +18,8 @@ their content here.
   tree in so rebuilds land with no re-install.
 * [imp-module-conventions](../../../chisurf/okf/subsystems/imp-module-conventions.md) -
   the SWIG, cereal, generated-file and deprecation conventions an out-of-tree
-  IMP module has to follow.
+  IMP module has to follow. Includes "Wrapping numpy arrays": use the stock
+  numpy.i suites via `%apply`, never a hand-written typemap.
 * [change-tracking](../../../chisurf/okf/workflows/change-tracking.md) - the
   loop every material change follows.
 * [PRD index](../../../chisurf/okf/prds/index.md) - all PRDs. The ones that
