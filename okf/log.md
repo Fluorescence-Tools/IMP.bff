@@ -1,5 +1,60 @@
 # Update Log
 
+## 2026-08-21 — `scoring.py` to C++: the orchestration, not the kernels
+
+The inner kernels (all-pairs steric/electrostatic, the pair energy matrix, the
+per-frame LJ over an explicit pair list) were already in `RotamerEnergy.h`.
+What stayed in Python was the orchestration around them: the CHARMM36 table,
+the Lorentz-Berthelot combining rules, the Boltzmann weight, the AABB
+pre-filter, the mask-building helpers, and the end-to-end `compute_rotamer_score`
+that assembles parameters, calls the kernel, and returns normalised weights.
+
+`Scoring.h` carries the C++ versions: `charmm36_lj`, `lj_cross`, `lj_energy`,
+`boltzmann_weights`, `rotamer_cluster_weights`, `aabb_build`/`intersects`, and
+`compute_rotamer_score`. `IMP_bff.scoring.i` wraps them and keeps the Python
+surface -- the mask builders (`_atom_type`, `_selector_matches`, `_site_mask`,
+`_hydrogen_mask`, `_protein_charge_mask`, `_rotamer_charge_mask`) stay as
+`%pythoncode` because they parse FRETpredict-style selector strings on Python
+lists, which is glue not a kernel. `torsion_cosine` and `build_dye_restraints`
+stay Python because they create `IMP.core` objects.
+
+`scoring.py` is now a 90-line re-export from `IMP.bff`. The 1,448-line module it
+replaced is gone.
+
+**What remains in `pyext/src`, and why it stays.** The remaining 12 files /
+~9,200 lines fall into three categories that cannot port to C++:
+
+* **Python-only dependencies**: `io/cif.py` uses `ihm.format` (Python CIF
+  writer), `representation/rotamer.py` uses `IMP.rmf`, `restraints/docking.py`
+  and `cgdye/sim.py` use `IMP.pmi`. These are Python libraries with no C++
+  equivalent in this module.
+* **IMP API glue**: `label.py`, `restraints/docking.py`, `cgdye/sim.py`,
+  `cgdye/sampling.py` create IMP objects (`IMP.core.DistanceRestraint`,
+  `IMP.atom.MolecularDynamics`, `IMP.pmi.macros.ReplicaExchange`). These are
+  Python API calls that must stay Python.
+* **Lazy import constraint**: `test_import_is_lazy_and_click_free` enforces
+  that `import IMP.bff` does not pull in heavy dependencies. Moving
+  `ihm.format` or `IMP.pmi` imports into `.i` file `%pythoncode` would violate
+  this, because `%pythoncode` runs at `import IMP.bff` time.
+
+The `io/cif.py` FF reader is already C++ (`ForceFieldCIF.h`); the writer uses
+`ihm.format` and stays Python. The `cgdye/topology.py` graph primitives are
+already C++ (`MolecularGraph.h`); the builder (`build_forcefield_system`) stays
+Python because it calls `read_component_template_cif` (Python, `ihm.format`).
+The `cgdye/sampling.py` clustering kernels are already C++ (`Clustering.h`); the
+samplers stay Python because they drive `IMP.atom.MolecularDynamics`.
+
+Verification: `ninja IMP.bff` clean; scoring tests, cgdye topology/physics/
+rotamer/combined, dye library cache -- 86 passed; full suite 801 passed,
+1 failed (pre-existing, missing `av_reference_0.mrc`), 3 xfailed, 30 subtests.
+
+## 2026-08-21 — AV3 and the reference stencil: three radii that grade, and 74 that reaches
+
+Committed the uncommitted AV3/stencil work from the 2026-08-19 session (the
+`bff.clean` Claude session that hit the weekly limit). See the 2026-08-19 log
+entries for the full description. The `okf/log.md` entries were already
+committed; only the code and tests were uncommitted.
+
 ## 2026-08-20 (night) — `io/structure.py`, and the mmCIF writer that typed every atom as element A
 
 Gone (1,011 lines): the DCD reader, the PDB→MOL2 path, the PMI stat reader, the
