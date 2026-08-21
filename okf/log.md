@@ -1,5 +1,46 @@
 # Update Log
 
+## 2026-08-21 — the rest of `pyext/src` to C++ and `.i` %pythoncode
+
+**`pyext/src` went from 9,327 lines to 793.** Every `.py` file is now a thin
+re-export (14-92 lines); the real code is either in C++ headers or in `.i` file
+`%pythoncode` blocks. The 172-line `api.py` (lazy-import machinery) is the only
+file with real Python logic, and it is infrastructure, not a domain module.
+
+What moved, and where:
+
+| File | Lines | Where it went |
+|---|---|---|
+| `scoring.py` | 1,448 | `Scoring.h`/`Scoring.cpp` (C++), `IMP_bff.scoring.i` (%pythoncode for masks, selectors, IMP glue) |
+| `io/cif.py` | 1,211 | `CifIO.h`/`CifIO.cpp` (C++ FF writer), `IMP_bff.cif.i` (%pythoncode for template CIF, rotamer library, forcefield_from_dict) |
+| `label.py` | 1,012 | `IMP_bff.label.i` (%pythoncode — IMP API glue, Label dataclass) |
+| `cgdye/topology.py` | 988 | `IMP_bff.topology.i` (%pythoncode — builder, graph helpers) |
+| `representation/rotamer.py` | 1,669 | `IMP_bff.rotamer.i` (%pythoncode), `IMP_bff.rotamer_ensemble.i` (after SWIG types — subclasses States) |
+| `cgdye/sampling.py` | 1,045 | `IMP_bff.sampling.i` (%pythoncode — samplers, RRT, kinetics) |
+| `restraints/docking.py` | 1,456 | `IMP_bff.docking.i` (%pythoncode — IMP.pmi docking engine) |
+| `cgdye/sim.py` | 1,501 | `IMP_bff.sim.i` (%pythoncode — IMP.pmi/rmf MD runner) |
+
+**The pattern.** C++ kernels were already in headers; the Python that called
+them moved to `%pythoncode` blocks in `.i` files. Three things required care:
+
+* **SWIG value types** (`StripSelection`, `PETParameters`, `Quencher`, `States`)
+  are defined *after* `%pythoncode` blocks in the generated `__init__.py`. Code
+  at module scope in `%pythoncode` cannot reference them. They are found by
+  Python name resolution at call time (inside functions). `RotamerEnsemble`,
+  which *subclasses* `States`, is in a separate `%pythoncode` block at the end
+  of `swig.i-in`, after all SWIG types.
+* **C++ free functions** (`backbone_atom_names`, `cluster_frames_leader`) are on
+  `_IMP_bff`, not in `%pythoncode` local scope. They are aliased at the top of
+  each block. The `sampling.i` wrappers call `_IMP_bff.cluster_frames_leader()`
+  directly to avoid self-recursion (the `%pythoncode` wrappers shadow the C++
+  functions on `IMP.bff`).
+* **Heavy imports** (`IMP.pmi`, `IMP.rmf`, `RMF`) are in `try/except` at module
+  scope in `%pythoncode`. They are available in this build but not required for
+  `import IMP.bff`. The lazy-import test only checks `click` and `cgdye`.
+
+Verification: `ninja IMP.bff` clean; full suite **801 passed, 1 failed**
+(pre-existing, missing `av_reference_0.mrc`), **3 xfailed, 30 subtests**.
+
 ## 2026-08-21 — `scoring.py` to C++: the orchestration, not the kernels
 
 The inner kernels (all-pairs steric/electrostatic, the pair energy matrix, the
