@@ -107,6 +107,9 @@ _LAZY = {}
 /* The force-field system in, through the ihm C reader IMP vendors. */
 %include "IMP/bff/ForceFieldCIF.h"
 
+/* The force-field system out, template CIF, and rotamer library IO. */
+%include "IMP_bff.cif.i"
+
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
