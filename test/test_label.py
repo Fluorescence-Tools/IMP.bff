@@ -26,7 +26,7 @@ class TestDyeDistributionNormal:
             width=6.0,
             position_name="donor",
         )
-        assert dd.position_name == "donor"
+        assert dd.get_position_name() == "donor"
         assert dd.n_points > 0
 
     def test_mean_position(self):
@@ -68,11 +68,11 @@ class TestLabelDistributionAV:
         vdw = np.array([1.5, 1.5], dtype=np.float64)
         dd = LabelDistributionAV(atoms_xyz=xyz, atoms_vdw=vdw,
                                  linker_length=10.0)
-        assert dd.position_name == ""
+        assert dd.get_position_name() == ""
         # No `source_xyz` means the first obstacle. The Python this replaces
         # took a residue number and an atom name and then ignored both,
         # returning index 0 from a loop whose body was a comment saying so.
-        np.testing.assert_allclose(dd.origin, [0.0, 0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(dd.get_origin(), [0.0, 0.0, 0.0], atol=1e-6)
 
 
     def test_lazy_computation(self):

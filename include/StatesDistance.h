@@ -206,6 +206,18 @@ public:
         return simulation_grid_resolution_;
     }
     void get_origin(double** out_view, int* n_out_view) const;
+    //! The cloud as a numpy view, via the underlying states (which may compute
+    //! on first access).
+    void get_points(double** out_view, int* n_out_view) const;
+    //! Weight-averaged position, three values (via the underlying states).
+    void get_mean_position(double** out_view, int* n_out_view) const;
+    //! Distance between the two labels' mean positions, A (via the states).
+    double dRmp(const LabelDistribution& other) const;
+    //! Mean over sampled point pairs, A (via the states).
+    double dRDA(const LabelDistribution& other, int n_samples = 50000) const;
+    //! FRET-averaged distance, A (via the states).
+    double dRDAE(const LabelDistribution& other, double forster_radius,
+                 int n_samples = 50000) const;
     int get_n_points() const { return get_accessible_volume().get_n_points(); }
 };
 
@@ -218,14 +230,17 @@ class IMPBFFEXPORT LabelDistributionAV : public LabelDistribution {
     void do_compute() const override;
 
 public:
-    //! \param[in] atoms_xyzr,n_atoms,n_cols obstacles, `(N, 4)`
-    /*! \param[in] source_xyz where the linker is tied
+    //! \param[in] atoms_xyz flat `(N, 3)` obstacle coordinates
+    /*! \param[in] atoms_vdw flat `(N,)` obstacle van der Waals radii, A
+        \param[in] source_xyz where the linker is tied
         \param[in] linker_length,linker_width the linker
         \param[in] r1,r2,r3 dye radii; a zero `r2` means the AV1 model
         \param[in] simulation_grid_resolution voxel spacing, A
         \param[in] position_name a human-readable label */
-    LabelDistributionAV(double* atoms_xyzr, int n_atoms, int n_cols,
-                        const std::vector<double>& source_xyz,
+    LabelDistributionAV(const std::vector<double>& atoms_xyz,
+                        const std::vector<double>& atoms_vdw,
+                        const std::vector<double>& source_xyz =
+                                std::vector<double>(),
                         double linker_length = 20.0, double linker_width = 0.5,
                         double r1 = 3.5, double r2 = 0.0, double r3 = 0.0,
                         double simulation_grid_resolution = 1.5,

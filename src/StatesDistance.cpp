@@ -352,24 +352,63 @@ void LabelDistribution::get_origin(double** out_view, int* n_out_view) const {
     internal::copy_to_view(origin_, out_view, n_out_view);
 }
 
-LabelDistributionAV::LabelDistributionAV(double* atoms_xyzr, int n_atoms,
-                                         int n_cols,
-                                         const std::vector<double>& source_xyz,
-                                         double linker_length,
-                                         double linker_width, double r1,
-                                         double r2, double r3,
-                                         double simulation_grid_resolution,
-                                         const std::string& position_name)
+void LabelDistribution::get_points(double** out_view,
+                                   int* n_out_view) const {
+    get_accessible_volume().get_points(out_view, n_out_view);
+}
+
+void LabelDistribution::get_mean_position(double** out_view,
+                                          int* n_out_view) const {
+    get_accessible_volume().get_mean_position(out_view, n_out_view);
+}
+
+double LabelDistribution::dRmp(const LabelDistribution& other) const {
+    return get_accessible_volume().dRmp(other.get_accessible_volume());
+}
+
+double LabelDistribution::dRDA(const LabelDistribution& other,
+                               int n_samples) const {
+    return get_accessible_volume().dRDA(other.get_accessible_volume(),
+                                        n_samples);
+}
+
+double LabelDistribution::dRDAE(const LabelDistribution& other,
+                                double forster_radius, int n_samples) const {
+    return get_accessible_volume().dRDAE(other.get_accessible_volume(),
+                                         forster_radius, n_samples);
+}
+
+LabelDistributionAV::LabelDistributionAV(
+        const std::vector<double>& atoms_xyz,
+        const std::vector<double>& atoms_vdw,
+        const std::vector<double>& source_xyz, double linker_length,
+        double linker_width, double r1, double r2, double r3,
+        double simulation_grid_resolution, const std::string& position_name)
     : LabelDistribution(r2 == 0.0 ? "AV1" : "AV3", source_xyz,
                         simulation_grid_resolution, position_name),
       source_xyz_(source_xyz), linker_length_(linker_length),
       linker_width_(linker_width), r1_(r1), r2_(r2), r3_(r3) {
-    if (n_cols != 4) {
-        IMP_THROW("obstacles must be (N, 4) of x, y, z, radius, not (" << n_atoms
-                          << ", " << n_cols << ")",
-                  ValueException);
+    const std::size_t n = atoms_xyz.size() / 3;
+    if (atoms_xyz.size() % 3 != 0 || atoms_vdw.size() != n) {
+        IMP_THROW("obstacle coords must be (N, 3) and vdw (N,), got "
+                          << atoms_xyz.size() << " coords and "
+                          << atoms_vdw.size() << " radii",
+                  IMP::ValueException);
     }
-    atoms_xyzr_.assign(atoms_xyzr, atoms_xyzr + static_cast<std::size_t>(n_atoms) * 4);
+    // Interleave (x, y, z, ball-radius) so compute_av sees its (N, 4) layout.
+    atoms_xyzr_.resize(4 * n);
+    for (std::size_t i = 0; i < n; ++i) {
+        atoms_xyzr_[4 * i + 0] = atoms_xyz[3 * i + 0];
+        atoms_xyzr_[4 * i + 1] = atoms_xyz[3 * i + 1];
+        atoms_xyzr_[4 * i + 2] = atoms_xyz[3 * i + 2];
+        atoms_xyzr_[4 * i + 3] = atoms_vdw[i];
+    }
+    // No explicit source means the first obstacle (the Python this replaced
+    // took a residue number / atom name and ignored both).
+    if (source_xyz_.empty() && !atoms_xyzr_.empty()) {
+        source_xyz_.assign(atoms_xyzr_.begin(), atoms_xyzr_.begin() + 3);
+        origin_.assign(source_xyz_.begin(), source_xyz_.end());
+    }
 }
 
 void LabelDistributionAV::do_compute() const {

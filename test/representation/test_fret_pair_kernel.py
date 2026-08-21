@@ -76,11 +76,12 @@ def test_matches_the_python_it_replaced(oriented, n1, n2):
 
     want_r, want_k2, want_w = _reference(p1, w1, p2, w2, mu1, mu2)
     got = fret_pair_geometry(p1, w1, p2, w2, mu1, mu2)
+    n1, n2 = got.n1, got.n2
 
-    np.testing.assert_allclose(got["R"], want_r, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(got["kappa2"], want_k2, rtol=1e-11, atol=1e-13)
-    np.testing.assert_allclose(got["weight"], want_w, rtol=1e-14)
-    assert got["kappa2_avg"] == pytest.approx(float(np.sum(want_k2 * want_w)))
+    np.testing.assert_allclose(got.get_R().reshape(n1, n2), want_r, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(got.get_kappa2().reshape(n1, n2), want_k2, rtol=1e-11, atol=1e-13)
+    np.testing.assert_allclose(got.get_weight().reshape(n1, n2), want_w, rtol=1e-14)
+    assert got.kappa2_avg == pytest.approx(float(np.sum(want_k2 * want_w)))
 
 
 def test_efficiencies_match_the_python_they_replaced():
@@ -90,7 +91,10 @@ def test_efficiencies_match_the_python_they_replaced():
     w1, w2 = rng.random(n1), rng.random(n2)
     mu1, mu2 = rng.normal(0, 1, (n1, 3)), rng.normal(0, 1, (n2, 3))
     g = fret_pair_geometry(p1, w1, p2, w2, mu1, mu2)
-    r, kappa2, weight, ka = g["R"], g["kappa2"], g["weight"], g["kappa2_avg"]
+    r = g.get_R().reshape(n1, n2)
+    kappa2 = g.get_kappa2().reshape(n1, n2)
+    weight = g.get_weight().reshape(n1, n2)
+    ka = g.kappa2_avg
 
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio6 = np.power(r / 52.0, 6)
@@ -102,31 +106,32 @@ def test_efficiencies_match_the_python_they_replaced():
     rate_avg = float(np.sum(np.nan_to_num(rate_ratio, posinf=0.0) * weight))
 
     got = fret_pair_efficiencies(g, 52.0)
-    np.testing.assert_allclose(got["E"], e_pair, rtol=1e-12, atol=1e-14)
-    np.testing.assert_allclose(got["rate_ratio"], rate_ratio, rtol=1e-12)
-    assert got["static"] == pytest.approx(float(np.sum(e_pair * weight)))
-    assert got["dynamic1"] == pytest.approx(float(np.sum(e_dyn1 * weight)))
-    assert got["dynamic2"] == pytest.approx(rate_avg / (rate_avg + 1.0))
+    np.testing.assert_allclose(got.get_E().reshape(n1, n2), e_pair, rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(got.get_rate_ratio().reshape(n1, n2), rate_ratio, rtol=1e-12)
+    assert got.static_efficiency == pytest.approx(float(np.sum(e_pair * weight)))
+    assert got.dynamic1 == pytest.approx(float(np.sum(e_dyn1 * weight)))
+    assert got.dynamic2 == pytest.approx(rate_avg / (rate_avg + 1.0))
 
 
 def test_coincident_states_mean_complete_transfer():
     """R = 0 makes the efficiency 0/0 or 1/(1+0). Both mean E = 1."""
     p = np.zeros((1, 3))
     g = fret_pair_geometry(p, [1.0], p, [1.0])
-    assert g["R"][0, 0] == 0.0
+    assert g.get_R().reshape(1, 1)[0, 0] == 0.0
     e = fret_pair_efficiencies(g, 52.0)
-    assert e["E"][0, 0] == pytest.approx(1.0)
-    assert np.isinf(e["rate_ratio"][0, 0]), "an infinite rate at zero separation is true"
+    assert e.get_E().reshape(1, 1)[0, 0] == pytest.approx(1.0)
+    assert np.isinf(e.get_rate_ratio().reshape(1, 1)[0, 0]), (
+        "an infinite rate at zero separation is true")
 
 
 def test_r_vectors_is_gone():
     """It was the largest allocation in the call and had no reader."""
     g = fret_pair_geometry(np.zeros((2, 3)), [1, 1], np.ones((2, 3)), [1, 1])
     assert not hasattr(g, "r_vectors")
-    with pytest.raises(KeyError):
-        g["r_vectors"]
-    for key in ("R", "kappa2", "weight", "kappa2_avg"):
-        assert g[key] is not None
+    assert g.get_R().size == 4
+    assert g.get_kappa2().size == 4
+    assert g.get_weight().size == 4
+    assert g.kappa2_avg is not None
 
 
 # --- the hazards of a numpy view --------------------------------------------
@@ -197,13 +202,14 @@ def test_dipoles_need_not_be_normalised():
     mu1, mu2 = rng.normal(0, 1, (5, 3)), rng.normal(0, 1, (4, 3))
     a = fret_pair_geometry(p1, w[0], p2, w[1], mu1, mu2)
     b = fret_pair_geometry(p1, w[0], p2, w[1], mu1 * 17.0, mu2 * 0.03)
-    np.testing.assert_allclose(a["kappa2"], b["kappa2"], rtol=1e-12)
+    np.testing.assert_allclose(a.get_kappa2(), b.get_kappa2(), rtol=1e-12)
 
 
 def test_an_empty_ensemble_returns_empty_matrices():
     g = fret_pair_geometry(np.zeros((0, 3)), [], np.ones((3, 3)), [1, 1, 1])
-    assert g["R"].shape == (0, 3)
-    assert g["kappa2"].shape == (0, 3)
+    assert g.get_R().size == 0
+    assert g.get_kappa2().size == 0
+    assert g.n1 == 0 and g.n2 == 3
 
 
 if __name__ == "__main__":
