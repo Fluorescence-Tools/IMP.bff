@@ -1,5 +1,44 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 1, batch 10: `quenching.i` to C++ — phase 1 complete
+
+`pyext/IMP_bff.quenching.i` lost its one `%pythoncode` block (`_flat`/`_cube`/
+`_kappa2` helpers and the ~dozen grid/map/trace reshapers) and all twelve
+`_function` renames; the C++ `sphere_points`, `solvent_accessible_surface`,
+`quenching_rate_per_frame`, `slow_factor_grid`, `quenching_rate_grid`,
+`av_contact_mask`, `grid_axis`, `diffusion_coefficient_map`,
+`quenching_rate_map`, `fret_rate_map`, `fret_rate_trace`,
+`fret_rate_pair_trace` are the public flat surface. Interfaces/wrappers that
+changed:
+
+- The cube-reshaping (`_cube`), the `_flat` ravel and the `None`-kappa2
+  resolution are caller-side now; `fret_rate_trace`/`fret_rate_pair_trace`
+  take an explicit `kappa2` (pass `kappa2_isotropic()`).
+- `radial_diffusion_map` is **C++** (QuenchingMap) and takes the profile
+  pre-evaluated on an integer-Angstrom radius grid instead of a callable.
+
+Two shared typemaps widened in `pyext/IMP_bff.types.i`: the
+`std::vector<double>` `in` typemap now converts any array-like through
+`PyArray_FROMANY(..., FORCECAST)` to a flat float64 copy (so an int-fold
+density/mask reaches these kernels the way the Python `astype(float64)` did),
+mirroring the `vector<int>` one.
+
+Test callers migrated: `test_quenching_kernels` (helpers `_sas`/`_qgrid`/
+`_sfgrid`/`_cmask`/`_ftrace`/`_fptrace`), `test_quenching_field`
+(`_qrmap`/`_dcmap`/`_frmap` + `_axis`), `test_ported_kernels`, and
+`test_photophysics_terms`.
+
+**Phase 1 (the 17-file %pythoncode port) is done:** all of avdistance,
+interactionterms, forcefield, observables, greedyolga, dye, distributions,
+griddiffusion, avmodel, statesdistance, fret_pair_distribution, dyediffusion,
+quenchingmodel, avbuilder, petquenching, dyesampling, photophysics and
+quenching are %pythoncode-free. 14 `.i` files with `%pythoncode` remain (Phases
+2-5): fps, cif, structureio, rotamer_ensemble, avmeandistance, topology,
+scoring, label, sampling, rotamer, docking, sim.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** — only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 1, batch 9: `photophysics.i` to C++
 
 `pyext/IMP_bff.photophysics.i` lost its one `%pythoncode` block (two dozen

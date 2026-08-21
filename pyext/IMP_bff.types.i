@@ -104,7 +104,7 @@
 %typemap(in, fragment="NumPy_Macros")
         const std::vector<double>& (std::vector<double> imp_bff_tmp,
                                     std::vector<double>* imp_bff_ptr = 0,
-                                    int imp_bff_res = 0) {
+                                    PyArrayObject* imp_bff_arr = 0) {
     if (is_numpy_array($input) && array_type($input) == NPY_DOUBLE &&
         array_is_contiguous($input)) {
         const double* imp_bff_data = (const double*) array_data($input);
@@ -127,14 +127,24 @@
         // from ever being emitted, and the generic asptr only knows sequences.
         $1 = imp_bff_ptr;
     } else {
-        imp_bff_res = swig::asptr($input, &imp_bff_ptr);
-        if (!SWIG_IsOK(imp_bff_res) || !imp_bff_ptr) {
+        // Any other array-like -- an int8/uint8 mask, a float32 or an
+        // F-contiguous layout -- is converted to a flat float64 copy, the way
+        // the Python wrappers' `astype(float64)`+ravel did. swig::asptr does
+        // not iterate numpy buffers of the wrong flavour, so it cannot serve
+        // here.
+        imp_bff_arr = (PyArrayObject*) PyArray_FROMANY(
+                $input, NPY_DOUBLE, 0, 0,
+                NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_FORCECAST |
+                        NPY_ARRAY_ENSUREARRAY);
+        if (imp_bff_arr == NULL) {
             SWIG_exception_fail(
-                SWIG_ArgError(imp_bff_res),
-                "in method '$symname', argument $argnum of type '$1_type'");
+                SWIG_ValueError,
+                "in method '$defname', argument $argnum of type '$1_type'");
         }
-        imp_bff_tmp = *imp_bff_ptr;
-        if (SWIG_IsNewObj(imp_bff_res)) delete imp_bff_ptr;
+        const npy_intp imp_bff_n = PyArray_SIZE(imp_bff_arr);
+        const double* imp_bff_src = (const double*) PyArray_DATA(imp_bff_arr);
+        imp_bff_tmp.assign(imp_bff_src, imp_bff_src + imp_bff_n);
+        Py_DECREF(imp_bff_arr);
         $1 = &imp_bff_tmp;
     }
 }

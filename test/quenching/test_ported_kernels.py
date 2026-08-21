@@ -15,11 +15,32 @@ from IMP.bff import solvent_accessible_surface, sphere_points
 from IMP.bff import quenching_rate_per_frame
 
 
+def _sphere(n):
+    """`sphere_points` comes back flat; the sphere shape is the caller's."""
+    return np.asarray(sphere_points(n), dtype=np.float64).reshape(-1, 3)
+
+
+def _sas(xyz, vdw, idx, points, probe=1.4, radius=2.5):
+    return np.asarray(solvent_accessible_surface(
+        np.asarray(xyz, dtype=np.float64).ravel(),
+        np.asarray(vdw, dtype=np.float64).ravel(),
+        np.ascontiguousarray(idx).ravel(),
+        np.asarray(points, dtype=np.float64).ravel(),
+        float(probe), float(radius)), dtype=np.float64)
+
+
+def _qpf(collided, k_quench):
+    return np.asarray(quenching_rate_per_frame(
+        np.ascontiguousarray(np.asarray(collided, dtype=np.int32).ravel()),
+        int(np.asarray(collided).shape[0]),
+        np.asarray(k_quench, dtype=np.float64).ravel()), dtype=np.float64)
+
+
 class TestSpherePoints:
 
     @pytest.mark.parametrize("n", [1, 7, 200, 961])
     def test_the_points_are_on_the_unit_sphere(self, n):
-        pts = sphere_points(n)
+        pts = _sphere(n)
         assert pts.shape == (n, 3)
         np.testing.assert_allclose(np.linalg.norm(pts, axis=1), 1.0, atol=1e-12)
 
@@ -31,7 +52,7 @@ class TestSpherePoints:
         this is not a tolerance to relax later.
         """
         n = 961
-        pts = sphere_points(n)
+        pts = _sphere(n)
         assert pts.dtype == np.float64
         inc = np.pi * (3.0 - np.sqrt(5.0))
         off = 2.0 / float(n)
@@ -42,7 +63,7 @@ class TestSpherePoints:
         np.testing.assert_allclose(pts, ref, atol=1e-14)
 
     def test_they_spread_over_the_whole_sphere(self):
-        pts = sphere_points(400)
+        pts = _sphere(400)
         assert np.linalg.norm(pts.mean(axis=0)) < 0.05   # no hemisphere bias
 
 
@@ -52,17 +73,17 @@ class TestSolventAccessibleSurface:
         """With nothing to occlude it, the area is the full sphere at `radius`."""
         xyz = np.zeros((1, 3))
         vdw = np.array([2.0])
-        pts = sphere_points(2000)
-        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32), pts, 1.4, 2.5)
+        pts = _sphere(2000)
+        area = _sas(xyz, vdw, np.array([0], dtype=np.uint32), pts, 1.4, 2.5)
         assert area[0] == pytest.approx(4.0 * np.pi * vdw[0] ** 2, rel=1e-12)
 
     def test_a_buried_atom_has_no_area(self):
         """Shells of neighbours at contact leave no accessible sample."""
-        shell = sphere_points(300) * 3.0
+        shell = _sphere(300) * 3.0
         xyz = np.vstack([np.zeros(3), shell])
         vdw = np.full(len(xyz), 2.0)
-        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32),
-                    sphere_points(500), 1.4, 2.5)
+        area = _sas(xyz, vdw, np.array([0], dtype=np.uint32),
+                    _sphere(500), 1.4, 2.5)
         assert area[0] == 0.0
 
     def test_the_neighbour_cutoff_reaches_far_enough(self):
@@ -74,8 +95,8 @@ class TestSolventAccessibleSurface:
         """
         xyz = np.array([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]])
         vdw = np.array([2.0, 2.0])
-        area = solvent_accessible_surface(xyz, vdw, np.array([0], dtype=np.uint32),
-                    sphere_points(2000), 1.4, 2.5)
+        area = _sas(xyz, vdw, np.array([0], dtype=np.uint32),
+                    _sphere(2000), 1.4, 2.5)
         full = 4.0 * np.pi * vdw[0] ** 2
         assert area[0] < full, "the occluder at 5 A was not seen"
 
@@ -86,17 +107,17 @@ class TestQuenchingRatePerFrame:
     def test_rates_add_over_the_quenchers_in_contact(self):
         collided = np.array([[1, 0, 1], [0, 0, 0], [1, 1, 1]], dtype=bool)
         k = np.array([1.0, 2.0, 3.0])
-        np.testing.assert_allclose(quenching_rate_per_frame(collided, k),
+        np.testing.assert_allclose(_qpf(collided, k),
                                    [4.0, 0.0, 6.0])
 
     def test_no_contact_is_zero_not_the_radiative_floor(self):
         collided = np.zeros((5, 4), dtype=bool)
-        out = quenching_rate_per_frame(collided, np.arange(4.0))
+        out = _qpf(collided, np.arange(4.0))
         np.testing.assert_allclose(out, np.zeros(5))
 
     def test_it_returns_one_value_per_frame(self):
         collided = np.ones((17, 3), dtype=bool)
-        assert quenching_rate_per_frame(collided, np.ones(3)).shape == (17,)
+        assert _qpf(collided, np.ones(3)).shape == (17,)
 
 
 if __name__ == "__main__":

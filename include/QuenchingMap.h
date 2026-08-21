@@ -107,6 +107,26 @@ IMPBFFEXPORT void fret_map(
 */
 IMPBFFEXPORT std::vector<double> grid_axis(int ng, double dg);
 
+//! A diffusion map from a radial profile, evaluated on an integer-radius axis.
+/*!
+    \f$f\f$ is a profile of the distance from the grid anchor, sampled once per
+    integer Angstrom: \p radial[k] is the value at \f$r = k\f$. Every voxel gets
+    \f$\p radial[\operatorname{round}(|r|)]\f$, clamped to the table -- the old
+    Python took a *callable* and there is no C++ spelling of one that does not
+    call back into the interpreter per voxel, so the caller lands \f$f\f$ on a
+    radius grid first. This is what a turnover lamp (``stretched linker'')
+    mobility looks like before #slow_near_atoms adds the local crowding.
+
+    \param[in] density binary occupancy, flat ng^3, whose grid side gives ng
+    \param[in] dg voxel edge, A
+    \param[in] radial \f$f\f$ at integer radii in Angstrom; length 0 is the
+               identity (returns 1.0 everywhere)
+    \param[out] out_view,n_out_view flat ng^3
+*/
+IMPBFFEXPORT void radial_diffusion_map(
+        const std::vector<double>& density, double dg,
+        const std::vector<double>& radial, double** out_view, int* n_out_view);
+
 //! The mobility field: a base coefficient, slowed by nearby atoms.
 /*!
     \param[in] density binary occupancy of the accessible volume, flat ng^3

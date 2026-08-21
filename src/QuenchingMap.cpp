@@ -197,4 +197,37 @@ void fret_rate_map(const std::vector<double>& density_donor,
              acceptor_step > 1 ? acceptor_step : 1, out_view, n_out_view);
 }
 
+void radial_diffusion_map(const std::vector<double>& density, double dg,
+                           const std::vector<double>& radial,
+                           double** out_view, int* n_out_view) {
+    const int ng = qmap::grid_side(density.size());
+    if (ng == 0) {
+        IMP_THROW("the density must be a grid with an integer cube-root side",
+                  ValueException);
+    }
+    const std::vector<double> axis = grid_axis(ng, dg);
+    const int max_r = radial.empty() ? 0
+                                     : static_cast<int>(radial.size()) - 1;
+    double* out = internal::new_double_view(density.size(), out_view, n_out_view);
+    if (out == NULL) return;
+    for (int ix = 0; ix < ng; ++ix) {
+        const double ax = axis[ix];
+        for (int iy = 0; iy < ng; ++iy) {
+            const double ay = axis[iy];
+            const double s2_xy = ax * ax + ay * ay;
+            for (int iz = 0; iz < ng; ++iz) {
+                const std::size_t k = (static_cast<std::size_t>(ix) * ng + iy) * ng + iz;
+                if (radial.empty()) {
+                    out[k] = 1.0;
+                    continue;
+                }
+                const double r2 = s2_xy + axis[iz] * axis[iz];
+                int r = static_cast<int>(std::lround(std::sqrt(r2)));
+                if (r > max_r) r = max_r;
+                out[k] = radial[static_cast<std::size_t>(r)];
+            }
+        }
+    }
+}
+
 IMPBFF_END_NAMESPACE

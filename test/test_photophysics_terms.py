@@ -92,13 +92,14 @@ class TestPET:
         ng, dg = 9, 2.0
         r0 = np.array([30.0, 20.0, 10.0])
         density = np.ones((ng, ng, ng))
-        axis = maps.grid_axis(ng, dg)
+        axis = np.asarray(maps.grid_axis(ng, dg))
         kQ, rC = maps.atomic_quenching_parameters(
             atoms["res_name"], atoms["atom_name"], params)
         tau0 = 4.0
-        grid = maps.quenching_rate_map(
-            density, r0, dg, np.ascontiguousarray(atoms["coord"]), kQ, rC,
-            tau0=tau0, dye_radius=3.5)
+        grid = np.asarray(maps.quenching_rate_map(
+            np.asarray(density, dtype=np.float64).ravel(), r0.ravel(), dg,
+            np.ascontiguousarray(atoms["coord"]).ravel(), kQ, rC, tau0,
+            3.5)).reshape(ng, ng, ng)
 
         centre = (ng - 1) // 2
         pts, expect = [], []
@@ -134,7 +135,6 @@ class TestFRET:
         assert term.used_isotropic_kappa2
 
     def test_it_reproduces_the_trace_kernel(self):
-        from IMP.bff import fret_rate_trace
         # `find_dye` returns a copy out of the cached library, so setting a
         # lifetime on it is local to this test. It was `dataclasses.replace`
         # over a frozen dataclass for the same reason, and before that an
@@ -146,10 +146,12 @@ class TestFRET:
         term = FRETTerm(d, a)
         donor, acceptor = _states(32, 1), _states(48, 2)
         got = np.asarray(term.rate_constants(donor, acceptor))
-        want = fret_rate_trace(
-            np.ascontiguousarray(donor.get_points().reshape(-1, 4)[:, :3]),
-            np.ascontiguousarray(acceptor.get_points().reshape(-1, 4)[:, :3]),
-            R0=term.forster_radius, tau0=4.0, r_min=7.0, kappa2=None)
+        want = maps.fret_rate_trace(
+            np.ascontiguousarray(donor.get_points().reshape(-1, 4)[:, :3]).ravel(),
+            np.ascontiguousarray(
+                acceptor.get_points().reshape(-1, 4)[:, :3]).ravel(),
+            float(term.forster_radius), 4.0, 7.0, 512,
+            maps.kappa2_isotropic())
         np.testing.assert_allclose(got, want, rtol=1e-12)
 
     def test_a_dye_without_a_lifetime_is_refused(self):

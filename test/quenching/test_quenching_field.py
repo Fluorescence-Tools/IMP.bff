@@ -37,6 +37,42 @@ def closed_occupancy(diffusion_map, bounds, flux_form="smoluchowski"):
     return np.asarray(out, dtype=float).reshape(side, side, side)
 
 
+def _flat(a, dtype=np.float64):
+    return np.ascontiguousarray(np.asarray(a, dtype=dtype)).ravel()
+
+
+def _axis(ng, dg):
+    return np.asarray(maps.grid_axis(ng, dg))
+
+
+def _cube(fn, density, *args):
+    ng = int(round(float(np.asarray(density).size) ** (1.0 / 3.0)))
+    return np.asarray(fn(_flat(density), *args)).reshape(ng, ng, ng)
+
+
+def _qrmap(density, r0, dg, atoms_xyz, kQ, rC, tau0, dye_radius):
+    return _cube(maps.quenching_rate_map, density, _flat(r0), float(dg),
+                 _flat(atoms_xyz), _flat(kQ), _flat(rC), float(tau0),
+                 float(dye_radius))
+
+
+def _dcmap(density, r0, dg, atoms_xyz, free_diffusion, min_distance,
+           slow_factor, base=None):
+    b = np.zeros(0) if base is None else _flat(base)
+    return _cube(maps.diffusion_coefficient_map, density, _flat(r0), float(dg),
+                 _flat(atoms_xyz), float(free_diffusion), float(min_distance),
+                 float(slow_factor), b)
+
+
+def _frmap(density_donor, density_acceptor, r0_donor, r0_acceptor, dg_donor,
+           dg_acceptor, forster_radius, kf, acceptor_step=2):
+    ng = int(round(float(np.asarray(density_donor).size) ** (1.0 / 3.0)))
+    return np.asarray(maps.fret_rate_map(
+        _flat(density_donor), _flat(density_acceptor), _flat(r0_donor),
+        _flat(r0_acceptor), float(dg_donor), float(dg_acceptor),
+        float(forster_radius), float(kf), int(acceptor_step))).reshape(ng, ng, ng)
+
+
 def point_source(ng=41):
     p = np.zeros((ng,) * 3)
     c = (ng - 1) // 2
@@ -49,12 +85,12 @@ class GridAxisTests(IMP.test.TestCase):
     def test_the_axis_uses_the_same_centre_as_every_other_map(self):
         from IMP.bff import grid_center_index
         for ng in (31, 46, 92):
-            axis = maps.grid_axis(ng, 0.5)
+            axis = _axis(ng, 0.5)
             self.assertEqual(axis.size, ng)
             self.assertAlmostEqual(axis[grid_center_index(ng)], 0.0)
 
     def test_the_spacing_is_the_voxel_edge(self):
-        axis = maps.grid_axis(21, 0.75)
+        axis = _axis(21, 0.75)
         self.assertAlmostEqual(float(np.diff(axis).max()), 0.75)
 
 
@@ -97,18 +133,18 @@ class RateMapTests(IMP.test.TestCase):
         self.r0 = np.zeros(3)
 
     def test_the_intrinsic_rate_is_the_floor_without_quenchers(self):
-        rates = maps.quenching_rate_map(
+        rates = _qrmap(
             self.density, self.r0, self.dg, np.zeros((0, 3)),
-            np.zeros(0), np.zeros(0), tau0=4.0, dye_radius=3.5,
+            np.zeros(0), np.zeros(0), 4.0, 3.5,
         )
         self.assertTrue(np.allclose(rates, 0.25))
 
     def test_quenching_falls_off_exponentially(self):
         """kQ * exp(-(d - r_dye) / rC), measured from the dye surface."""
         kQ, rC, r_dye, tau0 = 3.5, 2.0, 3.5, 4.0
-        rates = maps.quenching_rate_map(
+        rates = _qrmap(
             self.density, self.r0, self.dg, np.zeros((1, 3)),
-            np.array([kQ]), np.array([rC]), tau0=tau0, dye_radius=r_dye,
+            np.array([kQ]), np.array([rC]), tau0, r_dye,
         )
         centre = (self.ng - 1) // 2
         for offset in (2, 4, 6):
@@ -117,27 +153,27 @@ class RateMapTests(IMP.test.TestCase):
             self.assertAlmostEqual(float(got), expected, places=9)
 
     def test_a_zero_rate_or_length_atom_is_skipped(self):
-        rates = maps.quenching_rate_map(
+        rates = _qrmap(
             self.density, self.r0, self.dg, np.zeros((2, 3)),
-            np.array([0.0, 3.5]), np.array([2.0, 0.0]), tau0=4.0, dye_radius=3.5,
+            np.array([0.0, 3.5]), np.array([2.0, 0.0]), 4.0, 3.5,
         )
         self.assertTrue(np.allclose(rates, 0.25))
 
     def test_voxels_outside_the_volume_carry_no_rate(self):
         density = np.zeros((self.ng,) * 3)
         density[5:15, 5:15, 5:15] = 1.0
-        rates = maps.quenching_rate_map(
+        rates = _qrmap(
             density, self.r0, self.dg, np.zeros((1, 3)),
-            np.array([3.5]), np.array([2.0]), tau0=4.0, dye_radius=3.5,
+            np.array([3.5]), np.array([2.0]), 4.0, 3.5,
         )
         self.assertTrue(np.all(rates[density == 0] == 0.0))
         self.assertTrue(np.all(rates[density > 0] > 0.0))
 
     def test_the_whole_grid_is_written(self):
         """ChiSurf's `range(-npm, npm)` never reached the outer slab."""
-        rates = maps.quenching_rate_map(
+        rates = _qrmap(
             self.density, self.r0, self.dg, np.zeros((1, 3)),
-            np.array([3.5]), np.array([2.0]), tau0=4.0, dye_radius=3.5,
+            np.array([3.5]), np.array([2.0]), 4.0, 3.5,
         )
         self.assertTrue(np.all(rates > 0.0))
         for face in (rates[0], rates[-1], rates[:, 0], rates[:, -1],
@@ -153,18 +189,18 @@ class MobilityMapTests(IMP.test.TestCase):
         self.density = np.ones((self.ng,) * 3)
 
     def test_far_from_every_atom_the_dye_is_free(self):
-        d_map = maps.diffusion_coefficient_map(
+        d_map = _dcmap(
             self.density, np.zeros(3), self.dg, np.array([[100.0, 100.0, 100.0]]),
-            free_diffusion=8.0, min_distance=5.0, slow_factor=0.5,
+            8.0, 5.0, 0.5,
         )
         self.assertTrue(np.allclose(d_map, 8.0))
 
     def test_each_contacting_atom_slows_the_dye_again(self):
         """The factor compounds -- two atoms in contact means slow_factor^2."""
         atoms = np.zeros((2, 3))
-        d_map = maps.diffusion_coefficient_map(
+        d_map = _dcmap(
             self.density, np.zeros(3), self.dg, atoms,
-            free_diffusion=8.0, min_distance=3.0, slow_factor=0.5,
+            8.0, 3.0, 0.5,
         )
         centre = (self.ng - 1) // 2
         self.assertAlmostEqual(float(d_map[centre, centre, centre]), 8.0 * 0.25)
@@ -173,25 +209,27 @@ class MobilityMapTests(IMP.test.TestCase):
         """A non-zero coefficient there would let the solver leak into the protein."""
         density = np.zeros((self.ng,) * 3)
         density[5:15, 5:15, 5:15] = 1.0
-        d_map = maps.diffusion_coefficient_map(
+        d_map = _dcmap(
             density, np.zeros(3), self.dg, np.array([[100.0, 0.0, 0.0]]),
-            free_diffusion=8.0, min_distance=3.0, slow_factor=0.5,
+            8.0, 3.0, 0.5,
         )
         self.assertTrue(np.all(d_map[density == 0] == 0.0))
 
     def test_a_radial_profile_replaces_the_constant_base(self):
-        d_map = maps.radial_diffusion_map(
-            self.density, self.dg, lambda r: 1.0 + r
-        )
+        r_max = int(np.ceil((self.ng - 1) * self.dg * float(np.sqrt(3)) / 2))
+        profile = 1.0 + np.arange(r_max + 1)
+        d_map = np.asarray(maps.radial_diffusion_map(
+            _flat(self.density), self.dg, profile)).reshape(
+                self.ng, self.ng, self.ng)
         centre = (self.ng - 1) // 2
         self.assertAlmostEqual(float(d_map[centre, centre, centre]), 1.0)
         self.assertAlmostEqual(float(d_map[centre + 3, centre, centre]), 4.0)
 
     def test_the_whole_grid_is_written(self):
         """ChiSurf's variant 1 left the last slab as uninitialised memory."""
-        d_map = maps.diffusion_coefficient_map(
+        d_map = _dcmap(
             self.density, np.zeros(3), self.dg, np.array([[100.0, 100.0, 100.0]]),
-            free_diffusion=8.0, min_distance=3.0, slow_factor=0.5,
+            8.0, 3.0, 0.5,
         )
         self.assertTrue(np.all(d_map == 8.0))
 
@@ -208,8 +246,8 @@ class FretMapTests(IMP.test.TestCase):
 
     def test_one_donor_and_one_acceptor_give_the_forster_rate(self):
         d, a, r0d, r0a, dg = self.single_voxel_grids(52.0)
-        rates = maps.fret_rate_map(d, a, r0d, r0a, dg, dg, 52.0, 0.25,
-                                   acceptor_step=1)
+        rates = _frmap(d, a, r0d, r0a, dg, dg, 52.0, 0.25,
+                       acceptor_step=1)
         c = (d.shape[0] - 1) // 2
         # r = R0 -> k = kf
         self.assertAlmostEqual(float(rates[c, c, c]), 0.25, places=9)
@@ -219,8 +257,8 @@ class FretMapTests(IMP.test.TestCase):
         rates = []
         for separation in (52.0, 104.0):
             d, a, r0d, r0a, dg = self.single_voxel_grids(separation)
-            m = maps.fret_rate_map(d, a, r0d, r0a, dg, dg, 52.0, 0.25,
-                                   acceptor_step=1)
+            m = _frmap(d, a, r0d, r0a, dg, dg, 52.0, 0.25,
+                       acceptor_step=1)
             c = (d.shape[0] - 1) // 2
             rates.append(float(m[c, c, c]))
         self.assertAlmostEqual(rates[0] / rates[1], 2.0 ** 6, delta=1e-6)
@@ -236,7 +274,7 @@ class FretMapTests(IMP.test.TestCase):
         acceptor[c + 2, c, c] = 1.0
         r0a = np.array([60.0, 0.0, 0.0])
         kf, R0 = 0.25, 52.0
-        got = maps.fret_rate_map(
+        got = _frmap(
             donor, acceptor, np.zeros(3), r0a, dg, dg, R0, kf, acceptor_step=1
         )[c, c, c]
         distances = np.array([60.0 - 2.0, 60.0 + 2.0])
@@ -248,7 +286,7 @@ class FretMapTests(IMP.test.TestCase):
     def test_a_zero_radiative_rate_raises(self):
         d, a, r0d, r0a, dg = self.single_voxel_grids(52.0)
         with self.assertRaises(ValueError):
-            maps.fret_rate_map(d, a, r0d, r0a, dg, dg, 52.0, 0.0)
+            _frmap(d, a, r0d, r0a, dg, dg, 52.0, 0.0)
 
 
 class GridDiffusionSolverTests(IMP.test.TestCase):
@@ -270,7 +308,7 @@ class GridDiffusionSolverTests(IMP.test.TestCase):
         """The pin that caught ChiSurf's half-rate ping-pong."""
         n_steps = 200
         result = self.solver(point_source(self.ng)).run(n_steps, n_out=n_steps)
-        axis = maps.grid_axis(self.ng, self.dg)
+        axis = _axis(self.ng, self.dg)
         density = result.get_density().reshape(self.ng, self.ng, self.ng)
         variance = float((density * axis[:, None, None] ** 2).sum() / density.sum())
         expected = 2.0 * self.D * n_steps * self.t_step
@@ -428,9 +466,9 @@ class PortedDefectTests(IMP.test.TestCase):
         """`range(-npm, npm)` is one short; on an even `ng` it is two short."""
         for ng in (21, 22):
             density = np.ones((ng,) * 3)
-            d_map = maps.diffusion_coefficient_map(
+            d_map = _dcmap(
                 density, np.zeros(3), 1.0, np.array([[500.0, 0.0, 0.0]]),
-                free_diffusion=3.0, min_distance=1.0, slow_factor=0.5,
+                3.0, 1.0, 0.5,
             )
             self.assertTrue(
                 np.all(d_map == 3.0),
@@ -446,7 +484,7 @@ class PortedDefectTests(IMP.test.TestCase):
             np.full((ng,) * 3, D), open_box(ng), point_source(ng),
             t_step=t_step, dg=dg,
         ).run(n_steps, n_out=n_steps)
-        axis = maps.grid_axis(ng, dg)
+        axis = _axis(ng, dg)
         density = result.get_density().reshape(ng, ng, ng)
         variance = float(
             (density * axis[:, None, None] ** 2).sum() / density.sum()

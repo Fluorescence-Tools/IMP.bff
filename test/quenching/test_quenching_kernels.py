@@ -37,6 +37,61 @@ def sphere_grid(ng=40, radius_voxels=15, slow_voxels=8):
     return density, slow
 
 
+def _flat(a, dtype=np.float64):
+    return np.ascontiguousarray(np.asarray(a, dtype=dtype)).ravel()
+
+
+def _cube(flat, ng):
+    return np.asarray(flat, dtype=np.float64).reshape(ng, ng, ng)
+
+
+def _sas(xyz, vdw, idx, points=None, probe=1.0, radius=2.5):
+    pts = np.zeros(0) if points is None or np.asarray(points).ndim != 2 \
+        else _flat(points)
+    return np.asarray(_q.solvent_accessible_surface(
+        _flat(xyz), _flat(vdw),
+        np.ascontiguousarray(np.asarray(idx)).ravel(), pts,
+        float(probe), float(radius)), dtype=np.float64)
+
+
+def _qgrid(density, ng, dg, radius, centres, r0, values):
+    return _cube(_q.quenching_rate_grid(
+        _flat(density), int(ng), float(dg), _flat(np.atleast_1d(radius)),
+        _flat(centres), _flat(r0), _flat(values)), int(ng))
+
+
+def _sfgrid(density, ng, dg, radius, centres, r0, values):
+    return _cube(_q.slow_factor_grid(
+        _flat(density), int(ng), float(dg), _flat(np.atleast_1d(radius)),
+        _flat(centres), _flat(r0), _flat(values)), int(ng))
+
+
+def _cmask(density, ng, dg, radius, centres, r0):
+    mask = _q.av_contact_mask(
+        _flat(density), int(ng), float(dg), _flat(np.atleast_1d(radius)),
+        _flat(centres), _flat(r0))
+    return np.ascontiguousarray(mask, dtype=np.uint8).reshape(int(ng), int(ng), int(ng))
+
+
+def _ftrace(trajectory, acceptor_points, R0, tau0, r_min=7.0,
+            max_acceptor_points=512, kappa2=None):
+    """Per-frame FRET rate, kappa2 resolved on the caller side."""
+    if kappa2 is None:
+        kappa2 = _q.kappa2_isotropic()
+    return np.asarray(_q.fret_rate_trace(
+        _flat(trajectory), _flat(acceptor_points),
+        float(R0), float(tau0), float(r_min), int(max_acceptor_points),
+        float(kappa2)), dtype=np.float64)
+
+
+def _fptrace(donor, acceptor, r0, tau0, r_min=7.0, kappa2=None):
+    if kappa2 is None:
+        kappa2 = _q.kappa2_isotropic()
+    return np.asarray(_q.fret_rate_pair_trace(
+        _flat(donor), _flat(acceptor),
+        float(r0), float(tau0), float(r_min), float(kappa2)), dtype=np.float64)
+
+
 class PetParameterTests(IMP.test.TestCase):
 
     def test_quenching_centres_sit_on_the_redox_active_moiety(self):
@@ -124,7 +179,7 @@ class SolventAccessibleSurfaceTests(IMP.test.TestCase):
         """4 pi r^2 for the isolated sphere, within the sampling resolution."""
         xyz = np.zeros((1, 3))
         vdw = np.array([2.0])
-        area = _q.solvent_accessible_surface(xyz, vdw, np.array([0], np.uint32))
+        area = _sas(xyz, vdw, np.array([0], np.uint32))
         self.assertAlmostEqual(float(area[0]), 4.0 * np.pi * 2.0 ** 2, delta=1e-3)
 
     def test_burying_an_atom_reduces_its_area(self):
@@ -135,8 +190,8 @@ class SolventAccessibleSurfaceTests(IMP.test.TestCase):
         ])
         vdw = np.full(shell.shape[0], 2.0)
         idx = np.array([0], np.uint32)
-        buried = _q.solvent_accessible_surface(shell, vdw, idx)
-        alone = _q.solvent_accessible_surface(shell[:1], vdw[:1], idx)
+        buried = _sas(shell, vdw, idx)
+        alone = _sas(shell[:1], vdw[:1], idx)
         self.assertLess(float(buried[0]), 0.5 * float(alone[0]))
 
     def test_frozen_reference(self):
@@ -154,11 +209,11 @@ class SolventAccessibleSurfaceTests(IMP.test.TestCase):
         xyz = rng.normal(0, 12, (n, 3))
         vdw = rng.uniform(1.2, 2.0, n)
         idx = np.arange(0, n, 7, dtype=np.uint32)
-        area = _q.solvent_accessible_surface(xyz, vdw, idx)
+        area = _sas(xyz, vdw, idx)
         self.assertAlmostEqual(float(area.sum()), 642.911865, delta=1e-3)
 
     def test_no_probe_atoms_is_not_an_error(self):
-        area = _q.solvent_accessible_surface(
+        area = _sas(
             np.zeros((3, 3)), np.ones(3), np.array([], np.uint32)
         )
         self.assertEqual(area.size, 0)
@@ -183,7 +238,7 @@ class GridRegistrationTests(IMP.test.TestCase):
             ([2.0, 0.0, 0.0], offset + 2),
             ([-2.0, 0.0, 0.0], offset - 2),
         ):
-            rates = _q.quenching_rate_grid(
+            rates = _qgrid(
                 density, ng, dg, np.array([1.4]), np.array([point]),
                 np.zeros(3), np.array([1.0]),
             )
@@ -195,7 +250,7 @@ class GridRegistrationTests(IMP.test.TestCase):
         ng, dg = 21, 1.0
         density = np.ones((ng, ng, ng), np.uint8)
         offset = _q.grid_center_index(ng)
-        rates = _q.quenching_rate_grid(
+        rates = _qgrid(
             density, ng, dg, np.array([1.4]), np.array([[-0.5, 0.0, 0.0]]),
             np.zeros(3), np.array([1.0]),
         )
@@ -214,7 +269,7 @@ class QuenchingGridTests(IMP.test.TestCase):
     def test_overlapping_quenchers_add_their_rates(self):
         """Independent PET channels compose additively."""
         centres = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
-        rates = _q.quenching_rate_grid(
+        rates = _qgrid(
             self.density, self.ng, self.dg, np.array([4.0, 4.0]),
             centres, self.r0, np.array([1.5, 2.5]),
         )
@@ -222,7 +277,7 @@ class QuenchingGridTests(IMP.test.TestCase):
 
     def test_overlapping_sticky_spheres_multiply_their_factors(self):
         centres = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
-        factors = _q.slow_factor_grid(
+        factors = _sfgrid(
             self.density, self.ng, self.dg, np.array([4.0, 4.0]),
             centres, self.r0, np.array([0.5, 0.25]),
         )
@@ -232,20 +287,20 @@ class QuenchingGridTests(IMP.test.TestCase):
         """The walk cannot reach them, so a rate there would be a lie."""
         density = np.zeros((self.ng,) * 3, np.uint8)
         density[10:20, 10:20, 10:20] = 1
-        rates = _q.quenching_rate_grid(
+        rates = _qgrid(
             density, self.ng, self.dg, np.array([20.0]), np.zeros((1, 3)),
             self.r0, np.array([3.0]),
         )
         self.assertTrue(np.all(rates[density == 0] == 0.0))
         self.assertTrue(np.any(rates[density == 1] > 0.0))
-        factors = _q.slow_factor_grid(
+        factors = _sfgrid(
             density, self.ng, self.dg, np.array([20.0]), np.zeros((1, 3)),
             self.r0, np.array([0.3]),
         )
         self.assertTrue(np.all(factors[density == 0] == 1.0))
 
     def test_a_zero_rate_quencher_stamps_nothing(self):
-        rates = _q.quenching_rate_grid(
+        rates = _qgrid(
             self.density, self.ng, self.dg, np.array([5.0]), np.zeros((1, 3)),
             self.r0, np.array([0.0]),
         )
@@ -253,7 +308,7 @@ class QuenchingGridTests(IMP.test.TestCase):
 
     def test_the_stamp_is_a_ball_of_the_requested_radius(self):
         radius = 3.0
-        rates = _q.quenching_rate_grid(
+        rates = _qgrid(
             self.density, self.ng, self.dg, np.array([radius]), np.zeros((1, 3)),
             self.r0, np.array([1.0]),
         )
@@ -263,7 +318,7 @@ class QuenchingGridTests(IMP.test.TestCase):
 
     def test_the_contact_mask_is_inside_the_accessible_volume(self):
         density, _ = sphere_grid(ng=self.ng, radius_voxels=12)
-        mask = _q.av_contact_mask(
+        mask = _cmask(
             density, self.ng, self.dg, np.array([3.0]), np.zeros((1, 3)), self.r0
         )
         self.assertTrue(np.all(mask[density == 0] == 0))
@@ -352,7 +407,7 @@ class DyeDiffusionTests(IMP.test.TestCase):
         self.assertLess(step(sticky), step(free))
 
     def test_a_per_voxel_factor_grid_is_accepted(self):
-        factors = _q.slow_factor_grid(
+        factors = _sfgrid(
             self.density, self.density.shape[0], self.dg,
             np.array([4.0]), np.zeros((1, 3)), np.zeros(3), np.array([0.05]),
         )
@@ -386,13 +441,13 @@ class FretRateTraceTests(IMP.test.TestCase):
 
     def test_the_rate_at_the_forster_radius_is_the_intrinsic_rate(self):
         """k_FRET = 1/tau0 exactly when r = R0 and kappa2 is isotropic."""
-        rate = _q.fret_rate_trace(
+        rate = _ftrace(
             np.zeros((1, 3)), self.acceptor, R0=52.0, tau0=4.0
         )
         self.assertAlmostEqual(float(rate[0]), 1.0 / 4.0)
 
     def test_the_rate_falls_as_the_sixth_power(self):
-        rate = _q.fret_rate_trace(
+        rate = _ftrace(
             np.array([[0.0, 0.0, 0.0], [26.0, 0.0, 0.0]]),
             np.array([[52.0, 0.0, 0.0]]), R0=52.0, tau0=4.0,
         )
@@ -400,14 +455,14 @@ class FretRateTraceTests(IMP.test.TestCase):
 
     def test_kappa2_scales_relative_to_the_isotropic_value(self):
         """R0 is published *at* 2/3, so passing 2/3 must change nothing."""
-        base = _q.fret_rate_trace(
+        base = _ftrace(
             self.trajectory, self.acceptor, 52.0, 4.0
         )
-        same = _q.fret_rate_trace(
+        same = _ftrace(
             self.trajectory, self.acceptor, 52.0, 4.0, kappa2=2.0 / 3.0
         )
         self.assertTrue(np.allclose(base, same))
-        doubled = _q.fret_rate_trace(
+        doubled = _ftrace(
             self.trajectory, self.acceptor, 52.0, 4.0, kappa2=4.0 / 3.0
         )
         self.assertTrue(np.allclose(doubled, 2.0 * base))
@@ -415,13 +470,13 @@ class FretRateTraceTests(IMP.test.TestCase):
     def test_an_impossible_kappa2_is_rejected(self):
         for bad in (-0.1, 4.5, float("nan")):
             with self.assertRaises(ValueError):
-                _q.fret_rate_trace(
+                _ftrace(
                     self.trajectory, self.acceptor, 52.0, 4.0, kappa2=bad
                 )
 
     def test_overlapping_clouds_do_not_diverge(self):
         """Both clouds are dye *centres* and may overlap; (R0/r)^6 would blow up."""
-        rate = _q.fret_rate_trace(
+        rate = _ftrace(
             np.zeros((4, 3)), np.zeros((4, 3)), R0=52.0, tau0=4.0, r_min=7.0
         )
         self.assertTrue(np.all(np.isfinite(rate)))
@@ -430,38 +485,38 @@ class FretRateTraceTests(IMP.test.TestCase):
 
     def test_the_pair_trace_matches_the_cloud_average_for_a_single_acceptor(self):
         """A one-point cloud held still *is* a frame-aligned acceptor trajectory."""
-        cloud = _q.fret_rate_trace(
+        cloud = _ftrace(
             self.trajectory, self.acceptor, 52.0, 4.0
         )
         held = np.repeat(self.acceptor, self.trajectory.shape[0], axis=0)
-        pair = _q.fret_rate_pair_trace(self.trajectory, held, 52.0, 4.0)
+        pair = _fptrace(self.trajectory, held, 52.0, 4.0)
         self.assertTrue(np.allclose(cloud, pair))
 
     def test_mismatched_trajectories_raise_rather_than_truncate(self):
         """Truncating would silently change the sampled time window."""
         with self.assertRaises(ValueError):
-            _q.fret_rate_pair_trace(
+            _fptrace(
                 self.trajectory, self.trajectory[:-1], 52.0, 4.0
             )
 
     def test_an_empty_acceptor_cloud_raises(self):
         with self.assertRaises(ValueError):
-            _q.fret_rate_trace(
+            _ftrace(
                 self.trajectory, np.zeros((0, 3)), 52.0, 4.0
             )
 
     def test_a_non_positive_lifetime_raises(self):
         with self.assertRaises(ValueError):
-            _q.fret_rate_trace(self.trajectory, self.acceptor, 52.0, 0.0)
+            _ftrace(self.trajectory, self.acceptor, 52.0, 0.0)
 
     def test_the_acceptor_cloud_is_subsampled_by_an_even_stride(self):
         """The average converges long before the full cloud."""
         rng = np.random.default_rng(0)
         cloud = rng.normal(40.0, 5.0, (5000, 3))
-        full = _q.fret_rate_trace(
+        full = _ftrace(
             self.trajectory, cloud, 52.0, 4.0, max_acceptor_points=5000
         )
-        capped = _q.fret_rate_trace(
+        capped = _ftrace(
             self.trajectory, cloud, 52.0, 4.0, max_acceptor_points=512
         )
         self.assertTrue(np.allclose(full, capped, rtol=0.05))
