@@ -1,5 +1,13 @@
 # Update Log
 
+## 2026-08-21 — PRD-117: `%pythoncode` to C++ porting plan
+
+Documented the full port of 11,607 lines of `%pythoncode` across 29 `.i` files
+to C++. Five-phase plan in [`okf/prds/prd-117.md`](prds/prd-117.md).
+Comprehensive handoff at [`okf/handoff-pythoncode-to-cpp.md`](handoff-pythoncode-to-cpp.md).
+`pyext/src/` is at 353 lines (done). The `.i` files are the remaining work.
+End state: 0 `%pythoncode` blocks, all C++ for SWIG/JS.
+
 ## 2026-08-21 — the rest of `pyext/src` to C++ and `.i` %pythoncode
 
 **`pyext/src` went from 9,327 lines to 793.** Every `.py` file is now a thin
