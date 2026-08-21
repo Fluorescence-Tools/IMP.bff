@@ -113,6 +113,9 @@ _LAZY = {}
 /* The system layer: Label, Quencher, attachment, backbone frame, strip. */
 %include "IMP_bff.label.i"
 
+/* The cgdye topology builder: force-field system assembly, graph helpers. */
+%include "IMP_bff.topology.i"
+
 /* The accessible volume as an object, not just a solver. */
 %include "IMP_bff.avmodel.i"
 
