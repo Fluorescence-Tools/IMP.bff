@@ -25,20 +25,44 @@ import IMP.bff
 import IMP.bff as o
 
 
+def _wobbling(sD2, sA2, n_bins=81, k2_min=0.0, k2_max=4.0, n_samples=10000,
+              seed=0):
+    """`(scale, hist, samples)` -- the two out-collections are SWIG `VectorDouble`s."""
+    scale = IMP.bff.VectorDouble()
+    hist = IMP.bff.VectorDouble()
+    samples = np.asarray(o.wobbling_kappa2_distribution(
+        sD2, sA2, n_bins, k2_min, k2_max, n_samples, seed, scale, hist))
+    return np.asarray(scale), np.asarray(hist), samples
+
+
+def _wobbling_delta(delta, sD2, sA2, step=0.25, n_bins=31, k2_min=0.0,
+                    k2_max=4.0):
+    """`(scale, hist, k2)` with `k2` reshaped to `(n_beta, n_phi)`."""
+    scale = IMP.bff.VectorDouble()
+    hist = IMP.bff.VectorDouble()
+    k2 = np.asarray(o.wobbling_kappa2_distribution_delta(
+        delta, sD2, sA2, step, n_bins, k2_min, k2_max, scale, hist))
+    n_beta = max(1, int(np.floor((np.pi / 2.0 - 0.001) /
+                                 (step * np.pi / 180.0))) + 1)
+    if n_beta and k2.size % n_beta == 0:
+        k2 = k2.reshape(n_beta, -1)
+    return np.asarray(scale), np.asarray(hist), k2
+
+
 # --- the geometry ------------------------------------------------------------
 
 def test_kappa_reproduces_its_documented_value():
     """Perpendicular dipoles offset along y -- the case in ``kappa``'s docstring."""
     donor = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     acceptor = np.array([[0.0, 0.5, 0.0], [0.0, 0.5, 1.0]])
-    d, k = o.kappa(donor, acceptor)
+    d, k = o.dipole_kappa_distance(donor[0], donor[1], acceptor[0], acceptor[1])
     assert d == pytest.approx(0.8660254037844386)
     assert k == pytest.approx(1.0000000000000002)
 
 
 def test_collinear_dipoles_give_kappa_minus_two():
     """Head to tail along the separation vector: kappa = 1 - 3 = -2, kappa^2 = 4."""
-    d, k = o.kappa_distance(np.array([-0.5, 0.0, 0.0]), np.array([0.5, 0.0, 0.0]),
+    d, k = o.dipole_kappa_distance(np.array([-0.5, 0.0, 0.0]), np.array([0.5, 0.0, 0.0]),
                             np.array([19.5, 0.0, 0.0]), np.array([20.5, 0.0, 0.0]))
     assert d == pytest.approx(20.0)
     assert k == pytest.approx(-2.0)
@@ -46,15 +70,14 @@ def test_collinear_dipoles_give_kappa_minus_two():
 
 
 def test_parallel_dipoles_perpendicular_to_r_give_kappa_one():
-    d, k = o.kappa_distance(np.array([0.0, -0.5, 0.0]), np.array([0.0, 0.5, 0.0]),
+    d, k = o.dipole_kappa_distance(np.array([0.0, -0.5, 0.0]), np.array([0.0, 0.5, 0.0]),
                             np.array([30.0, -0.5, 0.0]), np.array([30.0, 0.5, 0.0]))
     assert d == pytest.approx(30.0)
     assert k == pytest.approx(1.0)
 
 
 def test_kappa_is_signed_and_squaring_loses_that():
-    """Anti-parallel dipoles give -1, not 1. The sign is real; kappa^2 discards it."""
-    _, k = o.kappa_distance(np.array([0.0, -0.5, 0.0]), np.array([0.0, 0.5, 0.0]),
+    _, k = o.dipole_kappa_distance(np.array([0.0, -0.5, 0.0]), np.array([0.0, 0.5, 0.0]),
                             np.array([30.0, 0.5, 0.0]), np.array([30.0, -0.5, 0.0]))
     assert k == pytest.approx(-1.0)
 
@@ -64,7 +87,7 @@ def test_kappa_is_signed_and_squaring_loses_that():
 def test_wobbling_kappa2_reduces_to_two_thirds_when_nothing_is_ordered():
     for beta1 in (0.0, 0.7, np.pi / 2):
         for beta2 in (0.0, 1.3, np.pi):
-            assert o.kappasq(0.9, 0.0, 0.0, beta1, beta2) == pytest.approx(2 / 3)
+            assert o.wobbling_kappa2(0.9, 0.0, 0.0, beta1, beta2) == pytest.approx(2 / 3)
 
 
 def test_wobbling_kappa2_matches_the_bare_geometry_when_fully_rigid():
@@ -78,37 +101,37 @@ def test_wobbling_kappa2_matches_the_bare_geometry_when_fully_rigid():
         beta2 = np.arccos(np.clip(d2[0], -1, 1))
         # R_DA along x, which is the convention the module documents
         static = (d1 @ d2 - 3.0 * d1[0] * d2[0]) ** 2
-        assert o.kappasq(delta, 1.0, 1.0, beta1, beta2) == pytest.approx(static, abs=1e-9)
+        assert o.wobbling_kappa2(delta, 1.0, 1.0, beta1, beta2) == pytest.approx(static, abs=1e-9)
 
 
 # --- the distributions -------------------------------------------------------
 
 def test_free_dyes_give_exactly_two_thirds_every_sample():
-    _, _, k2 = o.kappa2_distribution_wobbling_in_cone(0.0, 0.0, n_samples=20000, seed=2)
+    _, _, k2 = _wobbling(0.0, 0.0, n_samples=20000, seed=2)
     assert np.ptp(k2) == 0.0
     assert k2[0] == pytest.approx(2 / 3)
 
 
 def test_rigid_dyes_average_two_thirds_and_span_the_full_range():
     """The check that caught the octant-sampling defect. Do not loosen it."""
-    _, _, k2 = o.kappa2_distribution_wobbling_in_cone(1.0, 1.0, n_bins=81, n_samples=400000, seed=1)
+    _, _, k2 = _wobbling(1.0, 1.0, n_bins=81, n_samples=400000, seed=1)
     assert k2.mean() == pytest.approx(2 / 3, abs=0.01)
     assert k2.min() < 0.01 and k2.max() > 3.9, "the sampler is not reaching the sphere"
 
 
 def test_samples_stay_within_the_physical_bounds():
-    _, _, k2 = o.kappa2_distribution_wobbling_in_cone(0.9, 0.9, n_samples=100000, seed=3)
+    _, _, k2 = _wobbling(0.9, 0.9, n_samples=100000, seed=3)
     assert k2.min() >= 0.0 and k2.max() <= 4.0
 
 
 def test_distribution_is_reproducible_and_seed_dependent():
-    a = o.kappa2_distribution_wobbling_in_cone(0.5, 0.4, n_samples=5000, seed=7)[2]
-    np.testing.assert_array_equal(a, o.kappa2_distribution_wobbling_in_cone(0.5, 0.4, n_samples=5000, seed=7)[2])
-    assert not np.array_equal(a, o.kappa2_distribution_wobbling_in_cone(0.5, 0.4, n_samples=5000, seed=8)[2])
+    a = _wobbling(0.5, 0.4, n_samples=5000, seed=7)[2]
+    np.testing.assert_array_equal(a, _wobbling(0.5, 0.4, n_samples=5000, seed=7)[2])
+    assert not np.array_equal(a, _wobbling(0.5, 0.4, n_samples=5000, seed=8)[2])
 
 
 def test_histogram_and_scale_shapes_are_consistent():
-    scale, hist, k2 = o.kappa2_distribution_wobbling_in_cone(0.3, 0.3, n_bins=81, n_samples=1000, seed=0)
+    scale, hist, k2 = _wobbling(0.3, 0.3, n_bins=81, n_samples=1000, seed=0)
     assert scale.shape == (81,) and hist.shape == (80,)
     assert hist.sum() == 1000, "every sample must land in a bin, including the top edge"
     assert k2.shape == (1000,)
@@ -116,7 +139,7 @@ def test_histogram_and_scale_shapes_are_consistent():
 
 def test_delta_distribution_is_solid_angle_weighted():
     """Each beta1 ring contributes sin(beta1); without it the poles are over-counted."""
-    scale, hist, k2 = o.kappasq_all_delta(delta=0.2, sD2=0.15, sA2=0.25, step=2.0, n_bins=31)
+    scale, hist, k2 = _wobbling_delta(delta=0.2, sD2=0.15, sA2=0.25, step=2.0, n_bins=31)
     assert scale.shape == (31,) and hist.shape == (30,)
     assert k2.shape == (45, 180)
     n_beta, n_phi = k2.shape
@@ -125,8 +148,8 @@ def test_delta_distribution_is_solid_angle_weighted():
 
 
 def test_delta_distribution_is_deterministic():
-    a = o.kappasq_all_delta(0.2, 0.15, 0.25, 2.0, 31)
-    b = o.kappasq_all_delta(0.2, 0.15, 0.25, 2.0, 31)
+    a = _wobbling_delta(0.2, 0.15, 0.25, 2.0, 31)
+    b = _wobbling_delta(0.2, 0.15, 0.25, 2.0, 31)
     for x, y in zip(a, b):
         np.testing.assert_array_equal(x, y)
 
@@ -229,5 +252,5 @@ def test_a_single_point_convolution_is_a_single_bin():
 
 def test_empty_input_returns_empty():
     c, h = o.convolve_distance_with_k2_ratio(
-        np.empty(0), np.empty(0), np.array([1.0]), np.array([1.0]))
+        np.empty(0), np.empty(0), np.array([1.0]), np.array([1.0]), n_bins=256)
     assert c.size == 0 and h.size == 0

@@ -243,6 +243,29 @@ IMPBFFEXPORT std::vector<double> outer_product_histogram(
         const std::vector<double>& b, const std::vector<double>& weights_b,
         int n_bins, double lo, double hi);
 
+//! \f$R_{app} = R_{DA} \cdot (R_{app}/R_{DA})\f$, as a multiplicative convolution.
+/*!
+    The front door over #outer_product_histogram a FRET caller actually uses:
+    bin \p r_da against \p r_ratio, but report only the bins that carry weight
+    (the threshold is \f$10^{-10}\f$ of the peak) as `(centres, hist)` on one
+    floor with the range:
+    \f$[\min R_{DA} \cdot \min r, \max R_{DA} \cdot \max r]\f$. A range of zero
+    width is widened by half a bin on each side, as numpy's
+    `np.histogram`-with-a-point-range contract does. Empty input returns two
+    empty views.
+
+    \param[in] r_da,amp the donor distance distribution and its amplitudes
+    \param[in] r_ratio,weights_ratio the \f$R_{app}/R_{DA}\f$ distribution
+    \param[in] n_bins bins on the output axis
+    \param[out] out_centres,n_centres bin centres that carry weight
+    \param[out] out_hist,n_hist the corresponding weights
+*/
+IMPBFFEXPORT void convolve_distance_with_k2_ratio(
+        const std::vector<double>& r_da, const std::vector<double>& amp,
+        const std::vector<double>& r_ratio,
+        const std::vector<double>& weights_ratio, int n_bins,
+        double** out_centres, int* n_centres, double** out_hist, int* n_hist);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_LIFETIMESPECTRUM_H

@@ -105,6 +105,44 @@ std::vector<double> outer_product_histogram(
     return hist;
 }
 
+void convolve_distance_with_k2_ratio(
+        const std::vector<double>& r_da, const std::vector<double>& amp,
+        const std::vector<double>& r_ratio,
+        const std::vector<double>& weights_ratio, int n_bins,
+        double** out_centres, int* n_centres, double** out_hist, int* n_hist) {
+    if (r_da.empty() || r_ratio.empty() || n_bins <= 0) {
+        internal::new_double_view(0, out_centres, n_centres);
+        internal::new_double_view(0, out_hist, n_hist);
+        return;
+    }
+    double lo = *std::min_element(r_da.begin(), r_da.end()) *
+                *std::min_element(r_ratio.begin(), r_ratio.end());
+    double hi = *std::max_element(r_da.begin(), r_da.end()) *
+                *std::max_element(r_ratio.begin(), r_ratio.end());
+    if (!(hi > lo)) {   // every product identical: a delta, like numpy's range
+        lo -= 0.5;
+        hi += 0.5;
+    }
+    const std::vector<double> hist = outer_product_histogram(
+            r_da, amp, r_ratio, weights_ratio, n_bins, lo, hi);
+    double peak = 0.0;
+    for (std::size_t i = 0; i < hist.size(); ++i) peak = std::max(peak, hist[i]);
+
+    double* centres = internal::new_double_view(n_bins, out_centres, n_centres);
+    double* kept = internal::new_double_view(n_bins, out_hist, n_hist);
+    const double step = (hi - lo) / n_bins;
+    int n_kept = 0;
+    for (int i = 0; i < n_bins; ++i) {
+        if (hist[i] <= 1e-10 * peak) continue;
+        centres[n_kept] = lo + (i + 0.5) * step;
+        kept[n_kept] = hist[i];
+        ++n_kept;
+    }
+    // The views were sized for n_bins; shrink the published length to n_kept.
+    if (out_centres != NULL) *n_centres = n_kept;
+    if (out_hist != NULL) *n_hist = n_kept;
+}
+
 
 // --------------------------------------------------------------------------
 // LifetimeSpectrum

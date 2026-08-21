@@ -1,5 +1,32 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 1, batch 9: `photophysics.i` to C++
+
+`pyext/IMP_bff.photophysics.i` lost its one `%pythoncode` block (two dozen
+reshape/tuple-split wrappers) and the `FRETRegimes` `%extend` dict surface;
+the four `_function` renames are gone and the C++ kernels are the public flat
+surface. Interfaces that changed (prerelease; callers migrated):
+
+- `kappa(d0,d1,a0,a1)`/`kappa_distance(d1,d2,a1,a2)` are
+  `dipole_kappa_distance(d1,d2,a1,a2)` -> two-value `VectorDouble`; `kappasq`
+  is `wobbling_kappa2`.
+- `kappa2_distribution_wobbling_in_cone`/`kappasq_all_delta` are
+  `wobbling_kappa2_distribution`/`wobbling_kappa2_distribution_delta`: the
+  `scale`/`hist` out-collections are now passed in as `VectorDouble()` and
+  mutated in place; samples come back first (test helpers `_wobbling` /
+  `_wobbling_delta` reshape and re-split).
+- `kappa2_from_dipoles` -> `kappa2_dipole_matrix` (flat, caller reshapes to
+  `(n_d, n_a)`).
+- The convolution front door `convolve_distance_with_k2_ratio` was **moved
+  into C++** (`LifetimeSpectrum.h/.cpp`): it runs `outer_product_histogram`,
+  computes the product range, widens a zero-width (delta) range, and returns
+  only the bins carrying more than `1e-10` of the peak, as two managed views.
+- `FRETRegimes` no longer maps `["static"/"dynamic"/...]` (the dataclass dict
+  surface); its members are attributes.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** — only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 1, batch 8: `dyesampling.i` to C++
 
 `pyext/IMP_bff.dyesampling.i` lost its three `%pythoncode` blocks (the

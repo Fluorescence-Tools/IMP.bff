@@ -80,7 +80,7 @@ def test_the_package_works_with_numba_blocked():
         # exercise one kernel from each ported domain
         "pts = np.array([[0., 0., 0., 1.], [2., 0., 0., 1.]])\n"
         "assert _kernels.points_weighted_mean(pts.ravel())[0] == 1.0\n"
-        "assert abs(orientation.kappasq(0.0, 0.0, 0.0, 0.0, 0.0) - 2/3) < 1e-12\n"
+        "assert abs(orientation.wobbling_kappa2(0.0, 0.0, 0.0, 0.0, 0.0) - 2/3) < 1e-12\n"
         "d, _ = excited_state.simulate_photon_trace(100, np.zeros(10), 0.01, 4.0, random_seed=1)\n"
         "assert (d >= 0).all()\n"
         "print('ok')\n"

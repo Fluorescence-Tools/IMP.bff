@@ -64,6 +64,11 @@ def __init__(self, *args, **kwargs):
 %attribute_py(IMP::bff::LifetimeSpectrum, double, intensity_averaged_lifetime,
               get_intensity_averaged_lifetime);
 
+// `convolve_distance_with_k2_ratio` publishes its centres and weights as two
+// managed views; the names are unique to it, so this binds only that call.
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_centres, int* n_centres)};
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_hist, int* n_hist)};
+
 %include "IMP/bff/LifetimeSpectrum.h"
 
 // `decay` publishes a flat managed view (ARGOUTVIEWM_ARRAY1) whose 1-D shape is

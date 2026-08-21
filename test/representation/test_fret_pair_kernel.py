@@ -39,7 +39,6 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff import kappa2_from_dipoles
 from IMP.bff import fret_pair_efficiencies, fret_pair_geometry
 
 
@@ -60,7 +59,9 @@ def _reference(p1, w1, p2, w2, mu1=None, mu2=None):
         m2 = np.asarray(mu2, float)
         m1 = m1 / np.linalg.norm(m1, axis=1, keepdims=True)
         m2 = m2 / np.linalg.norm(m2, axis=1, keepdims=True)
-        kappa2 = kappa2_from_dipoles(m1, m2, r_vectors)
+        kappa2 = np.asarray(IMP.bff.kappa2_dipole_matrix(
+            m1.ravel(), m2.ravel(), r_vectors.ravel())).reshape(
+                m1.shape[0], m2.shape[0])
     return r, kappa2, weight
 
 
