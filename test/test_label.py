@@ -34,7 +34,7 @@ class TestDyeDistributionNormal:
             origin=np.array([5.0, 0.0, 0.0]),
             width=1.0,
         )
-        mp = dd.mean_position
+        mp = dd.get_mean_position()
         np.testing.assert_allclose(mp, [5.0, 0.0, 0.0], atol=1.0)
 
     def test_dRmp(self):

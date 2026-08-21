@@ -350,9 +350,9 @@ def test_the_array_door_computes_an_accessible_volume():
         np.array([1.7, 1.7, 1.7, 1.7]),
         np.array([2.0, 2.0, 2.0]),
     )
-    assert av.density.ndim == 3
-    assert av.points.shape[0] > 0
-    assert av.mean_position.shape == (3,)
+    assert av.get_density().reshape((av.get_ng(),) * 3).ndim == 3
+    assert av.get_points().reshape(-1, 4).shape[0] > 0
+    assert av.get_mean_position().shape == (3,)
 
 
 if __name__ == "__main__":

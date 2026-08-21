@@ -39,15 +39,20 @@ def _build(pdb_path, resolution):
 
 
 def _voxel_indices(av):
-    points = np.asarray(av.points, dtype=float)[:, :3]
-    origin = np.asarray(av.grid_origin, dtype=float)
-    return np.rint((points - origin) / float(av.grid_step)).astype(int)
+    points = np.asarray(av.get_points(), dtype=float).reshape(-1, 4)[:, :3]
+    origin = np.asarray(av.get_grid_origin(), dtype=float)
+    return np.rint((points - origin) / float(av.get_grid_step())).astype(int)
+
+
+def _density(av):
+    ng = av.get_ng()
+    return np.asarray(av.get_density(), dtype=float).reshape(ng, ng, ng)
 
 
 @pytest.mark.parametrize("resolution", [1.5, 2.0, 2.5])
 def test_every_cloud_point_indexes_to_an_occupied_voxel(pdb_path, resolution):
     av = _build(pdb_path, resolution)
-    density = np.asarray(av.density, dtype=float)
+    density = _density(av)
     idx = _voxel_indices(av)
     inside = np.all((idx >= 0) & (idx < np.array(density.shape)), axis=1)
     assert inside.all(), f"{(~inside).sum()} points index outside the grid"
@@ -65,7 +70,7 @@ def test_a_transposed_density_would_be_caught(pdb_path):
     fails it. Asserting that keeps it from silently becoming vacuous.
     """
     av = _build(pdb_path, 1.5)
-    density = np.asarray(av.density, dtype=float)
+    density = _density(av)
     idx = _voxel_indices(av)
     mirrored = np.ascontiguousarray(density.transpose(2, 1, 0))
     occupied = mirrored[idx[:, 0], idx[:, 1], idx[:, 2]] > 0
@@ -76,8 +81,8 @@ def test_a_transposed_density_would_be_caught(pdb_path):
 
 def test_the_occupied_voxel_count_matches_the_cloud(pdb_path):
     av = _build(pdb_path, 2.0)
-    density = np.asarray(av.density, dtype=float)
-    assert int((density > 0).sum()) == av.points.shape[0]
+    density = _density(av)
+    assert int((density > 0).sum()) == av.get_n_points()
 
 
 if __name__ == "__main__":

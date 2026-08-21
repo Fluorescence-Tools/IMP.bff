@@ -152,7 +152,8 @@ class Tests(unittest.TestCase):
             av = compute_av(xyz, vdw, source, kw["linker_length"],
                             kw["linker_width"], radii, kw["grid_resolution"],
                             kw["allowed_sphere_radius"])
-            return np.asarray(av.density, dtype=float)
+            ng = av.get_ng()
+            return np.asarray(av.get_density(), dtype=float).reshape(ng, ng, ng)
 
         R = (3.5, 2.5, 1.0)
         a3 = dens(R)

@@ -32,27 +32,32 @@ def pdb_path():
     return IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
 
 
+def _density(av):
+    ng = av.get_ng()
+    return np.asarray(av.get_density()).reshape(ng, ng, ng)
+
+
 @pytest.mark.parametrize("disc_step", [1.5, 2.0, 2.5])
 def test_disc_step_sets_the_grid_spacing(pdb_path, disc_step):
     av = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE),
                                            disc_step=disc_step)
-    assert av.grid_step == pytest.approx(disc_step)
+    assert av.get_grid_step() == pytest.approx(disc_step)
 
 
 def test_a_coarser_grid_is_a_smaller_array(pdb_path):
     fine = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE), disc_step=1.5)
     coarse = IMP.bff.compute_av_from_structure(pdb_path, dict(_SOURCE), disc_step=2.5)
-    assert np.prod(coarse.density.shape) < np.prod(fine.density.shape)
+    assert np.prod(_density(coarse).shape) < np.prod(_density(fine).shape)
     # Same cloud, so the physical extent survives the coarsening.
-    fine_extent = np.array(fine.density.shape) * fine.grid_step
-    coarse_extent = np.array(coarse.density.shape) * coarse.grid_step
+    fine_extent = np.array(_density(fine).shape) * fine.get_grid_step()
+    coarse_extent = np.array(_density(coarse).shape) * coarse.get_grid_step()
     assert coarse_extent == pytest.approx(fine_extent, rel=0.25)
 
 
 def test_an_agreeing_declaration_is_accepted(pdb_path):
     av = IMP.bff.compute_av_from_structure(
         pdb_path, dict(_SOURCE, simulation_grid_resolution=2.0), disc_step=2.0)
-    assert av.grid_step == pytest.approx(2.0)
+    assert av.get_grid_step() == pytest.approx(2.0)
 
 
 def test_a_disagreeing_declaration_raises(pdb_path):

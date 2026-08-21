@@ -147,8 +147,8 @@ class TestFRET:
         donor, acceptor = _states(32, 1), _states(48, 2)
         got = np.asarray(term.rate_constants(donor, acceptor))
         want = fret_rate_trace(
-            np.ascontiguousarray(donor.positions),
-            np.ascontiguousarray(acceptor.positions),
+            np.ascontiguousarray(donor.get_points().reshape(-1, 4)[:, :3]),
+            np.ascontiguousarray(acceptor.get_points().reshape(-1, 4)[:, :3]),
             R0=term.forster_radius, tau0=4.0, r_min=7.0, kappa2=None)
         np.testing.assert_allclose(got, want, rtol=1e-12)
 

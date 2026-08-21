@@ -231,6 +231,11 @@ ACV::ACV(const std::vector<double>& points, const std::vector<double>& density,
                            position_name),
           slow_centers_(slow_centers), slow_radius_(slow_radius),
           trapped_fraction_(trapped_fraction) {
+    // A single `slow_radius` is broadcast over every centre: a caller that has
+    // one sticky-sphere radius for every residue should not have to repeat it.
+    if (slow_radius_.size() == 1 && !slow_centers_.empty()) {
+        slow_radius_.assign(slow_centers_.size() / 3, slow_radius_[0]);
+    }
     if (!density_.empty() && !slow_centers_.empty()) {
         update_contact_density();
     }

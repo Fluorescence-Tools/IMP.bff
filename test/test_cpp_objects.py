@@ -247,13 +247,13 @@ def test_a_spectrum_is_a_value_not_a_handle():
 
 
 def test_an_av_carries_no_grid_when_it_was_built_from_points():
-    """``density`` is ``None``, not an empty array: every consumer tests it."""
+    """``get_density()`` is empty, not an error: every consumer tests size."""
     pts = np.ascontiguousarray(np.random.default_rng(0).random((40, 4)))
     av = IMP.bff.AccessibleVolume(points=pts, position_name="donor")
-    assert av.density is None
-    assert av.grid_origin is None
-    assert av.n_points == 40
-    assert av.points.shape == (40, 4)
+    assert av.get_density().size == 0
+    assert av.get_grid_origin().size == 0
+    assert av.get_n_points() == 40
+    assert av.get_points().reshape(-1, 4).shape == (40, 4)
 
 
 if __name__ == "__main__":
