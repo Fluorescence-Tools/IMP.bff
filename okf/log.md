@@ -1,5 +1,50 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 2, batch 12: `fps.i` to C++
+
+`pyext/IMP_bff.fps.i` lost its entire `%pythoncode` block (the module
+constants, the `_fields_as_dict` tables, the `to_json_schema`/`validate_*`
+dict bridges and the `_io.read_*`/`_write_*` wrappers) and all eleven
+`_function` renames. The C++ `fps_json_schema`, `validate_position`,
+`validate_distance`, `fps_schema_validate`, `read_old_lps_txt`,
+`read_old_distances_txt`, `read_fps_json`, `write_fps_json`,
+`fps_positions_for_docking`, `read_evaluators_json`, `write_evaluators_json`,
+`fps_simulation_types`, `fps_av_simulation_types`, `fps_distance_types`,
+`fps_position_fields` etc. are the public surface, speaking JSON text (a dict
+is passed with `json.dumps(...)`; a returned `FPSDocument`'s sections are JSON
+text the caller parses).
+
+Interfaces that changed (prerelease; every caller migrated):
+
+- `read_fps_json(str(path))` returns an `FPSDocument`; `positions`/`distances`/
+  `score_sets`/`extra` are JSON strings, not dicts. No `p, d, s, e =` unpack.
+- `write_fps_json(str(path), json.dumps(...), ..., validate=True)`.
+- The module constants (`SIMULATION_TYPES`, `AV_SIMULATION_TYPES`,
+  `DISTANCE_TYPES`, `SCHEMA_VERSION`, `POSITION_FIELDS`, ...) are the calls
+  (`fps_simulation_types()`, `fps_av_simulation_types()`,
+  `fps_distance_types()`, `fps_schema_version()`, ...); the io shim re-exports
+  the calls.
+- `validate_position`/`validate_distance`/`fps_schema_validate` take JSON text
+  and return an `FPSValidation` (`.errors`/`.warnings` tuples, `.is_valid`).
+- `histogram_rda(s1, s2)` gained defaults (empty axis spans the sample, its
+  own `n_samples + 1` edges, normalized) so the "just a histogram" caller works
+  without naming an axis.
+
+Migrated consumers: `test/io/test_fps_schema.py`, `test/io/test_formats.py`,
+`test/test_AVNetworkRestraint.py`, `pyext/IMP_bff.docking.i` (the
+`_FPS_JSON_CACHE` conversion, now preserving `doc.*` JSON directly),
+`pyext/IMP_bff.rotamer.i` (`read_rotamer_fps`, `write_rotamer_fps`), and
+`pyext/IMP_bff.rotamer_ensemble.i` (`rotamer_ensembles_from_fps`). The
+`RotamerEnsemble` subclass gained the `States` attribute surface (`points`,
+`orientations`, `params`, `mean_position`, ...) over the C++ get_*/set_*
+methods, and its pair-physics methods now adapt a plain `AccessibleVolume`
+other as well. `load_rotamer_library_dcd` fixed at its single consumer to
+pass `str(...)` paths (the old wrapper str'd them). cgdye/rotamer (24 tests)
+green.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** -- only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 2, batch 11: `avmeandistance.i` to C++ (Phase-1 stragglers clear)
 
 `pyext/IMP_bff.avmeandistance.i` lost the `%extend %pythoncode` property block

@@ -147,20 +147,36 @@ double model_distance(const States& s1, const States& s2,
 void histogram_rda(const States& s1, const States& s2,
                    const std::vector<double>& axis, int n_samples,
                    bool normalize, double** out_view, int* n_out_view) {
-    const std::size_t n_bins = axis.size() > 1 ? axis.size() - 1 : 0;
-    double* out = internal::new_double_view(n_bins, out_view, n_out_view);
-    if (out == NULL || n_bins == 0) return;
-
     std::vector<double> d, w;
     sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+
+    std::vector<double> used_axis = axis;
+    if (used_axis.size() < 2) {
+        // No axis given: span the sample. One edge per sample distance, closed
+        // at the upper end -- `n_samples + 1` edges, `n_samples` bins.
+        const int n_b = n_samples > 0 ? n_samples : 1;
+        used_axis.resize(static_cast<std::size_t>(n_b) + 1);
+        for (int b = 0; b <= n_b; ++b)
+            used_axis[static_cast<std::size_t>(b)] =
+                    static_cast<double>(b) / n_b;
+        double r_max = 0.0;
+        for (std::size_t i = 0; i < d.size(); ++i) r_max = std::max(r_max, d[i]);
+        if (r_max <= 0.0) r_max = 1.0;
+        for (std::size_t b = 0; b < used_axis.size(); ++b)
+            used_axis[b] *= r_max;
+    }
+
+    const std::size_t n_bins = used_axis.size() > 1 ? used_axis.size() - 1 : 0;
+    double* out = internal::new_double_view(n_bins, out_view, n_out_view);
+    if (out == NULL || n_bins == 0) return;
 
     double total = 0.0;
     for (std::size_t i = 0; i < d.size(); ++i) {
         const double r = d[i];
-        if (r < axis.front() || r > axis.back()) continue;
+        if (r < used_axis.front() || r > used_axis.back()) continue;
         // Upper edge closed, as numpy's histogram has it.
         std::size_t b = 0;
-        while (b + 1 < n_bins && r >= axis[b + 1]) ++b;
+        while (b + 1 < n_bins && r >= used_axis[b + 1]) ++b;
         out[b] += w[i];
         total += w[i];
     }

@@ -148,12 +148,16 @@ class R1PositionsTests(unittest.TestCase):
             # the C++ side warns loudly when it meets a non-AV simulation_type
             self.assertIn("simulation_type 'R1'", _run(mixed))
             # the Python filter is what a docking run must apply first
-            kept_p, kept_d = fio.fps_positions_for_docking(positions, distances)
+            kept_doc = fio.fps_positions_for_docking(
+                json.dumps(positions), json.dumps(distances))
+            kept_p = json.loads(kept_doc.positions)
+            kept_d = json.loads(kept_doc.distances)
             self.assertNotIn("r1_probe", kept_p)
             self.assertNotIn("r1_probe_dist", kept_d)
             self.assertEqual(set(kept_p), set(positions) - {"r1_probe"})
             clean = os.path.join(tmp, "clean.fps.json")
-            fio.write_fps_json(clean, kept_p, kept_d, payload.get("χ²", {}), validate=True)
+            fio.write_fps_json(clean, json.dumps(kept_p), json.dumps(kept_d),
+                               json.dumps(payload.get("χ²", {})))
             self.assertNotIn("simulation_type", _run(clean))
 
 

@@ -9,10 +9,9 @@ dialects of one format come to exist without anyone deciding.
 * ``fps.json`` -- the authored definition (every field mapped to its flrCIF item
   where the dictionary defines one), the one reader and writer, and the legacy
   C# FPS ``.txt`` formats, **read only**. All C++ now:
-  `include/IMP/bff/FPSSchema.h` and `FPSIO.h`, with the marshalling in
-  `pyext/IMP_bff.fps.i`. A format nobody can still read is data that has been
-  lost, and a decade of measurements live in those ``.txt`` files; nothing
-  should write them again.
+  `include/IMP/bff/FPSSchema.h` and `FPSIO.h`. The C++ functions speak JSON
+  text -- a caller passes a dict as `json.dumps(...)` and parses the returned
+  text with `json.loads`.
 * :mod:`IMP.bff.io.cif` -- BinaryCIF and mmCIF for dye templates and force
   fields.
 * PDB, MOL2, mmCIF, DCD and coordinate comparison -- C++, in
@@ -24,18 +23,16 @@ Moved out of ``fret/`` by PRD-113 stage 7 and split three ways there. One module
 held all of it, which is how ``fret/io.py`` came to be the thing that writes
 PDBs -- and why ``IMP.bff.fret.read_fps_json`` no longer exists.
 
-Port status (PRD-117): 3 of 17 names are C++-covered (``AV_SIMULATION_TYPES``
-et al.); the remaining 14 (``read_fps_json``/``write_*``, ``load_structure*``,
-``read_dcd``/``read_trajectory``, ``write_pdb``, the evaluators, ``compute_rmsd``)
-are %pythoncode across ``fps.i``/``cif.i``/``structureio.i`` and still to port.
-Pure re-export -- holds no logic of its own to move.
+Port status (PRD-117): 15 of 17 names are C++-covered; the remaining 2
+(``write_rmf`` and the lazy RMF writers) cannot be C++ without widening
+`required_modules`. Pure re-export -- holds no logic of its own to move.
 """
 
 from IMP.bff import (  # noqa: F401
-    AV_SIMULATION_TYPES,
-    DISTANCE_TYPES,
-    SIMULATION_TYPES,
+    fps_av_simulation_types,
+    fps_distance_types,
     fps_positions_for_docking,
+    fps_simulation_types,
     read_evaluators_json,
     read_fps_json,
     read_old_distances_txt,
@@ -54,8 +51,8 @@ from IMP.bff import (  # noqa: F401
 )
 
 __all__ = [
-    "AV_SIMULATION_TYPES", "DISTANCE_TYPES", "SIMULATION_TYPES",
-    "fps_positions_for_docking", "read_evaluators_json", "read_fps_json",
+    "fps_av_simulation_types", "fps_distance_types", "fps_positions_for_docking",
+    "fps_simulation_types", "read_evaluators_json", "read_fps_json",
     "read_old_distances_txt", "read_old_lps_txt", "write_evaluators_json",
     "write_fps_json",
     "compute_rmsd", "load_structure", "load_structure_with_particles",

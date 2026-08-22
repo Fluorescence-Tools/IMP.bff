@@ -76,10 +76,16 @@ IMPBFFEXPORT double model_distance(const States& s1, const States& s2,
                                    int n_samples = 50000);
 
 //! \f$p(R_{DA})\f$ over \p axis (bin edges), weighted by the pair weights.
+/*! An empty \p axis (the default) spans the sample: bin edges on
+    \f$[0, R_{max}]\f$ of \p n_samples pairs, \p n_samples + 1 edges (one more
+    than the default sample count) -- the shape a caller wanting "just a
+    histogram" gets. \p normalize scales the counts to sum to 1. */
 IMPBFFEXPORT void histogram_rda(const States& s1, const States& s2,
-                                const std::vector<double>& axis, int n_samples,
-                                bool normalize, double** out_view,
-                                int* n_out_view);
+                                const std::vector<double>& axis =
+                                        std::vector<double>(),
+                                int n_samples = 50000, bool normalize = true,
+                                double** out_view = NULL,
+                                int* n_out_view = NULL);
 
 //! Fit \f$R_{mp} \to \langle R_{DA}\rangle\f$ (or \f$R_E\f$) by translation.
 /*!

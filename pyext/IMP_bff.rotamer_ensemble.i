@@ -5,6 +5,8 @@
  */
 
 %pythoncode %{
+import json as _json
+
 class RotamerEnsemble(States):
     """A rotamer library placed and screened at one labelling site (fps ``R1``).
 
@@ -47,9 +49,12 @@ class RotamerEnsemble(States):
         chain: str = "",
         residue: int = 0,
     ):
+        p = IMP.bff.MapStringString()
+        for k, v in (params or {}).items():
+            p[k] = v if isinstance(v, str) else str(v)
         States.__init__(
             self, points=points, attachment_point=attachment_point,
-            orientations=mu, position_name=position_name, params=params or {})
+            orientations=mu, position_name=position_name, params=p)
         self.atoms = (np.zeros((0, 0, 3)) if atoms is None
                       else np.asarray(atoms, dtype=np.float64))
         self.atom_names = tuple(atom_names)
@@ -69,6 +74,64 @@ class RotamerEnsemble(States):
     @mu.setter
     def mu(self, value):
         self.orientations = value
+
+    # -- the States surface, as the attribute names callers have always used ---
+    # The base `States` is a C++ value behind get_*()/set_*()`; these properties
+    # restore the dataclass attribute surface this subclass used (points,
+    # orientations, params, ...) on top of it.
+    @property
+    def points(self) -> np.ndarray:
+        return np.asarray(self.get_points(), dtype=np.float64).reshape(-1, 4)
+
+    @points.setter
+    def points(self, value):
+        self.set_points(np.ascontiguousarray(
+            np.asarray(value, dtype=np.float64)).ravel())
+
+    @property
+    def attachment_point(self) -> np.ndarray:
+        return np.asarray(self.get_attachment_point(), dtype=np.float64)
+
+    @attachment_point.setter
+    def attachment_point(self, value):
+        self.set_attachment_point(np.asarray(value, dtype=np.float64).ravel())
+
+    @property
+    def orientations(self) -> np.ndarray:
+        o = np.asarray(self.get_orientations(), dtype=np.float64)
+        return o.reshape(-1, 3) if o.size else o
+
+    @orientations.setter
+    def orientations(self, value):
+        self.set_orientations(np.ascontiguousarray(
+            np.asarray(value, dtype=np.float64)).ravel())
+
+    @property
+    def params(self) -> dict:
+        return dict(self.get_params())
+
+    @params.setter
+    def params(self, value):
+        m = IMP.bff.MapStringString()
+        for k, v in (value or {}).items():
+            m[k] = v if isinstance(v, str) else str(v)
+        self.set_params(m)
+
+    @property
+    def mean_position(self) -> np.ndarray:
+        return np.asarray(self.get_mean_position(), dtype=np.float64)
+
+    @property
+    def position_name(self) -> str:
+        return self.get_position_name()
+
+    @position_name.setter
+    def position_name(self, value):
+        self.set_position_name(str(value))
+
+    @property
+    def n_points(self) -> int:
+        return self.get_n_points()
 
     def __repr__(self) -> str:
         return (f"RotamerEnsemble({self.n_rotamers} rotamers, "
@@ -181,20 +244,65 @@ class RotamerEnsemble(States):
         return int(self.points.shape[0])
 
     # -- pair physics ------------------------------------------------------
+    @staticmethod
+    def _pts4(obj):
+        """The `(N, 4)` points of any `States` (ensemble or AV value)."""
+        if isinstance(obj, RotamerEnsemble):
+            return obj.points
+        p = np.asarray(obj.get_points(), dtype=np.float64)
+        return p.reshape(-1, 4)
+
+    @staticmethod
+    def _mu_of(obj):
+        """The `(N, 3)` dipoles of any `States`, or None."""
+        mu = getattr(obj, "mu", None)
+        if mu is not None:
+            return mu
+        o = np.asarray(obj.get_orientations(), dtype=np.float64)
+        return o.reshape(-1, 3) if o.size else None
+
     def pair_geometry(self, other: "RotamerEnsemble") -> dict:
         """R_ij, κ²_ij and w_i·w_j against another ensemble (or any AV: κ² = 2/3)."""
-        mu_other = getattr(other, "mu", None)
-        if mu_other is not None and np.asarray(mu_other).shape[0] != other.points.shape[0]:
-            mu_other = None
-        return fret_pair_geometry(self.centres, self.weights, other.points[:, :3], other.points[:, 3], self.mu, mu_other)
+        op = self._pts4(other)
+        om = self._mu_of(other)
+        if om is not None and om.shape[0] != op.shape[0]:
+            om = None
+        g = fret_pair_geometry(self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om)
+        n1, n2 = g.n1, g.n2
+        return {
+            "R": np.asarray(g.R, dtype=np.float64).reshape(n1, n2),
+            "kappa2": np.asarray(g.kappa2, dtype=np.float64).reshape(n1, n2),
+            "weight": np.asarray(g.weight, dtype=np.float64).reshape(n1, n2),
+            "kappa2_avg": g.kappa2_avg,
+        }
 
     def pair_distribution(self, other: "RotamerEnsemble", forster_radius: float, tau0: Optional[float] = None) -> dict:
         """The pair's FRET rate distribution and averages (see ``fret.distance.fret_pair_efficiencies``).
 
         ``forster_radius`` in Å for κ² = 2/3.
         """
-        geometry = self.pair_geometry(other)
-        return fret_pair_efficiencies(geometry, forster_radius, tau0)
+        g = self.pair_geometry(other)
+        op = self._pts4(other)
+        om = self._mu_of(other)
+        if om is not None and om.shape[0] != op.shape[0]:
+            om = None
+        eff = fret_pair_efficiencies(
+            fret_pair_geometry(
+                self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om),
+            forster_radius, tau0)
+        n1, n2 = eff.n1, eff.n2
+        return {
+            "R": np.asarray(eff.R, dtype=np.float64).reshape(n1, n2),
+            "kappa2": np.asarray(eff.kappa2, dtype=np.float64).reshape(n1, n2),
+            "weight": np.asarray(eff.weight, dtype=np.float64).reshape(n1, n2),
+            "k_fret": np.asarray(eff.get_k_fret(), dtype=np.float64).reshape(n1, n2),
+            "E": np.asarray(eff.get_E(), dtype=np.float64).reshape(n1, n2),
+            "rate_ratio": np.asarray(eff.get_rate_ratio(), dtype=np.float64).reshape(n1, n2),
+            "static": eff.static_efficiency,
+            "dynamic1": eff.dynamic1,
+            "dynamic2": eff.dynamic2,
+            "kappa2_avg": eff.kappa2_avg,
+        }
 
     def fret_efficiencies(
         self,
@@ -217,8 +325,17 @@ class RotamerEnsemble(States):
             # FRETpredict applies its k2-dependent R0 with the isotropic formula
             # 1/(1 + (2/3/k2)(r/R0)^6); fret_pair_efficiencies expects R0 at k2 = 2/3
             forster_radius = r0_nm * 10.0
-            return fret_pair_efficiencies(geometry, forster_radius)
-        return fret_pair_efficiencies(geometry, forster_radius)
+        op = self._pts4(other)
+        om = self._mu_of(other)
+        if om is not None and om.shape[0] != op.shape[0]:
+            om = None
+        eff = fret_pair_efficiencies(
+            fret_pair_geometry(
+                self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om),
+            forster_radius)
+        return {"static": eff.static_efficiency, "dynamic1": eff.dynamic1,
+                "dynamic2": eff.dynamic2, "kappa2_avg": eff.kappa2_avg,
+                "forster_radius_nm": forster_radius / 10.0}
 
 
 def rotamer_ensembles_from_fps(
@@ -236,9 +353,7 @@ def rotamer_ensembles_from_fps(
     for AV-only files. Positions without a library are skipped. ``kwargs`` go
     to :meth:`RotamerEnsemble.from_site`.
     """
-        # (was: from .fps import ...) -- now in this module
-
-    positions, _distances, _score_sets, _extra = read_fps_json(fps_json)
+    positions = _json.loads(read_fps_json(str(fps_json)).positions)
     frame = _frame(structure, frame_index)
     library_map = dict(library_map or {})
     out: Dict[str, RotamerEnsemble] = {}

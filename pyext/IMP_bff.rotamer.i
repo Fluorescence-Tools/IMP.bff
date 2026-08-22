@@ -226,7 +226,11 @@ def read_rotamer_fps(
         Donor position, acceptor position, distance, positions, distances,
         and extra payload.
     """
-    positions, distances, score_sets, extra = read_fps_json(path)
+    doc = read_fps_json(str(path))
+    positions = json.loads(doc.positions)
+    distances = json.loads(doc.distances)
+    score_sets = json.loads(doc.score_sets)
+    extra = json.loads(doc.extra)
     if not distances:
         raise ValueError(f"No distances found in {path}")
     if distance_name is None:
@@ -370,16 +374,17 @@ def distances_from_ensembles(
         mu1 = getattr(e1, "mu", None) if kappa2 == "dipoles" else None
         mu2 = getattr(e2, "mu", None) if kappa2 == "dipoles" else None
         geometry = fret_pair_geometry(e1.points[:, :3], e1.points[:, 3], e2.points[:, :3], e2.points[:, 3], mu1, mu2)
-        w = geometry["weight"]
+        w = np.asarray(geometry.get_weight()).reshape(e1.points.shape[0], e2.points.shape[0])
+        R = np.asarray(geometry.get_R()).reshape(e1.points.shape[0], e2.points.shape[0])
         if distance_type == "RDAMean":
-            value = float(np.sum(geometry["R"] * w))
+            value = float(np.sum(R * w))
         elif distance_type == "Rmp":
             value = float(np.linalg.norm(e1.mean_position - e2.mean_position))
         else:
             eff = fret_pair_efficiencies(geometry, forster_radius)
-            mean_e = eff["static"]
+            mean_e = eff.static_efficiency
             if mean_e <= 0:
-                value = float(np.sum(geometry["R"] * w))
+                value = float(np.sum(R * w))
             elif mean_e >= 1:
                 value = 0.0
             else:
@@ -419,12 +424,18 @@ def write_rotamer_fps(
     score_sets: dict[str, Any] = {}
     extra: dict[str, Any] = {}
     if merge_into is not None:
-        p0, d0, score_sets, extra = read_fps_json(merge_into)
+        doc = read_fps_json(str(merge_into))
+        p0 = json.loads(doc.positions)
+        d0 = json.loads(doc.distances)
+        score_sets = json.loads(doc.score_sets)
+        extra = json.loads(doc.extra)
         all_positions.update(p0)
         all_distances.update(d0)
     all_positions.update(positions)
     all_distances.update(distances or {})
-    write_fps_json(path, all_positions, all_distances, score_sets or None, extra or None, validate=validate)
+    write_fps_json(str(path), json.dumps(all_positions), json.dumps(all_distances),
+                   json.dumps(score_sets or {}), json.dumps(extra or {}),
+                   validate=validate)
 
 
 # --------------------------------------------------------------------------
@@ -767,12 +778,15 @@ def load_rotamer_library(
         stem = path.stem.split("_cutoff")[0]
         pdb_path = path.with_name(f"{stem}.pdb")
         weights_path = path.with_name(f"{path.stem}_weights.txt")
-        ref = load_rotamer_library_dcd(pdb_path, path, weights_path if weights_path.exists() else None)
-        coords = np.asarray(ref["coords"], dtype=np.float64)
-        weights = np.asarray(ref["weights"], dtype=np.float64)
+        ref = load_rotamer_library_dcd(
+            str(pdb_path), str(path),
+            str(weights_path) if weights_path.exists() else "")
+        coords = np.asarray(ref.get_coords(), dtype=np.float64).reshape(
+            ref.n_frames, ref.n_atoms, 3)
+        weights = np.asarray(ref.get_weights(), dtype=np.float64)
         library = {
             "id": list(range(1, coords.shape[0] + 1)),
-            "atom_names": [str(n) for n in ref["atom_names"]],
+            "atom_names": [str(n) for n in ref.atom_names],
             "transitions": None,
         }
     elif suffix == ".rmf3":
@@ -1237,20 +1251,22 @@ class RotamerFRET:
         """
         donor = self._ensemble(self.lib_1, frame, self.chains[0], self.residues[0])
         acceptor = self._ensemble(self.lib_2, frame, self.chains[1], self.residues[1])
-        geometry = donor.pair_geometry(acceptor)
-        k2_avg = geometry["kappa2_avg"]
+        geom = fret_pair_geometry(
+            donor.points[:, :3], donor.points[:, 3],
+            acceptor.points[:, :3], acceptor.points[:, 3], donor.mu, acceptor.mu)
+        k2_avg = geom.kappa2_avg
         if not self.fixed_R0:
             self.r0 = forster_radius_from_spectra(self.donor, self.acceptor, k2_avg,
                                                   library_cif="" if self.r0lib is None else str(self.r0lib))
             if self.r0 == 0:
                 return FRETFrameResult((donor.partition, acceptor.partition), float("nan"), float("nan"), float("nan"), float("nan"))
-        eff = fret_pair_efficiencies(geometry, float(self.r0) * 10.0)   # r0 in nm, geometry in A
+        eff = fret_pair_efficiencies(geom, float(self.r0) * 10.0)   # r0 in nm, geometry in A
         return FRETFrameResult(
             (donor.partition, acceptor.partition),
             k2_avg,
-            eff["static"],
-            eff["dynamic1"],
-            eff["dynamic2"],
+            eff.static_efficiency,
+            eff.dynamic1,
+            eff.dynamic2,
         )
 
     def trajectory_analysis(self) -> None:

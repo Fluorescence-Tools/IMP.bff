@@ -74,8 +74,15 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
 def test_fps_json_roundtrip(tmp_path: Path) -> None:
     """Generic fps.json read/write helpers round-trip payload data."""
     path = tmp_path / "labels.fps.json"
-    fps.write_fps_json(path, {"p": {"residue_seq_number": 1}}, {"d": {"position1_name": "p", "position2_name": "p"}}, {"s": {}})
-    positions, distances, score_sets, extra = fps.read_fps_json(path)
+    fps.write_fps_json(str(path), json.dumps({"p": {"residue_seq_number": 1}}),
+                       json.dumps({"d": {"position1_name": "p",
+                                         "position2_name": "p"}}),
+                       json.dumps({"s": {}}))
+    doc = fps.read_fps_json(str(path))
+    positions = json.loads(doc.positions)
+    distances = json.loads(doc.distances)
+    score_sets = json.loads(doc.score_sets)
+    extra = json.loads(doc.extra)
     assert positions["p"]["residue_seq_number"] == 1
     assert distances["d"]["position1_name"] == "p"
     assert score_sets == {"s": {}}

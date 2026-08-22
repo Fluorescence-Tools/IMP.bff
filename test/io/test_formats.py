@@ -24,52 +24,45 @@ def test_fps_json_roundtrip(tmp_path):
                         "Forster_radius": 52.0}}
     score_sets = {"all": {"distances": ["d1"]}}
     extra = {"FlexFit": {"anything": 1}}
-    fio.write_fps_json(path, positions, distances, score_sets, extra,
-                       validate=True)
-    p, d, s, e = fio.read_fps_json(path, validate=True)
-    assert p == positions
-    assert d == distances
-    assert s == score_sets
-    assert e == extra
+    fio.write_fps_json(str(path), json.dumps(positions), json.dumps(distances),
+                       json.dumps(score_sets), json.dumps(extra), validate=True)
+    doc = fio.read_fps_json(str(path), validate=True)
+    assert json.loads(doc.positions) == positions
+    assert json.loads(doc.distances) == distances
+    assert json.loads(doc.score_sets) == score_sets
+    assert json.loads(doc.extra) == extra
 
 
 def test_write_fps_json_validate_refuses_nonconforming(tmp_path):
     path = tmp_path / "bad.fps.json"
     with pytest.raises(ValueError, match="non-conforming"):
         fio.write_fps_json(
-            path, {"p": {"linker_length": "long"}}, {}, validate=True)
+            str(path), json.dumps({"p": {"linker_length": "long"}}), "{}",
+            validate=True)
     assert not path.exists()
 
 
 def test_read_fps_json_reads_shipped_example():
-    p, d, s, extra = fio.read_fps_json(
-        REPO / "examples" / "structure" / "T4L" / "fret.fps.json",
+    doc = fio.read_fps_json(
+        str(REPO / "examples" / "structure" / "T4L" / "fret.fps.json"),
         validate=True)
+    p = json.loads(doc.positions)
+    d = json.loads(doc.distances)
+    s = json.loads(doc.score_sets)
+    extra = json.loads(doc.extra)
     assert len(p) == 17
     assert len(d) == 99
     assert len(s) == 7
     assert extra == {}
 
 
-def test_evaluators_roundtrip_with_and_without_factory(tmp_path):
+def test_evaluators_roundtrip(tmp_path):
     path = tmp_path / "labels.fps.json"
-    fio.write_fps_json(path, {}, {})
-    fio.write_evaluators_json(
-        path, [{"type": "distance", "cutoff": 30.0}])
-    raw = fio.read_evaluators_json(path)
+    fio.write_fps_json(str(path), "{}", "{}")
+    fio.write_evaluators_json(str(path), json.dumps(
+        [{"type": "distance", "cutoff": 30.0}]))
+    raw = json.loads(fio.read_evaluators_json(str(path)))
     assert raw == [{"type": "distance", "cutoff": 30.0}]
-
-    class Ev:
-        def __init__(self, d):
-            self.d = d
-
-    made = fio.read_evaluators_json(path, factory=Ev)
-    assert len(made) == 1 and made[0].d["cutoff"] == 30.0
-
-    def broken(d):
-        raise RuntimeError("no")
-
-    assert fio.read_evaluators_json(path, factory=broken) == []
 
 
 def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
@@ -88,8 +81,11 @@ def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
         "RDAMeanE\n"
         "site1 site2 45.7 4.5 4.6 52.0\n")
 
-    positions, distances, score_sets, extra = fio.read_fps_json(
-        lps, pdb_paths=[str(pdb)])
+    doc = fio.read_fps_json(str(lps), pdb_paths=[str(pdb)])
+    positions = json.loads(doc.positions)
+    distances = json.loads(doc.distances)
+    score_sets = json.loads(doc.score_sets)
+    extra = json.loads(doc.extra)
     assert positions["site1"]["atom_name"] == "CB"
     assert positions["site1"]["residue_seq_number"] == 12
     assert positions["site1"]["simulation_type"] == "AV1"
@@ -104,8 +100,8 @@ def test_read_old_lps_txt_av1_av3_xyz(tmp_path):
     assert score_sets == {} and extra == {}
     # the converted payload conforms to the schema
     import IMP.bff as fps_schema
-    errors, _ = fps_schema.fps_schema_validate(
-        {"Positions": positions, "Distances": distances})
+    errors = fps_schema.fps_schema_validate(json.dumps(
+        {"Positions": positions, "Distances": distances})).errors
     assert not errors, errors
 
 

@@ -98,11 +98,11 @@ def ensure_fps_json(fps_path: str, pdb_paths: Sequence[str]) -> str:
         return cached
     import tempfile
 
-    positions, distances, score_sets, extra = _io.read_fps_json(
-        p, pdb_paths=list(pdb_paths))
+    doc = _io.read_fps_json(p, pdb_paths=list(pdb_paths))
     fd, out = tempfile.mkstemp(suffix=".fps.json", prefix="fps_")
     os.close(fd)
-    _io.write_fps_json(out, positions, distances, score_sets or None, extra or None)
+    _io.write_fps_json(out, doc.positions, doc.distances,
+                       doc.score_sets, doc.extra)
     _FPS_JSON_CACHE[key] = out
     return out
 

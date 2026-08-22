@@ -173,12 +173,17 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
 
     out = tmp_path / "rotamer.fps.json"
     write_rotamer_fps(out, positions, distances)                    # validated on write
-    p, dist, _s, _e = read_fps_json(out)
+    doc = read_fps_json(str(out))
+    p = json.loads(doc.positions)
+    dist = json.loads(doc.distances)
     assert set(p) == {"d1", "a1"} and set(dist) == {"d1_a1"}
-    errors, warnings = fps_schema.fps_schema_validate({"Positions": p, "Distances": dist})
-    assert errors == []
+    errors = fps_schema.fps_schema_validate(json.dumps(
+        {"Positions": p, "Distances": dist})).errors
+    assert not errors
     # what the C++ scorer may see: no R1 positions, no dangling distances
-    kept_p, kept_d = fps_positions_for_docking(p, dist)
+    kept_doc = fps_positions_for_docking(json.dumps(p), json.dumps(dist))
+    kept_p = json.loads(kept_doc.positions)
+    kept_d = json.loads(kept_doc.distances)
     assert kept_p == {} and kept_d == {}
     # merge into an AV-style file keeps the AV positions and adds R1
     av_file = tmp_path / "av.fps.json"
@@ -187,9 +192,13 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
                              "simulation_type": "AV1", "linker_length": 20.0, "linker_width": 4.5, "radius1": 3.5}},
         "Distances": {}}))
     write_rotamer_fps(out, positions, distances, merge_into=av_file)
-    p, dist, _s, _e = read_fps_json(out)
+    doc = read_fps_json(str(out))
+    p = json.loads(doc.positions)
+    dist = json.loads(doc.distances)
     assert set(p) == {"p1", "d1", "a1"}
-    kept_p, kept_d = fps_positions_for_docking(p, dist)
+    kept_doc = fps_positions_for_docking(json.dumps(p), json.dumps(dist))
+    kept_p = json.loads(kept_doc.positions)
+    kept_d = json.loads(kept_doc.distances)
     assert set(kept_p) == {"p1"} and kept_d == {}
     # the ensembles come back from the file
     ens = rotamer_ensembles_from_fps(out, hsp90_path(pair), temperature=293, electrostatic=True)
@@ -198,13 +207,16 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
 
 def test_r1_requires_a_library():
     import IMP.bff as fps_schema
-    errors, _ = fps_schema.validate_position({"chain_identifier": "A", "residue_seq_number": 1,
-                                              "atom_name": "CA", "simulation_type": "R1"}, "x")
+    report = fps_schema.validate_position(json.dumps(
+        {"chain_identifier": "A", "residue_seq_number": 1,
+         "atom_name": "CA", "simulation_type": "R1"}), "x")
+    errors = report.errors
     assert any("rotamer_library" in e for e in errors)
-    errors, warnings = fps_schema.validate_position(
-        {"chain_identifier": "A", "residue_seq_number": 1, "atom_name": "CA", "simulation_type": "R1",
-         "rotamer_library": "AlexaFluor 488 C1R cutoff30", "linker_length": 20.0}, "x")
-    assert errors == [] and any("AV parameter" in w for w in warnings)
+    report = fps_schema.validate_position(json.dumps(
+        {"chain_identifier": "A", "residue_seq_number": 1, "atom_name": "CA",
+         "simulation_type": "R1", "rotamer_library": "AlexaFluor 488 C1R cutoff30",
+         "linker_length": 20.0}), "x")
+    assert not report.errors and any("AV parameter" in w for w in report.warnings)
 
 
 def hsp90_path(pair):
