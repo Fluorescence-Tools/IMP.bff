@@ -18,8 +18,6 @@
 IMP_SWIG_OBJECT(IMP::bff, AVMeanDistanceRestraint, AVMeanDistanceRestraints);
 IMP_SWIG_VALUE(IMP::bff, PositionUncertainty, PositionUncertainties);
 
-%rename(_estimate_position_uncertainty) IMP::bff::estimate_position_uncertainty;
-
 %feature("shadow") IMP::bff::AVMeanDistanceRestraint::AVMeanDistanceRestraint %{
 def __init__(self, m, av1, av2, dist, sigma=6.0, weight=1.0):
     """Score the separation of two mean dye positions against a measurement.
@@ -45,72 +43,14 @@ def __init__(self, m, av1, av2, dist, sigma=6.0, weight=1.0):
 %include "IMP/bff/AVMeanDistanceRestraint.h"
 %include "IMP/bff/ModelPrecision.h"
 
-%extend IMP::bff::PositionUncertainty {
-    %pythoncode %{
-        @property
-        def rmsf(self):
-            """Per-atom RMSF about the mean structure, A."""
-            return _IMP_bff.PositionUncertainty_get_rmsf(self)
-
-        @property
-        def mean_coords(self):
-            """``(n, 3)`` mean structure."""
-            return _IMP_bff.PositionUncertainty_get_mean_coords(self).reshape(-1, 3)
-
-        @property
-        def rmsf_mean(self):
-            return self.get_rmsf_mean()
-
-        @property
-        def rmsf_max(self):
-            return self.get_rmsf_max()
-
-        @property
-        def mobile_rmsf_mean(self):
-            return self.get_mobile_rmsf_mean()
-    %}
-}
+// The scalar RMSF summaries as read-only attributes; the array fields stay
+// `get_rmsf()`/`get_mean_coords()` numpy views, reshaped by the caller.
+%attribute(IMP::bff::PositionUncertainty, double, rmsf_mean, get_rmsf_mean);
+%attribute(IMP::bff::PositionUncertainty, double, rmsf_max, get_rmsf_max);
+%attribute(IMP::bff::PositionUncertainty, double, mobile_rmsf_mean,
+           get_mobile_rmsf_mean);
 
 %pythoncode %{
-def estimate_position_uncertainty(pdb_paths, fixed_chains, out_pdb=None,
-                                  out_csv=None):
-    """Superpose docked models on the fixed body and report per-atom RMSF.
-
-    The FPS notion of a model's *precision*: dock the same bodies from several
-    independent starts, superpose on the fixed body, and measure how far each
-    atom of the mobile body wanders. It is a precision, not an accuracy -- it
-    says the restraints did not pin the body down further, not that the body is
-    there.
-
-    :param pdb_paths: best-scoring PDB per docking run. Same atom ordering --
-        they are the same structure docked from different starts; a file whose
-        atom count differs is skipped.
-    :param fixed_chains: chains of the reference body used for superposition.
-    :param out_pdb: write the mean structure with B-factor = RMSF here.
-    :param out_csv: write a per-atom ``index,chain,rmsf`` table here.
-    :returns: a dict, the shape this has always returned.
-    """
-    paths = [str(p) for p in pdb_paths if p]
-    result = _IMP_bff._estimate_position_uncertainty(
-        paths, [str(c) for c in fixed_chains])
-    if result.n_models < 2:
-        return {"n_models": result.n_models, "rmsf_mean": float("nan"),
-                "rmsf_max": float("nan"), "mobile_rmsf_mean": float("nan"),
-                "uncertainty_pdb": None, "uncertainty_csv": None}
-    if out_pdb:
-        write_position_uncertainty_pdb(result, paths[0], str(out_pdb))
-    if out_csv:
-        write_position_uncertainty_csv(result, str(out_csv))
-    return {
-        "n_models": result.n_models,
-        "rmsf_mean": result.rmsf_mean,
-        "rmsf_max": result.rmsf_max,
-        "mobile_rmsf_mean": result.mobile_rmsf_mean,
-        "uncertainty_pdb": out_pdb if out_pdb else None,
-        "uncertainty_csv": out_csv if out_csv else None,
-    }
-
-
 def _build_av_network_restraint_wrapper():
     """Define `AVNetworkRestraintWrapper` on first use.
 

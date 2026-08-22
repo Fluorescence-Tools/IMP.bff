@@ -1,5 +1,27 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 2, batch 11: `avmeandistance.i` to C++ (Phase-1 stragglers clear)
+
+`pyext/IMP_bff.avmeandistance.i` lost the `%extend %pythoncode` property block
+on `PositionUncertainty` (rmsf/mean_coords are the `get_*()` views, and
+`rmsf_mean`/`rmsf_max`/`mobile_rmsf_mean` are `%attribute`s now) and the
+`%pythoncode` wrapper around `estimate_position_uncertainty`, whose only job
+was building a dict from the C++ record and writing the two output files. The
+`_estimate_position_uncertainty` rename is gone; the C++ function and
+`write_position_uncertainty_pdb`/`write_position_uncertainty_csv`/
+`pdb_chain_ids` are the public surface. Nothing consumed the dict shape (no
+test, shim or program), so there is nothing to migrate.
+
+The `_LAZY["AVNetworkRestraintWrapper"]` builder stays Python: it subclasses
+`IMP.pmi.restraints.RestraintBase`, and defining it at import time would make
+`import IMP.bff` require IMP.pmi (the module's `required_modules` do not).
+
+`avmodel.i` turns out to be already clean (the `%pythoncode` `rg` hit was a
+comment); `av_pair_statistics`/`histogram_rda` are C++ in `StatesDistance.h`.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** — only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 1, batch 10: `quenching.i` to C++ — phase 1 complete
 
 `pyext/IMP_bff.quenching.i` lost its one `%pythoncode` block (`_flat`/`_cube`/
