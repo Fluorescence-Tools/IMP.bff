@@ -4,6 +4,23 @@
  */
 
 %pythoncode %{
+# The FF-system duck-typing convenience (dict or typed value -> typed value)
+# lives in the io.cif package module. The import is deferred to first call:
+# this module *is* IMP.bff's __init__, so importing a subpackage of it at
+# module scope would re-enter a partially initialized module.
+def as_forcefield_system(system):
+    from IMP.bff.io.cif import as_forcefield_system as _as
+    return _as(system)
+
+
+def write_dye_forcefield_cif(path, system):
+    # `_IMP_bff` directly: this name shadows the SWIG-generated module-level
+    # writer, so re-importing it from IMP.bff here would recurse into this
+    # wrapper forever.
+    from IMP.bff.io.cif import as_forcefield_system as _as
+    _IMP_bff.write_dye_forcefield_cif(str(path), _as(system))
+
+
 try:
     import RMF
     import IMP.rmf
@@ -1457,13 +1474,16 @@ def run_dye_simulation(
 
 
     for path in _parse_paths(system_cif, systems_dir):
-        system = read_dye_forcefield_cif(path)
+        system = read_forcefield_cif(str(path))
         _validate_system(system)
         # CLI overrides for sampling params not settable per system CIF
-        if friction_ps is not None:
-            system.setdefault("sampling", {})["friction_ps"] = friction_ps
-        if temperature_k is not None:
-            system.setdefault("sampling", {})["temperature_K"] = temperature_k
+        if friction_ps is not None or temperature_k is not None:
+            sampling = system.sampling
+            if friction_ps is not None:
+                sampling.friction_ps = friction_ps
+            if temperature_k is not None:
+                sampling.temperature_K = temperature_k
+            system.sampling = sampling
         _run(
             system,
             path,

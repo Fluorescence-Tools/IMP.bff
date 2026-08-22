@@ -36,7 +36,7 @@ def test_rotamer_sampling_all_dyes(dye_name):
     
     # Test minimal sampling
     rng = random.Random(42)
-    idx = sample_rotamer_index(weights, rng=rng)
+    idx = sample_rotamer_index(weights, seed=rng.randint(0, 2**31 - 1))
     coords = lib["coords"][idx + 1]
     assert coords.shape[0] == len(lib["atom_names"])
 

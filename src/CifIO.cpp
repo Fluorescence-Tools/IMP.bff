@@ -42,7 +42,7 @@ public:
                          const std::vector<std::pair<std::string, std::string>>& kv) {
         out_ << "#" << "\n";
         for (auto& [k, v] : kv) {
-            out_ << name << "." << k << " " << v << "\n";
+            out_ << name << "." << k << " " << quote(v) << "\n";
         }
         out_ << "#" << "\n";
     }
@@ -54,13 +54,32 @@ public:
         for (auto& row : rows) {
             for (size_t i = 0; i < row.size(); i++) {
                 if (i) out_ << " ";
-                out_ << row[i];
+                out_ << quote(row[i]);
             }
             out_ << "\n";
         }
         out_ << "#" << "\n";
     }
 private:
+    //! A value the ihm reader will tokenize as one token. Quoting here (and
+    //! not at each call site) is what makes a metadata value like
+    //! `N1 and resname A48, N2 and resname A48` survive a round trip -- the
+    //! reader splits rows on whitespace, so an unquoted multi-word value is
+    //! read as several and the loop comes up short. Already-quoted and the CIF
+    //! nulls (`.`/`?`) pass through untouched.
+    static std::string quote(const std::string& s) {
+        if (s.empty() || s == "." || s == "?") return s;
+        if (s[0] == '"' || s[0] == '\'') return s;
+        const bool plain = s.find_first_of(" \t,#'\"") == std::string::npos
+                && s[0] != '_' && s[0] != ';';
+        if (plain) return s;
+        std::string escaped;
+        for (char ch : s) {
+            if (ch == '"') escaped += "\"\"";
+            else escaped += ch;
+        }
+        return "\"" + escaped + "\"";
+    }
     std::ostream& out_;
 };
 
@@ -142,7 +161,7 @@ std::vector<std::pair<int, int>> compress_int_ranges(const std::vector<int>& nos
 // Force-field system writer
 // --------------------------------------------------------------------------
 
-void _write_dye_forcefield_cif(const std::string& path,
+void write_dye_forcefield_cif(const std::string& path,
                                 const DyeForceFieldSystem& system) {
     std::ofstream out(path);
     if (!out) IMP_THROW("cannot open " << path << " for writing", IOException);
@@ -421,41 +440,160 @@ void _write_dye_forcefield_cif(const std::string& path,
 
 namespace {
 
+// The template CIF reader: same ihm callback pattern ForceFieldCIF.cpp uses.
+bool tc_has(ihm_keyword* k) {
+    return k && k->in_file && !k->omitted && !k->unknown;
+}
+std::string tc_str(ihm_keyword* k) {
+    return tc_has(k) && k->data.str ? std::string(k->data.str) : std::string();
+}
+int tc_int(ihm_keyword* k, int fallback) {
+    return tc_has(k) ? k->data.ival : fallback;
+}
+bool tc_bool(ihm_keyword* k) { return tc_has(k) && k->data.bval; }
+
 struct TemplateCtx {
-    ComponentTemplate tmpl;
-    bool with_metadata = false;
-};
-
-// The ihm reader uses handler structs with keyword pointers. We define a
-// handler for each category, similar to ForceFieldCIF.cpp.
-
-struct TemplateHandler {
-    TemplateCtx* ctx;
+    ComponentTemplate* t;
     ihm_keyword *name;
-    ihm_keyword *feature_id, *feature_type, *rb, *md_fixed, *region_color;
-    ihm_keyword *atom_name, *occurrence;
-    ihm_keyword *center_atom, *type;
-    ihm_keyword *key, *value;
+    ihm_keyword *f_id, *f_type, *f_rb, *f_md, *f_color;
+    ihm_keyword *fa_id, *fa_atom, *fa_occ;
+    ihm_keyword *i_center, *i_type;
+    ihm_keyword *m_key, *m_value;
+
+    ComponentTemplate::Feature& feature(const std::string& fid) {
+        ComponentTemplate::Feature& f = t->features[fid];
+        if (f.feature_type.empty()) f.feature_type = "dof";
+        return f;
+    }
 };
+
+void tc_on_template(ihm_reader*, int, void* d, ihm_error**) {
+    TemplateCtx* c = (TemplateCtx*) d;
+    const std::string n = tc_str(c->name);
+    if (!n.empty()) c->t->name = n;
+}
+
+void tc_on_feature(ihm_reader*, int, void* d, ihm_error**) {
+    TemplateCtx* c = (TemplateCtx*) d;
+    const std::string fid = tc_str(c->f_id);
+    if (fid.empty()) return;
+    ComponentTemplate::Feature& f = c->feature(fid);
+    const std::string ft = tc_str(c->f_type);
+    if (!ft.empty()) f.feature_type = ft;
+    f.rb = tc_bool(c->f_rb);
+    f.md_fixed = tc_bool(c->f_md);
+    const std::string rc = tc_str(c->f_color);
+    if (!rc.empty() && rc != ".") f.region_color = rc;
+}
+
+void tc_on_feature_atom(ihm_reader*, int, void* d, ihm_error**) {
+    TemplateCtx* c = (TemplateCtx*) d;
+    const std::string fid = tc_str(c->fa_id);
+    const std::string anm = tc_str(c->fa_atom);
+    if (fid.empty() || anm.empty()) return;
+    ComponentTemplate::FeatureAtom a;
+    a.name = anm;
+    a.occurrence = tc_int(c->fa_occ, 1);
+    c->feature(fid).atoms.push_back(a);
+}
+
+void tc_on_improper(ihm_reader*, int, void* d, ihm_error**) {
+    TemplateCtx* c = (TemplateCtx*) d;
+    const std::string ca = tc_str(c->i_center);
+    const std::string it = tc_str(c->i_type);
+    if (ca.empty() || it.empty()) return;
+    ComponentTemplate::Improper imp;
+    imp.center_atom = ca;
+    imp.type = it;
+    c->t->impropers.push_back(imp);
+}
+
+void tc_on_metadata(ihm_reader*, int, void* d, ihm_error**) {
+    TemplateCtx* c = (TemplateCtx*) d;
+    const std::string k = tc_str(c->m_key);
+    const std::string v = tc_str(c->m_value);
+    if (k.empty() || v.empty()) return;
+    ComponentTemplate* t = c->t;
+    if (k == "center_atom") {
+        t->center_atom = v;
+    } else if (k == "dipole_atom_1") {
+        t->dipole_atom_1 = v;
+    } else if (k == "dipole_atom_2") {
+        t->dipole_atom_2 = v;
+    } else if (k == "positive_atoms" || k == "negative_atoms") {
+        // Comma-separated on the wire; split on any whitespace around commas.
+        std::vector<std::string>& out =
+                k == "positive_atoms" ? t->positive_atoms : t->negative_atoms;
+        std::string tok;
+        std::istringstream in(v);
+        while (std::getline(in, tok, ',')) {
+            const std::size_t a = tok.find_first_not_of(" \t");
+            const std::size_t b = tok.find_last_not_of(" \t");
+            if (a != std::string::npos) out.push_back(tok.substr(a, b - a + 1));
+        }
+    }
+}
 
 }  // namespace
 
 ComponentTemplate read_component_template_cif(const std::string& path,
                                                 bool with_dye_metadata) {
-    // The ihm C reader API is callback-based. We use the same pattern as
-    // ForceFieldCIF.cpp: open the file, register keywords, read.
-    // For now, this is a minimal implementation that reads the categories
-    // the Python version did. The ihm reader is complex; this is a
-    // simplified version that handles the common case.
-    //
-    // TODO: full ihm reader integration. For now, return an empty template
-    // with the name from the file basename.
     ComponentTemplate tmpl;
+    // The Python reader named unnamed templates after the file stem.
     auto slash = path.find_last_of('/');
     auto basename = (slash != std::string::npos) ? path.substr(slash + 1) : path;
     auto dot = basename.find_last_of('.');
     tmpl.name = (dot != std::string::npos) ? basename.substr(0, dot) : basename;
-    // TODO: full implementation with ihm reader
+
+    FILE* fh = std::fopen(path.c_str(), "r");
+    if (!fh) IMP_THROW("Cannot read " << path, IOException);
+    const int fd = fileno(fh);
+
+    TemplateCtx c;
+    c.t = &tmpl;
+    ihm_file* ifile = ihm_file_new_from_fd(fd);
+    ihm_reader* reader = ihm_reader_new(ifile, false);  // text, not binary
+
+#define TC_CAT(name, fn) ihm_category_new(reader, name, fn, NULL, NULL, &c, NULL)
+    ihm_category* cat;
+    cat = TC_CAT("_cgdye_template", tc_on_template);
+    c.name = ihm_keyword_str_new(cat, "name");
+
+    cat = TC_CAT("_cgdye_feature", tc_on_feature);
+    c.f_id = ihm_keyword_str_new(cat, "feature_id");
+    c.f_type = ihm_keyword_str_new(cat, "feature_type");
+    c.f_rb = ihm_keyword_bool_new(cat, "rb");
+    c.f_md = ihm_keyword_bool_new(cat, "md_fixed");
+    c.f_color = ihm_keyword_str_new(cat, "region_color");
+
+    cat = TC_CAT("_cgdye_feature_atom", tc_on_feature_atom);
+    c.fa_id = ihm_keyword_str_new(cat, "feature_id");
+    c.fa_atom = ihm_keyword_str_new(cat, "atom_name");
+    c.fa_occ = ihm_keyword_int_new(cat, "occurrence");
+
+    cat = TC_CAT("_cgdye_improper", tc_on_improper);
+    c.i_center = ihm_keyword_str_new(cat, "center_atom");
+    c.i_type = ihm_keyword_str_new(cat, "type");
+
+    if (with_dye_metadata) {
+        cat = TC_CAT("_cgdye_metadata", tc_on_metadata);
+        c.m_key = ihm_keyword_str_new(cat, "key");
+        c.m_value = ihm_keyword_str_new(cat, "value");
+    }
+#undef TC_CAT
+
+    bool more = false;
+    ihm_error* err = NULL;
+    const bool ok = ihm_read_file(reader, &more, &err);
+    if (!ok) {
+        const std::string message = err && err->msg ? err->msg : "parse failed";
+        if (err) ihm_error_free(err);
+        ihm_reader_free(reader);
+        std::fclose(fh);
+        IMP_THROW("reading " << path << ": " << message, IOException);
+    }
+    ihm_reader_free(reader);
+    std::fclose(fh);
     return tmpl;
 }
 
@@ -732,12 +870,14 @@ void write_rotamer_library(const std::string& path, const RotamerLibraryData& li
     for (auto& name : lib.atom_names) af << name << "\n";
 }
 
-void normalize_weights(RotamerLibraryData& lib) {
+RotamerLibraryData normalize_weights(const RotamerLibraryData& lib) {
+    RotamerLibraryData out = lib;
     double total = 0;
-    for (auto& w : lib.weight) total += w;
+    for (double w : out.weight) total += w;
     if (total > 0) {
-        for (auto& w : lib.weight) w /= total;
+        for (double& w : out.weight) w /= total;
     }
+    return out;
 }
 
 IMPBFF_END_NAMESPACE

@@ -50,8 +50,8 @@ IMPBFFEXPORT std::vector<std::pair<int, int>> compress_int_ranges(
     plus _atom_site (from the component MOL2/PDB files) and _flr_probe_list.
     Site numbers are assigned and group members are written as integer ranges.
 */
-IMPBFFEXPORT void _write_dye_forcefield_cif(const std::string& path,
-                                             const DyeForceFieldSystem& system);
+IMPBFFEXPORT void write_dye_forcefield_cif(const std::string& path,
+                                            const DyeForceFieldSystem& system);
 
 // --------------------------------------------------------------------------
 // Component/dye template CIF reader and writer
@@ -135,8 +135,10 @@ IMPBFFEXPORT RotamerLibraryData read_rotamer_library(const std::string& path);
 IMPBFFEXPORT void write_rotamer_library(const std::string& path,
                                           const RotamerLibraryData& lib);
 
-//! Normalize rotamer weights to sum to 1.0 in-place.
-IMPBFFEXPORT void normalize_weights(RotamerLibraryData& lib);
+//! Rotamer weights normalised to sum to 1.0.
+/*! Returns the normalised copy: `RotamerLibraryData` is a value, so there is
+    no in-place spelling across the boundary. */
+IMPBFFEXPORT RotamerLibraryData normalize_weights(const RotamerLibraryData& lib);
 
 IMPBFF_END_NAMESPACE
 

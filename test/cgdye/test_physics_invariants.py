@@ -10,7 +10,17 @@ import pytest
 
 # photophysics owns kappa2_from_dipoles; it was reachable through `scoring`
 # only because scoring imported it, and scoring no longer needs it.
-from IMP.bff import kappa2_from_dipoles
+from IMP.bff import kappa2_dipole_matrix
+import numpy as _np
+
+
+def kappa2_from_dipoles(mu_d, mu_a, r):
+    """The (n_d, n_a) orientation-factor matrix the old flat name returned."""
+    return _np.asarray(kappa2_dipole_matrix(
+        _np.asarray(mu_d, float).ravel(),
+        _np.asarray(mu_a, float).ravel(),
+        _np.asarray(r, float).ravel())).reshape(
+            _np.asarray(mu_d).shape[0], _np.asarray(mu_a).shape[0])
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff.scoring import boltzmann_weights
 from IMP.bff.cgdye.sampling import rotamer_transition_matrix
@@ -83,13 +93,13 @@ def test_single_rotamer_pair_all_regimes_agree():
     d = np.array([[45.0]])
     k2 = np.array([[1.2]])
     r0 = 52.0
-    out = fret_efficiency_regimes(d, k2, np.array([1.0]), np.array([1.0]), R0=r0)
+    out = fret_efficiency_regimes(d, k2, np.array([1.0]), np.array([1.0]), forster_radius=r0)
     ratio = (r0 / 45.0) ** 6 * 1.5 * 1.2
     expected = ratio / (1.0 + ratio)      # = 1 / (1 + (2/3/κ²) (r/R0)^6)
-    assert out["static"] == pytest.approx(expected, rel=1e-12)
-    assert out["dynamic"] == pytest.approx(expected, rel=1e-12)
-    assert out["dynamic_plus"] == pytest.approx(expected, rel=1e-12)
-    assert out["kappa2_avg"] == pytest.approx(1.2)
+    assert out.static_efficiency == pytest.approx(expected, rel=1e-12)
+    assert out.dynamic == pytest.approx(expected, rel=1e-12)
+    assert out.dynamic_plus == pytest.approx(expected, rel=1e-12)
+    assert out.kappa2_avg == pytest.approx(1.2)
     # the same number through the master equation with no exchange (P = I)
     p = np.eye(1)
     e = fret_efficiency_exact_kinetic(p, np.array([ratio / 4.0]), tau0=4.0, dt=1.0)
@@ -103,8 +113,8 @@ def test_regime_ordering_static_le_dynamic_plus():
     d = rng.uniform(30, 80, size=(6, 5))
     k2 = rng.uniform(0.0, 4.0, size=(6, 5))
     wd = rng.dirichlet(np.ones(6)); wa = rng.dirichlet(np.ones(5))
-    out = fret_efficiency_regimes(d, k2, wd, wa, R0=52.0)
-    assert out["static"] <= out["dynamic_plus"] + 1e-12
+    out = fret_efficiency_regimes(d, k2, wd, wa, forster_radius=52.0)
+    assert out.static_efficiency <= out.dynamic_plus + 1e-12
 
 
 # --------------------------------------------------------------- weights
@@ -186,16 +196,18 @@ def test_kronecker_pair_equals_explicit_product_space():
     d = np.array([[40.0, 55.0], [62.0, 48.0]])
     k2 = np.array([[0.4, 1.1], [0.9, 2.5]])
     r0, tau0, dt = 52.0, 4.0, 0.1
-    e_pair = fret_efficiency_exact_kinetic_pair(d, k2, p_d, p_a, wd, wa, R0=r0, tau0=tau0, dt=dt)
+    e_pair = fret_efficiency_exact_kinetic_pair(
+        d, k2, p_d, p_a, wd, wa, forster_radius=r0, tau0=tau0, dt=dt)
     # explicit 4-state chain
     p_tot = np.kron(p_d, p_a)
     rates = ((r0 / d) ** 6 * 1.5 * k2 / tau0).ravel()
     e_ref = fret_efficiency_exact_kinetic(p_tot, rates, tau0, dt, weights=np.outer(wd, wa).ravel())
     assert e_pair == pytest.approx(e_ref, rel=1e-12)
     # no exchange at all -> static average of the 2x2 grid
-    e_static = fret_efficiency_exact_kinetic_pair(d, k2, np.eye(2), np.eye(2), wd, wa, R0=r0, tau0=tau0, dt=dt)
-    reg = fret_efficiency_regimes(d, k2, wd, wa, R0=r0)
-    assert e_static == pytest.approx(reg["static"], rel=1e-12)
+    e_static = fret_efficiency_exact_kinetic_pair(
+        d, k2, np.eye(2), np.eye(2), wd, wa, forster_radius=r0, tau0=tau0, dt=dt)
+    reg = fret_efficiency_regimes(d, k2, wd, wa, forster_radius=r0)
+    assert e_static == pytest.approx(reg.static_efficiency, rel=1e-12)
 
 
 if __name__ == "__main__":

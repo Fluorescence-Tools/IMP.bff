@@ -46,28 +46,34 @@ class TestRotamerGeneration(unittest.TestCase):
         self.assertGreater(c_weights[0], c_weights[1])
 
     def test_io_cycle(self):
-        library = {
-            "weight": [0.7, 0.3],
-            "atom_names": ["C1", "C2"],
-            "coords": {
-                1: np.array([[0, 0, 0], [1, 0, 0]]),
-                2: np.array([[0, 0, 0], [0, 1, 0]])
-            }
-        }
-        
+        from IMP.bff import RotamerLibraryData
+
+        library = RotamerLibraryData()
+        library.weight = [0.7, 0.3]
+        library.atom_names = ["C1", "C2"]
+        library.id = [1, 2]
+        library.n_rotamers = 2
+        library.n_atoms = 2
+        # frames flat: rotamer 1 then rotamer 2, (x, y, z) per atom
+        library.coords = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                          0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+
         with tempfile.TemporaryDirectory() as tmpdir:
             base = os.path.join(tmpdir, "test_lib")
             write_rotamer_library(base, library)
-            
+
             # Verify files exist
             self.assertTrue(os.path.exists(base + "_coords.npy"))
             self.assertTrue(os.path.exists(base + "_weights.txt"))
             self.assertTrue(os.path.exists(base + "_atoms.txt"))
-            
+
             read_lib = read_rotamer_library(base)
-            self.assertEqual(len(read_lib["weight"]), 2)
-            self.assertEqual(read_lib["atom_names"], ["C1", "C2"])
-            np.testing.assert_array_almost_equal(read_lib["coords"][1], library["coords"][1])
+            self.assertEqual(len(read_lib.weight), 2)
+            self.assertEqual(list(read_lib.atom_names), ["C1", "C2"])
+            # rotamer 2's frame is the second (n_atoms, 3) slab of the flat buffer
+            np.testing.assert_array_almost_equal(
+                np.asarray(read_lib.coords).reshape(2, 2, 3)[1],
+                np.array([[0, 0, 0], [0, 1, 0]]))
 
 
 class TestLinkerSamplerPhysics(unittest.TestCase):

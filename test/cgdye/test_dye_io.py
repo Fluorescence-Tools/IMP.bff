@@ -58,14 +58,14 @@ class TestDyeTemplateRead:
         except Exception as e:
             pytest.fail(f"Failed to read dye template: {e}")
 
-        assert "name" in template, "Template missing 'name' field"
-        assert "features" in template, "Template missing 'features'"
-        assert "impropers" in template, "Template missing 'impropers'"
+        assert template.name, "Template missing 'name' field"
+        assert len(template.features) > 0, "Template missing 'features'"
+        assert len(template.impropers) > 0, "Template missing 'impropers'"
 
         # Check for expected features
-        assert "backbone_N" in template["features"], "Missing backbone_N feature"
-        assert "linker" in template["features"], "Missing linker feature"
-        assert "dye_core" in template["features"], "Missing dye_core feature"
+        assert "backbone_N" in template.features, "Missing backbone_N feature"
+        assert "linker" in template.features, "Missing linker feature"
+        assert "dye_core" in template.features, "Missing dye_core feature"
 
 
 class TestDyeTemplateWrite:
@@ -101,13 +101,13 @@ class TestDyeTemplateWrite:
             except Exception as e:
                 pytest.fail(f"Failed to reload template: {e}")
 
-            assert reloaded["name"] == original["name"], (
+            assert reloaded.name == original.name, (
                 "Template name mismatch after round-trip"
             )
-            assert set(reloaded["features"].keys()) == set(
-                original["features"].keys()
+            assert set(reloaded.features.keys()) == set(
+                original.features.keys()
             ), (
-                f"Feature keys mismatch: {set(reloaded['features'].keys())} vs {set(original['features'].keys())}"
+                f"Feature keys mismatch: {set(reloaded.features.keys())} vs {set(original.features.keys())}"
             )
 
 
@@ -142,22 +142,21 @@ class TestRotamerLibraryRead:
 
     def test_rotamer_library_structure(self):
         """Verify rotamer library reader handles numpy format."""
-        from IMP.bff.io.cif import read_rotamer_library, normalize_weights
+        from IMP.bff.io.cif import read_rotamer_library, write_rotamer_library
+        from IMP.bff import RotamerLibraryData
 
-        test_lib = {
-            "id": [1, 2, 3],
-            "weight": [0.5, 0.3, 0.2],
-            "atom_names": ["C1"],
-            "coords": {
-                1: [[1.0, 2.0, 3.0]],
-                2: [[4.0, 5.0, 6.0]],
-                3: [[7.0, 8.0, 9.0]],
-            },
-        }
+        test_lib = RotamerLibraryData()
+        test_lib.id = [1, 2, 3]
+        test_lib.weight = [0.5, 0.3, 0.2]
+        test_lib.atom_names = ["C1"]
+        test_lib.n_rotamers = 3
+        test_lib.n_atoms = 1
+        # one atom per rotamer: three (x, y, z) triples, flat
+        test_lib.coords = [1.0, 2.0, 3.0,
+                           4.0, 5.0, 6.0,
+                           7.0, 8.0, 9.0]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            from IMP.bff.io.cif import write_rotamer_library
-
             output_base = os.path.join(tmpdir, "test_rotamer")
             write_rotamer_library(output_base, test_lib)
 
@@ -171,15 +170,17 @@ class TestRotamerLibraryRead:
 
             reloaded = read_rotamer_library(output_base)
 
-            assert len(reloaded["id"]) == 3, (
-                f"Rotamer ID count mismatch: got {len(reloaded['id'])}"
+            assert len(reloaded.id) == 3, (
+                f"Rotamer ID count mismatch: got {len(reloaded.id)}"
             )
-            assert len(reloaded["weight"]) == 3, "Weight count mismatch"
-            assert len(reloaded["coords"]) == 3, "Coords dict length mismatch"
-            assert 1 in reloaded["coords"], "Rotamer 1 not found in coords"
-            assert 2 in reloaded["coords"], "Rotamer 2 not found in coords"
-            assert reloaded["atom_names"] == ["C1"], (
-                f"atom_names mismatch: {reloaded['atom_names']}"
+            assert len(reloaded.weight) == 3, "Weight count mismatch"
+            assert reloaded.n_rotamers == 3, "Rotamer count mismatch"
+            assert list(reloaded.atom_names) == ["C1"], (
+                f"atom_names mismatch: {list(reloaded.atom_names)}"
+            )
+            # rotamer i's frame is the i-th (x, y, z) triple of the flat buffer
+            assert list(reloaded.coords[3:6]) == [4.0, 5.0, 6.0], (
+                "Rotamer 2 not found in coords"
             )
 
 
@@ -189,13 +190,19 @@ class TestRotamerLibraryNormalize:
     def test_normalize_weights(self):
         """Verify weight normalization sums to 1.0."""
         from IMP.bff.io.cif import normalize_weights
+        from IMP.bff import RotamerLibraryData
 
-        lib = {"id": [1, 2, 3], "weight": [50.0, 30.0, 20.0], "coords": {}}
+        lib = RotamerLibraryData()
+        lib.id = [1, 2, 3]
+        lib.weight = [50.0, 30.0, 20.0]
+        lib.n_rotamers = 3
 
-        normalize_weights(lib)
+        normalized = normalize_weights(lib)
 
-        total = sum(lib["weight"])
+        total = sum(normalized.weight)
         assert abs(total - 1.0) < 1e-6, f"Weights should sum to 1.0, got {total}"
+        # value semantics: the original is untouched
+        assert sum(lib.weight) == 100.0
 
 
 if __name__ == "__main__":

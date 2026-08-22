@@ -1,5 +1,99 @@
 # Update Log
 
+## 2026-08-22 — PRD-117 phase 2, batch 14: `cif.i` to C++ — template CIF reader written, JSON system bridge
+
+`pyext/IMP_bff.cif.i` lost all 558 lines of `%pythoncode` (the
+`forcefield_system_from_dict` builder, the ihm.format template reader/writer
+pair, the rotamer-library numpy IO and the `_parse_*_atom_site_rows` helpers).
+The C++ surface in `CifIO.h` takes over every name:
+
+- `read_component_template_cif`/`read_dye_template_cif` are **real now**: the
+  shipped stub returned an empty template; this batch wrote the ihm C-reader
+  integration (`_cgdye_template`/`_cgdye_feature`/`_cgdye_feature_atom`/
+  `_cgdye_improper`/`_cgdye_metadata`) the same way ForceFieldCIF.cpp reads
+  `_ff_*`. Returns the `ComponentTemplate` value (`features` a `FeatureMap`,
+  rows flatnested `Feature`/`FeatureAtom`/`Improper`).
+- The CifWriter quotes values at the writer, not per call site: a metadata
+  value like `N1 and resname A48, N2 and resname A48` unquoted made the ihm
+  reader split the row and the round trip failed short.
+- `forcefield_system_from_dict` is a nlohmann bridge in C++
+  (`forcefield_system_from_json` in DyeForceField.cpp): every field the dict
+  literal carried, string-typed fields coerced with `str()` semantics (a
+  numeric `"id": 0` is `"0"`), site references by `site_no` resolved. The
+  writer lost its underscore (`write_dye_forcefield_cif`).
+- `normalize_weights` returns the normalized copy (value semantics; the old
+  in-place dict mutation has no spelling across the boundary).
+- `as_forcefield_system`/`forcefield_system_from_dict`/the dict-accepting
+  `write_dye_forcefield_cif` stay in the `IMP.bff.io.cif` package module --
+  duck typing on a Python object has no C++ spelling.
+
+Migrated consumers: `topology.i` (template value surface + the system bridge),
+`sim.i` (`read_forcefield_cif` direct, sampling overrides on the typed value;
+its `as_forcefield_system` indirection is deferred -- a module-scope io import
+is circular, and shadowing the SWIG writer recursed), the io.cif shim, and the
+tests (`test_template`, `test_dye_io`, `test_io`, `test_dye_topology`,
+`test_rotamer_generation/sampling`, `test_physics_invariants`,
+`test_combined_system`, the expensive all-dyes sweep -- whose `rng=` kwarg had
+been dead since the Phase-1 dyesampling port).
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **656 passed,
+3 xfailed** (only the pre-existing `test_access_av_feature` data failure);
+cgdye **149 passed** and the expensive all-dyes sweep **36 passed**.
+
+## 2026-08-22 — PRD-118: FASPR itself ported 1:1 to C++ — `IMP.bff.faspr_pack`
+
+The first half of PRD-118's C++ stage: FASPR (version 20200309) is now in the
+module, not just cloned. `utility/port_faspr.py` vendors
+`junk/FASPR/src/*.cpp` into flat `src/Faspr*.cpp` + `src/faspr/*.h` inside
+`namespace IMP::bff::faspr`, with **behaviour-identical, mechanical transforms
+only**: namespace wrap, include-guard prefixes, `exit(0)` → throwing
+`faspr_fail()`, MSVC pragmas dropped, one `std::swap` qualification (nested
+namespace hiding, caught by the amalgamated `bff_all.cpp` build). The MIT
+notice travels with every file. `src/Faspr.cpp` is FASPR's `main()` pipeline
+minus the CLI, behind `IMP.bff.faspr_pack(pdb_in, pdb_out, rotlib, verbose)`
+(`include/Faspr.h`, exposed through `swig.i-in`; FASPR's chatty stdout is
+buf-swapped silent unless `verbose`).
+
+**Parity is pinned, not asserted**: `test/faspr/test_faspr_port.py` repacks
+T4L 3GUN with both the port and the *reference executable* built from the
+same sources — atom sets, coordinates (≤ 0.002 Å) and every chi1 (≤ 0.5°)
+must agree; backbone N/CA/C/O must be untouched; a missing library must
+throw. All 4 tests pass, plus the surrounding suites (97 in the API/import/
+vendored-headers/no-numba block). Example:
+`examples/structure/faspr_sidechains.py`.
+
+**The Dunbrack-2010 binary library (13.8 MB) is deliberately NOT
+redistributed** — free for academic use, redistribution decision open in
+PRD-118; callers pass its path, tests and the example skip politely without
+it (`$IMP_BFF_FASPR_ROT_LIB` or the `junk/FASPR` clone).
+
+Still open (second half): port the dye-rotamer `.drot` store
+(`internal2cart` kernel, `rotamer.i` loader hook, pin re-derivation on
+reconstructed frames).
+
+## 2026-08-22 — PRD-118 A/B: side-chain packer vs the reference FASPR, and the 180° convention bug it caught
+
+Built the FASPR executable from `junk/FASPR/` and ran `ab_faspr.py`
+(`prototypes/drot_rotlib/`): repack 3GUN + mGBP2A with the reference, compare
+every rotatable residue's chi against the prototype's top-prior Dunbrack
+packer. **Assertion passes: 87/87 and 354/354** — on every residue where
+FASPR's global-GMEC search lands on the top-probability rotamer, the
+prototype reproduces it exactly (median per-chi deviation 0.0°); the
+remaining 36 %/31 % is FASPR's pair-energy optimisation overriding the
+library prior, an algorithmic difference by design.
+
+**The first honest run failed 136/136 — every chi ~180° off — and that was a
+real bug, not a comparison artefact:** the prototype's `dihedral_deg`
+measured *standard + 180°*. It was exactly self-consistent with its own
+placement primitive, so every internal round-trip check passed, while every
+rotamer it built sat mirrored off the IUPAC/Dunbrack convention *and* every
+(phi, psi) lookup read the mirrored bin. Two lessons now pinned in the
+prototype docs: a convention that round-trips against itself proves nothing
+about the world's convention, and an A/B against an independent reference
+implementation is the check that catches it. After the fix (`rotlib.py`):
+ZTree self-check 2.5e-14 Å, `.drot` v2 exactness unchanged (0.014 Å, 0.12°
+dipole), side-chain round-trips exact, both A/B assertions pass.
+
 ## 2026-08-21 — PRD-117 phase 2, batch 13: `structureio.i` to C++
 
 `pyext/IMP_bff.structureio.i` lost its reshape/dict/set wrappers (`read_dcd`

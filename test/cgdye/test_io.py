@@ -39,24 +39,18 @@ class TestIO(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cif_path = os.path.join(tmpdir, "test.cif")
-            
-            # Note: write_dye_forcefield_cif expects mol2 files to exist if it's going to write _atom_site
-            # But we can test the basic round-trip of topology categories.
-            # We'll mock the _parse_struct_atom_site_rows to avoid file dependency
-            import IMP.bff.io.cif as cif_mod
-            original_parse = cif_mod._parse_struct_atom_site_rows
-            cif_mod._parse_struct_atom_site_rows = lambda path, asym, ent: []
-            
-            try:
-                write_dye_forcefield_cif(cif_path, system)
-                self.assertTrue(os.path.exists(cif_path))
-                
-                read_system = read_dye_forcefield_cif(cif_path)
-                self.assertEqual(read_system.name, system["name"])
-                self.assertEqual(len(read_system.sites), len(system["sites"]))
-                self.assertEqual(read_system.sampling.n_steps, system["sampling"]["n_steps"])
-            finally:
-                cif_mod._parse_struct_atom_site_rows = original_parse
+
+            # The C++ writer does not read the component MOL2/PDB files (the
+            # reader tolerates a missing _atom_site), so a system naming a
+            # nonexistent mol2 round-trips its topology unchanged.
+            write_dye_forcefield_cif(cif_path, system)
+            self.assertTrue(os.path.exists(cif_path))
+
+            read_system = read_dye_forcefield_cif(cif_path)
+            self.assertEqual(read_system.name, system["name"])
+            self.assertEqual(len(read_system.sites), len(system["sites"]))
+            self.assertEqual(read_system.sampling.n_steps,
+                             system["sampling"]["n_steps"])
 
 if __name__ == "__main__":
     unittest.main()

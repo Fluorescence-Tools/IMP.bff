@@ -100,8 +100,8 @@ def _build_impropers(atoms, graph, template):
         "orient": _build_orient_impropers_from_template,
     }
     centers_by_kind = defaultdict(list)
-    for imp in template.get("impropers", []):
-        centers_by_kind[imp["type"]].extend(by_name.get(imp["center_atom"], []))
+    for imp in template.impropers:
+        centers_by_kind[imp.type].extend(by_name.get(imp.center_atom, []))
 
     out = []
     for kind, centers in centers_by_kind.items():
@@ -433,9 +433,9 @@ def _center_atom_serials_from_template(
     template, improper_type, component_atoms, site_names
 ):
     center_names = set()
-    for imp in template.get("impropers", []):
-        if imp.get("type") == improper_type:
-            center_names.add(imp.get("center_atom"))
+    for imp in template.impropers:
+        if imp.type == improper_type:
+            center_names.add(imp.center_atom)
     center_serials = set()
     for serial, atom in component_atoms.items():
         if atom.get("atom_name") in center_names:
@@ -751,17 +751,18 @@ def build_forcefield_system(
         ]
 
         if template:
-            for fid, spec in template.get("features", {}).items():
-                if spec.get("feature_type") == "dof":
+            for fid in template.features:
+                spec = template.features[fid]
+                if spec.feature_type == "dof":
                     ids = _resolve_feature_ids(
                         template, fid, comp_name, comp_atoms, all_site_names[comp_name]
                     )
                     if ids:
-                        if spec.get("rb"):
+                        if spec.rb:
                             rb_groups[f"{comp_name}_{fid}_rb"] = ids
-                        if spec.get("md_fixed"):
+                        if spec.md_fixed:
                             md_fixed_groups[f"{comp_name}_{fid}_md_fixed"] = ids
-                        if not spec.get("rb") and not spec.get("md_fixed"):
+                        if not spec.rb and not spec.md_fixed:
                             groups[f"{comp_name}_{fid}"] = ids
 
     fixed_groups = [f"{c['name']}_all" for c in fixed_comps]
@@ -860,6 +861,7 @@ def build_forcefield_system(
         },
     }
 
+    from IMP.bff.io.cif import forcefield_system_from_dict
     return forcefield_system_from_dict(system)
 
 
@@ -911,14 +913,15 @@ def build_system_from_specs(
 """Build combined protein+dye systems."""
 
 def _resolve_feature_ids(template, feature_id, comp_name, atoms, serial_to_site_name):
-    entries = template.get("features", {}).get(feature_id, {}).get("atoms", [])
+    entries = (template.features[feature_id].atoms
+               if feature_id in template.features else [])
     by_name = {}
     for serial, atom in sorted(atoms.items()):
         by_name.setdefault(atom.get("atom_name", ""), []).append(serial)
     out = []
     for e in entries:
-        name = e.get("name")
-        occurrence = int(e.get("occurrence", 1))
+        name = e.name
+        occurrence = int(e.occurrence)
         idx = occurrence - 1
         serials = by_name.get(name, [])
         if 0 <= idx < len(serials):

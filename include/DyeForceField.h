@@ -290,6 +290,28 @@ public:
 };
 IMP_VALUES(DyeForceFieldSystem, DyeForceFieldSystems);
 
+//! Build a typed system from a JSON object (the dict-literal convenience).
+/*!
+    The topology builder assembles a system as a plain JSON-shaped object --
+    easier to author and to diff than eighteen typed vectors -- and this is
+    the one conversion into #IMP::bff::DyeForceFieldSystem. The accepted shape
+    mirrors the reader: `name`, `components` (`{id: {mol2_path|mol2,
+    pdb_path|pdb, role}}`), `sites` (a list of `{id, component, atom_name,
+    element, site_no, site_serial, radius, mass}`), `groups`/`rb_groups`/
+    `md_fixed_groups` (`{gid: [site-id...]}`, integers resolved to site ids by
+    `site_no`), `fixed_groups`, `bond_types`/`angle_types` (`{tid: {k}}`),
+    `torsion_types`/`improper_types` (`{tid: {periodicity, phase_rad, k}}`),
+    `lj_types` (`{tid: {element, rmin_half, epsilon}}`), `bonds`
+    (`[a, b, length, tid]`), `angles` (`[a, b, c, theta, tid]`), `dihedrals`/
+    `impropers` (`[a, b, c, d, tid]`), `probes`, `nonbonded`
+    (`{enabled, k, cutoff_A}`) and `sampling` (`{temperature_K, friction_ps,
+    timestep_fs, n_steps, write_every, minimize_steps}`).
+    Missing keys take the same defaults the reader does.
+    \throw ValueException for a row of the wrong arity or a non-object root
+*/
+IMPBFFEXPORT DyeForceFieldSystem forcefield_system_from_json(
+        const std::string& json);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_DYEFORCEFIELD_H

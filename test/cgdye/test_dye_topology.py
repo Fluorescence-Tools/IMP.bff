@@ -68,11 +68,10 @@ class TestDyeTopologyBuilder:
         return {(1, 2), (2, 3), (3, 4)}
 
     def _make_template(self):
-        return {
-            "name": "test",
-            "features": {},
-            "impropers": [],
-        }
+        from IMP.bff import ComponentTemplate
+        template = ComponentTemplate()
+        template.name = "test"
+        return template
 
     def test_graph_construction(self):
         g = build_graph(self._make_bonds())

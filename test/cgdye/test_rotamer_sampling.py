@@ -31,9 +31,11 @@ class TestRotamerSampling(unittest.TestCase):
         )
         data = load_rotamer_library_dcd(pdb, dcd, weights, max_frames=8)
 
-        self.assertEqual(data["coords"].shape[0], 8)
-        self.assertEqual(len(data["weights"]), 8)
-        self.assertAlmostEqual(float(data["weights"].sum()), 1.0)
+        # the library is a C++ value: flat coords, n_frames * n_atoms * 3
+        self.assertEqual(data.n_frames, 8)
+        self.assertEqual(len(data.get_coords()), 8 * data.n_atoms * 3)
+        self.assertEqual(len(data.get_weights()), 8)
+        self.assertAlmostEqual(float(np.asarray(data.get_weights()).sum()), 1.0)
 
     def test_apply_rotamer_coords(self):
         """Verify coordinates are correctly applied to an IMP hierarchy."""
