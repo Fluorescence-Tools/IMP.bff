@@ -23,9 +23,10 @@ Moved out of ``fret/`` by PRD-113 stage 7 and split three ways there. One module
 held all of it, which is how ``fret/io.py`` came to be the thing that writes
 PDBs -- and why ``IMP.bff.fret.read_fps_json`` no longer exists.
 
-Port status (PRD-117): 15 of 17 names are C++-covered; the remaining 2
-(``write_rmf`` and the lazy RMF writers) cannot be C++ without widening
-`required_modules`. Pure re-export -- holds no logic of its own to move.
+Port status (PRD-117): 15 of 17 names are C++-covered; the only Python left is
+the IMP-object glue (`load_structure_with_particles`, `read_angle_file`, and
+the lazy RMF writers) which must create SWIG objects / import `IMP.rmf`.
+Pure re-export -- holds no logic of its own to move.
 """
 
 from IMP.bff import (  # noqa: F401

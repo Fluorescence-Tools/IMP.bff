@@ -232,7 +232,9 @@ def load_trajectory(path: Path, top: Path | None) -> np.ndarray:
     """Coordinates in **Angstrom** from a DCD or an XTC."""
     if path.suffix.lower() == ".dcd":
         import IMP.bff as ios
-        return np.asarray(ios.read_dcd(str(path)), dtype=np.float64)   # already A
+        n_atoms = ios.read_dcd_header(str(path)).n_atoms
+        return np.asarray(ios.read_dcd(str(path)), dtype=np.float64).reshape(
+            -1, n_atoms, 3)   # already A
     if path.suffix.lower() in (".xtc", ".trr"):
         try:
             import mdtraj as md

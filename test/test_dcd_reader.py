@@ -49,24 +49,27 @@ class Tests(IMP.test.TestCase):
         # a sample here; expensive_test_dcd_reader.py sweeps every file
         for path in files[:8]:
             head = read_dcd_header(path)
-            self.assertGreater(head["n_frames"], 0, path)
-            self.assertGreater(head["n_atoms"], 0, path)
-            self.assertIn(head["endianness"], ("<", ">"))
+            self.assertGreater(head.n_frames, 0, path)
+            self.assertGreater(head.n_atoms, 0, path)
+            self.assertIn(head.endianness, ("<", ">"))
 
     def test_shapes_and_finiteness(self):
         """Coordinates come back as (frames, atoms, 3) and are finite"""
         for path in _dcd_files()[:5]:
             head = read_dcd_header(path)
-            coords = read_dcd(path)
+            coords = np.asarray(read_dcd(path)).reshape(
+                -1, head.n_atoms, 3)
             self.assertEqual(
-                coords.shape, (head["n_frames"], head["n_atoms"], 3), path)
+                coords.shape, (head.n_frames, head.n_atoms, 3), path)
             self.assertTrue(np.isfinite(coords).all(), path)
 
     def test_max_frames_truncates(self):
         """max_frames stops the read without disturbing the values"""
         path = _dcd_files()[0]
-        full = read_dcd(path)
-        part = read_dcd(path, max_frames=3)
+        head = read_dcd_header(path)
+        full = np.asarray(read_dcd(path)).reshape(-1, head.n_atoms, 3)
+        part = np.asarray(read_dcd(path, max_frames=3)).reshape(
+            -1, head.n_atoms, 3)
         self.assertEqual(part.shape[0], min(3, full.shape[0]))
         np.testing.assert_array_equal(part, full[:part.shape[0]])
 

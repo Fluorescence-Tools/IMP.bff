@@ -97,8 +97,8 @@ IMPBFFEXPORT DCDHeader read_dcd_header(const std::string& path);
 /*! \param[in] max_frames stop after this many; negative reads all of them
     \param[out] out_view,n_out_view `n_frames * n_atoms * 3`, in the file's own
                 units (Angstrom for the bundled libraries) */
-IMPBFFEXPORT void read_dcd(const std::string& path, int max_frames,
-                           double** out_view, int* n_out_view);
+IMPBFFEXPORT void read_dcd(const std::string& path, int max_frames = -1,
+                           double** out_view = NULL, int* n_out_view = NULL);
 
 //! Coordinates from a trajectory, whatever format it is in.
 /*!

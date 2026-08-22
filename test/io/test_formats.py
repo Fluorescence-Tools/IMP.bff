@@ -109,16 +109,17 @@ def test_write_pdb_and_rmsd(tmp_path):
     import numpy as np
     coords = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
     out = tmp_path / "m.pdb"
-    fio.write_pdb(coords, out, transform=np.array([1.0, 1.0, 1.0]))
+    fio.write_pdb(coords.ravel(), str(out),
+                  transform=np.array([1.0, 1.0, 1.0]))
     text = out.read_text()
     assert text.count("ATOM") == 3
     assert "2.000" in text  # translated x of atom 2
 
     shifted = coords + 5.0
-    assert fio.compute_rmsd(coords, shifted) == pytest.approx(
+    assert fio.compute_rmsd(coords.ravel(), shifted.ravel()) == pytest.approx(
         np.sqrt(3 * 25.0))
-    assert fio.compute_rmsd(coords, shifted, superpose=True) == pytest.approx(
-        0.0, abs=1e-9)
+    assert fio.compute_rmsd(coords.ravel(), shifted.ravel(), superpose=True) == \
+        pytest.approx(0.0, abs=1e-9)
 
 
 def test_write_rmf_is_self_contained(tmp_path):

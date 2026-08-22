@@ -49,7 +49,8 @@ class Tests(IMP.test.TestCase):
             pdb = os.path.join(lib, base + ".pdb")
             if not os.path.exists(pdb):
                 continue
-            mine = read_dcd(path)
+            mine = np.asarray(read_dcd(path)).reshape(
+                -1, read_dcd_header(path).n_atoms, 3)
             universe = mda.Universe(pdb, path)
             theirs = np.array(
                 [ts.positions.copy() for ts in universe.trajectory], dtype=np.float64)

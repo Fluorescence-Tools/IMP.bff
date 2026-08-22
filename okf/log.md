@@ -1,5 +1,36 @@
 # Update Log
 
+## 2026-08-21 — PRD-117 phase 2, batch 13: `structureio.i` to C++
+
+`pyext/IMP_bff.structureio.i` lost its reshape/dict/set wrappers (`read_dcd`
+`read_dcd_header`, `read_trajectory`, `parse_pdb_atoms`, `parse_conect_bonds`,
+`infer_bonds`, `write_mol2`, `read_score_series`, `write_pdb`, `compute_rmsd`,
+`load_structure`, `structure_coordinates`, `read_xlink_table`, `apply_transform`)
+and all twelve `_function` renames; the C++ functions are the public surface.
+Flat coordinate buffers come back as numpy views; the `(n,3)` /
+`(n_frames,n_atoms,3)` reshape is the caller's. Interfaces that changed:
+
+- `read_dcd_header(path)` returns the `DCDHeader` value (`head.n_frames`,
+  `head.n_atoms`, `head.endianness`, ...), not a dict; `read_dcd` returns a flat
+  view (`max_frames` now defaults to -1) that callers reshape with the header's
+  `n_atoms`.
+- `parse_pdb_atoms`/`parse_conect_bonds`/`infer_bonds`/`read_xlink_table` are
+  the C++ record lists/sets (iterate `AtomBond.a/.b` etc.) rather than dicts.
+- `write_pdb(coords.ravel(), str(path), chain, res_name, transform, model_index)` /
+  `compute_rmsd(a.ravel(), b.ravel(), mask, superpose)` / `apply_transform`.
+
+Stays Python, deliberately: the RMF writers (`_LAZY`), which would pull
+`IMP.rmf` into `required_modules`, and the IMP-object glue
+(`load_structure_with_particles`, `read_angle_file`), which creates SWIG
+objects (`read_pdb_hierarchy` is re-usable from Python since it is a C++
+`Hierarchy` now).
+
+Migrated: `test/io/test_formats.py`, `test/test_dcd_reader.py`,
+`test/expensive_test_dcd_reader.py`, `bin/imp_bff_traj2bcif`.
+
+Verification: `ninja IMP.bff` clean; the non-medium suite **652 passed,
+3 xfailed** -- only the pre-existing `test_access_av_feature` data failure.
+
 ## 2026-08-21 — PRD-117 phase 2, batch 12: `fps.i` to C++
 
 `pyext/IMP_bff.fps.i` lost its entire `%pythoncode` block (the module
