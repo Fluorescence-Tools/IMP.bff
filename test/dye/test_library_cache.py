@@ -94,16 +94,19 @@ def test_a_missing_file_is_not_cached(tmp_path):
     assert dye_library_cache_size() == before
 
 
-def test_the_atom_type_lookup_is_memoised():
-    """Thousands of atoms, a few dozen distinct names, five possible answers."""
-    from IMP.bff import _atom_type
-    assert hasattr(_atom_type, "cache_info")
-    _atom_type.cache_clear()
-    for _ in range(500):
-        _atom_type("CB")
-    info = _atom_type.cache_info()
-    assert info.hits == 499 and info.misses == 1
-    assert _atom_type("SG") == "S" and _atom_type("XX") == "C"
+def test_the_atom_type_lookup():
+    """The C++ lookup answers what the memoised Python did.
+
+    The lru_cache was a Python-side cost dodge; C++ needs no memoisation, so
+    what is pinned now is only the answers.
+    """
+    from IMP.bff import atom_type
+    assert atom_type("SG") == "S"
+    assert atom_type("NZ") == "N"
+    assert atom_type("OD1") == "O"
+    assert atom_type("HB2") == "H"
+    assert atom_type("CB") == "C"
+    assert atom_type("XX") == "C"   # unknown falls back to carbon
 
 
 if __name__ == "__main__":

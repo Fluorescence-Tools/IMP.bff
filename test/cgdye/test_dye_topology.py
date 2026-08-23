@@ -3,6 +3,7 @@
 
 import math
 import os
+import numpy as np
 import sys
 import tempfile
 from pathlib import Path
@@ -19,14 +20,12 @@ from IMP.bff import (
     find_cycles,
 )
 from IMP.bff import as_forcefield_system, read_dye_forcefield_cif, write_dye_forcefield_cif
-# CHARMM36_LJ, lj_cross and lj_params are scoring's, and were reached through
-# `cgdye.topology` only because it imports them for its own use. Importing them
-# from their owner is what lets that pass-through go.
-from IMP.bff import CHARMM36_LJ, lj_cross, lj_params
+# The CHARMM36 table is a C++ function now (charmm36_lj(element) ->
+# (rmin_half, epsilon)); there is no second dict to drift.
+from IMP.bff import charmm36_lj, lj_cross
 from IMP.bff import (
     build_lj_type_table,
     compute_lj_pair_sites,
-    lj_cross_params,
     lj_score,
     site_element_map,
 )
@@ -119,28 +118,18 @@ class TestLJParameters:
 
     def test_all_elements_present(self):
         for elem in ("C", "N", "O", "S", "H"):
-            assert elem in CHARMM36_LJ
-            assert "rmin_half" in CHARMM36_LJ[elem]
-            assert "epsilon" in CHARMM36_LJ[elem]
+            rmin_half, epsilon = charmm36_lj(elem)
+            assert rmin_half > 0, f"{elem} rmin_half must be positive"
+            assert epsilon < 0, f"{elem} epsilon must be negative (well depth)"
 
-    def test_rmin_positive(self):
-        for elem, p in CHARMM36_LJ.items():
-            assert p["rmin_half"] > 0, f"{elem} rmin_half must be positive"
-
-    def test_epsilon_negative(self):
-        for elem, p in CHARMM36_LJ.items():
-            assert p["epsilon"] < 0, f"{elem} epsilon must be negative (well depth)"
+    def test_unknown_element_falls_back_to_carbon(self):
+        np.testing.assert_array_equal(charmm36_lj("X"), charmm36_lj("C"))
 
     def test_lj_cross_combining_rules(self):
         rmin, eps = lj_cross("C", "N")
-        assert (
-            abs(rmin - (CHARMM36_LJ["C"]["rmin_half"] + CHARMM36_LJ["N"]["rmin_half"]))
-            < 1e-10
-        )
-        expected_eps = math.sqrt(
-            CHARMM36_LJ["C"]["epsilon"] * CHARMM36_LJ["N"]["epsilon"]
-        )
-        assert abs(eps - expected_eps) < 1e-10
+        pc, pn = charmm36_lj("C"), charmm36_lj("N")
+        assert abs(rmin - (pc[0] + pn[0])) < 1e-10
+        assert abs(eps - math.sqrt(pc[1] * pn[1])) < 1e-10
 
     def test_lj_cross_symmetric(self):
         r1, e1 = lj_cross("C", "S")
@@ -148,9 +137,7 @@ class TestLJParameters:
         assert abs(r1 - r2) < 1e-10
         assert abs(e1 - e2) < 1e-10
 
-    def test_lj_cross_unknown_element_falls_back_to_carbon(self):
-        p = lj_params("X")
-        assert p["rmin_half"] == CHARMM36_LJ["C"]["rmin_half"]
+
 
 
 class TestLJTypeCifRoundtrip:
@@ -191,10 +178,10 @@ class TestLJTypeCifRoundtrip:
             os.unlink(path)
 
     def test_build_lj_type_table(self):
-        table = build_lj_type_table({"C", "S", "N"})
+        table = build_lj_type_table(["C", "S", "N"])
         assert len(table) == 3
-        assert table["LJ_C"]["element"] == "C"
-        assert table["LJ_S"]["element"] == "S"
+        assert table["LJ_C"].element == "C"
+        assert table["LJ_S"].element == "S"
 
 
 class TestExclusionList:
@@ -246,51 +233,51 @@ class TestLJScoring:
     """Test 2.5: LJ pair score computation."""
 
     def test_lj_score_zero_at_rmin(self):
-        e = lj_score(r=2.0, rmin=2.0, epsilon=-1.0)
+        e = lj_score(2.0, 2.0, -1.0)
         assert abs(e) < 1e-10
 
     def test_lj_score_zero_beyond_rmin(self):
-        e = lj_score(r=3.0, rmin=2.0, epsilon=-1.0)
+        e = lj_score(3.0, 2.0, -1.0)
         assert e == 0.0
 
     def test_lj_score_repulsive_close(self):
-        e = lj_score(r=1.0, rmin=2.0, epsilon=1.0)
+        e = lj_score(1.0, 2.0, 1.0)
         assert e > 0
 
     def test_lj_score_zero_beyond_rmin(self):
-        e = lj_score(r=3.0, rmin=2.0, epsilon=1.0)
+        e = lj_score(3.0, 2.0, 1.0)
         assert e == 0.0
 
     def test_lj_cross_params_callable(self):
-        rmin, eps = lj_cross_params("C", "N")
+        rmin, eps = lj_cross("C", "N")
         assert rmin > 0
         assert eps > 0
 
     def test_compute_lj_pair_sites(self):
-        system = {
+        import json
+        from IMP.bff import forcefield_system_from_json
+        system = forcefield_system_from_json(json.dumps({
             "sites": [
                 {"id": "dye/C1", "atom_name": "C1", "component": "dye"},
                 {"id": "dye/N1", "atom_name": "N1", "component": "dye"},
             ],
-            "bonds": [],
-            "angles": [],
-            "dihedrals": [],
-            "impropers": [],
-        }
+            "bonds": [], "angles": [], "dihedrals": [], "impropers": [],
+        }))
         pairs = compute_lj_pair_sites(system)
         assert len(pairs) == 1
-        sa, sb, rmin, eps = pairs[0]
-        assert rmin > 0
-        assert eps > 0
+        assert pairs[0].rmin > 0
+        assert pairs[0].eps > 0
 
     def test_site_element_map(self):
-        system = {
+        import json
+        from IMP.bff import forcefield_system_from_json
+        system = forcefield_system_from_json(json.dumps({
             "sites": [
                 {"id": "dye/C1", "atom_name": "C1"},
                 {"id": "dye/S1", "atom_name": "S1"},
                 {"id": "dye/N1", "atom_name": "N1"},
             ]
-        }
+        }))
         emap = site_element_map(system)
         assert emap["dye/C1"] == "C"
         assert emap["dye/S1"] == "S"

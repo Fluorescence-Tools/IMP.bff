@@ -629,7 +629,8 @@ class LinkerSampler:
         evaluator = DyeInternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
         
         self.apply_config(current_cfg)
-        current_energy = evaluator.evaluate(self.get_coords())
+        current_energy = evaluator.evaluate(
+            self.get_coords(), len(atoms_dict))
         
         frames = []
         sorted_serials = sorted(self.idx_to_particle.keys())
@@ -647,7 +648,8 @@ class LinkerSampler:
             old_coords = self.get_coords()
             
             self.apply_config(proposal)
-            proposal_energy = evaluator.evaluate(self.get_coords())
+            proposal_energy = evaluator.evaluate(
+                self.get_coords(), len(atoms_dict))
             
             # Metropolis acceptance
             accept = False
@@ -731,8 +733,9 @@ def generate_linker_rotamers(
     # bonded 1-2/1-3/1-4 pairs excluded from the LJ score (same as the sampler)
     evaluator = DyeInternalEnergyEvaluator(dye_internal_system(atoms_dict, bonds))
 
-    # Trick 3: vectorized batch scoring (evaluate_batch is now NumPy-based)
-    energies = evaluator.evaluate_batch(all_coords)
+    # Trick 3: vectorized batch scoring
+    energies = np.asarray(evaluator.evaluate_batch(
+        all_coords, all_coords.shape[0], all_coords.shape[1]))
 
     # Clustering
     centers = cluster_frames_leader(all_coords, cluster_threshold)

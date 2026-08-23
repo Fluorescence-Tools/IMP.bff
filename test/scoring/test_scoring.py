@@ -1,5 +1,7 @@
 import numpy as np
-from IMP.bff import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
+from IMP.bff import (
+    BoundingBoxFilter, DyeInternalEnergyEvaluator, forcefield_system_from_json,
+    lj_score)
 
 def test_bounding_box_filter():
     bbf = BoundingBoxFilter(pad=3.5)
@@ -13,22 +15,25 @@ def test_bounding_box_filter():
     # Create reference coords: 1 atom at origin
     ref_coords = np.array([[0.0, 0.0, 0.0]])
     
-    surviving, mask = bbf.filter_frames(coords, ref_coords)
-    
+    out = bbf.filter_frames(
+        coords.ravel(), 2, 1, ref_coords.ravel(), 1)
+
     # Frame 0 should survive, Frame 1 should be filtered out
-    assert mask.shape == (2,)
-    assert mask[0] == True
-    assert mask[1] == False
-    assert surviving.shape == (1, 1, 3)
+    assert len(out.mask) == 2
+    assert out.mask[0] == True
+    assert out.mask[1] == False
+    # flat: one surviving frame of one atom
+    assert np.asarray(out.coords).shape == (3,)
 
 def test_internal_energy_evaluator_vectorized():
-    system = {
+    import json
+    system = forcefield_system_from_json(json.dumps({
         'sites': [
             {'id': 'a', 'atom_name': 'C1'},
             {'id': 'b', 'atom_name': 'C2'}
         ],
         'bonds': []
-    }
+    }))
     evaluator = DyeInternalEnergyEvaluator(system)
     
     # 2 frames, 2 atoms
@@ -37,25 +42,27 @@ def test_internal_energy_evaluator_vectorized():
         [[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]]  # Frame 1: distance 5.0 (should be 0 energy if > rmin)
     ])
     
-    energies = evaluator.evaluate_batch(coords)
+    energies = np.asarray(evaluator.evaluate_batch(
+        coords.ravel(), 2, 2))
     assert energies.shape == (2,)
     
     # Manually calculate expected energy for Frame 0
     # Assuming C-C interaction uses default params from CHARMM36_LJ
-    expected_energy_0 = evaluator.evaluate(coords[0])
-    expected_energy_1 = evaluator.evaluate(coords[1])
+    expected_energy_0 = evaluator.evaluate(coords[0].ravel(), 2)
+    expected_energy_1 = evaluator.evaluate(coords[1].ravel(), 2)
     
     np.testing.assert_allclose(energies[0], expected_energy_0)
     np.testing.assert_allclose(energies[1], expected_energy_1)
 
 def test_evaluate_batch_filtered():
-    system = {
+    import json
+    system = forcefield_system_from_json(json.dumps({
         'sites': [
             {'id': 'a', 'atom_name': 'C1'},
             {'id': 'b', 'atom_name': 'C2'}
         ],
         'bonds': []
-    }
+    }))
     evaluator = DyeInternalEnergyEvaluator(system)
     
     # Frame 0 is close, Frame 1 is far
@@ -66,13 +73,14 @@ def test_evaluate_batch_filtered():
     
     ref_coords = np.array([[0.0, 0.0, 0.0]])
     
-    energies, mask = evaluator.evaluate_batch_filtered(coords, ref_coords)
-    
-    assert mask.shape == (2,)
-    assert mask[0] == True
-    assert mask[1] == False
-    assert energies[1] == 0.0 # Energy should be 0 since it didn't overlap
-    assert energies[0] != 0.0 # Energy should be evaluated
+    out = evaluator.evaluate_batch_filtered(
+        coords.ravel(), 2, 2, ref_coords.ravel(), 1)
+
+    assert len(out.mask) == 2
+    assert out.mask[0] == True
+    assert out.mask[1] == False
+    assert out.energies[1] == 0.0  # no overlap -> not scored
+    assert out.energies[0] != 0.0
 
 
 # IMP runs every .py under test/ as a standalone script, and a file of bare

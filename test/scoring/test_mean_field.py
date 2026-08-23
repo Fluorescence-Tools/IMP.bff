@@ -14,11 +14,11 @@ def test_mean_field_weights_single():
     dye_elems = ['C'] * n_dye_atoms
     prot_elems = ['C'] * n_prot
     
-    w = rotamer_mean_field_weights(
+    w = np.asarray(rotamer_mean_field_weights(
         rotamer_coords, initial_weights, protein_coords,
         dye_elems, prot_elems, K=1.0, n_iter=5
-    )
-    
+    ))
+
     assert w.shape == (n_clusters,)
     assert abs(w.sum() - 1.0) < 1e-9
 

@@ -784,20 +784,18 @@ def build_forcefield_system(
             # Since this builder is general, we might need to pass labeling info via CLI.
             pass
 
-    # (was: from .topology import ...) -- now in this module
-    lj_types = {}
+    # (was: from .topology import ...) -- now in this module. The C++
+    # build_lj_type_table owns the single table; the dict fields are what the
+    # JSON bridge below reads.
     all_elements = set()
     for s in sites:
         ename = IMP.bff.element_from_atom_name(s["atom_name"])
         all_elements.add(ename)
-    
-    for elem in sorted(all_elements):
-        params = CHARMM36_LJ.get(elem, CHARMM36_LJ["C"])
-        lj_types[f"LJ_{elem}"] = {
-            "element": elem,
-            "rmin_half": params["rmin_half"],
-            "epsilon": params["epsilon"],
-        }
+    lj_types = {}
+    for key, t in build_lj_type_table(sorted(all_elements)).items():
+        lj_types[key] = {"element": t.element,
+                         "rmin_half": t.rmin_half,
+                         "epsilon": t.epsilon}
 
     out_dir = os.path.abspath(relative_to) if relative_to else None
     system = {

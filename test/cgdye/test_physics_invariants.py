@@ -121,14 +121,16 @@ def test_regime_ordering_static_le_dynamic_plus():
 def test_boltzmann_weights_are_softmax_of_minus_e_over_kt():
     e = np.array([0.0, 1.0, 2.5, 10.0])
     t = 298.15
-    w = boltzmann_weights(e, temperature=t)
+    w = np.asarray(boltzmann_weights(e, temperature=t))
     ref = np.exp(-e / (KB_KCAL * t)); ref /= ref.sum()
     np.testing.assert_allclose(w, ref, rtol=1e-12)
     assert w.sum() == pytest.approx(1.0)
     # invariant to an energy offset
-    np.testing.assert_allclose(boltzmann_weights(e + 123.4, t), w, rtol=1e-12)
+    np.testing.assert_allclose(
+        np.asarray(boltzmann_weights(e + 123.4, t)), w, rtol=1e-12)
     # huge energies do not overflow
-    assert np.isfinite(boltzmann_weights(np.array([0.0, 5000.0]), t)).all()
+    assert np.isfinite(
+        np.asarray(boltzmann_weights(np.array([0.0, 5000.0]), t))).all()
 
 
 def test_mean_field_weights_prior_limits():
@@ -140,11 +142,11 @@ def test_mean_field_weights_prior_limits():
     elems_d = ["C"] * 6
     elems_p = ["C"] * near_protein.shape[0]
     # K = 0: the prior is returned
-    np.testing.assert_allclose(rotamer_mean_field_weights(rot, prior, near_protein, elems_d, elems_p, K=0.0), prior, rtol=1e-12)
+    np.testing.assert_allclose(np.asarray(rotamer_mean_field_weights(rot, prior, near_protein, elems_d, elems_p, K=0.0)), prior, rtol=1e-12)
     # protein far away: no interaction, prior returned for any K
-    np.testing.assert_allclose(rotamer_mean_field_weights(rot, prior, far_protein, elems_d, ["C"] * 20, K=5.0), prior, rtol=1e-12)
+    np.testing.assert_allclose(np.asarray(rotamer_mean_field_weights(rot, prior, far_protein, elems_d, ["C"] * 20, K=5.0)), prior, rtol=1e-12)
     # protein on top of cluster 0: cluster 0 loses weight, result stays a distribution
-    q = rotamer_mean_field_weights(rot, prior, near_protein, elems_d, elems_p, K=1.0)
+    q = np.asarray(rotamer_mean_field_weights(rot, prior, near_protein, elems_d, elems_p, K=1.0))
     assert q.shape == (4,) and (q >= 0).all() and q.sum() == pytest.approx(1.0)
     assert q[0] < prior[0]
 

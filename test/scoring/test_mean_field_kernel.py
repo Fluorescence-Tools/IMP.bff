@@ -26,13 +26,33 @@ import pytest
 
 import IMP.bff
 from IMP.bff import (
-    _aabb_overlap,
-    _build_cross_lj_params,
-    _lj_energy_pairs,
-    _pair_energy_matrix,
+    BoundingBoxFilter,
+    cross_lj_params,
+    lj_pairs_sum,
+    pair_energy_matrix,
     rotamer_mean_field_weights,
     rotamer_mean_field_weights_multi_dye,
 )
+
+
+def _aabb_overlap(a, b):
+    return BoundingBoxFilter.intersects(list(a), list(b))
+
+
+def _build_cross_lj_params(ea, eb):
+    arrs = cross_lj_params(list(ea), list(eb))
+    return np.asarray(arrs.rmin_half), np.asarray(arrs.epsilon)
+
+
+def _lj_energy_pairs(a, b, rmin, eps, r_cutoff=12.0):
+    return lj_pairs_sum(np.asarray(a).ravel(), np.asarray(b).ravel(),
+                        rmin, eps, r_cutoff)
+
+
+def _pair_energy_matrix(a, b, ea, eb, rc, pad):
+    return np.asarray(pair_energy_matrix(
+        np.asarray(a).ravel(), np.asarray(b).ravel(), list(ea), list(eb),
+        a.shape[0], b.shape[0], rc, pad)).reshape(a.shape[0], b.shape[0])
 
 
 def _reference_single(rot, w0, prot, de, pe, K=1.0, n_iter=10, pad=3.5, rc=12.0):

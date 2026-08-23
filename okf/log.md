@@ -1,5 +1,129 @@
 # Update Log
 
+## 2026-08-23 — PRD-118: `.drot` v6 — the data members become JSON
+
+Final payload shape (user direction): the tar.xz stays, and every data
+member is now JSON text — `base.json` / `theta.json` / `phi.json` (flat int
+arrays, the same int16 grids spelled out) and `weights.json` (int array;
+weights are cluster populations), alongside `drot.json`, `template.cif`
+(CIF per the earlier explicit call) and `rows.json`. Unpack with `tar -xf`
+and everything but the template parses in any JSON parser — no bespoke
+binary decoding on the data path. **Measured cost: +15.6 % over v5's int16
+members after LZMA — 7.68 vs 6.59 MB across the 95 libraries — still 3.91×
+smaller than the shipped `.bcif` (74 % saved).** Validation unchanged:
+93/95 reconstruct exactly (worst 0.018 Å; the two known template-defect
+libs), all 95 files pass `xz -t` and `tar -tf`, JSON-member load of every
+conformer ~7 s. Spec and full format-decision ledger (bit-pack rejected,
+msgpack rejected, JSON accepted at its measured price) in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
+## 2026-08-22 — PRD-117 batch 16: `scoring.i` to C++ — the whole stage-2 layer
+
+667 lines of `%pythoncode` became 150 (the sanctioned remainder). Scoring.h
+grew from parameter-table shims to the full stage-2 layer:
+
+- `charmm36_lj`/`lj_cross` are public and return 2-value managed views
+  (un-`%ignore`d; `std::array` -> the out-view pattern the repo already uses).
+  New beside them: `atom_type`, `lj_score`, `scaled_parameters`,
+  `cross_lj_params`, `lj_pairs_sum`, `pair_energy_matrix` (over the C++
+  conformer-pair kernel), and `LJArrays` values.
+- The **FRETpredict selector mini-language** is C++: `selector_matches`,
+  `selector_resnames`, `selector_atom_names`, `hydrogen_mask`, `site_mask`,
+  `protein_charge_mask`, `rotamer_charge_mask`.
+- `BoundingBoxFilter` is a C++ class (`build`/`build_single`/`intersects`/
+  `intersects_reference`/`filter_frames` -> `AABBFilterResult{coords, mask}`).
+- `compute_rotamer_score` is **end-to-end** now: it takes the names/resnames/
+  selectors the Python orchestration took, builds the masks itself, assembles
+  the Lorentz-Berthelot parameters, calls the all-pairs kernel. The old
+  pre-assembled-parameters entry point is gone (it had no caller).
+- `rotamer_mean_field_weights` (single dye) iterates in C++ over the
+  pair-energy matrix; `boltzmann_weights`/`rotamer_cluster_weights` already
+  were C++ and now surface as such (they return tuples/lists -- callers wrap
+  with `np.asarray`).
+- Typed-system walkers: `site_element_map`, `compute_lj_pair_sites` (returns
+  `LJSitePair` values), `build_lj_type_table` (map of `FFLJType`), and
+  `DyeInternalEnergyEvaluator` as a C++ class taking the **typed system**
+  (evaluate/evaluate_batch(flat, n, m)/evaluate_batch_filtered ->
+  `EnergyMaskResult{energies, mask}`).
+
+Still Python, deliberately: `rotamer_mean_field_weights_multi_dye` (numpy
+matrix algebra over the C++ kernel), `dye_internal_system` (bridges
+`parse_dye_mol2` dicts, moves with the topology batch), and
+`torsion_cosine`/`build_dye_restraints` (create IMP.core objects).
+
+Also: swig.i-in runs `forcefield.i` before `scoring.i` -- Scoring.h's
+`DyeForceFieldSystem` parameters need DyeForceField.h parsed first or the
+wrappers emit unqualified names and fail to compile; SWIG does not follow a
+header's #include chain. rotamer_ensemble's from_site passes lists (a numpy
+`or []` raised an ambiguous-truth error). topology.i's LJ-type table is
+`build_lj_type_table` now (CHARMM36_LJ is gone with its dict). The
+`_atom_type` lru_cache test became a plain answers test -- C++ needs no
+memoisation.
+
+Migrated tests: scoring/*, cgdye/test_dye_topology, test_rotamer_generation,
+test_physics_invariants, dye/test_library_cache; sampling.i and
+rotamer_ensemble.i call sites.
+
+Verification: `ninja IMP.bff` clean; non-medium **624 passed, 3 xfailed**
+(only the pre-existing `av_reference_0.mrc` data failure); cgdye **160
+passed**; expensive all-dyes **36 passed**.
+
+## 2026-08-23 — PRD-118: "why not msgpack?" — measured
+
+Answered with the corpus rather than an argument: one msgpack document
+(grids as `bin`, header as a map) through the same xz stream is **+0.13 %
+larger** than v5's tar.xz (6.597 vs 6.588 MB over the 95 libraries) — tar's
+repetitive headers compress to less than msgpack's framing saves. Two
+presumptions corrected on the way: msgpack **is** already in the Python dep
+tree (ships with python-ihm) and its C decoder **is** already compiled into
+IMP (`ihm_format.c` includes `cmp.h`, and bff's own `read_bcif_trajectory`
+drives it in binary mode) — so neither side lacks msgpack; the decision is
+the size tie plus the requirement that the file unpack with zero tooling.
+Recorded next to the bit-packing rejection in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
+## 2026-08-23 — PRD-118: `.drot` v5 — the container becomes an unpackable archive
+
+Final container shape: a `.drot` is now a **`tar.xz`** — `tar -tf` lists the
+members, `tar -xf` unpacks them (`xz -t` still verifies). The members are
+the library's parts as named files: `drot.json` (header), `template.cif`
+(the mmCIF reference geometry), `rows.json` (the Z-matrix table),
+`base.i16`/`theta.i16`/`phi.i16` (the grids), `weights.bin`. No bespoke
+container code anywhere: Python `tarfile`, the CLIs, and C++ liblzma +
+tar's 512-byte headers all read it; the loader still rebuilds and
+cross-checks the `ZTree` from the embedded template. One tar payload
+through one LZMA stream keeps the joint compression — the tar layering
+costs ~0.4 KB/file (~40 KB over the corpus). **Sweep: 30.05 MB `.bcif` →
+6.59 MB `.drot` = 4.56× smaller (78 % saved)**, 93/95 reconstruct exactly
+(worst 0.018 Å), all 95 files pass `xz -t` *and* `tar -tf`, self-contained
+load of all conformers ~8 s. Spec and commands in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
+## 2026-08-23 — PRD-118: `.drot` v4 — one `.xz` container, self-contained
+
+The ship format is settled: a `.drot` **is** a single `.xz` container (CRC32;
+`xz -t` verifies every shipped file) whose payload carries everything —
+the template as mmCIF (`_atom_site`), the Z-matrix row table, the per-rotamer
+grids (int16: base 0.001 Å, θ/φ 0.1°) and varint weights. No sidecar `.pdb`:
+`load_drot(path)` returns `ZTree` + coordinates + weights from the one file,
+rebuilding the tree from the embedded template and cross-checking it against
+the embedded rows (a built-in consistency check). Joint compression over the
+whole payload beat v3's per-stream containers by 0.6 %, so the inner streams
+went away; self-containment costs ~1 KB/file. **Sweep: 30.05 MB `.bcif` →
+6.55 MB `.drot` = 4.59× smaller (78 % saved)**, 93/95 reconstruct exactly
+(worst 0.018 Å), self-contained load of all ~30 k conformers in ~6 s; the
+one sub-1× library (`A35_C1R_c30`) has a single rotamer — its 1.1 KB is
+mostly the embedded template. Format and commands in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
 ## 2026-08-22 — PRD-117 batch 15: `pyext/src` deleted — zero .py files in pyext
 
 The thirteen re-export shims (873 lines: `api.py`, `io/`, `io/cif.py`,
@@ -37,6 +161,23 @@ Verification: `ninja IMP.bff` clean; non-medium **624 passed, 3 xfailed**
 (count lower only because the deleted audits carried ~30 of their own tests;
 sole failure is the pre-existing `av_reference_0.mrc` data file), cgdye
 **162 passed**, expensive all-dyes **36 passed**, `imp_bff --help` runs.
+
+## 2026-08-23 — PRD-118: `.drot` v3 — entropy-coded streams in `.xz` containers
+
+Ship-size squeeze on top of the v2 exact store (the libraries must travel
+with the package): measured the streams' entropy floor (order-0, 1.71×
+headroom), then tested the candidates over the full corpus — per-stream LZMA
+on the plain int16 grids wins (bit-packing *scrambles* the byte structure
+the range coder exploits: 4.09 MB packed vs 3.59 MB plain on the probe);
+weights are integer cluster populations, so they varint. The streams ship
+inside **`.xz` containers (CRC32)**: +53 B/stream, +0.24 % over the raw
+filter, for a built-in integrity check, `xz -t` debuggability and the simple
+auto-detecting `lzma_stream_decoder` on the C++ side (filters self-describe
+in the container header — no versioning hazard). **Final: 30.05 MB `.bcif`
+→ 6.49 MB `.drot` = 4.63× smaller (78 % saved)**, per-library 2.09–13.83×
+(median 4.33×); decode + full reconstruction of all ~30 k conformers in
+~6 s; validation unchanged (93/95 exact, the 2 known-template-defect libs
+apart). Numbers and rationale in `prototypes/drot_rotlib/CONVERTING.md`.
 
 ## 2026-08-23 — PRD-118: `.drot` space saving measured over all 95 libraries — and a shipped-template defect found
 

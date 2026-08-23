@@ -167,19 +167,25 @@ class RotamerEnsemble(States):
         lib = _library(library)
         ca, n, c = resolve_backbone_site(frame, chain, residue)
         rotamers = transform_library_to_site(lib["coords"], ca, n, c)
+        metadata = dict(lib.get("metadata", {}) or {})
+        _weights = lib.get("weights")
+        _weights = [] if _weights is None else list(_weights)
+        _resnames = lib.get("resnames")
+        _resnames = [] if _resnames is None else list(_resnames)
         score = compute_rotamer_score(
             rotamers,
             frame["coords"],
             frame["atom_names"],
             frame["resnames"],
             lib["atom_names"],
-            lib.get("metadata", {}),
-            lib.get("resnames"),
-            protein_residue_indices=frame.get("residue_indices"),
-            protein_chain_ids=frame.get("chain_ids"),
+            metadata.get("positive") or [],
+            metadata.get("negative") or [],
+            _resnames,
+            protein_residue_indices=frame.get("residue_indices") or [],
+            protein_chain_ids=frame.get("chain_ids") or [],
             site_residue=residue,
-            site_chain=chain,
-            rotamer_weights=lib.get("weights"),
+            site_chain=chain or "",
+            rotamer_weights=_weights,
             temperature=temperature,
             ignore_h=ignore_h,
             electrostatic=electrostatic,
@@ -187,7 +193,6 @@ class RotamerEnsemble(States):
             sigma_scaling=sigma_scaling,
             epsilon_scaling=epsilon_scaling,
         )
-        metadata = dict(lib.get("metadata", {}) or {})
         names = list(lib["atom_names"])
         lib_res = lib.get("resnames")
         centre_idx = selector_atom_indices(names, metadata.get("r", []), lib_res)[0]

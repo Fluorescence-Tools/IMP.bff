@@ -86,27 +86,27 @@ class TestLinkerSamplerPhysics(unittest.TestCase):
         from IMP.bff import get_structure_dir
         atoms, bonds = parse_dye_mol2(str(get_structure_dir("alexa488_r48.mol2")), "dye")
         system = dye_internal_system(atoms, bonds)
-        self.assertEqual(len(system["sites"]), len(atoms))
-        self.assertEqual(len(system["bonds"]), len(bonds))
-        excluded = {frozenset(p) for p in as_forcefield_system(system).exclusions()}
+        self.assertEqual(len(system.sites), len(atoms))
+        self.assertEqual(len(system.bonds), len(bonds))
+        excluded = {frozenset(p) for p in system.exclusions()}
         # every bond, angle end pair and dihedral end pair is excluded
-        for a, b, _l, _t in system["bonds"]:
-            self.assertIn(frozenset({a, b}), excluded)
-        for a, _b, c, _th, _t in system["angles"]:
-            self.assertIn(frozenset({a, c}), excluded)
-        for a, _b, _c, d, _t in system["dihedrals"]:
-            self.assertIn(frozenset({a, d}), excluded)
+        for bd in system.bonds:
+            self.assertIn(frozenset({bd.site_a, bd.site_b}), excluded)
+        for an in system.angles:
+            self.assertIn(frozenset({an.site_a, an.site_c}), excluded)
+        for to in system.dihedrals:
+            self.assertIn(frozenset({to.site_a, to.site_d}), excluded)
         with_excl = DyeInternalEnergyEvaluator(system)
-        without = DyeInternalEnergyEvaluator({"sites": system["sites"], "bonds": []})
-        self.assertLess(len(with_excl.pairs), len(without.pairs))
+        without = DyeInternalEnergyEvaluator(dye_internal_system(atoms, []))
+        self.assertLess(len(with_excl.get_pairs()), len(without.get_pairs()))
         # site ids are unique although MOL2 atom names are not (83 atoms, 68 names)
-        self.assertEqual(len({s["id"] for s in system["sites"]}), len(atoms))
+        self.assertEqual(len({s.id for s in system.sites}), len(atoms))
         # the MOL2 geometry scores a few tens of kcal/mol (repulsive-only 12-6
         # on non-bonded pairs) once bonded pairs are excluded; scored against
         # bonded neighbours (the old behaviour) it is ~1e6
         coords = np.array([[a["x"], a["y"], a["z"]] for a in sorted(atoms.values(), key=lambda x: x["serial"])])
-        self.assertLess(with_excl.evaluate(coords), 50.0)
-        self.assertGreater(without.evaluate(coords), 1e5)
+        self.assertLess(with_excl.evaluate(coords.ravel(), len(atoms)), 50.0)
+        self.assertGreater(without.evaluate(coords.ravel(), len(atoms)), 1e5)
 
     def test_generate_rotamers_pins(self):
         import hashlib

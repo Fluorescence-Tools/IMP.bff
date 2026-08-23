@@ -76,6 +76,9 @@ _LAZY = {}
 /* Scoring: how hard a conformer collides with its structure. */
 %include "IMP/bff/RotamerEnergy.h"
 
+/* The coarse-grained system, typed: what cgdye builds and simulates. */
+%include "IMP_bff.forcefield.i"
+
 /* Scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, rotamer score. */
 %include "IMP_bff.scoring.i"
 
@@ -118,9 +121,6 @@ _LAZY = {}
 %include "IMP/bff/ZMatrix.h"
 %template(VectorPairIntInt) std::vector<std::pair<int, int> >;
 %template(VectorVector3D) std::vector<IMP::algebra::Vector3D>;
-
-/* The coarse-grained system, typed: what cgdye builds and simulates. */
-%include "IMP_bff.forcefield.i"
 
 /* The force-field system in, through the ihm C reader IMP vendors. */
 %include "IMP/bff/ForceFieldCIF.h"

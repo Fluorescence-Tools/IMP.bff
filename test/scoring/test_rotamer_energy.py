@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff import lj_energy
+from IMP.bff import forcefield_system_from_json, lj_energy
 
 
 def _reference(rot, prot, rmin_ij, eps_ij, q_rot, q_prot, potential, electrostatic):
@@ -177,7 +177,9 @@ def test_lj_pair_energies_match_the_gathered_numpy():
     eps = rng.uniform(0.02, 0.3, n_pairs)
 
     r = np.linalg.norm(coords[:, ia, :] - coords[:, ib, :], axis=-1)
-    want = lj_energy(r, rmin[None, :], eps[None, :], repulsive_only=True).sum(axis=-1)
+    want = np.asarray(lj_energy(
+        r, np.broadcast_to(rmin, r.shape), np.broadcast_to(eps, r.shape),
+        repulsive_only=True)).reshape(r.shape).sum(axis=-1)
     got = np.asarray(IMP.bff.lj_pair_energies(
         np.ascontiguousarray(coords).ravel(),
         ia.astype(np.int32), ib.astype(np.int32), rmin, eps,
@@ -202,14 +204,18 @@ def test_the_scalar_and_batch_evaluators_agree():
         "sites": [{"id": i, "element": "C"} for i in range(n)],
         "bonds": [(i, i + 1, 1.5, 0) for i in range(n - 1)],
     }
-    ev = DyeInternalEnergyEvaluator(system)
+    import json
+    ev = DyeInternalEnergyEvaluator(
+        forcefield_system_from_json(json.dumps(system)))
     frames = rng.normal(0, 3, (5, n, 3))
-    batch = ev.evaluate_batch(frames)
+    batch = ev.evaluate_batch(frames.ravel(), 5, n)
     for i, f in enumerate(frames):
-        assert ev.evaluate(f) == pytest.approx(batch[i], rel=1e-12)
+        assert ev.evaluate(f.ravel(), n) == pytest.approx(batch[i], rel=1e-12)
 
 
 def test_no_pairs_means_no_energy():
     from IMP.bff import DyeInternalEnergyEvaluator
-    ev = DyeInternalEnergyEvaluator({"sites": [{"id": 0, "element": "C"}], "bonds": []})
-    assert list(ev.evaluate_batch(np.zeros((3, 1, 3)))) == [0.0, 0.0, 0.0]
+    import json
+    ev = DyeInternalEnergyEvaluator(forcefield_system_from_json(json.dumps(
+        {"sites": [{"id": 0, "element": "C"}], "bonds": []})))
+    assert list(ev.evaluate_batch(np.zeros((3, 1, 3)).ravel(), 3, 1)) == [0.0, 0.0, 0.0]
