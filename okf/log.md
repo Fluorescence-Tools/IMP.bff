@@ -1,5 +1,72 @@
 # Update Log
 
+## 2026-08-22 — PRD-117 batch 18: `build_forcefield_system` to C++ (`TopologyBuild.h`)
+
+The 410-line Python orchestration is one C++ function now:
+`build_forcefield_system(components_json, ...force constants...)` reads the
+MOL2 components, derives sites (alpha-suffix dedup of repeated MOL2 names --
+`serial_to_site_atom_names` is public too), bonds/angles/dihedrals, the
+template-driven impropers (ring/pi/flat/orient centers expanded against the
+bond graph), the feature groups, the LJ table (via `build_lj_type_table`, one
+source), and the type tables -- then builds the typed system through
+`forcefield_system_from_json`, the one conversion path, which guarantees the
+same semantics the Python produced.
+
+The Python `build_forcefield_system` is a thin bridge (list-or-string specs ->
+JSON -> `_IMP_bff`); `build_system_from_specs`, `build_dye_protein_system`,
+`dye_forcefield_system` and the dict/`parse_dye_mol2` surface stay Python
+(dict-shaped callers; the writer wrapper). `topology.i` 989 -> 628 lines.
+
+**The bug the port caught**: `MolecularGraph` keys nodes by the raw pair
+values (the serials), but my first improper expansion passed 0-based index
+arrays beside a serial-keyed graph -- 58 impropers where the pins say 81.
+Every count matches after passing serial spelling everywhere (138 sites, 146
+bonds, 262 angles, 207 dihedrals, 81 impropers on the shipped two-component
+system).
+
+Verification: `ninja IMP.bff` clean; non-medium **624 passed, 3 xfailed** (only
+the pre-existing `av_reference_0.mrc` data failure); cgdye **160 passed**;
+expensive all-dyes **36 passed**; `imp_bff build-system --help` runs.
+
+## 2026-08-23 — PRD-118 scope: spin labels (DEER/PRD + PRE) — DEER-PREdict cloned, `.drot` verified on its libraries
+
+The label story now extends beyond fluorescent dyes: cloned
+[KULL-Centre/DEERpredict](https://github.com/KULL-Centre/DEERpredict) (de-gitted,
+176 MB of test MD stripped to 22 MB) into `junk/DEERpredict/` — Tesei, Martins,
+Kunze, Wang, Crehuet & Lindorff-Larsen, *PLOS Comput Biol* 2021;17:e1008551,
+GPLv3; **the same group and the same pdb+dcd+weights mdtraj triple as our
+FRETpredict dye libraries**. Its `lib/` carries 10 spin-label rotamer
+libraries (MTSSL 175K/298K variants, BASL, MA-proxyl) — and the `.drot`
+converter handles them as-is: **MTSSL CaSd → `.drot` at 0.0023 Å RMSD
+(rigid rotamers, cleaner than the dye MD), 17× smaller than its DCD**.
+One gotcha found and recorded: their PDB templates are zero-geometry
+placeholders, so the template comes from the first DCD frame
+(`CONVERTING.md` gotchas). What this opens: EPR (DEER distance
+distributions) and NMR (PRE rates) labels on the same rotamer machinery as
+FRET dyes — one `.drot` store, one loader, two spectroscopies.
+
+# Update Log
+
+## 2026-08-23 — PRD-118: the lossy ladder measured — and the 1–3 MB/dye budget is already met lossless
+
+Per-stem accounting first: v8's largest dye+linker stem is **0.41 MB**
+(median 175 KB), so the stated 1–3 MB/dye budget is met 3–7× over with zero
+loss. The lossy option was still measured so it is quantified, not guessed:
+grids coarsened through the real pipeline (0.25° → 4°) with the transition-
+dipole error as the acceptance metric, against the guard that a 1.58°
+dipole error is what broke the FRETpredict pins in the bcif investigation.
+Verdict: 0.25° is safe (−10 %, 0.27° median), 0.5° spends most of the
+margin (−20 %, 0.52°/1.11° med/p95), 1° and beyond sit in or past the
+pin-breaking regime. The rungs are now real options, not code changes:
+`encode_drot.py --grid-deg/--grid-a`, the grid recorded per member in
+`drot.json`, and the reader honours it (verified end-to-end on a 0.5°
+encode: −21.7 %, errors land on the ladder rung). Also counted: the
+**loss-free** diet of shipping cutoff20+30 only is 2.13 MB — the first cut
+if package size ever matters. Ladder + guard in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
 ## 2026-08-22 — PRD-117 batch 17: rotamer site kernels + library registry to C++ (`RotamerSite.h`)
 
 New header `include/RotamerSite.h` / `src/RotamerSite.cpp` carrying what was
