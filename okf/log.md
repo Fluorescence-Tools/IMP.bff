@@ -1,5 +1,57 @@
 # Update Log
 
+## 2026-08-22 — PRD-117 batch 17: rotamer site kernels + library registry to C++ (`RotamerSite.h`)
+
+New header `include/RotamerSite.h` / `src/RotamerSite.cpp` carrying what was
+Python in `representation/rotamer.py`:
+
+- **The backbone frame**: `resolve_backbone_site` (CA/N/C by chain+residue,
+  raising which atom is missing), `backbone_rotation` (x along CA->N, y in the
+  N-CA-C plane, z = x cross y), `transform_library_to_site` -- nine
+  multiplications a caller should not re-type, now out-views.
+- **`selector_atom_indices`**: the FRETpredict selector index resolution, same
+  `NAME and resname RES` grammar and ambiguity rules as scoring's -- the
+  resname clause is honoured when resnames are given (atom names repeat
+  between dye and linker residues), and a miss raises naming the selector.
+- **The library registry**: `rotamer_library_metadata` (libraries.json read
+  once in C++, entry returned as JSON text with name/library_name/cutoff
+  added), `normalize_library_name` (cutoff-suffix grammar),
+  `library_name_cutoff`, `library_filename`, `resolve_rotamer_library_path`
+  (canonical FRETpredict set first so the *requested cutoff* loads; the
+  only-cutoff-30-RMF mismatch raises).
+
+`rotamer.i`'s Python functions with the same names became thin shape/bridge
+wrappers (1420 -> 1252 lines); the fps payload dataclasses,
+`load_rotamer_library` (bcif via C++ `load_rotamer_library_dcd`, RMF door
+lazy), `load_protein_frames` (IMP.atom/IMP.rmf) and the `RotamerFRET` driver
+stay Python -- RMF and IMP API glue. Gotcha repeated and fixed: a %pythoncode
+def that shadows its own SWIG name must call `_IMP_bff.<name>`, or it
+recurses into itself (all eight bridges).
+
+Verification: `ninja IMP.bff` clean; non-medium **624 passed, 3 xfailed**
+(only the pre-existing `av_reference_0.mrc` data failure); cgdye **160
+passed**; expensive all-dyes **36 passed**.
+
+## 2026-08-23 — PRD-118: `.drot` v8 — column-major grids + brotli, 5.31× vs `.bcif`
+
+"Better encoding?" answered with the full codec matrix on the real payload
+(95 libraries): zstd-22-long +11.5 % vs xz, PPMd worse, per-row centering
+noise, xz-DELTA +9 % — and **brotli −6.6 %** on identical tar bytes with
+**3.6× faster decode** (libbrotlidec already in the runtime env). Combined
+with the other measured win — **column-major grids (−7.4 %: same-row values
+cluster; contiguity is what the context model needs)** — v8 lands at
+**30.05 MB `.bcif` → 5.66 MB `.drot` = 5.31× smaller (81 % saved)**, v5's
+6.59 MB cut by another 14 %. Validation unchanged (93/95 exact, worst
+0.018 Å; the two known template-defect libs), load + full reconstruction
+of every conformer ~9 s, every file unpacks `brotli -dc | tar -t`
+(GNU: `tar -I brotli -xf`). One **corpus archive** was measured too
+(4.52 MB, 6.65×) and rejected as ship shape — couples all libraries,
+kills per-file lazy loading. Full decision ledger (nine candidates,
+eight rejected with numbers) in `prototypes/drot_rotlib/CONVERTING.md`;
+reader still dispatches v2–v8.
+
+# Update Log
+
 ## 2026-08-23 — PRD-118: `.drot` v6 — the data members become JSON
 
 Final payload shape (user direction): the tar.xz stays, and every data

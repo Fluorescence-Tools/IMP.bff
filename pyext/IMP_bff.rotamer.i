@@ -1,13 +1,18 @@
 /*
  * representation/rotamer.py to %pythoncode: the rotamer library, ensemble,
- * and FRET driver. Uses IMP.rmf and RMF (deferred inside functions) for
- * rotamer library IO. The C++ kernels (FRETPair, RotamerEnergy, States,
- * RotamerStatistics) are in their own headers.
+ * and FRET driver. The backbone frame, the atom selectors and the library
+ * registry are C++ (RotamerSite.h); the C++ kernels (FRETPair, RotamerEnergy,
+ * States, RotamerStatistics) are in their own headers. What stays Python:
+ * the IMP.atom/IMP.rmf protein-frame reader, the RMF library door (deferred),
+ * the fps payload plumbing (dict-shaped, the JSON text is the C++ surface),
+ * and the RotamerFRET driver itself.
  *
  * RotamerEnsemble subclasses States (a SWIG value type defined later in
  * __init__.py), so it is defined in a separate %pythoncode block at the
  * end of swig.i-in, after all SWIG types.
  */
+
+%include "IMP/bff/RotamerSite.h"
 
 %pythoncode %{
 
@@ -443,29 +448,20 @@ def write_rotamer_fps(
 # --------------------------------------------------------------------------
 """Input/output helpers for rotamer libraries and protein frames."""
 
+# The registry, the metadata and the path resolution are C++ (RotamerSite.h):
+# `rotamer_library_metadata(name)` returns the entry as JSON text, and
+# `resolve_rotamer_library_path(name, lib_dir)` resolves it. The Python kept a
+# module-level cache; the C++ reads libraries.json once.
 _LIBRARY_REGISTRY: dict[str, dict[str, Any]] | None = None
 
 
 def _registry_path() -> Path:
-    """Return the bundled FRETpredict rotamer-library registry path.
-
-    Returns
-    -------
-    pathlib.Path
-        Path to ``libraries.json``.
-    """
-    import IMP.bff
+    """Path to the bundled FRETpredict rotamer-library registry."""
     return Path(IMP.bff.get_data_path("rotamer_library")) / "libraries.json"
 
 
 def rotamer_library_registry() -> dict[str, dict[str, Any]]:
-    """Load the bundled FRETpredict rotamer-library registry.
-
-    Returns
-    -------
-    dict
-        Registry keyed by FRETpredict library name.
-    """
+    """The bundled FRETpredict rotamer-library registry, as a dict."""
     global _LIBRARY_REGISTRY
     if _LIBRARY_REGISTRY is None:
         with _registry_path().open() as handle:
@@ -474,138 +470,29 @@ def rotamer_library_registry() -> dict[str, dict[str, Any]]:
 
 
 def normalize_library_name(library_name: str) -> str:
-    """Return the registry key for a rotamer-library name.
-
-    Parameters
-    ----------
-    library_name : str
-        User-facing library name, for example
-        ``AlexaFluor 488 C1R cutoff30``.
-
-    Returns
-    -------
-    str
-        Registry key without the cutoff suffix.
-    """
-    return re.sub(r"\s+cutoff\d+$", "", str(library_name).strip())
+    """The registry key for a rotamer-library name (no cutoff suffix)."""
+    return _IMP_bff.normalize_library_name(str(library_name))
 
 
 def rotamer_library_metadata(library_name: str) -> dict[str, Any]:
-    """Return metadata for a FRETpredict-style rotamer library.
-
-    Parameters
-    ----------
-    library_name : str
-        User-facing library name.
-
-    Returns
-    -------
-    dict
-        Library metadata from ``libraries.json``.
-    """
-    key = normalize_library_name(library_name)
-    registry = rotamer_library_registry()
-    if key not in registry:
-        raise ValueError(f"Unknown rotamer library {library_name!r}")
-    metadata = dict(registry[key])
-    metadata["name"] = key
-    metadata["library_name"] = library_name
-    metadata["cutoff"] = _cutoff_from_library_name(library_name)
-    return metadata
+    """Metadata for a FRETpredict-style library, from libraries.json."""
+    return json.loads(_IMP_bff.rotamer_library_metadata(str(library_name)))
 
 
 def _cutoff_from_library_name(library_name: str) -> int | None:
-    """Extract the cutoff value from a library name.
-
-    Parameters
-    ----------
-    library_name : str
-        User-facing library name.
-
-    Returns
-    -------
-    int or None
-        Cutoff value if present.
-    """
-    match = re.search(r"cutoff(\d+)", str(library_name))
-    return int(match.group(1)) if match else None
-
-
-def _library_filename(metadata: dict[str, Any], cutoff: int | None = None) -> str:
-    """Return the FRETpredict library file stem.
-
-    Parameters
-    ----------
-    metadata : dict
-        Library metadata.
-    cutoff : int, optional
-        Cutoff value.
-
-    Returns
-    -------
-    str
-        File stem without extension.
-    """
-    base = str(metadata["filename"])
-    if cutoff is None:
-        return base
-    # The registry's filename carries FRETpredict's default cutoff
-    # (``A48_C1R_cutoff30``); a name that asks for another cutoff replaces it.
-    stem = re.sub(r"_?cutoff\d+$", "", base)
-    return f"{stem}_cutoff{int(cutoff)}"
+    cutoff = _IMP_bff.library_name_cutoff(str(library_name))
+    return None if cutoff < 0 else cutoff
 
 
 def resolve_rotamer_library_path(library_name: str, lib_dir: str | Path | None = None) -> Path:
-    """Resolve a FRETpredict-style library name to an IMP-native RMF file.
+    """Resolve a FRETpredict-style library name to a library file (C++).
 
-    Parameters
-    ----------
-    library_name : str
-        Library name or explicit path.
-    lib_dir : pathlib.Path or str, optional
-        Directory containing RMF rotamer libraries.
-
-    Returns
-    -------
-    pathlib.Path
-        Existing RMF library path.
+    The canonical FRETpredict set (module data) is tried first so the
+    *requested cutoff* is the one loaded; the RMF templates under
+    templates/rotamer hold only the cutoff-30 clustering.
     """
-    candidate = Path(str(library_name))
-    if candidate.exists():
-        return candidate
-
-    metadata = rotamer_library_metadata(library_name)
-    cutoff = metadata.get("cutoff")
-    filename = _library_filename(metadata, cutoff)
-    stem = filename.split("_cutoff")[0]
-
-    # The FRETpredict library files (module data, data/rotamer_library) are the
-    # canonical libraries: <stem>.pdb + <stem>_cutoff<N>.bcif (+ weights) for
-    # each cutoff. They are tried first so that the *requested cutoff* is the
-    # one loaded. The RMF templates under templates/rotamer hold only the
-    # cutoff-30 clustering, so resolving every name to <stem>.rmf3 silently
-    # returned the wrong library for cutoff10/cutoff20 names.
-    if lib_dir is None:
-        dcd = _registry_path().parent / f"{filename}.bcif"
-        if dcd.exists() and dcd.with_name(f"{stem}.pdb").exists():
-            return dcd
-
-    template_dir = Path(lib_dir) if lib_dir is not None else Path(get_template_dir("rotamer"))
-    candidates = [
-        template_dir / f"{filename}.bcif",
-        template_dir / f"{filename}.rmf3",
-        template_dir / f"{stem}.rmf3",
-        template_dir / f"{stem}.pdb",
-        template_dir / f"{filename}.pdb",
-    ]
-    for path in candidates:
-        if path.exists():
-            if path.suffix.lower() == ".rmf3" and cutoff not in (None, 30) and path.stem == stem:
-                raise FileNotFoundError(
-                    f"{library_name!r}: only the cutoff-30 RMF template {path.name} is available; "
-                    f"the cutoff-{cutoff} library needs {filename}.bcif next to {stem}.pdb")
-            return path
-    raise FileNotFoundError(f"No rotamer library found for {library_name!r}")
+    return Path(_IMP_bff.resolve_rotamer_library_path(
+        str(library_name), "" if lib_dir is None else str(lib_dir)))
 
 
 def _coords_to_array(library: dict[str, Any]) -> np.ndarray:
@@ -948,44 +835,33 @@ SIMULATION_TYPE_R1 = "R1"
 # ---------------------------------------------------------------------------
 
 def resolve_backbone_site(frame: dict[str, Any], chain: Optional[str], residue: int):
-    """CA, N, C coordinates of ``(chain, residue)`` in a protein frame dict."""
-    coords = np.asarray(frame["coords"], dtype=np.float64)
-    atom_names = [str(name).upper() for name in frame["atom_names"]]
-    chain_id = (chain or "").upper()
-    chain_ids = [str(v).upper() for v in frame.get("chain_ids", [""] * len(atom_names))]
-    residue_indices = [int(v) for v in frame.get("residue_indices", [-1] * len(atom_names))]
-    matches: dict[str, np.ndarray] = {}
-    for coord, atom_name, frame_chain, frame_residue in zip(coords, atom_names, chain_ids, residue_indices):
-        if atom_name not in {"CA", "N", "C"} or atom_name in matches:
-            continue
-        if chain_id and frame_chain and frame_chain != chain_id:
-            continue
-        if frame_residue != -1 and frame_residue != residue:
-            continue
-        matches[atom_name] = coord
-    missing = [name for name in ("CA", "N", "C") if name not in matches]
-    if missing:
-        raise ValueError(f"Missing backbone atoms {missing} for chain {chain or 'A'} residue {residue}")
-    return matches["CA"], matches["N"], matches["C"]
+    """CA, N, C of ``(chain, residue)`` -- the C++ kernel, shaped here."""
+    names = [str(n) for n in frame["atom_names"]]
+    out = np.asarray(_IMP_bff.resolve_backbone_site(
+        np.asarray(frame["coords"], dtype=np.float64).ravel(), names,
+        [str(v) for v in frame.get("chain_ids", [""] * len(names))],
+        [int(v) for v in frame.get("residue_indices", [-1] * len(names))],
+        chain or "", int(residue))).reshape(3, 3)
+    return out[0], out[1], out[2]
 
 
 def backbone_rotation(ca, n, c) -> np.ndarray:
-    """Rows are the site frame axes: x along CA→N, y in the N–CA–C plane, z = x × y."""
-    ca_v = np.asarray(ca, dtype=np.float64)
-    x = np.asarray(n, dtype=np.float64) - ca_v
-    x /= np.linalg.norm(x)
-    yt = np.asarray(c, dtype=np.float64) - ca_v
-    yt /= np.linalg.norm(yt)
-    z = np.cross(x, yt)
-    z /= np.linalg.norm(z)
-    y = np.cross(z, x)
-    return np.vstack([x, y, z])
+    """Rows are the site frame axes (the C++ kernel, reshaped)."""
+    return np.asarray(_IMP_bff.backbone_rotation(
+        np.asarray(ca, dtype=np.float64).ravel(),
+        np.asarray(n, dtype=np.float64).ravel(),
+        np.asarray(c, dtype=np.float64).ravel())).reshape(3, 3)
 
 
 def transform_library_to_site(coords: np.ndarray, ca, n, c) -> np.ndarray:
-    """Library coordinates (n_rot, n_atoms, 3) into the backbone frame at CA."""
-    rotation = backbone_rotation(ca, n, c)
-    return np.tensordot(np.asarray(coords, dtype=np.float64), rotation, axes=([2], [0])) + np.asarray(ca, dtype=np.float64)
+    """Library coordinates into the backbone frame at CA (the C++ kernel)."""
+    shape = np.shape(coords)
+    out = np.asarray(_IMP_bff.transform_library_to_site(
+        np.asarray(coords, dtype=np.float64).reshape(-1, 3).ravel(),
+        np.asarray(ca, dtype=np.float64).ravel(),
+        np.asarray(n, dtype=np.float64).ravel(),
+        np.asarray(c, dtype=np.float64).ravel()))
+    return out.reshape(shape)
 
 
 def selector_atom_indices(
@@ -993,58 +869,19 @@ def selector_atom_indices(
     selector,
     resnames: Optional[Sequence[str]] = None,
 ) -> list[int]:
-    """Indices of the atoms named by a FRETpredict selector (``'C7 and resname A48'``).
+    """Indices of the atoms named by FRETpredict selectors (the C++ kernel).
 
-    The ``and resname X`` clause is **honoured** when ``resnames`` is supplied.
-    It has to be: atom names repeat between the dye residue and its linker --
-    ``C13`` is in both ``A48`` and ``C1R``, ``C9`` in both ``A35``/``T48`` and
-    theirs -- and a selector that ignores the residue takes whichever comes
-    first in the atom ordering. That is the dye today only by luck of the
-    ordering; a library written linker-first would silently resolve the
-    transition dipole to two linker atoms and raise nothing.
-
-    Without ``resnames`` the clause cannot be checked and the first name match is
-    returned, as before. Callers that have the residue names should pass them.
-
-    A selector that matches nothing now raises naming **which** item failed. The
-    previous behaviour raised only when *every* item failed, so a two-atom
-    selector with one bad name returned a one-element list, and
-    :meth:`RotamerEnsemble.from_site` then fell back to atoms 0 and 1 -- a
-    silently wrong dipole.
+    The ``and resname X`` clause is honoured when ``resnames`` is supplied --
+    atom names repeat between the dye residue and its linker, and a selector
+    that ignores the residue takes whichever comes first. A selector that
+    matches nothing raises naming which item failed.
     """
     items = [selector] if isinstance(selector, str) else list(selector)
     if not items:
         return []
-    upper = [str(n).upper() for n in atom_names]
-    upper_res = [str(r).upper() for r in resnames] if resnames is not None else None
-
-    indices: list[int] = []
-    for item in items:
-        text = str(item)
-        head, _, tail = text.partition(" and ")
-        wanted = head.strip().upper()
-        want_res = None
-        match = re.search(r"\bresname\s+(\S+)", tail, flags=re.IGNORECASE)
-        if match:
-            want_res = match.group(1).strip().upper()
-
-        found = None
-        for i, name in enumerate(upper):
-            if name != wanted:
-                continue
-            if want_res is not None and upper_res is not None:
-                if i >= len(upper_res) or upper_res[i] != want_res:
-                    continue
-            found = i
-            break
-        if found is None:
-            raise ValueError(
-                f"Atom selector {text!r} matched no atom in the rotamer library"
-                + (f" (residue {want_res} not found with that atom name)"
-                   if want_res and upper_res is not None else "")
-            )
-        indices.append(found)
-    return indices
+    return list(_IMP_bff.selector_atom_indices(
+        [str(n) for n in atom_names], [str(i) for i in items],
+        [] if resnames is None else [str(r) for r in resnames]))
 
 
 def _library(library) -> dict:
