@@ -400,7 +400,7 @@ class _Assembly:
     model: "IMP.Model"
     root: "IMP.atom.Hierarchy"
     rigid_bodies: Dict[int, "IMP.core.RigidBody"]
-    fret: "IMP.bff.restraints.AVNetworkRestraintWrapper"
+    fret: "AVNetworkRestraintWrapper"
     restraint_set: "IMP.RestraintSet"
     scoring_function: "IMP.core.RestraintsScoringFunction"
     body_of_pdb: List[int]
@@ -488,7 +488,7 @@ def build_assembly(
 
     # FRET restraint (PMI wrapper around IMP.bff.AVNetworkRestraint). Built
     # after the rigid bodies exist so the AVs attach to their bodies.
-    fret = IMP.bff.restraints.AVNetworkRestraintWrapper(
+    fret = AVNetworkRestraintWrapper(
         root,
         fps_json_path,
         mean_position_restraint=mean_position_restraint,

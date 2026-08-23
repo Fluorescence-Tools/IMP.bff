@@ -11,19 +11,19 @@ from IMP.bff import get_template_dir, get_structure_dir
 import pytest
 
 
-from IMP.bff.cgdye.topology import (
+from IMP.bff import (
     build_angles,
     build_dihedrals,
     build_dye_topology,
     build_graph,
     find_cycles,
 )
-from IMP.bff.io.cif import as_forcefield_system, read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff import as_forcefield_system, read_dye_forcefield_cif, write_dye_forcefield_cif
 # CHARMM36_LJ, lj_cross and lj_params are scoring's, and were reached through
 # `cgdye.topology` only because it imports them for its own use. Importing them
 # from their owner is what lets that pass-through go.
-from IMP.bff.scoring import CHARMM36_LJ, lj_cross, lj_params
-from IMP.bff.scoring import (
+from IMP.bff import CHARMM36_LJ, lj_cross, lj_params
+from IMP.bff import (
     build_lj_type_table,
     compute_lj_pair_sites,
     lj_cross_params,
@@ -310,7 +310,7 @@ class TestTorsionConvention:
         import IMP
         import IMP.algebra
         import IMP.core
-        from IMP.bff.scoring import torsion_cosine
+        from IMP.bff import torsion_cosine
         m = IMP.Model()
         def P(x):
             p = IMP.Particle(m)

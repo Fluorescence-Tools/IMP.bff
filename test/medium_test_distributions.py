@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff.representation.distance import (
+from IMP.bff import (
     poisson_0toN,
     normal_distribution,
     generalized_normal_distribution,

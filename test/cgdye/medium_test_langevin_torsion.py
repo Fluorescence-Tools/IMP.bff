@@ -19,7 +19,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.sampling import KB_KCAL, make_langevin_simulator
+from IMP.bff import KB_KCAL, make_langevin_simulator
 from test_langevin_sampler import _particle, _run
 
 

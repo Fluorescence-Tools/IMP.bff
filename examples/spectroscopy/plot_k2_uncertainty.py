@@ -11,8 +11,9 @@ import scipy.stats
 
 import pylab as plt
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-import IMP.bff.spectroscopy.kappa2
-from IMP.bff.spectroscopy.kappa2 import s2delta, kappasq_all_delta
+import IMP.bff
+from IMP.bff import s2_delta_from_anisotropy, VectorDouble
+from IMP.bff import wobbling_kappa2_distribution_delta as _wobbling_delta
 
 
 @nb.njit
@@ -74,19 +75,13 @@ def k2_call(
     step = kwargs['step']
     n_bins = kwargs['n_bins']
     r_0 = kwargs['r_0']
-    _, delta = s2delta(
-        s2_donor=sD2,
-        s2_acceptor=sA2,
-        r_inf_AD=kwargs.get(r_ADinf, 0.0001),
-        r_0=r_0
-    )
-    return kappasq_all_delta(
-        delta = delta,
-        sD2 = sD2,
-        sA2 = sA2,
-        step = step,
-        n_bins = n_bins
-    )
+    delta = s2_delta_from_anisotropy(sD2, sA2,
+                                     kwargs.get(r_ADinf, 0.0001), r_0)[1]
+    scale = VectorDouble()
+    hist = VectorDouble()
+    _wobbling_delta(delta, sD2, sA2, step, n_bins, k2_min, k2_max,
+                    scale, hist)
+    return np.asarray(scale), np.asarray(hist)
 
 
 n_axis = 256

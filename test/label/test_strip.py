@@ -12,7 +12,7 @@ import pytest
 import IMP
 import IMP.atom
 
-import IMP.bff.label as strip
+import IMP.bff as strip
 
 _PDB = """\
 ATOM      1  N   ILE A   3      11.104   6.134  -6.504  1.00  0.00           N
@@ -108,7 +108,7 @@ def test_hierarchy_non_destructive_and_in_place(tmp_path):
 
 def test_cgdye_and_av_defaults_differ_only_in_cb(tmp_path):
     """The two consumers own their keep-sets; the engine is shared (PRD-106)."""
-    from IMP.bff.label import SITE_KEEP_ATOM_NAMES, strip_sidechain_at_site
+    from IMP.bff import SITE_KEEP_ATOM_NAMES, strip_sidechain_at_site
     pdb = tmp_path / "mini.pdb"
     pdb.write_text(_PDB)
     m = IMP.Model()

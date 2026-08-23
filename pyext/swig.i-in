@@ -98,6 +98,10 @@ _LAZY = {}
 /* Weighted averaging over a rotamer ensemble. */
 %include "IMP/bff/RotamerStatistics.h"
 
+/* Protein side-chain packing: the 1:1 FASPR port (Dunbrack 2010).
+   Attribution and the non-redistributed library note in the header. */
+%include "IMP/bff/Faspr.h"
+
 /* Leader clustering: how a conformer stack becomes a rotamer library. */
 %include "IMP/bff/Clustering.h"
 
@@ -106,6 +110,14 @@ _LAZY = {}
 %template(VectorVectorInt) std::vector<std::vector<int> >;
 %template(VectorPairIntInt) std::vector<std::pair<int, int> >;
 %template(PairIntInt) std::pair<int, int>;
+
+/* Internal coordinates, general over dyes and side chains: measure a chi
+   vector, rebuild coordinates from one (FASPR's construction, IUPAC
+   convention). The .drot dye-rotamer store and the side-chain packer share
+   this kernel. */
+%include "IMP/bff/ZMatrix.h"
+%template(VectorPairIntInt) std::vector<std::pair<int, int> >;
+%template(VectorVector3D) std::vector<IMP::algebra::Vector3D>;
 
 /* The coarse-grained system, typed: what cgdye builds and simulates. */
 %include "IMP_bff.forcefield.i"
@@ -185,25 +197,23 @@ _LAZY = {}
 %include "IMP_bff.rotamer_ensemble.i"
 
 /*
- * The flat user-facing surface. `IMP.bff.<Name>` resolves lazily through
- * api.py, which also owns the domain map. Installed here because a SWIG
- * module's __init__ is generated -- pyext/src/__init__.py is not used, which is
- * why there isn't one.
+ * The flat user-facing surface. Every public name is an attribute of
+ * `IMP.bff` itself -- a SWIG wrapper or a `%pythoncode` def in this file --
+ * except the handful in `_LAZY`, which cannot be defined at import time
+ * because they would make `import IMP.bff` require a module this one does
+ * not depend on (IMP.pmi, IMP.rmf).
  */
 %pythoncode %{
-from .api import module_getattr as _api_getattr, public_names as _api_names
-
-
 def __getattr__(name):
-    """PEP 562 hook: the lazily-built names first, then the domain map.
+    """PEP 562 hook: the lazily-built names only.
 
-    `_LAZY` holds the handful of names that cannot be defined at import time --
-    today only the IMP.pmi restraint wrapper, because defining it would make
-    `import IMP.bff` require a module this one does not depend on.
+    Everything else was already defined at import time, so a miss here is a
+    genuine miss.
     """
     builder = _LAZY.get(name)
     if builder is None:
-        return _api_getattr(name)
+        raise AttributeError(
+                "module 'IMP.bff' has no attribute %r" % name)
     import IMP.bff as _self
     value = builder()
     setattr(_self, name, value)
@@ -212,5 +222,5 @@ def __getattr__(name):
 
 def __dir__():
     import IMP.bff as _self
-    return sorted(set(vars(_self)) | set(_api_names()) | set(_LAZY))
+    return sorted(set(vars(_self)) | set(_LAZY))
 %}

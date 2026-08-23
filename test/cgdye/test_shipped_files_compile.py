@@ -1,103 +1,64 @@
-"""Every shipped cgdye source compiles, is listed in the manifest, and imports.
+"""Every shipped Python source compiles: the example scripts and the programs.
 
-A script that does not parse (scripts/rotamer_hgbp1_site481.py shipped with a
-SyntaxError for a while) is invisible to the test suite unless something
-compiles every file. The manifest check keeps pyext/src/Files.cmake honest
-in both directions.
+A script that does not parse is invisible to the test suite unless something
+compiles every file -- ``examples/structure/rotamer_hgbp1_site481.py`` shipped
+with a SyntaxError for a while. The manifest check this file used to carry died
+with ``pyext/src``: the package's Python is the `.i` files' ``%pythoncode``
+now, which the build compiles into ``__init__.py`` and imports with every test.
 """
 
-import importlib
-import os
 import py_compile
-import re
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-import IMP.bff.cgdye
-
-PKG_DIR = Path(IMP.bff.cgdye.__file__).resolve().parent
+REPO = Path(__file__).resolve().parents[2]
 
 
-def _manifest_path():
-    for parent in Path(__file__).resolve().parents:
-        cand = parent / "pyext" / "src" / "Files.cmake"
-        if cand.exists():
-            return cand
-    return None
-
-
-def _manifest_cgdye_files():
-    manifest = _manifest_path()
-    if manifest is None:
-        pytest.skip("pyext/src/Files.cmake not found (installed tree)")
-    text = manifest.read_text()
-    m = re.search(r'set\(pyfiles "(.*?)"\)', text, re.S)
-    assert m, "Files.cmake has no set(pyfiles ...)"
-    return sorted(f for f in m.group(1).split(";") if f.startswith("cgdye/"))
-
-
-def _disk_cgdye_files():
+def _python_sources():
     out = []
-    for path in PKG_DIR.rglob("*.py"):
-        if "__pycache__" in path.parts:
+    for base in ("examples", "bin"):
+        root = REPO / base
+        if not root.is_dir():
             continue
-        if path.name == "__init__.py":
-            # IMP's build regenerates Files.cmake from disk and deliberately
-            # leaves package __init__.py files out of it.
-            continue
-        out.append("cgdye/" + path.relative_to(PKG_DIR).as_posix())
-    return sorted(out)
+        for path in sorted(root.rglob("*")):
+            if "__pycache__" in path.parts or path.is_dir():
+                continue
+            if path.suffix == ".py" or (base == "bin" and path.is_file()
+                                        and not path.name.startswith(".")
+                                        and "CMakeLists" not in path.name
+                                        and "Files.cmake" not in path.name):
+                out.append(path)
+    assert out, "no shipped Python sources found"
+    return out
 
 
-def test_every_cgdye_source_compiles():
-    for path in PKG_DIR.rglob("*.py"):
-        if "__pycache__" not in path.parts:
-            py_compile.compile(str(path), doraise=True)
+@pytest.mark.parametrize("path", _python_sources(), ids=str)
+def test_source_compiles(path):
+    py_compile.compile(str(path), doraise=True)
 
 
-def test_manifest_matches_disk():
-    manifest = set(_manifest_cgdye_files())
-    disk = set(_disk_cgdye_files())
-    assert manifest == disk, (
-        f"missing from Files.cmake: {sorted(disk - manifest)}; "
-        f"listed but not on disk: {sorted(manifest - disk)}")
+def test_the_programs_import_the_flat_surface():
+    """The programs reach every name flat -- no submodule survived pyext/src."""
+    import ast
+    offenders = []
+    for path in _python_sources():
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            target = None
+            if isinstance(node, ast.ImportFrom) and node.module:
+                target = node.module
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("IMP.bff."):
+                        offenders.append(f"{path.name}: import {alias.name}")
+            if target and target.startswith("IMP.bff."):
+                suffix = target[len("IMP.bff."):]
+                if "." in suffix or suffix != "":
+                    offenders.append(f"{path.name}: from {target} import ...")
+    assert not offenders, offenders
 
 
-def _importable_modules():
-    mods = []
-    for rel in _disk_cgdye_files():
-        parts = rel[:-3].split("/")
-        if "scripts" in parts:
-            continue  # scripts have side effects; compile-only
-        mods.append("IMP.bff." + ".".join(parts))
-        mods.append("IMP.bff." + ".".join(parts[:-1]))  # the package itself
-    return sorted(set(mods))
-
-
-@pytest.mark.parametrize("module", _importable_modules())
-def test_module_imports(module):
-    importlib.import_module(module)
-
-
-def test_library_imports_without_click():
-    """click is a CLI dependency, not a library one (declared in conda-recipe)."""
-    code = (
-        "import sys; sys.modules['click'] = None\n"
-        "import IMP.bff.cgdye\n"
-        "import IMP.bff.cgdye.topology, IMP.bff.cgdye.sim\n"
-        "print('ok')\n"
-    )
-    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
-    assert result.returncode == 0, result.stderr
-    assert "ok" in result.stdout
-
-
-# IMP runs every .py under test/ as a standalone script, and a file of bare
-# pytest functions would import cleanly and exit 0 -- reporting success without
-# running a single assertion. Hand the file to pytest explicitly so a failure
-# here is a failure in ctest.
 if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+    sys.exit(pytest.main([__file__, "-q", "-p no:cacheprovider"]))

@@ -9,7 +9,7 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff.label import attach_dyes, resolve_dye_site
+from IMP.bff import attach_dyes, resolve_dye_site
 
 
 def _site_atoms(hier, chain_id, resnum):

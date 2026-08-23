@@ -861,7 +861,6 @@ def build_forcefield_system(
         },
     }
 
-    from IMP.bff.io.cif import forcefield_system_from_dict
     return forcefield_system_from_dict(system)
 
 

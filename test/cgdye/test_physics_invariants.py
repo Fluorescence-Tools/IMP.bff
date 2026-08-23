@@ -22,9 +22,9 @@ def kappa2_from_dipoles(mu_d, mu_a, r):
         _np.asarray(r, float).ravel())).reshape(
             _np.asarray(mu_d).shape[0], _np.asarray(mu_a).shape[0])
 from IMP.bff import forster_radius_from_spectra
-from IMP.bff.scoring import boltzmann_weights
-from IMP.bff.cgdye.sampling import rotamer_transition_matrix
-from IMP.bff.scoring import rotamer_mean_field_weights
+from IMP.bff import boltzmann_weights
+from IMP.bff import rotamer_transition_matrix
+from IMP.bff import rotamer_mean_field_weights
 from IMP.bff import (
     fret_efficiency_exact_kinetic_pair,
     fret_efficiency_regimes,

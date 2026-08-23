@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from IMP.bff.io.cif import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff import read_dye_forcefield_cif, write_dye_forcefield_cif
 
 class TestIO(unittest.TestCase):
     def test_read_write_ff_system(self):

@@ -15,7 +15,7 @@ import IMP.atom
 import IMP.bff
 import IMP.core
 from IMP.bff import find_dye
-from IMP.bff.label import reference_pet_parameters
+from IMP.bff import reference_pet_parameters
 from IMP.bff import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
@@ -32,7 +32,7 @@ def _pet(atoms, parameters, dye_radius=3.5):
     return PETTerm(parameters, list(atoms["res_name"]), list(atoms["atom_name"]),
                    np.ascontiguousarray(atoms["coord"]), dye_radius=dye_radius)
 import IMP.bff as maps
-from IMP.bff.representation import States
+from IMP.bff import States
 
 
 @pytest.fixture(scope="module")

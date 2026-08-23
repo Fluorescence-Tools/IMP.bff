@@ -11,7 +11,7 @@
 import IMP
 import IMP.atom
 import IMP.bff
-from IMP.bff.cgdye.utils import get_structure_dir
+from IMP.bff import get_structure_dir
 
 pdb = str(get_structure_dir("1DG3.pdb"))
 

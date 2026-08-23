@@ -279,7 +279,7 @@ def test_the_molecular_graph_is_the_systems_own():
     """
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff.cgdye.topology import build_dye_protein_system, build_graph, find_cycles
+    from IMP.bff import build_dye_protein_system, build_graph, find_cycles
 
     system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
@@ -346,7 +346,7 @@ def test_the_molecular_graph_matches_the_python_it_replaced():
     """
     import IMP.bff
     from IMP.bff import get_structure_dir
-    from IMP.bff.cgdye.topology import (
+    from IMP.bff import (
         build_angles, build_dihedrals, build_graph, find_cycles, parse_dye_mol2)
 
     expected = {                      # atoms, angles, dihedrals, rings
@@ -512,7 +512,7 @@ def test_improper_expansion_matches_the_python_it_replaced():
     """
     import IMP.bff
     from IMP.bff import get_structure_dir
-    from IMP.bff.cgdye.topology import parse_dye_mol2
+    from IMP.bff import parse_dye_mol2
 
     expected = {
         "atto655.mol2": {"ring": 20, "pi": 15, "flat": 1, "orient": 1},
@@ -553,7 +553,7 @@ def test_the_mol2_reader_matches_the_python_it_replaced():
     """
     import IMP.bff
     from IMP.bff import get_structure_dir
-    from IMP.bff.cgdye.topology import parse_dye_mol2
+    from IMP.bff import parse_dye_mol2
 
     for mol2, n_atoms, n_bonds in (("atto655.mol2", 70, 74),
                                    ("cx4.mol2", 68, 72),
@@ -594,7 +594,7 @@ def test_system_self_consistency_is_the_systems_own_check():
     """
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff.cgdye.topology import build_dye_protein_system
+    from IMP.bff import build_dye_protein_system
 
     def fresh():
         return build_dye_protein_system(
@@ -640,7 +640,7 @@ def test_linker_geometry_matches_the_python_it_replaced():
     import IMP.algebra
     import IMP.core
     from IMP.bff import get_structure_dir
-    from IMP.bff.cgdye.sampling import LinkerSampler
+    from IMP.bff import LinkerSampler
 
     sampler = LinkerSampler(str(get_structure_dir("alexa488_r48.mol2")))
     n_dof = len(sampler.rot_bonds) + len(sampler.rot_angles)

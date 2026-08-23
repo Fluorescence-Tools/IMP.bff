@@ -17,8 +17,7 @@ import IMP.core
 import RMF
 import IMP.atom
 import IMP.bff
-import IMP.bff.representation.av
-import IMP.bff.restraints
+import IMP.bff
 
 import IMP.rmf
 import IMP.pmi
@@ -100,7 +99,7 @@ output_objects.append(barrier_restraint)
 # the AVs are recalculated on each restraint evaluation.
 fps_json_fn = str(root_dir / "fret.fps.json")
 score_set = "chi2_C3"  # molecule in close c2, go from c2 -> open c1
-fret_restraint = IMP.bff.restraints.AVNetworkRestraintWrapper(
+fret_restraint = IMP.bff.AVNetworkRestraintWrapper(
     hier, fps_json_fn,
     mean_position_restraint=True,
     occupy_volume=True,
@@ -122,7 +121,7 @@ output_objects.append(evr)
 # %%
 # Adds the AV to the atom Hierarchy to display the dye mean position:
 used_avs = fret_restraint.av_network_restraint.get_used_avs()
-IMP.bff.representation.av.display_mean_av_positions(used_avs)
+# (display_mean_av_positions went with representation/av.py)
 
 # %%
 # Sampling

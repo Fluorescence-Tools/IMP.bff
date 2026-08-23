@@ -399,8 +399,6 @@ def strip_sidechain_at_site(
     mask ``chain <id> and resid <n> and not name <keep...>``. Returns the
     number of removed atoms.
     """
-    from IMP.bff.label import site_strip_mask, strip_hierarchy
-
     mask = site_strip_mask(chain_id, resnum, keep_atom_names)
     _, n_removed = strip_hierarchy(protein_hier, mask, inplace=True)
     return n_removed

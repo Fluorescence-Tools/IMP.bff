@@ -14,13 +14,13 @@ Names follow the FLR dictionaries where an item exists (checked against
 import pytest
 
 from IMP.bff import find_dye
-from IMP.bff.label import (
+from IMP.bff import (
     Label, Quencher, PETParameters, pet_quenching_reference,
     reference_quenchers, reference_pet_parameters, REFERENCE_DYE,
     FLUOROPHORE_TYPES,
 )
-from IMP.bff.label import LABEL_FLRCIF_ITEMS as SITE_ITEMS
-from IMP.bff.label import QUENCHER_FLRCIF_ITEMS as QUENCHER_ITEMS
+from IMP.bff import LABEL_FLRCIF_ITEMS as SITE_ITEMS
+from IMP.bff import QUENCHER_FLRCIF_ITEMS as QUENCHER_ITEMS
 
 
 class TestLabel:

@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 import IMP.bff as fps
-from IMP.bff.representation.rotamer import read_rotamer_fps, rotamer_fret_from_fps
-from IMP.bff.representation.rotamer import RotamerFRET
-from IMP.bff.representation.rotamer import load_protein_frames, load_rotamer_library
+from IMP.bff import read_rotamer_fps, rotamer_fret_from_fps
+from IMP.bff import RotamerFRET
+from IMP.bff import load_protein_frames, load_rotamer_library
 from IMP.bff import forster_radius_from_spectra
 # Invoking the command through imp-tricks' aggregator would make an imp.bff
 # test depend on the layer above it, so it is invoked directly. The group now
@@ -55,7 +55,7 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
     BinaryCIF sets in data/rotamer_library are the canonical libraries
         now; they replaced the DCDs on 2026-08-19.
     """
-    from IMP.bff.representation.rotamer import resolve_rotamer_library_path
+    from IMP.bff import resolve_rotamer_library_path
     sizes = {}
     for cutoff in (10, 20, 30):
         name = f"AlexaFluor 488 C1R cutoff{cutoff}"

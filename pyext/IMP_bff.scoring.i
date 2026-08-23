@@ -544,7 +544,6 @@ def torsion_cosine(torsion_type):
 
 def build_dye_restraints(model, system, site_particles):
     """Build bonded + element-aware nonbonded restraints."""
-    from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
     restraints = []
     bt = system.bond_types
@@ -599,7 +598,6 @@ def build_dye_restraints(model, system, site_particles):
 
 def compute_lj_pair_sites(system, excluded=None):
     """Compute all non-excluded site pairs with LJ cross parameters."""
-    from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
     if excluded is None:
         excluded = {frozenset(p) for p in system.exclusions()}
@@ -622,7 +620,6 @@ def compute_lj_pair_sites(system, excluded=None):
 
 def site_element_map(system):
     """Extract {site_id: element} from system sites."""
-    from IMP.bff.io.cif import as_forcefield_system
     system = as_forcefield_system(system)
     result = {}
     for s in system.sites:
@@ -649,7 +646,7 @@ def build_lj_type_table(elements):
 
 def dye_internal_system(atoms_dict, bonds):
     """Minimal force-field system for a lone dye from parse_dye_mol2 output."""
-    from IMP.bff.cgdye.topology import build_angles, build_dihedrals, build_graph
+    from IMP.bff import build_angles, build_dihedrals, build_graph
     ordered = sorted(atoms_dict.values(), key=lambda x: x["serial"])
     sid = {a["serial"]: f"dye:{a['serial']}:{a['atom_name']}" for a in ordered}
     sites = [{"id": sid[a["serial"]], "atom_name": a["atom_name"]} for a in ordered]
@@ -666,7 +663,6 @@ class DyeInternalEnergyEvaluator:
     """Evaluates the internal LJ energy of dye conformations."""
 
     def __init__(self, system, excluded=None):
-        from IMP.bff.io.cif import as_forcefield_system
         system = as_forcefield_system(system)
         self.pairs = compute_lj_pair_sites(system, excluded=excluded)
         self.id_to_idx = {s.id: i for i, s in enumerate(system.sites)}

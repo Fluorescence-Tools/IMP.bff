@@ -96,7 +96,7 @@ def test_a_missing_file_is_not_cached(tmp_path):
 
 def test_the_atom_type_lookup_is_memoised():
     """Thousands of atoms, a few dozen distinct names, five possible answers."""
-    from IMP.bff.scoring import _atom_type
+    from IMP.bff import _atom_type
     assert hasattr(_atom_type, "cache_info")
     _atom_type.cache_clear()
     for _ in range(500):

@@ -22,15 +22,34 @@ import IMP.bff
 
 
 def _sources():
-    """The checked-in sources, not the build tree.
+    """The `%pythoncode` blocks of the `.i` files -- the only Python left.
 
-    The build tree is a directory of symlinks, and a deleted source leaves a
-    dangling one behind -- ``spectroscopy/`` did, months after stage 0 removed
-    it. Scanning the source is both the right question and the robust one.
+    The checked-in sources, not the build tree: the build tree is a directory
+    of symlinks, and a deleted source leaves a dangling one behind.
     """
-    root = Path(__file__).resolve().parent.parent / "pyext" / "src"
-    assert root.is_dir(), root
-    return sorted(root.rglob("*.py"))
+    root = Path(__file__).resolve().parent.parent / "pyext"
+    blocks = []
+    for path in sorted(root.glob("*.i")) + [root / "swig.i-in"]:
+        text = path.read_text()
+        for part in text.split("%pythoncode %{")[1:]:
+            body = part.split("%}")[0]
+            blocks.append((path.name, body))
+    assert blocks, "no %pythoncode blocks found"
+    return [FakeSource(name, body) for name, body in blocks]
+
+
+class FakeSource:
+    """A %pythoncode block posing as a file for the AST scanners."""
+
+    def __init__(self, name, body):
+        self._name = name
+        self._body = "import numpy as np\n" + body
+
+    def read_text(self):
+        return self._body
+
+    def __str__(self):
+        return f"{self._name}:%pythoncode"
 
 
 def test_the_jit_shim_is_gone():
@@ -45,7 +64,7 @@ def test_no_module_imports_numba_or_the_shim():
         names = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
         names |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
         if any("numba" in n or n.endswith("_jit") for n in names):
-            offenders.append(path.name)
+            offenders.append(str(path))
     assert not offenders, offenders
 
 
@@ -59,7 +78,7 @@ def test_no_jit_decorator_survives():
             for dec in node.decorator_list:
                 text = ast.dump(dec)
                 if "njit" in text or "numba" in text or "'jit'" in text:
-                    offenders.append(f"{path.name}::{node.name}")
+                    offenders.append(f"{path}::{node.name}")
     assert not offenders, offenders
 
 

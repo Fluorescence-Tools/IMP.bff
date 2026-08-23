@@ -3,7 +3,7 @@ Accessible Volume Restraint
 ===========================
 Accessible volume (AV) restraints can be used for integrative modeling and for
 scoring structures. There are two versions of AV restraints ``IMP.bff.AVNetworkRestraint``
-and ``IMP.bff.restraints.AVNetworkRestraintWrapper``. The AV restraint wrapped for PMI,
+and ``IMP.bff.AVNetworkRestraintWrapper``. The AV restraint wrapped for PMI,
 ``AVNetworkRestraintWrapper`` provides a mean dye positions, an approximation that
 is faster when working with rigid bodies.
 

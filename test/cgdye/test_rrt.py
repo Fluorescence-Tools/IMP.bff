@@ -5,7 +5,7 @@ from pathlib import Path
 from IMP.bff import get_template_dir, get_structure_dir
 
 
-from IMP.bff.cgdye.sampling import (
+from IMP.bff import (
     IMPRRTTree,
     make_transform,
     transform_distance,
@@ -104,7 +104,7 @@ def test_run_rrt_respects_collision():
 
 
 def test_run_torsion_rrt_grows_collision_free_tree():
-    from IMP.bff.cgdye.sampling import run_torsion_rrt, torsion_distance
+    from IMP.bff import run_torsion_rrt, torsion_distance
     import math
 
     # forbid the half-space where the first torsion is > pi/2 (a "wall")

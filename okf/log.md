@@ -1,5 +1,138 @@
 # Update Log
 
+## 2026-08-22 — PRD-117 batch 15: `pyext/src` deleted — zero .py files in pyext
+
+The thirteen re-export shims (873 lines: `api.py`, `io/`, `io/cif.py`,
+`label.py`, `scoring.py`, `representation/`, `restraints/`, `cgdye/*`) are
+gone. Every public name is an attribute of `IMP.bff` itself — a SWIG wrapper
+or a `%pythoncode` def in the one generated `__init__.py`:
+
+- the two shims that held logic moved into `%pythoncode`: cif.i carries
+  `forcefield_system_from_dict`/`as_forcefield_system`/`read|write_dye_
+  forcefield_cif` (duck typing on Python objects has no C++ spelling; the
+  write calls `_IMP_bff` directly so it cannot recurse into its own shadow),
+  and swig.i-in's `__getattr__` is lazy-names-only (`_LAZY`), raising a real
+  AttributeError for everything else — the api.py domain map died with the
+  subpackages it indexed.
+- 60+ files migrated to flat imports (`from IMP.bff import X`): 42 test
+  files, `bin/imp_bff*`, the examples. Stale example surfaces fixed on the
+  way (`IMP.bff.spectroscopy.kappa2`'s `s2delta`/`kappasq_all_delta` →
+  `s2_delta_from_anisotropy`/`wobbling_kappa2_distribution_delta`;
+  `representation.av.display_mean_av_positions` never survived the
+  consolidation — the calls are commented with a note).
+- The source-tree audits rewritten for the new shape: `test_public_api_names`
+  (flat-name resolution, lazy build+cache, retired submodules stay gone,
+  import survives click/RMF/IMP.pmi blocked), `test_import_discipline` (kept
+  only its two source-independent guards — its own tripwire said "delete this
+  file, its job is done"), `test_no_numba` (scans the `.i` `%pythoncode`
+  blocks now), `test_shipped_files_compile` (examples + programs compile;
+  nothing imports `IMP.bff.<submodule>`), `test_cgdye_integration` (dropped
+  its vestigial `IMP.bff.cgdye` path helper; the program drives `bin/imp_bff`).
+
+The build symlinks pyext/src into lib/IMP/bff at configure time; the stale
+links were removed from the tree. `import IMP.bff` now loads RMF only behind
+sim.i's try/except (unchanged) and nothing else optional.
+
+Verification: `ninja IMP.bff` clean; non-medium **624 passed, 3 xfailed**
+(count lower only because the deleted audits carried ~30 of their own tests;
+sole failure is the pre-existing `av_reference_0.mrc` data file), cgdye
+**162 passed**, expensive all-dyes **36 passed**, `imp_bff --help` runs.
+
+## 2026-08-23 — PRD-118: `.drot` space saving measured over all 95 libraries — and a shipped-template defect found
+
+Encoded every recoverable DCD and compared against the shipped `.bcif` on
+disk (`prototypes/drot_rotlib/results_space.json`):
+**30.05 MB → 10.70 MB, 2.81× smaller (64 % saved)**, consistent per library
+(2.67–3.15×); 3.02× against the DCD form. Validation in the same sweep:
+**93/95 libraries reconstruct exactly** (worst mean RMSD 0.018 Å, all
+≤ 0.05 Å). The two failures are a data defect, not a converter limit:
+**`Cy3b_C2R.pdb` is byte-identical to `CF660R_C2R.pdb`** (residue `CF6` in
+both) — a copy-paste template whose cutoff10 trajectory (real Cy3b
+conformers) cannot match it, showing up as 10 Å template-vs-frames bond
+deviations where every healthy library sits at ≤ 0.02 Å. Recorded on
+PRD-116's registry-honesty list; numbers and caveats in
+`prototypes/drot_rotlib/CONVERTING.md`.
+
+# Update Log
+
+## 2026-08-23 — PRD-118: the FRETpredict → `.drot` conversion runbook
+
+`prototypes/drot_rotlib/CONVERTING.md` documents how a library entry becomes
+`.drot`, every command verified end to end: DCD recovery from git `8fac573`,
+encode (CLI weights now optional — omitting them leader-clusters a raw
+trajectory, `cutoffN` → N/100 Å threshold), validate (acceptance: mean RMSD
+≤ 0.015 Å, max ≤ 0.05 Å), the batch loop, and the raw-MD route. Two caveats
+found while verifying are now written down rather than rediscovered: mdtraj
+needs `top=` for XTC (the template PDB is it, and warns about the dye/linker
+sharing resid 2 — harmless), and the one recoverable raw trajectory
+(`A48_C1R/traj.xtc`, 28110 frames) has **92 atoms against the shipped 83** —
+the upstream strip is undocumented and the upstream topology is not in the
+repo, so the git-recovered DCDs are the supported conversion source. Linked
+from the PRD's input-contract section and the prototype README.
+
+## 2026-08-22 — PRD-118: the rotamer core becomes IMP-native and general — `IMP.bff.ZMatrix`
+
+The FASPR port's engine stays vendored verbatim behind `faspr_pack` (that is
+what the parity pin guards), but the *shared machinery* is now a proper IMP
+citizen: `include/ZMatrix.h` + `src/ZMatrix.cpp` expose the IUPAC
+`dihedral_deg`, `bond_angle_deg`, `internal2cartesian` (FASPR's
+`Internal2Cartesian` construction, double precision, the exact inverse to
+~1e-13), geometry-based `perceive_bonds`, and a `ZMatrix` class — a
+molecule's spanning-tree internal coordinates with exact `encode`/`decode`
+(`encode(decode(chi)) == chi` for arbitrary chi; the template round-trips to
+itself to 1e-13).
+
+**General over the molecule, by test**: the A48_C1R dye+linker template
+perceives exactly its 87 MOL2 bonds and round-trips exactly; a protein
+residue does the same through the same class; the chi the kernel reads off a
+FASPR-repacked LYS equals the mdtraj-verified −65.9°. The dihedral
+convention is pinned against an independent numpy implementation — the
+standard+180 bug of the prototype survived every self round-trip, so the
+test suite now makes the external convention check structural
+(`test/representation/test_zmatrix.py`, 7 tests; faspr/representation/API
+suites: 124 passed). SWIG: `VectorVector3D` instantiated for the
+`std::vector<Vector3D>` surfaces.
+
+What this buys: the remaining `.drot` half (store + `rotamer.i` loader +
+pin re-derivation) is now assembly on a tested kernel rather than a port.
+
+## 2026-08-22 — PRD-119: quenching anisotropy from the rotamers, decision-gated
+
+Wrote [`okf/prds/prd-119.md`](prds/prd-119.md) — plan only, nothing
+implemented. Two questions in the cheapest order:
+
+- **Stage 0 is the continuum's trial.** Per-site reachability (17-parameter
+  per-site overfit through the surrogate, after checking the surrogate's
+  held-out 0.057 ns is not the limiter) plus the s33b/s33d floors, per site.
+  If ≥ ~85–90 % of the 41 sites are reachable and the global fit beats the
+  parameter-free s30 baseline (+0.571) by a real margin, the continuum is
+  adequate and **the PRD closes with that finding** — the rotamer machinery
+  is unnecessary. Honest prior: marginal (+0.573 vs +0.571).
+- **Only if it fails:** the exact rotamer master equation
+  `M = L − diag(k)` — exchange generator L **measured from the shipped
+  A48_C1R MD** (reversible MSM on cutoff10 centroids; hard gate: reproduce
+  the direct ⟨P2(μ(0)·μ(t))⟩), per-rotamer rates `k_i(d, χ)` on real
+  conformer atoms with a ring-orientation factor, one global site-specific
+  exchange-scaling exponent (contact rotamers slowed by
+  `slow_factor^n_contact`). Every stage has a numeric kill criterion:
+  frozen/Lipari–Szabo limits, emergent static-bound species (the 2026-08-22
+  channel becomes a theorem of the formulation), `r∞/r0 = ⟨P2⟩` of the
+  slowest mode, and stage 3 must beat both the continuum fit and the s30
+  the slowest mode, and stage 3 must beat both the continuum fit and the s30
+  baseline with the continuum-dead sites as headline. Then the learned
+  components — **the point of the differentiable formulation, per the
+  user's refinement: backprop to the interaction potential and to the
+  quenching** (`s43` learned `k(d, χ)` surface, payoff = does it rediscover
+  the Vaiana π-stacking criterion; `s43b` learned correction to the
+  screening potential that sets the rotamer weights, payoff = does
+  stickiness localise to Lys/Arg; both zero-regularised and
+  Fisher-checked), with the deeper rungs (torsion PMF via a torch
+  `internal2cart`, learned L correction) as conditional extensions.
+  Surrogate/eigen/VV-VH machinery reused
+  unchanged; a UDE in PRD-115's sense, not a collocation PINN. v1 of the
+  plan built the rotamer model unconditionally; the user's correction —
+  *if the continuum works, no rotamer is needed* — made stage 0 the gate.
+
 ## 2026-08-22 — PRD-117 phase 2, batch 14: `cif.i` to C++ — template CIF reader written, JSON system bridge
 
 `pyext/IMP_bff.cif.i` lost all 558 lines of `%pythoncode` (the

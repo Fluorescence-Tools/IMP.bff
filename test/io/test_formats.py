@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-import IMP.bff.io as fio
+import IMP.bff as fio
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -144,9 +144,9 @@ def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
     term may name a number whose `_ff_site` row appears later in the file.
     """
     import IMP.bff
-    from IMP.bff.io.cif import write_dye_forcefield_cif
+    from IMP.bff import write_dye_forcefield_cif
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff.cgdye.topology import build_dye_protein_system
+    from IMP.bff import build_dye_protein_system
 
     system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),

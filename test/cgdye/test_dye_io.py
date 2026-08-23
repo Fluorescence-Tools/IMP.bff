@@ -46,7 +46,7 @@ class TestDyeTemplateRead:
 
     def test_read_dye_template(self):
         """Read A48_C1R template and verify structure."""
-        from IMP.bff.io.cif import read_dye_template_cif
+        from IMP.bff import read_dye_template_cif
 
         template_path = str(get_template_dir("dyes/A48_C1R/template.cif"))
 
@@ -73,7 +73,7 @@ class TestDyeTemplateWrite:
 
     def test_write_dye_template_roundtrip(self):
         """Write and read back a dye template, verify consistency."""
-        from IMP.bff.io.cif import read_dye_template_cif, write_dye_template_cif
+        from IMP.bff import read_dye_template_cif, write_dye_template_cif
 
         template_path = str(get_template_dir("dyes/A48_C1R/template.cif"))
 
@@ -142,7 +142,7 @@ class TestRotamerLibraryRead:
 
     def test_rotamer_library_structure(self):
         """Verify rotamer library reader handles numpy format."""
-        from IMP.bff.io.cif import read_rotamer_library, write_rotamer_library
+        from IMP.bff import read_rotamer_library, write_rotamer_library
         from IMP.bff import RotamerLibraryData
 
         test_lib = RotamerLibraryData()
@@ -189,7 +189,7 @@ class TestRotamerLibraryNormalize:
 
     def test_normalize_weights(self):
         """Verify weight normalization sums to 1.0."""
-        from IMP.bff.io.cif import normalize_weights
+        from IMP.bff import normalize_weights
         from IMP.bff import RotamerLibraryData
 
         lib = RotamerLibraryData()

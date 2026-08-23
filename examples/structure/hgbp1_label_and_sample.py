@@ -32,8 +32,8 @@ import IMP.atom
 import IMP.core
 import IMP.algebra
 
-from IMP.bff.cgdye.utils import get_structure_dir
-from IMP.bff.cgdye.labeling.attachment import attach_dyes, resolve_dye_site
+from IMP.bff import get_structure_dir
+from IMP.bff import attach_dyes, resolve_dye_site
 
 # sys.argv, not []: IMP.setup_from_argv reads argv[0] without checking, so an
 # empty list segfaults the interpreter rather than raising. Reported as a trap

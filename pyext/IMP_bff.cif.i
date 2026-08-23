@@ -25,3 +25,33 @@ IMP_SWIG_VALUE(IMP::bff, RotamerLibraryData, RotamerLibraryDatas);
 %template(FeatureAtomList) std::vector<IMP::bff::ComponentTemplate::FeatureAtom>;
 %template(ImproperList) std::vector<IMP::bff::ComponentTemplate::Improper>;
 %template(FeatureMap) std::map<std::string, IMP::bff::ComponentTemplate::Feature>;
+
+%pythoncode %{
+import json as _json
+
+
+def forcefield_system_from_dict(d):
+    """A parsed or built dictionary as a typed DyeForceFieldSystem."""
+    return forcefield_system_from_json(_json.dumps(d))
+
+
+def as_forcefield_system(system):
+    """A system, whichever way it was given (dict or typed value)."""
+    if isinstance(system, dict):
+        return forcefield_system_from_dict(system)
+    return system
+
+
+def read_dye_forcefield_cif(path):
+    """Read a force-field system from mmCIF."""
+    return read_forcefield_cif(str(path))
+
+
+def write_dye_forcefield_cif(path, system):
+    """Write a force-field system to mmCIF. Accepts DyeForceFieldSystem or dict.
+
+    Calls the C extension directly: this def shadows the SWIG-generated
+    module-level writer, so going through the shadowed name would recurse.
+    """
+    _IMP_bff.write_dye_forcefield_cif(str(path), as_forcefield_system(system))
+%}

@@ -17,7 +17,7 @@ class TestBackboneFrame:
     """Test 1.1: Backbone frame computation."""
 
     def test_frame_from_coords_identity(self):
-        from IMP.bff.label import backbone_frame_from_coords
+        from IMP.bff import backbone_frame_from_coords
 
         import IMP.algebra
 
@@ -31,7 +31,7 @@ class TestBackboneFrame:
         assert abs(trans.get_translation()[2] - 30) < 1e-10
 
     def test_frame_axes_orthonormal(self):
-        from IMP.bff.label import backbone_frame_from_coords
+        from IMP.bff import backbone_frame_from_coords
 
         import IMP.algebra
 
@@ -61,7 +61,7 @@ class TestBackboneFrame:
 
     def test_frame_matches_reference(self):
         """Verify that backbone frame matches reference transform."""
-        from IMP.bff.label import backbone_frame_from_coords
+        from IMP.bff import backbone_frame_from_coords
 
         import IMP.algebra
 
@@ -93,7 +93,7 @@ class TestBackboneFrame:
             assert diff < 1e-10, f"Column {i} diff = {diff}"
 
     def test_frame_x_along_ca_n(self):
-        from IMP.bff.label import backbone_frame_from_coords
+        from IMP.bff import backbone_frame_from_coords
 
         import IMP.algebra
 
@@ -131,7 +131,7 @@ class TestAttachmentResolver:
             m = IMP.Model()
             hier = IMP.atom.read_pdb(pdb_path, m, IMP.atom.AllPDBSelector())
 
-            from IMP.bff.label import resolve_dye_site
+            from IMP.bff import resolve_dye_site
 
             site = resolve_dye_site(hier, "A", 1)
             assert "CA" in site
@@ -160,7 +160,7 @@ class TestAttachmentResolver:
             m = IMP.Model()
             hier = IMP.atom.read_pdb(pdb_path, m, IMP.atom.AllPDBSelector())
 
-            from IMP.bff.label import strip_sidechain_at_site
+            from IMP.bff import strip_sidechain_at_site
 
             removed = strip_sidechain_at_site(hier, "A", 1)
             assert removed == 1
@@ -197,10 +197,10 @@ class TestDyePlacement:
         n = IMP.algebra.Vector3D(11, 20, 30)
         c = IMP.algebra.Vector3D(10, 21, 30)
 
-        from IMP.bff.label import backbone_frame_from_coords
+        from IMP.bff import backbone_frame_from_coords
 
         frame = backbone_frame_from_coords(ca, n, c)
-        from IMP.bff.label import place_dye
+        from IMP.bff import place_dye
 
         place_dye(IMP.atom.Hierarchy(p), frame)
 
@@ -221,7 +221,7 @@ class TestDyePlacement:
         at = IMP.atom.Atom.setup_particle(p, IMP.atom.AtomType("C"))
         hier_p = IMP.atom.Hierarchy.setup_particle(p)
 
-        from IMP.bff.label import place_dye_from_coords
+        from IMP.bff import place_dye_from_coords
 
         place_dye_from_coords(
             hier_p,
@@ -271,7 +271,7 @@ class TestMultiDyeAttachment:
             dye1 = make_dye(m)
             dye2 = make_dye(m)
 
-            from IMP.bff.label import attach_dyes
+            from IMP.bff import attach_dyes
 
             results = attach_dyes(prot, [(dye1, "A", 1), (dye2, "A", 2)])
             assert len(results) == 2
@@ -292,7 +292,7 @@ class TestRotamerAttachment:
     def test_get_anchor_cb_position(self):
         import IMP
         import IMP.atom
-        from IMP.bff.label import get_anchor_cb_position
+        from IMP.bff import get_anchor_cb_position
         
         pdb_content = (
             "ATOM      1  N   ALA A   1       1.000   0.000   0.000  1.00  0.00           N\n"

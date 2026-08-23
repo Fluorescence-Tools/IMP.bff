@@ -1,5 +1,5 @@
 import numpy as np
-from IMP.bff.scoring import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
+from IMP.bff import BoundingBoxFilter, DyeInternalEnergyEvaluator, lj_score
 
 def test_bounding_box_filter():
     bbf = BoundingBoxFilter(pad=3.5)
@@ -102,8 +102,8 @@ def test_improper_restraints_are_built_from_a_typed_system():
     import IMP.bff
     import IMP.atom
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff.cgdye.topology import build_dye_protein_system
-    from IMP.bff.scoring import build_dye_restraints
+    from IMP.bff import build_dye_protein_system
+    from IMP.bff import build_dye_restraints
 
     system = build_dye_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),

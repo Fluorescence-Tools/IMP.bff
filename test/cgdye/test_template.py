@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from IMP.bff import ComponentTemplate, Feature, FeatureAtom, Improper
-from IMP.bff.io.cif import read_component_template_cif, write_component_template_cif
+from IMP.bff import read_component_template_cif, write_component_template_cif
 
 class TestTemplate(unittest.TestCase):
     def test_read_write_template(self):

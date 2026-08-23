@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff.representation import LabelDistribution, LabelDistributionAV, DyeDistributionNormal
+from IMP.bff import LabelDistribution, LabelDistributionAV, DyeDistributionNormal
 
 
 class TestLabelDistribution:
@@ -122,7 +122,7 @@ def test_find_atom_matches_the_full_scan_it_replaced():
     import IMP
     import IMP.atom
     from IMP.bff import get_structure_dir
-    from IMP.bff.label import _find_atom, _atom_name, _atom_type_from_name
+    from IMP.bff import _find_atom, _atom_name, _atom_type_from_name
 
     def exhaustive(hierarchy, chain_id, resnum, atom_name):
         target = _atom_type_from_name(atom_name)

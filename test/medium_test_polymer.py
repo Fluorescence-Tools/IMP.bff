@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff.representation.distance import (
+from IMP.bff import (
     gaussian_chain_ree,
     gaussian_chain,
     worm_like_chain,

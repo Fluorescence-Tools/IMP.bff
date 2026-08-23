@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff.scoring import lj_energy
+from IMP.bff import lj_energy
 
 
 def _reference(rot, prot, rmin_ij, eps_ij, q_rot, q_prot, potential, electrostatic):
@@ -128,7 +128,7 @@ def test_empty_inputs_do_not_crash():
 
 def test_the_scorer_still_produces_normalised_weights():
     """The kernel feeds compute_rotamer_score; its contract is unchanged."""
-    from IMP.bff.scoring import compute_rotamer_score
+    from IMP.bff import compute_rotamer_score
     rng = np.random.default_rng(11)
     n_rot, n_dye, n_prot = 12, 6, 40
     result = compute_rotamer_score(
@@ -144,7 +144,7 @@ def test_the_scorer_still_produces_normalised_weights():
 
 
 def test_an_unknown_potential_is_refused():
-    from IMP.bff.scoring import compute_rotamer_score
+    from IMP.bff import compute_rotamer_score
     rng = np.random.default_rng(1)
     with pytest.raises(ValueError, match="Unknown potential"):
         compute_rotamer_score(
@@ -195,7 +195,7 @@ def test_repulsive_only_drops_the_attractive_tail():
 
 def test_the_scalar_and_batch_evaluators_agree():
     """``evaluate`` is one frame through the batch path, and must stay so."""
-    from IMP.bff.scoring import DyeInternalEnergyEvaluator
+    from IMP.bff import DyeInternalEnergyEvaluator
     rng = np.random.default_rng(2)
     n = 12
     system = {
@@ -210,6 +210,6 @@ def test_the_scalar_and_batch_evaluators_agree():
 
 
 def test_no_pairs_means_no_energy():
-    from IMP.bff.scoring import DyeInternalEnergyEvaluator
+    from IMP.bff import DyeInternalEnergyEvaluator
     ev = DyeInternalEnergyEvaluator({"sites": [{"id": 0, "element": "C"}], "bonds": []})
     assert list(ev.evaluate_batch(np.zeros((3, 1, 3)))) == [0.0, 0.0, 0.0]

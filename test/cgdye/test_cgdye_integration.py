@@ -8,26 +8,14 @@ from pathlib import Path
 
 from IMP.bff import get_output_dir, get_structure_dir
 
-def _cgdye_file(*parts):
-    """A path inside the installed IMP.bff.cgdye package.
-
-    These tests used to walk up from __file__ into imp-tricks' src/IMP/bff
-    layout, which stopped existing when cgdye moved into imp.bff. Asking the
-    package where it is works wherever it is installed from.
-    """
-    import IMP.bff.cgdye
-    from pathlib import Path as _P
-    return _P(IMP.bff.cgdye.__file__).parent.joinpath(*parts)
-
-
 class TestIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Build the CX4+atto655 force-field system into a temporary directory
         # instead of expecting a pre-built output/systems/*.system.cif: the
         # test used to skip everywhere the build-system task had not run.
-        from IMP.bff.io.cif import write_dye_forcefield_cif
-        from IMP.bff.cgdye.topology import build_dye_protein_system
+        from IMP.bff import write_dye_forcefield_cif
+        from IMP.bff import build_dye_protein_system
         from IMP.bff import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()
         system = build_dye_protein_system(
@@ -44,9 +32,6 @@ class TestIntegration(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls._tmp.cleanup()
-
-    def setUp(self):
-        self.script = _cgdye_file("sim.py")
 
     def run_sim(self, args):
         env = os.environ.copy()

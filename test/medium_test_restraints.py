@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from IMP.bff import AccessibleVolume
-from IMP.bff.restraints import (
+from IMP.bff import (
     SimpleAVNetworkRestraint,
     AVMeasurement,
     DirectLabelingRestraint,

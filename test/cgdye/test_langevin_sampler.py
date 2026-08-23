@@ -17,7 +17,7 @@ import IMP.algebra
 import IMP.atom
 import IMP.core
 
-from IMP.bff.cgdye.sampling import KB_KCAL, LangevinDyeSampler, make_langevin_simulator
+from IMP.bff import KB_KCAL, LangevinDyeSampler, make_langevin_simulator
 
 
 def _particle(m, xyz, radius=1.7, mass=12.0):
@@ -76,7 +76,7 @@ def test_bd_free_particle_msd_is_6Dt():
 
 
 def test_attached_dye_sampler_hgbp1_481():
-    from IMP.bff.label import attach_dyes
+    from IMP.bff import attach_dyes
     from IMP.bff import get_structure_dir
     for integrator in ("md", "bd"):
         m = IMP.Model()

@@ -18,8 +18,8 @@ import IMP
 import IMP.atom
 import numpy as np
 
-from IMP.bff.label import attach_dyes
-from IMP.bff.cgdye.sampling import LangevinDyeSampler
+from IMP.bff import attach_dyes
+from IMP.bff import LangevinDyeSampler
 from IMP.bff import get_structure_dir
 
 

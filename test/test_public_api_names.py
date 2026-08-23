@@ -1,18 +1,16 @@
-"""The public surface: domain-scoped, resolvable, documented, and correctly filed.
+"""The public surface: flat, resolvable, documented, and shim-free.
 
-This replaced a naming-families regex. That test asserted every export's *name*
-matched one of ``Rotamer|Dye|Linker|Langevin|...`` -- a list that had to grow
-with every feature, and which could only ever say that a name looked plausible.
-It could not tell a misfiled name from a well-filed one, and it grew by four
-tokens in the six months before this was written.
+This replaced a naming-families regex, then a domain-map audit; both were about
+a structure that no longer exists. Every public name is an attribute of
+``IMP.bff`` itself now -- a SWIG wrapper or a `%pythoncode` def in the one
+generated ``__init__.py`` -- so what is left to check is structural:
 
-What is checked instead is structural, and does not grow:
-
-* every export resolves and carries a docstring;
-* every export's module lies **inside the domain it is filed under**, so the
-  grouping in ``api.py`` is enforced rather than decorative;
-* no name is exported by two domains;
-* every domain in the map is a real subpackage.
+* every public name resolves, carries a docstring, and is in ``dir()``;
+* the lazy names (IMP.pmi/IMP.rmf wrappers) build on first use and cache;
+* the retired names stay retired;
+* ``import IMP.bff`` stays click-free and pulls no optional dependency;
+* no ``IMP.bff.<submodule>`` package survives -- the shims are gone and the
+  flat namespace is the only surface.
 """
 
 import subprocess
@@ -21,66 +19,66 @@ import sys
 import pytest
 
 import IMP.bff
-import IMP.bff.api as api
+
+#: Names built on first use because defining them at import time would make
+#: `import IMP.bff` require a module it does not depend on.
+LAZY_NAMES = [
+    "AVNetworkRestraintWrapper",
+    "write_rmf",
+    "write_rotamer_library_rmf",
+    "read_rotamer_library_rmf",
+]
+
+#: A sample of the always-defined flat surface, one per source `.i` group.
+FLAT_NAMES = [
+    "compute_av",                    # avbuilder
+    "AccessibleVolume",              # avmodel
+    "read_fps_json",                 # fps
+    "read_component_template_cif",   # cif
+    "forcefield_system_from_json",   # forcefield / DyeForceField
+    "compute_rotamer_score",         # scoring (pythoncode, flat)
+    "attach_dyes",                   # label (pythoncode, flat)
+    "build_dye_protein_system",      # topology (pythoncode, flat)
+    "LangevinDyeSampler",            # sampling (pythoncode, flat)
+    "RotamerEnsemble",               # rotamer_ensemble (pythoncode, flat)
+    "build_system_from_specs",       # sim/topology (pythoncode, flat)
+    "simulate_dye_diffusion",        # dyesampling
+    "fret_rate_trace",               # quenching / FRETRateTrace
+]
+
+#: The module paths that used to be the domain packages. None may exist.
+RETIRED_SUBMODULES = [
+    "IMP.bff.api",
+    "IMP.bff.io",
+    "IMP.bff.io.cif",
+    "IMP.bff.label",
+    "IMP.bff.scoring",
+    "IMP.bff.representation",
+    "IMP.bff.representation.rotamer",
+    "IMP.bff.restraints",
+    "IMP.bff.cgdye",
+    "IMP.bff.cgdye.topology",
+    "IMP.bff.cgdye.sampling",
+    "IMP.bff.cgdye.sim",
+]
 
 
-@pytest.mark.parametrize("name", api.public_names())
-def test_export_resolves_and_is_documented(name):
-    value = api.resolve(name)
+@pytest.mark.parametrize("name", FLAT_NAMES)
+def test_flat_name_resolves_and_is_documented(name):
+    value = getattr(IMP.bff, name)
     assert value is not None
     if not isinstance(value, (dict, tuple, list)):
         assert getattr(value, "__doc__", None), f"{name} has no docstring"
-    # reachable flat, and cached after first access
-    assert getattr(IMP.bff, name) is value
     assert name in dir(IMP.bff)
 
 
-@pytest.mark.parametrize("domain", sorted(api.BY_DOMAIN))
-def test_every_export_lives_in_the_domain_it_is_filed_under(domain):
-    """The check the naming regex could not make.
-
-    A name filed under ``fret`` whose module is ``IMP.bff.label`` is
-    a mistake, and it is exactly the kind of mistake that accumulates when the
-    grouping is a comment.
-    """
-    # `IMP.bff.observables` and `IMP.bff.io.fps` are both "in the observables
-    # / io domain"; a domain that is one flat module *is* the module, so an
-    # exact match counts as much as a prefix. Before the consolidation only the
-    # prefix form existed and this read `startswith`.
-    module_form = f"IMP.bff.{domain}"
-    package_form = f"IMP.bff.{domain}."
-    wrong = {name: module for name, module in api.BY_DOMAIN[domain].items()
-             if module != module_form and not module.startswith(package_form)}
-    assert not wrong, wrong
-
-
-def test_the_flat_view_is_derived_and_complete():
-    flat = {}
-    for members in api.BY_DOMAIN.values():
-        flat.update(members)
-    assert flat == api.EXPORTS
-
-
-def test_no_name_is_exported_by_two_domains():
-    seen = {}
-    clashes = {}
-    for domain, members in api.BY_DOMAIN.items():
-        for name in members:
-            if name in seen:
-                clashes[name] = (seen[name], domain)
-            seen[name] = domain
-    assert not clashes, clashes
-
-
-def test_every_domain_is_a_real_subpackage():
-    import importlib
-    for domain in api.BY_DOMAIN:
-        importlib.import_module(f"IMP.bff.{domain}")
-
-
-def test_domain_of_agrees_with_the_module_path():
-    for name, module in api.EXPORTS.items():
-        assert module.split(".")[2] == api.domain_of(name), name
+@pytest.mark.parametrize("name", LAZY_NAMES)
+def test_lazy_name_builds_and_caches(name):
+    value = getattr(IMP.bff, name)
+    assert value is not None
+    # cached: the second access is the same object, not a rebuild
+    assert getattr(IMP.bff, name) is value
+    assert name in dir(IMP.bff)
 
 
 def test_no_retired_names_survive():
@@ -94,21 +92,16 @@ def test_no_retired_names_survive():
         "parse_mol2", "analyze_mobile", "LJ_PARAMETERS",
     ]
     for name in retired:
-        assert name not in api.EXPORTS
         with pytest.raises(AttributeError):
             getattr(IMP.bff, name)
-    import IMP.bff.cgdye as cgdye
-    for name in ("System", "resolve_site", "generate_rotamers"):
-        assert not hasattr(cgdye, name)
 
 
 def test_import_is_lazy_and_click_free():
     code = (
         "import sys; sys.modules['click'] = None\n"
         "import IMP.bff\n"
-        "assert 'IMP.bff.cgdye' not in sys.modules, 'import IMP.bff must not import cgdye'\n"
         "IMP.bff.RotamerFRET; IMP.bff.forster_radius_from_spectra; IMP.bff.strip_hierarchy\n"
-        "import IMP.bff.label as l; l.attach_dyes\n"
+        "IMP.bff.attach_dyes\n"
         "print('ok')\n"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
@@ -116,73 +109,33 @@ def test_import_is_lazy_and_click_free():
     assert "ok" in result.stdout
 
 
-def test_cgdye_is_off_the_public_surface():
-    """It is explicit-dye molecular mechanics, kept but not a domain.
+def test_the_domain_packages_are_gone():
+    """The shims under pyext/src are deleted; the flat namespace is the surface.
 
-    ``cgdye`` used to mirror its slice of the flat map. As of 2026-08-18 it has
-    no flat names at all: propagating an all-atom dye under a force field is
-    IMP's territory, not a spectroscopy library's, so the package stays
-    importable by module path and off the surface. What was *not* molecular
-    mechanics was taken out of it first -- the rotamer library into
-    ``representation``, attachment into ``label``, its readers into ``io``.
+    A submodule reappearing is a regression: it forks the name space again,
+    which is exactly what the domain layout was retired to end.
     """
-    import IMP.bff.cgdye as cgdye
-
-    assert cgdye.__all__ == []
-    assert not [m for m in api.EXPORTS.values() if m.startswith("IMP.bff.cgdye.")]
-    assert "cgdye" not in api.BY_DOMAIN
-
-    # still reachable by module path -- kept, not deleted
-    import importlib
-    assert importlib.import_module("IMP.bff.cgdye.sampling").LangevinDyeSampler
-
-    # and the harvested pieces landed where they were supposed to
-    assert api.domain_of("RotamerFRET") == "representation"
-    assert api.domain_of("attach_dyes") == "label"
-    # The io half is C++ now and is not in `BY_DOMAIN` at all, so this asks
-    # only that it is reachable -- which is the claim the harvest made.
-    assert IMP.bff.read_rotamer_library_rmf
+    import importlib.util
+    for module in RETIRED_SUBMODULES:
+        try:
+            spec = importlib.util.find_spec(module)
+        except ModuleNotFoundError:      # a missing parent is the same miss
+            spec = None
+        assert spec is None, f"{module} exists again"
 
 
-def test_nothing_in_the_package_imports_cgdye_at_module_scope():
-    """No domain may *load* cgdye. If one grows a module-level edge into it,
-    that is the signal something was filed in the wrong place -- as the LJ term
-    and the rotamer library both were.
+def test_import_works_with_the_optional_dependencies_blocked():
+    """RMF / IMP.pmi are optional: blocking them must not break the import.
 
-    Module scope, not every import: ``scoring/dye_lj.py`` reaches into
-    ``cgdye.topology.dye`` from inside a function for the molecular graph, since
-    an exclusion list is derived from connectivity. That is a genuine
-    dependency of scoring on topology and it is deferred, so importing a domain
-    never pulls cgdye in. A module-level edge would.
+    sim.i guards them in try/except at module scope, so they load *when
+    present* -- the property that must hold either way is that the import
+    survives without them.
     """
-    import ast
-    from pathlib import Path
-
-    src = Path(__file__).resolve().parent.parent / "pyext" / "src"
-    offenders = []
-    for path in sorted(src.rglob("*.py")):
-        if "cgdye" in path.parts:
-            continue
-        tree = ast.parse(path.read_text())
-        names = set()
-        for node in tree.body:                       # body, not walk
-            if isinstance(node, ast.ImportFrom) and node.module:
-                names.add(node.module)
-            elif isinstance(node, ast.Import):
-                names |= {a.name for a in node.names}
-        if any(n.startswith("IMP.bff.cgdye") for n in names):
-            offenders.append(str(path.relative_to(src)))
-    assert not offenders, offenders
-
-
-def test_importing_a_domain_does_not_load_cgdye():
-    """The property the test above is a proxy for, checked directly."""
     code = (
         "import sys\n"
-        "import IMP.bff.scoring, IMP.bff.representation, IMP.bff.label\n"
-        "import IMP.bff.io\n"
-        "loaded = [m for m in sys.modules if m.startswith('IMP.bff.cgdye')]\n"
-        "assert not loaded, loaded\n"
+        "for m in ('RMF', 'IMP.pmi', 'IMP.rmf'):\n"
+        "    sys.modules[m] = None\n"
+        "import IMP.bff\n"
         "print('ok')\n"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True,
@@ -192,4 +145,4 @@ def test_importing_a_domain_does_not_load_cgdye():
 
 
 if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+    sys.exit(pytest.main([__file__, "-q", "-p no:cacheprovider"]))

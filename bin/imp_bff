@@ -29,7 +29,7 @@ import IMP.pmi.topology
 import IMP.rmf
 
 import IMP.bff
-import IMP.bff.restraints
+import IMP.bff
 
 from IMP.bff import read_angle_file
 import random
@@ -38,10 +38,10 @@ from pathlib import Path
 
 import IMP.rmf
 
-from IMP.bff.label import attach_dyes, place_dye_from_coords, resolve_dye_site
+from IMP.bff import attach_dyes, place_dye_from_coords, resolve_dye_site
 from IMP.bff import read_rotamer_library_rmf, write_rotamer_library_rmf
 from IMP.bff import apply_rotamer_coordinates, sample_rotamer_index
-from IMP.bff.cgdye.sampling import (
+from IMP.bff import (
     generate_linker_rotamers,
     reconstruct_rotamer_trajectory,
     rotamer_correlation_times,
@@ -49,12 +49,12 @@ from IMP.bff.cgdye.sampling import (
 )
 from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff import forster_radius_from_spectra
-from IMP.bff.io.cif import (
+from IMP.bff import (
     read_component_template_cif, read_dye_forcefield_cif, region_features)
 from IMP.bff import AccessibleVolume, compute_av_from_structure
 from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
-from IMP.bff.representation.rotamer import RotamerEnsemble
+from IMP.bff import RotamerEnsemble
 
 
 # --------------------------------------------------------------------------
@@ -257,7 +257,7 @@ def flexfit(
         use_mean_positions = True
     else:
         use_mean_positions = False
-    av_restraint = IMP.bff.restraints.AVNetworkRestraintWrapper(
+    av_restraint = IMP.bff.AVNetworkRestraintWrapper(
         hier=root_hier,
         score_set=score_set,
         fps_json_fn=labeling,
@@ -826,7 +826,7 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
     accepted whenever the dye does not clash. Real Langevin/Brownian dynamics
     is ``sample-langevin`` (IMP.bff.cgdye.sampling).
     """
-    from IMP.bff.cgdye.sampling import LinkerSampler
+    from IMP.bff import LinkerSampler
     random.seed(seed); np.random.seed(seed)
     protein_path = resolve_protein_pdb(protein_pdb)
     model = IMP.Model()
@@ -919,7 +919,7 @@ def sample_langevin(protein_pdb, chain, residue, dye, integrator, temperature, t
     site; the dye's backbone anchor stays on the residue. Thermodynamic pins:
     test/cgdye/test_langevin_sampler.py.
     """
-    from IMP.bff.cgdye.sampling import LangevinDyeSampler
+    from IMP.bff import LangevinDyeSampler
     protein_path = resolve_protein_pdb(protein_pdb)
     mol2 = Path(dye) if Path(dye).exists() else find_dye_mol2(dye)
     model = IMP.Model()
@@ -953,7 +953,7 @@ def get_residue_range(hier):
 @click.option("--output", help="Output PDB path")
 def label_fp(pdb_id_or_path, site, output):
     """Label a protein with one or more Fluorescent Proteins (FPs)."""
-    from IMP.bff.label import align_hierarchies
+    from IMP.bff import align_hierarchies
     model = IMP.Model()
     if os.path.exists(pdb_id_or_path):
         pdb_path = pdb_id_or_path
@@ -996,7 +996,7 @@ def label_fp(pdb_id_or_path, site, output):
         
         # Get target backbone coords
         try:
-            from IMP.bff.label import resolve_dye_site
+            from IMP.bff import resolve_dye_site
             t_site = resolve_dye_site(protein, chain_id, res_num)
             t_ca, t_n, t_c = [IMP.core.XYZ(t_site[k]).get_coordinates() for k in ["CA", "N", "C"]]
             
@@ -1018,7 +1018,7 @@ def label_fp(pdb_id_or_path, site, output):
 @click.option("--output", help="Output labeled PDB")
 def label_fusion(pdb_path, chain, output):
     """Automatically detect and label FPs in a fusion protein."""
-    from IMP.bff.label import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
+    from IMP.bff import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
     model = IMP.Model()
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
 
@@ -1251,7 +1251,7 @@ def compare_av_and_rotamer_positions(
     "n_rotamers", "av_extent", "rot_extent"}}`` (extents = rms distance of
     the weighted cloud from its mean, Å).
     """
-    from IMP.bff.representation.rotamer import load_protein_frames
+    from IMP.bff import load_protein_frames
 
     frame = load_protein_frames(pdb)[0]
     p_names = [str(n).upper() for n in frame["atom_names"]]
@@ -2336,7 +2336,7 @@ def analyze_trajectories(traj_root, runs_root, combine_runs, output_dir, mobiles
 def simulate(system_cif, systems_dir, output_root, md_steps, write_every, sampling_mode, mc_steps, mc_temperature, rb_max_translation, rb_max_rotation_deg, friction_ps, temperature_k, mobile_group, fixed_flex_mode, freeze_mobile_rings, init_placement, init_distance_a, init_trials, init_seed, com_pull_k, go_mobile_k, go_fixed_k, go_cutoff, log_every_frames, n_restarts):
     """Propagate an explicit dye on a force-field system (MD, MC, or both)."""
     import click as _click
-    from IMP.bff.cgdye.sim import run_dye_simulation
+    from IMP.bff import run_dye_simulation
     try:
         return run_dye_simulation(system_cif=system_cif, systems_dir=systems_dir, output_root=output_root, md_steps=md_steps, write_every=write_every, sampling_mode=sampling_mode, mc_steps=mc_steps, mc_temperature=mc_temperature, rb_max_translation=rb_max_translation, rb_max_rotation_deg=rb_max_rotation_deg, friction_ps=friction_ps, temperature_k=temperature_k, mobile_group=mobile_group, fixed_flex_mode=fixed_flex_mode, freeze_mobile_rings=freeze_mobile_rings, init_placement=init_placement, init_distance_a=init_distance_a, init_trials=init_trials, init_seed=init_seed, com_pull_k=com_pull_k, go_mobile_k=go_mobile_k, go_fixed_k=go_fixed_k, go_cutoff=go_cutoff, log_every_frames=log_every_frames, n_restarts=n_restarts)
     except ValueError as exc:                    # library-level, rendered as a CLI error
@@ -2398,7 +2398,7 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
     okf/validation/impropers_are_dropped.md.
     """
     import click as _click
-    from IMP.bff.cgdye.topology import build_system_from_specs
+    from IMP.bff import build_system_from_specs
     try:
         return build_system_from_specs(components=components, output_cif=output_cif, bond_k=bond_k, angle_k=angle_k, pi_dihedral_k=pi_dihedral_k, linker_dihedral_k=linker_dihedral_k, ring_improper_k=ring_improper_k, pi_improper_k=pi_improper_k, flat_improper_k=flat_improper_k, orient_improper_k=orient_improper_k, n_steps=n_steps, write_every=write_every, default_radius=default_radius, default_mass=default_mass, nonbonded_k=nonbonded_k, nonbonded_cutoff=nonbonded_cutoff, minimize_steps=minimize_steps)
     except ValueError as exc:
