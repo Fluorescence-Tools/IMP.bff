@@ -18,7 +18,7 @@
 #   `get_structure_dir()` rather than by walking up from `__file__`. Deriving
 #   data paths from the source layout broke the moment cgdye moved between
 #   repositories.
-# - **Attachment mutates the dye in place.** `attach_dyes` transforms the dye's
+# - **Attachment mutates the dye in place.** `attach_probes` transforms the dye's
 #   coordinates onto the site frame; it does not return a new molecule. The
 #   check below is on the dye having *moved*, which is the observable.
 # - **The site's sidechain is stripped.** A dye occupies the space the
@@ -33,7 +33,7 @@ import IMP.core
 import IMP.algebra
 
 from IMP.bff import get_structure_dir
-from IMP.bff import attach_dyes, resolve_dye_site
+from IMP.bff import ProbeAttachment, attach_probes, resolve_probe_site
 
 # sys.argv, not []: IMP.setup_from_argv reads argv[0] without checking, so an
 # empty list segfaults the interpreter rather than raising. Reported as a trap
@@ -52,26 +52,29 @@ n_dye_atoms = len(IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE))
 print("hGBP1 atoms:", n_protein_atoms, " dye atoms:", n_dye_atoms)
 
 # --- 2. resolve the labelling site ------------------------------------------
-# resolve_dye_site returns the backbone frame the dye is attached against. If the
+# resolve_probe_site returns the backbone frame the dye is attached against. If the
 # residue is missing from the model this raises rather than silently labelling
 # somewhere else, which is the behaviour you want from a labelling step.
-site = resolve_dye_site(protein, "A", 481)
-print("site 481 backbone atoms:", sorted(site))
-assert {"N", "CA", "C"} <= set(site)
+# It answers the particles CA, N, C -- in that order, not a dict of names.
+site = resolve_probe_site(protein, "A", 481)
+names = [IMP.atom.Atom(p).get_atom_type().get_string() for p in site]
+print("site 481 backbone atoms:", names)
+assert names == ["CA", "N", "C"]
 
 # --- 3. attach the dye ------------------------------------------------------
 before = [IMP.core.XYZ(a).get_coordinates()
           for a in IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE)]
 
-attached = attach_dyes(protein, [(dye, "A", 481)], strip_site_sidechain=True)
-print("attached:", len(attached), "dye(s) at residue", attached[0]["resnum"])
+attached = attach_probes(protein, [ProbeAttachment(dye, "A", 481)], strip_site_sidechain=True)
+print("attached:", len(attached), "dye(s) at residue",
+      attached[0].get_residue())
 
 after = [IMP.core.XYZ(a).get_coordinates()
          for a in IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE)]
 
 moved = max(IMP.algebra.get_distance(b, a) for b, a in zip(before, after))
 print("largest atom displacement on attachment: %.2f A" % moved)
-assert moved > 1e-8, "attach_dyes transforms the dye in place; it did not move"
+assert moved > 1e-8, "attach_probes transforms the dye in place; it did not move"
 
 # The sidechain at the labelled site is gone: a dye and a sidechain cannot both
 # occupy that volume, and leaving both produces clashes that distort sampling.

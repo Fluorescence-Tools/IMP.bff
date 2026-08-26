@@ -12,7 +12,7 @@ import scipy.stats
 import pylab as plt
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 import IMP.bff
-from IMP.bff import s2_delta_from_anisotropy, VectorDouble
+from IMP.bff import s2_delta_from_anisotropy
 from IMP.bff import wobbling_kappa2_distribution_delta as _wobbling_delta
 
 
@@ -77,11 +77,10 @@ def k2_call(
     r_0 = kwargs['r_0']
     delta = s2_delta_from_anisotropy(sD2, sA2,
                                      kwargs.get(r_ADinf, 0.0001), r_0)[1]
-    scale = VectorDouble()
-    hist = VectorDouble()
-    _wobbling_delta(delta, sD2, sA2, step, n_bins, k2_min, k2_max,
-                    scale, hist)
-    return np.asarray(scale), np.asarray(hist)
+    # `(bin edges, histogram, every computed kappa^2)` -- the caller unpacks
+    # three, and the two-value return this used to have never matched it.
+    k2 = _wobbling_delta(delta, sD2, sA2, step, n_bins, k2_min, k2_max)
+    return k2.scale, k2.hist, k2.values
 
 
 n_axis = 256

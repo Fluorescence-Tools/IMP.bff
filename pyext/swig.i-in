@@ -1,6 +1,12 @@
 %feature("kwargs", 1);
 %{
 #define SWIG_FILE_WITH_INIT
+
+/* `rmf` is one of this module's modules (RmfIO.h), so SWIG imports IMP.rmf's
+   interface -- and the conversion table it generates names RMF types this
+   header declares. IMP.rmf's own wrapper includes it; an importer has to say
+   so itself. */
+#include <RMF/TraverseHelper.h>
 %}
 
 /* Vendored from numpy upstream; not ours, not edited. */
@@ -15,12 +21,6 @@ import numpy as np
 
 /* STL templates and the numpy typemaps everything below depends on. */
 %include "IMP_bff.types.i"
-
-/* Names that cannot be defined at import time -- see `__getattr__` at the foot
-   of this file. Declared here so any `.i` below can register into it. */
-%pythoncode %{
-_LAZY = {}
-%}
 
 /* Where the shipped cgdye data lives. */
 %include "IMP/bff/DataPaths.h"
@@ -40,8 +40,17 @@ _LAZY = {}
 %include "IMP_bff.pathmap.i"
 %include "IMP_bff.av.i"
 
-/* Reading a frame out of a hierarchy without a SWIG call per atom. */
+/* Reading a frame out of a hierarchy without a SWIG call per atom, and the
+   `ProteinFrame` value that reading is for. */
+IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
+// Hidden from SWIG's member wrapping and republished as an `(n, 3)` table:
+// a flat `coords` and a shaped `coords` cannot both be called `coords`.
+%ignore IMP::bff::ProteinFrame::coords;
 %include "IMP/bff/HierarchyFrame.h"
+%attribute_np2(IMP::bff::ProteinFrame, std::vector<double>, coords,
+               get_coords, 3, set_coords);
+%attribute(IMP::bff::ProteinFrame, int, n_atoms, get_n_atoms);
+%template(ProteinFrameList) std::vector<IMP::bff::ProteinFrame>;
 
 /* PET: which moieties quench a dye, and how hard. */
 %include "IMP_bff.petquenching.i"
@@ -61,6 +70,12 @@ _LAZY = {}
 
 /* Dynamics: the dye's position, then its excited state. */
 %include "IMP/bff/BrownianWalk.h"
+/* `diffusion_propagate` reports two arrays -- the population at each reported
+   step and the final density -- and both are managed numpy views, so Python
+   gets a 2-tuple. The population was a `std::vector<double>&` out-parameter,
+   which made a caller construct a wrapped vector of a class this module does
+   not own (see the note in `IMP_bff.types.i`). */
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_fluorescence, int* n_out_fluorescence)};
 %include "IMP/bff/DiffusionSolver.h"
 /* The photon trace returns delay and emitted-flag views, and the decay curve
    accumulates in place into the caller's histogram. The %apply has to sit
@@ -111,6 +126,9 @@ _LAZY = {}
 /* Bond connectivity, and the angles, torsions and rings that follow from it. */
 %include "IMP/bff/MolecularGraph.h"
 %template(VectorVectorInt) std::vector<std::vector<int> >;
+// `LabelledGraph` answers in labels, so its returns need the string forms.
+// `VectorVectorString` is instantiated in types.i for the multi-dye kernel.
+%template(VectorPairStringString) std::vector<std::pair<std::string, std::string> >;
 %template(VectorPairIntInt) std::vector<std::pair<int, int> >;
 %template(PairIntInt) std::pair<int, int>;
 
@@ -126,6 +144,21 @@ _LAZY = {}
 %include "IMP/bff/ForceFieldCIF.h"
 
 /* The force-field system out, template CIF, and rotamer library IO. */
+// The rotamer library value -- an ensemble of conformers with a weight
+// each -- before the three readers that return one: the numpy/text pair
+// (cif.i), the PDB+trajectory loader (dyesampling.i) and `read_drot`.
+IMP_SWIG_VALUE(IMP::bff, RotamerLibrary, RotamerLibraries);
+// Same as `ProteinFrame::coords`: the shaped attributes below replace the raw
+// members, so a library answers `(n_rotamers, n_atoms, 3)` and not a flat
+// vector a caller has to fold by hand.
+%ignore IMP::bff::RotamerLibrary::coords;
+%ignore IMP::bff::RotamerLibrary::weights;
+%include "IMP/bff/RotamerLibrary.h"
+%attribute_np3(IMP::bff::RotamerLibrary, std::vector<double>, coords,
+               get_coords, n_rotamers, 3, set_coords);
+%attribute_np(IMP::bff::RotamerLibrary, std::vector<double>, weights,
+              get_weights, set_weights);
+
 %include "IMP_bff.cif.i"
 
 /* The system layer: Label, Quencher, attachment, backbone frame, strip. */
@@ -152,6 +185,11 @@ _LAZY = {}
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
 %include "IMP_bff.avbuilder.i"
 
+/* The native Labelizer: per-residue label-site scores and the FRET pair score.
+   After `avbuilder.i`, whose `PDBAtomRecord` reader it groups into residues,
+   and whose accessible volumes the pair layer measures distances over. */
+%include "IMP_bff.labelizer.i"
+
 /* Structures and trajectories in and out: PDB, MOL2, mmCIF, BinaryCIF, DCD.
    After `avbuilder.i`, which declares the `PDBAtomRecord` the MOL2 writer takes
    -- SWIG resolves a type at the point of use. */
@@ -173,7 +211,7 @@ _LAZY = {}
 %include "IMP_bff.statesdistance.i"
 
 /* Chi-squared scoring of labelling data, with and without volumes. */
-%include "IMP_bff.labelingrestraints.i"
+%include "IMP_bff.proberestraints.i"
 
 /* The mean-position FRET restraint, and what repeated docking says about a
    model's precision. */
@@ -192,35 +230,42 @@ _LAZY = {}
    an accessible volume, the PET tables, the walk and the grid solver. */
 %include "IMP_bff.quenchingmodel.i"
 
+/* The .drot container reader: the PTO envelope, brotli, JSON and exact
+   reconstruction, self-contained through the vendored decoder and the
+   vendored PTO core. Feeds the same loader surface as the bcif/dcd path. */
+%include "IMP/bff/DrotReader.h"
+
+/* The writer for the same container, through the vendored brotli encoder --
+   the trajectory-to-library path (bin/imp_bff_traj2drot). */
+%include "IMP/bff/DrotWriter.h"
+
+/* The third rotamer family in the same container: the Dunbrack-2010
+   backbone-dependent side-chain table, which is a distribution over (phi,
+   psi) rather than an ensemble and so has kinds of its own. */
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
+%include "IMP/bff/DunbrackLibrary.h"
+
 /* RotamerEnsemble subclasses States (a SWIG value type), so it is defined
    here -- after all SWIG types -- rather than in the main rotamer.i block. */
 %include "IMP_bff.rotamer_ensemble.i"
 
+/* The coarse-grained protein potentials: contacts, sterics, solvation. After
+   the accessible-surface kernels it composes and the residue types it reads. */
+%include "IMP_bff.potentials.i"
+
 /*
- * The flat user-facing surface. Every public name is an attribute of
- * `IMP.bff` itself -- a SWIG wrapper or a `%pythoncode` def in this file --
- * except the handful in `_LAZY`, which cannot be defined at import time
- * because they would make `import IMP.bff` require a module this one does
- * not depend on (IMP.pmi, IMP.rmf).
+ * The flat user-facing surface: every public name is an attribute of `IMP.bff`
+ * itself, a SWIG wrapper over a C++ declaration.
+ *
+ * There was a `_LAZY` table and a PEP 562 `__getattr__` here, for the six
+ * names that could not be defined at import time -- an `IMP.pmi` restraint
+ * subclass, four `IMP.rmf` readers and writers, and an `IMP.rotamer` query --
+ * because naming them would have made `import IMP.bff` require a module this
+ * one did not depend on. `rmf` and `rotamer` are modules of this one now, so
+ * those five are ordinary C++; the PMI one was a `RestraintBase` subclass,
+ * which has no C++ spelling at all, and what it did apart from PMI's
+ * bookkeeping is `av_network_restraint_set`.
+ *
+ * Nothing is lazy, so there is no hook: a missing attribute is a missing
+ * attribute, and `dir()` is the module's own.
  */
-%pythoncode %{
-def __getattr__(name):
-    """PEP 562 hook: the lazily-built names only.
-
-    Everything else was already defined at import time, so a miss here is a
-    genuine miss.
-    """
-    builder = _LAZY.get(name)
-    if builder is None:
-        raise AttributeError(
-                "module 'IMP.bff' has no attribute %r" % name)
-    import IMP.bff as _self
-    value = builder()
-    setattr(_self, name, value)
-    return value
-
-
-def __dir__():
-    import IMP.bff as _self
-    return sorted(set(vars(_self)) | set(_LAZY))
-%}

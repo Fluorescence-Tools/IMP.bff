@@ -1,6 +1,6 @@
 """PRD-105: AV evaluation on the semi space-fixed lattice.
 
-The battery runs over the six valid flag modes of ``AVNetworkRestraint``:
+The battery runs over the six valid flag modes of ``ProbeNetworkRestraint``:
 
     mode                space_fixed  shared_map  distance
     default             yes          yes         quad
@@ -69,8 +69,8 @@ QUAD_K = 100
 def make_restraint(mode, hier, score_set="chi2_C1_33p", n_samples=N_SAMPLES,
                    quad_k=QUAD_K):
     space_fixed, shared_map, distance = MODES[mode]
-    return IMP.bff.AVNetworkRestraint(
-        hier, FPS_JSON, "AVNetworkRestraint_" + mode, score_set, n_samples,
+    return IMP.bff.ProbeNetworkRestraint(
+        hier, FPS_JSON, "ProbeNetworkRestraint_" + mode, score_set, n_samples,
         space_fixed=space_fixed, shared_map=shared_map, distance=distance,
         quad_k=quad_k)
 
@@ -181,7 +181,7 @@ class TestModeMatrix(unittest.TestCase):
                     self.assertEqual(d["shared_map_classes"], 0)
 
     def test_defaults_select_the_default_mode(self):
-        r = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON,
+        r = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON,
                                        score_set="chi2_C2_33p")
         self.assertTrue(r.get_space_fixed())
         self.assertTrue(r.get_shared_map())
@@ -191,9 +191,9 @@ class TestModeMatrix(unittest.TestCase):
     def test_keyword_arguments(self):
         # positional and keyword spellings agree (the constructor is
         # overloaded for deserialization; kwargs come from a SWIG shadow)
-        r1 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, "n", "chi2_C2_33p",
+        r1 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, "n", "chi2_C2_33p",
                                         123, False, False, "mc", 7)
-        r2 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, name="n",
+        r2 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, name="n",
                                         score_set="chi2_C2_33p", n_samples=123,
                                         space_fixed=False, shared_map=False,
                                         distance="mc", quad_k=7)
@@ -203,17 +203,17 @@ class TestModeMatrix(unittest.TestCase):
             self.assertEqual(r.get_distance_method(), "mc")
             self.assertEqual(r.get_quad_k(), 7)
         with self.assertRaises(TypeError):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, bogus=1)
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, bogus=1)
 
     def test_shared_map_requires_space_fixed(self):
         with self.assertRaises(Exception):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON,
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON,
                                        score_set="chi2_C2_33p",
                                        space_fixed=False, shared_map=True)
 
     def test_distance_method_is_checked(self):
         with self.assertRaises(Exception):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON,
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON,
                                        score_set="chi2_C2_33p",
                                        distance="fft")
 
@@ -325,7 +325,7 @@ class TestLegacyByteIdentity(unittest.TestCase):
                     self.assertEqual(list(av.get_mean_position()), pin["mean"], key)
 
     def test_pinned_reference_values(self):
-        # the pre-PRD-105 pins of test_AccessibleVolume / test_AVNetworkRestraint
+        # the pre-PRD-105 pins of test_AccessibleVolume / test_ProbeNetworkRestraint
         av = make_av(self.mdl, self.hier, 55, space_fixed=False)
         np.testing.assert_almost_equal(av.get_mean_position(),
                                        (-15.9244, 19.2183, 20.1207), decimal=3)
@@ -335,7 +335,10 @@ class TestLegacyByteIdentity(unittest.TestCase):
                                    (0.31708, -25.513668, -1.132486), rtol=0.1)
         r = make_restraint("legacy", self.hier, score_set="chi2_C2_33p",
                            n_samples=500000)
-        self.assertAlmostEqual(11.917975852594935, r.unprotected_evaluate(None),
+        # 11.918 before the asymmetric chi2 became one function (2026-08-24)
+        # and this restraint stopped swapping the error bars; the distances
+        # above are unchanged, the score is not.
+        self.assertAlmostEqual(20.0, r.unprotected_evaluate(None),
                                places=0)
 
     def test_restraint_mp_distances(self):
@@ -831,14 +834,16 @@ class TestAVHandle(unittest.TestCase):
         # The historical 30-offset stencil is still selectable; with it and
         # K=100 the restraint reproduces the value pinned before the stencil
         # became symmetric (2026-08-17: 26 neighbours by default).
-        r30 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+        r30 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                          quad_k=100, search_stencil=30)
         self.assertEqual(r30.get_search_stencil(), 30)
-        self.assertAlmostEqual(r30.unprotected_evaluate(None), 13.079781979252157, places=6)
-        r26 = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+        # 13.0798 before the chi2 error bars were unswapped (2026-08-24).
+        self.assertAlmostEqual(r30.unprotected_evaluate(None), 22.132214560661566, places=6)
+        r26 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                          quad_k=100)
         self.assertEqual(r26.get_search_stencil(), 26)
-        self.assertAlmostEqual(r26.unprotected_evaluate(None), 13.508167976104748, places=6)
+        # 13.5082 before the chi2 error bars were unswapped (2026-08-24).
+        self.assertAlmostEqual(r26.unprotected_evaluate(None), 22.705514543532768, places=6)
         # the 30-stencil AVs leak through one-voxel walls: slightly larger
         n30 = sum(len(r30.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r30))
         n26 = sum(len(r26.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r26))
@@ -850,10 +855,10 @@ class TestAVHandle(unittest.TestCase):
         mp30 = r30.get_used_av(av_names(r30)[0]).get_map()
         self.assertEqual(len(mp30.get_neighbor_idx_offsets()) // 5, 30)
         with self.assertRaises(Exception):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                        search_stencil=27)
         # coarse search grid: an approximation, deterministic, opt-in
-        rc = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+        rc = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                         search_grid_factor=2)
         self.assertEqual(rc.get_search_grid_factor(), 2)
         v1 = rc.unprotected_evaluate(None)
@@ -864,15 +869,15 @@ class TestAVHandle(unittest.TestCase):
         d = json.loads(rc.get_diagnostics_json())
         self.assertEqual(d["search_grid_factor"], 2)
         with self.assertRaises(Exception):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                        space_fixed=False, shared_map=False,
                                        search_grid_factor=2)
 
     def test_euclidean_search_mode(self):
         # straight-linker model: a tile is reached iff the source sees it;
         # a subset of the path-search AV, deterministic, exact vs full
-        rd = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p")
-        re_ = IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+        rd = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p")
+        re_ = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                          search_mode="euclidean")
         self.assertEqual(rd.get_search_mode(), "dijkstra")
         self.assertEqual(re_.get_search_mode(), "euclidean")
@@ -897,7 +902,7 @@ class TestAVHandle(unittest.TestCase):
             av.resample(True, True)
             self.assertTrue(np.array_equal(ce, np.array(av.get_map().get_xyz_density())))
         with self.assertRaises(Exception):
-            IMP.bff.AVNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
+            IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                        search_mode="fft")
 
     def test_used_av_shares_the_restraint_map(self):

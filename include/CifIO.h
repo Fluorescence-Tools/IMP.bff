@@ -16,6 +16,7 @@
 #define IMPBFF_CIFIO_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/RotamerLibrary.h>
 #include <IMP/bff/DyeForceField.h>
 
 #include <string>
@@ -61,7 +62,13 @@ IMPBFFEXPORT void write_dye_forcefield_cif(const std::string& path,
 struct ComponentTemplate {
     std::string name;
     // feature_id -> {rb, md_fixed, feature_type, region_color, atoms}
-    struct FeatureAtom { std::string name; int occurrence; };
+    struct FeatureAtom {
+        std::string name;
+        int occurrence;
+
+        IMP_SHOWABLE_INLINE(FeatureAtom, out << "FeatureAtom(" << name << ", "
+                                             << occurrence << ")");
+    };
     struct Feature {
         bool rb = false;
         bool md_fixed = false;
@@ -70,7 +77,13 @@ struct ComponentTemplate {
         std::vector<FeatureAtom> atoms;
     };
     std::map<std::string, Feature> features;
-    struct Improper { std::string center_atom; std::string type; };
+    struct Improper {
+        std::string center_atom;
+        std::string type;
+
+        IMP_SHOWABLE_INLINE(Improper, out << "Improper(" << center_atom << ", "
+                                          << type << ")");
+    };
     std::vector<Improper> impropers;
     // dye metadata
     std::string center_atom;
@@ -110,35 +123,15 @@ IMPBFFEXPORT std::map<std::string, std::string> region_features(
 // Rotamer library IO (numpy .npy + text files)
 // --------------------------------------------------------------------------
 
-//! A rotamer library read from disk.
-struct RotamerLibraryData {
-    std::vector<int> id;
-    std::vector<double> weight;
-    std::vector<std::string> atom_names;
-    // flat coords: n_rotamers * n_atoms * 3
-    std::vector<double> coords;
-    int n_rotamers = 0;
-    int n_atoms = 0;
-
-    void show(std::ostream& out) const {
-        out << "RotamerLibraryData(" << n_rotamers << " x " << n_atoms << ")";
-    }
-};
-
-//! A list of rotamer library data (the SWIG plural type).
-typedef std::vector<RotamerLibraryData> RotamerLibraryDatas;
 
 //! Read a rotamer library from numpy/text files.
-IMPBFFEXPORT RotamerLibraryData read_rotamer_library(const std::string& path);
+IMPBFFEXPORT RotamerLibrary read_rotamer_library(const std::string& path);
 
 //! Write a rotamer library to numpy/text files.
 IMPBFFEXPORT void write_rotamer_library(const std::string& path,
-                                          const RotamerLibraryData& lib);
+                                          const RotamerLibrary& lib);
 
-//! Rotamer weights normalised to sum to 1.0.
-/*! Returns the normalised copy: `RotamerLibraryData` is a value, so there is
-    no in-place spelling across the boundary. */
-IMPBFFEXPORT RotamerLibraryData normalize_weights(const RotamerLibraryData& lib);
+// `normalize_weights` is in `RotamerLibrary.h`, with the value it acts on.
 
 IMPBFF_END_NAMESPACE
 

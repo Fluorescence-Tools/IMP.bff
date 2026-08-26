@@ -34,16 +34,17 @@ def _fixture_pdb(name: str, tmp_path: Path) -> Path:
 def test_calculate_r0_matches_fretpredict_pp11_reference() -> None:
     """R0 calculation matches the pp11 tutorial reference."""
     r0 = forster_radius_from_spectra("AlexaFluor 488", "AlexaFluor 594", 0.684587)
-    assert r0 == pytest.approx(5.712982, abs=1e-5)
+    # FRETpredict reports 5.712982 nm; this package returns Angstrom.
+    assert r0 == pytest.approx(57.12982, abs=1e-4)
 
 
 def test_load_rotamer_library_from_fretpredict_name() -> None:
     """FRETpredict-style library names resolve to the bundled libraries."""
     lib = load_rotamer_library("AlexaFluor 488 C1R cutoff30")
-    assert lib["coords"].ndim == 3
-    assert lib["coords"].shape[0] > 1
-    assert lib["weights"].sum() == pytest.approx(1.0)
-    assert lib["metadata"]["mu"]
+    assert lib.coords.ndim == 3
+    assert lib.coords.shape[0] > 1
+    assert lib.weights.sum() == pytest.approx(1.0)
+    assert json.loads(lib.metadata)["mu"]
 
 
 def test_library_name_cutoff_selects_that_cutoff() -> None:
@@ -52,23 +53,32 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
     Every name used to resolve to the cutoff-30 RMF template (33 rotamers for
     Alexa488 C1R), so a cutoff-10 request silently scored 33 rotamers instead
     of 711 -- the pp11 tutorial numbers were off by 0.2 in E. The FRETpredict
-    BinaryCIF sets in data/rotamer_library are the canonical libraries
-        now; they replaced the DCDs on 2026-08-19.
+    sets in data/rotamer_library are the canonical libraries now; they
+    replaced the DCDs on 2026-08-19, became `.drot` (PRD-118) on 2026-08-24,
+    moved into the shared PTO container the same day and then into one
+    container per family (`dyes.drot.pto`) -- which is why neither the suffix
+    nor the file name is what this test pins, the cutoff is.
     """
     from IMP.bff import resolve_rotamer_library_path
     sizes = {}
     for cutoff in (10, 20, 30):
         name = f"AlexaFluor 488 C1R cutoff{cutoff}"
         path = resolve_rotamer_library_path(name)
-        assert path.name == f"A48_C1R_cutoff{cutoff}.bcif"
+        # A shipped dye lives in the family container, so the answer is a
+        # locator (`dyes.drot.pto::A48_C1R_cutoff10`); a standalone library
+        # resolves to a path. Either way the cutoff is what is pinned.
+        container, _, inside = str(path).partition("::")
+        assert container.endswith((".drot.pto", ".drot", ".bcif"))
+        assert (inside or Path(container).name).startswith(
+            f"A48_C1R_cutoff{cutoff}")
         lib = load_rotamer_library(name)
-        sizes[cutoff] = lib["coords"].shape[0]
-        assert lib["weights"].shape == (sizes[cutoff],)
-        assert lib["weights"].sum() == pytest.approx(1.0)
-        assert lib["resnames"] and len(lib["resnames"]) == len(lib["atom_names"]) == lib["coords"].shape[1]
+        sizes[cutoff] = lib.coords.shape[0]
+        assert lib.weights.shape == (sizes[cutoff],)
+        assert lib.weights.sum() == pytest.approx(1.0)
+        assert len(lib.resnames) == len(lib.atom_names) == lib.coords.shape[1]
     assert sizes == {10: 711, 20: 123, 30: 33}
     # the default (no cutoff in the name) is FRETpredict's default, cutoff 30
-    assert load_rotamer_library("AlexaFluor 488 C1R")["coords"].shape[0] == 33
+    assert load_rotamer_library("AlexaFluor 488 C1R").coords.shape[0] == 33
 
 
 def test_fps_json_roundtrip(tmp_path: Path) -> None:
@@ -116,7 +126,9 @@ def test_read_rotamer_fps_label_distributions(tmp_path: Path) -> None:
         },
     }
     fps.write_text(json.dumps(payload))
-    donor, acceptor, distance, _positions, _distances, _extra = read_rotamer_fps(fps)
+    selection = read_rotamer_fps(str(fps))
+    donor, acceptor, distance = (selection.donor, selection.acceptor,
+                                 selection.distance)
     assert donor.name == "d1"
     assert donor.chain == "A"
     assert donor.residue == 10
@@ -161,10 +173,12 @@ def test_rotamer_fret_from_fps(tmp_path: Path) -> None:
         )
     )
     pdb = _fixture_pdb("openHsp90.pdb", tmp_path)
-    fret = rotamer_fret_from_fps(fps, pdb, fixed_R0=True, r0=5.5, output_prefix=str(tmp_path / "from_fps"))
+    fret = rotamer_fret_from_fps(str(fps), str(pdb), fixed_R0=True, r0=55.0,
+                                 output_prefix=str(tmp_path / "from_fps"))
     assert isinstance(fret, RotamerFRET)
-    assert fret.residues == [452, 637]
-    assert fret.chains == ["A", "B"]
+    # the configuration is C++ values: a wrapped vector, not a list
+    assert list(fret.residues) == [452, 637]
+    assert list(fret.chains) == ["A", "B"]
     assert fret.donor == "AlexaFluor 594"
     assert fret.acceptor == "AlexaFluor 568"
 
@@ -179,7 +193,8 @@ def test_rotamer_cli_help_and_r0(imp_bff_program) -> None:
 
     result = runner.invoke(imp_bff_program.rotamer, ["r0", "--donor", "AlexaFluor 488", "--acceptor", "AlexaFluor 594", "--k2", "0.684587"])
     assert result.exit_code == 0
-    assert float(result.output.split()[0]) == pytest.approx(5.712982, abs=1e-5)
+    assert float(result.output.split()[0]) == pytest.approx(57.12982, abs=1e-4)
+    assert result.output.split()[1] == "A"        # and it says which unit
 
 
 def test_load_protein_frames_from_rmf_trajectory(tmp_path: Path) -> None:
@@ -207,12 +222,15 @@ def test_load_protein_frames_from_rmf_trajectory(tmp_path: Path) -> None:
     IMP.rmf.save_frame(fh, "1")
     del fh
 
-    frames = load_protein_frames(rmf, max_frames=2)
+    # `rmf` is one of this module's modules now, so this is C++ beside the
+    # PDB reader (`RmfIO.h`) and gives the same `ProteinFrame` values.
+    from IMP.bff import protein_frames_from_rmf
+    frames = protein_frames_from_rmf(str(rmf), 2)
     assert len(frames) == 2
-    assert frames[0]["coords"].ndim == 2
-    assert frames[0]["residue_indices"]
-    assert frames[1]["coords"].shape == frames[0]["coords"].shape
-    assert np.allclose(frames[1]["coords"] - frames[0]["coords"], [1.0, 0.0, 0.0])
+    assert frames[0].coords.ndim == 2
+    assert list(frames[0].residue_indices)
+    assert frames[1].coords.shape == frames[0].coords.shape
+    assert np.allclose(frames[1].coords - frames[0].coords, [1.0, 0.0, 0.0])
 
 
 # IMP runs every .py under test/ as a standalone script, and a file of bare

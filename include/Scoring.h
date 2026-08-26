@@ -21,6 +21,12 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/DyeForceField.h>
 
+#include <IMP/showable_macros.h>
+
+#include <IMP/Model.h>
+#include <IMP/Restraint.h>
+#include <IMP/core/Cosine.h>
+
 #include <vector>
 #include <string>
 #include <map>
@@ -144,7 +150,7 @@ IMPBFFEXPORT std::vector<double> boltzmann_weights(
     \param n_clusters total number of clusters
     \return normalised cluster weights (n_clusters,)
 */
-IMPBFFEXPORT std::vector<double> rotamer_cluster_weights(
+IMPBFFEXPORT std::vector<double> cluster_weights(
         const std::vector<int>& assignments,
         const std::vector<double>& frame_weights,
         int n_clusters);
@@ -365,6 +371,36 @@ IMPBFFEXPORT std::vector<double> rotamer_mean_field_weights(
         double K = 1.0, int n_iter = 10, double aabb_pad = 3.5,
         double r_cutoff = 12.0);
 
+//! Mean-field weights for several dyes at once, cross-interactions included.
+/*!
+    The single-dye #rotamer_mean_field_weights sees the protein only. With two
+    or more labels on one structure each dye is also part of the others'
+    environment, so the update carries a conformer-pair energy matrix per dye
+    pair and iterates all of them together:
+    \f$\log q_d \leftarrow \log q_d - K(E^{bb}_d + \sum_{e \neq d} E^{sc}_{de} q_e)\f$,
+    renormalised by log-sum-exp each round.
+
+    \param[in] rotamer_coords_list one flat `n_conf * n_atoms * 3` per dye
+    \param[in] initial_weights_list one weight vector per dye, same order
+    \param[in] protein_coords flat `n_atoms * 3`
+    \param[in] dye_elements_list one element per atom, per dye
+    \param[in] protein_elements one per protein atom
+    \param[in] K inverse temperature of the update
+    \param[in] n_iter fixed-point iterations
+    \param[in] aabb_pad,r_cutoff as #pair_energy_matrix
+    \return one normalised weight vector per dye
+    \throw ValueException when the per-dye lists disagree in length
+*/
+IMPBFFEXPORT std::vector<std::vector<double> >
+rotamer_mean_field_weights_multi_dye(
+        const std::vector<std::vector<double> >& rotamer_coords_list,
+        const std::vector<std::vector<double> >& initial_weights_list,
+        const std::vector<double>& protein_coords,
+        const std::vector<std::vector<std::string> >& dye_elements_list,
+        const std::vector<std::string>& protein_elements,
+        double K = 1.0, int n_iter = 10, double aabb_pad = 3.5,
+        double r_cutoff = 12.0);
+
 // --------------------------------------------------------------------------
 // Walkers over a typed force-field system
 // --------------------------------------------------------------------------
@@ -377,12 +413,150 @@ IMPBFFEXPORT std::map<std::string, std::string> site_element_map(
 struct LJSitePair {
     std::string site_a, site_b;
     double rmin, eps;
+
+    IMP_SHOWABLE_INLINE(LJSitePair, out << "LJSitePair(" << site_a << "-"
+                                        << site_b << ")");
 };
 
 //! Every non-excluded site pair of a system, with LJ cross parameters.
 /*! The exclusions are the system's own (bonds, angle and dihedral end pairs). */
 IMPBFFEXPORT std::vector<LJSitePair> compute_lj_pair_sites(
         const DyeForceFieldSystem& system);
+
+//! The \c IMP::core::Cosine a torsion type spells, converted from CHARMM.
+/*!
+    cgdye stores torsions in the CHARMM convention
+    \f$V = k(1 + \cos(n\phi - \delta))\f$, and \c IMP::core::Cosine scores
+    \f$k(1 - \cos(n\phi - \delta'))\f$ -- so the phase needs
+    \f$\delta' = \delta + \pi\f$. Getting that wrong put every conjugated
+    torsion's minimum at 90 degrees (PRD-108); it is one conversion, in one
+    place, for that reason.
+*/
+IMPBFFEXPORT IMP::core::Cosine* torsion_cosine(const FFTorsionType& type);
+
+//! Bonded and element-aware nonbonded restraints for a typed dye system.
+/*!
+    Bonds and angles become harmonics, torsions the CHARMM cosine above,
+    impropers a harmonic about the *current* geometry's dihedral, and every
+    non-excluded site pair a lower-bound harmonic at its Lennard-Jones
+    \f$R_{min}\f$. A site with no particle is skipped rather than an error:
+    a system may describe more than the caller decorated.
+
+    \param[in] model the model the restraints score in
+    \param[in] system the typed system (bonds, angles, torsions, impropers)
+    \param[in] site_ids,particles the decorated sites, parallel; a site id
+               that appears twice takes its last particle
+    \param[in] nonbonded add the repulsion (#build_steric_restraint). False
+               leaves it to the caller, which is what a run wants when it
+               scores rigid moves against the repulsion *alone*.
+    \throw ValueException when the two sequences disagree in length
+
+    \note A bond whose equilibrium length is not set (zero, which no real bond
+    has) is restrained about the geometry as it stands, and an angle likewise.
+    That is what a system built without a template carries, and refusing it
+    would refuse the systems this module builds itself.
+*/
+IMPBFFEXPORT IMP::Restraints build_dye_restraints(
+        IMP::Model* model, const DyeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles, bool nonbonded = true);
+
+//! The steric term alone: one soft-sphere restraint over the whole system.
+/*!
+    Every site pair the system does not exclude, in a single
+    #IMP::container::PairsRestraint over a #IMP::core::SoftSpherePairScore.
+
+    **This is the repulsion, for molecular dynamics and Monte Carlo alike.**
+    It is differentiable, so a dynamics run can use it; it is one restraint
+    over a container rather than one per pair, so a long run can afford it;
+    and it depends only on where the spheres are, so a rigid move can be
+    scored against it and nothing else -- a rigid move cannot change a bond,
+    an angle or a torsion, and scoring those during one is work whose answer
+    never changes. There used to be two repulsions, these soft spheres for the
+    Monte-Carlo step and per-pair Lennard-Jones lower bounds everywhere else,
+    which is two implementations of one piece of physics.
+
+    The Lennard-Jones parameters remain what
+    #IMP::bff::IntramolecularEnergy *evaluates*: an energy of a
+    conformation is a different question from keeping two atoms apart, and a
+    sphere overlap answers the second.
+
+    The exclusions are the system's own (#DyeForceFieldSystem::get_exclusions),
+    so this and the bonded terms cannot disagree about which pairs are 1-2,
+    1-3 or 1-4.
+
+    \param[in] model,system,site_ids,particles as for #build_dye_restraints
+    \param[in] k the soft-sphere force constant; negative takes the system's
+               own `nonbonded.k`
+    \return the restraint; null when the system's non-bonded term is off or
+            it has no non-excluded pair
+*/
+IMPBFFEXPORT IMP::Restraint* build_steric_restraint(
+        IMP::Model* model, const DyeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles, double k = -1.0);
+
+//! Place a guest rigidly around a host and keep the best-scoring pose.
+/*!
+    A random search, not an optimisation: each trial rotates the guest about a
+    random axis by a random angle and puts its centre a fixed distance from
+    the host's, in a random direction; the pose that scores lowest is the one
+    left in the model. That is enough to start a simulation somewhere
+    plausible rather than wherever the input files happened to put the two
+    components -- which for a dye and a protein read from separate files is
+    usually on top of each other.
+
+    \param[in] scoring_function what a trial is judged by
+    \param[in] model the model both sets of particles belong to
+    \param[in] host,guest the two particle sets; only \p guest moves
+    \param[in] distance the separation of the two centres, A
+    \param[in] n_trials how many poses to try
+    \param[in] seed the random seed, so a run repeats
+    \return the best score, or NaN when there is nothing to place
+
+    The guest keeps its own shape throughout: every trial applies one rotation
+    and one translation to the same input coordinates, so this cannot distort
+    what it is placing.
+*/
+IMPBFFEXPORT double place_guest_by_score(
+        IMP::ScoringFunction* scoring_function, IMP::Model* model,
+        const IMP::ParticleIndexes& host, const IMP::ParticleIndexes& guest,
+        double distance = 62.5, int n_trials = 200, int seed = 42);
+
+//! Native-contact (Go) restraints that hold a component in its own shape.
+/*!
+    Every heavy-atom pair of a component that is closer than \p cutoff and is
+    not already within two bonds gets a harmonic at the distance it currently
+    has. That is what keeps a component's fold while its parts are free to
+    move: the bonded terms fix the local geometry, these fix the tertiary one.
+
+    Hydrogens are left out (a name beginning with `H`): they add pairs without
+    adding shape, and they are the majority of the atoms.
+
+    \param[in] model,system the model and the typed system
+    \param[in] site_ids,particles the decorated sites, parallel
+    \param[in] site_atom_names the atom name of each site id, for the hydrogen
+               test; a site missing from it counts as heavy
+    \param[in] component which component to restrain
+    \param[in] only_sites when non-empty, a pair is kept only if at least one
+               of its two sites is in this set -- how a mostly-rigid component
+               releases a few atoms and restrains only what they touch
+    \param[in] k the force constant
+    \param[in] cutoff the contact distance, A
+    \return one restraint per contact, named `go_<component>_<a>_<b>`
+
+    \note The equilibrium is `max(d, 1 A)`: two atoms that a structure has
+    placed on top of each other would otherwise get a harmonic at zero, which
+    is a singularity a minimiser walks straight into.
+*/
+IMPBFFEXPORT IMP::Restraints build_go_restraints(
+        IMP::Model* model, const DyeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles,
+        const std::map<std::string, std::string>& site_atom_names,
+        const std::string& component,
+        const std::vector<std::string>& only_sites = std::vector<std::string>(),
+        double k = 3.0, double cutoff = 6.0);
 
 //! `_ff_lj_type` entries (`LJ_<elem>`) for a set of elements.
 IMPBFFEXPORT std::map<std::string, FFLJType> build_lj_type_table(
@@ -396,13 +570,13 @@ IMPBFFEXPORT std::map<std::string, FFLJType> build_lj_type_table(
     \c evaluate_batch_filtered pre-filters with a #BoundingBoxFilter and gives
     non-overlapping frames zero energy.
 */
-class IMPBFFEXPORT DyeInternalEnergyEvaluator {
+class IMPBFFEXPORT IntramolecularEnergy {
     std::vector<LJSitePair> pairs_;
     std::vector<int> idx_a_, idx_b_;
     std::vector<double> rmin_, eps_;
 
 public:
-    DyeInternalEnergyEvaluator(const DyeForceFieldSystem& system);
+    IntramolecularEnergy(const DyeForceFieldSystem& system);
 
     std::vector<LJSitePair> get_pairs() const { return pairs_; }
 

@@ -32,6 +32,7 @@ import IMP.bff as _kernels
 import IMP.bff as qmaps
 
 
+
 def rss_mb():
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
 
@@ -125,10 +126,12 @@ def call_diffusion_propagate():
     mob = np.full(ng ** 3, 0.05)
     decay = np.ones(ng ** 3)
     bounds = (d > 0).astype(np.float64).ravel()
-    fluo = IMP.bff.VectorDouble()
-    return np.asarray(IMP.bff.diffusion_propagate(
+    # Two managed views now: the population trace, then the final density.
+    fluo, density = IMP.bff.diffusion_propagate(
         np.ascontiguousarray(cur).ravel(), mob, decay, bounds,
-        ng, IMP.bff.FLUX_SMOLUCHOWSKI, 20, 5, fluo)), (cur, mob, decay, bounds)
+        ng, IMP.bff.FLUX_SMOLUCHOWSKI, 20, 5)
+    assert fluo.size == 20 // 5 + 1
+    return density, (cur, mob, decay, bounds)
 
 
 def call_stamp_spheres():
@@ -153,7 +156,7 @@ def call_rotamer_pair_energy_matrix():
     b = np.ascontiguousarray(rng.random(35 * 12 * 3) * 10.0 + 4.0)
     rmin = np.full(12, 3.5)
     eps = np.full(12, 0.1)
-    return np.asarray(IMP.bff.rotamer_pair_energy_matrix(
+    return np.asarray(IMP.bff.pair_energy_matrix_kernel(
         a, b, rmin, eps, 40, 12, 35, 12)), (a, b, rmin, eps)
 
 
@@ -169,7 +172,7 @@ KERNELS = {
     "diffusion_propagate": call_diffusion_propagate,
     "stamp_spheres": call_stamp_spheres,
     "photon_trace": call_photon_trace,
-    "rotamer_pair_energy_matrix": call_rotamer_pair_energy_matrix,
+    "pair_energy_matrix_kernel": call_rotamer_pair_energy_matrix,
 }
 
 

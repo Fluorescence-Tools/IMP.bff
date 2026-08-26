@@ -1,374 +1,138 @@
 /*
- * RotamerEnsemble -- defined here, at the end of swig.i-in, because it
- * subclasses States (a SWIG value type that is defined after all %pythoncode
- * blocks in the main body).
+ * RotamerEnsemble -- last in swig.i-in, because it derives from `States`
+ * (avmodel.i) and returns `FRETPairGeometry` / `FRETPairEfficiencies`.
+ *
+ * This file was 340 lines of `%pythoncode` holding a Python class that
+ * subclassed a C++ value. What that cost, and why it is C++ now:
+ *
+ *  - The class carried `atoms`, `energies`, `partition`, `library`, `chain`
+ *    and `residue` as Python attributes on top of a C++ `States`, so an
+ *    ensemble built in C++ could not be one, and every consumer that wanted
+ *    the atoms had to be Python too.
+ *  - `from_site` -- place the library in the residue's backbone frame, screen
+ *    it, take the chromophore centre and the transition dipole -- was already
+ *    four C++ kernel calls with numpy reshapes between them. The reshapes are
+ *    what the kernels' own shapes say, so they belong on the C++ side of the
+ *    boundary: `RotamerEnsemble::from_site` in `RotamerEnsemble.h`.
+ *  - `pair_geometry`, `pair_distribution` and `fret_efficiencies` each rebuilt
+ *    a *dict* out of a typed value that already carried every field
+ *    (`FRETPairEfficiencies` holds `R`, `kappa2`, `weight`, `E`, `k_fret` and
+ *    the three averages). They are methods returning those values now, and a
+ *    caller reads `eff.static_efficiency` rather than `eff["static"]`.
+ *  - `_pts4` and `_mu_of` asked what kind of states an object was. `States`
+ *    answers that itself, so both are gone.
+ *
+ * Nothing in it is Python any more. A library is a `RotamerLibrary` and a
+ * protein frame is a `ProteinFrame`; `from_site` takes either those values or
+ * the two paths they are read from, because reading them is C++ as well
+ * (`load_rotamer_library`, `load_protein_frames`).
  */
 
-%pythoncode %{
-import json as _json
+IMP_SWIG_VALUE(IMP::bff, RotamerSiteOptions, RotamerSiteOptionsList);
+IMP_SWIG_VALUE(IMP::bff, RotamerEnsemble, RotamerEnsembles);
 
-class RotamerEnsemble(States):
-    """A rotamer library placed and screened at one labelling site (fps ``R1``).
+// Keyword arguments for the two values a caller constructs by hand: an
+// ensemble has thirteen fields and a site has six, and positional calls at
+// that width are how a `sigma_scaling` ends up in `epsilon_scaling`.
+%feature("kwargs") IMP::bff::RotamerEnsemble::RotamerEnsemble;
+%feature("kwargs") IMP::bff::RotamerEnsemble::from_site;
+%feature("kwargs") IMP::bff::RotamerSiteOptions::RotamerSiteOptions;
 
-    A **sibling** of :class:`IMP.bff.AccessibleVolume`, not a subclass of it. It
-    used to inherit from the concrete AV, which is why distance code worked for
-    rotamers -- by inheritance rather than by design -- and it then had to carry
-    a grid it does not have, filling ``density``, ``grid_step`` and
-    ``grid_shape`` with empty placeholders. No consumer ever read them: they all
-    used ``points``, ``mean_position``, ``n_points`` or ``has_volume``, which is
-    the :class:`IMP.bff.States` surface both representations share.
+%include "IMP/bff/RotamerEnsemble.h"
 
-    From ``States``, which is C++: ``points`` (N, 4) chromophore centre +
-    weight, ``attachment_point`` (CA), ``orientations`` (the per-rotamer
-    transition dipoles), ``position_name``, ``params`` (carries
-    ``simulation_type='R1'``, library, temperature, ...). Adds ``atoms``
-    (N, n_atoms, 3) in the protein frame, ``atom_names``, ``resnames``,
-    ``energies``, ``partition`` (Z) and the ``library`` name.
+// The shapes, on the C++ getters (see the note in avmodel.i): the flat view is
+// what the C++ callers want and the table shape is what a numpy caller cannot
+// be left to guess. `points` and `mu` come from `States` and are declared
+// there, for every representation at once.
+%attribute_np3(IMP::bff::RotamerEnsemble, std::vector<double>, atoms,
+               get_atoms, n_rotamers, 3);
+%attribute_np2(IMP::bff::RotamerEnsemble, std::vector<double>, centres,
+               get_centres, 3);
+%attribute_np(IMP::bff::RotamerEnsemble, std::vector<double>, weights,
+              get_weights);
+%attribute_np(IMP::bff::RotamerEnsemble, std::vector<double>, energies,
+              get_energies);
 
-    ``mu`` is the name the rotamer code uses for the dipoles, and it *is*
-    ``States.orientations`` -- a property over the one array, so a caller cannot
-    set one and read a stale other. It is why this is a plain class rather than
-    a dataclass: the states are a C++ value, and its constructor is the one that
-    has to run.
-    """
+// The name lists come back as the wrapped `std::vector<std::string>`, which
+// indexes and iterates like the tuple the Python attribute held.
+%attribute_py(IMP::bff::RotamerEnsemble, std::vector<std::string>, atom_names,
+              get_atom_names);
+%attribute_py(IMP::bff::RotamerEnsemble, std::vector<std::string>, resnames,
+              get_resnames);
 
-    def __init__(
-        self,
-        *,
-        points,
-        attachment_point,
-        position_name: str = "",
-        params: Optional[dict] = None,
-        mu=None,
-        atoms=None,
-        atom_names: tuple = (),
-        resnames: tuple = (),
-        energies=None,
-        partition: float = 0.0,
-        library: str = "",
-        chain: str = "",
-        residue: int = 0,
-    ):
-        p = IMP.bff.MapStringString()
-        for k, v in (params or {}).items():
-            p[k] = v if isinstance(v, str) else str(v)
-        States.__init__(
-            self, points=points, attachment_point=attachment_point,
-            orientations=mu, position_name=position_name, params=p)
-        self.atoms = (np.zeros((0, 0, 3)) if atoms is None
-                      else np.asarray(atoms, dtype=np.float64))
-        self.atom_names = tuple(atom_names)
-        self.resnames = tuple(resnames)
-        self.energies = (np.zeros(0) if energies is None
-                         else np.asarray(energies, dtype=np.float64))
-        self.partition = float(partition)
-        self.library = str(library)
-        self.chain = str(chain)
-        self.residue = int(residue)
+%attribute(IMP::bff::RotamerEnsemble, int, n_rotamers, get_n_rotamers);
+%attribute(IMP::bff::RotamerEnsemble, int, n_atoms, get_n_atoms);
+%attribute(IMP::bff::RotamerEnsemble, double, partition, get_partition);
+%attribute(IMP::bff::RotamerEnsemble, double, effective_sample_size,
+           get_effective_sample_size);
+%attribute(IMP::bff::RotamerEnsemble, int, residue, get_residue);
+%attributestring(IMP::bff::RotamerEnsemble, std::string, library, get_library);
+%attributestring(IMP::bff::RotamerEnsemble, std::string, chain, get_chain);
 
-    @property
-    def mu(self) -> np.ndarray:
-        """(N, 3) per-rotamer transition dipoles -- ``States.orientations``."""
-        return self.orientations
+%template(MapStringRotamerEnsemble) std::map<std::string, IMP::bff::RotamerEnsemble>;
 
-    @mu.setter
-    def mu(self, value):
-        self.orientations = value
+/*
+ * The fps.json layer over the ensembles: which position is labelled with
+ * what, and what distance a pair of ensembles predicts. Entries cross as JSON
+ * text, which is what the rest of the fps layer does -- an entry carries
+ * whatever keys its writer put there, and the alias reading (a chain is
+ * `chain_identifier`, `chain` or `segid`) is the format's business, done once
+ * in C++ rather than in every caller.
+ */
+IMP_SWIG_VALUE(IMP::bff, RotamerPosition, RotamerPositions);
+IMP_SWIG_VALUE(IMP::bff, RotamerDistance, RotamerDistances);
+IMP_SWIG_VALUE(IMP::bff, RotamerFpsSelection, RotamerFpsSelections);
 
-    # -- the States surface, as the attribute names callers have always used ---
-    # The base `States` is a C++ value behind get_*()/set_*()`; these properties
-    # restore the dataclass attribute surface this subclass used (points,
-    # orientations, params, ...) on top of it.
-    @property
-    def points(self) -> np.ndarray:
-        return np.asarray(self.get_points(), dtype=np.float64).reshape(-1, 4)
+%feature("kwargs") IMP::bff::rotamer_position_payload;
+%feature("kwargs") IMP::bff::distances_from_ensembles;
+%feature("kwargs") IMP::bff::write_rotamer_fps;
 
-    @points.setter
-    def points(self, value):
-        self.set_points(np.ascontiguousarray(
-            np.asarray(value, dtype=np.float64)).ravel())
+%include "IMP/bff/RotamerFps.h"
 
-    @property
-    def attachment_point(self) -> np.ndarray:
-        return np.asarray(self.get_attachment_point(), dtype=np.float64)
+%template(VectorPairStringString) std::vector<std::pair<std::string, std::string> >;
 
-    @attachment_point.setter
-    def attachment_point(self, value):
-        self.set_attachment_point(np.asarray(value, dtype=np.float64).ravel())
+/*
+ * The FRETpredict driver: two libraries, two sites, every frame. It was the
+ * last of `rotamer.i`'s Python -- a class holding twenty options, five numpy
+ * arrays and the file writing, over kernels that were all C++ already. Its
+ * `distance_distributions` never held anything: `trajectory_analysis`
+ * allocated the array when `calc_distr` was set and nothing ever wrote to it,
+ * so the option, the array and the `rmin`/`rmax`/`dr` axis it was shaped
+ * from are gone rather than ported.
+ *
+ * The parameter names are FRETpredict's (`fixed_R0`, `ign_H`, `libname_1`),
+ * deliberately: the parity harness hands one keyword dictionary to both.
+ */
+IMP_SWIG_VALUE(IMP::bff, FRETFrameResult, FRETFrameResults);
 
-    @property
-    def orientations(self) -> np.ndarray:
-        o = np.asarray(self.get_orientations(), dtype=np.float64)
-        return o.reshape(-1, 3) if o.size else o
+%feature("kwargs") IMP::bff::RotamerFRET::RotamerFRET;
+%feature("kwargs") IMP::bff::RotamerFRET::from_frames;
+%feature("kwargs") IMP::bff::RotamerFRET::reweight;
+%feature("kwargs") IMP::bff::RotamerFRET::save;
+%feature("kwargs") IMP::bff::rotamer_fret_from_fps;
 
-    @orientations.setter
-    def orientations(self, value):
-        self.set_orientations(np.ascontiguousarray(
-            np.asarray(value, dtype=np.float64)).ravel())
+%include "IMP/bff/RotamerFret.h"
 
-    @property
-    def params(self) -> dict:
-        return dict(self.get_params())
-
-    @params.setter
-    def params(self, value):
-        m = IMP.bff.MapStringString()
-        for k, v in (value or {}).items():
-            m[k] = v if isinstance(v, str) else str(v)
-        self.set_params(m)
-
-    @property
-    def mean_position(self) -> np.ndarray:
-        return np.asarray(self.get_mean_position(), dtype=np.float64)
-
-    @property
-    def position_name(self) -> str:
-        return self.get_position_name()
-
-    @position_name.setter
-    def position_name(self, value):
-        self.set_position_name(str(value))
-
-    @property
-    def n_points(self) -> int:
-        return self.get_n_points()
-
-    def __repr__(self) -> str:
-        return (f"RotamerEnsemble({self.n_rotamers} rotamers, "
-                f"{self.library!r}, Z={self.partition:.3g})")
-
-    # -- construction ------------------------------------------------------
-    @classmethod
-    def from_site(
-        cls,
-        structure,
-        chain: Optional[str],
-        residue: int,
-        library,
-        *,
-        temperature: float = 298.15,
-        electrostatic: bool = False,
-        potential: str = "lj",
-        ignore_h: bool = True,
-        sigma_scaling: float = 0.5,
-        epsilon_scaling: float = 1.0,
-        frame_index: int = 0,
-        position_name: str = "",
-    ) -> "RotamerEnsemble":
-        """Place ``library`` on ``(chain, residue)`` of ``structure`` and screen it.
-
-        ``structure`` is a PDB / multi-MODEL PDB / RMF path or a frame dict
-        from ``load_protein_frames``; ``library`` a registry name
-        (``'AlexaFluor 488 C1R cutoff30'``), a path, or a loaded library dict.
-        Scoring is FRETpredict's (LJ or Gauss, optional Debye–Hückel; the
-        labelled residue and hydrogens are not obstacles).
-        """
-        frame = _frame(structure, frame_index)
-        lib = _library(library)
-        ca, n, c = resolve_backbone_site(frame, chain, residue)
-        rotamers = transform_library_to_site(lib["coords"], ca, n, c)
-        metadata = dict(lib.get("metadata", {}) or {})
-        _weights = lib.get("weights")
-        _weights = [] if _weights is None else list(_weights)
-        _resnames = lib.get("resnames")
-        _resnames = [] if _resnames is None else list(_resnames)
-        score = compute_rotamer_score(
-            rotamers,
-            frame["coords"],
-            frame["atom_names"],
-            frame["resnames"],
-            lib["atom_names"],
-            metadata.get("positive") or [],
-            metadata.get("negative") or [],
-            _resnames,
-            protein_residue_indices=frame.get("residue_indices") or [],
-            protein_chain_ids=frame.get("chain_ids") or [],
-            site_residue=residue,
-            site_chain=chain or "",
-            rotamer_weights=_weights,
-            temperature=temperature,
-            ignore_h=ignore_h,
-            electrostatic=electrostatic,
-            potential=potential,
-            sigma_scaling=sigma_scaling,
-            epsilon_scaling=epsilon_scaling,
-        )
-        names = list(lib["atom_names"])
-        lib_res = lib.get("resnames")
-        centre_idx = selector_atom_indices(names, metadata.get("r", []), lib_res)[0]
-        mu_idx = selector_atom_indices(names, metadata.get("mu", []), lib_res)
-        if len(mu_idx) >= 2:
-            mu = rotamers[:, mu_idx[1], :] - rotamers[:, mu_idx[0], :]
-        else:
-            mu = rotamers[:, 1, :] - rotamers[:, 0, :]
-        mu = mu / np.linalg.norm(mu, axis=1, keepdims=True)
-        centres = rotamers[:, centre_idx, :]
-        points = np.hstack([centres, score.weights[:, None]]).astype(np.float64)
-        ca_v = np.asarray(ca, dtype=np.float64)
-        return cls(
-            points=points,
-            attachment_point=ca_v.copy(),
-            position_name=position_name or f"{chain or ''}{residue}",
-            params={
-                "simulation_type": SIMULATION_TYPE_R1,
-                "library": metadata.get("library_name", metadata.get("name", str(library))),
-                "chain": chain or "",
-                "residue": int(residue),
-                "temperature": float(temperature),
-                "electrostatic": bool(electrostatic),
-                "potential": potential,
-                "ignore_h": bool(ignore_h),
-                "sigma_scaling": float(sigma_scaling),
-                "epsilon_scaling": float(epsilon_scaling),
-                "partition": float(score.partition),
-            },
-            mu=mu,
-            atoms=rotamers,
-            atom_names=tuple(names),
-            resnames=tuple(lib.get("resnames") or ()),
-            energies=np.asarray(score.energies, dtype=np.float64),
-            partition=float(score.partition),
-            library=str(metadata.get("library_name", metadata.get("name", str(library)))),
-            chain=chain or "",
-            residue=int(residue),
-        )
-
-    # -- accessors ---------------------------------------------------------
-    @property
-    def centres(self) -> np.ndarray:
-        """(N, 3) chromophore centres in the protein frame (Å)."""
-        return self.points[:, :3]
-
-    @property
-    def weights(self) -> np.ndarray:
-        """(N,) normalised Boltzmann × library weights."""
-        return self.points[:, 3]
-
-    @property
-    def n_rotamers(self) -> int:
-        return int(self.points.shape[0])
-
-    # -- pair physics ------------------------------------------------------
-    @staticmethod
-    def _pts4(obj):
-        """The `(N, 4)` points of any `States` (ensemble or AV value)."""
-        if isinstance(obj, RotamerEnsemble):
-            return obj.points
-        p = np.asarray(obj.get_points(), dtype=np.float64)
-        return p.reshape(-1, 4)
-
-    @staticmethod
-    def _mu_of(obj):
-        """The `(N, 3)` dipoles of any `States`, or None."""
-        mu = getattr(obj, "mu", None)
-        if mu is not None:
-            return mu
-        o = np.asarray(obj.get_orientations(), dtype=np.float64)
-        return o.reshape(-1, 3) if o.size else None
-
-    def pair_geometry(self, other: "RotamerEnsemble") -> dict:
-        """R_ij, κ²_ij and w_i·w_j against another ensemble (or any AV: κ² = 2/3)."""
-        op = self._pts4(other)
-        om = self._mu_of(other)
-        if om is not None and om.shape[0] != op.shape[0]:
-            om = None
-        g = fret_pair_geometry(self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om)
-        n1, n2 = g.n1, g.n2
-        return {
-            "R": np.asarray(g.R, dtype=np.float64).reshape(n1, n2),
-            "kappa2": np.asarray(g.kappa2, dtype=np.float64).reshape(n1, n2),
-            "weight": np.asarray(g.weight, dtype=np.float64).reshape(n1, n2),
-            "kappa2_avg": g.kappa2_avg,
-        }
-
-    def pair_distribution(self, other: "RotamerEnsemble", forster_radius: float, tau0: Optional[float] = None) -> dict:
-        """The pair's FRET rate distribution and averages (see ``fret.distance.fret_pair_efficiencies``).
-
-        ``forster_radius`` in Å for κ² = 2/3.
-        """
-        g = self.pair_geometry(other)
-        op = self._pts4(other)
-        om = self._mu_of(other)
-        if om is not None and om.shape[0] != op.shape[0]:
-            om = None
-        eff = fret_pair_efficiencies(
-            fret_pair_geometry(
-                self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om),
-            forster_radius, tau0)
-        n1, n2 = eff.n1, eff.n2
-        return {
-            "R": np.asarray(eff.R, dtype=np.float64).reshape(n1, n2),
-            "kappa2": np.asarray(eff.kappa2, dtype=np.float64).reshape(n1, n2),
-            "weight": np.asarray(eff.weight, dtype=np.float64).reshape(n1, n2),
-            "k_fret": np.asarray(eff.get_k_fret(), dtype=np.float64).reshape(n1, n2),
-            "E": np.asarray(eff.get_E(), dtype=np.float64).reshape(n1, n2),
-            "rate_ratio": np.asarray(eff.get_rate_ratio(), dtype=np.float64).reshape(n1, n2),
-            "static": eff.static_efficiency,
-            "dynamic1": eff.dynamic1,
-            "dynamic2": eff.dynamic2,
-            "kappa2_avg": eff.kappa2_avg,
-        }
-
-    def fret_efficiencies(
-        self,
-        other: "RotamerEnsemble",
-        forster_radius: Optional[float] = None,
-        *,
-        donor: Optional[str] = None,
-        acceptor: Optional[str] = None,
-    ) -> dict:
-        """E_static, E_dynamic1, E_dynamic2 and ⟨κ²⟩ for this (donor) and ``other`` (acceptor).
-
-        Give ``forster_radius`` (Å, κ² = 2/3) or the dye names -- then R0 is
-        computed from the spectra at the pair's ⟨κ²⟩, as FRETpredict does.
-        """
-        geometry = self.pair_geometry(other)
-        if forster_radius is None:
-            if donor is None or acceptor is None:
-                raise ValueError("give forster_radius (A) or donor and acceptor names")
-            r0_nm = forster_radius_from_spectra(donor, acceptor, geometry["kappa2_avg"])
-            # FRETpredict applies its k2-dependent R0 with the isotropic formula
-            # 1/(1 + (2/3/k2)(r/R0)^6); fret_pair_efficiencies expects R0 at k2 = 2/3
-            forster_radius = r0_nm * 10.0
-        op = self._pts4(other)
-        om = self._mu_of(other)
-        if om is not None and om.shape[0] != op.shape[0]:
-            om = None
-        eff = fret_pair_efficiencies(
-            fret_pair_geometry(
-                self.centres, self.weights, op[:, :3], op[:, 3], self.mu, om),
-            forster_radius)
-        return {"static": eff.static_efficiency, "dynamic1": eff.dynamic1,
-                "dynamic2": eff.dynamic2, "kappa2_avg": eff.kappa2_avg,
-                "forster_radius_nm": forster_radius / 10.0}
-
-
-def rotamer_ensembles_from_fps(
-    fps_json,
-    structure,
-    library_map: Optional[Dict[str, str]] = None,
-    *,
-    frame_index: int = 0,
-    **kwargs,
-) -> Dict[str, RotamerEnsemble]:
-    """One :class:`RotamerEnsemble` per fps.json position that names a library.
-
-    A position's ``rotamer_library`` / ``library`` field selects the library;
-    ``library_map`` (position name → library name) overrides or supplies it
-    for AV-only files. Positions without a library are skipped. ``kwargs`` go
-    to :meth:`RotamerEnsemble.from_site`.
-    """
-    positions = _json.loads(read_fps_json(str(fps_json)).positions)
-    frame = _frame(structure, frame_index)
-    library_map = dict(library_map or {})
-    out: Dict[str, RotamerEnsemble] = {}
-    for name, payload in positions.items():
-        pos = RotamerPosition.from_payload(name, payload)
-        lib_name = library_map.get(name) or pos.library
-        if not lib_name:
-            continue
-        out[name] = RotamerEnsemble.from_site(
-            frame, pos.chain, pos.residue, lib_name, position_name=name, **kwargs)
-    return out
-
-%}
+%attribute_np2(IMP::bff::RotamerFRET, std::vector<double>, z_values,
+               get_z_values, 2);
+%attribute_np(IMP::bff::RotamerFRET, std::vector<double>, k2_values,
+              get_k2_values);
+%attribute_np(IMP::bff::RotamerFRET, std::vector<double>, estatic_values,
+              get_estatic_values);
+%attribute_np(IMP::bff::RotamerFRET, std::vector<double>, edynamic1_values,
+              get_edynamic1_values);
+%attribute_np(IMP::bff::RotamerFRET, std::vector<double>, edynamic2_values,
+              get_edynamic2_values);
+%attribute(IMP::bff::RotamerFRET, double, r0, get_r0);
+// What the driver was told to do: the sites, the dyes and their libraries.
+%attribute_py(IMP::bff::RotamerFRET, VectorInt, residues, get_residues);
+%attribute_py(IMP::bff::RotamerFRET, std::vector<std::string>, chains, get_chains);
+%attributestring(IMP::bff::RotamerFRET, std::string, donor, get_donor);
+%attributestring(IMP::bff::RotamerFRET, std::string, acceptor, get_acceptor);
+%attributestring(IMP::bff::RotamerFRET, std::string, libname_1,
+                 get_libname_1);
+%attributestring(IMP::bff::RotamerFRET, std::string, libname_2,
+                 get_libname_2);
+%attribute(IMP::bff::RotamerFRET, int, n_frames, get_n_frames);
+%attributestring(IMP::bff::RotamerFRET, std::string, output_prefix,
+                 get_output_prefix);

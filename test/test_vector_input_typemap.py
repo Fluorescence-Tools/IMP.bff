@@ -29,7 +29,8 @@ What this file guards is that the fast path did not change any *answer*, and
 that everything which is not a contiguous float64 array still goes through
 SWIG's own converter:
 
-* a Python list, a tuple, and a wrapped ``VectorDouble`` all still work --
+* a Python list, a tuple, and a wrapped ``std::vector<double>`` all still
+  work --
   the last one needs explicit handling, because overriding the typemap stops
   ``std_vector.i``'s traits specialisation from ever being emitted;
 * a **strided** array must not be read as though it were contiguous. Silently
@@ -42,6 +43,16 @@ import numpy as np
 import pytest
 
 import IMP.bff
+
+# The wrapped-vector case below needs an instance of whatever class SWIG uses
+# for `std::vector<double>`, and that is not this module's to name: SWIG wraps
+# a type once across a module and its imports, and `IMP.bff` imports `rmf`,
+# which brings `isd`, which brings `saxs` -- so `IMP.saxs.DistBase` is the
+# class and `IMP_bff.types.i` instantiates no `VectorDouble`. Nothing in the
+# module's own surface asks a caller to build one; this test does, because
+# binding one is the property under test.
+from IMP.saxs import DistBase as VectorDouble
+
 
 
 AMP = np.array([0.7, 0.3])
@@ -73,7 +84,7 @@ def test_a_tuple_gives_the_same_answer_as_an_array(reference):
 def test_a_wrapped_vectordouble_still_binds(reference):
     """The case the fast path breaks if it is not handled explicitly."""
     t, want = reference
-    v = IMP.bff.VectorDouble
+    v = VectorDouble
     np.testing.assert_array_equal(
         decay(v(AMP.tolist()), v(RATE.tolist()), v(t.tolist())), want)
 

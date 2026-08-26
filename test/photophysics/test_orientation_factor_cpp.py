@@ -27,26 +27,27 @@ import IMP.bff as o
 
 def _wobbling(sD2, sA2, n_bins=81, k2_min=0.0, k2_max=4.0, n_samples=10000,
               seed=0):
-    """`(scale, hist, samples)` -- the two out-collections are SWIG `VectorDouble`s."""
-    scale = IMP.bff.VectorDouble()
-    hist = IMP.bff.VectorDouble()
-    samples = np.asarray(o.wobbling_kappa2_distribution(
-        sD2, sA2, n_bins, k2_min, k2_max, n_samples, seed, scale, hist))
-    return np.asarray(scale), np.asarray(hist), samples
+    """`(scale, hist, samples)` -- one `Kappa2Distribution`, three numpy views.
+
+    It used to return the samples and *fill* two `std::vector<double>&`
+    out-parameters, so a caller had to construct a wrapped vector first.
+    """
+    k2 = o.wobbling_kappa2_distribution(
+        sD2, sA2, n_bins, k2_min, k2_max, n_samples, seed)
+    return k2.scale, k2.hist, k2.values
 
 
 def _wobbling_delta(delta, sD2, sA2, step=0.25, n_bins=31, k2_min=0.0,
                     k2_max=4.0):
     """`(scale, hist, k2)` with `k2` reshaped to `(n_beta, n_phi)`."""
-    scale = IMP.bff.VectorDouble()
-    hist = IMP.bff.VectorDouble()
-    k2 = np.asarray(o.wobbling_kappa2_distribution_delta(
-        delta, sD2, sA2, step, n_bins, k2_min, k2_max, scale, hist))
+    dist = o.wobbling_kappa2_distribution_delta(
+        delta, sD2, sA2, step, n_bins, k2_min, k2_max)
+    k2 = dist.values
     n_beta = max(1, int(np.floor((np.pi / 2.0 - 0.001) /
                                  (step * np.pi / 180.0))) + 1)
     if n_beta and k2.size % n_beta == 0:
         k2 = k2.reshape(n_beta, -1)
-    return np.asarray(scale), np.asarray(hist), k2
+    return dist.scale, dist.hist, k2
 
 
 # --- the geometry ------------------------------------------------------------

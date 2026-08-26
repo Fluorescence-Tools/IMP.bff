@@ -92,10 +92,24 @@ std::vector<double> dipole_kappa_distance(
     return {dRDA, mu_dot - 3.0 * d_dot_n * a_dot_n};
 }
 
-std::vector<double> wobbling_kappa2_distribution_delta(
+void Kappa2Distribution::get_values(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(values, out_view, n_out_view);
+}
+
+void Kappa2Distribution::get_scale(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(scale, out_view, n_out_view);
+}
+
+void Kappa2Distribution::get_hist(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(hist, out_view, n_out_view);
+}
+
+Kappa2Distribution wobbling_kappa2_distribution_delta(
         double delta, double sD2, double sA2, double step,
-        int n_bins, double k2_min, double k2_max,
-        std::vector<double>& k2_scale, std::vector<double>& k2_hist) {
+        int n_bins, double k2_min, double k2_max) {
+    Kappa2Distribution out;
+    std::vector<double>& k2_scale = out.scale;
+    std::vector<double>& k2_hist = out.hist;
     k2_scale = bin_edges(n_bins, k2_min, k2_max);
     k2_hist.assign(k2_scale.empty() ? 0 : k2_scale.size() - 1, 0.0);
 
@@ -123,13 +137,16 @@ std::vector<double> wobbling_kappa2_distribution_delta(
             accumulate(k2_hist, k2_scale, v, weight);
         }
     }
-    return k2;
+    out.values.swap(k2);
+    return out;
 }
 
-std::vector<double> wobbling_kappa2_distribution(
+Kappa2Distribution wobbling_kappa2_distribution(
         double sD2, double sA2, int n_bins, double k2_min, double k2_max,
-        int n_samples, int seed,
-        std::vector<double>& k2_scale, std::vector<double>& k2_hist) {
+        int n_samples, int seed) {
+    Kappa2Distribution out;
+    std::vector<double>& k2_scale = out.scale;
+    std::vector<double>& k2_hist = out.hist;
     k2_scale = bin_edges(n_bins, k2_min, k2_max);
     k2_hist.assign(k2_scale.empty() ? 0 : k2_scale.size() - 1, 0.0);
 
@@ -159,7 +176,8 @@ std::vector<double> wobbling_kappa2_distribution(
         k2[i] = v;
         accumulate(k2_hist, k2_scale, v, 1.0);
     }
-    return k2;
+    out.values.swap(k2);
+    return out;
 }
 
 

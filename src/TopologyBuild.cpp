@@ -16,6 +16,7 @@
 #include <IMP/exception.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -27,6 +28,48 @@
 IMPBFF_BEGIN_NAMESPACE
 
 namespace {
+
+//! `path` written relative to `base`, both absolute; `os.path.relpath`.
+/*!
+    The count of `..` is the number of segments of \p base past the common
+    prefix -- **segments, not separators**. Counting the separators is one
+    short whenever \p base has no trailing one, which is always, and a system
+    written to a directory that is not a sibling of its MOL2 files then
+    recorded a path one level too shallow: `/var/folders/x/T/tmp1` and
+    `/Users/me/dye.mol2` came back as `/var/Users/me/dye.mol2`, and the reader
+    said the file did not exist. It did.
+*/
+std::string relative_path(const std::string& path, const std::string& base) {
+    if (path.empty() || path[0] != '/' || base.empty() || base[0] != '/') {
+        return path;   // nothing to relate; keep what the caller gave
+    }
+    const auto split = [](const std::string& s) {
+        std::vector<std::string> out;
+        std::size_t i = 0;
+        while (i < s.size()) {
+            const std::size_t j = s.find('/', i);
+            const std::string part =
+                    s.substr(i, j == std::string::npos ? j : j - i);
+            if (!part.empty() && part != ".") out.push_back(part);
+            if (j == std::string::npos) break;
+            i = j + 1;
+        }
+        return out;
+    };
+    const std::vector<std::string> a = split(path), b = split(base);
+    std::size_t common = 0;
+    while (common < a.size() && common < b.size() && a[common] == b[common]) {
+        ++common;
+    }
+    std::string rel;
+    for (std::size_t i = common; i < b.size(); ++i) rel += "../";
+    for (std::size_t i = common; i < a.size(); ++i) {
+        rel += a[i];
+        if (i + 1 < a.size()) rel += "/";
+    }
+    return rel.empty() ? std::string(".") : rel;
+}
+
 
 std::string tb_upper(std::string s) {
     for (auto& c : s) {
@@ -219,31 +262,7 @@ DyeForceFieldSystem build_forcefield_system(
         nlohmann::json entry;
         entry["role"] = c.role;
         if (!relative_to.empty()) {
-            // os.path.relpath semantics: both absolute, relative to out_dir
-            std::string abs = c.mol2, base = relative_to;
-            const std::size_t common = [&] {
-                std::size_t i = 0;
-                while (i < abs.size() && i < base.size() &&
-                       abs[i] == base[i]) {
-                    if (abs[i] == '/') ++i;
-                    else {
-                        // extend to the end of the matching path segment
-                        const std::size_t na = abs.find('/', i);
-                        const std::size_t nb = base.find('/', i);
-                        if (na == nb && na != std::string::npos) i = na + 1;
-                        else break;
-                    }
-                }
-                return i;
-            }();
-            std::string rel_a = abs.substr(common);
-            std::string rel_b = base.substr(common);
-            int ups = 0;
-            for (char ch : rel_b) ups += (ch == '/');
-            std::string rel;
-            for (int u = 0; u < ups; u++) rel += "../";
-            rel += rel_a;
-            entry["mol2"] = rel.empty() ? "." : rel;
+            entry["mol2"] = relative_path(c.mol2, relative_to);
         } else {
             entry["mol2"] = c.mol2;
         }
@@ -425,6 +444,168 @@ DyeForceFieldSystem build_forcefield_system(
                           {"minimize_steps", minimize_steps}};
 
     return forcefield_system_from_json(system.dump());
+}
+
+namespace {
+//! A JSON string escape for the few characters a path can carry.
+std::string json_quote(const std::string& v) {
+    std::string out = "\"";
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        if (v[i] == '"' || v[i] == '\\') out += '\\';
+        out += v[i];
+    }
+    return out + "\"";
+}
+}  // namespace
+
+DyeForceFieldSystem build_forcefield_system(
+        const std::vector<FFComponentSpec>& components, double bond_k,
+        double angle_k, double pi_dihedral_k, double linker_dihedral_k,
+        double ring_improper_k, double pi_improper_k, double flat_improper_k,
+        double orient_improper_k, int n_steps, int write_every,
+        double default_radius, double default_mass, double nonbonded_k,
+        double nonbonded_cutoff, int minimize_steps,
+        const std::string& relative_to) {
+    std::ostringstream json;
+    json << '[';
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        const FFComponentSpec& c = components[i];
+        if (i) json << ',';
+        json << "{\"name\":" << json_quote(c.name)
+             << ",\"mol2\":" << json_quote(c.mol2)
+             << ",\"template\":"
+             << (c.template_path.empty() ? std::string("null")
+                                         : json_quote(c.template_path))
+             << ",\"role\":" << json_quote(c.role) << '}';
+    }
+    json << ']';
+    return build_forcefield_system(json.str(), bond_k, angle_k, pi_dihedral_k,
+                                   linker_dihedral_k, ring_improper_k,
+                                   pi_improper_k, flat_improper_k,
+                                   orient_improper_k, n_steps, write_every,
+                                   default_radius, default_mass, nonbonded_k,
+                                   nonbonded_cutoff, minimize_steps,
+                                   relative_to);
+}
+
+DyeForceFieldSystem build_dye_protein_system(
+        const std::string& protein_mol2, const std::string& dye_mol2,
+        const std::string& protein_name, const std::string& dye_name,
+        const std::string& protein_template, const std::string& dye_template,
+        double default_radius, double default_mass) {
+    std::vector<FFComponentSpec> specs;
+    specs.push_back(FFComponentSpec(protein_name, protein_mol2,
+                                    protein_template, "fixed"));
+    specs.push_back(FFComponentSpec(dye_name, dye_mol2, dye_template,
+                                    "mobile"));
+    return build_forcefield_system(specs, 2000.0, 400.0, 12.0, 1.5, 40.0,
+                                   180.0, 120.0, 220.0, 20000, 100,
+                                   default_radius, default_mass, 5.0, 6.0,
+                                   200, "");
+}
+
+DyeForceFieldSystem probe_forcefield_system(const std::string& dye_mol2,
+                                          const std::string& dye_name,
+                                          const std::string& dye_template,
+                                          double default_radius,
+                                          double default_mass) {
+    std::vector<FFComponentSpec> specs;
+    specs.push_back(FFComponentSpec(dye_name, dye_mol2, dye_template,
+                                    "mobile"));
+    DyeForceFieldSystem system = build_forcefield_system(
+            specs, 2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
+            20000, 100, default_radius, default_mass, 5.0, 6.0, 200, "");
+
+    // The dye's own backbone anchor: with no protein component there is
+    // nothing else for a sampler to hold still.
+    std::vector<std::string> anchor;
+    const std::vector<FFSite>& sites = system.get_sites();
+    for (std::size_t i = 0; i < sites.size(); ++i) {
+        std::string name = sites[i].atom_name;
+        for (std::size_t k = 0; k < name.size(); ++k) {
+            name[k] = static_cast<char>(
+                    std::toupper(static_cast<unsigned char>(name[k])));
+        }
+        if (name == "N" || name == "CA" || name == "C" || name == "O") {
+            anchor.push_back(sites[i].id);
+        }
+    }
+    std::sort(anchor.begin(), anchor.end());
+    std::map<std::string, std::vector<std::string> > groups =
+            system.get_groups();
+    groups[dye_name + "_anchor"] = anchor;
+    system.set_groups(groups);
+    std::vector<std::string> fixed;
+    fixed.push_back(dye_name + "_anchor");
+    system.set_fixed_groups(fixed);
+    return system;
+}
+
+DyeForceFieldSystem internal_topology_system(const Mol2Component& component) {
+    // Sites in serial order, so the ids and the derived terms come out in the
+    // order the MOL2 lists its atoms.
+    std::vector<Mol2Atom> ordered = component.atoms;
+    std::sort(ordered.begin(), ordered.end(),
+              [](const Mol2Atom& l, const Mol2Atom& r) {
+                  return l.serial < r.serial;
+              });
+
+    std::map<int, std::string> id_of;
+    std::vector<FFSite> sites;
+    for (std::size_t i = 0; i < ordered.size(); ++i) {
+        std::ostringstream id;
+        id << "dye:" << ordered[i].serial << ":" << ordered[i].atom_name;
+        id_of[ordered[i].serial] = id.str();
+        FFSite site;
+        site.id = id.str();
+        site.component = ordered[i].component;
+        site.atom_name = ordered[i].atom_name;
+        site.element = ordered[i].element;
+        site.site_no = static_cast<int>(i);
+        site.site_serial = ordered[i].serial;
+        sites.push_back(site);
+    }
+
+    std::vector<std::pair<int, int> > bonds = component.bonds;
+    std::sort(bonds.begin(), bonds.end());
+    std::vector<FFBond> ff_bonds;
+    for (std::size_t i = 0; i < bonds.size(); ++i) {
+        if (!id_of.count(bonds[i].first) || !id_of.count(bonds[i].second)) {
+            continue;
+        }
+        FFBond b;
+        b.site_a = id_of[bonds[i].first];
+        b.site_b = id_of[bonds[i].second];
+        ff_bonds.push_back(b);
+    }
+
+    const MolecularGraph graph(bonds);
+    std::vector<FFAngle> ff_angles;
+    const std::vector<std::vector<int> > angles = graph.get_angles();
+    for (std::size_t i = 0; i < angles.size(); ++i) {
+        FFAngle a;
+        a.site_a = id_of[angles[i][0]];
+        a.site_b = id_of[angles[i][1]];
+        a.site_c = id_of[angles[i][2]];
+        ff_angles.push_back(a);
+    }
+    std::vector<FFTorsion> ff_torsions;
+    const std::vector<std::vector<int> > torsions = graph.get_dihedrals();
+    for (std::size_t i = 0; i < torsions.size(); ++i) {
+        FFTorsion t;
+        t.site_a = id_of[torsions[i][0]];
+        t.site_b = id_of[torsions[i][1]];
+        t.site_c = id_of[torsions[i][2]];
+        t.site_d = id_of[torsions[i][3]];
+        ff_torsions.push_back(t);
+    }
+
+    DyeForceFieldSystem out;
+    out.set_sites(sites);
+    out.set_bonds(ff_bonds);
+    out.set_angles(ff_angles);
+    out.set_dihedrals(ff_torsions);
+    return out;
 }
 
 IMPBFF_END_NAMESPACE

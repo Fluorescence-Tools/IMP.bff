@@ -121,11 +121,19 @@ GridDiffusionResult GridDiffusionSolver::run(int n_steps, int n_out) {
         decay[i] = std::exp(-rate_map_[i] * t_step_);
     }
 
-    std::vector<double> fluorescence;
+    double* fluo_buf = nullptr;
+    int n_fluo_buf = 0;
     double* final_density = nullptr;
     int n_final = 0;
     diffusion_propagate(cur, d, decay, bounds_, ng_, flux_form_, n_steps, n_out,
-                        fluorescence, &final_density, &n_final);
+                        &fluo_buf, &n_fluo_buf, &final_density, &n_final);
+    // Both outputs are malloc'ed views the caller owns; this one is read into
+    // a vector and released here, the density below.
+    std::vector<double> fluorescence;
+    if (fluo_buf != nullptr) {
+        fluorescence.assign(fluo_buf, fluo_buf + std::max(0, n_fluo_buf));
+        std::free(fluo_buf);
+    }
     n_iterations_ += n_steps;
 
     const int n_reports = n_steps / n_out + 1;
@@ -215,11 +223,13 @@ void GridDiffusionSolver::equilibrium(int n_steps, double tolerance,
     const int chunk = std::max(1, n_check);
     while (remaining > 0) {
         const int take = std::min(chunk, remaining);
-        std::vector<double> fluo;
+        double* fluo = nullptr;
+        int n_fluo = 0;
         double* next = nullptr;
         int n_next = 0;
         diffusion_propagate(cur, d, one, bounds_, ng_, flux_form_, take, take,
-                            fluo, &next, &n_next);
+                            &fluo, &n_fluo, &next, &n_next);
+        std::free(fluo);
         if (next == nullptr) break;
         cur.assign(next, next + n_next);
         std::free(next);

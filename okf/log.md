@@ -1,5 +1,1908 @@
 # Update Log
 
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
+
+## 2026-08-26 (night, last +4) — the coarse-grained potentials, as IMP scores
+
+The family that lived twice: `numba.njit` kernels in
+`IMP.cgmol.{statpot,sterics,solvation}` (imp-tricks) and classes around them in
+chisurf's `structure/potential/potentials.py`, which imported those kernels.
+Coordinates are this module's business and numba is a prototyping tool in this
+stack, so both are here and both are C++.
+
+### The shape, corrected
+
+The first cut of this was a `CoarseStructure` holding flat coordinate arrays, a
+residue lookup table and a C-alpha distance matrix -- chisurf's design,
+transliterated. That is a second scoring world beside IMP's, and it was thrown
+away. **IMP has all three already**: particles in a `Model`, a `Hierarchy` over
+them, and a `ClosePairContainer` for the pair loop with its cutoff.
+
+| term | what it is here |
+|---|---|
+| Miyazawa-Jernigan | `IMP::core::StatisticalPairScore<atom::ResidueType>` + a table |
+| UNRES centroid | the same, distance-binned |
+| hydrogen bond | `HydrogenBondRestraint` (four-channel, no IMP form) |
+| Go model | `GoRestraint` (truncated LJ, no IMP form) |
+| generalized Born | `GeneralizedBornRestraint` (no IMP form) |
+| Ramachandran | `RamachandranRestraint` (no IMP form) |
+| LJ bead | `LennardJonesBeadPairScore` |
+| clash | **IMP's** `SoftSpherePairScore`, k = 2/t^2, via `build_clash_restraint` |
+| C-alpha internals | **IMP's** `Harmonic` distance/angle/dihedral, via `build_ca_internal_restraints` |
+| accessible surface | this module's `solvent_accessible_surface_area`, per residue |
+| radius of gyration | **IMP's** `atom::get_radius_of_gyration`; nothing added |
+
+`add_residue_type_score_data` is `IMP::atom::add_dope_score_data` for residues:
+it puts the type on one atom each and the scores read it through
+`get_residue_type_key()`. The tables name residues and IMP's PMF reader maps
+names to indices, so **nothing here carries a residue order** -- which is what
+kept the two Python copies from agreeing.
+
+The kernels stay public on flat arrays (`clash_energy`, `go_energy`,
+`lennard_jones_bead_energy`, `generalized_born_energy`, `residue_asa`,
+`ramachandran_energy`), because a caller holding numpy should not have to build
+a model to score one, and because they are what the parity tests pin.
+
+### Verified against the Python it replaces
+
+Every kernel reproduces the unmodified numba kernel on a seeded 12-residue
+structure, to the last bit or one ulp:
+
+| | value |
+|---|---|
+| clash | 35.961679525439735 |
+| clash (t 6, cov 1) | 6.521641123970415 |
+| Go | -6.676356712583448 |
+| residue ASA (64 points) | 288.3883881225005 |
+| Miyazawa-Jernigan | 21 contacts, 3.95 |
+| hydrogen bond | 3 bonds, -0.1324432499910165 |
+| generalized Born | -0.024505222258838378 |
+| LJ C-alpha | 91590.40855879632 |
+
+The Miyazawa-Jernigan row is the interesting one: 3.95 comes back through
+`ClosePairContainer` + `PairsRestraint` + `StatisticalPairScore`, so IMP's pair
+loop and IMP's table reader agree with the hand-written double loop.
+
+### Three defects, fixed and recorded
+
+`okf/validation/hbond_ca_cutoff.md`: the H-bond kernel compared a plain
+C-alpha distance against a **squared** cutoff, so its 8 A prefilter passed
+every pair -- and unlike the same mismatch in the MJ and ASA kernels, there it
+decides which bonds count. Applied here, with the difference pinned. Also:
+chisurf's `go()` carried its accumulator across pairs, and `_asa_kernel` read
+its representative atom from a column that holds `CG`.
+
+### Not ported
+
+`IMP/cgmol/martini/score.py` -- seven PMI `RestraintBase` subclasses over a
+vermouth topology. Neither has a C++ spelling; their own pass.
+
+### The tables: one container
+
+`data/potentials.pto`, 680 KB, holding all four where four loose `.npy` files
+(3.3 MB) used to sit in a chisurf directory. `MiyazawaJerniganPairScore()` and
+`UNRESCentroidPairScore()` with no argument read it.
+
+One file rather than four because a potential is not one table: the UNRES term
+needs its grid *and* the residue order that indexes it, the Ramachandran map
+needs to say which channel is glycine, and a reader that has to find four files
+in agreement with each other will one day find three. The manifest carries what
+each is, where it came from (with a sha256 of the source) and **what the
+conversion did to it** -- because none of them were copies:
+
+| table | as shipped | what the converter had to do |
+|---|---|---|
+| `mj` | PMF text | flat to 6.5 A, zero past it; two bins, because IMP's reader splines each pair |
+| `unres` | PMF text | 6 NaNs in bin 0, and the flat repulsion below 3.5 A that the Python applied *in its loop*, written into the bins |
+| `hbond` | 4x800 grid | 243 values above 1e5 below 1.3 A -- a divergence where no two atoms are -- held at the value there |
+| `ramachandran` | 3x360x360 grid | two of the source's five channels are the phi and psi *coordinate* grids, not maps; and 114 556 cells of the proline map held a sentinel `1.0`, which read as a density would make the unmeasured region the most favourable place in the map |
+
+The two contact potentials go in as **text in IMP's PMF format**, so
+`IMP::core::StatisticalPairScore` reads them directly and the potential is the
+file rather than a loop. The file names residues and IMP maps names to indices,
+which is why nothing in the C++ carries a residue order.
+
+### A fourth defect, found by the conversion
+
+`unres.npy` is filled in its **upper triangle**: past the repulsion, entries
+with `type_i < type_j` average -0.129 and their transposes -0.003. `centroid2`
+indexes it by the residues' order *in the chain*, so about one contact in two
+read the empty half and scored zero -- on T4 lysozyme, -207.198 where the
+filled half gives **-371.031** over the same 4 983 pairs. A PMF file holds one
+value per unordered pair, which is what a pair potential is; the container
+stores the filled half and the manifest says so.
+
+### The residue types are the potential's own, not IMP's
+
+The first cut typed particles with `IMP::atom::ResidueType`'s index and wrote
+tables as wide as IMP. That is wrong in a way that only shows up later: an IMP
+`Key` table **grows at run time** -- read one PDB with an unusual residue in it
+and the next index is one further out -- while a statistical table is a fixed
+square. The full suite caught it: a test that passed alone failed after other
+tests had widened the key table.
+
+`IMP::bff::ResidueContactType` is a key family of its own, the shape
+`IMP::atom::DopeType` has, and its names are the ones the table names.
+`add_residue_type_score_data` types a residue only when the table covers it, so
+no index can land outside the square. Two smaller things fell out: the key's
+family number has to be one nobody else uses (`783462` is
+`IMP::atom::ProteinLigandType`, and sharing it brought back two hundred names
+that were not residues), and a `%template` base has to be spelled the way the
+header spells it or SWIG quietly makes the class a bare `object` -- it built,
+imported, and then would not go into a `PairsRestraint`.
+
+### Two things the build taught, worth keeping
+
+- **A payload that compresses better than eight times did not read.** Brotli's
+  one-shot decoder reports a too-small output buffer as an *error*, not as
+  `NEEDS_MORE_OUTPUT`, so a reader that guesses the size as `compressed * 8`
+  fails outright -- and 2.4 MB of digits compresses far better than that. The
+  container writes the decompressed length into the payload and allocates
+  exactly. **`src/DrotReader.cpp` guessed the same way and is fixed too**: it
+  uses brotli's *streaming* decoder now, which asks for more room when it runs
+  out, so there is nothing to guess and nothing to re-decode. A library of
+  near-identical conformers -- a rigid dye on a short linker, which is the
+  common case -- would have been reported as a corrupt stream while being
+  perfectly good; `test_a_payload_that_compresses_hugely_still_reads` writes
+  one.
+- **A new program in `bin/` silently disables the module.** IMP's configure
+  wants a section title for every command-line tool in `README.md`; without one
+  it prints "Module IMP.bff disabled" among a thousand lines and the next
+  `ninja` fails with `library 'IMP.bff-lib' not found`, which says nothing about
+  the cause. `imp_bff_potentials2pto` has its section now.
+
+### Delivered
+
+`include/Potentials.h`, `src/Potentials.cpp`, `pyext/IMP_bff.potentials.i`,
+`test/potentials/test_potentials.py` (22 tests),
+`examples/structure/coarse_grained_potentials.py`,
+`doc/manual/structure/structure_potentials.ipynb`,
+`okf/validation/hbond_ca_cutoff.md`.
+
+## 2026-08-26 (night, last +3) — `AVNetwork` is `ProbeNetwork`; the template collision, fixed at the source
+
+### The rename
+
+| was | is |
+|---|---|
+| `AVNetworkRestraint` / `AVNetworkRestraints` | `ProbeNetworkRestraint` / `ProbeNetworkRestraints` |
+| `SimpleAVNetworkRestraint` | `SimpleProbeNetworkRestraint` |
+| `av_network_restraint_set` | `probe_network_restraint_set` |
+| `AVNetworkRestraint.h`, `.cpp` | `ProbeNetworkRestraint.h`, `.cpp` |
+| `test_AVNetworkRestraint.py`, `plot_AVNetworkRestraint.py` | `test_ProbeNetworkRestraint.py`, `plot_ProbeNetworkRestraint.py` |
+
+Same reasoning as `ProbeSite` and `ProbeRestraints`: what the restraint scores
+is a network of *probes* -- the volumes are how a dye's reach is modelled, not
+what the restraint is about, and a spin label has no accessible volume in the
+FRET sense at all. The four old names are on `test_public_api_names.py`'s
+retired list. Prose in `okf/prds/`, `okf/handoff-*` and this log keeps the old
+names where it is recording history; `AVNetworkRestraintWrapper` keeps its name
+wherever a sentence says what it *was*, because that was its name.
+
+`AVMeanDistanceRestraint`, `AVModel`, `AVBuilder` and the rest of the AV layer
+are untouched: those really are about accessible volumes.
+
+### The template collision
+
+Yesterday's `rmf` dependency cost four `%template` names -- `rmf` brings `isd`,
+`isd` brings `saxs`, and `saxs` declares
+`%template(DistBase) std::vector<double>` first, so `types.i`'s
+`%template(VectorDouble)` was silently skipped (warning 302 is filtered by
+IMP's own `%warnfilter`). Three test files papered over it by importing
+`IMP.saxs.DistBase`. The paper is off now, and the cause is gone:
+
+**Nothing in this module's surface should ever have asked a caller to build a
+wrapped vector.** Two functions did, through non-const `std::vector<double>&`
+out-parameters, and both are fixed at the source:
+
+- `wobbling_kappa2_distribution` and `wobbling_kappa2_distribution_delta`
+  returned the values and *filled* `k2_scale` and `k2_hist`. They return one
+  **`Kappa2Distribution`** value now -- `values`, `scale`, `hist`, three numpy
+  attributes -- which is what `RotamerScoreResult` and every other result value
+  in this module already does.
+- `diffusion_propagate` filled a `std::vector<double>& fluorescence` beside its
+  managed density view. It has **two managed views** now and hands Python a
+  `(fluorescence, density)` tuple. The C++ callers in `GridDiffusionSolver`
+  free both, which is the same contract they already had for the density.
+
+`types.i` no longer *declares* `VectorString`, `VectorDouble`, `VectorFloat` or
+`VectorInt`: a `%template` that SWIG always skips is a promise of a class that
+never appears. The comment there says which module owns each type.
+`VectorLong` stays -- nothing else wraps `std::vector<long>`.
+
+`test_vector_input_typemap.py` still builds an `IMP.saxs.DistBase`, and should:
+binding a wrapped vector is the property that test exists to check, and the
+class is whatever SWIG has. `examples/spectroscopy/plot_k2_uncertainty.py`
+imported `IMP.bff.VectorDouble` and had been **broken since the dependency
+landed**; it uses the new value.
+
+### Verification
+
+`ninja IMP.bff-python` clean after a cmake reconfigure (renamed headers are new
+headers as far as SWIG's dependency list is concerned); the full suite **1017
+passed, 3 xfailed, 30 subtests** in 101 s.
+
+## 2026-08-26 (night, last +2) — the last four `.i` files with Python in them
+
+`avmeandistance.i`, `cif.i`, `interactionterms.i` and `structureio.i` were the
+four left. They are `%include` files now, and there is no `%pythoncode` left in
+`pyext/` outside `swig.i-in`'s `import numpy as np`.
+
+### What each one was, and where it went
+
+**`cif.i`** (4 defs). `read_dye_forcefield_cif(path)` was
+`read_forcefield_cif(str(path))` -- a second name for the C++ reader, spelled
+in Python so it could take a `pathlib.Path`; the callers say `read_forcefield_cif`
+now. `write_dye_forcefield_cif` *shadowed* the C++ writer of the same name to
+coerce its arguments, and had to call `_IMP_bff.` to avoid recursing into
+itself. `forcefield_system_from_dict` and `as_forcefield_system` turned a dict
+into a typed system through `json.dumps`: that is what a caller does with a
+dict it built, so `bin/imp_bff` and the three tests that write systems as dict
+literals coerce their own.
+
+**`interactionterms.i`** (2 `%feature("shadow")` constructors). Three reasons,
+all typemaps or features:
+
+| the shadow did | now |
+|---|---|
+| keyword arguments with C++ defaults | `%feature("compactdefaultargs")` -- SWIG's default-argument *overloads* are what disable `kwargs`, and compact ones do not |
+| `dict(...)`, `[str(x) for x in ...]`, `np.ascontiguousarray(...)` | std_map, std_vector and numpy.i typemaps, which already did all three |
+| `kappa2=None` for "no orientation factor" | a `%typemap(in) double kappa2` that reads `None` as NaN |
+
+**`avmeandistance.i`** (93 lines). `AVNetworkRestraintWrapper` subclassed
+`IMP.pmi.restraints.RestraintBase`, so it was built lazily -- naming it at
+import time would have made `import IMP.bff` require IMP.pmi. What it did
+besides PMI's bookkeeping is `av_network_restraint_set` in
+`AVMeanDistanceRestraint.h`: the network restraint, or one
+`AVMeanDistanceRestraint` per distance over volumes made rigid-body members,
+plus `add_avs_to_rigid_bodies` and `set_av_xyzr_mass`. **IMP.pmi stays
+optional**: a `RestraintBase` subclass has no C++ spelling at all, so the
+fifteen lines that make one are in the two PMI examples that want one. Nothing
+had ever tested the wrapper; the set has five tests.
+
+**`structureio.i`** (359 lines). Four RMF functions and an `IMP.rotamer` query,
+all behind the same lazy door. They are C++ in `RmfIO.h` and
+`ProbeAttachment.h`, which cost a dependency -- see below.
+`place_probe_from_rotamer_cb` is not ported: it computed the
+backbone-dependent C-beta, logged it, and then called
+`place_probe_from_coords(label, ca, n, c)`, which is what a caller gets by
+calling that function. The C-beta was never used.
+
+With those gone there is **no `_LAZY` table and no module `__getattr__`**: every
+public name is an ordinary attribute again, and a missing one is a miss.
+
+### The dependency, and what it cost
+
+`dependencies.py` gained `rmf` and `rotamer`. `rotamer` is free (`core:atom`).
+`rmf` is not: it brings `isd`, and `isd` brings `saxs`, and SWIG wraps a type
+once across a module and its imports -- so `saxs`'s
+`%template(DistBase) std::vector<double>` is declared first and `types.i`'s
+`%template(VectorDouble)` is **skipped**. `VectorDouble`, `VectorString`,
+`VectorFloat` and `VectorInt` are no longer attributes of `IMP.bff`;
+`IMP.saxs.DistBase` *is* `std::vector<double>`.
+
+Only code that *names* those classes is affected -- a list or a numpy array
+converts as it always did -- and in this tree that was three test files, which
+now say where the class comes from. The two functions that made it visible
+(`wobbling_kappa2_distribution`, `diffusion_propagate`) take
+`std::vector<double>&` output collectors, which is the pattern that needs a
+wrapped vector in the first place.
+
+Two other things the import needed: `#include <RMF/TraverseHelper.h>` in the
+wrapper (IMP.rmf's conversion table names it; an importer has to include it
+itself), and `IMP_SHOWABLE_INLINE` on `LJSitePair`, `Mol2Atom`, `AlignedBlock`,
+`ComponentTemplate::FeatureAtom` and `ComponentTemplate::Improper` -- RMF's
+`Showable` is what SWIG reaches for when printing a `std::vector<T>`, and it
+needs `operator<<` on `T`. Those five value types had none; they should have
+had one anyway.
+
+**This is reversible.** Dropping `rmf` from `required_modules` puts the four
+RMF functions back in Python and restores the four template names; it is one
+line either way.
+
+### Verification
+
+`ninja IMP.bff-python` clean; the full suite **1008 passed, 3 xfailed, 30
+subtests** (one timing test, `test_a_short_walk_on_a_large_grid...`, failed
+once under CPU contention with a second build and passes alone). New tests:
+`test/io/test_rmf_io.py` (8) and `TestAVNetworkRestraintSet` in
+`test/test_AVNetworkRestraint.py` (4).
+
+## 2026-08-26 (night, last +1) — `ProbeSite`, `ProbeRestraints`; labelizer stays
+
+Finishing the flrCIF alignment. The three names left behind last time were
+`labelizer`, `LabelingSite` and `LabelingRestraints`; the first is a program
+and keeps its name, the other two are API and did not.
+
+| was | is |
+|---|---|
+| `LabelingSite` / `LabelingSites` | `ProbeSite` / `ProbeSites` |
+| `LabelingRestraints.h`, `.cpp` | `ProbeRestraints.h`, `.cpp` |
+| `DirectLabelingRestraint` | `DirectProbeRestraint` |
+| `IMP_bff.labelingrestraints.i` | `IMP_bff.proberestraints.i` |
+| `%template(LabelingSiteVector)` | `%template(ProbeSiteVector)` |
+
+`ProbeSite` is a residue, an attachment atom and a measured distance -- the
+same object whether what sits there fluoresces, carries an unpaired electron
+or quenches. `DirectProbeRestraint` scores attachment-atom distances with no
+volume at all, which is as true of a spin label as of a dye.
+
+Two headers, two sources, one `.i` renamed; a cmake reconfigure before SWIG,
+because a renamed header is a new header as far as the dependency list is
+concerned.
+
+Verification: `ninja IMP.bff-python` clean; **1004 passed, 3 xfailed, 30
+subtests**, `medium_test_restraints.py` 18 passed.
+
+## 2026-08-26 (night, last) — flrCIF says *probe*, so this package does
+
+Asked which term aligns with the dictionary, `label` or `probe`. Checked
+`mmcif_ihm_flr_ext.dic` rather than answering from memory:
+
+- **probe appears 86 times, label 5.** The categories are `_flr_probe_list`,
+  `_flr_probe_descriptor`, `_flr_poly_probe_position`,
+  `_flr_poly_probe_conjugate`, `_flr_sample_probe_details`. There is no label
+  category at all.
+- **The five `label` hits mean something else.** `mm_atom_site_label` and
+  `mm_poly_res_label` are mmCIF's `label_asym_id` / `label_seq_id` /
+  `label_comp_id` convention -- the canonical-identifier naming. The other two
+  are prose in an EPR example ("Spin label rotamer refinement using DEER").
+
+The second point decided it: the value's fields **are** the `label_*` items,
+so naming the type `Label` would have named it after its own field prefix, in
+a dictionary where `label_` already means something.
+
+| was | is | flrCIF |
+|---|---|---|
+| `Label` | `ProbePosition` | `_flr_poly_probe_position` |
+| `label_from_source_info` | `probe_position_from_source_info` | |
+| `label_flrcif_items` | `probe_position_flrcif_items` | |
+| `LabelAttachment`, `attach_labels` | `ProbeAttachment`, `attach_probes` | |
+| `place_label`, `resolve_label_site` | `place_probe`, `resolve_probe_site` | |
+| `AttachedLabelDynamics` | `AttachedProbeDynamics` | |
+| `label_forcefield_system` | `probe_forcefield_system` | |
+| `Labeling.h` | `ProbeAttachment.h` | |
+
+flrCIF also splits what this value merges -- the probe itself
+(`_flr_probe_list`), where it attaches (`_flr_poly_probe_position`) and the
+pairing that carries `fluorophore_type` (`_flr_sample_probe_details`). The
+struct is the position, naming its probe; the split is recorded in the header
+for whoever needs the other two categories.
+
+"Labelling site" stays in prose -- it is what the field calls it, and
+`labelizer`, `LabelingSite` and `LabelingRestraints` keep their names. What
+changed is the identifiers a caller writes.
+
+Verification: `ninja IMP.bff-python` clean; **1004 passed, 3 xfailed, 30
+subtests**.
+
+## 2026-08-26 (night, later) — a label is not a dye
+
+The labelling layer described a *fluorophore* everywhere -- `resolve_dye_site`,
+`place_dye`, `attach_dyes`, `DyeAttachment`, `LangevinDyeSampler`,
+`dye_forcefield_system` -- while the package already ships
+`spinlabels.drot.pto` beside `dyes.drot.pto` and the rotamer machinery
+(`RotamerLibrary`, `RotamerEnsemble`) was general all along. The attachment
+half was the only place that insisted.
+
+**From a structure's point of view there is no difference.** A fluorophore at
+a cysteine, a spin label for DEER and a quencher tryptophan are one object: a
+molecule on a linker, anchored at a residue's backbone frame, with a rotamer
+library behind it. What differs is what is *measured* -- spectra for FRET, a
+dipole for DEER -- and that lives with the measurement, not with the site.
+
+So the structural vocabulary is now labels:
+
+| was | is |
+|---|---|
+| `resolve_dye_site` | `resolve_label_site` |
+| `place_dye`, `place_dye_from_coords` | `place_label`, `place_label_from_coords` |
+| `attach_dyes`, `DyeAttachment` | `attach_labels`, `LabelAttachment` |
+| `LangevinDyeSampler` (`DyeDynamics.h`) | `AttachedLabelDynamics` (`LabelDynamics.h`) |
+| `dye_forcefield_system` | `label_forcefield_system` |
+| `dye_internal_system` | `internal_topology_system` |
+| `DyeInternalEnergyEvaluator` | `IntramolecularEnergy` |
+
+`Label` carries a `probe` **name** and, when the probe happens to be a
+fluorophore this package knows, a `Dye` value with the photophysics.
+`set_dye` sets both, so the two cannot disagree about what is attached.
+
+**What was deliberately not added.** A first draft gave `Label` a
+`probe_type` enumeration (`fluorophore` / `spin_label` / `quencher`) and
+refused a FRET role to a non-fluorophore. That is over-modelling at the
+structural layer, which cannot tell the three apart and should not try: the
+field is gone and a probe with no spectra simply has no `dye`.
+
+`Dye`, `find_dye`, `forster_radius_from_spectra` and the FRET distance
+conventions keep their names. A dye *is* a dye where photophysics is meant.
+
+### Two things the rename caught
+
+1. **A name that had been retired came back.** `InternalEnergyEvaluator` is on
+   `test_public_api_names`'s retired list, and renaming
+   `DyeInternalEnergyEvaluator` to it un-retired something deliberately
+   buried. It is `IntramolecularEnergy`, which says what it computes -- the
+   intramolecular non-bonded energy of a conformation -- and was never
+   anything else.
+2. **A component name split in two.** The attached molecule's force-field
+   component is named once and its anchor group is that name plus `_anchor`;
+   renaming the first and not the second left every anchor unfound, so
+   nothing was held fixed. Both come from one constant now, and the
+   thermodynamic test caught it (`len(s.fixed) == 4` became `0 == 4`).
+
+Verification: `ninja IMP.bff-python` clean; **1004 passed, 3 xfailed, 30
+subtests** -- the new one asserting that a spin label is a label:
+`Label("A", 41, "SG", "MTSSL")` has a site, a key and no `dye`.
+
+## 2026-08-26 (night) — `label.i` is empty, and the backbone frame existed twice
+
+986 lines gone. `Labeling.h` carries the frame, the site, the strip, the
+attachment and the `Label` value; the fluorescent-protein detection, the pLDDT
+parsing and the segmentation went to `SequenceAlignment.h`, beside the
+Smith-Waterman they are built on.
+
+**The find: the backbone frame existed twice.** Once as `backbone_rotation`
+(`RotamerSite.h`), which every rotamer library is placed with, and once in the
+Python labelling layer, which every explicit dye was placed with. The same
+three cross products -- x along CA->N, z out of the peptide plane, y
+completing the set -- in two languages, for the two halves of one package. One
+`backbone_frame` now; the flat-matrix spelling is a view of it.
+
+Three smaller ones:
+
+- **`atom_name_of` was written out in three files.** The unity build caught it
+  as a redefinition. It is `atom_name` in `HierarchyFrame.h`.
+- **`strip_hierarchy` defaulted to `inplace=False`**, which cloned an entire
+  structure on every call without saying so. Stripping is in place; a caller
+  that wants the original clones it and can see the cost.
+- **`attach_dyes` took three parallel vectors** in the first draft -- the exact
+  smell being removed elsewhere. It takes `DyeAttachment` values, which also
+  lets it report where each dye was placed and how many atoms were stripped.
+
+`Label` now carries a `Dye` **value** rather than a dye name: a label that
+carries only a name cannot derive an R0 or a correlation time without going
+back to the library for what it already had.
+
+### What could not be C++, and why
+
+`get_anchor_cb_position` and `place_dye_from_rotamer_cb` need **`IMP.rotamer`**
+-- a third optional IMP module, alongside `IMP.pmi` and `IMP.rmf`, that this
+module does not depend on. They joined the lazy island in `structureio.i`,
+which is why that file grew from 189 to 359 lines while the total fell.
+
+### API changes that moved tests
+
+A frame is a `Transformation3D`, not a `ReferenceFrame3D`; `resolve_dye_site`
+answers CA, N, C **in order** rather than a dict; `select_atoms` returns
+particles; `strip_obstacles` is `strip_keep_mask`, which says which rows
+survive and leaves the slicing to numpy; `SITE_KEEP_ATOM_NAMES` is
+`site_keep_atom_names()`. `Label` is constructed positionally, because an IMP
+value needs a default constructor too and SWIG turns keyword arguments off for
+anything overloaded.
+
+The `_find_atom` test was **rebuilt, not deleted**: it pins *which* atom a
+lookup returns -- first in hierarchy order, right chain and residue, matched
+on the name as the structure spells it -- and it now checks `select_atoms`
+against the same exhaustive scan.
+
+### The same build trap, twice
+
+A header added since the last cmake run is not in SWIG's dependency list, so
+`wrap.cpp` is generated from the previous declaration and the wrapper compiles
+against an API that no longer exists. It cost a cycle for `RRT.h` and another
+for `Labeling.h`, with the lesson written down in between. **Reconfigure after
+adding a header**, not after the error.
+
+`label.i` 986 -> 0; the `%pythoncode` total is **509** (11,607 when PRD-117
+started). What is left is almost entirely the optional-module islands:
+`structureio.i` 359 (RMF, rotamer), `avmeandistance.i` 93 (the PMI wrapper),
+`cif.i` 28, `swig.i-in` 24, `scoring.i` 5.
+
+Verification: `ninja IMP.bff-python` clean; **1003 passed, 3 xfailed, 30
+subtests**.
+
+## 2026-08-26 (later) — `sampling.i` is empty
+
+1,041 lines gone, in three headers and one addition to a fourth:
+
+- **`DyeDynamics.h`** -- `make_langevin_simulator` (md gets a Langevin
+  thermostat, bd gets Einstein's coefficient for each particle's own radius),
+  `LangevinDyeSampler`, `LangevinTrajectory`.
+- **`LinkerSampling.h`** -- the Metropolis sampler over a linker's torsions
+  and bond angles, and the library it clusters into. **No IMP model at all**:
+  the Python wrote every configuration into `XYZ` decorators and read the
+  coordinates straight back, using the particles as a scratch buffer for
+  numbers `LinkerGeometry::apply` had just returned.
+- **`RRT.h`** -- the two planners. Kept as two functions rather than one
+  generic tree because their metrics differ *in kind*: the rigid one adds a
+  translation distance to a weighted rotation distance, which no single norm
+  over six numbers expresses. Ångström and radian are not the same thing.
+- **`markov_state_trajectory`** in `Clustering.h`, beside the transition
+  matrix it draws from.
+
+A caller's collision test crosses back through the `RRTCollision` director,
+as a docking run's cancellation does through `DockingStop`.
+
+### What the port changed, and what it cost
+
+**The sampler pins moved, and had to.** `generate_linker_rotamers` is a
+Metropolis walk; C++ draws from `boost::mt19937` where Python drew from its
+own `random`. Same process, different stream, so every number downstream is a
+different draw. The pins are re-recorded and their note says so -- drift
+guard, not reference values. The invariants hold: 30 clusters, weights summing
+to one, 29 transitions across 30 frames.
+
+**An error the port caught in my own first draft**: I weighted each cluster by
+its *representative's* Boltzmann factor. The original sums over members, and
+that is right -- a broad shallow basin holds more of the ensemble than a
+narrow deep one.
+
+**Three tests are gone and their coverage is not.** The Python had unit tests
+for `steer_transform`, `is_collision_sphere`, `rrt_grow_step` and
+`tree.nearest`, all internal now. The tree-level assertions say the same
+thing: no step longer than `step_size`, no node in a collision, a reachable
+goal reached -- plus a case the old suite did not have, that an unreachable
+goal reports `goal_node == -1` rather than failing, because a tree that did
+not reach still explored. Suite 1006 -> 1003 for exactly that reason.
+
+**A fourth copy of Boltzmann's constant** was in `test_physics_invariants`;
+both tests take `kb_kcal()` now.
+
+**A second van der Waals table** was in the dye sampler, keyed by symbol,
+disagreeing with `AVBuilder`'s (by atomic number) about hydrogen -- 1.10
+against 1.20, Rowland & Taylor against Bondi. One `vdw_radius(element)` now;
+the thermodynamic pins did not move.
+
+### Two build lessons, both paid for
+
+1. **A shared build directory makes exit 0 meaningless.** `wrap.cpp`
+   regenerated at 18:28 while `_IMP_bff.so` stayed at 18:13: this session's
+   ninja planned its work, a peer's ninja regenerated the wrapper underneath
+   it, and mine exited 0 believing it was done. Check the artefact
+   timestamps, not the exit code.
+2. **A new header needs a cmake reconfigure before SWIG sees it.** The swig
+   rule's dependency list is fixed at configure time, so `RRT.h` changed and
+   SWIG never re-ran -- the wrapper compiled against the previous
+   declaration. `cmake -S ../imp -B .` then ninja.
+
+Also: `%attribute_py(Class, T, name, name)` on a *public member* makes a
+property of a property (`'property' object is not callable`). SWIG already
+exposes a public member; `%attribute` with a real getter is for methods.
+
+`sampling.i` 1,041 -> 0; the `%pythoncode` total is **1,325** (11,607 when
+PRD-117 started). Left: `label.i` 986, `structureio.i` 189 (the RMF island),
+`avmeandistance.i` 93, `cif.i` 28, `swig.i-in` 24, `scoring.i` 5.
+
+Verification: `ninja IMP.bff-python` clean; **1003 passed, 3 xfailed, 30
+subtests**; the 36 expensive all-dyes sampling tests green.
+
+## 2026-08-26 (later) — `sim.i` is empty, and there is one repulsion
+
+**The runner moved to `bin/imp_bff`.** All 1,319 remaining lines of it: it
+reads a directory of force-field systems, propagates each one and writes
+trajectories, and it was reached through a three-line `simulate` command that
+forwarded twenty-five options into the library. It needed exactly eight names
+from `IMP.bff` (one explicit import) and collided with nothing already in the
+program.
+
+What it *computes* stayed in C++ -- `build_dye_restraints`,
+`build_steric_restraint`, `build_go_restraints`, `place_guest_by_score` --
+because those are kernels rather than orchestration, and because the runner
+had grown its own copy of the restraint builder that disagreed with the C++
+one.
+
+### One repulsion, for dynamics and for Monte Carlo
+
+There were two implementations of the same physics: per-pair Lennard-Jones
+lower bounds in `build_dye_restraints`, and soft spheres over a container in
+the Monte-Carlo path. It is `build_steric_restraint` everywhere now --
+differentiable, so a dynamics run can use it; one restraint over a container
+rather than one per pair, so a long run can afford it; and dependent only on
+where the spheres are, so a rigid move can be scored against it *alone*, which
+is the whole reason the Monte-Carlo path wanted its own term. A rigid move
+cannot change a bond, an angle or a torsion.
+
+The Lennard-Jones parameters remain what `DyeInternalEnergyEvaluator`
+evaluates. An energy of a conformation is a different question from keeping
+two atoms apart.
+
+**A hazard closed on the way**: a soft sphere is a sphere, so a site the
+caller decorated without `XYZR` would have contributed nothing at all, and
+silently -- the run would look fine and the molecule would pass through
+itself. The builder gives such a site the radius the system says it has.
+
+### The suite did not cover the term that changed
+
+The Langevin test's `d.min() > 1.5` is a *dye-protein* assertion and comes
+from a separate bipartite restraint, so it says nothing about the intra-dye
+repulsion. Measured directly instead -- the steric term is the last of 697
+restraints on the bundled dye system, scores 294 on an artificial line
+layout, and rises when two sites are superposed -- and then pinned, because
+"the suite is green" is not evidence when the suite does not look:
+`test_the_repulsion_is_one_term_shared_by_dynamics_and_monte_carlo` (one
+restraint, not thousands; absent when asked for), that it rises on overlap,
+and that a site without a radius still repels.
+
+`sim.i` 1,319 -> 0; the `%pythoncode` total is **2,366** (from 11,607 when
+PRD-117 started). Left: `sampling.i` 1041, `label.i` 986, `structureio.i` 189
+(the RMF island), `avmeandistance.i` 93, `cif.i` 28, `swig.i-in` 24,
+`scoring.i` 5.
+
+Verification: `ninja IMP.bff` clean; **1006 passed, 3 xfailed, 30 subtests**,
+the three `imp_bff simulate` modes among them.
+
+## 2026-08-26 — `sim.i`: three kernels out, and a restraint builder that existed twice
+
+The cgdye MD runner, started. `bin/imp_bff simulate` was a three-line shim
+forwarding twenty-five options into a 1,491-line body that lived in the
+library -- the same shape docking had.
+
+**The restraint builder existed twice.** `sim.i::_build_restraints` and the
+C++ `build_dye_restraints` both walk a force-field system into IMP restraints,
+and they disagreed in two ways:
+
+- *The equilibrium fallback.* The Python restrained a bond about the geometry
+  as it stands when the system carried no length; the C++ used the stored
+  zero, which would pull the two sites together. A system built without a
+  template carries exactly that. The C++ falls back the same way now, for
+  bonds and for angles.
+- *The steric term.* The C++ made one lower-bound harmonic **per pair** --
+  thousands of restraints; the Python made one `PairsRestraint` over a
+  container. The container form is what a molecular-dynamics run wants, and it
+  is also what a *rigid-body* Monte-Carlo step should be scored against: a
+  rigid move cannot change a bond, an angle or a torsion, so scoring those
+  during one is work whose answer never changes.
+
+So `build_dye_restraints` gained a `nonbonded` switch and `build_steric_restraint`
+sits beside it. Both take the exclusions from
+`DyeForceFieldSystem::get_exclusions`, so they cannot disagree about which
+pairs are 1-2, 1-3 or 1-4.
+
+Two more kernels moved:
+
+- **`build_go_restraints`** -- native contacts holding a component in its own
+  shape. The mobile component is restrained everywhere and the fixed one only
+  where `fixed_flex_mode` released atoms, which is an `only_sites` filter
+  rather than two near-identical loops. The `max(d, 1 A)` equilibrium is
+  written down for what it is: two atoms a structure has placed on top of each
+  other would otherwise get a harmonic at zero, and a minimiser walks straight
+  into it.
+- **`place_guest_by_score`** -- the rigid random placement search that gives a
+  simulation somewhere plausible to start, rather than wherever two separate
+  input files happened to put a dye and a protein (usually inside each other).
+  Its uniform-sphere direction is now written down as the one construction
+  that does not crowd the poles.
+
+`_center` is gone in favour of `IMP.core.get_centroid`: a local mean nobody
+outside that file could find, when IMP has had the function all along.
+
+Unlike docking, this runner **is** covered -- `test_cgdye_integration` runs
+`imp_bff simulate` end to end in three modes -- so the C++ builders are
+exercised against real MD rather than only by construction.
+
+`sim.i` 1,491 -> 1,323 lines; the `%pythoncode` total is **3,689**.
+
+Verification: `ninja IMP.bff` clean; **1003 passed, 3 xfailed, 30 subtests**
+after each of the three ports.
+
+## 2026-08-25 (night, last) — `docking.i` is empty
+
+1,427 lines of `%pythoncode` when the file was first opened this session;
+**zero** now. It is declarations, `%feature("kwargs")` and attributes.
+
+Where each kind of thing went, by what it *is*:
+
+- **An API** -- `score_structures`, `dock_minimize`, `refine_docking`,
+  `screen_structures`, the assembly, the pair table, the poses, the CSV -- is
+  C++ in `Docking.h`. `refine` and `screen` were renamed on the way in:
+  `IMP::bff::refine` says nothing in a namespace this size.
+- **Programs** -- `imp_bff dock` (PMI replica exchange) and `imp_bff
+  dock-errors` (forked trial driver) -- are in `bin/imp_bff`. Both write
+  directories of results; one needs a Python-only dependency and the other
+  forks workers.
+- **The cancellation callback** is #IMP::bff::DockingStop, an `IMP::Object`
+  with a SWIG director, rather than a bare Python callable. A caller
+  subclasses it in either language and the C++ loop asks it between chunks --
+  which is also the only reliable place to ask, since raising out of an
+  `IMP::OptimizerState` mid-step is not.
+
+Two things were **removed rather than translated**, both because they never
+did anything:
+
+- `IMP.pmi.tools.shuffle_configuration` was called inside a bare
+  `except: pass`, so the initial shuffle silently did nothing whenever PMI was
+  missing. It is a plain random displacement of the mobile bodies now, with no
+  dependency.
+- `ensure_fps_json` (the one with the undefined `_io`) is gone: `read_fps_json`
+  already reads the legacy C# format, so `build_docking_assembly` converts a
+  non-`.json` input once, in the one place that needs it.
+
+### And one I introduced
+
+Moving `estimate_errors` into `bin/imp_bff` carried its annotation
+`params: Optional[DockingParameters] = None` with it. Annotations are
+evaluated at `def` time and that name does not exist in a program file, so
+**the whole `imp_bff` program stopped importing** -- 3 failures and 4 errors,
+every test that shells out to it. Caught by the suite, fixed by dropping the
+annotation. Worth remembering when moving code between a `.i` and `bin/`: the
+library's names are not in scope there, and an annotation is not free.
+
+`docking.i` 831 -> 0; the `%pythoncode` total is **3,857**. Left: `sim.i`
+1491, `sampling.i` 1041, `label.i` 986, `structureio.i` 189 (the RMF island),
+`avmeandistance.i` 93, `cif.i` 28, `swig.i-in` 24, `scoring.i` 5.
+
+Verification: `ninja IMP.bff` clean; **1003 passed, 3 xfailed, 30 subtests**;
+the twelve docking tests green against the C++ entry points.
+
+## 2026-08-25 (night, later) — `dock` is a command; the rest of the engine is not a program
+
+Asked whether the programs had been relocated: for docking they had not. The
+samplers were still `%pythoncode` and this entry corrects that -- but only for
+the one piece that is actually a program.
+
+**`imp_bff dock`** (`bin/imp_bff`) is the PMI replica-exchange sampler. It
+drives `IMP.pmi.macros.ReplicaExchange` -- IMP.pmi is Python-only and not one
+of this module's `required_modules`, so it can never be C++ -- and it writes an
+RMF trajectory, PMI stat files and best-scoring PDBs into a directory. That is
+a program by any reading. Verified end to end against the bundled T4L fixture.
+
+**`score`, `dock_minimize`, `refine` and `screen` stay in the library**, and
+the reason is the consumer rather than taste: ChiSurf's FRET plugin calls
+`dock_minimize(...)` and `estimate_errors(...)` **with a `stop_check`
+callback from its GUI thread** and reads the returned `DockingResult`. Shelling
+out to a command would lose both the cancellation and the structured result.
+They are an API, so the rule that applies is "what can be C++ must be C++",
+which is where their assembly, pair table, poses and CSV went earlier today.
+
+`estimate_errors(method="mc")` now raises, naming `imp_bff dock`: its
+Monte-Carlo branch called the function that moved. ChiSurf offers both
+`minimize` and `mc`, so this is a real (if currently theoretical) capability
+loss on that side.
+
+### The consumer is already broken, and has been for a while
+
+`chisurf/plugins/modelling/fret/core/imp_engine.py` is a forwarder to
+`IMP.bff.fret.imp_engine` -- a sub-package the flat-namespace commit deleted.
+It raises `ModuleNotFoundError` at import, independently of anything done
+here. Both sides of this API were dead: the engine could not run (four
+`NameError`s, one per entry point) and the caller could not import it. That is
+why nothing noticed either.
+
+Whoever picks the ChiSurf side up needs to know that `IMP.bff.dock` is gone
+from the library and that the flat names (`IMP.bff.score`,
+`IMP.bff.dock_minimize`, ...) are what the forwarder should point at.
+
+`docking.i` 899 -> 831 lines.
+
+Verification: `imp_bff dock --help` and a two-frame run on the T4L fixture;
+**1003 passed, 3 xfailed, 30 subtests**.
+
+## 2026-08-25 (late night) — the docking engine runs, and every entry point had to be walked
+
+The `NameError` in `build_assembly` was the first of four. Each entry point
+fails on its first unexercised line, so the only way through was to run them
+one at a time:
+
+1. `build_assembly` looked up the lazy `AVNetworkRestraintWrapper` as a bare
+   global -- a module `__getattr__` answers attribute lookups only. Every
+   entry point died here.
+2. `ensure_fps_json` called `_io.read_fps_json(...)`; **`_io` is defined
+   nowhere in the module**, so every legacy C#-format conversion raised
+   `NameError`. Only a non-`.json` input reaches it, which is why the first
+   fix did not surface it.
+3. `dock_minimize` (and `dock`) indexed `asm.rigid_bodies` as a dict.
+4. `screen` catches per-structure exceptions and records `NaN`, so a broken
+   engine produced a full ranking table of NaNs and looked like a screening
+   run with unscorable inputs.
+
+All five now run against the bundled T4L fixture, and
+`test/test_docking_values.py` pins them: `score` (22.69935116408601 -- the
+same number `test_AVNetworkRestraint.py` pins for the quadrature score, so the
+docking path and the restraint agree), `dock_minimize`, `refine`, `screen`,
+and the pose round-trip. Twelve tests, four seconds.
+
+### The assembly is C++ and needs no PMI
+
+`build_docking_assembly` (`Docking.h`) does what the PMI wrapper did --
+resample each volume, attach it to the rigid body of the atom it hangs off,
+give it a radius and a mass, add the mean-distance restraints and the
+excluded-volume term -- in plain IMP. The PMI wrapper was the only reason the
+*scoring* path pulled a sampler's dependency, and the lazy name it was reached
+through is what made the engine unrunnable. `dock` still drives PMI's replica
+exchange, and registers the assembly's restraint set with one call.
+
+`capture_poses` / `apply_poses` are C++ too, JSON in and out, so a docked
+state can be stored and continued from without Python.
+
+### What is still not tested, and should be said plainly
+
+**The bundled fixture is one rigid body.** No rigid motion of a single body
+changes the distance between two of its own dyes, so there is nothing for a
+docking optimiser to optimise, and the score moving at all during
+`dock_minimize` (16.02 -> 15.48) is the AV resampling between builds and not
+the minimiser. Nothing in this tree exercises multi-body docking. That needs a
+two-body fixture; the tests say so rather than implying coverage they do not
+have.
+
+`estimate_errors` and its forked-worker trial runner are still unexercised.
+
+`docking.i` 1,119 -> 899 lines; the `%pythoncode` total is **4,756**.
+
+Verification: `ninja IMP.bff` clean; **1003 passed, 3 xfailed, 30 subtests**.
+
+## 2026-08-25 (night) — the docking engine could not run, and nothing said so
+
+`IMP.bff.score`, `dock`, `dock_minimize`, `screen` and `estimate_errors` have
+raised `NameError` on their first line since the PMI wrapper went lazy.
+`build_assembly` looks up `AVNetworkRestraintWrapper` as a bare global; the
+wrapper is provided by the module's `__getattr__` (it needs `IMP.pmi`, which
+is not a dependency of this module), and **a module `__getattr__` answers
+attribute lookups only** -- never a bare global inside a function defined in
+that module. One `IMP.bff.` prefix fixes it.
+
+Nothing noticed because the engine had no test of any kind, in this tree or
+before the move: 1,400 lines driving IMP.pmi over a whole assembly, and no
+caller here builds one. `test/test_docking_values.py` is its first coverage,
+and the end-to-end case is worth more than it looks: `score()` on the bundled
+T4L fixture returns **22.69935116408601**, which is exactly what
+`test_AVNetworkRestraint.py` pins for the quadrature score of the same
+fixture. Assembling a model and scoring it through the docking path gives what
+the restraint gives on its own, and both numbers now move together or not at
+all.
+
+### What moved
+
+`Docking.h` carries what a run is *told* and what it *reports* --
+`DockingParameters`, `PairDistance`, `DockingResult` -- with the two readers
+of a scored assembly beside them: `collect_pair_distances` (from the
+network's own volumes) and `pair_distances_at_positions` (from the proxy
+particles the minimisation path moves instead), plus `write_score_csv`.
+
+**The mean-distance restraint defined in `docking.i` was a third copy.**
+`AVMeanDistanceRestraint` has had the gradient in C++ since the AV batch --
+its header records that the Python had two copies, "one with the gradient and
+one without, and the one without was the one the wrapper used". This was the
+third, and the only one still in Python. It is gone; the C++ class takes the
+Förster radius and the distance type from the measurement rather than from a
+re-parse of the JSON the measurement was built from.
+
+**The fps.json distance vocabulary was private to a reader.**
+`DyePairMeasure_name_to_type` sat in `internal/FPSReaderWriter.h`, so a
+diagnostics table that wanted to report which convention it had scored
+re-derived the names from the JSON -- and said `RDAMean` for an entry whose
+absent `distance_type` the reader had defaulted to `RDAMeanE`. It is
+`dye_pair_distance_type()` / `dye_pair_distance_type_name()` in `AV.h` now,
+one table read both ways, used by the reader and by the table.
+
+`docking.i` 1,427 -> 1,119 lines; the `%pythoncode` total is **4,976**. What
+remains in it is the engine -- build the assembly, run the Monte-Carlo or the
+minimisation, write the RMF and the PDBs -- which is IMP.pmi orchestration.
+Now that it runs, it can be moved with a test watching.
+
+Verification: `ninja IMP.bff` clean; **1000 passed, 3 xfailed, 30 subtests**
+(999 before this file's own test).
+
+## 2026-08-25 (evening) — `rotamer.i` is empty: the loaders, the fps layer and the FRETpredict driver
+
+1,277 lines of `%pythoncode` when this batch started; **zero** now, a file
+comment and one `%include`. Three new headers carry what left it.
+
+**`RotamerFps.h` — fps.json and rotamer ensembles.** `RotamerPosition`,
+`RotamerDistance` and `RotamerFpsSelection` (what `read_rotamer_fps` returned
+as a six-tuple), the payload builders, `distances_from_ensembles`,
+`write_rotamer_fps` and `rotamer_ensembles_from_fps`. Entries cross as JSON
+text, which is what the rest of the fps layer does: an entry carries whatever
+keys its writer put there, and a typed struct would either lose them or grow a
+field per program. What *is* typed is the part this module reasons about --
+which chain, which residue, which library, which dye.
+
+The alias reading is the format's business and is done once now: a position's
+chain is `chain_identifier`, `chain` or `segid`; a distance's donor is
+`position1_name`, `donor_position`, `donor_position_name` or `dye1_position`.
+`rotamer_ensembles_from_fps` had grown its *own* copy of that list -- the unity
+build caught the duplicate as a redefinition -- and reads through the typed
+parser now, one library load per library rather than one per position.
+
+**`RotamerFret.h` — the FRETpredict driver.** Twenty options, five arrays and
+the file writing, over kernels that were C++ already. The parameter names stay
+FRETpredict's (`fixed_R0`, `ign_H`, `libname_1`, `r0lib`), deliberately: the
+parity harness hands *one* keyword dictionary to this class and to FRETpredict
+and compares the files they write, so a rename here would be a rename of the
+experiment. `distance_distributions` was **not** ported: `trajectory_analysis`
+allocated it whenever `calc_distr` was set and nothing ever wrote to it, so the
+option and the `rmin`/`rmax`/`dr` axis it was shaped from are gone.
+
+**The registry shims are gone too.** `rotamer_library_registry`,
+`normalize_library_name`, `rotamer_library_metadata` and
+`resolve_rotamer_library_path` turned the C++ answers back into dicts and
+`Path`s. The C++ ones answer directly, and the registry itself is published as
+JSON text (`rotamer_library_registry()`, read once and cached).
+
+One more name of the kind the last two batches were about:
+`rotamer_frame_weights` -> **`frame_weights_from_partitions`**. It takes two
+partition functions per frame and weights the frames by their product; nothing
+in it is particular to a rotamer.
+
+`OwnedView` -- a malloc'ed out-view freed on scope exit, which is what a *C++*
+caller of the numpy out-view protocol needs -- moved into
+`internal/OutputView.h`, beside the protocol it belongs to.
+
+### Two defects found, one fixed here
+
+**The expensive FRETpredict parity harness has been feeding R0 = 5.5 to both
+sides.** R0 became Ångström across this package on 2026-08-25; the pins file
+was restated that day (5.5 -> 55.0) and
+`expensive_test_fretpredict_parity.py` was missed, so it handed 5.5 Å to
+IMP and 5.5 nm to FRETpredict out of one shared dictionary. It skips unless
+FRETpredict is installed, which is why nothing said so. Fixed: `_imp_kwargs`
+converts the one value whose unit differs, and says why.
+
+**`RotamerFRET(rmf_path)` no longer works**, and that is a loss, not a fix:
+`IMP.rmf` is not one of this module's `required_modules` and C++ cannot open
+an RMF here. The trajectory goes through the lazy door instead --
+`RotamerFRET.from_frames(protein_frames_from_rmf(path), ...)` -- which is the
+same `ProteinFrame` values the C++ PDB reader returns. `from_frames` is a
+named factory and not a second constructor because SWIG turns keyword
+arguments off for anything overloaded, and this constructor is keyword
+arguments in every caller.
+
+### Standing
+
+`rotamer.i` 1,277 -> 0 and `rotamer_ensemble.i` 332 -> 0. The `%pythoncode`
+total is **5,284** (was 6,166 this morning, 7,695 when PRD-117 started). Left:
+`sim.i` 1491, `docking.i` 1427, `sampling.i` 1041, `label.i` 986,
+`structureio.i` 189 (the RMF island), `avmeandistance.i` 93, `cif.i` 28,
+`swig.i-in` 24, `scoring.i` 5.
+
+Verification: `ninja IMP.bff` clean; **991 passed, 3 xfailed, 30 subtests**
+(988 before -- the three new are the API test's coverage of `RotamerFRET`,
+`load_rotamer_library` and the lazy `protein_frames_from_rmf`); the
+FRETpredict pins pass through the C++ driver unchanged; both
+`examples/structure/` dye examples run end to end and the cgdye notebook
+executes.
+
+## 2026-08-25 (later) — `rotamer_ensemble.i` is empty, and three structs that were one library
+
+**`rotamer_ensemble.i` holds no Python.** 332 lines of `%pythoncode` defining a
+Python class that *subclassed a C++ value*; zero now. `RotamerEnsemble` is a
+C++ `States` (`include/RotamerEnsemble.h`) carrying the atoms, the energies,
+the partition function and the site, with `from_frame` / `from_site` placing a
+library on a residue and `pair_geometry` / `pair_distribution` /
+`pair_distribution_from_dyes` answering with the typed pair values instead of
+rebuilding dicts out of them. It reproduces the FRETpredict parity pins
+exactly -- E_static, E_dyn1, E_dyn2, ⟨κ²⟩, R0 and both partition functions,
+`test/cgdye/rotamer/test_rotamer_ensemble.py`, all eight tests green.
+
+**One rotamer library value, not three.** `RotamerLibraryData` (`CifIO.h`, the
+numpy/text pair), `RotamerLibrary` (`DyeSampling.h`, a PDB plus a trajectory)
+and `DrotLibrary` (`DrotReader.h`, a `.drot` container) held the same thing --
+conformers, a weight each, the atom names the coordinates are ordered by -- and
+differed only in which optional columns their own reader filled. A caller that
+took one could not be handed another, so each reader grew its own consumers,
+and `id` (always `1..n`) existed in exactly one of them. There is one
+`RotamerLibrary` now (`include/RotamerLibrary.h`), with `resnames`, `elements`,
+`metadata` and `path`, and three readers returning it.
+
+Two names went with it, both of the kind the last batch was about:
+`load_rotamer_library_dcd` reads a PDB plus *any* trajectory, so it is
+`load_rotamer_library_trajectory`; and `DrotLibrary` named the container it
+first came out of.
+
+**The loaders are C++.** `load_rotamer_library(name, lib_dir)` (registry name,
+locator or path -> the library with its metadata, resnames filled from the
+container, from the `<stem>.pdb` beside it, or inferred) and
+`load_protein_frames(path)` (a multi-MODEL PDB -> `ProteinFrame` values) were
+the last Python between a file and an ensemble. `ProteinFrame` sits in
+`HierarchyFrame.h`, beside the two functions that read one out of a hierarchy.
+`rotamer_ensembles_from_fps` is C++ too, and reads each library once rather
+than once per position.
+
+**RMF stays out of the dependency graph.** `IMP.rmf` is not one of this
+module's `required_modules`, so the RMF trajectory door is one more lazy
+builder in `structureio.i` (`protein_frames_from_rmf`), six lines that open a
+file and step it, returning the same `ProteinFrame` values the C++ PDB reader
+returns.
+
+**Shapes that were the caller's problem.** `FRETPairGeometry` and
+`FRETPairEfficiencies` publish `R`, `kappa2`, `weight`, `E`, `rate_ratio` and
+`k_fret` as `(n1, n2)` attributes now (`%attribute_np2v`, new); a library
+answers `(n_rotamers, n_atoms, 3)` and a frame `(n, 3)`. Every consumer used to
+fold those by hand out of `n1` and `n2` -- six sites in the ensemble code alone
+-- and a matrix reshaped wrongly is a matrix transposed in silence.
+
+`rotamer.i` 1277 -> 882 lines of Python; the `%pythoncode` total is **6,166**
+(was 6,864). Left: `sim.i` 1491, `docking.i` 1427, `sampling.i` 1041,
+`label.i` 986, `rotamer.i` 882, `structureio.i` 189 (the RMF island),
+`avmeandistance.i` 93, `cif.i` 28, `swig.i-in` 24, `scoring.i` 5.
+
+Verification: `ninja IMP.bff` clean; **988 passed, 3 xfailed, 30 subtests**;
+both `examples/structure/` dye examples run end to end; the cgdye notebook
+executes (it had been broken since the flat-namespace commit -- it imported
+`IMP.bff.cgdye.utils`, called `kappa2_from_dipoles` and passed `R0=` to
+`fret_efficiency_regimes`, all three gone; fixed, and its `.drot` paragraph
+now describes the PTO container rather than the brotli+tar one).
+
+**Found, not fixed** (not this session's model to re-pin):
+`test/cgdye/rotamer/medium_test_av_vs_rotamer.py` fails on `av_n_points`
+(2047 against a pinned 1137). The pins are from 2026-08-17 and the AV model
+changed on 2026-08-21 (`9446fee`, "AV3 and the reference stencil"); the file is
+named `medium_test_*`, which pytest does not collect, so nothing said so. Its
+`bin/imp_bff` helper also still subscripted the typed pair values
+(`g["weight"]`) -- that part is fixed here.
+
+## 2026-08-25 (later still) — `topology.i` is empty, and eight names that described their first caller
+
+**`topology.i` holds no Python.** 989 lines when PRD-117 started, 47 now, all
+of it a file comment and a `%include`. The last of it: `build_forcefield_system`
+turned dicts into the JSON string the C++ builder took, so the builder takes
+`FFComponentSpec` values instead; `build_dye_protein_system` and
+`dye_forcefield_system` are two- and one-component calls of it, in
+`TopologyBuild.h` with the dye's `N`/`CA`/`C`/`O` anchor logic beside the
+builder it belongs to; and `build_system_from_specs` was the `build-system`
+command's body -- build, write, report -- which is a program's job and now sits
+in `bin/imp_bff` with the `name=X,mol2=Y` parsing that is its own CLI syntax.
+Five more helpers were dead: nothing called `sid`, `_alpha_suffix`,
+`_serial_to_site_atom_names`, `_center_atom_serials_from_template` or
+`_resolve_feature_ids`, and the site-id deduplication they duplicated is
+`serial_to_site_atom_names` in C++.
+
+**Then a naming pass, prompted by `write_path_map`.** The observation was that
+a PINN will want to write a field to a map too, and the name says *path map*
+when the operation is "write one voxel feature of a lattice to a density file".
+Looking for the same defect -- a name that describes its first caller rather
+than what it does -- found seven more:
+
+| was | is | why |
+|---|---|---|
+| `write_path_map` | `write_map_feature` | picks a scalar field, writes a density file |
+| `rotamer_transition_matrix` | `transition_matrix_from_counts` | counts to jump probabilities; Markov, not rotamer |
+| `rotamer_correlation_times` | `relaxation_times` | eigenvalues of a transition matrix |
+| `rotamer_rotational_correlation_time` | `slowest_relaxation_time` | it is *rotational* only when the states are orientations, which the arithmetic never checks |
+| `rotamer_cluster_weights` | `cluster_weights` | aggregates frame weights by cluster label |
+| `sample_rotamer_index` | `sample_weighted_index` | a weighted draw over an index |
+| `apply_rotamer_coordinates` | `apply_coordinates` | puts a coordinate set on a hierarchy |
+| `rotamer_pair_energy_matrix` | `pair_energy_matrix_kernel` | the kernel had the domain prefix while its general wrapper had the plain name -- backwards |
+
+The docs moved with the names, which is the half that matters: a name a PINN
+author does not recognise is as good as absent, and
+`rotamer_rotational_correlation_time` additionally *claimed* something its
+arithmetic does not do. 21 files, 988 tests pass.
+
+7,245 -> 6,864 lines of Python in the `.i` files. `topology.i`, `observables.i`
+and `av.i` are clear; `scoring.i` has four lines left.
+
+## 2026-08-25 (later) — the dict view and the dict arithmetic
+
+`parse_dye_mol2` copied `read_mol2_component`'s typed atoms into dicts of the
+same fields under string keys, and `distance`/`angle_value` took those dicts
+and did arithmetic IMP already does. All three are gone. A MOL2 atom is
+`IMP.bff.Mol2Atom`, a distance is `IMP.algebra.get_distance`, and an angle is
+`bond_angle_rad`.
+
+**One angle primitive, two spellings, each with its unit in the name.** There
+were three: `bond_angle_deg` in C++ returning 0.0 for a collapsed arm,
+`angle_value` in `topology.i` returning the tetrahedral 1.9106 rad for the
+same case, and `sim.i`'s `_angle`, which built coordinate dicts out of three
+IMP particles so it could call the second one. `bond_angle_rad` is the formula
+now and `bond_angle_deg` is `* 180/pi` over it; the fallback is the tetrahedral
+angle, which is the choice this repository already recorded when it deleted the
+*fourth* copy -- a harmonic whose minimum sits at a collapsed angle is not a
+default anyone wants. It fires on nothing in the tree: 6,364 angles, no
+zero-length arm.
+
+The test that compared the dict view with the typed value went with the dict
+view -- its subject no longer exists -- and what replaced it checks the reader
+against real files, the 4,698-atom 1DG3 included.
+
+7,295 -> 7,245 lines. 971 tests pass, built and run at `nice -n 19` with two
+jobs.
+
+## 2026-08-25 — R0 is Angstrom, the graph is C++, and a lesson about shared build trees
+
+**R0 is Angstrom at the source.** It returned nanometres while every consumer
+of it -- `fret_efficiency`, `av_distance`,
+`AVPairDistanceMeasurement::forster_radius`, `LlFretOptions` -- worked in
+Angstrom, so six call sites multiplied by ten and one nearly shipped without.
+`forster_radius` converts once now; **the spectra stay nanometres**, which is
+what a spectrometer, a datasheet and the overlap integral are in. Gone with it:
+the x10 in `DyeContainer.cpp`, `InteractionTerms.cpp`, `bin/imp_bff_labelizer`,
+`rotamer.i` and `rotamer_ensemble.i`, and the one in the container test that
+existed to pin the conversion. `RotamerFRET(r0=...)` and `imp_bff --r0` are
+Angstrom (54 by default), and the FRETpredict pin kwargs were restated
+5.5 -> 55.0 and 5.68 -> 56.8 -- the same experiment in the package's unit, with
+the reference E values untouched. The pins that cite FRETpredict's own R0 keep
+it in *FRETpredict's* nanometres and convert at the comparison, because that
+number is a citation.
+
+**The molecular graph is C++.** `topology.i` had `build_graph` (a dict of
+neighbour sets), `build_angles`, `build_dihedrals`, `find_cycles`,
+`ring_atoms_from_graph`, `_component_without_edge` and two rotor helpers: 126
+lines that numbered the caller's nodes, called `MolecularGraph`, and mapped the
+answers back -- twice over, because a first-appearance numbering and a sorted
+one give different orders out. The numbering belongs with the graph.
+`MolecularGraph` gains `get_component_without_edge`, `get_bond_rotor`,
+`get_angle_rotor` and `get_ring_atoms`; the new `LabelledGraph` does the same
+for string-keyed nodes, which is what site ids are. `LinkerSampler`, `sim.i`
+and four test files call the C++ directly. The sampler keeps **first-appearance
+node order** explicitly rather than taking the C++ ascending order, because
+that order reaches a seeded sampler whose weights are pinned -- and the pins
+did not move.
+
+7,381 -> 7,295 lines of Python in the `.i` files. 966 tests pass.
+
+**And the process lesson, which cost more than the code.** Two sessions ran
+`ninja` in the same build tree; ninja takes no lock, so the builds interleaved
+writes to the same objects and `.ninja_log`. The visible symptom was a build
+that **exited 0 having printed through [11/18]**, leaving a `_IMP_bff.so` that
+did not contain the sources it had just built -- R0 still returning the old
+value, a class missing from the module -- which reads exactly like a source
+regression and was mis-diagnosed as one, twice, by two sessions. The machine
+also went to load 45 on 8 cores. What replaces it: announce a build, one at a
+time, `nice -n 19 ninja -j2`, and no `until ...; do sleep; done && ninja`
+waiters -- an armed trigger is not a hold, and it cannot see that the tree went
+quiet because somebody was rescuing the machine.
+
+## 2026-08-24 (later still) — a third derivation of the dye topology, deleted rather than ported
+
+`topology.i` had `build_dye_topology` and, under it, `_build_impropers` and
+four `_build_*_impropers_from_template` wrappers: bonds, angles, dihedrals and
+template impropers derived from a MOL2 graph. `build_forcefield_system` (C++)
+derives the same four things, and `build_dye_protein_system` used to carry a
+*second* copy of that derivation -- the one whose `impropers = []` cost 81
+impropers and has its own page
+([`validation/impropers_are_dropped.md`](validation/impropers_are_dropped.md)).
+This was the third.
+
+Nothing in the package called it. Its seven call sites were all in
+`test/cgdye/test_dye_topology.py`, and what those tests assert about a
+four-atom chain -- 3 bonds, 2 angles, 1 dihedral -- the three tests directly
+above them assert against the graph itself; the only thing they added was
+`distance > 0`. So it is deleted rather than ported, with the tests that
+existed to keep it alive, and the note in its place says why. 100 lines of
+Python and one more chance for the derivations to drift.
+
+`dye_internal_system` went the other way, to `TopologyBuild.h`, and
+`scoring.i` is down to four lines. 7,471 -> 7,381. One test is red on the
+shared tree and it is the labelizer session's
+(`test_dye_container.py::test_every_column_name_is_a_dictionary_item`, an
+`mfdb_is_term` vocabulary check, file touched 21:03); they have been told.
+958 pass otherwise.
+
+## 2026-08-24 (late) — `dye_internal_system` to C++, and a wrong hypothesis measured before it was written down
+
+`scoring.i` is down to four lines. `dye_internal_system` -- the topology-only
+system `DyeInternalEnergyEvaluator` needs to know which site pairs are 1-2, 1-3
+or 1-4 -- took `parse_dye_mol2`'s dicts, built site ids, and went out through
+`forcefield_system_from_json`. It is `TopologyBuild.h` now and takes the typed
+`Mol2Component` the C++ reader already returns, so the dict never exists: the
+sites, the `MolecularGraph` angles and torsions and the exclusions are all
+derived where the data is. Its three callers (two in `sampling.i`, one test)
+took the typed value with it, and one of them lost a `re.match` that
+re-derived the element from the atom name -- a rule the MOL2 reader had
+already applied.
+
+**The hypothesis that made this interesting was wrong, and measuring is what
+said so.** The Python built its sites with `id` and `atom_name` only, so every
+site reached the LJ table with an empty element: apparently a hydrogen
+parameterised as carbon, in the dye's own internal energy. The port fills the
+element from the MOL2 -- and the energy did not move, to four decimals. The
+reason is that `site_element_map` never read `FFSite::element` at all: it
+re-derived the element from the atom name in an inline loop, a **fourth** copy
+of a rule that already exists as `element_from_atom_name` (C++), as
+`structio::element_from_name`, and as that `re.match` in `sampling.i`. Nothing
+was broken; something was written four times.
+
+So the fix is the dedup, not the "bug": `site_element_map` now prefers the
+site's own element and falls back to `element_from_atom_name`. Today those
+agree on every structure in the tree -- 0 atoms differ across the shipped MOL2
+set, because the reader derives the element with the same first-letter rule --
+and they will part on a halogen, where the name rule calls `CL3` carbon and a
+`_atom_site.type_symbol` does not. The dye's internal energy on alexa488_r48 is
+18.8717 kcal/mol before and after.
+
+7,495 -> 7,471 lines, 951 tests pass.
+
+## 2026-08-24 (night) — the shadows are gone, and a typemap that lets a C++ signature say what it means
+
+Three `%feature("shadow")` blocks re-implemented in Python what SWIG does
+natively, and all three are gone.
+
+`AVNetworkRestraint` (33 lines) and `LifetimeSpectrum` (26) hand-parsed
+argument names, defaults and error messages because **SWIG will not generate
+keyword arguments for an overloaded constructor** -- and both classes had a
+second, default constructor that exists only for deserialisation.
+`%ignore`ing that one (it is cereal's, and a restraint over no hierarchy is
+not a restraint) leaves a single wrapped constructor, and
+`%feature("kwargs")` then does the whole job, unknown-keyword `TypeError`
+included. `LifetimeSpectrum` took the other route -- one constructor with
+default arguments -- because its empty state is a real value the vector
+template needs.
+
+`AVMeanDistanceRestraint` (28) was not kwargs but a `hasattr` ladder turning a
+Particle or an AV decorator into an index. That is `IMP::ParticleIndexAdaptor`,
+which `IMP::core::AngleRestraint` and `DihedralRestraint` already take, so the
+constructor takes it too and the ladder is deleted. **`av.i` and
+`observables.i` now hold no Python at all.**
+
+`rotamer_mean_field_weights_multi_dye` moved to `Scoring.h`: it was numpy
+iteration over the C++ pair-energy matrix, which is the same fixed-point the
+single-dye update already ran in C++, written a second time. The port needed
+two typemaps, and they are the interesting part. A caller passes one
+`(n_conf, n_atoms, 3)` array per dye, and SWIG's nested conversion walks the
+outer sequence and then asks its traits for each element -- traits that only
+know sequences, so a 3-D ndarray arrives as a sequence of 2-D ndarrays and
+fails naming the whole nested type. `types.i` now converts a sequence of
+arrays into `const std::vector<std::vector<double> >&` (the same
+`PyArray_FROMANY` path the single-vector typemap has taken since 2026-08-19)
+and returns one back as a **list of numpy arrays** rather than a tuple of
+tuples of floats. The alternative was flattening at every call site, which is
+what the Python version did and what a C++ signature should not require.
+
+7,695 -> 7,495 lines. Cleared outright: `observables.i`, `av.i`. `scoring.i`
+is down to `dye_internal_system`, which reads `parse_dye_mol2`'s dicts and can
+only move when `topology.i` does. 951 tests pass.
+
+## 2026-08-24 (evening) — dedup: four helpers with five copies, two bond rules, and the first program out of a `.i`
+
+**Helpers.** `ends_with`, `file_exists`, `trimmed`/`trim` and `nan_value` had
+between two and four definitions each across `src/`, and they were not all the
+same function: `FPSIO`'s `ends_with` was case-sensitive and `TrajectoryIO`'s
+was not, so `LIB.BCIF` was a trajectory and `X.PDB` was not a structure.
+Extension dispatch should not depend on which file the caller sits in. One
+copy each in [`include/internal/Text.h`](../include/internal/Text.h), pulled in
+by `using` declarations so no call site moved; `trim`'s two callers took the
+rename. The case-insensitive spelling won, which widens what `FPSIO` accepts.
+
+**Two bond rules, measured before touching.** `perceive_bonds` (ZMatrix,
+`r_i + r_j + 0.35`) and `infer_bonds` (StructureIO, `1.22 * (r_i + r_j)`) carry
+*different covalent-radius tables* -- H 0.37 against 0.31, O 0.73 against 0.66
+-- and different cutoff rules. On the 33 dye templates and on 1DG3's 4,698
+atoms they return **identical bond sets**, and `perceive_bonds` reproduces the
+A48_C1R MOL2 table exactly (87/87). So this is latent, not live: the cutoffs
+differ by up to 0.25 A (C-H 1.49 against 1.31, S-S 2.39 against 2.56) and a
+stretched bond would fall on different sides. Not merged, because merging is a
+decision about which perception rule the package has, not a cleanup.
+
+**`faspr` is flat in `src/`** -- `src/faspr/*.h` became `src/Faspr*.h` beside
+the `.cpp` files they belong to. The vendored headers include each other by
+their upstream names, which is what broke the shared build tree for the
+rotamer session for ten minutes; `utility/port_faspr.py` writes the flat layout
+now, so a re-vendor reproduces it.
+
+**`observables.i` is clear** -- the first of the ten named files with no Python
+left in it. Its 26-line `%feature("shadow")` re-derived argument names,
+defaults and error messages by hand because SWIG cannot generate keyword
+arguments for an *overloaded* constructor. `LifetimeSpectrum` has one
+constructor with default arguments now, so `%feature("kwargs")` does it
+natively -- including rejecting an unknown keyword with a proper `TypeError`.
+The same trick is available for the shadows in `av.i` (31 lines) and
+`avmeandistance.i` (111).
+
+**`scoring.i` lost its program half.** `torsion_cosine` and
+`build_dye_restraints` -- 73 lines that were *literally* IMP C++ API calls
+written in Python (`DistanceRestraint`, `AngleRestraint`, `DihedralRestraint`,
+`Harmonic`, `HarmonicLowerBound`) -- are `Scoring.h` now, and with them the
+CHARMM-to-`Cosine` phase shift, which is physics that had no business in an
+interface file. The builder takes parallel `site_ids`/`particles` rather than a
+dict, so nothing has to teach SWIG about a map of particles. Two test
+adjustments came with it and both are the platform's own contract: a torsion
+type is the typed `FFTorsionType`, not an ad-hoc dict with a `phase_rad` key,
+and restraints come back from an `IMP::Restraints` container as base
+`IMP.Restraint` -- IMP's own `RestraintSet.get_restraints()` does exactly the
+same, so counting by `isinstance` only ever worked because the objects had been
+built in Python.
+
+7,695 -> 7,633 lines of Python in the `.i` files, 886 tests passing. What is
+left in `scoring.i` is the multi-dye mean-field loop and `dye_internal_system`,
+which reads `parse_dye_mol2`'s dicts and moves when `topology.i` does.
+
+**Then, once it was said the package is pre-release, the two things that had
+been left for compatibility were done properly.** `score_model` is
+`0.5 * chi2_score` -- what a Gaussian is worth, \(-\log L = z^2/2\), and what
+`IMP::core::Harmonic` scores for \(k = 1/\sigma^2\). It read 0.25 because one
+factor of a half was applied twice, which had this restraint entering a scoring
+function at *half the weight of every IMP harmonic beside it*; the four pins
+doubled. And the second covalent-radius table is gone: `infer_bonds` used
+Cordero radii under a multiplicative rule while `perceive_bonds` used
+Pauling-ish radii under an additive one, agreeing on every molecule in the tree
+but not on the cutoffs (C-H 1.31 A against 1.49 A). `covalent_radius` and
+`bond_tolerance` are published from `ZMatrix.h`, `infer_bonds` takes a
+`tolerance` rather than a `scale`, and the bond sets are unchanged on all 33
+templates and on 1DG3.
+
+`structureio.i` gave up `load_structure_with_particles` and `read_angle_file`
+(38 lines) for `LoadedStructure` and `FlexFitSelection` in `StructureIO.h` --
+the flexfit block is JSON, which this module parses in C++ everywhere else, and
+decorating a particle is not a reason to be in Python. Both are IMP value types
+with by-value getters, because SWIG rejects a non-const reference to one and
+says so in a compiler error naming the rule. 7,633 -> 7,595, 919 tests pass.
+
+## 2026-08-24 — the rotamer path, 7x on loading and 2x on scoring, and what a site does to a library
+
+Three fixes, each found by measuring rather than by guessing, and none of them
+changes a number: the FRETpredict pins and the 883-test suite are untouched.
+
+**`read_drot` read the whole container to look at four bytes.** It opened the
+file, slurped every byte to check the EBML magic, and only then walked the
+framing — harmless when the only envelope was a tar that had to be read whole
+anyway, and *expensive* the moment libraries moved into a 19.7 MB family
+container, because it read all of it to fetch one library. Four bytes now.
+Pulling one library out of `dyes.drot.pto` went 20.5 -> 10.1 ms CPU, and a
+one-conformer library 10.2 -> 1.7 ms.
+
+**The reader's framing walk was syscall-bound.** Crossing 761 objects took
+~9,000 reads of a dozen octets each. `PtoReader` now serves small reads from a
+512-octet window — big enough for one `AttachedFile`'s whole header run, small
+enough never to drag a payload in. Listing a catalog went 12.9 -> 1.4 ms.
+
+**Scoring spent 46 % of its time formatting numpy arrays into strings.** The
+profile said `arrayprint`, 240 calls, and the cause was
+`metadata.get("library_name", metadata.get("name", str(library)))` in
+`RotamerEnsemble.from_site`: `dict.get` evaluates its default whether or not
+the key is present, and `library` here is the library *dict*, so every site of
+every frame rendered 711x83x3 coordinates to text and threw the string away.
+Twice. pp11's `trajectory_analysis` went 1200 -> 562 ms.
+
+Together: the whole 95-library corpus loads in **0.51 s against 3.65 s**, one
+library in 9.4 ms against 36.3.
+
+**One negative result, and a caveat on it.** The decode walks column-major
+grids with a stride of `n_rot` doubles, which looks like a cache miss per row;
+blocking the conformer loop so each row reads a run of neighbours was measured
+at block sizes 1, 4, 16, 64, 256 and 1024 (a block of 1 *is* the plain order)
+and the whole spread was under 10 %. The blocked form is kept at 16 because
+writing straight into the output drops a per-conformer buffer and its copy.
+
+The caveat is the method, not the result: those six numbers were taken as six
+*sequential* runs on a machine at load 13, so "under 10 %" cannot distinguish
+no effect from an effect smaller than the drift between runs. The honest way
+to A/B on shared hardware is to interleave the arms inside one run in short
+alternating blocks and compare medians -- contention and thermal drift then
+hit both arms equally, so the ratio survives even though the absolute numbers
+do not. Re-take it that way before leaning on it. (The method is chimol's,
+learned the same day from the same mistake.)
+
+What is left in the scoring path is genuine all-pairs work — 409k donor x
+acceptor pairs per frame for pp11 — and reducing it means changing the answer,
+which belongs to the sampling question below rather than to optimisation.
+
+## 2026-08-24 — a dye library is a fixed sample, and the site decides how much survives
+
+Measured, because "the sampling is site dependent" turned out to be an
+understatement. A library is one sample of the *free* dye; a site reweights it
+and never resamples it, so the site's answer is worth what the overlap between
+that sample and the site's allowed conformations is worth. Kish's effective
+sample size measures exactly that and is now on every ensemble as
+`RotamerEnsemble.effective_sample_size`.
+
+**Hsp90 residue 637 with the default cutoff-30 library is an ensemble of 1.7
+conformers**: seven exist, two survive the site, one holds 72 % of the weight.
+Every orientational quantity that site reports is that one conformer's. The
+same site at cutoff 10 carries 71.7.
+
+It costs the answer: at that site cutoff30 gives `Es` 0.4677 where cutoff10
+gives 0.3999 — **0.068 in E**, and `<kappa^2>` moves 0.97 -> 0.65. At pp11's
+open sites the same comparison moves E by 0.008. That factor of ten between two
+structures, same library and same code, *is* the site dependence. The
+`<kappa^2>` of 0.97 at the tight site is not order in the dye; it is two
+conformers being unable to represent a distribution of orientations.
+
+Written up with the full table in
+`okf/validation/site_dependent_rotamer_sampling.md`, including why the shipped
+default is nonetheless right for parity (it is FRETpredict's default, and the
+pins prove this package reproduces FRETpredict — including where FRETpredict is
+under-sampled). The real fix is resampling rather than reweighting: a `.drot`
+conformer is a dihedral vector, so conformers can be generated near the
+survivors and rebuilt through `internal2cartesian`. That changes numbers by
+design, so it is a decision and not a default.
+
+## 2026-08-24 (PRD-120: the Labelizer ported, and what the A/B found)
+
+* **The published label-site score is native, and it could not be run here
+  before.** `../labelizer-backend`'s `ss` shells out to DSSP and raises
+  `RuntimeError("Unknown platform")` on macOS; `se` and `me` shell out to MSMS
+  binaries that are 32-bit ppc/i386 Mach-O; and it pins LabelLib, banned since
+  2026-08-11. Meanwhile `IMP.bff` had every piece of physics underneath it —
+  AVs, R₀, κ², PET quenchers, SASA, charge masks — and **no per-residue scoring
+  layer at all**. `LabelizerFeatures.h`, `LabelizerScore.h`, `LabelizerFret.h`,
+  `LabelizerIO.h`, `PtoProfile.h`, `internal/Sha256.h`, `bin/imp_bff_labelizer`.
+
+* **The native DSSP reproduces the reference binary exactly — 195/195 on
+  1DDB, zero score delta — and getting there found two real things.** First,
+  DSSP marks the residues *between* an n-turn's hydrogen-bonded pair, `k+1 …
+  k+n-1`, not the donor `k`; including `k` over-assigned `T` and cost nine
+  residues. Second, the remaining four disagreements were all `I → H` in one
+  stretch: **DSSP 3.0 reversed the π/α precedence** (Touw 2015), so a 5-turn
+  now wins where a 4-turn overlaps it. Assigning `I` first took it to 195/195,
+  which also dates the reference's CSVs to DSSP ≥ 3. Worth knowing if these
+  numbers are ever compared against an older binary.
+
+* **The shipped 1DDB example feeds its own output back in as its input.** Its
+  `cs` reference has **two distinct values across 195 residues** where the
+  table has ten bins (`cr` has 20, `se` has 10). The example passes
+  `prot1_cs=[".../1DDB-39_cs.pdb"]` and `_save_pdb` writes the scores to that
+  same path, so each run reads the last run's output as conservation grades —
+  and the lookup has a two-cycle (1.63 → 2.3553…, 2.36 → 1.6322…, each
+  rounding to the other's grade), which is the fixed point it is stuck on. Our
+  lookup reproduces both values to sixteen digits, so the machinery is
+  verified; the input that produced them is one generation back and is not in
+  the distribution. The real ConSurf file for the entry correlates with the
+  implied bins at **r = +0.07**, i.e. it is not the one either.
+
+* **Residue depth against MSMS: no bias worth correcting.** Mean +0.015 Å,
+  r = 0.976, slope 0.953, 92.3 % within one table bin, 74.9 % bin-exact. The
+  0.163 Å scatter is close to the quantisation floor the binned reference
+  imposes (0.077 Å); the genuine disagreement is ≈ 0.14 Å. The native surface
+  is the **contact** surface only — MSMS includes the reentrant patches — which
+  is where the rest should live, in crevices.
+
+* **The cheap dye model over-reaches, and it matters more than it looks.** The
+  analytic alpha cone screens 15 051 pairs in 0.01 s but places the dye 2–5 Å
+  too far out; because the pair score peaks sharply at `R = R₀`, that is a
+  ~30 % score error, and the top five pairs by cone score are **not** the top
+  five after rebuilding the clouds (A3–A30: 1.8931 @ 52.4 Å → 1.3606 @ 47.0 Å).
+  Do not leave `n_refine` at zero.
+
+* **Absence replaced the sentinel, and the term layer earned its keep on the
+  first run.** The reference writes `-1` for "excluded" and `0` for "no
+  contribution" into the same column as real scores, so its CSVs cannot be read
+  back; a position with no score now carries a `status` and no number.
+  `mfdb_check_term` then refused to write `row_grain = label_site` because the
+  dictionary had no such term — which is the layer working, not failing — so
+  `label_site` went into `../mmfdb/.../mmfdb_flr_ext.dic` and the version to
+  **1.8**. Left uncommitted there; that repo has other work in flight.
+
+* **Attribution became dictionary terms, not header JSON.** Seven items on
+  `_mmfdb_artifact` in the same 1.8 pass, at the `.drot` session's request:
+  `author`, `citation`, `license`, `terms`, `terms_url`, `source`,
+  `redistributed_via`, with `MfdbAttribution`/`mfdb_attribution_tags` over
+  them. The reasoning is theirs and worth keeping: attribution is **per
+  artifact** because one family container can hold GPL-3.0-only and
+  academic-use libraries at once; **`license` must not be mandatory-SPDX**,
+  since "free for academic use" has no identifier and coining a `LicenseRef`
+  would state something the upstream did not — so at least one of
+  `license`/`terms` is required and neither is preferred; and
+  `redistributed_via` exists because Dunbrack-2010 reaches this stack through
+  FASPR, which is MIT while the library is not, so a chain recording only the
+  immediate source loses that the licences differ along it. Spelled `license`
+  (US) to match the upstream mmCIF dictionaries.
+
+* **Two kernels extended rather than copied.**
+  `solvent_accessible_surface_area_per_atom` joins the existing SASA: the old
+  one samples every atom at one radius and scales by `vdw²`, which is right for
+  contact estimates and wrong for a *relative* accessibility, and the header now
+  says which answers which. PRD-109 wrote that kernel and nothing ever called
+  it; this is its first consumer.
+
+* **Coordination.** `Pto.h`/`Pto.cpp` are `imp-bff-69`'s and were used as-is —
+  no second container core, no tttrlib dependency. Kinds split by agreement:
+  `drot.*` and `rot.bbdep.*` theirs, `label.*` here. They asked for the
+  vocabulary layer to be reusable rather than labelizer-scoped, hence
+  `PtoProfile.h`. Tags stay additive: a walker plus the framing reads a
+  container with none of this code. `prototypes/fast_label_score/` — the
+  *improved* model — is untouched; the original had to land first so there is
+  something to measure an improvement against.
+
+* **The container passes `../tttrlib/test/tools/pto_ebml_check.cpp`** — libebml
+  itself, strict alignment included (5 payloads, 0 misaligned). The checker
+  needs **libebml 2.0**, not the 1.4.7 Homebrew ships: `EbmlId::FromBuffer` is
+  2.0-only and 1.4.7 puts `EMaxSizeLength`/`EDocType` behind an
+  `EbmlSubHead.h` the tool does not include. Build it from the clone at
+  `../tttrlib/junk/libebml` (recipe in `test/label/test_labelizer_pto.py`).
+  I first read those two breaks as the tool being stale; that was backwards,
+  and `Rotamer` corrected it — it targets the newer library and Homebrew is
+  behind. The suite does not take that dependency, so the container is *also*
+  walked by a from-scratch RFC 8794 parser in `test/label/test_labelizer_pto.py`
+  that shares no lineage with either implementation.
+
+* **A second A/B closed the biggest gap, and found two more defects.** 1DDB is
+  all-helical, so the strand half of DSSP was never *compared* — only
+  exercised. The paper's Supplementary Data 1 also carries maltose-binding
+  protein in two conformations (1OMP apo, 1ANF holo, 370 residues, 72 `E` and
+  5 `B` in the reference's own column), and against it `cr` is **370/370** and
+  `ss` is **97.3 % on both**. Getting from 94.6 % found: **β-bulges were
+  fragmenting sheets** — ladders were joined only between strictly adjacent
+  bridges, so a bulge broke a strand into isolated bridges (`E → B`), now a
+  union-find joins any two bridges of a type that advance together with one
+  side stepping exactly one; and **`G` was a leftover stub** — assigning
+  whatever remained after `H` took part of the span gave one- and two-residue
+  3-10 helices at helix C-termini where the reference has `T`. The ten interior
+  strand residues that remain are **not** a threshold artifact: −0.5 kcal/mol
+  is optimal (94.3 % at −0.4, 94.9 % at −0.6), so what is left is DSSP's
+  sheet-level bookkeeping. Fixture provenance: extracted from the published
+  supplement, five decimals, so comparisons are at 1e-5 and that is the file's
+  precision rather than a tolerance on the port.
+
+* **The two-state layer got its first real test and passes a physical one.**
+  It had no tests at all. On MBP it ranks the hinge closure first — the top
+  twenty two-state pairs all move more than 5 Å and eighteen contract, by
+  11–13 Å — and **A29, in the best pair, is a site the paper itself labelled**
+  (Figure 4). The Cβ difference map peaks at 13.8 Å over the same motion, is
+  symmetric, and is zero on the diagonal. A structure paired with itself scores
+  exactly zero, which is the check that the two conformations are read
+  independently.
+
+* **`ll_dssp` no longer bridges a sequence gap.** Array-adjacent is not
+  chain-adjacent: a dropped residue (an unnatural amino acid, a modified
+  residue) or an unresolved loop leaves a hole in the author numbering, and the
+  turn logic was indexing by array position — reading residues 99 and 103 as
+  three apart when a missing 100 had made them four, and asserting a 3-turn
+  that does not exist. Confident wrong output, not an error, and invisible on
+  all three fixtures because none of them has a gap. Raised as a hypothesis by
+  `fast-label-score-77` (whose bundle has 982 pAcF measurements over 75 sites);
+  reproduced by deleting one mid-chain residue, then fixed and pinned. Scores
+  were never at risk — they key on `(asym_id, seq_id)` — so only a caller
+  zipping arrays by index could have been misled.
+
+* Suite: **886 passed, 3 xfailed**. `okf/validation/labelizer_ab.md`,
+  `okf/prds/prd-120.md`.
+
+
+## 2026-08-24 — one container per rotamer family: dyes, spin labels, side chains
+
+The store now holds all three rotamer families it should always have held.
+`data/rotamer_library/` is three files: **`dyes.drot.pto`** (95 FRETpredict
+dye+linker libraries, 19.7 MB), **`spinlabels.drot.pto`** (10 DEER-PREdict spin
+labels, 0.24 MB) and **`sidechains.drot.pto`** (the Dunbrack-2010
+backbone-dependent table, 3.3 MB). Before today only the dyes shipped, spin
+labels merely converted, and side chains were not in the format at all.
+
+**Bundling costs nothing and reading stays cheap.** `write_drot_bundle` copies
+payload bytes across unread under `<library>/` names and adds a `drot.catalog`;
+95 libraries bundle to 19,675,419 bytes against the 19,683,305 they occupied
+separately. A library is addressed by a locator —
+`dyes.drot.pto::A48_C1R_cutoff10` — and `PtoReader` now walks the framing by
+seeking and reads only the objects asked for, so pulling one library out of the
+family touches its own bytes. That is what makes one-file-per-family a
+different proposition from the corpus tar rejected in the PRD a day earlier.
+
+**Side chains are the case that tests the shared grammar.** A dye library is an
+ensemble; a side-chain library is a distribution over (phi, psi). Same
+envelope, new kinds — `rot.bbdep.header`, `rot.bbdep.records` — and no element
+ID invented, which is the claim PRD-040 makes about a new domain. The records
+keep FASPR's own 20-byte layout byte for byte, so `write_dunbrack_bin`
+reproduces `dun2010bbdep.bin` with an identical SHA-256, `faspr_pack` accepts
+the shipped container and packs byte-identically to packing from the binary,
+and the decode agrees with the prototype's independent reader over 720
+(residue, phi, psi) cases exactly. 13.76 MB → 3.31 MB.
+
+The Dunbrack library is academic-use. It is redistributed here on the owner's
+explicit instruction, after the terms were put to them; the attribution,
+citation and terms ride *inside* the container in `bbdep.json`, where they
+cannot be separated from the data.
+
+## 2026-08-24 (later) — the property sugar goes native, and a 100x chi2 disagreement falls out of looking
+
+`avmodel.i` had already decided how a C++ value shows itself to Python --
+`%attribute` for scalars, `get_*()` views for arrays, "no property sugar, no
+`%pythoncode`" -- and then `rotamer_ensemble.i` hand-wrote eight property pairs
+over the same `States` getters anyway. They are gone: `points`, `orientations`,
+`mu`, `attachment_point`, `mean_position`, `position_name`, `params` and
+`n_points` are declared on `States` itself in `avmodel.i`, so an ensemble, an
+`AccessibleVolume` and an `ACV` now answer alike and the two helpers that
+branched on `isinstance(RotamerEnsemble)` are one line each. The shape is the
+part worth having in one place: a cloud is `(n, 4)` and a dipole set is
+`(n, 3)`, and this repository has paid twice for a caller reshaping by hand.
+`%attribute_np2` (new, `types.i`) carries that reshape; `%attributestring` --
+not `%attribute` -- carries `position_name`, because the getter returns the
+string by value and `%attribute` would hand out the address of a temporary.
+71 lines of Python left the `.i` files (7,676 -> 7,605) and 798 tests pass.
+
+**The finding is worth more than the line count.** The next record in the
+queue, `PairDistance` in `docking.i`, turned out to be the Python duplicate of
+the C++ `AVPairDistanceMeasurement` -- and the two implement the asymmetric
+chi2 in *opposite* directions. `score_model` (C++, what every restraint and the
+docking engine minimise) scores a model above the experiment against
+`error_neg`; `PairDistance.chi2` (Python, what the FPS tables report) scores it
+against `error_pos`. On experiment 50 A with errors (1, 10) that is 25.0 versus
+1.0 one way and 0.25 versus 100.0 the other -- and no test asserts either
+number: the one test that calls `score_model` throws the result away.
+Measurement and all three listings in
+[`validation/two_chi2_conventions.md`](validation/two_chi2_conventions.md).
+
+**Resolved the same day, on the maintainer's ruling: the residual is model
+minus data -- a model distance that is too large is a positive deviation, and a
+positive deviation is judged against `error_pos`.** Looking for the second
+implementation turned up a *third*: `chi2_score` (`AVDistance.cpp`), which
+`LabelingRestraints` and the `imp_bff` chi2 columns already use, and which had
+it right all along. So the ruling cost `chi2_score` nothing but a comment, made
+`AVPairDistanceMeasurement::score_model` delegate to it -- it had measured
+`data - model` and then read the branch as if it were `model - data`, which is
+how the bars came out swapped -- and turned `PairDistance`'s four properties
+into calls to `chi2_score` and `fret_efficiency`. Three implementations became
+one. The 0.25
+`score_model` carries was left alone deliberately: it is a scale, and every
+restraint weight in the package was set against it, whereas a branch reorders
+models. Four of the package's own regression pins moved with the fix
+(13.505 -> 11.350 and three like it, listed in the note) while the model
+distances in the same tests did not -- which is what a branch fix should look
+like -- and `test_distance_conventions.py` now asserts which bar divides in
+each direction and that `score_model` is `0.25 * chi2_score` across a sweep.
+863 tests pass.
+
+## 2026-08-24 — `.drot` folds into `.pto`: one container for the stack
+
+The rotamer libraries stopped having a private container. Their members —
+header, template, Z-matrix rows, the four grids, the weights — are now the
+attached objects of a **PTO** document (EBML, `DocType "pto"`), the envelope
+tttrlib writes photon streams into and chimol writes structures into, and a
+shipped library is `<stem>.drot.pto`. The suffix is the profile convention
+PRD-040 settles: it names the primary payload kind, so a shell and a human see
+which profile a container carries while a reader still asks each object what
+it is. No element ID was invented — the eight members are `PtoKind` strings
+(`drot.header`, `drot.template`, `drot.rows`, `drot.grid` ×4, `drot.weights`) —
+which is the test of the claim that a new domain is a set of kinds, not a
+dialect.
+
+**Vendored, not depended on.** `include/Pto.h` + `src/Pto.cpp` (~570 lines)
+were written from `../tttrlib/okf/specs/pto-binary-decoding.md`, not imported
+from tttrlib: the convergence record's rule is one small core per repo with a
+provenance note, and imp.bff acquires no build dependency for a container. It
+is the third independent implementation of the same grammar, after tttrlib's
+C++ and chimol's Python.
+
+**The envelope is free.** Each object is brotli'd on its own instead of one
+stream over a tar, which gives up the joint context across members and gets
+tar's 512-byte headers back: over the 95 shipped libraries **19.60 MB against
+19.64 MB**. Per file it is +0.5 %; the honest outlier is the one-rotamer
+library, which pays 35 % of its 2 KB for the framing. Bought with it: payloads
+on 8-byte boundaries for a mapping reader, a header that inflates without the
+grids, and objects addressable by name and kind.
+
+**Proved by readers that are not ours**, which is the only proof a shared
+format admits — writer and reader agreeing on a misreading of RFC 8794 would
+satisfy any test written here. `pto_ebml_check` walks all 95 with **libebml**
+(`--aligned` enforced), and **chimol's `render/pto.py` reads imp.bff's
+containers** and agrees on every object's kind, offset and payload — the first
+time two implementations of this format have been pointed at each other's
+files. Round-trip against the v9 files is bit-exact (0.0 Å), re-writes are
+byte-identical, the FRETpredict pins are unmoved and the suite is 797 green.
+v5–v9 still read; only v10 is written.
+
+Also this session, before the fold: `resolve_rotamer_library_path` and
+`load_rotamer_library` learned the `.drot` store (the loader normalises its
+raw cluster populations, which the frame stores already did), `find_reference_
+rotamer_files` prefers it, and the C++ `load_rotamer_library` now dispatches on
+the extension — which incidentally repaired `.dcd`, dead in that path since it
+was pointed at `read_bcif_trajectory` alone. The DEER-PREdict spin-label
+libraries (10, in `junk/`) were run through the same path as a second family:
+they encode, read back and load, worst error 2.1e-06 Å.
+
+## 2026-08-24 — PRD-118: `.drot` ships, brotli is vendored both ways, and the pins hold
+
+The rotamer-library store is finished end to end. `read_drot` was in the tree
+but nothing could **write** one, the container linked against a brotli that was
+not declared, and the shipped `.drot` set failed the FRETpredict parity gate --
+10 red tests in `test/cgdye`. All three are closed.
+
+**Vendoring, both directions.** `src/brotli/` is google/brotli master
+(`8e10eeb`, MIT), decoder *and* encoder, compiled as the single hidden
+translation unit `src/Brotli.cpp` -- `dependencies.py` declares nothing, no
+`-lbrotli*` reaches the link line, and `nm -gU libimp_bff` shows zero `Brotli*`
+symbols, so a process that also loads a real libbrotlidec keeps the two apart.
+Three mechanical rules make it work in an IMP module and are written down in
+`src/brotli/VENDORING.md`: implementation files carry `.inc` (a `.cpp` under
+`src/` would be compiled twice -- once inside `bff_all.cpp`, once in per-file
+mode -- because **`setup_all.py` globs `src/*.cpp` one level deep and ignores
+`Files.cmake` in the default build**); `<brotli/x.h>` is rewritten to the
+relative header so the vendored one always wins; and the three file-local
+helpers two encoder units share are renamed around their `#include`. The
+codec is byte-identical to the reference brotli in both directions.
+
+**The format had to stop losing; the pins did not have to move.** v8 rebuilt
+conformers on the *template's* bond lengths. Real MD flexes bonds by ~0.004 A
+RMS, and measured against the shipped `.bcif` that was 0.016 A of the 0.020 A
+total error -- 1.3e-3 in E against a 2e-5 tolerance. The fix is representational,
+not numerical: store the conformer's own bond length per Z-matrix row and the
+description is complete (`ZMatrix::frame_internals`/`decode_internals`, exact to
+~1e-13). What is left is the grid, and **v9 stores float32 internals,
+column-major, byte-plane shuffled**: 1.2e-6 A mean / 9.3e-6 A max, 0.66x the
+`.bcif`. The 95 shipped libraries were re-encoded and verified on write (19.6 MB
+against 30.0 MB), the parity pins pass untouched, and `test/cgdye` is green.
+The int16 rung survives as `--grid` (0.30x, ~3e-3 A) carrying the warning
+`imp_bff_traj2bcif` already carries: kappa^2 comes from dipole directions
+between atoms ~1.7 A apart, and those errors do not average away.
+
+**The builder is a program**: `bin/imp_bff_traj2drot` (`.bcif`/`.dcd`/`.xtc` +
+template PDB -> `.drot`; `--cluster A` takes PRD-118's raw-MD path through
+`cluster_frames_leader`, `--all DIR` re-encodes a corpus, and every write is
+round-trip verified unless told otherwise). Two smaller things fell out of
+using it: `_metadata_from_path` never matched a `<stem>_cutoff<N>` file, so an
+explicit library path lost the dye's dipole and attachment selectors and
+`RotamerEnsemble.from_site` raised `IndexError` -- a path is a library name
+again, for `.bcif` as much as `.drot`. And `load_rotamer_library` in
+`DyeSampling.cpp` called an `ends_with` that did not exist (a concurrent
+session's in-flight edit), which is what "the module is disabled" looked like
+that hour.
+
+Documented in `README.md` (the tool section `setup_module.py` insists on),
+`doc/manual/structure/structure_cgdye.ipynb`, the PRD-118 ledger, and
+`examples/structure/drot_rotamer_library.py`, which runs trajectory -> library
+-> two ensembles on hGBP1 -> FRET in one file. Tests: `test/io/test_drot.py`
+(11: round trip, self-containedness, reproducible bytes, the shipped corpus
+against its `.bcif`, the builder, the clustering path, the grid a molecule does
+not fit). Suites: **796 passed, none failed** in the non-medium run,
+`test/cgdye` 161, medium 43.
+
+**Three things the corpus change made visible, all older than it.** The dye
+CLI joined `str / str` in `find_dye_structure`, `find_dye_mol2` and
+`build_lib` -- `get_structure_dir`/`get_template_dir` became C++ and return
+`std::string`, so four commands of `imp_bff dye` had been dead since -- and
+`sample-rotamer` still passed `rng=` to a `sample_rotamer_index` that takes a
+seed. `test_AccessibleVolume.py` read its reference maps from
+`./references/...`, so the AV feature test passed from `test/` and failed from
+the repository root, where the suite is actually run; it had been recorded as
+"a pre-existing data failure" for that reason. And
+`expensive_test_dcd_reader.py` swept `data/rotamer_library` for `.dcd` files,
+of which there have been none since 2026-08-19 -- it now finds the one kept at
+`test/input/A56_C1R_cutoff30.dcd` and the MDAnalysis parity is checked again.
+
+**And one test that could only ever have passed by luck.**
+`expensive_test_langevin_equilibrium.py` (PRD-108, no rotamer library in
+sight) asserted `KS < 0.3` on the md-vs-bd centroid-distance distributions and
+failed at 0.3151 -- reproducibly, since it is seeded. That is not a near miss:
+**two md runs differing only in their seed are 0.3151 apart by the same
+statistic**, and md-vs-bd over three seed pairs gives 0.315 / 0.555 / 0.375.
+At 0.4-1.2 ns the linker's centroid distribution has not converged, so a fixed
+threshold below ~0.5 was testing the random number stream. The test now runs md
+twice and asserts that bd sits no further from md than md sits from itself
+(`ks <= 2 * floor`), with the measurement written into its docstring; whether
+the two integrators agree once *converged* needs runs an order of magnitude
+longer than a test should hold, and stays a PRD-108 question.
+
 ## 2026-08-22 — PRD-117 batch 18: `build_forcefield_system` to C++ (`TopologyBuild.h`)
 
 The 410-line Python orchestration is one C++ function now:
@@ -47,6 +1950,161 @@ FRET dyes — one `.drot` store, one loader, two spectroscopies.
 
 # Update Log
 
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
+
 ## 2026-08-23 — PRD-118: the lossy ladder measured — and the 1–3 MB/dye budget is already met lossless
 
 Per-stem accounting first: v8's largest dye+linker stem is **0.41 MB**
@@ -66,6 +2124,161 @@ if package size ever matters. Ladder + guard in
 `prototypes/drot_rotlib/CONVERTING.md`.
 
 # Update Log
+
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
 
 ## 2026-08-22 — PRD-117 batch 17: rotamer site kernels + library registry to C++ (`RotamerSite.h`)
 
@@ -119,6 +2332,161 @@ reader still dispatches v2–v8.
 
 # Update Log
 
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
+
 ## 2026-08-23 — PRD-118: `.drot` v6 — the data members become JSON
 
 Final payload shape (user direction): the tar.xz stays, and every data
@@ -137,6 +2505,161 @@ msgpack rejected, JSON accepted at its measured price) in
 `prototypes/drot_rotlib/CONVERTING.md`.
 
 # Update Log
+
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
 
 ## 2026-08-22 — PRD-117 batch 16: `scoring.i` to C++ — the whole stage-2 layer
 
@@ -205,6 +2728,161 @@ Recorded next to the bit-packing rejection in
 
 # Update Log
 
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
+
 ## 2026-08-23 — PRD-118: `.drot` v5 — the container becomes an unpackable archive
 
 Final container shape: a `.drot` is now a **`tar.xz`** — `tar -tf` lists the
@@ -224,6 +2902,161 @@ load of all conformers ~8 s. Spec and commands in
 
 # Update Log
 
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
+
 ## 2026-08-23 — PRD-118: `.drot` v4 — one `.xz` container, self-contained
 
 The ship format is settled: a `.drot` **is** a single `.xz` container (CRC32;
@@ -242,6 +3075,161 @@ mostly the embedded template. Format and commands in
 `prototypes/drot_rotlib/CONVERTING.md`.
 
 # Update Log
+
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
 
 ## 2026-08-22 — PRD-117 batch 15: `pyext/src` deleted — zero .py files in pyext
 
@@ -314,6 +3302,161 @@ PRD-116's registry-honesty list; numbers and caveats in
 `prototypes/drot_rotlib/CONVERTING.md`.
 
 # Update Log
+
+## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
+
+Chasing the last of the untested surface -- the two `bin/` programs nothing
+covered, and the top-level commands -- turned up two real defects and one that
+had been silently wrong for as long as the CIF writer has existed.
+
+### A system CIF written anywhere else could not be read back
+
+The writer records each component's MOL2 path *relative to the CIF*, and
+computed the `..` count from the **separators** of the base directory rather
+than its segments -- one short whenever the base has no trailing separator,
+which is always:
+
+```
+base   /var/folders/cl/xxxx/T/tmp1        6 segments
+mol2   /Users/me/dye.mol2
+wrote  ../../../../../Users/me/dye.mol2   5 ups
+read   /var/Users/me/dye.mol2             does not exist
+```
+
+Nothing noticed because every test writes its systems into the data tree,
+where the common prefix is long and the miscount cancels. `imp_bff simulate`
+was dead for any system built outside it. `relative_path` in
+`TopologyBuild.cpp` counts segments now, and
+`test/cgdye/test_system_paths.py` writes a system into a `tmp_path` -- which
+is exactly the case that failed.
+
+### A container read off a temporary was freed memory
+
+Writing the test for that found something worse:
+
+```python
+IMP.bff.read_forcefield_cif(path).components.values()
+```
+
+returned `'\x00\x00\x00...'` where a path should be, and segfaulted under
+pytest. An accessor returning `const std::map&` gives SWIG a **borrowed**
+pointer into the owner, and the proxy does not keep the owner alive: the
+system is a temporary, it dies as the expression unwinds, and the map proxy
+outlives it. Silently, most of the time.
+
+The accessors cannot return by value -- `Scoring.cpp` calls `get_bonds()` in
+the *condition* of a loop over the bonds, so a copy per access is quadratic --
+so the copy is made **at the language boundary**: `%owned_container_out` in
+`IMP_bff.types.i` gives every `const container&` return an owning copy, which
+costs one copy per Python access and hands the lifetime to Python. Eight
+container types: the maps, and the vectors whose element is one of this
+module's own values.
+
+**Not** `std::vector<std::string>`, `<double>` or `<int>`. Those already come
+back *converted* -- a Python list, a numpy array -- which is a copy, so they
+were never borrowed; claiming them replaced the conversion with a raw proxy and
+five tests stopped recognising their own results (`assert <RMF_HDF5.Strings> ==
+('SD',)`). The first cut of this fix did claim them, and the suite said so.
+`%naturalvar` is on beside it, for the same hazard in plain member variables.
+
+`test/test_borrowed_containers.py` reads five kinds of container off a
+temporary, and checks that the copy really is one.
+
+### Two programs nothing had ever run
+
+`imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+`const std::string&`, so its documented default invocation raised a
+`TypeError` before reading anything. `imp_bff_labelizer --show`, given a
+structure instead of a container, failed with "does not begin with an EBML
+header" -- true, and useless. Both fixed, both now in
+`test/io/test_bin_programs.py`.
+
+`imp_bff dock` runs (score 188.30 over 99 distances, 17 accessible volumes),
+and so do `build-system`, `simulate` and the six `dye` commands.
+
+## 2026-08-26 (night, last +6) — nine dead paths, found by running the docs
+
+The unit suite was green at every step of the last three passes, and the CLI
+and the example gallery were quietly rotting the whole time: **what breaks when
+a C++ port changes a shape is the code nobody runs**, and nobody runs the
+documentation.
+
+Running every `bin/imp_bff` command and every example and notebook found nine.
+
+### In the program
+
+| command | what was wrong |
+|---|---|
+| `dye sample-dof-walk` | imported `LinkerSampler`, a name from before the linker sampler became C++; read `resolve_probe_site` as a dict; and then, once running, **accepted nothing** |
+| `dye sample-langevin` | passed `timestep_fs=None` into a `double`, and asked `run()` to write an RMF, which it stopped doing when the sampler became C++ |
+| `dye label-fusion` | `sys.exit` in a module that never imported `sys` |
+| `flexfit` (FP branch) | `attach_probes` with four parallel lists, and another dict-style site |
+
+`sample-dof-walk` is the interesting one. It rejected every proposal because
+the probe is *bonded into* the site: its first atoms sit a bond length from
+residues i-1 and i+1, and the walk counted those bonds as clashes. Excluding
+the site and its two neighbours, and accepting a move that does not make the
+clash count *worse* -- a walk that starts inside the protein can never leave,
+otherwise -- gives 30/60 and 51/60 accepted with no clashes left. It also
+built its geometry from a MOL2 while turning atoms read from a **PDB**, whose
+order need not match; both come from the same file now.
+
+### In the documentation
+
+| page | what was wrong |
+|---|---|
+| `plot_convolution_routines`, `plot_pile_up` | `IMP.bff.decay_fconv*` -- decay convolution is **tttrlib's** by the placement rule; they call `tttrlib.fconv`/`fconv_per`/`fconv_simd` now |
+| `hgbp1_label_and_sample` | `{"N", "CA", "C"} <= set(site)`, and `attached[0]["resnum"]` |
+| `langevin_hgbp1_site481` | the `None` timestep and `out_rmf` |
+| `plot_k2_uncertainty` | `k2_call` returned two values where its caller unpacked three -- it had *never* matched; `Kappa2Distribution` supplies the third |
+| `t4l_pmi` | fetched AVs for a display helper that went with `representation/av.py` |
+| `structure_cgdye` | `attach_probes` tuples, `SITE_KEEP_ATOM_NAMES` (a function now), a nested transition-count matrix (flat + `n` now), and a `RotamerLibrary` read as a dict |
+| `structure_accessible_volumes` | stopped on a missing `ipyvolume`, which is a viewer and not a dependency |
+
+### What holds them now
+
+`test/expensive_test_docs_and_examples.py` runs **every** example and **every**
+notebook
+-- 42 of them -- with each notebook's own directory as the working directory,
+which is what Jupyter does and what their relative paths assume. Opt-in, like
+the other `expensive_test_` files. `test/label/test_dye_commands.py` runs six
+commands for real, and asserts the walk *accepts* something: a sampler that
+accepts nothing passes any "does it run" check.
+
+### One decision left
+
+`doc/manual/decays/decay_curves.ipynb`, `decay_forward_model.ipynb`,
+`decay_objective_function.ipynb` and `doc/manual/programming/programming_imp_decorator.ipynb`
+document `IMP.bff.DecayCurve`, `DecayConvolution`, `DecayLifetimeHandler`,
+`DecayScale`, `DecayPattern` and `DecayLinearization` -- 50 references to an
+API **deliberately deleted** by `93b7198` ("PRD-113 stage 0: delete the TCSPC
+instrument layer"), and which exists nowhere in the stack now, tttrlib
+included. They are not broken call sites; they are pages describing a layer
+that left. Porting them to tttrlib's manual or dropping them is a call for the
+maintainer, so they are skipped by name in the sweep, with the reason written
+where the skip is.
+
+## 2026-08-26 (night, last +5) — two landmines defused
+
+**`.drot` could not read a payload that compressed well.** `DrotReader`'s
+decompressor sized its output buffer as `compressed * 8` and grew it on
+`NEEDS_MORE_OUTPUT`; brotli's one-shot decoder reports a too-small buffer as
+`BROTLI_DECODER_RESULT_ERROR`, so the growth branch never fired and a good file
+came back as "corrupt brotli stream". Every shipped `.drot` is under the ratio,
+which is why nothing had noticed -- but a library of near-identical conformers
+(a rigid dye on a short linker) is not. It streams now.
+
+**Four `attach_probes` calls in `bin/imp_bff` were dead.** Three passed
+`(hierarchy, chain, residue)` tuples and one passed four parallel lists; the
+C++ takes `ProbeAttachment` values, so all four raised `TypeError` at the
+binding. `dye sample-rotamer` then read `attached[0]["site"]` out of a list of
+values. The command runs end to end now, and `resolve_probe_site` -- which
+answers CA, N, C -- is where the site comes from.
+
+Neither had a test, which is why neither was known to be dead. Both do now:
+`test/io/test_drot.py::test_a_payload_that_compresses_hugely_still_reads` and
+`test/label/test_attach_probes_cli.py` (3 tests, including the command itself
+through `CliRunner`).
 
 ## 2026-08-23 — PRD-118: the FRETpredict → `.drot` conversion runbook
 

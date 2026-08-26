@@ -1,3 +1,4 @@
+import json
 #!/usr/bin/env python3
 """Tests for Phase 2: dye topology, LJ scoring, exclusion lists."""
 
@@ -9,17 +10,22 @@ import tempfile
 from pathlib import Path
 from IMP.bff import get_template_dir, get_structure_dir
 
+import IMP.bff
 import pytest
 
+from IMP.bff import (forcefield_system_from_json, read_forcefield_cif,
+                     write_dye_forcefield_cif)
 
-from IMP.bff import (
-    build_angles,
-    build_dihedrals,
-    build_dye_topology,
-    build_graph,
-    find_cycles,
-)
-from IMP.bff import as_forcefield_system, read_dye_forcefield_cif, write_dye_forcefield_cif
+
+def as_forcefield_system(system):
+    """A dict-literal system as the typed value the library takes.
+
+    The library takes systems, not dicts: `IMP.bff.as_forcefield_system` was a
+    `%pythoncode` def and is gone. A test that writes its system out as a dict
+    literal converts its own, which is one `json.dumps` away.
+    """
+    return (forcefield_system_from_json(json.dumps(system))
+            if isinstance(system, dict) else system)
 # The CHARMM36 table is a C++ function now (charmm36_lj(element) ->
 # (rmin_half, epsilon)); there is no second dict to drift.
 from IMP.bff import charmm36_lj, lj_cross
@@ -72,45 +78,31 @@ class TestDyeTopologyBuilder:
         template.name = "test"
         return template
 
+    def _graph(self):
+        return IMP.bff.MolecularGraph(sorted(self._make_bonds()))
+
     def test_graph_construction(self):
-        g = build_graph(self._make_bonds())
-        assert 1 in g[2]
-        assert 3 in g[2]
-        assert 2 in g[3]
+        g = self._graph()
+        assert 1 in list(g.get_neighbors(2))
+        assert 3 in list(g.get_neighbors(2))
+        assert 2 in list(g.get_neighbors(3))
 
     def test_angles_from_chain(self):
-        g = build_graph(self._make_bonds())
-        angles = build_angles(g)
+        angles = [tuple(a) for a in self._graph().get_angles()]
         assert (1, 2, 3) in angles
         assert (2, 3, 4) in angles
 
     def test_dihedrals_from_chain(self):
-        g = build_graph(self._make_bonds())
-        dihedrals = build_dihedrals(g)
+        dihedrals = [tuple(d) for d in self._graph().get_dihedrals()]
         assert (1, 2, 3, 4) in dihedrals
 
-    def test_build_dye_topology_bonds(self):
-        atoms = self._make_atoms()
-        bonds = self._make_bonds()
-        template = self._make_template()
-        topo = build_dye_topology(atoms, bonds, template)
-        assert len(topo["bonds"]) == 3
-        for a, b, d in topo["bonds"]:
-            assert d > 0
-
-    def test_build_dye_topology_angles(self):
-        atoms = self._make_atoms()
-        bonds = self._make_bonds()
-        template = self._make_template()
-        topo = build_dye_topology(atoms, bonds, template)
-        assert len(topo["angles"]) == 2
-
-    def test_build_dye_topology_dihedrals(self):
-        atoms = self._make_atoms()
-        bonds = self._make_bonds()
-        template = self._make_template()
-        topo = build_dye_topology(atoms, bonds, template)
-        assert len(topo["dihedrals"]) == 1
+    # The three `build_dye_topology` tests that stood here went with the
+    # function (2026-08-24): it was a third derivation of the same terms, used
+    # by nothing but these tests, and what they asserted about a four-atom
+    # chain -- 3 bonds, 2 angles, 1 dihedral -- the three tests above assert
+    # directly against the graph. What it added beyond them was `distance > 0`.
+    # The shipped derivation is `build_forcefield_system` (C++), covered on
+    # real MOL2 input by test_combined_system.py and test_scoring.py.
 
 
 class TestLJParameters:
@@ -168,8 +160,8 @@ class TestLJTypeCifRoundtrip:
         with tempfile.NamedTemporaryFile(suffix=".cif", delete=False) as f:
             path = f.name
         try:
-            write_dye_forcefield_cif(path, system)
-            loaded = read_dye_forcefield_cif(path)
+            write_dye_forcefield_cif(path, as_forcefield_system(system))
+            loaded = read_forcefield_cif(path)
             assert "LJ_C" in loaded.lj_types
             assert loaded.lj_types["LJ_C"].element == "C"
             assert abs(loaded.lj_types["LJ_C"].rmin_half - 2.024) < 1e-3
@@ -310,8 +302,13 @@ class TestTorsionConvention:
 
     def test_pi_torsion_is_planar_and_linker_staggered(self):
         import math
-        t_pi = {"periodicity": 2, "phase_rad": math.pi, "k": 12.0}
-        t_link = {"periodicity": 3, "phase_rad": 0.0, "k": 1.5}
+        # `torsion_cosine` is C++ now and takes the typed value, not a dict
+        def ttype(periodicity, phase, k):
+            t = IMP.bff.FFTorsionType()
+            t.periodicity, t.phase, t.k = periodicity, phase, k
+            return t
+        t_pi = ttype(2, math.pi, 12.0)
+        t_link = ttype(3, 0.0, 1.5)
         _assert_close(self._score_at(t_pi, 0.0), 0.0, places=9)
         _assert_close(self._score_at(t_pi, 180.0), 0.0, places=9)
         _assert_close(self._score_at(t_pi, 90.0), 24.0, places=9)

@@ -32,12 +32,14 @@ void diffusion_propagate(
         const std::vector<double>& cur, const std::vector<double>& d,
         const std::vector<double>& decay, const std::vector<double>& bounds,
         int ng, int flux_form, int n_steps, int n_out,
-        std::vector<double>& fluorescence,
+        double** out_fluorescence, int* n_out_fluorescence,
         double** out_view, int* n_out_view) {
+    std::vector<double> fluorescence;
     const std::vector<double> final_density = internal::lattice_propagate(
             cur, d, decay, bounds, ng,
             flux_form == FLUX_SMOLUCHOWSKI ? internal::LATTICE_FLUX_SMOLUCHOWSKI : internal::LATTICE_FLUX_ITO,
             n_steps, n_out, fluorescence);
+    internal::copy_to_view(fluorescence, out_fluorescence, n_out_fluorescence);
     // One memcpy, against ng^3 x ~35-40 ns of marshalling.
     internal::copy_to_view(final_density, out_view, n_out_view);
 }

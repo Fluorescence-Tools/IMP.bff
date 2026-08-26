@@ -117,8 +117,17 @@ IMPBFFEXPORT void diffusion_step(
     \param[in] flux_form FLUX_SMOLUCHOWSKI or FLUX_ITO
     \param[in] n_steps steps to take
     \param[in] n_out report the population every this many steps
-    \param[out] fluorescence surviving population at each reported step
+    \param[out] out_fluorescence,n_out_fluorescence the surviving population at
+               each reported step -- `n_steps / n_out + 1` of them
     \param[out] out_view,n_out_view the final density
+
+    Both outputs are managed numpy views: the caller owns the buffers, and in
+    C++ frees them with `std::free`. The fluorescence used to be a
+    `std::vector<double>&` out-parameter, which made a Python caller construct
+    a wrapped vector to pass in -- and after this module took on `rmf` (and
+    with it `isd`, and `saxs`) the class to construct is `IMP.saxs.DistBase`,
+    because SWIG wraps `std::vector<double>` once across a module and its
+    imports. Two views, no wrapped vector, and a 2-tuple of arrays in Python.
 */
 IMPBFFEXPORT void diffusion_propagate(
         const std::vector<double>& cur,
@@ -129,7 +138,7 @@ IMPBFFEXPORT void diffusion_propagate(
         int flux_form,
         int n_steps,
         int n_out,
-        std::vector<double>& fluorescence,
+        double** out_fluorescence, int* n_out_fluorescence,
         double** out_view, int* n_out_view
 );
 

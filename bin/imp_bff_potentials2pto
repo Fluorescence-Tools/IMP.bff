@@ -1,0 +1,235 @@
+#!/usr/bin/env python
+"""Build `data/potentials.pto` from the loose `.npy` tables ChiSurf ships.
+
+One container carries every parameter table the coarse-grained potentials read.
+Two of them -- Miyazawa-Jernigan and UNRES -- go in as **text in IMP's PMF
+format**, because `IMP.core.StatisticalPairScore` reads that directly and the
+potential is then the file rather than a loop; the other two go in as float64
+grids, because their restraints are not pair scores over a distance.
+
+The conversion is not a copy. What it does to the numbers, and why, is written
+into the container's manifest, which is the part four loose `.npy` files cannot
+carry:
+
+* `unres.npy` has six NaNs, all in bin 0 (0 to 0.05 A). They become the
+  short-range repulsion, which is what that bin means.
+* `unres.npy` starts at zero distance, but the potential it belongs to applies
+  a flat penalty below `min_dist`. That penalty is written into the low bins,
+  so the branch the Python took at evaluation time is in the data.
+* `hb.npy` reaches 7e33 in its first 127 bins -- a divergence below 1.27 A,
+  where no two atoms are. Those bins are held at the value the table has at
+  1.3 A.
+* `rama_ala_pro_gly.npy` has five channels, of which the first two are the phi
+  and psi *coordinate* grids and only the last three are maps. The container
+  keeps the three.
+
+Run it against a ChiSurf checkout:
+
+    imp_bff_potentials2pto --database ../chisurf/chisurf/core/structure/potential/database
+"""
+
+import hashlib
+import json
+import os
+
+import click
+import numpy as np
+
+import IMP.bff
+
+#: ChiSurf's `res2id` order, which is Miyazawa and Jernigan's. It indexes the
+#: `mj` and `unres` arrays, and nothing beyond this program needs to know it:
+#: the PMF files name residues and IMP maps the names to its own indices.
+MJ_ORDER = ["CYS", "MET", "PHE", "ILE", "LEU", "VAL", "TRP", "TYR", "ALA",
+            "GLY", "THR", "SER", "GLN", "ASN", "GLU", "ASP", "HIS", "ARG",
+            "LYS", "PRO"]
+
+
+def _sha256(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _pmf_text(bin_width, values_for, names=MJ_ORDER):
+    """A PMF file: a header, then one line per pair of residue types.
+
+    The types are the potential's own -- `IMP.bff.ResidueContactType`, not
+    `IMP.atom.ResidueType` -- so the file is as wide as the potential and not
+    as wide as IMP. That matters: an `IMP.atom.ResidueType` table *grows* when
+    a process meets a residue it has not seen, and an index past the side of a
+    square table reads outside it.
+    """
+    lines = [f"{bin_width} {len(names)}"]
+    for i, a in enumerate(names):
+        for b in names[i:]:
+            bins = values_for(a, b)
+            lines.append(" ".join([a, b] + [repr(float(v)) for v in bins]))
+    return "\n".join(lines) + "\n"
+
+
+def build_mj(matrix, cutoff=6.5):
+    """The contact matrix as a PMF: two bins of half the cutoff, both the same.
+
+    A contact potential is one value out to the cutoff and nothing past it.
+    Two bins rather than one because IMP's reader builds a spline over the
+    values of each pair, and a spline needs two.
+    """
+    index = {name: i for i, name in enumerate(MJ_ORDER)}
+
+    def values_for(a, b):
+        v = float(matrix[index[a], index[b]])
+        return (v, v)
+
+    return _pmf_text(cutoff / 2.0, values_for), {
+        "bin_width": cutoff / 2.0, "n_bins": 2, "cutoff_A": cutoff,
+        "units": "kT", "residues": list(MJ_ORDER),
+        "note": "a contact potential: flat to the cutoff, zero past it"}
+
+
+def build_unres(grid, bin_width=0.05, min_dist=3.5, repulsion=100.0):
+    """The centroid table as a PMF, with the repulsion written into the bins.
+
+    **The table is filled in its upper triangle only.** Past the repulsion the
+    entries with `type_i < type_j` average -0.129 and their transposes -0.003:
+    one half carries the potential and the other is all but empty. The Python
+    indexed it with the residues' order *in the chain*, so about half of every
+    structure's contacts read the empty half and scored zero. A PMF file stores
+    one value per unordered pair, which is what a pair potential is, and this
+    writes the filled half into it.
+    """
+    n_types, _, n_bins = grid.shape
+    clean = np.array(grid, dtype=np.float64)
+    n_nan = int(np.isnan(clean).sum())
+    clean = np.nan_to_num(clean, nan=repulsion)
+    below = int(round(min_dist / bin_width))
+    clean[:, :, :below] = repulsion
+    index = {name: i for i, name in enumerate(MJ_ORDER)}
+
+    def values_for(a, b):
+        i, j = index[a], index[b]
+        return clean[min(i, j), max(i, j)]
+
+    return _pmf_text(bin_width, values_for), {
+        "bin_width": bin_width, "n_bins": int(n_bins),
+        "residues": list(MJ_ORDER),
+        "max_A": bin_width * n_bins, "min_dist_A": min_dist,
+        "repulsion": repulsion, "units": "kcal/mol",
+        "triangle": "upper",
+        "note": (f"{n_nan} NaNs in bin 0 and every bin below {min_dist} A "
+                 f"hold the repulsion; the source is filled in its upper "
+                 f"triangle only and that half is what is written, where the "
+                 f"Python indexed it by the residues' order in the chain and "
+                 f"so read the empty half for about one contact in two; "
+                 f"multiply the restraint's weight by 0.593 for kT at 298 K")}
+
+
+def build_hbond(table, bin_width=0.01, physical_A=1.3):
+    """The four-channel lookup, with its short-range divergence held flat."""
+    clean = np.array(table, dtype=np.float64)
+    first = int(round(physical_A / bin_width))
+    diverged = int((np.abs(clean[:, :first]) > 1e5).sum())
+    clean[:, :first] = clean[:, first][:, None]
+    return clean, {
+        "shape": list(clean.shape), "bin_width": bin_width,
+        "channels": ["CH", "ON", "OH", "CN"], "units": "kT",
+        "note": (f"{diverged} values above 1e5 below {physical_A} A were held "
+                 f"at the value there; no two atoms are that close")}
+
+
+def build_ramachandran(stack, n_bins=360):
+    """The three maps, without the two coordinate grids in front of them.
+
+    The values are `log(P/Pmax)`, so zero is the peak of the distribution and
+    the map is never positive -- except that the proline channel marks the
+    cells it has no data for with a sentinel `1.0`, which is not a log of
+    anything. Read as a density that sentinel would be the *most* favourable
+    value in the map, and the measured region the least; the cells are set to
+    the least probable value the channel actually measured instead.
+    """
+    maps = np.array(stack[2:], dtype=np.float64).reshape(3, n_bins, n_bins)
+    sentinels = 0
+    for c in range(maps.shape[0]):
+        mask = maps[c] > 0.0
+        if not mask.any():
+            continue
+        sentinels += int(mask.sum())
+        maps[c][mask] = maps[c][~mask].min()
+    return maps, {
+        "shape": [3, n_bins, n_bins],
+        "channels": ["general", "PRO", "GLY"],
+        "resolution_deg": 360.0 / n_bins, "units": "log(P/Pmax)",
+        "axes": "phi along axis 0, psi along axis 1, both from -180 deg",
+        "note": (f"channels 0 and 1 of the source are the phi and psi "
+                 f"coordinate grids, not maps, and are dropped; {sentinels} "
+                 f"cells held a sentinel 1.0 (proline, where the map has no "
+                 f"data) and were set to the least probable measured value of "
+                 f"their channel, so every cell is a log-ratio and the reader "
+                 f"negates the map as a whole")}
+
+
+def _table(name, kind, shape=None, values=None, text=None):
+    t = IMP.bff.PotentialTable(name, kind)
+    if shape is not None:
+        t.shape = [int(s) for s in shape]
+    if values is not None:
+        t.values = [float(v) for v in np.asarray(values).ravel()]
+    if text is not None:
+        t.text = text
+    return t
+
+
+@click.command()
+@click.option("--database", required=True,
+              type=click.Path(exists=True, file_okay=False),
+              help="ChiSurf's structure/potential/database directory")
+@click.option("--output", default=None,
+              help="the container to write; the shipped path by default")
+def main(database, output):
+    """Write one PTO container from the four `.npy` tables."""
+    output = output or IMP.bff.get_potential_container_path()
+    sources = {n: os.path.join(database, f"{n}.npy")
+               for n in ("mj", "hb", "unres", "rama_ala_pro_gly")}
+    for path in sources.values():
+        if not os.path.exists(path):
+            raise SystemExit(f"missing: {path}")
+
+    mj_text, mj_meta = build_mj(np.load(sources["mj"]))
+    unres_text, unres_meta = build_unres(np.load(sources["unres"]))
+    hbond, hbond_meta = build_hbond(np.load(sources["hb"]))
+    rama, rama_meta = build_ramachandran(np.load(sources["rama_ala_pro_gly"]))
+
+    for name, meta, source in (("mj", mj_meta, "mj"),
+                               ("unres", unres_meta, "unres"),
+                               ("hbond", hbond_meta, "hb"),
+                               ("ramachandran", rama_meta,
+                                "rama_ala_pro_gly")):
+        meta["source"] = f"{source}.npy"
+        meta["source_sha256"] = _sha256(sources[source])
+
+    manifest = {
+        "doctype": "imp.bff potential tables",
+        "version": 1,
+        "made_by": "bin/imp_bff_potentials2pto",
+        "tables": {
+            "mj": dict(kind="pot.pmf", **mj_meta),
+            "unres": dict(kind="pot.pmf", **unres_meta),
+            "hbond": dict(kind="pot.grid", **hbond_meta),
+            "ramachandran": dict(kind="pot.grid", **rama_meta),
+        },
+    }
+
+    tables = [
+        _table("mj", "pot.pmf", text=mj_text),
+        _table("unres", "pot.pmf", text=unres_text),
+        _table("hbond", "pot.grid", shape=hbond.shape, values=hbond),
+        _table("ramachandran", "pot.grid", shape=rama.shape, values=rama),
+    ]
+    IMP.bff.write_potential_tables(output, tables, json.dumps(manifest,
+                                                             indent=1))
+    click.echo(f"wrote {output} ({os.path.getsize(output) / 1e6:.2f} MB)")
+    for name in IMP.bff.potential_table_names(output):
+        click.echo(f"  {name}")
+
+
+if __name__ == "__main__":
+    main()

@@ -165,6 +165,27 @@ else:
 # output_objects.append(xl)
 #
 # %%
+# The library builds the restraints; PMI's bookkeeping is the caller's. A
+# `RestraintBase` subclass is what `output_objects` and the replica-exchange
+# macro report through, and `IMP.pmi.restraints.RestraintBase` is a Python
+# class in a module `IMP.bff` does not depend on -- so the adapter is here,
+# in the script that already imports PMI, and the restraints it wraps come
+# from `IMP.bff.probe_network_restraint_set` (C++).
+class ProbeNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
+    """The fps.json AV network restraint, as a PMI restraint."""
+
+    def __init__(self, hier, fps_json_fn, score_set="", weight=1.0,
+                 mean_position_restraint=False, sigma_DA=6.0,
+                 label="ProbeNetworkRestraint", occupy_volume=True):
+        super().__init__(hier.get_model(), label=label, weight=weight)
+        self.rs = IMP.bff.probe_network_restraint_set(
+            hier, str(fps_json_fn), name=self.name, score_set=score_set,
+            mean_position_restraint=mean_position_restraint,
+            sigma_DA=sigma_DA, occupy_volume=occupy_volume, weight=weight)
+        self.restraint_sets = [self.rs]
+
+
+# %%
 # FRET restraint
 # --------------
 # The experimental information is contained in an ``fps.json`` file.
@@ -179,7 +200,7 @@ else:
 # the AVs are recalculated on each restraint evaluation.
 fps_json_fn = str(root_dir / "mGBP2_FP.fps.json")
 score_set = "577_577"  # molecule in close c2, go from c2 -> open c1
-fret_restraint = IMP.bff.AVNetworkRestraintWrapper(
+fret_restraint = ProbeNetworkRestraintWrapper(
     hier, fps_json_fn,
     mean_position_restraint=True,
     occupy_volume=False,

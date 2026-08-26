@@ -16,8 +16,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("pdb", help="input PDB")
     ap.add_argument("cif", help="output mmCIF")
-    ap.add_argument("--dye-id", default=None,
-                    help="chemical component id to record (default: from the file)")
+    ap.add_argument("--dye-id", default="",
+                    help="chemical component id to record; empty takes it "
+                         "from the file")
     a = ap.parse_args(argv)
     convert_pdb_to_cif(a.pdb, a.cif, a.dye_id)
     return 0

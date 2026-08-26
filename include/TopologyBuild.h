@@ -19,11 +19,70 @@
 #define IMPBFF_TOPOLOGYBUILD_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/Mol2IO.h>
 #include <IMP/bff/DyeForceField.h>
 
 #include <string>
+#include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
+
+//! One component of a system to build: a MOL2, its template, and its role.
+/*! The typed form of the `{"name": ..., "mol2": ..., "template": ...,
+    "role": ...}` object the JSON builder takes. It exists so a caller says
+    what it means in C++ instead of composing JSON, which is what the Python
+    wrapper did. */
+struct IMPBFFEXPORT FFComponentSpec {
+    std::string name;
+    std::string mol2;
+    //! A cgdye component template; empty when the component has none.
+    std::string template_path;
+    //! `"fixed"` or `"mobile"`.
+    std::string role;
+
+    FFComponentSpec() {}
+    FFComponentSpec(const std::string& name, const std::string& mol2,
+                    const std::string& template_path, const std::string& role)
+        : name(name), mol2(mol2), template_path(template_path), role(role) {}
+
+    IMP_SHOWABLE_INLINE(FFComponentSpec,
+                        out << "FFComponentSpec(" << name << ", " << role
+                            << ")");
+};
+IMP_VALUES(FFComponentSpec, FFComponentSpecs);
+
+//! The same builder, from typed component specs.
+/*! Composes the JSON the other overload takes -- one conversion path, and it
+    is in C++ now rather than in a `%pythoncode` wrapper that turned dicts
+    into a string. */
+IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
+        const std::vector<FFComponentSpec>& components,
+        double bond_k = 2000.0, double angle_k = 400.0,
+        double pi_dihedral_k = 12.0, double linker_dihedral_k = 1.5,
+        double ring_improper_k = 40.0, double pi_improper_k = 180.0,
+        double flat_improper_k = 120.0, double orient_improper_k = 220.0,
+        int n_steps = 20000, int write_every = 100,
+        double default_radius = 1.7, double default_mass = 12.0,
+        double nonbonded_k = 5.0, double nonbonded_cutoff = 6.0,
+        int minimize_steps = 200, const std::string& relative_to = "");
+
+//! A system for a protein and a dye, both from MOL2 -- two components.
+IMPBFFEXPORT DyeForceFieldSystem build_dye_protein_system(
+        const std::string& protein_mol2, const std::string& dye_mol2,
+        const std::string& protein_name, const std::string& dye_name,
+        const std::string& protein_template = "",
+        const std::string& dye_template = "",
+        double default_radius = 1.7, double default_mass = 12.0);
+
+//! A system for one dye alone, with its backbone anchor held fixed.
+/*! One mobile component and no protein. What this adds over the plain
+    builder: the dye's `N`, `CA`, `C` and `O` sites are collected into a
+    `<dye_name>_anchor` group and named in `fixed_groups`, so a sampler can
+    hold the labelled residue's backbone still. */
+IMPBFFEXPORT DyeForceFieldSystem probe_forcefield_system(
+        const std::string& dye_mol2, const std::string& dye_name = "dye",
+        const std::string& dye_template = "", double default_radius = 1.7,
+        double default_mass = 12.0);
 
 //! The one force-field system builder, from components to the typed value.
 /*!
@@ -59,6 +118,28 @@ IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
         double default_radius = 1.7, double default_mass = 12.0,
         double nonbonded_k = 5.0, double nonbonded_cutoff = 6.0,
         int minimize_steps = 200, const std::string& relative_to = "");
+
+//! A topology-only system for one MOL2 component: sites, bonds, angles,
+//! torsions.
+/*!
+    What #IntramolecularEnergy needs and no more: the connectivity that
+    says which site pairs are 1-2, 1-3 or 1-4 and therefore excluded from the
+    dye's own Lennard-Jones sum. No equilibrium lengths, no force constants --
+    those come from a template, and a lone dye in vacuum has none.
+
+    Site ids are `dye:<serial>:<atom_name>`, which is what the Python this
+    replaces produced.
+
+    \note The sites carry the MOL2's **element**. The Python version did not:
+    it built its JSON with `id` and `atom_name` only, so every site reached the
+    LJ table elementless and a hydrogen was parameterised as whatever the
+    fallback is. The element is in the file and in `FFSite`; dropping it was an
+    oversight, not a choice.
+
+    \param[in] component the parsed MOL2 (see #read_mol2_component)
+*/
+IMPBFFEXPORT DyeForceFieldSystem internal_topology_system(
+        const Mol2Component& component);
 
 //! `{serial: site atom name}` -- the MOL2 names deduplicated per component.
 /*! Repeated names get an alpha suffix in serial order (`C`, `CA`, `CB`, ...,

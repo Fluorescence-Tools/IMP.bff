@@ -5,25 +5,26 @@ Fluorescence decay convolution
 Fast convolution
 ----------------
 
-In ``IMP.bff`` there are a set of different routines that can be used to compute
-fluorescence decays. Most fluorescence decays are linear combinations of exponential
-decays. Convolutions of such fluorescence decays with instrument response functions
-can be computed using the routines (fconv, fconv_per, fconv_per_cs, etc.). Here,
-fconv stands for fast convolution.
+Most fluorescence decays are linear combinations of exponential decays, and a
+measured decay is that combination convolved with the instrument response. The
+routines that do it -- ``fconv``, ``fconv_per``, and their SIMD forms -- are
+**tttrlib's**: photons and curves live there, coordinates live in ``IMP.bff``,
+and this package sits above it and reaches down. They were called
+``IMP.bff.decay_fconv`` when the decay code was still here.
 
-``IMP.bff`` provides routines that make use of SIMD (Single Instruction Multiple Data).
-The SIMD routines use of the AVX extension (Advanced Vector Extension). The SIMD routines
-compute in parallel decays composed of more than a single fluorescence lifetime.
-The SIMD routines require CPUs with 'modern' instruction sets. Most x86 CPUs that were
-manufacture since 2012 are supported.
-
+The SIMD routines use the AVX extension and compute several lifetimes at once;
+most x86 CPUs made since 2012 have it.
 """
 from __future__ import annotations
-import IMP.bff
-import scipy.stats
 import time
+
 import numpy as np
 import pylab as p
+import scipy.stats
+
+# tttrlib is a soft dependency of IMP.bff -- most of IMP.bff works without it,
+# and this example does not.
+import tttrlib
 
 period = 16
 n_channels = 2000
@@ -46,25 +47,25 @@ times_avx = list()
 names = ["fconv", "fconv_per"]
 t_start = time.perf_counter()
 for _ in range(n_runs):
-    IMP.bff.decay_fconv(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
+    tttrlib.fconv(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 ex = time.perf_counter() - t_start
 times.append(ex)
 
 t_start = time.perf_counter()
 for _ in range(n_runs):
-    IMP.bff.decay_fconv_avx(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
+    tttrlib.fconv_simd(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 ex = time.perf_counter() - t_start
 times_avx.append(ex)
 
 t_start = time.perf_counter()  # in seconds
 for _ in range(n_runs):
-    IMP.bff.decay_fconv_per(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
+    tttrlib.fconv_per(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
 ex = time.perf_counter() - t_start
 times.append(ex)
 
 t_start = time.perf_counter()
 for _ in range(n_runs):
-    IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
+    tttrlib.fconv_per_simd(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
 ex = time.perf_counter() - t_start
 times_avx.append(ex)
 
@@ -81,19 +82,19 @@ ax[0].set_ylabel('counts')
 ax[0].set_xlabel('channels')
 
 model = np.zeros_like(irf)
-IMP.bff.decay_fconv(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
+tttrlib.fconv(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv")
 
 model_avx = np.zeros_like(irf)
-IMP.bff.decay_fconv_avx(fit=model_avx, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
+tttrlib.fconv_simd(fit=model_avx, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv_avx")
 
 model = np.zeros_like(irf)
-IMP.bff.decay_fconv_per(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
+tttrlib.fconv_per(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv_per")
 
 model = np.zeros_like(irf)
-IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
+tttrlib.fconv_per_simd(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv_per_avx")
 ax[0].legend()
 

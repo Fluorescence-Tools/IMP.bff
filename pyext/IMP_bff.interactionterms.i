@@ -12,6 +12,14 @@
  * quenching atoms move into the term, because resolving which of a structure's
  * atoms quench and how hard is a function of names and parameters and does not
  * change from one set of dye states to the next.
+ *
+ * The two constructors had a `%feature("shadow")` each, for three reasons that
+ * are all typemaps or features now: keyword arguments with C++ defaults
+ * (`%feature("compactdefaultargs")` -- SWIG's default-argument *overloads* are
+ * what disables `kwargs`, and compact ones do not), the conversions of a dict,
+ * two name lists and an `(N, 3)` array (std_map, std_vector and numpy.i do
+ * those), and `kappa2=None` for "no orientation factor" (a typemap, below,
+ * since NaN is how C++ spells it).
  */
 
 IMP_SWIG_OBJECT(IMP::bff, InteractionTerm, InteractionTerms);
@@ -34,25 +42,29 @@ IMP_SWIG_OBJECT(IMP::bff, FRETTerm, FRETTerms);
     (double* coords, int n_atoms, int n_dim)
 };
 
-// Both take every argument by keyword with defaults, which SWIG cannot express
-// for a function that has them; the shadows also spell `None` for "no kappa2"
-// and "no attenuation", which is NaN on the C++ side.
-%feature("shadow") IMP::bff::PETTerm::PETTerm %{
-def __init__(self, parameters, res_names, atom_names, coords, dye_radius=3.5):
-    _IMP_bff.PETTerm_swiginit(self, _IMP_bff.new_PETTerm(
-        dict(parameters), [str(r) for r in res_names],
-        [str(a) for a in atom_names],
-        np.ascontiguousarray(np.asarray(coords, dtype=np.float64)),
-        float(dye_radius)))
-%}
+// `kappa2=None` is "no orientation factor given", and C++ spells that NaN.
+// The typemap is on the argument's name, so it applies to the one parameter
+// that means it and to no other double.
+%typemap(in) double kappa2 {
+    if ($input == Py_None) {
+        $1 = std::numeric_limits<double>::quiet_NaN();
+    } else {
+        double v = PyFloat_AsDouble($input);
+        if (v == -1.0 && PyErr_Occurred()) SWIG_fail;
+        $1 = v;
+    }
+}
+%typemap(typecheck, precedence=SWIG_TYPECHECK_DOUBLE) double kappa2 {
+    $1 = ($input == Py_None || PyNumber_Check($input)) ? 1 : 0;
+}
 
-%feature("shadow") IMP::bff::FRETTerm::FRETTerm %{
-def __init__(self, donor, acceptor, refractive_index=1.4, kappa2=None,
-             r_min=7.0):
-    _IMP_bff.FRETTerm_swiginit(self, _IMP_bff.new_FRETTerm(
-        donor, acceptor, float(refractive_index),
-        float("nan") if kappa2 is None else float(kappa2), float(r_min)))
-%}
+// Keyword arguments *and* C++ default arguments: SWIG expands defaults into
+// overloads by default, and it refuses `kwargs` for an overloaded function.
+// A compact default keeps one wrapper, so both work.
+%feature("compactdefaultargs") IMP::bff::PETTerm::PETTerm;
+%feature("compactdefaultargs") IMP::bff::FRETTerm::FRETTerm;
+%feature("kwargs") IMP::bff::PETTerm::PETTerm;
+%feature("kwargs") IMP::bff::FRETTerm::FRETTerm;
 
 %include "IMP/bff/InteractionTerms.h"
 

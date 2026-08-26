@@ -11,7 +11,7 @@ import IMP.atom
 import IMP.core
 
 
-from IMP.bff import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff import read_forcefield_cif, write_dye_forcefield_cif
 from IMP.bff import build_dye_restraints
 from IMP.bff import build_dye_protein_system
 
@@ -47,7 +47,7 @@ def test_combined_system_cif_roundtrip(tmp_path):
     )
     out = tmp_path / "combined.system.cif"
     write_dye_forcefield_cif(str(out), system)
-    loaded = read_dye_forcefield_cif(str(out))
+    loaded = read_forcefield_cif(str(out))
     assert loaded.name == "CX4_atto655"
     assert len(loaded.sites) == len(system.sites)
     assert "LJ_C" in loaded.lj_types
@@ -73,7 +73,8 @@ def test_build_dye_restraints_smoke():
         )
         site_particles[s.id] = p
 
-    restraints = build_dye_restraints(model, system, site_particles)
+    restraints = build_dye_restraints(model, system, list(site_particles),
+                                 [p.get_index() for p in site_particles.values()])
     assert len(restraints) > 0
 
 

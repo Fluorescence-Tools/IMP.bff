@@ -9,7 +9,7 @@ how pile-up changes the shape of fluorescence decays.
 import pylab as plt
 import numpy as np
 import scipy.stats
-import IMP.bff
+import tttrlib
 
 n_channels = 128
 irf_position, irf_width = 1.0, 0.2
@@ -22,7 +22,7 @@ data = np.zeros_like(irf)
 stop = len(irf)
 start = 0
 
-IMP.bff.decay_fconv(fit=data, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
+tttrlib.fconv(fit=data, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 
 
 # %%
@@ -47,9 +47,11 @@ pile_up_parameter = {
 }
 
 data_with_pileup = np.copy(data)
-IMP.bff.decay_add_pile_up_to_model(
+# the measured decay the pile-up is computed from is `decay`; it was called
+# `data` when this routine was `IMP.bff.decay_add_pile_up_to_model`
+tttrlib.add_pile_up_to_model(
     model=data_with_pileup,
-    data=data,
+    decay=data,
     **pile_up_parameter
 )
 

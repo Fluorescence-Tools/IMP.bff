@@ -2,7 +2,7 @@
  *  \file IMP/bff/AVMeanDistanceRestraint.h
  *  \brief A FRET restraint on the distance between two mean dye positions.
  *
- * The cheap half of #IMP::bff::AVNetworkRestraint. That one rebuilds both
+ * The cheap half of #IMP::bff::ProbeNetworkRestraint. That one rebuilds both
  * accessible volumes on every evaluation, which is the whole cost of an
  * AV-restrained optimisation; this one scores the separation of the two volumes'
  * *mean positions*, converts it to the modelled observable through a cached
@@ -30,9 +30,11 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AV.h>
+#include <IMP/bff/ProbeNetworkRestraint.h>
 #include <IMP/bff/StatesDistance.h>
 
 #include <IMP/Restraint.h>
+#include <IMP/RestraintSet.h>
 #include <IMP/particle_index.h>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -56,8 +58,12 @@ public:
         \param[in] sigma the per-component width of the separation vector, for
                the \f$R_{mp} \to \langle R_{DA}\rangle\f$ conversion
         \param[in] weight multiplies the score */
-    AVMeanDistanceRestraint(IMP::Model* m, IMP::ParticleIndex p1,
-                            IMP::ParticleIndex p2,
+    /*! \note The two particles are \c ParticleIndexAdaptor, which is how
+        `IMP::core`'s own restraints take theirs: a `Particle`, an `AV`
+        decorator or a bare index all convert. The Python wrapper used to do
+        that with a `hasattr` ladder in a `%feature("shadow")`. */
+    AVMeanDistanceRestraint(IMP::Model* m, IMP::ParticleIndexAdaptor p1,
+                            IMP::ParticleIndexAdaptor p2,
                             const AVPairDistanceMeasurement& measurement,
                             double sigma = 6.0, double weight = 1.0);
 
@@ -71,6 +77,51 @@ public:
 
     IMP_OBJECT_METHODS(AVMeanDistanceRestraint);
 };
+
+//! Make each volume a member of its attachment atom's rigid body.
+/*! The coordinates of an accessible volume are the mean of its density, so a
+    volume is resampled before it is added: the position it is added *at* is
+    the one the rigid body will carry it by. Volumes whose source atom is not
+    in a rigid body are left alone. */
+IMPBFFEXPORT void add_avs_to_rigid_bodies(const AVs& avs);
+
+//! Give each volume a radius and a mass, so it occupies space.
+/*! The radius is the largest of the volume's three; the mass is twice that.
+    Without this a volume is a point, and nothing keeps two of them -- or a
+    volume and the structure -- from sharing the same coordinates. */
+IMPBFFEXPORT void set_av_xyzr_mass(const AVs& avs);
+
+//! Every restraint an fps.json network asks for, as one set.
+/*!
+    This was `AVNetworkRestraintWrapper`, a `%pythoncode` class subclassing
+    `IMP.pmi.restraints.RestraintBase` -- which is why `import IMP.bff` had a
+    lazy door in it: IMP.pmi is not one of this module's modules. What the
+    wrapper did beyond PMI's bookkeeping is here, and a caller that wants a
+    `RestraintBase` subclasses one around this set, in the program that already
+    imports PMI.
+
+    \param[in] hier the structure the labelled residues are in
+    \param[in] fps_json the network: positions, distances and score sets
+    \param[in] name names the restraint, and is the score set's key
+    \param[in] score_set which set of distances to score; empty means all
+    \param[in] mean_position_restraint score the separation of the volumes'
+               *mean positions* (one #IMP::bff::AVMeanDistanceRestraint per
+               distance) instead of rebuilding both volumes per evaluation.
+               That is an approximation whose content is that the shape of a
+               volume does not change when the structure moves, so the volumes
+               are made rigid-body members first.
+    \param[in] sigma_DA the per-component width for the mean-position branch
+    \param[in] occupy_volume give the volumes a radius and a mass
+    \param[in] weight multiplies the set's score
+    
+eturn the set, owned by the caller (an IMP::Object; keep a reference)
+    	hrow IOException when \p fps_json cannot be read
+*/
+IMPBFFEXPORT IMP::RestraintSet* probe_network_restraint_set(
+        const IMP::core::Hierarchy& hier, const std::string& fps_json,
+        std::string name = "ProbeNetworkRestraint",
+        std::string score_set = "", bool mean_position_restraint = false,
+        double sigma_DA = 6.0, bool occupy_volume = true, double weight = 1.0);
 
 IMPBFF_END_NAMESPACE
 

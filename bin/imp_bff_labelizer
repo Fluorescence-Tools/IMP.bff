@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Score the labelling sites of a structure, and write one `.mmfdb.pto`.
+
+A native port of the Labelizer label-site score (Gebhardt *et al.*, *Nat.
+Commun.* **16**, 3305, 2025). Every residue gets a per-parameter score and a
+combined label score; optionally every pair of labelable sites gets a FRET
+pair score saying how informative that pair would be to measure.
+
+The reference implementation cannot run on a current machine -- its secondary
+structure shells out to DSSP and refuses to start on macOS, and its default
+solvent-exposure term shells out to MSMS binaries that are 32-bit ppc/i386
+Mach-O. Both are native here, and the agreement with the reference's own
+published output is measured rather than asserted: on the shipped 1DDB example
+the secondary structure and cysteine-resemblance terms reproduce it **exactly**
+on all 195 residues, and residue depth agrees with MSMS to 0.14 A rms with no
+bias. See `okf/validation/labelizer_ab.md`.
+
+**The published arithmetic is the default, defects included**, because the
+paper's numbers were computed with them. `--corrected` selects the arithmetic
+the reference's own documentation describes. Which one was used is recorded in
+the container, so a file always says which it is.
+
+Output is **one file**, not the reference's six CSVs, four score-carrying PDBs,
+heat-map JSON and zip. It holds the structure verbatim, the scores as tables
+whose columns are named by MMFDB dictionary items, and the complete settings.
+A position that was not scored carries a status and no number -- the reference
+writes `-1` for excluded and `0` for no contribution into the same column as
+real scores, which is why its output cannot be read back.
+
+Usage
+-----
+::
+
+    imp_bff_labelizer structure.pdb                      # -> structure.mmfdb.pto
+    imp_bff_labelizer structure.pdb -o scored.mmfdb.pto
+    imp_bff_labelizer structure.pdb --conservation grades.txt
+    imp_bff_labelizer structure.pdb --pairs --forster-radius 52
+    imp_bff_labelizer structure.pdb --pairs --refine 300 --r0 52
+    imp_bff_labelizer scored.mmfdb.pto --show
+    imp_bff_labelizer scored.mmfdb.pto --extract-structure recovered.pdb
+
+Conservation is **imported, never computed**: an alignment and a rate estimate
+are a different program. Pass a ConSurf `.grades` table or a PDB carrying the
+normalised grade in its B-factor column. Without one the conservation term is
+`unavailable` for every position and, under the published model, the combined
+score is unavailable with it -- which is honest, and is what `--no-conservation`
+makes explicit by dropping the term from the model instead.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import IMP.bff as bff
+
+#: Terms of the published model, so `--no-conservation` can drop one by name.
+PUBLISHED_TAGS = ("cs", "se", "tp", "cr", "ss", "ce")
+
+
+def _model(drop: set[str]) -> list:
+    """The published model, minus any terms the caller dropped."""
+    return [p for p in bff.ll_model_paper() if p.tag not in drop]
+
+
+def _show(path: Path) -> int:
+    """Print what a container holds, without unpacking it."""
+    if path.suffix != ".pto":
+        print(f"imp_bff_labelizer: --show reads a container; {path} is not "
+              f"one. Score the structure first, which writes "
+              f"{path.stem}.mmfdb.pto beside it.", file=sys.stderr)
+        return 2
+    scores = bff.ll_read_pto_scores(str(path))
+    pairs = bff.ll_read_pto_pairs(str(path))
+    settings = json.loads(bff.ll_read_pto_settings(str(path)) or "{}")
+
+    by_type: dict[str, list] = {}
+    for row in scores:
+        by_type.setdefault(row.score_type, []).append(row)
+
+    print(f"{path}")
+    print(f"  arithmetic     {settings.get('arithmetic', 'unknown')}")
+    terms = ", ".join("%s:%d" % (t["tag"], t["weight"])
+                      for t in settings.get("model", []))
+    print("  model          %s" % terms)
+    print(f"  score rows     {len(scores)}")
+    for score_type in sorted(by_type):
+        rows = by_type[score_type]
+        scored = [r for r in rows if r.status == "scored"]
+        print(f"    {score_type:<22} {len(scored):>5} scored, "
+              f"{len(rows) - len(scored):>4} not")
+    print(f"  pair rows      {len(pairs)}")
+
+    combined = [r for r in by_type.get("combined", []) if r.status == "scored"]
+    if combined:
+        best = sorted(combined, key=lambda r: -r.value)[:10]
+        print("  best sites")
+        for r in best:
+            print(f"    {r.asym_id}{r.seq_id:<5} {r.comp_id}  {r.value:.4f}")
+    if pairs:
+        print("  best pairs")
+        for p in list(pairs)[:10]:
+            print(f"    {p.asym_id_1}{p.seq_id_1}-{p.asym_id_2}{p.seq_id_2:<6} "
+                  f"{p.value:.4f}  d={p.distance:.1f} A")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("src", type=Path,
+                    help="a structure to score, or a container to inspect")
+    ap.add_argument("-o", "--out", type=Path, default=None,
+                    help="the container to write; defaults to "
+                         "<stem>.mmfdb.pto beside the structure")
+    ap.add_argument("--conservation", type=Path, default=None,
+                    help="a ConSurf .grades table, or a PDB carrying the "
+                         "normalised grade in its B-factor column")
+    ap.add_argument("--no-conservation", action="store_true",
+                    help="drop the conservation term from the model, rather "
+                         "than leaving it unavailable and taking the whole "
+                         "combined score down with it")
+    ap.add_argument("--corrected", action="store_true",
+                    help="use the arithmetic the reference documents instead "
+                         "of the arithmetic it runs; see IMP.bff.LlModel")
+    ap.add_argument("--pairs", action="store_true",
+                    help="also score every pair of labelable sites")
+    ap.add_argument("--r0", "--forster-radius", type=float, default=52.0,
+                    dest="r0", metavar="A",
+                    help="Forster radius for the pair score (default 52). "
+                         "Prefer --donor/--acceptor, which derive it.")
+    ap.add_argument("--donor", default=None, metavar="DYE",
+                    help="derive the Forster radius from this donor and "
+                         "--acceptor rather than taking --r0 on trust. Names "
+                         "resolve loosely: Alexa488, Cy3, Atto647N all work")
+    ap.add_argument("--acceptor", default=None, metavar="DYE",
+                    help="the acceptor dye; see --donor")
+    ap.add_argument("--dyes", type=Path, default=None, metavar="PTO",
+                    help="a dye container (.mmfdb.pto) to take the spectra "
+                         "from; defaults to the library bundled with IMP.bff")
+    ap.add_argument("--kappa2", type=float, default=2.0 / 3.0,
+                    help="orientation factor for the derived R0. The default "
+                         "is the isotropic average and is an assumption, not "
+                         "a measurement")
+    ap.add_argument("--refractive-index", type=float, default=1.4,
+                    dest="refractive_index",
+                    help="of the medium between the dyes (default 1.4)")
+    ap.add_argument("--refine", type=int, default=0, metavar="N",
+                    help="recompute the top N pairs with real accessible "
+                         "volumes instead of the analytic cone (default 0)")
+    ap.add_argument("--threshold", type=float, default=0.5, metavar="LS",
+                    help="sites below this combined score are not paired "
+                         "(default 0.5, the reference's LS_THRESHOLD)")
+    ap.add_argument("--max-pairs", type=int, default=0, metavar="N",
+                    help="keep only the best N pairs in the container; 0 "
+                         "keeps all of them")
+    ap.add_argument("--show", action="store_true",
+                    help="print what a container holds and exit")
+    ap.add_argument("--extract-structure", type=Path, default=None,
+                    metavar="PDB",
+                    help="recover the embedded structure from a container, "
+                         "verifying it against its recorded SHA-256, and exit")
+    args = ap.parse_args(argv)
+
+    if not args.src.exists():
+        print(f"imp_bff_labelizer: {args.src} does not exist", file=sys.stderr)
+        return 1
+
+    if args.extract_structure is not None:
+        digest = bff.ll_extract_pto_structure(str(args.src),
+                                              str(args.extract_structure))
+        print(f"{args.extract_structure}  sha256 {digest}  verified")
+        return 0
+
+    if args.show:
+        return _show(args.src)
+
+    drop = {"cs"} if args.no_conservation else set()
+    model = _model(drop)
+
+    options = bff.LlOptions()
+    options.model = (bff.LL_MODEL_CORRECTED if args.corrected
+                     else bff.LL_MODEL_PUBLISHED)
+
+    conservation = str(args.conservation) if args.conservation else ""
+    if not conservation and not args.no_conservation:
+        print("imp_bff_labelizer: no --conservation given, so the "
+              "conservation term is unavailable and the combined score will "
+              "be too. Pass --no-conservation to score without it.",
+              file=sys.stderr)
+
+    scores = bff.ll_score_structure(str(args.src), model, options, conservation)
+
+    fret = bff.LlFretOptions()
+    fret.model = options.model
+    fret.forster_radius = args.r0
+
+    # A Forster radius is derived from two spectra and a quantum yield, not
+    # supplied. When the dyes are named, say so in the output: an R0 that came
+    # from a number on a command line and one that came from measured spectra
+    # are different claims.
+    if bool(args.donor) != bool(args.acceptor):
+        print("imp_bff_labelizer: --donor and --acceptor go together",
+              file=sys.stderr)
+        return 1
+    if args.donor:
+        # Both paths are Angstrom, which is what the pair layer, the
+        # accessible volumes and `fret_efficiency` all use. The direct path
+        # used to multiply by ten because `forster_radius` returned
+        # nanometres; it converts inside itself since 2026-08-25.
+        if args.dyes:
+            fret.forster_radius = bff.dye_pto_forster_radius(
+                str(args.dyes), args.donor, args.acceptor,
+                args.kappa2, args.refractive_index)
+            whence = str(args.dyes)
+        else:
+            fret.forster_radius = bff.forster_radius(
+                bff.find_dye(args.donor), bff.find_dye(args.acceptor),
+                args.kappa2, args.refractive_index)
+            whence = "the bundled dye library"
+        print("R0(%s -> %s) = %.1f A  [kappa2=%.3f, n=%.2f, from %s]"
+              % (args.donor, args.acceptor, fret.forster_radius,
+                 args.kappa2, args.refractive_index, whence))
+    fret.label_score_threshold = args.threshold
+    fret.n_refine = args.refine
+    pairs = []
+    if args.pairs:
+        label_scores = bff.ll_combined_by_key(scores)
+        if not label_scores:
+            print("imp_bff_labelizer: no position has a combined score, so "
+                  "there is nothing to pair", file=sys.stderr)
+        else:
+            pairs = list(bff.ll_pair_scores(str(args.src), label_scores, fret))
+            if args.max_pairs > 0:
+                pairs = pairs[:args.max_pairs]
+
+    out = args.out or args.src.with_suffix("").with_suffix(".mmfdb.pto")
+    settings = bff.ll_settings_json(model, options, fret, conservation)
+    bff.ll_write_pto(str(out), str(args.src), scores, pairs, settings)
+
+    scored = sum(1 for r in scores
+                 if r.score_type == "combined" and r.status == "scored")
+    print(f"{out}  {scored} sites scored, {len(pairs)} pairs, "
+          f"{out.stat().st_size} bytes")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

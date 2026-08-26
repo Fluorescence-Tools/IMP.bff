@@ -11,6 +11,8 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/DyeForceField.h>
 
+#include <IMP/showable_macros.h>
+
 #include <map>
 #include <string>
 #include <utility>
@@ -28,6 +30,9 @@ struct IMPBFFEXPORT Mol2Atom {
     double x, y, z;
 
     Mol2Atom() : serial(0), x(0), y(0), z(0) {}
+
+    IMP_SHOWABLE_INLINE(Mol2Atom, out << "Mol2Atom(" << serial << ", "
+                                      << atom_name << ")");
 };
 
 //! The atoms and bonds of a MOL2 file.

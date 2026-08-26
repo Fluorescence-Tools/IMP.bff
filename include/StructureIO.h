@@ -8,11 +8,10 @@
  * until PRD-113 stage 7, which is how "the fps reader" came to be the thing that
  * writes PDBs.
  *
- * The RMF door is **not** here. Writing RMF needs `IMP.rmf`, which is not one of
- * this module's `required_modules`, and widening the dependency graph for two
- * functions is the wrong trade; they are `%pythoncode` in
- * `pyext/IMP_bff.structureio.i` with a lazy `import RMF`, the same shape
- * `AVNetworkRestraintWrapper` has.
+ * RMF is **not** here: it is in #IMP::bff::RmfIO.h, beside the rotamer-library
+ * pair that shares its file format. `rmf` is one of this module's
+ * `required_modules`, so those readers and writers are C++ like these; they
+ * were `%pythoncode` behind a lazy `import RMF` until 2026-08-26.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -22,6 +21,9 @@
 #define IMPBFF_STRUCTUREIO_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/ZMatrix.h>
+
+#include <IMP/atom/bond_decorators.h>
 #include <IMP/bff/AVBuilder.h>
 
 #include <IMP/Model.h>
@@ -63,9 +65,18 @@ IMPBFFEXPORT std::vector<AtomBond> parse_conect_bonds(const std::string& path);
 //! Bonds from geometry, by a covalent-radius cutoff.
 /*! A guess, and that is why it is not the default: `CONECT` records are what a
     PDB says, and this is what a distance suggests.
-    \param[in] scale multiplies the sum of the two covalent radii */
+
+    The rule is #perceive_bonds': bonded when the separation is under
+    \f$r_i + r_j + \mathrm{tolerance}\f$ over \c covalent_radius. This used to
+    be a second table (Cordero radii) under a multiplicative rule, which agreed
+    with the first on every molecule in the tree but not on the cutoffs -- C-H
+    at 1.31 A against 1.49 A -- so a stretched bond was a bond or not depending
+    on which function was asked.
+
+    \param[in] tolerance added to the sum of the two covalent radii */
 IMPBFFEXPORT std::vector<AtomBond> infer_bonds(
-        const std::vector<PDBAtomRecord>& atoms, double scale = 1.22);
+        const std::vector<PDBAtomRecord>& atoms,
+        double tolerance = 0.35);
 
 //! Write a Tripos MOL2 file.
 /*! The library could **parse** MOL2 but not write one, and MOL2 is the format a
@@ -202,6 +213,60 @@ struct IMPBFFEXPORT AtomReference {
                             << residue_seq_number << ":" << atom_name << ")");
 };
 IMP_VALUES(AtomReference, AtomReferences);
+
+//! A PDB read into a model: the hierarchy, its leaves and their coordinates.
+class IMPBFFEXPORT LoadedStructure {
+    IMP::atom::Hierarchy hierarchy_;
+    IMP::ParticlesTemp leaves_;
+    std::vector<double> coords_;
+
+ public:
+    LoadedStructure() {}
+    LoadedStructure(IMP::atom::Hierarchy h, const IMP::ParticlesTemp& leaves,
+                    const std::vector<double>& coords)
+        : hierarchy_(h), leaves_(leaves), coords_(coords) {}
+
+    //! By value: IMP's value types may not be handed out by non-const ref.
+    IMP::atom::Hierarchy get_hierarchy() const { return hierarchy_; }
+    //! The leaf particles, in hierarchy order -- three coordinates each.
+    IMP::ParticlesTemp get_leaves() const { return leaves_; }
+    int get_number_of_leaves() const {
+        return static_cast<int>(leaves_.size());
+    }
+    //! `(n_leaves, 3)` in Angstrom.
+    void get_coords(double** output, int* n_output1, int* n_output2) const;
+};
+
+//! Read a PDB into \p model and return its hierarchy, leaves and coordinates.
+/*! The model is the caller's because it owns the particles: drop it and the
+    hierarchy decorates nothing. */
+IMPBFFEXPORT LoadedStructure load_structure_with_particles(
+        const std::string& path, IMP::Model* model);
+
+//! What a FlexFit block names: flexible residues and the bonds to add.
+class IMPBFFEXPORT FlexFitSelection {
+    IMP::ParticlesTemp residues_;
+    IMP::atom::Bonds bonds_;
+
+ public:
+    FlexFitSelection() {}
+    FlexFitSelection(const IMP::ParticlesTemp& residues,
+                     const IMP::atom::Bonds& bonds)
+        : residues_(residues), bonds_(bonds) {}
+
+    //! One particle per flexible residue, in the order the block lists them.
+    IMP::ParticlesTemp get_residues() const { return residues_; }
+    //! The bonds the block declares between named atoms, created in the model.
+    IMP::atom::Bonds get_bonds() const { return bonds_; }
+};
+
+//! Resolve one FlexFit block against a hierarchy.
+/*! \param[in] hier the structure the names resolve against
+    \param[in] flexfit_json one FlexFit set as JSON -- the `"Flexible
+               residues"` and `"Bonds"` arrays of an angle file
+    \throw ValueException when the JSON does not parse or lacks those keys */
+IMPBFFEXPORT FlexFitSelection read_angle_file(IMP::atom::Hierarchy hier,
+                                              const std::string& flexfit_json);
 
 //! Resolve the flexible residues a flexfit file names.
 /*! \param[in] residues one entry per flexible residue; `atom_name` is ignored

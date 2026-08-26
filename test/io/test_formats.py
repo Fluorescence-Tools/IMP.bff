@@ -127,8 +127,10 @@ def test_write_rmf_is_self_contained(tmp_path):
     import RMF
     out = tmp_path / "m.rmf3"
     coords = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
-    fio.write_rmf(coords, out, model_name="probe",
-                  metadata={"origin": "test"})
+    # C++ now (`RmfIO.h`), so the path is a string and the metadata is the
+    # JSON the description is written from -- a caller with a dict dumps it.
+    fio.write_rmf(coords, str(out), model_name="probe",
+                  metadata_json=json.dumps({"origin": "test"}))
     fh = RMF.open_rmf_file_read_only(str(out))
     assert fh.get_number_of_frames() == 1
     assert "origin" in fh.get_description()

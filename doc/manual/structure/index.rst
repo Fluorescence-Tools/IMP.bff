@@ -16,5 +16,7 @@ Structural modeling
    _structure_surface_distance
    structure_distance_restraints
    structure_cgdye
+   structure_potentials
+   structure_label_sites
 
 |

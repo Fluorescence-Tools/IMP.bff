@@ -1,7 +1,7 @@
 """Tests for ``IMP.bff``'s labelling restraints — AV network and direct.
 
 Both restraints, their measurements and their sites are C++ values
-(``include/IMP/bff/LabelingRestraints.h``); this exercises them from the
+(``include/IMP/bff/ProbeRestraints.h``); this exercises them from the
 Python surface SWIG gives them.
 """
 
@@ -12,10 +12,10 @@ import pytest
 
 from IMP.bff import AccessibleVolume
 from IMP.bff import (
-    SimpleAVNetworkRestraint,
+    SimpleProbeNetworkRestraint,
     AVMeasurement,
-    DirectLabelingRestraint,
-    LabelingSite,
+    DirectProbeRestraint,
+    ProbeSite,
 )
 
 
@@ -33,7 +33,7 @@ class TestAVMeasurement:
         assert m.distance_type == "RDAMean"
 
 
-class TestSimpleAVNetworkRestraint:
+class TestSimpleProbeNetworkRestraint:
     """Programmatic AV network restraint."""
 
     @pytest.fixture
@@ -54,13 +54,13 @@ class TestSimpleAVNetworkRestraint:
             error_neg=error, error_pos=error, distance_type="Rmp"))
 
     def test_create_empty(self):
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         assert r.evaluate() == 0.0
         assert r.get_n_avs() == 0
 
     def test_add_av(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("donor", av1)
         r.add_av("acceptor", av2)
         assert r.has_av("donor") and r.has_av("acceptor")
@@ -68,14 +68,14 @@ class TestSimpleAVNetworkRestraint:
 
     def test_evaluate_no_measurements(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         assert r.evaluate() == 0.0
 
     def test_evaluate_one_measurement(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         self._rmp(r)
@@ -85,7 +85,7 @@ class TestSimpleAVNetworkRestraint:
 
     def test_weight(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         self._rmp(r)
@@ -96,7 +96,7 @@ class TestSimpleAVNetworkRestraint:
 
     def test_get_model_distances(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         self._rmp(r)
@@ -106,7 +106,7 @@ class TestSimpleAVNetworkRestraint:
 
     def test_multiple_measurements(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         self._rmp(r, distance=50.0, error=3.0)
@@ -116,7 +116,7 @@ class TestSimpleAVNetworkRestraint:
 
     def test_an_unregistered_volume_is_an_error(self, two_avs):
         av1, _ = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         self._rmp(r)
         with pytest.raises(ValueError):
@@ -124,7 +124,7 @@ class TestSimpleAVNetworkRestraint:
 
     def test_an_unknown_distance_type_is_an_error(self, two_avs):
         av1, av2 = two_avs
-        r = SimpleAVNetworkRestraint()
+        r = SimpleProbeNetworkRestraint()
         r.add_av("d", av1)
         r.add_av("a", av2)
         r.add_measurement(AVMeasurement(
@@ -135,16 +135,16 @@ class TestSimpleAVNetworkRestraint:
 
 
 class TestLabelingSite:
-    """LabelingSite, a value."""
+    """ProbeSite, a value."""
 
     def test_defaults(self):
-        s = LabelingSite(residue_seq_number=5)
+        s = ProbeSite(residue_seq_number=5)
         assert s.residue_seq_number == 5
         assert s.atom_name == "CB"
         assert s.distance == 0.0
 
 
-class TestDirectLabelingRestraint:
+class TestDirectProbeRestraint:
     """Fast direct-labeling restraint."""
 
     #: A restraint with no coordinates. The array is `(0, 3)` rather than
@@ -153,31 +153,31 @@ class TestDirectLabelingRestraint:
     NO_COORDS = np.zeros((0, 3))
 
     def test_create_empty(self):
-        r = DirectLabelingRestraint(self.NO_COORDS)
+        r = DirectProbeRestraint(self.NO_COORDS)
         assert r.evaluate() == 0.0
 
     def test_no_xyz(self):
-        r = DirectLabelingRestraint(self.NO_COORDS)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=50.0))
-        r.add_site(LabelingSite(residue_seq_number=1, distance=50.0))
+        r = DirectProbeRestraint(self.NO_COORDS)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=50.0))
+        r.add_site(ProbeSite(residue_seq_number=1, distance=50.0))
         assert r.evaluate() == 0.0
 
     def test_two_sites(self):
         xyz = np.array([[0., 0., 0.], [30., 0., 0.]], dtype=np.float64)
-        r = DirectLabelingRestraint(xyz)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=30.0,
+        r = DirectProbeRestraint(xyz)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=30.0,
                                 error_neg=3.0, error_pos=3.0))
-        r.add_site(LabelingSite(residue_seq_number=1, distance=30.0,
+        r.add_site(ProbeSite(residue_seq_number=1, distance=30.0,
                                 error_neg=3.0, error_pos=3.0))
         # perfect fit → chi2 = 0
         assert r.evaluate() == pytest.approx(0.0, abs=1e-10)
 
     def test_two_sites_mismatch(self):
         xyz = np.array([[0., 0., 0.], [30., 0., 0.]], dtype=np.float64)
-        r = DirectLabelingRestraint(xyz)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=35.0,
+        r = DirectProbeRestraint(xyz)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=35.0,
                                 error_neg=3.0, error_pos=3.0))
-        r.add_site(LabelingSite(residue_seq_number=1, distance=35.0,
+        r.add_site(ProbeSite(residue_seq_number=1, distance=35.0,
                                 error_neg=3.0, error_pos=3.0))
         # |30 - 35| = 5, / 3 → (5/3)^2 ≈ 2.78
         expected = (5.0 / 3.0) ** 2
@@ -187,12 +187,12 @@ class TestDirectLabelingRestraint:
         xyz = np.array([[0., 0., 0.],
                         [10., 0., 0.],
                         [20., 0., 0.]], dtype=np.float64)
-        r = DirectLabelingRestraint(xyz)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=10.0,
+        r = DirectProbeRestraint(xyz)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=10.0,
                                 error_neg=1.0, error_pos=1.0))
-        r.add_site(LabelingSite(residue_seq_number=1, distance=10.0,
+        r.add_site(ProbeSite(residue_seq_number=1, distance=10.0,
                                 error_neg=1.0, error_pos=1.0))
-        r.add_site(LabelingSite(residue_seq_number=2, distance=20.0,
+        r.add_site(ProbeSite(residue_seq_number=2, distance=20.0,
                                 error_neg=1.0, error_pos=1.0))
         # Sites 0-1: |10-10|=0 → 0
         # Sites 0-2: |20-20|=0 → 0
@@ -201,19 +201,19 @@ class TestDirectLabelingRestraint:
 
     def test_weight(self):
         xyz = np.array([[0., 0., 0.], [30., 0., 0.]], dtype=np.float64)
-        r = DirectLabelingRestraint(xyz, weight=2.0)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=25.0,
+        r = DirectProbeRestraint(xyz, weight=2.0)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=25.0,
                                 error_neg=5.0, error_pos=5.0))
-        r.add_site(LabelingSite(residue_seq_number=1, distance=25.0,
+        r.add_site(ProbeSite(residue_seq_number=1, distance=25.0,
                                 error_neg=5.0, error_pos=5.0))
         expected = 2.0 * (5.0 / 5.0) ** 2
         assert r.evaluate() == pytest.approx(expected, rel=1e-9)
 
     def test_a_site_outside_the_coordinates_is_an_error(self):
         xyz = np.array([[0., 0., 0.], [30., 0., 0.]], dtype=np.float64)
-        r = DirectLabelingRestraint(xyz)
-        r.add_site(LabelingSite(residue_seq_number=0, distance=30.0))
-        r.add_site(LabelingSite(residue_seq_number=7, distance=30.0))
+        r = DirectProbeRestraint(xyz)
+        r.add_site(ProbeSite(residue_seq_number=0, distance=30.0))
+        r.add_site(ProbeSite(residue_seq_number=7, distance=30.0))
         with pytest.raises(ValueError):
             r.evaluate()
 

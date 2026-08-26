@@ -1,7 +1,21 @@
+import json
 import os
 import tempfile
 import unittest
-from IMP.bff import read_dye_forcefield_cif, write_dye_forcefield_cif
+from IMP.bff import (forcefield_system_from_json, read_forcefield_cif,
+                     write_dye_forcefield_cif)
+
+
+def as_forcefield_system(system):
+    """A dict-literal system as the typed value the library takes.
+
+    The library takes systems, not dicts: `IMP.bff.as_forcefield_system` was a
+    `%pythoncode` def and is gone. A test that writes its system out as a dict
+    literal converts its own, which is one `json.dumps` away.
+    """
+    return (forcefield_system_from_json(json.dumps(system))
+            if isinstance(system, dict) else system)
+
 
 class TestIO(unittest.TestCase):
     def test_read_write_ff_system(self):
@@ -43,10 +57,10 @@ class TestIO(unittest.TestCase):
             # The C++ writer does not read the component MOL2/PDB files (the
             # reader tolerates a missing _atom_site), so a system naming a
             # nonexistent mol2 round-trips its topology unchanged.
-            write_dye_forcefield_cif(cif_path, system)
+            write_dye_forcefield_cif(cif_path, as_forcefield_system(system))
             self.assertTrue(os.path.exists(cif_path))
 
-            read_system = read_dye_forcefield_cif(cif_path)
+            read_system = read_forcefield_cif(cif_path)
             self.assertEqual(read_system.name, system["name"])
             self.assertEqual(len(read_system.sites), len(system["sites"]))
             self.assertEqual(read_system.sampling.n_steps,

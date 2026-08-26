@@ -8,8 +8,8 @@ import IMP.core
 from pathlib import Path
 
 from IMP.bff import read_rotamer_library_rmf
-from IMP.bff import apply_rotamer_coordinates, sample_rotamer_index
-from IMP.bff import LinkerSampler
+from IMP.bff import apply_coordinates, sample_weighted_index
+from IMP.bff import linker_geometry_from_mol2, sample_linker
 from IMP.bff import get_template_dir, get_structure_dir
 
 ROTAMER_LIB_DIR = Path(get_template_dir("rotamer"))
@@ -26,19 +26,20 @@ def get_all_dyes():
 def test_rotamer_sampling_all_dyes(dye_name):
     """Test that every rotamer library can be loaded and sampled."""
     lib_path = os.path.join(ROTAMER_LIB_DIR, f"{dye_name}.rmf3")
+    # An `IMP.bff.RotamerLibrary` -- the same value every other reader
+    # returns. This one used to hand back a dict, because it was Python.
     lib = read_rotamer_library_rmf(lib_path)
-    
-    assert "coords" in lib
-    assert "weight" in lib or "weights" in lib # read_rotamer_library_rmf returns 'weight'
-    weights = lib.get("weight") or lib.get("weights")
+
+    weights = lib.weights
     assert len(weights) > 0
-    assert len(lib["coords"]) == len(weights)
-    
+    assert lib.coords.shape == (lib.n_rotamers, lib.n_atoms, 3)
+    assert len(weights) == lib.n_rotamers
+
     # Test minimal sampling
     rng = random.Random(42)
-    idx = sample_rotamer_index(weights, seed=rng.randint(0, 2**31 - 1))
-    coords = lib["coords"][idx + 1]
-    assert coords.shape[0] == len(lib["atom_names"])
+    idx = sample_weighted_index(weights, seed=rng.randint(0, 2**31 - 1))
+    coords = lib.coords[idx]
+    assert coords.shape[0] == len(lib.atom_names)
 
 @pytest.mark.parametrize("dye_mol2", [
     "alexa488_r48.mol2",
@@ -46,21 +47,18 @@ def test_rotamer_sampling_all_dyes(dye_name):
     "cx4.mol2"
 ])
 def test_linker_sampling_available_mol2(dye_mol2):
-    """LinkerSampler (Metropolis over linker torsions) runs for available MOL2 files."""
+    """Metropolis sampling over the linker runs for every bundled MOL2."""
     mol2_path = os.path.join(STRUCTURES_DIR, dye_mol2)
-    sampler = LinkerSampler(mol2_path)
-    
-    # Verify internal DOFs are found
-    assert len(sampler.rot_bonds) > 0 or len(sampler.rot_angles) > 0
-    
-    # Test minimal sampling (10 steps)
-    n_steps = 10
-    write_every = 2
-    frames = sampler.sample(n_steps=n_steps, write_every=write_every, seed=42)
-    
-    # 10 / 2 = 5 frames
-    assert frames.shape[0] == 5
-    assert frames.shape[1] == len(sampler.atoms)
+    geometry = linker_geometry_from_mol2(mol2_path)
+
+    # the molecule has something that turns
+    assert (geometry.get_number_of_torsions() > 0
+            or geometry.get_number_of_angles() > 0)
+
+    result = sample_linker(mol2_path, n_steps=10, write_every=2, seed=42)
+    assert result.n_frames == 5                       # 10 / 2
+    assert result.coordinates.shape == (5, result.n_atoms, 3)
+    assert 0.0 <= result.acceptance <= 1.0
 
 
 # IMP runs every .py under test/ as a standalone script, and a file of bare

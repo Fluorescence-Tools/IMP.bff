@@ -10,15 +10,86 @@
 %include "std_list.i";
 %include attribute.i
 
+// Member variables of class type come back **by value**.
+//
+// Without this SWIG hands out a pointer *into* the owning object, and a
+// caller who does not keep that object alive reads freed memory:
+//
+//     IMP.bff.read_forcefield_cif(path).components.values()
+//
+// -- the system is a temporary, it dies as the expression unwinds, and the
+// map proxy that outlives it returns a path of zero bytes on a good day and
+// segfaults on a bad one. A copy costs a copy; this is metadata, and the
+// arrays that are worth not copying are numpy views (`%attribute_np`) which
+// are unaffected.
+%naturalvar;
+
+// A `const T&` return is a **borrowed** view of the owner's insides, and SWIG
+// hands it to Python as a proxy that does not keep the owner alive:
+//
+//     IMP.bff.read_forcefield_cif(path).components.values()
+//
+// -- the system dies as the expression unwinds and the map proxy is left
+// pointing at freed memory, which returns a string of zero bytes on a good
+// day and segfaults on a bad one. The accessors cannot return by value: they
+// are called inside C++ loops (`Scoring.cpp` walks `get_bonds()` per
+// iteration), and a copy per iteration is quadratic.
+//
+// So the copy is made **at the boundary**, where the cost is one copy per
+// Python access and the lifetime becomes Python's.
+// The local typedef is not decoration: `SWIG_NewPointerObj` is a C macro, and
+// a template argument list carrying a comma would be read as two arguments of
+// it. `%arg()` does the same for the commas in the invocations below.
+%define %owned_container_out(Type...)
+%typemap(out) const Type& {
+    typedef Type bff_owned_result_t;
+    $result = SWIG_NewPointerObj(new bff_owned_result_t(*$1),
+                                 $descriptor(Type*), SWIG_POINTER_OWN);
+}
+%enddef
+
+// Not `std::vector<std::string>`, `<double>` or `<int>`: those already come
+// back converted -- a Python list, a numpy array -- which is a copy, so they
+// were never borrowed. Claiming them here replaces that conversion with a raw
+// proxy, and a caller comparing a result to a tuple stops recognising it.
+%owned_container_out(%arg(std::map<std::string, double>))
+%owned_container_out(%arg(std::map<std::string, std::string>))
+%owned_container_out(%arg(std::map<std::string, std::vector<std::string> >))
+
+// ...and the ones whose element is a value of this module's own. The list is
+// every `const container&` a `DyeForceFieldSystem` accessor returns; a type
+// left off it is not wrong, only still borrowed.
+%owned_container_out(%arg(std::map<std::string, IMP::bff::FFComponent>))
+%owned_container_out(%arg(std::map<std::string, IMP::bff::FFLJType>))
+%owned_container_out(%arg(std::map<std::string, IMP::bff::FFTorsionType>))
+%owned_container_out(std::vector<IMP::bff::FFSite>)
+%owned_container_out(std::vector<IMP::bff::FFBond>)
+%owned_container_out(std::vector<IMP::bff::FFAngle>)
+%owned_container_out(std::vector<IMP::bff::FFTorsion>)
+%owned_container_out(std::vector<IMP::bff::FFProbe>)
+
 // Pairs
 %template(PairFloatFloat) std::pair<float,float>;
 
-// Vectors
-%template(VectorString) std::vector<std::string>;
-%template(VectorDouble) std::vector<double>;
-%template(VectorFloat) std::vector<float>;
-%template(VectorInt) std::vector<int>;
+// Vectors.
+//
+// `std::vector` of `std::string`, `double`, `float` and `int` are **not**
+// instantiated here, and cannot be: SWIG wraps a type once across a module and
+// the modules it imports, and this one imports `rmf` (RmfIO.h), which brings
+// `isd`, which brings `saxs` -- whose `%template(DistBase) std::vector<double>`
+// is declared first. A `%template(VectorDouble)` here is silently skipped, so
+// naming one would promise a class that never appears. `IMP.saxs.DistBase` is
+// `std::vector<double>`, `RMF.Strings` is `std::vector<std::string>`.
+//
+// Nothing in this module's surface needs the *class*: a list or a numpy array
+// converts either way, and the two functions that used to make a caller build
+// one -- `diffusion_propagate` and `wobbling_kappa2_distribution` -- return
+// numpy views and a #IMP::bff::Kappa2Distribution instead.
 %template(VectorLong) std::vector<long>;
+// One entry per dye, for the multi-dye mean field: a list of numpy arrays on
+// the Python side, a vector of flat vectors here.
+%template(VectorVectorDouble) std::vector<std::vector<double> >;
+%template(VectorVectorString) std::vector<std::vector<std::string> >;
 
 %define %attribute_np(Class, Type, Name, GetMethod, SetMethod...)
     %extend Class {
@@ -35,6 +106,74 @@
         {
             Name = property(
                     lambda x: np.array(x.GetMethod())
+            )
+        }
+    #endif
+    }
+%enddef
+
+// The same, for a getter that returns a flat view of a `(n, cols)` table:
+// the reshape is the one thing a numpy caller cannot be left to guess, and
+// doing it here means it is written once rather than in every wrapper (the
+// C++ side keeps the flat view, which is what its own callers want).
+// The same for a `(rows, -1, cols)` cube, where `rows` is another attribute
+// of the object: a per-conformer atom set is `(n_rotamers, n_atoms, 3)` and
+// neither trailing dimension can be inferred from the flat length alone.
+// The same where the column count is another attribute of the object rather
+// than a literal: a pair matrix is `(n1, n2)` and both come from the value.
+// `reshape(-1, cols)` and not `reshape(rows, cols)`, so an array a run left
+// empty -- `k_fret` without a lifetime -- still answers with its own shape.
+%define %attribute_np2v(Class, Type, Name, GetMethod, ColsAttribute)
+    %extend Class {
+        %pythoncode
+        {
+            Name = property(
+                    lambda x: np.asarray(x.GetMethod()).reshape(
+                            -1, x.ColsAttribute)
+            )
+        }
+    }
+%enddef
+
+%define %attribute_np3(Class, Type, Name, GetMethod, RowsAttribute, Cols,
+                       SetMethod...)
+    %extend Class {
+    #if #SetMethod != ""
+        %pythoncode
+        {
+            Name = property(
+                    lambda x: np.asarray(x.GetMethod()).reshape(
+                            x.RowsAttribute, -1, Cols),
+                    SetMethod
+            )
+        }
+    #else
+        %pythoncode
+        {
+            Name = property(
+                    lambda x: np.asarray(x.GetMethod()).reshape(
+                            x.RowsAttribute, -1, Cols)
+            )
+        }
+    #endif
+    }
+%enddef
+
+%define %attribute_np2(Class, Type, Name, GetMethod, Cols, SetMethod...)
+    %extend Class {
+    #if #SetMethod != ""
+        %pythoncode
+        {
+            Name = property(
+                    lambda x: np.asarray(x.GetMethod()).reshape(-1, Cols),
+                    SetMethod
+            )
+        }
+    #else
+        %pythoncode
+        {
+            Name = property(
+                    lambda x: np.asarray(x.GetMethod()).reshape(-1, Cols)
             )
         }
     #endif
@@ -153,6 +292,79 @@
 // `freearg` frees ones it no longer declares, so it has to go with it.
 %typemap(freearg) const std::vector<double>& {}
 
+/*---------------------------------------------------------------------------*
+ * The same, one level up: a *sequence of* arrays into
+ * `const std::vector<std::vector<double> >&`.
+ *
+ * The multi-dye mean field takes one flat coordinate block per dye, so a
+ * caller writes `[rot_1, rot_2]` with each entry an `(n_conf, n_atoms, 3)`
+ * array. SWIG's own nested conversion walks the outer sequence and then asks
+ * its traits to turn each element into a `std::vector<double>` -- and those
+ * traits only know sequences, so a 3-D ndarray arrives as a sequence of 2-D
+ * ndarrays and the conversion fails with a type error naming the whole nested
+ * type. Flattening at the call site would work and is what the Python version
+ * did; doing it here means the C++ signature says what it means and the
+ * caller still passes the arrays it has.
+ *---------------------------------------------------------------------------*/
+%typemap(in, fragment="NumPy_Macros")
+        const std::vector<std::vector<double> >&
+                (std::vector<std::vector<double> > imp_bff_outer) {
+    PyObject* imp_bff_seq = PySequence_Fast(
+            $input, "expected a sequence of arrays");
+    if (imp_bff_seq == NULL) {
+        SWIG_exception_fail(
+            SWIG_TypeError,
+            "in method '$defname', argument $argnum of type '$1_type'");
+    }
+    const Py_ssize_t imp_bff_len = PySequence_Fast_GET_SIZE(imp_bff_seq);
+    imp_bff_outer.resize((std::size_t) imp_bff_len);
+    for (Py_ssize_t imp_bff_i = 0; imp_bff_i < imp_bff_len; ++imp_bff_i) {
+        PyObject* imp_bff_item =
+                PySequence_Fast_GET_ITEM(imp_bff_seq, imp_bff_i);
+        PyArrayObject* imp_bff_arr = (PyArrayObject*) PyArray_FROMANY(
+                imp_bff_item, NPY_DOUBLE, 0, 0,
+                NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_FORCECAST |
+                        NPY_ARRAY_ENSUREARRAY);
+        if (imp_bff_arr == NULL) {
+            Py_DECREF(imp_bff_seq);
+            SWIG_exception_fail(
+                SWIG_ValueError,
+                "in method '$defname', argument $argnum of type '$1_type'");
+        }
+        const npy_intp imp_bff_n = PyArray_SIZE(imp_bff_arr);
+        const double* imp_bff_src = (const double*) PyArray_DATA(imp_bff_arr);
+        imp_bff_outer[(std::size_t) imp_bff_i].assign(imp_bff_src,
+                                                      imp_bff_src + imp_bff_n);
+        Py_DECREF(imp_bff_arr);
+    }
+    Py_DECREF(imp_bff_seq);
+    $1 = &imp_bff_outer;
+}
+
+%typemap(freearg) const std::vector<std::vector<double> >& {}
+
+// ... and back out again as a list of numpy arrays, which is what a caller
+// that passed arrays in expects to get. Without this SWIG returns a tuple of
+// tuples of floats and every consumer starts with `np.asarray`.
+%typemap(out, fragment="NumPy_Macros") std::vector<std::vector<double> > {
+    $result = PyList_New((Py_ssize_t) $1.size());
+    if ($result == NULL) SWIG_fail;
+    for (std::size_t imp_bff_i = 0; imp_bff_i < $1.size(); ++imp_bff_i) {
+        npy_intp imp_bff_dim = (npy_intp) $1[imp_bff_i].size();
+        PyObject* imp_bff_arr = PyArray_SimpleNew(1, &imp_bff_dim, NPY_DOUBLE);
+        if (imp_bff_arr == NULL) {
+            Py_DECREF($result);
+            SWIG_fail;
+        }
+        if (imp_bff_dim > 0) {
+            std::memcpy(PyArray_DATA((PyArrayObject*) imp_bff_arr),
+                        &$1[imp_bff_i][0],
+                        (std::size_t) imp_bff_dim * sizeof(double));
+        }
+        PyList_SET_ITEM($result, (Py_ssize_t) imp_bff_i, imp_bff_arr);
+    }
+}
+
 // The int sibling: an occupancy/field grid `std::vector<int>`. Anything
 // array-like is converted through `PyArray_FromAny` to a flat C-contiguous
 // int32 copy, mirroring what the Python wrappers' `astype(int32)` did -- so a
@@ -249,6 +461,7 @@
 %apply(double* IN_ARRAY1, int DIM1) {(double* rate_map, int n_rate_map)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* coords, int n_coords)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* rotamer_coords, int n_rotamer_coords)}
+%apply(double* IN_ARRAY1, int DIM1) {(double* rotamer_weights, int n_rotamer_weights)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* protein_coords, int n_protein_coords)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* rmin_ij, int n_rmin_ij)}
 %apply(double* IN_ARRAY1, int DIM1) {(double* eps_ij, int n_eps_ij)}

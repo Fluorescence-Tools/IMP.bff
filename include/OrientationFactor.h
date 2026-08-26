@@ -21,6 +21,9 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/showable_macros.h>
+#include <IMP/value_macros.h>
+
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -46,6 +49,34 @@ IMPBFFEXPORT std::vector<double> dipole_kappa_distance(
         const std::vector<double>& d1, const std::vector<double>& d2,
         const std::vector<double>& a1, const std::vector<double>& a2);
 
+//! A \f$\kappa^2\f$ distribution: every value, and a histogram over them.
+/*! The three arrays the two `wobbling_kappa2_distribution` functions produce.
+    They used to be a return *and* two `std::vector<double>&` out-parameters,
+    which meant a Python caller had to build a wrapped vector to pass in -- and
+    the class to build one of is not this module's to give: `std::vector<double>`
+    is wrapped by `IMP.saxs` (see `IMP_bff.types.i`). Three numpy views on a
+    value is what the rest of this module does. */
+struct IMPBFFEXPORT Kappa2Distribution {
+    //! Every computed \f$\kappa^2\f$: one per sample, or row-major over the
+    //! swept grid.
+    std::vector<double> values;
+    //! The `n_bins` histogram bin *edges*.
+    std::vector<double> scale;
+    //! The histogram: one fewer than #scale, weighted where the sweep weights.
+    std::vector<double> hist;
+
+    Kappa2Distribution() {}
+
+    void get_values(double** out_view, int* n_out_view) const;
+    void get_scale(double** out_view, int* n_out_view) const;
+    void get_hist(double** out_view, int* n_out_view) const;
+
+    IMP_SHOWABLE_INLINE(Kappa2Distribution,
+                        out << "Kappa2Distribution(" << values.size()
+                            << " values, " << hist.size() << " bins)");
+};
+IMP_VALUES(Kappa2Distribution, Kappa2Distributions);
+
 //! \f$p(\kappa^2)\f$ for a known angle between the dyes' symmetry axes.
 /*!
     Sweeps \f$\beta_1\f$ over \f$(0, \pi/2)\f$ and \f$\phi\f$ over
@@ -58,14 +89,12 @@ IMPBFFEXPORT std::vector<double> dipole_kappa_distance(
     \param[in] step angular step, degrees
     \param[in] n_bins histogram edges returned; the histogram has one fewer
     \param[in] k2_min,k2_max histogram range
-    \param[out] k2_scale the \p n_bins bin edges
-    \param[out] k2_hist the solid-angle-weighted histogram
-    \return every computed \f$\kappa^2\f$, row-major over (beta1, phi)
+    \return the values (row-major over (beta1, phi)), the bin edges and the
+            solid-angle-weighted histogram
 */
-IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution_delta(
+IMPBFFEXPORT Kappa2Distribution wobbling_kappa2_distribution_delta(
         double delta, double sD2, double sA2, double step,
-        int n_bins, double k2_min, double k2_max,
-        std::vector<double>& k2_scale, std::vector<double>& k2_hist);
+        int n_bins, double k2_min, double k2_max);
 
 //! \f$p(\kappa^2)\f$ over isotropically oriented dyes.
 /*!
@@ -81,14 +110,11 @@ IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution_delta(
     \param[in] k2_min,k2_max histogram range
     \param[in] n_samples orientation pairs to draw
     \param[in] seed for reproducibility
-    \param[out] k2_scale the \p n_bins bin edges
-    \param[out] k2_hist the histogram
-    \return every sampled \f$\kappa^2\f$
+    \return the sampled values, the bin edges and the histogram
 */
-IMPBFFEXPORT std::vector<double> wobbling_kappa2_distribution(
+IMPBFFEXPORT Kappa2Distribution wobbling_kappa2_distribution(
         double sD2, double sA2, int n_bins, double k2_min, double k2_max,
-        int n_samples, int seed,
-        std::vector<double>& k2_scale, std::vector<double>& k2_hist);
+        int n_samples, int seed);
 
 
 //! \f$p(\kappa^2)\f$ for **diffusion with traps**, given a measured efficiency.
