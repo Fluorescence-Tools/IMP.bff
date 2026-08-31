@@ -21,13 +21,16 @@
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/Transformation3D.h>
 #include <IMP/core/XYZ.h>
+#include <IMP/atom/Hierarchy.h>
 #include <IMP/log.h>
 
 
+#include <IMP/bff/AVDistance.h>
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/AVOccupancyMap.h>
 #include <IMP/bff/internal/AVLatticeState.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <cmath>
@@ -47,15 +50,6 @@
 IMPBFF_BEGIN_NAMESPACE
 
 
-/// Different types of distances between two accessible volumes
-typedef enum{
-    DYE_PAIR_DISTANCE_E,            /// Mean FRET averaged distance R_E
-    DYE_PAIR_DISTANCE_MEAN,         /// Mean distance <R_DA>
-    DYE_PAIR_DISTANCE_MP,           /// Distance between AV mean positions
-    DYE_PAIR_EFFICIENCY,            /// Mean FRET efficiency
-    DYE_PAIR_DISTANCE_DISTRIBUTION, /// Distance distribution
-    DYE_PAIR_XYZ_DISTANCE           /// Distance between XYZ of dye particles
-} DyePairMeasures;
 
 
 
@@ -75,7 +69,7 @@ public:
     double error_neg = -1;
     double error_pos = -1;
     double forster_radius = 52.0;
-    int distance_type = IMP::bff::DYE_PAIR_DISTANCE_MEAN;
+    int distance_type = IMP::bff::PROBE_PAIR_DISTANCE_MEAN;
     std::string position_1;
     std::string position_2;
 
@@ -226,7 +220,9 @@ public:
                                 double linker_length = 20.0,
                                 const algebra::Vector3D radii = algebra::Vector3D(3.5, 0, 0),
                                 double linker_width = 0.5,
-                                double allowed_sphere_radius = 1.5,
+                                //! Negative derives it; see
+                                //! get_effective_allowed_sphere_radius().
+                                double allowed_sphere_radius = -1.0,
                                 double contact_volume_thickness = 0.0,
                                 double contact_volume_trapped_fraction = -1,
                                 double simulation_grid_resolution = 1.5) {
@@ -304,6 +300,93 @@ public:
     IMP_DECORATOR_GET_SET(contact_volume_trapped_fraction, get_av_key(7), Float, Float);
     IMP_DECORATOR_GET_SET(simulation_grid_resolution, get_av_key(8), Float, Float);
 
+    //! The selection whose atoms are not obstacles for this volume.
+    /*! The fps.json `strip_mask` field. A labelling site's own side chain
+        walls in its probe, so the position's parameters -- the linker length
+        and above all the `allowed_sphere_radius` -- are calibrated against a
+        structure with it removed. An empty mask strips nothing.
+
+        The source atom is kept whatever the mask says: it is the anchor the
+        volume grows from, and removing it would let the cloud grow through
+        its own attachment point. */
+    //! Whether the volume weights its voxels by the linker's chain statistics.
+    /*! An accessible volume treats every reachable voxel as equally likely;
+        a real linker does not. `chain_weighting` turns on the correction --
+        #IMP::bff::linker_weighting() for this volume's linker length, applied
+        to every voxel by its path length. Off by default, so the number a
+        volume reports does not change unless it is asked for.
+
+        This is the fps.json `chain_weighting` field. */
+    static IntKey get_chain_weighting_key() {
+        static const IntKey k("chain_weighting");
+        return k;
+    }
+
+    bool get_chain_weighting() const {
+        return get_model()->get_has_attribute(get_chain_weighting_key(),
+                                              get_particle_index()) &&
+               get_model()->get_attribute(get_chain_weighting_key(),
+                                          get_particle_index()) != 0;
+    }
+
+    //! Turn chain weighting on or off; the volume is stale afterwards.
+    void set_chain_weighting(bool on) {
+        if (get_model()->get_has_attribute(get_chain_weighting_key(),
+                                           get_particle_index())) {
+            get_model()->set_attribute(get_chain_weighting_key(),
+                                       get_particle_index(), on ? 1 : 0);
+        } else {
+            get_model()->add_attribute(get_chain_weighting_key(),
+                                       get_particle_index(), on ? 1 : 0);
+        }
+        if (!on) {
+            if (av_map_) av_map_->set_linker_weighting(LinkerWeighting());
+            return;
+        }
+        const LinkerWeighting w = linker_weighting(get_linker_length());
+        const double reach = w.get_supported_fraction(get_linker_length());
+        // A table column fitted for a much longer tether puts none of its mass
+        // inside a dye linker's reach. Weighting by it then does not correct
+        // the volume, it selects the volume's outer shell -- so say so rather
+        // than let a 13 A shift in the mean position pass for a refinement.
+        if (reach < 0.01) {
+            IMP_WARN("chain_weighting: the tabulated weighting for a linker of "
+                     << get_linker_length() << " A carries only "
+                     << reach * 100.0
+                     << "% of its weight within that reach, so it selects the "
+                        "volume's outer shell rather than reweighting it. See "
+                        "okf/validation/chain_weighting.md."
+                     << std::endl);
+        }
+        if (av_map_) av_map_->set_linker_weighting(w);
+    }
+
+    static StringKey get_strip_mask_key() {
+        static const StringKey k("strip_mask");
+        return k;
+    }
+
+    std::string get_strip_mask() const {
+        return get_model()->get_has_attribute(get_strip_mask_key(),
+                                              get_particle_index())
+                       ? get_model()->get_attribute(get_strip_mask_key(),
+                                                    get_particle_index())
+                       : std::string();
+    }
+
+    void set_strip_mask(const std::string& mask) {
+        if (get_model()->get_has_attribute(get_strip_mask_key(),
+                                           get_particle_index())) {
+            get_model()->set_attribute(get_strip_mask_key(),
+                                       get_particle_index(), mask);
+        } else {
+            get_model()->add_attribute(get_strip_mask_key(),
+                                       get_particle_index(), mask);
+        }
+        // The obstacle set is built from it, so a new mask invalidates the map.
+        av_map_ = nullptr;
+    }
+
 
     /**
      * @brief Returns the radii of an object.
@@ -327,7 +410,8 @@ public:
      * `dyeDensityAV1(r)` -- it is `(1 + 1 + [r fits])/3`, measured here as 21625
      * voxels against AV1's 16370. bff writes AV1 as `(r, 0, 0)` and the fps
      * schema requires `radius2`/`radius3` to be positive for an `AV3` position
-     * (`io/fps.py:888`), so selecting the positive radii reproduces both
+     * (see #IMP::bff::fps_json_schema), so selecting the positive radii
+     * reproduces both
      * conventions: one radius gives the AV1 carve, three give the AV3 carve.
      */
     /**
@@ -360,6 +444,33 @@ public:
     //! compensation. Equal to get_linker_length() for the default stencil.
     double get_effective_linker_length() const {
         return get_linker_length() * get_stencil_length_compensation();
+    }
+
+    //! The source clearance the search actually uses.
+    /*!
+        A **negative** stored `allowed_sphere_radius` means *derive it*, and
+        deriving is the default because the value that works depends on two
+        other parameters. The path search inflates every obstacle by half the
+        linker width, so the free sphere around the attachment atom has to
+        clear that inflation plus a grid step of slack, or the source voxel is
+        walled in and the volume comes back **empty**.
+
+        This lived in `compute_av_from_structure()` only, so the two doors onto
+        the same volume disagreed: the fps.json door derived, the decorator
+        door (and `imp_bff av-export` behind it) took a flat 1.5 and returned
+        nothing at FPS's standard linker width of 4.5 Å. One place now.
+
+        The FPS mapping, for the record: FPS seeds its search from a sphere of
+        `LinkerInitialSphere * W` with `LinkerInitialSphere = 0.5`
+        (`av_routines.cpp:136`), i.e. exactly `W/2` — the same half-width, with
+        no grid slack because FPS's seed is unconditional rather than carved
+        out of an inflated obstacle map.
+     */
+    double get_effective_allowed_sphere_radius() const {
+        double r = get_allowed_sphere_radius();
+        if(r >= 0.0) return r;
+        return std::max(1.5, 0.5 * get_linker_width()
+                                     + 0.5 * get_simulation_grid_resolution());
     }
 
     //! Whether to correct a coarse stencil's volume bias. **Default false**:
@@ -401,14 +512,16 @@ public:
         get_particle()->set_is_optimized(get_av_key(7), tf);
     }
 
-    /**
-     * @brief Sets the AV parameter using a JSON object.
-     *
-     * This function takes a JSON object as input and sets the AV parameter accordingly.
-     *
-     * @param j The JSON object containing the AV parameter.
-     */
-    void set_av_parameter(const nlohmann::json &j);
+    //! Take this volume's parameters from one fps.json position object.
+    /*! \param[in] json_text the position, as JSON text -- the file's own
+                   bytes, which is what every other reader in this module
+                   takes. Reads `linker_length`, `radius1..3`, `linker_width`,
+                   `allowed_sphere_radius`, `contact_volume_thickness`,
+                   `contact_volume_trapped_fraction`,
+                   `simulation_grid_resolution` and `strip_mask`.
+        \throw ValueException when the text is not JSON, or the mask cannot be
+               read. */
+    void set_av_parameter(const std::string &json_text);
 
 
     //! Get the vector of derivatives accumulated by add_to_derivatives().
@@ -655,7 +768,7 @@ IMPBFFEXPORT double av_distance(
         const AV& a,
         const AV& b,
         double forster_radius = 52.0,
-        int distance_type = DYE_PAIR_DISTANCE_MEAN,
+        int distance_type = PROBE_PAIR_DISTANCE_MEAN,
         int n_samples = 10000
 );
 
@@ -672,11 +785,96 @@ IMPBFFEXPORT double av_distance(
  * < 0.005 A on the mean distance (MC with 50k samples: ~0.25 A range).
  * @param quad_k maximum number of representative points per cloud
  */
+//! The mean-position separation that would reproduce a measurement.
+/*!
+    The one call an experiment-to-restraint conversion needs: two volumes and
+    what was measured between them, in, and the \f$R_{mp}\f$ to restrain to,
+    out. It is #IMP::bff::rmp_from_model_distance() over the two volumes'
+    point clouds, with the measurement's own distance convention and Förster
+    radius, so a caller never has to unpack either.
+
+    \param[in] a,b the two volumes; they are resampled if they are stale
+    \param[in] measurement the experimental distance to reproduce
+    \param[in] accuracy stop when the model distance is this close, A
+    \param[in] n_samples,seed the fixed pair sample the root is found on
+    \return the \f$R_{mp}\f$ that reproduces `measurement.distance`
+    \throw ValueException when no separation reproduces it
+
+    \see IMP::bff::effective_distance() for the forward, parametric
+         approximation of the same relation.
+*/
+IMPBFFEXPORT double rmp_from_measurement(
+        const AV& a, const AV& b, const AVPairDistanceMeasurement& measurement,
+        double accuracy = 0.01, int n_samples = 50000, int seed = 0);
+
+//! The flat-bottom well a measurement asks for, in mean-position coordinates.
+/*!
+    The measurement's value and its asymmetric errors, each converted through
+    rmp_from_measurement(): what comes back is
+    \f$(R_{mp}^{lo}, R_{mp}^{target}, R_{mp}^{hi})\f$ -- the bounds of the
+    interval inside which a model is not penalised, and the centre.
+
+    The three are converted **separately** rather than the errors being carried
+    across unchanged, because the \f$R_{mp} \to \langle R_{DA}\rangle\f$
+    relation is not linear: an error bar that is symmetric in the measured
+    quantity is not symmetric in \f$R_{mp}\f$.
+
+    \param[in] a,b the two volumes
+    \param[in] measurement the experimental distance and its errors
+    \param[in] accuracy,n_samples,seed as rmp_from_measurement()
+    \return three values: low bound, target, high bound. A bound that no
+            separation reproduces is clamped to the reachable end rather than
+            throwing -- an error bar running past what the volumes allow is a
+            one-sided restraint, not an error.
+*/
+IMPBFFEXPORT std::vector<double> rmp_flat_bottom_bounds(
+        const AV& a, const AV& b, const AVPairDistanceMeasurement& measurement,
+        double accuracy = 0.01, int n_samples = 50000, int seed = 0);
+
+//! Write a volume to \p path; the format follows the file extension.
+/*!
+    The one call for getting a volume into a viewer.
+
+    | extension | what is written |
+    |---|---|
+    | `.xyz` | the point cloud, weight in a fifth column |
+    | `.pqr` | the point cloud, weight in the charge column |
+    | `.dx` | the density grid, as OpenDX |
+    | `.mrc`, `.map`, `.ccp4` | the density grid, through `IMP.em` |
+
+    \param[in] av the volume; it is resampled if it is stale
+    \param[in] path the output path, whose extension picks the format
+    \throw ValueException on an extension that is not one of the above
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_av(const AV& av, const std::string& path);
+
+//! Fraction of a volume's weight within \p radius of the selected atoms.
+/*!
+    How much of the volume touches something. \p selection is a
+    #IMP::bff::SelectionExpression in either dialect -- `"resi 50-60"` or
+    `"resid 50 to 60"` -- evaluated against \p hierarchy.
+
+    \param[in] av the volume
+    \param[in] hierarchy where the reference atoms are selected from
+    \param[in] selection the selection expression; empty selects every atom
+    \param[in] radius the contact radius, A. It has to clear the volume's own
+               exclusion: an accessible volume already excludes the structure's
+               van der Waals envelope inflated by the dye radius and half the
+               linker width, so **no point of it is within about 5 A of any
+               atom centre** and a smaller radius returns zero for everything.
+               8 A is a reasonable "touching" for a 3.5 A dye.
+    \return the weight fraction in [0, 1]
+*/
+IMPBFFEXPORT double av_overlap(
+        const AV& av, const IMP::atom::Hierarchy& hierarchy,
+        const std::string& selection = "", double radius = 3.5);
+
 IMPBFFEXPORT double av_distance_quadrature(
         const AV& a,
         const AV& b,
         double forster_radius = 52.0,
-        int distance_type = DYE_PAIR_DISTANCE_MEAN,
+        int distance_type = PROBE_PAIR_DISTANCE_MEAN,
         int quad_k = 50
 );
 

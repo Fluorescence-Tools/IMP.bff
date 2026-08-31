@@ -1,5 +1,255 @@
 # Update Log
 
+## 2026-08-31 (3) — the OpenMM run, rebuilt volumes, and pRDA as a distribution
+
+Follow-ups on the six, all from the user reading the previous entry.
+
+**A runnable OpenMM script, not just a document.** `write_openmm_script` writes
+a self-contained Python file -- the restraint table embedded, so the generated
+file is the whole input -- that loads the PDB, builds the system, adds the
+probes, their tethers and the flat-bottom wells, minimises and runs, then
+reports how many measured distances the run satisfied. `imp_bff openmm` does it
+from the command line. OpenMM does not have to be installed to write it, and the
+test parses the generated file with `ast` and checks its embedded table against
+the system it came from.
+
+**The volumes rebuild during a run.** `md_flat_bottom_restraints` derives every
+well from volumes computed once on the starting structure, and that
+approximation decays: as the fold moves, a volume's shape and its offset from
+its attachment change, and so does the R_mp that reproduces a measured
+<R_DA>. `AVRebuildOptimizerState` resamples every `period` steps and re-derives
+each well and each tether. On the T4L example the bounds move **up to 47 A**
+over 8000 steps, which is the size of the error being carried when they are
+held fixed.
+
+It makes the example's headline *worse* -- C2 goes 23 -> 31 of 33 rather than
+23 -> 33 -- and that is the point: a fixed well is a target derived from a
+structure the run has already left. The example says so.
+
+**`pRDA` answers as a distribution.** Refusing it as a scalar was half the fix;
+`cloud_distance_distribution` is the other half -- the weighted histogram of
+pair distances over caller-supplied bin edges, which is what a decay is a
+function of. Its mean agrees with the scalar mean-distance reduction to 0.002 A.
+
+**Two commands**: `imp_bff openmm` and `imp_bff av-export` (one volume, format
+from the extension).
+
+One design fix found by a test that should have passed and did not: the rebuild
+updated its **own copy** of the probe records, so `ProbeParticle::offset` went
+stale while the tether it described moved. Two sources of truth for one number.
+`offset` is gone; `MDRestraintSystem::get_tether_length(i)` reads the tether,
+which is where it lives.
+
+Also cleared, from the previous entry's audit: `pRDA` returning R_E, `Rmin`
+reaching the vocabulary but not `av_distance`, `write_av`'s `.dx` branch writing
+the obstacle raster rather than the volume, and the chain weighting reaching the
+point cloud but not the exported grid.
+
+Tests: `test/restraints/test_flat_bottom_md.py` 21 -> 29,
+`test/label/test_av_kernels_and_io.py` 23 -> 30.
+
+## 2026-08-31 (2) — the six things Olga had that this module did not
+
+A survey of Olga's tree (17 evaluators, `AV/`, `av2restraints`, `screen-nox`,
+`irmsd`) against this module found most of it covered or bettered here --
+screening, the selection language, AV1/AV3, ACV (richer than their `freeSize`),
+distance distributions, RMSD. Six gaps were real. All six are closed.
+
+**1. FRET restraints an MD engine can integrate.** `AVMeanDistanceRestraint`
+scores a chi-squared: it pulls at every separation and never stops, which is a
+scoring function, not a potential. `AVFlatBottomRestraint` is AMBER's `&rst`
+well -- zero inside the error bars, harmonic outside, **linear** past that so
+the force is capped and a badly-placed start cannot blow up the first step.
+`md_flat_bottom_restraints` builds the whole system from an fps.json: volumes,
+bounds, one probe particle per position tethered to its site, one well per pair.
+`tether_atom` moves the probe to another atom of the same residue, which a
+C-alpha-only run needs.
+
+The bug that would have been silent: the probes were created with mass and
+coordinates and **not marked optimizable**, so every well pushed on something
+that could not move and MD reported no error and no motion. The test now asserts
+`get_coordinates_are_optimized()` per probe.
+
+`examples/labels/plot_fret_restrained_md.py` drives T4 lysozyme through both
+measured states. The crystal satisfies 18 of the 33 C1 distances and 23 of the
+33 C2 ones; restrained MD under C2 reaches **33/33**, and after switching the
+restraints to C1, **33/33** again. Two things had to be right for that: the
+elastic network is re-anchored on the C2 conformer before the C1 phase (left on
+the crystal it is a memory of where the run started, and C1 stalls at 29/33),
+and f_max/tether have to out-pull the network -- too soft and the data is
+decoration, too stiff and the force field is.
+
+The export target is **OpenMM**, not AMBER (user, 2026-08-31), and IMP turns out
+to have no MD bridge at all to hang it on: `IMP.modeller` is its only
+external-package interface, Modeller is not an MD engine, and the only
+`openmm` strings in the whole IMP tree are the two files this added.
+`write_openmm_restraints` therefore writes a document -- probes, tethers, one
+flat-bottom bond per pair -- in nm and kJ/mol, and
+`openmm_flat_bottom_energy()` is the well as a `CustomBondForce` expression.
+
+One string, used by both sides, and **checkable without OpenMM installed**:
+its `select` and `step` are two lines of Python and `^` is `**`, so a test
+evaluates the exported expression and compares it against the C++ restraint
+over 5-120 A through both walls and both linear tails. They agree to
+**2e-13 kJ/mol**, conversion included. That test is the thing that keeps the
+two from drifting.
+
+Attachment atoms are exported **by chain, residue and atom name**, never by
+index: an index depends on how the reader built its topology -- hydrogens,
+waters, altlocs -- and a spec that names atoms by position in someone else's
+file silently restrains the wrong ones.
+
+**2. `rmp_from_model_distance`.** The inverse of the model distance in the
+separation of two clouds, which is the number that turns a measurement into a
+two-point restraint. The pairs are sampled **once** and then translated, so the
+function being bisected is smooth -- resampling per iteration would put
+1/sqrt(n) noise on a root being found to 0.01 A. Bracket then bisect, which is
+stricter than the reference's fixed-point step (it assumes dR_model/dR_mp = 1
+and stops when it stops improving). A target no separation reproduces raises
+rather than returning a restraint that pulls forever.
+`rmp_flat_bottom_bounds` converts a value and both error bars, each separately,
+because the relation is not linear and a symmetric error bar in the measured
+quantity is not symmetric in R_mp.
+
+**3. `chain_weighting` was declared and never read.** A schema field,
+documented, with no AV attribute and one grep hit in the tree: a file asking for
+it got the unweighted volume and no complaint. Implemented as a `LinkerWeighting`
+folded into `density_soa_` once per raster, so every reader sees it. **And the
+shipped table does not cover a dye linker** -- 0.02 % of its weight lies within
+20.5 A, so it selects the volume's rim and moves the mean position 13.7 A. The
+code measures that and warns.
+[`chain_weighting.md`](validation/chain_weighting.md).
+
+Three defects in the above came out of auditing the paths the first round of
+tests did not reach, all of them silent:
+
+* **`pRDA` returned a number.** `cloud_model_distance` with the distribution
+  type fell through to the efficiency branch and returned R_E -- a value that
+  looks like an answer and is a different quantity. It throws now, naming
+  `av_distance_distribution`.
+* **`Rmin` reached the vocabulary but not the distances.** An fps.json could
+  declare it and `av_distance`/`av_distance_quadrature` would silently give the
+  mean distance. Both know it now, exactly and without a quadrature, since a
+  coarsened cloud gives a *wrong* minimum rather than a cheaper one. Inverting
+  it is refused: a minimum from a sample is biased high.
+* **`write_av`'s `.dx` branch wrote the obstacle raster.** `PathMap` derives
+  from `em::SampledDensityMap` and its `get_value` is the map it was *built
+  from*, not the accessible volume. Every OpenDX file this module wrote for an
+  AV was the wrong map. It reads `PM_TILE_ACCESSIBLE_DENSITY` now, the same
+  feature `write_map_feature` and `AVBuilder` use.
+
+And the chain weighting was landing on the point cloud but not on the tile-based
+grid, because a fold guarded by an "applied" flag cannot be sequenced reliably
+against a multi-stage resample that copies tiles once. It is a multiply at the
+point of read now (`PathMap::path_weight`), which has no state to desynchronise.
+Details in [`chain_weighting.md`](validation/chain_weighting.md).
+
+**4. `minimum_distance`.** Closest approach of two clouds -- a bound where every
+other type here is an average, and `Rmin` joins the fps.json vocabulary. Exact,
+not sampled: a minimum estimated from a sample is biased high. Zero-weight
+points are skipped, which matters since radius-zero masking leaves them in.
+
+**5. Export formats.** `write_av(av, path)`, format from the extension: `.xyz`,
+`.pqr`, `.dx` (OpenDX), `.mrc`/`.map`/`.ccp4`. Two overloads, for the decorator
+and for the value `compute_av` returns.
+
+**6. `av_overlap`.** How much of a volume touches a selection, in either
+dialect. Its documentation now carries the thing that cost a test: a volume
+already excludes the van der Waals envelope inflated by the dye radius, so
+**nothing is within about 5 A of an atom centre** and a smaller contact radius
+returns zero for everything.
+
+Structural: the `ProbePairMeasures` enum and the fps.json distance vocabulary
+moved from `AV.h` to `AVDistance.h`, where the distance conventions belong, and
+`avdistance.i` is now wrapped before `av.i` because AV.h's defaults name that
+enum. `States`/`AccessibleVolume` gained `*_vector` accessors for C++ callers,
+`%ignore`d so Python keeps only the numpy views.
+
+Tests: `test/restraints/test_flat_bottom_md.py` (21) and
+`test/label/test_av_kernels_and_io.py` (32). Suite 1366 -> **1471 passed**, 5 skipped, 3
+xfailed, 180 subtests. Both new examples pass the docs sweep.
+
+## 2026-08-31 — greedy Olga reaches a structure: `select-pairs`, an example, two kernels
+
+The greedy pair selection was correct and unreachable. `select_informative_pairs`
+and its three kernels had been in C++ since the `%pythoncode` sweep (PRD-117),
+with 28 passing tests -- all of which handed it **synthetic matrices**. Nothing
+in the tree turned an ensemble into the two things it takes, so a user with a
+trajectory and a candidate pair list had no route in. No example, no bin.
+
+Closed from both ends, and in C++ rather than twice in Python:
+
+* **`ProbeNetworkRestraint::get_pair_names` / `get_pair_efficiencies`.** The
+  score set's pairs and their mean FRET efficiency at the current coordinates.
+  The order was the real content: a `std::map` iterates sorted, and *which
+  column is which pair* was about to be rediscovered by every caller. It is
+  stated on the class instead. `get_pair_efficiencies` re-evaluates first, so a
+  freshly loaded frame answers for itself -- the failure it prevents is silent
+  (the previous frame's volumes, read as this one's).
+* **`pairwise_rmsd`** (`Clustering.h`), beside `rmsd_no_align` and on the same
+  `(n_frames, n_atoms, 3)` typemap `cluster_frames_leader` already uses. It
+  calls `compute_rmsd`, so the Kabsch superposition has one implementation, and
+  copies each frame once rather than once per pair.
+
+Then `imp_bff select-pairs` (RMF or PDBs in, ranking TSV out, `--stride` for a
+long ensemble) and `examples/labels/plot_pair_selection.py`, which plots the
+decay curve over the T4L docking ensemble and one 33-pair score set. Both call
+the same two accessors; neither reimplements the marshalling.
+
+`expected_rmsd` -- Olga's `rmsdMeanMean` -- had been exported with **no caller
+and no test** since the port. It is now the "before any data" baseline both the
+bin and the example print, which is what makes a gain column mean anything.
+
+`test/restraints/test_pair_selection.py`: 14 tests, both entry paths (RMF and a
+stack of PDBs), 4 s. Two things it found:
+
+* **The decay is not monotone.** Both the bin and the example print a gain per
+  measurement, and the obvious assertion -- that it never goes negative --
+  holds on the 20-frame ensemble and fails on a four-member one, where the
+  third selection gives back 0.03 A. The greedy scores each candidate against
+  the chi-squared accumulated so far, so the best *remaining* candidate can
+  leave a larger expectation than the step before it. The tests assert what is
+  actually true (the first selection beats the uninformed baseline, the last
+  beats the first) and say why the stronger claim is not asserted.
+* **A dropped `IMP.Model` is a segfault, not an exception.** The first version
+  of the restraint fixture returned the restraint and the hierarchy but not the
+  model; the model is reference counted from Python, and `get_pair_efficiencies`
+  faulted inside SWIG. Worth knowing before writing the next fixture.
+
+`test_superposition_removes_the_rigid_motions_and_nothing_else` is the one that
+earns its length: a frame rotated *and* translated must come back at RMSD 0
+with `superpose=True` and far from it without -- the only check exercising the
+reflection guard `compute_rmsd`'s Kabsch has.
+
+**A/B against Olga itself** -- [`greedy_olga_ab.md`](validation/greedy_olga_ab.md),
+`test/restraints/test_greedy_olga_ab.py`. Olga is Qt + pteros, but its selector
+is not: two non-semantic edits (drop the pteros includes and everything after
+`sys2xyz`; add the `template` disambiguator clang wants at `spline.hpp:165`)
+compile `best_dist.h` standalone against Eigen, and the test builds it in a
+temporary directory. On the T4L ensemble, 50 frames x 33 pairs: **the same ten
+pairs, in the same order**, decays agreeing to 1.6e-4 A. Same on a
+well-separated synthetic case.
+
+Where they differ is worth knowing. Olga carries `MatrixXf` -- float32 -- and
+does not evaluate the chi-squared right tail; it fits it with a 64-piece
+quadratic spline, which at **one** degree of freedom is off by **0.11 in
+probability** near the origin. `chiSqRTSpline`'s own accuracy assert is
+commented out with an `|| ndof==1` escape for exactly this. And ndof is 1 for
+the *first two* selections, because `bestPair` uses
+`max(selPairs.size() - 1, 1)` -- so the one step where the decays visibly
+disagree (3.2e-3 A at step 1) is the reference's approximation, not ours.
+
+A third case was built to break the parity and does: 25 candidates cut from one
+cloth, where the second selection's best two are 2.6e-4 A apart out of 1.70.
+The two pick differently and swap back one step later -- same eight pairs,
+different order. The test asserts what can be asserted, that a disagreement
+happens only on a tie, and only checks the *first* divergence, since after it
+the accumulated chi-squared differs and the scores are no longer comparable.
+
+Still open, and the owner's call (PRD-120): whether the Labelizer's pair layer
+should rank with this rather than with its own published score.
+
+
 ## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
 
 Chasing the last of the untested surface -- the two `bin/` programs nothing

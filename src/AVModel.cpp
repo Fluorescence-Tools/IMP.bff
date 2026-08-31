@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/AVModel.h>
+#include <IMP/bff/StructureIO.h>
 #include <IMP/bff/AVDistance.h>
 #include <IMP/bff/internal/GridShape.h>
 #include <IMP/bff/internal/OutputView.h>
@@ -137,8 +138,7 @@ double States::dRDAE(const States& other, double forster_radius,
 void States::pRDA(const States& other, const std::vector<double>& axis,
                   int n_samples, double** out_view, int* n_out_view) const {
     // `axis` is bin *edges*, so the histogram has one fewer bin than it has
-    // edges -- the Python this replaces passed the same array to
-    // `np.histogram(bins=axis)`, which reads it the same way.
+    // edges, the way a histogram reads a bin-edge array.
     const std::size_t n_bins = axis.size() > 1 ? axis.size() - 1 : 0;
     double* out = internal::new_double_view(n_bins, out_view, n_out_view);
     if (out == nullptr || n_bins == 0) return;
@@ -325,6 +325,34 @@ void ACV::get_slow_radius(double** out_view, int* n_out_view) const {
 
 void ACV::get_contact_density(double** out_view, int* n_out_view) const {
     internal::copy_to_view(contact_density_, out_view, n_out_view);
+}
+
+void write_av(const AccessibleVolume& av, const std::string& path) {
+    const std::size_t dot = path.rfind('.');
+    std::string ext = dot == std::string::npos ? "" : path.substr(dot + 1);
+    for (auto& c : ext) c = (char) std::tolower((unsigned char) c);
+
+    if (ext == "xyz") {
+        write_points_xyz(path, av.get_points_vector(), "He",
+                         "accessible volume, column 5 is the weight");
+        return;
+    }
+    if (ext == "pqr") {
+        write_points_pqr(path, av.get_points_vector(), 1.0);
+        return;
+    }
+    if (ext == "dx") {
+        const std::vector<double> d = av.get_density_vector();
+        if (d.empty()) {
+            IMP_THROW("this volume carries only a cloud, so it has no grid to "
+                      "write as OpenDX -- use .xyz or .pqr", ValueException);
+        }
+        write_opendx(path, d, av.get_ng(), av.get_ng(), av.get_ng(),
+                     av.get_grid_origin_vector(), av.get_grid_step());
+        return;
+    }
+    IMP_THROW("cannot write " << path << ": the extension must be one of "
+                              << "xyz, pqr, dx", ValueException);
 }
 
 IMPBFF_END_NAMESPACE

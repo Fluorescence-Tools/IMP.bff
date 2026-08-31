@@ -10,8 +10,7 @@
  *
  * RMF is **not** here: it is in #IMP::bff::RmfIO.h, beside the rotamer-library
  * pair that shares its file format. `rmf` is one of this module's
- * `required_modules`, so those readers and writers are C++ like these; they
- * were `%pythoncode` behind a lazy `import RMF` until 2026-08-26.
+ * `required_modules`, so those readers and writers are C++ like these.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -170,11 +169,66 @@ IMPBFFEXPORT double compute_rmsd(const std::vector<double>& coords_a,
                                          std::vector<int>(),
                                  bool superpose = false);
 
+// --------------------------------------------------------------------------
+// point clouds and grids out, in the formats a viewer opens
+// --------------------------------------------------------------------------
+
+//! Write a weighted point cloud as an XYZ file.
+/*! One line per point, `element x y z weight`. Every molecular viewer reads
+    XYZ, and the weight rides in a fifth column that viewers ignore and numpy
+    does not.
+
+    \param[in] path where to write
+    \param[in] points flat, four per point: x, y, z, weight
+    \param[in] element the element symbol every point is given
+    \param[in] comment the second line of the file
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_points_xyz(const std::string& path,
+                                   const std::vector<double>& points,
+                                   const std::string& element = "He",
+                                   const std::string& comment = "");
+
+//! Write a weighted point cloud as a PQR file.
+/*! PDB `ATOM` records with the weight in the **charge** column and \p radius
+    in the radius column, which is what PQR is: a PDB whose last two columns
+    are occupancy-shaped but mean charge and radius. PyMOL and VMD both read
+    it, and colouring by charge then colours by weight.
+
+    \param[in] path where to write
+    \param[in] points flat, four per point
+    \param[in] radius the radius written for every point, A
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_points_pqr(const std::string& path,
+                                   const std::vector<double>& points,
+                                   double radius = 1.0);
+
+//! Write a scalar grid as an OpenDX map.
+/*! The volumetric format PyMOL (`load map.dx`), VMD and APBS all read. Values
+    run in **x-fastest** order, which is the order OpenDX specifies and the
+    opposite of the C order a numpy `(nx, ny, nz)` array iterates in -- the
+    transposition is done here so a caller never has to know.
+
+    \param[in] path where to write
+    \param[in] density the grid, `nx * ny * nz`, in C order
+    \param[in] nx,ny,nz the grid shape
+    \param[in] origin three coordinates of the lowest corner, A
+    \param[in] spacing the grid step, A
+    \throw ValueException on a shape mismatch
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_opendx(const std::string& path,
+                               const std::vector<double>& density,
+                               int nx, int ny, int nz,
+                               const std::vector<double>& origin,
+                               double spacing);
+
 //! Convert a dye PDB to mmCIF with `_atom_site` records.
-/*! \param[in] dye_id the data block name; empty takes the PDB's stem */
+/*! \param[in] probe_id the data block name; empty takes the PDB's stem */
 IMPBFFEXPORT void convert_pdb_to_cif(const std::string& pdb_path,
                                      const std::string& cif_path,
-                                     const std::string& dye_id = "");
+                                     const std::string& probe_id = "");
 
 // --------------------------------------------------------------------------
 // the tables beside a structure

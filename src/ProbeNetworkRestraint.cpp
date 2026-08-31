@@ -1,12 +1,12 @@
 /**
- *  \file IMP/bff/AVNetworkRestraint.h
+ *  \file ProbeNetworkRestraint.cpp
  *  \brief Simple restraint for networks of accessible volumes.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2022 IMP Inventors. All rights reserved.
  *
  */
- #include <IMP/bff/AVNetworkRestraint.h>
+ #include <IMP/bff/ProbeNetworkRestraint.h>
 
 #include <algorithm>
 #include <atomic>
@@ -18,7 +18,7 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-AVNetworkRestraint::AVNetworkRestraint(
+ProbeNetworkRestraint::ProbeNetworkRestraint(
         const IMP::core::Hierarchy &hier,
         std::string fps_json_fn,
         std::string name,
@@ -36,37 +36,37 @@ AVNetworkRestraint::AVNetworkRestraint(
     distance_(distance), quad_k_(quad_k), search_grid_factor_(search_grid_factor),
     search_stencil_(search_stencil), search_mode_(search_mode){
     if(search_mode != "dijkstra" && search_mode != "euclidean"){
-        IMP_THROW("AVNetworkRestraint: search_mode must be \"dijkstra\" or \"euclidean\"",
+        IMP_THROW("ProbeNetworkRestraint: search_mode must be \"dijkstra\" or \"euclidean\"",
                   IMP::ValueException);
     }
     if(search_mode == "euclidean" && !space_fixed){
-        IMP_THROW("AVNetworkRestraint: search_mode=\"euclidean\" requires space_fixed=True",
+        IMP_THROW("ProbeNetworkRestraint: search_mode=\"euclidean\" requires space_fixed=True",
                   IMP::ValueException);
     }
     if(search_stencil != 26 && search_stencil != 30){
-        IMP_THROW("AVNetworkRestraint: search_stencil must be 26 or 30", IMP::ValueException);
+        IMP_THROW("ProbeNetworkRestraint: search_stencil must be 26 or 30", IMP::ValueException);
     }
     if(search_grid_factor < 1){
-        IMP_THROW("AVNetworkRestraint: search_grid_factor must be >= 1", IMP::ValueException);
+        IMP_THROW("ProbeNetworkRestraint: search_grid_factor must be >= 1", IMP::ValueException);
     }
     if(search_grid_factor > 1 && !space_fixed){
-        IMP_THROW("AVNetworkRestraint: search_grid_factor > 1 requires space_fixed=True",
+        IMP_THROW("ProbeNetworkRestraint: search_grid_factor > 1 requires space_fixed=True",
                   IMP::ValueException);
     }
     if(shared_map && !space_fixed){
-        IMP_THROW("AVNetworkRestraint: shared_map=True requires space_fixed=True "
+        IMP_THROW("ProbeNetworkRestraint: shared_map=True requires space_fixed=True "
                   "(sharing needs commensurate lattice windows)",
                   IMP::ValueException);
     }
     if(distance != "quad" && distance != "mc"){
-        IMP_THROW("AVNetworkRestraint: distance must be \"quad\" or \"mc\", got \""
+        IMP_THROW("ProbeNetworkRestraint: distance must be \"quad\" or \"mc\", got \""
                   << distance << "\"", IMP::ValueException);
     }
     if(quad_k < 1){
-        IMP_THROW("AVNetworkRestraint: quad_k must be >= 1", IMP::ValueException);
+        IMP_THROW("ProbeNetworkRestraint: quad_k must be >= 1", IMP::ValueException);
     }
     if(!space_fixed){
-        IMP_WARN("AVNetworkRestraint: space_fixed=False (legacy source-anchored "
+        IMP_WARN("ProbeNetworkRestraint: space_fixed=False (legacy source-anchored "
                  "grids) is deprecated and will be removed after the PRD-105 "
                  "transition period.\n");
     }
@@ -86,7 +86,7 @@ AVNetworkRestraint::AVNetworkRestraint(
     configure_avs();
 }
 
-void AVNetworkRestraint::configure_avs(){
+void ProbeNetworkRestraint::configure_avs(){
     if(space_fixed_ && shared_map_ && !registry_ && !avs_.empty()){
         // The obstacle set every AV rasterises: all leaves of the root of
         // the first source (identical for every AV of one hierarchy).
@@ -107,7 +107,7 @@ void AVNetworkRestraint::configure_avs(){
     }
 }
 
-const IMP::bff::AVs AVNetworkRestraint::get_used_avs(){
+const IMP::bff::AVs ProbeNetworkRestraint::get_used_avs(){
     IMP::bff::AVs out;
     for(IMP::ParticleIndex pi: av_pi_){
         out.emplace_back(get_model(), pi);
@@ -115,7 +115,7 @@ const IMP::bff::AVs AVNetworkRestraint::get_used_avs(){
     return out;
 }
 
-IMP::ModelObjectsTemp AVNetworkRestraint::do_get_inputs() const {
+IMP::ModelObjectsTemp ProbeNetworkRestraint::do_get_inputs() const {
     IMP::ModelObjectsTemp ret;
     for (size_t i = 0; i < model_ps_.size(); i++) {
         ret.push_back(get_model()->get_particle(model_ps_[i]));
@@ -123,7 +123,7 @@ IMP::ModelObjectsTemp AVNetworkRestraint::do_get_inputs() const {
     return ret;
 }
 
-std::map<std::string, std::unique_ptr<IMP::bff::AV> > AVNetworkRestraint::create_av_decorated_particles(
+std::map<std::string, std::unique_ptr<IMP::bff::AV> > ProbeNetworkRestraint::create_av_decorated_particles(
         nlohmann::json used_positions,
         const IMP::core::Hierarchy &hier
 ){
@@ -149,25 +149,25 @@ std::map<std::string, std::unique_ptr<IMP::bff::AV> > AVNetworkRestraint::create
         // Decorate AV particle
         IMP::bff::AV::do_setup_particle(model, av_index, parent_particle_idx);
         auto av = new IMP::bff::AV(av_particle);  // ownership passes to avs below
-        av->set_av_parameter(position);
+        av->set_av_parameter(position.dump());
 
         avs[position_name].reset(av);
     }
     return avs;
 }
 
-IMP::bff::AV AVNetworkRestraint::get_used_av(std::string name) const{
+IMP::bff::AV ProbeNetworkRestraint::get_used_av(std::string name) const{
     IMP::bff::AV* av = get_av(name);
-    IMP_USAGE_CHECK(av != nullptr, "AVNetworkRestraint: no AV named " << name);
+    IMP_USAGE_CHECK(av != nullptr, "ProbeNetworkRestraint: no AV named " << name);
     return *av;
 }
 
-IMP::bff::AV* AVNetworkRestraint::get_av(std::string name) const{
+IMP::bff::AV* ProbeNetworkRestraint::get_av(std::string name) const{
     for (const auto& n : avs_)
         if(n.first == name){
             return n.second.get();
         }
-    IMP_WARN("AV not found in AVNetworkRestraint");
+    IMP_WARN("AV not found in ProbeNetworkRestraint");
     return nullptr;
 }
 
@@ -195,7 +195,7 @@ struct AVEvalJob {
 };
 }
 
-std::shared_ptr<internal::AVEvalJob> AVNetworkRestraint::begin_evaluation() const {
+std::shared_ptr<internal::AVEvalJob> ProbeNetworkRestraint::begin_evaluation() const {
     auto job = std::make_shared<internal::AVEvalJob>();
     n_evaluations_++;
     typedef std::chrono::steady_clock clk;
@@ -251,8 +251,8 @@ std::shared_ptr<internal::AVEvalJob> AVNetworkRestraint::begin_evaluation() cons
     job->pairs.reserve(distances_.size());
     for(const auto &it : distances_){
         job->pairs.push_back(&it.second);
-        if(it.second.distance_type == DYE_PAIR_DISTANCE_MP ||
-           it.second.distance_type == DYE_PAIR_XYZ_DISTANCE){
+        if(it.second.distance_type == PROBE_PAIR_DISTANCE_MP ||
+           it.second.distance_type == PROBE_PAIR_XYZ_DISTANCE){
             job->has_model_reading_pairs = true;
         }
     }
@@ -278,7 +278,7 @@ std::shared_ptr<internal::AVEvalJob> AVNetworkRestraint::begin_evaluation() cons
     return job;
 }
 
-void AVNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
+void ProbeNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
     // Rasters, searches (after all rasters), carves + quadrature (after the
     // own search), pair sums (after both AVs) -- one pool run with explicit
     // dependencies; nothing here reads the Model.
@@ -335,7 +335,7 @@ void AVNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
     }
 }
 
-double AVNetworkRestraint::finish_evaluation(internal::AVEvalJob &job) const {
+double ProbeNetworkRestraint::finish_evaluation(internal::AVEvalJob &job) const {
     typedef std::chrono::steady_clock clk;
     for(auto &mp : job.maps) mp->end_update();
     for(auto *av : job.all) av->resample_finish();
@@ -349,7 +349,7 @@ double AVNetworkRestraint::finish_evaluation(internal::AVEvalJob &job) const {
     return score;
 }
 
-double AVNetworkRestraint::unprotected_evaluate(
+double ProbeNetworkRestraint::unprotected_evaluate(
         IMP::DerivativeAccumulator *accum) const {
     if(job_){
         // an evaluate_async() nobody waited for: finish it first
@@ -360,7 +360,7 @@ double AVNetworkRestraint::unprotected_evaluate(
     return finish_evaluation(*job);
 }
 
-void AVNetworkRestraint::evaluate_async() const {
+void ProbeNetworkRestraint::evaluate_async() const {
     if(job_) wait_score();
     std::shared_ptr<internal::AVEvalJob> job = begin_evaluation();
     // Pairs that read the Model at pair time (MP / XYZ types) cannot overlap a
@@ -376,8 +376,8 @@ void AVNetworkRestraint::evaluate_async() const {
     job_ = job;
 }
 
-double AVNetworkRestraint::wait_score() const {
-    IMP_USAGE_CHECK(job_, "AVNetworkRestraint::wait_score without evaluate_async");
+double ProbeNetworkRestraint::wait_score() const {
+    IMP_USAGE_CHECK(job_, "ProbeNetworkRestraint::wait_score without evaluate_async");
     std::shared_ptr<internal::AVEvalJob> job = job_;
     if(job->runner){
         job->runner->join();
@@ -388,7 +388,28 @@ double AVNetworkRestraint::wait_score() const {
     return score;
 }
 
-double AVNetworkRestraint::get_model_distance(
+std::vector<std::string> ProbeNetworkRestraint::get_pair_names() const {
+    std::vector<std::string> names;
+    names.reserve(distances_.size());
+    for(const auto &kv : distances_) names.push_back(kv.first);
+    return names;
+}
+
+std::vector<double> ProbeNetworkRestraint::get_pair_efficiencies() const {
+    // The score is discarded; what it buys is up-to-date accessible volumes,
+    // which every pair below then reads for free.
+    unprotected_evaluate(nullptr);
+    std::vector<double> effs;
+    effs.reserve(distances_.size());
+    for(const auto &kv : distances_){
+        effs.push_back(get_model_distance(
+                kv.second.position_1, kv.second.position_2,
+                kv.second.forster_radius, IMP::bff::PROBE_PAIR_EFFICIENCY));
+    }
+    return effs;
+}
+
+double ProbeNetworkRestraint::get_model_distance(
         std::string position1_name,
         std::string position2_name,
         double forster_radius,
@@ -402,7 +423,7 @@ double AVNetworkRestraint::get_model_distance(
     return av_distance(*av1, *av2, forster_radius,distance_type, n_samples);
 }
 
-internal::ThreadPool &AVNetworkRestraint::get_pool() const{
+internal::ThreadPool &ProbeNetworkRestraint::get_pool() const{
     int n = get_number_of_threads();
     if(!pool_ || pool_->size() != n){
         pool_ = std::make_shared<internal::ThreadPool>(n);
@@ -410,13 +431,13 @@ internal::ThreadPool &AVNetworkRestraint::get_pool() const{
     return *pool_;
 }
 
-int AVNetworkRestraint::get_number_of_threads() const{
+int ProbeNetworkRestraint::get_number_of_threads() const{
     if(n_threads_ > 0) return n_threads_;
     unsigned hw = std::thread::hardware_concurrency();
     return hw > 0 ? (int) hw : 1;
 }
 
-std::string AVNetworkRestraint::get_diagnostics_json() const{
+std::string ProbeNetworkRestraint::get_diagnostics_json() const{
     nlohmann::json j;
     j["space_fixed"] = space_fixed_;
     j["shared_map"] = shared_map_;
@@ -472,7 +493,7 @@ std::string AVNetworkRestraint::get_diagnostics_json() const{
     return j.dump();
 }
 
-double AVNetworkRestraint::get_quad_error_estimate(int reference_k) const{
+double ProbeNetworkRestraint::get_quad_error_estimate(int reference_k) const{
     double worst = 0.0;
     for(const auto &it : distances_){
         const auto &d = it.second;
@@ -488,6 +509,6 @@ double AVNetworkRestraint::get_quad_error_estimate(int reference_k) const{
     return worst;
 }
 
-IMP_OBJECT_SERIALIZE_IMPL(IMP::bff::AVNetworkRestraint);
+IMP_OBJECT_SERIALIZE_IMPL(IMP::bff::ProbeNetworkRestraint);
 
 IMPBFF_END_NAMESPACE

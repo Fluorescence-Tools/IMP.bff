@@ -57,7 +57,9 @@ is written out in `examples/structure/t4l_pmi.py`.
 
 
 The command tree is one tree. `imp_bff --help` lists every command:
-`flexfit` and `rmsd` fit against distance restraints, `decays` runs the
+`flexfit` and `rmsd` fit against distance restraints, `select-pairs` ranks
+labelling pairs before an experiment is done, `openmm` writes a restrained
+OpenMM run and `av-export` writes one volume for a viewer, `decays` runs the
 automated decay analysis, `dye` is explicit-dye labelling and sampling,
 `rotamer` is rotamer-library FRET, and `av-vs-rotamer` regenerates the
 comparison note. Two of those groups used to live *inside* the package and
@@ -83,6 +85,141 @@ sampler is a command rather than a library call because it drives IMP.pmi
 screening stay in the library -- `IMP.bff.score`, `dock_minimize`, `refine`,
 `screen` -- because an application drives those with a cancellation callback
 and reads the `DockingResult` back.
+
+## Which FRET pair to measure next
+
+`imp_bff select-pairs` ranks the labelling pairs of an fps.json by how much
+each would tell you, given an ensemble of candidate structures -- the greedy
+selection Olga performs (Dimura *et al.*, *Nat. Commun.* **11**, 5394, 2020):
+
+```bash
+imp_bff select-pairs -j labels.fps.json -r ensemble.rmf3 -n 10 -o ranking.tsv
+```
+
+Each step adds the pair leaving the smallest expected RMSD between the true
+structure and the one the measurements would single out, so the output is an
+order and a decay curve -- how much precision each further measurement buys,
+and where buying more stops paying. The two inputs it needs are computed from
+the ensemble rather than assumed: `ProbeNetworkRestraint::get_pair_efficiencies`
+gives one row of FRET efficiencies per frame, and `pairwise_rmsd` the matrix
+they are weighed against. `examples/labels/plot_pair_selection.py` plots the
+curve. The kernels underneath -- `select_informative_pairs`, `expected_rmsd`,
+`expected_rmsd_after_adding`, `chi2_right_tail` -- are public in their own
+right, for a caller who already has the two matrices.
+
+## FRET-restrained molecular dynamics
+
+An accessible-volume network can score a structure; to *move* one it has to have
+a gradient and a shape an integrator can live with.
+`IMP::bff::AVFlatBottomRestraint` is that shape -- zero inside the experimental
+error bars, harmonic outside them, and linear past that so the force is capped
+and a badly-placed start cannot blow up the first step. It is the same well an
+AMBER `&rst` record describes.
+
+`md_flat_bottom_restraints` builds the whole system from an fps.json in one
+call:
+
+```python
+system = IMP.bff.md_flat_bottom_restraints(
+    hierarchy, "labels.fps.json", "chi2_C1_33p",
+    f_max=15.0, tether_k=30.0, probe_mass=100.0, tether_atom="CA")
+
+sf = IMP.core.RestraintsScoringFunction(force_field + [system.get_restraints()])
+md = IMP.atom.MolecularDynamics(model)
+md.set_scoring_function(sf)
+md.optimize(10000)
+
+for well in system.get_wells():          # one per measured pair
+    print(well.get_name(), well.get_distance(), list(well.get_bounds()))
+```
+
+It computes both volumes, converts each measured distance and its **asymmetric**
+errors into mean-position bounds, creates one probe particle per labelling
+position tethered to its site, and puts a well between every measured pair.
+`tether_atom` puts the probes on a different atom of the same residue -- `"CA"`
+for a run that moves only alpha carbons, since a probe tethered to an atom
+nothing optimises cannot follow the structure.
+`examples/labels/plot_fret_restrained_md.py` drives T4 lysozyme from one
+measured state to the other and back through the data alone.
+
+The volumes are built once, on the starting structure, and every well follows
+from those shapes -- an approximation that decays as the structure moves.
+`AVRebuildOptimizerState` refreshes it:
+
+```python
+md.add_optimizer_state(IMP.bff.AVRebuildOptimizerState(model, system, 2000))
+```
+
+Every 2000 steps it resamples the volumes and re-derives each well's bounds and
+each probe's tether from the geometry the trajectory has reached. On the T4L
+example those bounds move by several angstrom over a run. Expect the *satisfied*
+count to go down when you switch it on: a fixed well is a target derived from a
+structure the run has already left.
+
+### Running them in OpenMM
+
+IMP has no bridge to an MD engine -- `IMP.modeller` is its only external-package
+interface and Modeller is not one -- so `write_openmm_restraints` exports
+instead:
+
+```python
+IMP.bff.write_openmm_restraints(system, "restraints.openmm.json", hierarchy)
+```
+
+The document carries the probes, their tethers and one flat-bottom bond per
+measured pair, **in OpenMM's units** (nm, kJ/mol), and `energy_expression` is
+the same well as a `CustomBondForce` expression --
+`IMP::bff::openmm_flat_bottom_energy()`, one string used by both sides, so the
+restraint that runs there is the restraint that ran here. The example verifies
+that numerically without OpenMM installed (its `select` and `step` are two lines
+of Python) and shows the dozen lines that consume the document.
+
+`write_openmm_script` goes one further and writes the OpenMM *around* it: a
+self-contained Python script with the restraint table embedded, which loads the
+PDB, builds the system, adds the probes, their tethers and the wells, minimises
+and runs. `imp_bff openmm` does it from the command line:
+
+```bash
+imp_bff openmm -j labels.fps.json -p structure.pdb -s chi2_set \
+               --tether-atom CA -o fret_restraints.py
+```
+
+Attachment atoms are named by **chain, residue and atom**, not indexed: an index
+depends on how the reader built its topology -- hydrogens, waters, altlocs --
+and a spec that names atoms by position in someone else's file silently
+restrains the wrong ones.
+
+`imp_bff av-export -p structure.pdb -c A -r 132 -o site.pqr` writes one
+accessible volume in whichever format the extension names.
+
+The conversion behind step two is public in its own right:
+`rmp_from_model_distance` slides two volumes apart until the modelled observable
+matches a target and reports the mean-position separation where that happens.
+An experiment reports \f$\langle R_{DA}\rangle\f$; a two-point restraint needs
+\f$R_{mp}\f$; the two differ by several angstrom in a way that depends on the
+shape of both clouds, so it is not a constant offset.
+`rmp_flat_bottom_bounds` does the same for a measurement's value and both of its
+error bars at once.
+
+## Measuring and exporting a volume
+
+| call | answers |
+|---|---|
+| `minimum_distance(a, b)` | closest approach of two clouds -- a *bound*, where every other distance type is an average |
+| `cloud_overlap(points, refs, r)`, `av_overlap(av, hier, sel, r)` | how much of a volume's weight lies within `r` of a selection |
+| `cloud_model_distance(a, b, type, R0)` | any `ProbePairMeasures` convention over two clouds -- except `pRDA`, which is not one |
+| `cloud_distance_distribution(a, b, axis)` | `p(R_DA)` as a histogram, which is what `pRDA` names |
+| `write_av(av, path)` | the volume as `.xyz`, `.pqr`, `.dx`, `.mrc`/`.map`/`.ccp4` -- the format follows the extension |
+
+`av_overlap` takes a selection in either dialect this module speaks
+(`"resi 130-134"` or `"resid 130 to 134"`). Note that a volume already excludes
+the structure's van der Waals envelope inflated by the dye radius, so a contact
+radius under about 5 A returns zero for everything.
+
+`chain_weighting` in an fps.json position now reaches the volume: grid points
+are weighted by the linker's chain statistics rather than uniformly. Read
+`okf/validation/chain_weighting.md` before turning it on -- the shipped table
+does not cover a dye-length linker, and the code says so.
 
 # imp_bff_traj2bcif: convert a trajectory to BinaryCIF {#imp_bff_traj2bcif}
 

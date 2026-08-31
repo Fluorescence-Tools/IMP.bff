@@ -6,8 +6,11 @@
  */
 
 #include <IMP/bff/StructureIO.h>
+#include <iomanip>
 
+#include <IMP/bff/internal/CifWriter.h>
 #include <IMP/bff/internal/OutputView.h>
+#include <IMP/bff/internal/Text.h>
 
 #include <IMP/atom/Atom.h>
 #include <IMP/atom/Residue.h>
@@ -15,6 +18,8 @@
 #include <IMP/atom/bond_decorators.h>
 #include <IMP/atom/pdb.h>
 #include <IMP/core/XYZ.h>
+#include <IMP/bff/internal/json.h>
+#include <IMP/atom/Hierarchy.h>
 #include <IMP/exception.h>
 
 #include <Eigen/Dense>
@@ -32,13 +37,9 @@ IMPBFF_BEGIN_NAMESPACE
 
 // Named, not anonymous: IMP compiles this module as one translation unit.
 namespace structio {
+using IMP::bff::internal::trimmed;
 
-std::string trimmed(const std::string& s) {
-    const std::size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return std::string();
-    const std::size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
+
 
 std::string field(const std::string& line, std::size_t at, std::size_t n) {
     if (at >= line.size()) return std::string();
@@ -58,16 +59,6 @@ std::string tripos_type(const std::string& element) {
     if (element == "Br") return "Br";
     if (element == "I") return "I";
     return element;
-}
-
-double covalent_radius(const std::string& element) {
-    if (element == "H") return 0.31;
-    if (element == "C") return 0.76;
-    if (element == "N") return 0.71;
-    if (element == "O") return 0.66;
-    if (element == "S") return 1.05;
-    if (element == "P") return 1.07;
-    return 0.77;
 }
 
 //! The element a PDB atom name implies: its first alphabetic character.
@@ -114,9 +105,9 @@ std::vector<AtomBond> parse_conect_bonds(const std::string& path) {
 }
 
 std::vector<AtomBond> infer_bonds(const std::vector<PDBAtomRecord>& atoms,
-                                  double scale) {
-    // Sorted by serial, as the Python's `sorted(atoms)` over a serial-keyed
-    // dict was: the pair order the writer numbers bonds by follows from it.
+                                  double tolerance) {
+    // Sorted by serial: the pair order the writer numbers bonds by follows
+    // from it.
     std::vector<PDBAtomRecord> sorted = atoms;
     std::sort(sorted.begin(), sorted.end(),
               [](const PDBAtomRecord& l, const PDBAtomRecord& r) {
@@ -124,13 +115,13 @@ std::vector<AtomBond> infer_bonds(const std::vector<PDBAtomRecord>& atoms,
               });
     std::set<AtomBond> bonds;
     for (std::size_t i = 0; i < sorted.size(); ++i) {
-        const double ra = structio::covalent_radius(sorted[i].element);
+        const double ra = IMP::bff::covalent_radius(sorted[i].element);
         for (std::size_t j = i + 1; j < sorted.size(); ++j) {
-            const double rb = structio::covalent_radius(sorted[j].element);
+            const double rb = IMP::bff::covalent_radius(sorted[j].element);
             const double dx = sorted[i].x - sorted[j].x;
             const double dy = sorted[i].y - sorted[j].y;
             const double dz = sorted[i].z - sorted[j].z;
-            if (std::sqrt(dx * dx + dy * dy + dz * dz) <= scale * (ra + rb)) {
+            if (std::sqrt(dx * dx + dy * dy + dz * dz) <= ra + rb + tolerance) {
                 bonds.insert(AtomBond(sorted[i].serial, sorted[j].serial));
             }
         }
@@ -411,6 +402,79 @@ void write_pdb(const std::vector<double>& coords, const std::string& path,
     out << "ENDMDL\nEND\n";
 }
 
+void LoadedStructure::get_coords(double** output, int* n_output1,
+                                 int* n_output2) const {
+    double* out = internal::new_double_view(coords_.size(), output, n_output1);
+    if (out == NULL) return;
+    if (!coords_.empty()) {
+        std::memcpy(out, coords_.data(), coords_.size() * sizeof(double));
+    }
+    *n_output1 = static_cast<int>(coords_.size() / 3);
+    *n_output2 = 3;
+}
+
+LoadedStructure load_structure_with_particles(const std::string& path,
+                                              IMP::Model* model) {
+    const IMP::atom::Hierarchy hier = read_pdb_hierarchy(path, model);
+    const IMP::ParticlesTemp leaves = IMP::atom::get_leaves(hier);
+    std::vector<double> coords;
+    coords.reserve(leaves.size() * 3);
+    for (unsigned int i = 0; i < leaves.size(); ++i) {
+        const IMP::algebra::Vector3D v =
+                IMP::core::XYZ(leaves[i]).get_coordinates();
+        coords.push_back(v[0]);
+        coords.push_back(v[1]);
+        coords.push_back(v[2]);
+    }
+    return LoadedStructure(hier, leaves, coords);
+}
+
+FlexFitSelection read_angle_file(IMP::atom::Hierarchy hier,
+                                 const std::string& flexfit_json) {
+    nlohmann::json block;
+    try {
+        block = nlohmann::json::parse(flexfit_json);
+    } catch (const std::exception& e) {
+        IMP_THROW("read_angle_file: the FlexFit block does not parse: "
+                  << e.what(), IMP::ValueException);
+    }
+    if (!block.contains("Flexible residues") || !block.contains("Bonds")) {
+        IMP_THROW("read_angle_file: a FlexFit block needs 'Flexible residues' "
+                  "and 'Bonds'", IMP::ValueException);
+    }
+    IMP::Model* model = hier.get_model();
+
+    std::vector<AtomReference> residues;
+    for (const nlohmann::json& fr : block["Flexible residues"]) {
+        residues.push_back(AtomReference(
+                fr.value("chain_identifier", std::string()),
+                fr.value("residue_seq_number", 0)));
+    }
+    std::vector<AtomReference> ends;
+    for (const nlohmann::json& bond : block["Bonds"]) {
+        for (int e = 0; e < 2 && e < static_cast<int>(bond.size()); ++e) {
+            const nlohmann::json& end = bond[e];
+            ends.push_back(AtomReference(
+                    end.value("chain_identifier", std::string()),
+                    end.value("residue_seq_number", 0),
+                    end.value("atom_name", std::string())));
+        }
+    }
+
+    IMP::ParticlesTemp residue_particles;
+    const IMP::ParticleIndexes flexible =
+            select_flexible_residues(hier, residues);
+    for (unsigned int i = 0; i < flexible.size(); ++i) {
+        residue_particles.push_back(model->get_particle(flexible[i]));
+    }
+    IMP::atom::Bonds bond_decorators;
+    const IMP::ParticleIndexes bonds = create_named_bonds(hier, ends);
+    for (unsigned int i = 0; i < bonds.size(); ++i) {
+        bond_decorators.push_back(IMP::atom::Bond(model, bonds[i]));
+    }
+    return FlexFitSelection(residue_particles, bond_decorators);
+}
+
 IMP::atom::Hierarchy read_pdb_hierarchy(const std::string& path,
                                         IMP::Model* m) {
     return IMP::atom::read_pdb(path, m, new IMP::atom::NonWaterPDBSelector());
@@ -506,9 +570,91 @@ double compute_rmsd(const std::vector<double>& coords_a,
     return std::sqrt(total / rows.size());
 }
 
+namespace {
+std::ofstream open_for_write(const std::string& path) {
+    std::ofstream out(path.c_str());
+    if (!out) IMP_THROW("cannot write " << path, IOException);
+    return out;
+}
+}  // namespace
+
+void write_points_xyz(const std::string& path, const std::vector<double>& points,
+                      const std::string& element, const std::string& comment) {
+    std::ofstream out = open_for_write(path);
+    const std::size_t n = points.size() / 4;
+    out << n << "\n" << comment << "\n";
+    out << std::fixed << std::setprecision(4);
+    for (std::size_t i = 0; i < n; ++i) {
+        out << element << " " << points[4 * i + 0] << " " << points[4 * i + 1]
+            << " " << points[4 * i + 2] << " " << points[4 * i + 3] << "\n";
+    }
+}
+
+void write_points_pqr(const std::string& path, const std::vector<double>& points,
+                      double radius) {
+    std::ofstream out = open_for_write(path);
+    const std::size_t n = points.size() / 4;
+    out << std::fixed;
+    for (std::size_t i = 0; i < n; ++i) {
+        // The PDB serial and residue-number fields are five and four digits;
+        // a rastered volume overruns both, so they wrap rather than widen the
+        // record and break every column after them.
+        out << "ATOM  " << std::setw(5) << (int) (i % 100000 + 1) << "  AV  AV  "
+            << std::setw(4) << (int) (i % 10000 + 1) << "    "
+            << std::setw(8) << std::setprecision(3) << points[4 * i + 0]
+            << std::setw(8) << std::setprecision(3) << points[4 * i + 1]
+            << std::setw(8) << std::setprecision(3) << points[4 * i + 2]
+            << std::setw(8) << std::setprecision(4) << points[4 * i + 3]
+            << std::setw(7) << std::setprecision(3) << radius << "\n";
+    }
+    out << "END\n";
+}
+
+void write_opendx(const std::string& path, const std::vector<double>& density,
+                  int nx, int ny, int nz, const std::vector<double>& origin,
+                  double spacing) {
+    const std::size_t want = (std::size_t) std::max(0, nx) *
+                             (std::size_t) std::max(0, ny) *
+                             (std::size_t) std::max(0, nz);
+    if (density.size() != want) {
+        IMP_THROW("density has " << density.size() << " values for a "
+                                 << nx << "x" << ny << "x" << nz << " grid",
+                  ValueException);
+    }
+    if (origin.size() != 3) {
+        IMP_THROW("origin must be three coordinates", ValueException);
+    }
+    std::ofstream out = open_for_write(path);
+    out << "# OpenDX density written by IMP.bff\n"
+        << "object 1 class gridpositions counts " << nx << " " << ny << " "
+        << nz << "\n";
+    out << std::fixed << std::setprecision(6);
+    out << "origin " << origin[0] << " " << origin[1] << " " << origin[2] << "\n"
+        << "delta " << spacing << " 0 0\n"
+        << "delta 0 " << spacing << " 0\n"
+        << "delta 0 0 " << spacing << "\n"
+        << "object 2 class gridconnections counts " << nx << " " << ny << " "
+        << nz << "\n"
+        << "object 3 class array type double rank 0 items " << want
+        << " data follows\n";
+    // OpenDX runs z fastest within y within x -- the same nesting a C-order
+    // (nx, ny, nz) array has, so the values go out in the order they are in.
+    int per_line = 0;
+    for (std::size_t i = 0; i < want; ++i) {
+        out << density[i];
+        out << (++per_line % 3 == 0 ? "\n" : " ");
+    }
+    if (per_line % 3 != 0) out << "\n";
+    out << "attribute \"dep\" string \"positions\"\n"
+        << "object \"density\" class field\n"
+        << "component \"positions\" value 1\n"
+        << "component \"connections\" value 2\n"
+        << "component \"data\" value 3\n";
+}
+
 void convert_pdb_to_cif(const std::string& pdb_path,
                         const std::string& cif_path,
-                        const std::string& dye_id) {
+                        const std::string& probe_id) {
     IMP_NEW(IMP::Model, m, ());
     // AllPDBSelector, because dyes often carry HETATM records and unusual
     // residue names and a NonWater selector drops them.
@@ -519,23 +665,21 @@ void convert_pdb_to_cif(const std::string& pdb_path,
 
     std::ofstream out(cif_path.c_str());
     if (!out) IMP_THROW("Cannot write " << cif_path, IOException);
-    out << "data_" << (dye_id.empty() ? structio::stem_of(pdb_path) : dye_id)
-        << "\n#\n"
-        << "loop_\n"
-        << "_atom_site.group_PDB\n"
-        << "_atom_site.id\n"
-        << "_atom_site.type_symbol\n"
-        << "_atom_site.label_atom_id\n"
-        << "_atom_site.label_comp_id\n"
-        << "_atom_site.label_asym_id\n"
-        << "_atom_site.label_entity_id\n"
-        << "_atom_site.label_seq_id\n"
-        << "_atom_site.Cartn_x\n"
-        << "_atom_site.Cartn_y\n"
-        << "_atom_site.Cartn_z\n"
-        << "_atom_site.occupancy\n"
-        << "_atom_site.B_iso_or_equiv\n";
-    char buffer[256];
+
+    // The same writer every other category in this module goes through
+    // (`internal/CifWriter.h`), so an atom or component name with a space in
+    // it is quoted here as it is there. IMP has no C++ CIF writer to borrow;
+    // it has the reader, and that is what reads this back.
+    internal::CifWriter w(out);
+    w.start_block(probe_id.empty() ? structio::stem_of(pdb_path) : probe_id);
+
+    const std::vector<std::string> cols = {
+            "group_PDB", "id", "type_symbol", "label_atom_id", "label_comp_id",
+            "label_asym_id", "label_entity_id", "label_seq_id",
+            "Cartn_x", "Cartn_y", "Cartn_z", "occupancy", "B_iso_or_equiv"};
+    std::vector<std::vector<std::string> > rows;
+    rows.reserve(atoms.size());
+    char coord[32];
     for (unsigned int i = 0; i < atoms.size(); ++i) {
         const IMP::algebra::Vector3D xyz =
                 IMP::core::XYZ(atoms[i]).get_coordinates();
@@ -546,13 +690,18 @@ void convert_pdb_to_cif(const std::string& pdb_path,
         if (parent && IMP::atom::Residue::get_is_setup(parent)) {
             comp = IMP::atom::Residue(parent).get_residue_type().get_string();
         }
-        std::snprintf(buffer, sizeof(buffer),
-                      "HETATM %d %s %s %s A 1 1 %.3f %.3f %.3f 1.000 0.000",
-                      i + 1, structio::element_from_name(name).c_str(),
-                      name.c_str(), comp.c_str(), xyz[0], xyz[1], xyz[2]);
-        out << buffer << "\n";
+        std::vector<std::string> row = {
+                "HETATM", std::to_string(i + 1),
+                structio::element_from_name(name), name, comp, "A", "1", "1"};
+        for (int k = 0; k < 3; ++k) {
+            std::snprintf(coord, sizeof(coord), "%.3f", xyz[k]);
+            row.push_back(coord);
+        }
+        row.push_back("1.000");
+        row.push_back("0.000");
+        rows.push_back(row);
     }
-    out << "#\n";
+    w.write_loop("_atom_site", cols, rows);
 }
 
 // --------------------------------------------------------------------------

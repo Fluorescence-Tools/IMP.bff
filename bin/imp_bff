@@ -426,6 +426,262 @@ def rmsd(
     df.to_csv(nf, sep='\t')
 
 
+
+@click.command(name="select-pairs")
+@click.option('-j', '--fps-json', required=True,
+              help='fps.json labelling and distance file: the candidate pairs.')
+@click.option('-r', '--rmf', 'rmf_file', required=False,
+              help='RMF trajectory holding the ensemble of candidate structures.')
+@click.option('-p', '--pdb', 'pdb_files', required=False, multiple=True,
+              help='PDB files, one structure each (repeatable); alternative to --rmf.')
+@click.option('-s', '--score-set', default='',
+              help='fps.json score set naming the candidate pairs (default: all).')
+@click.option('-n', '--max-pairs', default=10, show_default=True,
+              help='How many pairs to select.')
+@click.option('-e', '--err', default=0.06, show_default=True,
+              help='Expected absolute error of a FRET efficiency measurement.')
+@click.option('--stride', default=1, show_default=True,
+              help='Use every Nth structure of the ensemble.')
+@click.option('--superpose/--no-superpose', default=True, show_default=True,
+              help='Superpose each pair of frames before measuring their RMSD.')
+@click.option('--unique/--repeat', 'unique_only', default=True, show_default=True,
+              help='A pair may be selected at most once.')
+@click.option('-o', '--output', 'output_path', required=False,
+              help='Write the ranking to this tab-separated file.')
+def select_pairs(fps_json, rmf_file, pdb_files, score_set, max_pairs, err,
+                 stride, superpose, unique_only, output_path):
+    """Which FRET pairs to measure, in the order they are worth measuring.
+
+    Olga's greedy selection (Dimura et al., Nat. Commun. 11, 5394, 2020) over
+    the pairs an fps.json file defines and an ensemble of candidate structures.
+    Each step adds the pair that leaves the smallest expected RMSD between the
+    true structure and the one the measurements would single out; the reported
+    decay is that expectation after each addition.
+    """
+    if bool(rmf_file) == bool(pdb_files):
+        raise click.UsageError("give either --rmf or one or more --pdb")
+
+    model = IMP.Model()
+    IMP.set_log_level(IMP.SILENT)
+
+    # The ensemble, and the beads the RMSD is measured over. They are collected
+    # before the restraint decorates the hierarchy, so the accessible volumes it
+    # adds -- which move with the dye, not with the fold -- stay out of it.
+    if rmf_file:
+        handle = RMF.open_rmf_file_read_only(str(rmf_file))
+        hierarchies = IMP.rmf.create_hierarchies(handle, model)
+        if not hierarchies:
+            raise click.ClickException(f"no hierarchies in {rmf_file}")
+        hier = hierarchies[0]
+        IMP.rmf.load_frame(handle, RMF.FrameID(0))
+        beads = [IMP.core.XYZ(p) for p in IMP.atom.get_leaves(hier)]
+        frames = list(handle.get_root_frames())[::stride]
+
+        def load(i):
+            IMP.rmf.load_frame(handle, frames[i])
+
+        n_frames = len(frames)
+        label = f"{n_frames} frames of {os.path.basename(rmf_file)}"
+    else:
+        # One hierarchy per file: the restraint is built on the first, and each
+        # further structure is read into its coordinates.
+        hier = IMP.atom.read_pdb(str(pdb_files[0]), model,
+                                 IMP.atom.NonWaterNonHydrogenPDBSelector())
+        beads = [IMP.core.XYZ(p) for p in IMP.atom.get_leaves(hier)]
+        stack = []
+        for path in pdb_files:
+            other = IMP.Model()
+            h = IMP.atom.read_pdb(str(path), other,
+                                  IMP.atom.NonWaterNonHydrogenPDBSelector())
+            xyz = [IMP.core.XYZ(p).get_coordinates()
+                   for p in IMP.atom.get_leaves(h)]
+            if len(xyz) != len(beads):
+                raise click.ClickException(
+                    f"{path} has {len(xyz)} atoms, {pdb_files[0]} has "
+                    f"{len(beads)} -- the structures must correspond")
+            stack.append(xyz)
+        stack = stack[::stride]
+
+        def load(i):
+            for bead, xyz in zip(beads, stack[i]):
+                bead.set_coordinates(xyz)
+
+        n_frames = len(stack)
+        label = f"{n_frames} PDB structures"
+
+    if n_frames < 2:
+        raise click.ClickException(
+            "pair selection needs an ensemble; one structure separates nothing")
+
+    restraint = IMP.bff.ProbeNetworkRestraint(
+        hier, fps_json, score_set=score_set)
+    pair_names = list(restraint.get_pair_names())
+    used = restraint.get_used_distances()
+    if not pair_names:
+        raise click.ClickException(f"no candidate pairs in {fps_json}")
+
+    click.echo(f"Ensemble:   {label}")
+    click.echo(f"Candidates: {len(pair_names)} pairs"
+               + (f" from score set {score_set}" if score_set else ""))
+
+    effs = np.empty((n_frames, len(pair_names)))
+    coords = np.empty((n_frames, len(beads), 3))
+    for i in tqdm.tqdm(range(n_frames), "Efficiencies"):
+        load(i)
+        effs[i] = restraint.get_pair_efficiencies()
+        coords[i] = [b.get_coordinates() for b in beads]
+
+    if not np.isfinite(effs).all():
+        bad = [pair_names[j] for j in np.where(~np.isfinite(effs).all(0))[0]]
+        raise click.ClickException(
+            "non-finite efficiencies for " + ", ".join(bad)
+            + " -- the selector needs every candidate scored in every frame")
+
+    click.echo("Pairwise RMSD...")
+    rmsds = IMP.bff.pairwise_rmsd(coords, superpose)
+
+    selected, decay = IMP.bff.select_informative_pairs(
+        effs, rmsds, err=err, max_pairs=max_pairs, unique_only=unique_only)
+
+    # What the expectation is before anything has been measured, so the first
+    # selection has something to be a gain over.
+    start = IMP.bff.expected_rmsd(
+        rmsds.ravel(), np.zeros(rmsds.size), 1, 0.99, n_frames)
+
+    rows = []
+    previous = start
+    for rank, (index, value) in enumerate(zip(selected, decay), start=1):
+        name = pair_names[index]
+        measurement = used[name]
+        rows.append({
+            "rank": rank,
+            "pair": name,
+            "position_1": measurement.position_1,
+            "position_2": measurement.position_2,
+            "forster_radius": measurement.forster_radius,
+            "expected_rmsd": value,
+            "gain": previous - value,
+        })
+        previous = value
+
+    click.echo("")
+    click.echo(f"{'#':>3}  {'pair':<16}  {'expected RMSD':>13}  {'gain':>8}")
+    click.echo(f"{'-':>3}  {'(no data)':<16}  {start:>11.3f} A  {'':>8}")
+    for row in rows:
+        click.echo(f"{row['rank']:>3}  {row['pair']:<16}  "
+                   f"{row['expected_rmsd']:>11.3f} A  {row['gain']:>6.3f} A")
+
+    if output_path:
+        pd.DataFrame(rows).to_csv(output_path, sep="\t", index=False)
+        click.echo(f"\nwrote {output_path}")
+
+
+
+@click.command(name="openmm")
+@click.option('-j', '--fps-json', required=True,
+              help='fps.json labelling and distance file.')
+@click.option('-p', '--pdb', required=True,
+              help='Structure the volumes are built on and the script loads.')
+@click.option('-s', '--score-set', default='',
+              help='Which distances to restrain (default: all).')
+@click.option('-o', '--output', 'output_path', default='fret_restraints.py',
+              show_default=True, help='Where to write the runnable script.')
+@click.option('--json', 'json_path', default=None,
+              help='Also write the restraint table as JSON, for another engine.')
+@click.option('--f-max', default=15.0, show_default=True,
+              help='Force at one error bar, kcal/mol/A, before conversion.')
+@click.option('--tether-k', default=30.0, show_default=True,
+              help='Force constant holding a probe to its labelling site.')
+@click.option('--tether-atom', default='',
+              help='Tether probes to this atom of the labelled residue '
+                   '(e.g. CA); empty uses the fps.json attachment atom.')
+@click.option('-n', '--n-steps', default=100000, show_default=True,
+              help='Steps the generated script runs.')
+@click.option('--force-field', default='amber14-all.xml amber14/tip3pfb.xml',
+              show_default=True, help='OpenMM force-field XMLs.')
+def openmm_command(fps_json, pdb, score_set, output_path, json_path, f_max,
+                   tether_k, tether_atom, n_steps, force_field):
+    """Write a runnable OpenMM script with FRET restraints from an fps.json.
+
+    Each measured distance becomes a flat-bottom well between two probe
+    particles: zero inside the experimental error bars, harmonic outside them,
+    linear past that so the force is capped. The measured distances are
+    converted to mean-position bounds against the accessible volumes actually
+    built on this structure, which is not a constant offset.
+
+    The script is self-contained -- the restraint table is embedded -- and
+    OpenMM does not have to be installed to write it.
+    """
+    IMP.set_log_level(IMP.SILENT)
+    model = IMP.Model()
+    hier = IMP.atom.read_pdb(str(pdb), model,
+                             IMP.atom.NonWaterNonHydrogenPDBSelector())
+    system = IMP.bff.md_flat_bottom_restraints(
+        hier, fps_json, score_set, f_max, tether_k, 100.0, tether_atom)
+
+    IMP.bff.write_openmm_script(system, output_path, hier, str(pdb),
+                                force_field, int(n_steps))
+    click.echo(f"{len(system.get_probes())} probes, "
+               f"{len(system.get_wells())} FRET wells"
+               + (f" from score set {score_set}" if score_set else ""))
+    click.echo(f"wrote {output_path}")
+    if json_path:
+        IMP.bff.write_openmm_restraints(system, json_path, hier)
+        click.echo(f"wrote {json_path}")
+    click.echo("run it with: python " + os.path.basename(output_path))
+
+
+@click.command(name="av-export")
+@click.option('-p', '--pdb', required=True, help='Structure to label.')
+@click.option('-c', '--chain', required=True, help='Chain of the site.')
+@click.option('-r', '--residue', required=True, type=int,
+              help='Residue number of the site.')
+@click.option('-a', '--atom', default='CB', show_default=True,
+              help='Attachment atom.')
+@click.option('-o', '--output', 'output_path', required=True,
+              help='Output file; the extension picks the format '
+                   '(.xyz, .pqr, .dx, .mrc).')
+@click.option('--linker-length', default=20.5, show_default=True)
+@click.option('--linker-width', default=1.5, show_default=True)
+@click.option('--radius1', default=3.5, show_default=True)
+@click.option('--grid', 'grid_resolution', default=1.5, show_default=True,
+              help='Simulation grid resolution, A.')
+@click.option('--chain-weighting/--no-chain-weighting', default=False,
+              show_default=True,
+              help='Weight grid points by linker chain statistics. Read '
+                   'okf/validation/chain_weighting.md before using it.')
+def av_export(pdb, chain, residue, atom, output_path, linker_length,
+              linker_width, radius1, grid_resolution, chain_weighting):
+    """Compute one accessible volume and write it in a viewer's format.
+
+    `.xyz` and `.pqr` write the point cloud (the weight rides in the fifth
+    column, and in PQR's charge column); `.dx` and `.mrc` write the density
+    grid. PyMOL and VMD open all four.
+    """
+    IMP.set_log_level(IMP.SILENT)
+    model = IMP.Model()
+    hier = IMP.atom.read_pdb(str(pdb), model,
+                             IMP.atom.NonWaterNonHydrogenPDBSelector())
+    site = IMP.atom.Selection(hier, chain_id=chain, residue_index=int(residue),
+                              atom_type=IMP.atom.AtomType(atom))
+    chosen = site.get_selected_particles()
+    if not chosen:
+        raise click.ClickException(
+            f"{pdb} has no atom {atom} in residue {chain}{residue}")
+
+    av = IMP.bff.AV.setup_particle(model, IMP.Particle(model), chosen[0])
+    av.set_av_parameter(json.dumps({
+        "linker_length": linker_length, "linker_width": linker_width,
+        "radius1": radius1, "simulation_grid_resolution": grid_resolution,
+        "chain_weighting": bool(chain_weighting)}))
+    av.resample()
+
+    IMP.bff.write_av(av, output_path)
+    mean = IMP.core.XYZ(av).get_coordinates()
+    click.echo(f"{chain}{residue} {atom}: mean position "
+               f"({mean[0]:.2f}, {mean[1]:.2f}, {mean[2]:.2f}) A")
+    click.echo(f"wrote {output_path}")
+
 @click.command(name="decays")
 @click.argument('input-file')
 @click.option('-o', '--output-path', help='Output path', required=False)
@@ -535,7 +791,7 @@ def auto_model(input_file, output_path=None, settings=None, fret_efficiency=None
 # ==========================================================================
 # dye -- explicit-dye labelling and sampling
 #
-# Was `IMP.bff.cgdye.cli`, entered as `python -m IMP.bff.cgdye.cli`. A click
+# Was `IMP.bff.cgprobe.cli`, entered as `python -m IMP.bff.cgprobe.cli`. A click
 # command is a decorated function, so a module carrying one cannot be imported
 # without click; keeping command trees inside the package meant two of them
 # were reachable only by `-m` and neither appeared in `imp_bff --help`.
@@ -568,7 +824,7 @@ def _rotamer_library_dir():
     return _Path(IMP.bff.get_data_path("rotamer_library"))
 @click.group()
 def dye():
-    """cgdye: Coarse-Grained Dye Simulations in IMP."""
+    """cgprobe: Coarse-Grained Probe Simulations in IMP."""
     pass
 def download_pdb(pdb_id, output_path):
     url = f"https://files.rcsb.org/download/{pdb_id.upper()}.pdb"
@@ -578,7 +834,7 @@ def download_pdb(pdb_id, output_path):
     except Exception as e:
         click.echo(f"Error downloading PDB: {e}")
         return False
-def find_dye_structure(dye_name, linker_type=None):
+def find_probe_structure(probe_name, linker_type=None):
     # get_template_dir/get_structure_dir are C++ and hand back a std::string;
     # everything below joins with `/`, so they become paths here.
     templates_dir = Path(get_template_dir("rotamer"))
@@ -589,12 +845,12 @@ def find_dye_structure(dye_name, linker_type=None):
         "atto488": "T48", "atto495": "T49", "atto520": "T52",
         "atto610": "T61", "atto655": "T65",
     }
-    clean_dye = dye_name.lower().replace(" ", "").replace("-", "")
-    dye_id = mapping.get(clean_dye, dye_name)
+    clean_dye = probe_name.lower().replace(" ", "").replace("-", "")
+    probe_id = mapping.get(clean_dye, probe_name)
     
     patterns = []
-    if linker_type: patterns.append(f"{dye_id}_{linker_type}.rmf3")
-    patterns.extend([f"{dye_id}_C1R.rmf3", f"{dye_id}_C2R.rmf3", f"{dye_id}_L1R.rmf3"])
+    if linker_type: patterns.append(f"{probe_id}_{linker_type}.rmf3")
+    patterns.extend([f"{probe_id}_C1R.rmf3", f"{probe_id}_C2R.rmf3", f"{probe_id}_L1R.rmf3"])
     
     for p in patterns:
         f = templates_dir / p
@@ -603,18 +859,18 @@ def find_dye_structure(dye_name, linker_type=None):
     lib_dir = _rotamer_library_dir()
     if lib_dir.exists():
         pdb_patterns = []
-        if linker_type: pdb_patterns.append(f"{dye_id}_{linker_type}.pdb")
-        pdb_patterns.extend([f"{dye_id}_C1R.pdb", f"{dye_id}_C2R.pdb", f"{dye_id}_L1R.pdb"])
+        if linker_type: pdb_patterns.append(f"{probe_id}_{linker_type}.pdb")
+        pdb_patterns.extend([f"{probe_id}_C1R.pdb", f"{probe_id}_C2R.pdb", f"{probe_id}_L1R.pdb"])
         for p in pdb_patterns:
             f = lib_dir / p
             if f.exists(): return f, "pdb"
 
     structures_dir = Path(get_structure_dir())
     mol2_patterns = []
-    if linker_type: mol2_patterns.append(f"{dye_name}_{linker_type}.mol2")
-    mol2_patterns.append(f"{dye_name}.mol2")
-    if "488" in dye_name.lower(): mol2_patterns.append("alexa488_r48.mol2")
-    if "655" in dye_name.lower() or "atto655" in dye_name.lower(): mol2_patterns.append("atto655.mol2")
+    if linker_type: mol2_patterns.append(f"{probe_name}_{linker_type}.mol2")
+    mol2_patterns.append(f"{probe_name}.mol2")
+    if "488" in probe_name.lower(): mol2_patterns.append("alexa488_r48.mol2")
+    if "655" in probe_name.lower() or "atto655" in probe_name.lower(): mol2_patterns.append("atto655.mol2")
     for p in mol2_patterns:
         f = structures_dir / Path(p)
         if f.exists(): return f, "mol2"
@@ -653,7 +909,7 @@ def label(pdb_id_or_path, chain, residue, dye, linker, output):
             if not download_pdb(pdb_id_or_path, pdb_path): sys.exit(1)
                 
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
-    struct_path, struct_type = find_dye_structure(dye, linker)
+    struct_path, struct_type = find_probe_structure(dye, linker)
     if not struct_path:
         click.echo(f"Error: No structure found for {dye} {linker}")
         sys.exit(1)
@@ -661,8 +917,8 @@ def label(pdb_id_or_path, chain, residue, dye, linker, output):
     click.echo(f"Using: {struct_path}")
     if struct_type == "rmf":
         lib = read_rotamer_library_rmf(str(struct_path))
-        dye_id = struct_path.stem.split("_")[0]
-        base_pdb, _ = find_dye_structure(dye_id, linker)
+        probe_id = struct_path.stem.split("_")[0]
+        base_pdb, _ = find_probe_structure(probe_id, linker)
         if not base_pdb or not str(base_pdb).endswith(".pdb"):
              base_pdb = _rotamer_library_dir() / f"{struct_path.stem}.pdb"
         if base_pdb.exists():
@@ -693,14 +949,14 @@ def build_lib(n_steps, cluster_threshold, output_dir):
     mol2_files = [f for f in dye_dir.glob("*.mol2") if "1DG3" not in f.name]
     os.makedirs(output_dir, exist_ok=True)
     for mol2 in mol2_files:
-        dye_name = mol2.stem.replace("_r48", "")
+        probe_name = mol2.stem.replace("_r48", "")
         try:
             lib = generate_linker_rotamers(str(mol2), n_steps=n_steps, cluster_threshold=cluster_threshold)
-            out = os.path.join(output_dir, f"{dye_name}.rmf3")
+            out = os.path.join(output_dir, f"{probe_name}.rmf3")
             write_rotamer_library_rmf(out, lib)
-            click.echo(f"Built {dye_name} ({lib.n_rotamers} rotamers)")
+            click.echo(f"Built {probe_name} ({lib.n_rotamers} rotamers)")
         except Exception as e:
-            click.echo(f"Failed {dye_name}: {e}")
+            click.echo(f"Failed {probe_name}: {e}")
 @dye.command("analyze-tc")
 @click.argument("input_rmf", type=click.Path(exists=True))
 @click.option("--dt", default=1.0, help="Timestep (ps)")
@@ -751,12 +1007,12 @@ def reconstruct(lib_rmf, n_frames, output_rmf, seed):
         for p, c in zip(particles, coords): IMP.core.XYZ(p).set_coordinates(IMP.algebra.Vector3D(c[0], c[1], c[2]))
         IMP.rmf.save_frame(fh, f"step_{i}")
     click.echo(f"Saved to {output_rmf}")
-def find_dye_mol2(dye_name):
+def find_probe_mol2(probe_name):
     structures_dir = Path(get_structure_dir())
     mapping = {"alexa488": "alexa488_r48", "atto655": "atto655"}
-    clean = dye_name.lower().replace(" ", "").replace("-", "")
-    target = mapping.get(clean, dye_name)
-    for p in [f"{target}.mol2", f"{dye_name}.mol2"]:
+    clean = probe_name.lower().replace(" ", "").replace("-", "")
+    target = mapping.get(clean, probe_name)
+    for p in [f"{target}.mol2", f"{probe_name}.mol2"]:
         f = structures_dir / Path(p)
         if f.exists(): return f
     return structures_dir / "alexa488_r48.mol2" # Final fallback
@@ -769,12 +1025,12 @@ def find_dye_mol2(dye_name):
 @click.option("--output-rmf", required=True)
 def sample_rotamer(protein_pdb, chain, residue, dye, n_samples, output_rmf):
     """Library-based sampling with clash detection."""
-    lib_path, _ = find_dye_structure(dye)
+    lib_path, _ = find_probe_structure(dye)
     lib = read_rotamer_library_rmf(str(lib_path))
     model = IMP.Model()
     protein = IMP.atom.read_pdb(protein_pdb, model, IMP.atom.NonWaterPDBSelector())
     # Template for attachment
-    mol2_path = find_dye_mol2(dye)
+    mol2_path = find_probe_mol2(dye)
     dye_hier = IMP.atom.read_mol2(str(mol2_path), model)
     # Ensure all atoms have XYZR for RMF
     for a in IMP.atom.get_leaves(dye_hier):
@@ -790,7 +1046,7 @@ def sample_rotamer(protein_pdb, chain, residue, dye, n_samples, output_rmf):
     root.add_child(protein); root.add_child(dye_hier)
     fh = RMF.create_rmf_file(output_rmf); IMP.rmf.add_hierarchies(fh, [root])
     
-    # `sample_weighted_index` became C++ in the Phase-1 dyesampling port and
+    # `sample_weighted_index` became C++ in the Phase-1 probesampling port and
     # takes a seed, not a Python Random; one seed per frame keeps the run
     # reproducible the way the old `random.Random(42)` did.
     for i in range(n_samples):
@@ -837,7 +1093,7 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
 
     Not Langevin dynamics: no forces, friction or temperature -- a proposal is
     accepted whenever the dye does not clash. Real Langevin/Brownian dynamics
-    is ``sample-langevin`` (IMP.bff.cgdye.sampling).
+    is ``sample-langevin`` (IMP.bff.cgprobe.sampling).
     """
     from IMP.bff import apply_coordinates, linker_geometry_from_mol2
     random.seed(seed); np.random.seed(seed)
@@ -849,7 +1105,7 @@ def sample_dof_walk(protein_pdb, chain, residue, dye, linker, n_steps, output_rm
     # `LinkerGeometry` indexes the coordinate array it was built from, so a dye
     # read from a PDB and turned by a geometry built from a MOL2 would be
     # scrambled. The residue wrapper is what RMF needs to write it.
-    mol2_path = Path(dye) if Path(dye).exists() else find_dye_mol2(dye)
+    mol2_path = Path(dye) if Path(dye).exists() else find_probe_mol2(dye)
     raw_hier = IMP.atom.read_mol2(str(mol2_path), model)
     dye_hier = IMP.atom.Hierarchy.setup_particle(IMP.Particle(model, "DYE_ROOT"))
     d_chain = IMP.atom.Chain.setup_particle(IMP.Particle(model, "D"), "D")
@@ -951,11 +1207,11 @@ def sample_langevin(protein_pdb, chain, residue, dye, integrator, temperature, t
     Real stochastic dynamics on the dye force field (bonds, angles, dihedrals,
     repulsive LJ) with a soft-sphere repulsion against the protein around the
     site; the dye's backbone anchor stays on the residue. Thermodynamic pins:
-    test/cgdye/test_langevin_sampler.py.
+    test/cgprobe/test_langevin_sampler.py.
     """
     from IMP.bff import AttachedProbeDynamics
     protein_path = resolve_protein_pdb(protein_pdb)
-    mol2 = Path(dye) if Path(dye).exists() else find_dye_mol2(dye)
+    mol2 = Path(dye) if Path(dye).exists() else find_probe_mol2(dye)
     model = IMP.Model()
     protein = IMP.atom.read_pdb(str(protein_path), model, IMP.atom.NonWaterPDBSelector())
     dye_hier = IMP.atom.read_mol2(str(mol2), model)
@@ -1167,7 +1423,7 @@ def label_fusion(pdb_path, chain, output):
 
 @click.group()
 def rotamer() -> None:
-    """Rotamer-based cgdye tools."""
+    """Rotamer-based cgprobe tools."""
 @rotamer.command()
 @click.option("--protein", "protein_path", required=True, type=click.Path(exists=True), help="Protein PDB or RMF path.")
 @click.option("--residue", "residues", multiple=True, required=True, type=int, help="Placement residue number. Repeat twice.")
@@ -1239,7 +1495,7 @@ def r0(donor: str, acceptor: str, k2: float) -> None:
 # av-vs-rotamer -- was `IMP.bff.representation.compare`
 #
 # A validation tool, not a stage: it writes `okf/validation/av_vs_rotamer.md`
-# and the pin file `test/references/cgdye_av_vs_rotamer_pins.json`, and every
+# and the pin file `test/references/cgprobe_av_vs_rotamer_pins.json`, and every
 # number in it is recorded rather than asserted. It sat in the package because
 # the command that drives it lived in `cli.py`; when the command moved to this
 # program the module stayed behind, and *both* halves broke silently --
@@ -1552,7 +1808,7 @@ def av_vs_rotamer(system, okf_dir, pins, n_samples, temperature, cutoffs):
         okf_path.mkdir(parents=True, exist_ok=True)
         (okf_path / "av_vs_rotamer.md").write_text(text)
         click.echo(f"wrote {okf_path / 'av_vs_rotamer.md'}")
-    pin_path = Path(pins) if pins else (repo / "test" / "references" / "cgdye_av_vs_rotamer_pins.json" if repo else None)
+    pin_path = Path(pins) if pins else (repo / "test" / "references" / "cgprobe_av_vs_rotamer_pins.json" if repo else None)
     if pin_path is not None:
         pin_path.write_text(json.dumps(numbers, indent=1))
         click.echo(f"wrote {pin_path}")
@@ -1561,7 +1817,7 @@ def av_vs_rotamer(system, okf_dir, pins, n_samples, temperature, cutoffs):
 
 
 # --------------------------------------------------------------------------
-# Dye density and orientation over a trajectory -- was `IMP.bff.analysis`
+# Probe density and orientation over a trajectory -- was `IMP.bff.analysis`
 #
 # Stage 4 read structurally rather than as an observable: occupancy grids for a
 # mobile component, region-resolved, and the profiles read off them. It is a
@@ -2283,7 +2539,7 @@ def analyze_dye_trajectories(
     help=(
         "Path to template CIF for the mobile component. "
         "One per --mobile, or a single path used for all. "
-        "If omitted, looks for cgdye/templates/{mobile}.template.cif."
+        "If omitted, looks for cgprobe/templates/{mobile}.template.cif."
     ),
 )
 @click.option(
@@ -2320,7 +2576,7 @@ def analyze_dye_trajectories(
     help="0 means all frames.",
 )
 def analyze_trajectories(traj_root, runs_root, combine_runs, output_dir, mobiles, mobile_template_cifs, fixed_name, system_name, axis_element, resolution, voxel_size, bin_width, max_frames):
-    """Dye density and distance statistics over simulation trajectories."""
+    """Probe density and distance statistics over simulation trajectories."""
     import click as _click
     try:
         return analyze_dye_trajectories(traj_root=traj_root, runs_root=runs_root, combine_runs=combine_runs, output_dir=output_dir, mobiles=mobiles, mobile_template_cifs=mobile_template_cifs, fixed_name=fixed_name, system_name=system_name, axis_element=axis_element, resolution=resolution, voxel_size=voxel_size, bin_width=bin_width, max_frames=max_frames)
@@ -2329,7 +2585,7 @@ def analyze_trajectories(traj_root, runs_root, combine_runs, output_dir, mobiles
 
 
 # --------------------------------------------------------------------------
-# simulate -- was a `main` inside `IMP.bff.cgdye.sim`
+# simulate -- was a `main` inside `IMP.bff.cgprobe.sim`
 # --------------------------------------------------------------------------
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--system-cif", type=click.Path(path_type=str), default=None)
@@ -2415,38 +2671,37 @@ def simulate(system_cif, systems_dir, output_root, md_steps, write_every, sampli
 
 
 # ===========================================================================
-# The cgdye MD runner
+# The cgprobe MD runner
 # ===========================================================================
 #
-# This was `pyext/IMP_bff.sim.i` -- 1,491 lines of `%pythoncode` reached
-# through a three-line `simulate` command that forwarded twenty-five options
-# into it. It is a program: it reads a directory of force-field systems,
-# propagates each one and writes trajectories. It lives with the command that
-# runs it now.
+# A program, not a library entry point: it reads a directory of force-field
+# systems, propagates each one and writes trajectories. It lives beside the
+# `simulate` command that runs it, rather than behind one that forwards
+# twenty-five options into another module.
 #
 # Its kernels did not come with it. The restraint builders
-# (`build_dye_restraints`, `build_steric_restraint`, `build_go_restraints`)
+# (`build_probe_restraints`, `build_steric_restraint`, `build_go_restraints`)
 # and the placement search (`place_guest_by_score`) are C++ in `Scoring.h`,
 # because they are what the runner *computes* rather than what it *drives*.
 
 from IMP.bff import (
     LabelledGraph,
-    build_dye_restraints,
+    build_probe_restraints,
     build_go_restraints,
     build_steric_restraint,
     forcefield_system_from_json,
     place_guest_by_score,
     read_forcefield_cif,
-    write_dye_forcefield_cif,
+    write_probe_forcefield_cif,
 )
 
 
 def as_forcefield_system(system):
     """A system, however this program came by it: typed, or a dict from JSON.
 
-    The library takes `DyeForceFieldSystem` values; duck typing on a Python
-    object has no C++ spelling, so the coercion is here, in the program, and
-    not in `pyext/IMP_bff.cif.i` where it used to be a `%pythoncode` def.
+    The library takes `ProbeForceFieldSystem` values, so a program that built
+    its system as a dict literal coerces it here rather than the library
+    accepting both.
     """
     return (forcefield_system_from_json(json.dumps(system))
             if isinstance(system, dict) else system)
@@ -2515,7 +2770,7 @@ def _atom_name(p):
 def _validate_system(system):
     """Raise if *system* is not self-consistent.
 
-    :meth:`IMP.bff.DyeForceFieldSystem.get_inconsistency` does the checking --
+    :meth:`IMP.bff.ProbeForceFieldSystem.get_inconsistency` does the checking --
     components and sites present, ids unique, every site's component declared,
     every bonded term referring to sites that exist. It reports rather than
     raises, because a reader may want to say what is wrong instead of stopping;
@@ -2679,14 +2934,14 @@ def _build_restraints(model, system, site_particles):
     """The system's restraints, and the steric subset a rigid move feels.
 
     Both come from C++ (`Scoring.h`): the bonded terms from
-    `build_dye_restraints`, the sterics from `build_steric_restraint` -- one
+    `build_probe_restraints`, the sterics from `build_steric_restraint` -- one
     `PairsRestraint` over every non-excluded pair rather than one restraint
     per pair. The exclusions are the system's own, so the two cannot disagree
     about which pairs are 1-2, 1-3 or 1-4.
     """
     site_ids = list(site_particles)
     particles = [site_particles[s].get_index() for s in site_ids]
-    restraints = list(build_dye_restraints(model, system, site_ids, particles,
+    restraints = list(build_probe_restraints(model, system, site_ids, particles,
                                            nonbonded=False))
     steric = build_steric_restraint(model, system, site_ids, particles)
     softsphere_restraints = [steric] if steric is not None else []
@@ -2729,7 +2984,7 @@ def _mobile_ring_site_ids(
 
 
 # `_topo_distance_leq` was here -- a breadth-first walk over the site graph,
-# bounded by depth. It is `DyeForceFieldSystem::is_within_bonds` now: the walk
+# bounded by depth. It is `ProbeForceFieldSystem::is_within_bonds` now: the walk
 # reads only the bonds, so it belongs on the object that holds them.
 
 
@@ -2913,10 +3168,8 @@ def _configure_movable(
 def _absolutize_component_pdbs(system, system_cif):
     """Component paths relative to the system CIF, made absolute.
 
-    The copy used to be ``json.loads(json.dumps(system))`` -- a deep copy that
-    only worked because the system was a dictionary of plain data. A typed
-    system is not JSON, so the components map is rebuilt directly, which is
-    what the function meant in the first place: nothing else was being copied.
+    The components map is rebuilt directly rather than deep-copied: it is the
+    only part this touches, and a typed system is not JSON to round-trip.
     """
     system = as_forcefield_system(system)
     base_dir = Path(system_cif).resolve().parent
@@ -2941,7 +3194,7 @@ def _write_system_copy(system, system_cif, out_dir, output_root):
 
     out_path = Path(out_dir)
     copy_path = out_path / "system.cif"
-    write_dye_forcefield_cif(str(copy_path), sys_out)
+    write_probe_forcefield_cif(str(copy_path), sys_out)
 
     out_root = Path(output_root)
     trajs_anchor = None
@@ -2956,7 +3209,7 @@ def _write_system_copy(system, system_cif, out_dir, output_root):
     )
     systems_dir.mkdir(parents=True, exist_ok=True)
     root_copy_path = systems_dir / f"{(system.name or 'ff_system')}.system.cif"
-    write_dye_forcefield_cif(str(root_copy_path), sys_out)
+    write_probe_forcefield_cif(str(root_copy_path), sys_out)
 
 
 def _run_simple_md(
@@ -3767,7 +4020,7 @@ def run_dye_simulation(
         )
 
 # --------------------------------------------------------------------------
-# build-system -- was a `main` inside `IMP.bff.cgdye.topology`
+# build-system -- was a `main` inside `IMP.bff.cgprobe.topology`
 # --------------------------------------------------------------------------
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
@@ -3815,7 +4068,7 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
     """Build a force-field system from component MOL2 files and templates.
 
     Note this is not the same builder as
-    `IMP.bff.cgdye.topology.build_dye_protein_system`: on the same two
+    `IMP.bff.cgprobe.topology.build_probe_protein_system`: on the same two
     components they agree on sites, bonds, angles and dihedrals and differ on
     impropers, which this one builds (81) and that one leaves empty. See
     okf/validation/impropers_are_dropped.md.
@@ -3823,7 +4076,7 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
     import click as _click
     import os
     from IMP.bff import (FFComponentSpec, build_forcefield_system,
-                         write_dye_forcefield_cif)
+                         write_probe_forcefield_cif)
 
     # `name=X,mol2=Y,template=Z,role=fixed|mobile` is this command's own
     # syntax, so it is parsed here rather than in the library -- the builder
@@ -3853,7 +4106,7 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
     except ValueError as exc:
         raise _click.ClickException(str(exc)) from exc
     os.makedirs(out_dir, exist_ok=True)
-    write_dye_forcefield_cif(output_cif, system)
+    write_probe_forcefield_cif(output_cif, system)
     click.echo(f"Wrote {output_cif}")
     click.echo(
         f"sites={len(system.sites)} bonds={len(system.bonds)} "
@@ -4360,6 +4613,9 @@ def cli():
 def main():
     cli.add_command(flexfit)
     cli.add_command(rmsd)
+    cli.add_command(select_pairs)
+    cli.add_command(openmm_command)
+    cli.add_command(av_export)
     # `auto_model` is declared `@click.command(name="decays")` and was never
     # registered, so `imp_bff decays` did not exist however carefully you read
     # the file. Registered now.

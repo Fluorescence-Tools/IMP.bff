@@ -38,6 +38,10 @@ import numpy as np
 
 /* Reference-counted types: decorators, objects, and the restraint. */
 %include "IMP_bff.pathmap.i"
+/* The point-cloud distance kernels and the fps.json distance vocabulary.
+   Wrapped before av.i: AV.h's defaults name this header's enum. */
+%include "IMP_bff.avdistance.i"
+
 %include "IMP_bff.av.i"
 
 /* Reading a frame out of a hierarchy without a SWIG call per atom, and the
@@ -66,7 +70,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP_bff.dye.i"
 
 /* Distances and orientations over point clouds. */
-%include "IMP_bff.avdistance.i"
 
 /* Dynamics: the dye's position, then its excited state. */
 %include "IMP/bff/BrownianWalk.h"

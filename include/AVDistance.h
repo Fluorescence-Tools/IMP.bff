@@ -7,9 +7,6 @@
  * coarse-grained ensemble or an MD trajectory as readily as an accessible
  * volume -- anything that supplies states.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
- *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
@@ -22,6 +19,29 @@
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
+
+/// Different types of distances between two accessible volumes
+typedef enum{
+    PROBE_PAIR_DISTANCE_E,            /// Mean FRET averaged distance R_E
+    PROBE_PAIR_DISTANCE_MEAN,         /// Mean distance <R_DA>
+    PROBE_PAIR_DISTANCE_MP,           /// Distance between AV mean positions
+    PROBE_PAIR_EFFICIENCY,            /// Mean FRET efficiency
+    PROBE_PAIR_DISTANCE_DISTRIBUTION, /// Distance distribution
+    PROBE_PAIR_XYZ_DISTANCE,          /// Distance between XYZ of dye particles
+    PROBE_PAIR_DISTANCE_MIN           /// Closest approach of the two clouds
+} ProbePairMeasures;
+
+
+//! The fps.json name of a probe-pair distance type -- `RDAMean`, `RDAMeanE`,
+//! `Rmp`, `Efficiency`, `pRDA`, `Rmin`.
+/*! The vocabulary is the file format's, so it belongs beside the enum and not
+    inside a reader: a table that reports what it scored needs the same names
+    the file used. An unrecognised type gives the empty string. */
+IMPBFFEXPORT std::string probe_pair_distance_type_name(int distance_type);
+
+//! The type an fps.json distance name denotes; -1 when the name is unknown.
+IMPBFFEXPORT int probe_pair_distance_type(const std::string& name);
+
 
 //! What split_contact_volume() found in a voxel.
 enum AVVoxel {
@@ -46,9 +66,8 @@ IMPBFFEXPORT std::vector<double> points_weighted_mean(
     The clouds arrive straight from numpy, one `(n, 4)` array per cloud via
     IN_ARRAY2. The result is published as an `(n_samples, 2)` managed numpy
     view: column 0 is the distance, column 1 the weight product. Both shapes
-    are part of the contract -- they used to be applied by Python `.ravel()` /
-    `.reshape()` over the flat buffers, and the caller's picture of the data is
-    not something a second side should state a second time.
+    are part of the contract, so a caller never reshapes a flat buffer to
+    recover the picture the data already has.
 
     \param[in] p1,p2 flat clouds, four per point. Via IN_ARRAY2, carrying the
                 (n, 4) shape; the values are read as `4 * n` in row order.
@@ -116,11 +135,136 @@ IMPBFFEXPORT std::vector<double> distance_sample_statistics(
         double forster_radius = 52.0
 );
 
+//! Smallest distance between any point of one cloud and any of the other.
+/*!
+    A *bound*, where every other distance type here is an average: two labels
+    can approach no closer than this, whatever the linkers do. That is the
+    quantity a crosslink-style upper limit is written against, and the reason
+    it is not a mean.
+
+    Points of zero weight are skipped -- a zero-weight point is not in the
+    volume. The double loop is exact and \f$O(n_1 n_2)\f$; at the few thousand
+    points an AV carries that is milliseconds, and there is no sampled version
+    because a minimum estimated from a sample is biased high.
+
+    \param[in] p1,p2 flat clouds, four per point: x, y, z, weight
+    \return the minimum distance; infinity when either cloud has no weight
+*/
+IMPBFFEXPORT double minimum_distance(const std::vector<double>& p1,
+                                     const std::vector<double>& p2);
+
+//! Fraction of a cloud's weight lying within \p radius of any reference point.
+/*!
+    How much of a volume touches something -- a patch of surface, a set of
+    quenching residues, a binding partner. The answer is a weight fraction in
+    [0, 1], so it does not depend on how finely the volume was rastered.
+
+    \param[in] points the cloud, flat, four per point
+    \param[in] reference_coords the reference positions, flat, **three** per
+               point (they carry no weight)
+    \param[in] radius the contact radius, A
+    \return the fraction of \p points weight within \p radius of at least one
+            reference position; 0 for an empty cloud or no references
+    \throw ValueException when \p reference_coords is not a multiple of three
+*/
+IMPBFFEXPORT double cloud_overlap(const std::vector<double>& points,
+                                  const std::vector<double>& reference_coords,
+                                  double radius);
+
+//! The model distance between two clouds, in a named convention.
+/*!
+    One dispatch for the point-cloud forms of the #IMP::bff::ProbePairMeasures
+    conventions, so a caller that has two clouds rather than two
+    #IMP::bff::AV decorators does not have to pick the right reduction itself.
+
+    \param[in] p1,p2 flat clouds, four per point
+    \param[in] distance_type a #IMP::bff::ProbePairMeasures value
+    \param[in] forster_radius \f$R_0\f$, for the two FRET conventions
+    \param[in] n_samples,seed for the sampled conventions; `Rmp` and `Rmin` are
+               exact and ignore both
+*/
+IMPBFFEXPORT double cloud_model_distance(
+        const std::vector<double>& p1, const std::vector<double>& p2,
+        int distance_type = PROBE_PAIR_DISTANCE_MEAN,
+        double forster_radius = 52.0, int n_samples = 50000, int seed = 0);
+
+//! The distance distribution between two clouds: the `pRDA` convention.
+/*!
+    `pRDA` is the one entry in #IMP::bff::ProbePairMeasures that is **not a
+    distance**, and #IMP::bff::cloud_model_distance() refuses it for that
+    reason. This is what it asks for instead: the weighted histogram of pair
+    distances, \f$p(R_{DA})\f$, which is what a fluorescence decay is actually
+    a function of.
+
+    \param[in] p1,p2 flat clouds, four per point
+    \param[in] axis the histogram's **bin edges**, ascending; a distance
+               outside them is dropped rather than piled into an end bin
+    \param[in] n_samples,seed the pair sample
+    \param[in] normalize divide by the total weight, so the result sums to 1
+               over the bins that were in range
+    \return one value per bin -- `axis.size() - 1` of them
+    \throw ValueException when \p axis has fewer than two edges or is not
+           ascending
+*/
+IMPBFFEXPORT std::vector<double> cloud_distance_distribution(
+        const std::vector<double>& p1, const std::vector<double>& p2,
+        const std::vector<double>& axis, int n_samples = 50000, int seed = 0,
+        bool normalize = true);
+
+//! The mean-position separation that reproduces a given model distance.
+/*!
+    The inverse of #IMP::bff::cloud_model_distance in its first argument: slide
+    the two clouds apart, rigidly and along the line joining their mean
+    positions, until the modelled observable equals \p target_distance, and
+    report the \f$R_{mp}\f$ at which that happens.
+
+    This is the number that turns a measurement into a restraint an ordinary
+    two-particle potential can carry. An experiment reports
+    \f$\langle R_{DA}\rangle\f$; a distance restraint between two mean
+    positions needs \f$R_{mp}\f$; the two differ by several angstrom and the
+    difference depends on the shapes of both volumes, so it cannot be a
+    constant. #IMP::bff::effective_distance is the *forward* approximation of
+    the same relation, parametrised rather than measured; this is the exact
+    answer for the two volumes in hand.
+
+    The pairs are sampled **once** and then translated, so the function being
+    bisected is smooth: resampling per iteration would add noise of order
+    \f$1/\sqrt{n}\f$ to a root that is being located to \p accuracy. Bracket by
+    expansion, then bisect -- which is stricter than the fixed-point iteration
+    of the reference implementation, whose step assumes
+    \f$dR_{model}/dR_{mp} = 1\f$ and which stops when it stops improving rather
+    than when it has converged.
+
+    \param[in] p1,p2 flat clouds, four per point
+    \param[in] target_distance the measured value to reproduce
+    \param[in] distance_type which convention \p target_distance is in
+    \param[in] forster_radius \f$R_0\f$
+    \param[in] accuracy stop when the model distance is this close, A
+    \param[in] n_samples,seed the fixed pair sample
+    \return the \f$R_{mp}\f$ that reproduces \p target_distance; 0 when either
+            cloud is empty
+    \throw ValueException when \p target_distance is unreachable by any
+           separation -- a mean distance shorter than the volumes allow, or an
+           efficiency outside (0, 1)
+*/
+IMPBFFEXPORT double rmp_from_model_distance(
+        const std::vector<double>& p1, const std::vector<double>& p2,
+        double target_distance,
+        int distance_type = PROBE_PAIR_DISTANCE_MEAN,
+        double forster_radius = 52.0, double accuracy = 0.01,
+        int n_samples = 50000, int seed = 0);
+
 //! Asymmetric chi-squared contribution of one distance restraint.
 /*!
-    \f$\chi^2 = (d_m - d_e)^2 / \sigma^2\f$, with \f$\sigma\f$ taken from
-    whichever side of the experimental value the model falls on. A non-positive
-    error contributes nothing rather than dividing by zero.
+    \f$\chi^2 = (d_m - d_e)^2 / \sigma^2\f$. **The residual is model minus
+    data**, which is the definition the whole package uses: a model distance
+    that is too large is a positive deviation. \f$\sigma\f$ is the
+    experimental error on that side -- a positive residual is judged against
+    \p error_pos, a negative one against \p error_neg. Squaring makes the sign
+    invisible in the value; what the convention decides is which error bar
+    applies, and with asymmetric errors that is the whole answer.
+
+    A non-positive error contributes nothing rather than dividing by zero.
 */
 IMPBFFEXPORT double chi2_score(double model_distance,
                                double experimental_distance,

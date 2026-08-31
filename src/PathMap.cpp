@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/PathMap.h
+ *  \file PathMap.cpp
  *  \brief Class to search path on grids
  *
  * \authors Thomas-Otavio Peulen
@@ -7,6 +7,9 @@
  *
  */
 #include <IMP/bff/PathMap.h>
+#include <sstream>
+#include <fstream>
+#include <IMP/bff/DataPaths.h>
 
 #include <cstring>
 #ifdef __ARM_NEON
@@ -54,6 +57,110 @@ void PathMap::set_path_map_header(const PathMapHeader &av_header, float resoluti
     calc_all_voxel2loc();
     loc_size_ = nvox;
 }
+
+LinkerWeighting::LinkerWeighting(double x_min, double x_max,
+                                 const std::vector<double>& y)
+        : x_min_(x_min), x_max_(x_max), y_(y) {
+    if (y_.size() < 2) {
+        IMP_THROW("a linker weighting needs at least two tabulated points",
+                  ValueException);
+    }
+    if (!(x_max_ > x_min_)) {
+        IMP_THROW("the path-length range must be positive, got [" << x_min_
+                                                                  << ", "
+                                                                  << x_max_
+                                                                  << "]",
+                  ValueException);
+    }
+}
+
+double LinkerWeighting::get_weight(double path_length) const {
+    if (y_.empty()) return 1.0;
+    const std::size_t n = y_.size();
+    if (path_length <= x_min_) return y_.front();
+    if (path_length >= x_max_) return y_.back();
+    const double step = (x_max_ - x_min_) / (double) (n - 1);
+    const double f = (path_length - x_min_) / step;
+    std::size_t i = (std::size_t) f;
+    if (i >= n - 1) return y_.back();
+    const double t = f - (double) i;
+    return y_[i] * (1.0 - t) + y_[i + 1] * t;
+}
+
+double LinkerWeighting::get_supported_fraction(double x) const {
+    if (y_.empty()) return 1.0;
+    double total = 0.0, below = 0.0;
+    const double step = (x_max_ - x_min_) / (double) (y_.size() - 1);
+    for (std::size_t i = 0; i < y_.size(); ++i) {
+        total += y_[i];
+        if (x_min_ + step * (double) i <= x) below += y_[i];
+    }
+    return total > 0.0 ? below / total : 0.0;
+}
+
+LinkerWeighting read_linker_weighting(const std::string& path,
+                                      double linker_length) {
+    std::ifstream in(path.c_str());
+    if (!in) IMP_THROW("cannot read " << path, IOException);
+
+    std::vector<double> keys;
+    std::vector<double> xs;
+    std::vector<std::vector<double> > rows;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream ls(line);
+        std::string first;
+        if (!(ls >> first)) continue;
+        if (keys.empty()) {
+            double k;                       // the header: label then the keys
+            while (ls >> k) keys.push_back(k);
+            if (keys.empty()) {
+                IMP_THROW(path << ": the header row carries no axis keys",
+                          ValueException);
+            }
+            continue;
+        }
+        double x;
+        try { x = std::stod(first); } catch (...) { continue; }
+        std::vector<double> row;
+        double v;
+        while (ls >> v) row.push_back(v);
+        if (row.size() != keys.size()) {
+            IMP_THROW(path << ": row at " << x << " has " << row.size()
+                           << " values for " << keys.size() << " keys",
+                      ValueException);
+        }
+        xs.push_back(x);
+        rows.push_back(row);
+    }
+    if (xs.size() < 2) {
+        IMP_THROW(path << ": fewer than two tabulated path lengths",
+                  ValueException);
+    }
+
+    // the first key not less than the linker: a longer linker than the table
+    // covers gets no weighting rather than an extrapolation
+    std::size_t col = keys.size();
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        if (keys[i] >= linker_length) { col = i; break; }
+    }
+    if (col == keys.size()) return LinkerWeighting();
+
+    std::vector<double> y;
+    y.reserve(rows.size());
+    for (const auto& r : rows) y.push_back(r[col]);
+    return LinkerWeighting(xs.front(), xs.back(), y);
+}
+
+LinkerWeighting linker_weighting(double linker_length) {
+    static const std::string path =
+            get_data_path("linker/chain_weighting.csv");
+    return read_linker_weighting(path, linker_length);
+}
+
+void PathMap::set_linker_weighting(const LinkerWeighting& w) { weighting_ = w; }
+
 
 template<class Cmp>
 void PathMap::find_path_impl(
@@ -901,7 +1008,7 @@ void PathMap::sync_tiles_from_soa(){
         tiles[i].penalty = have_pen ? penalty_soa_[i]
                                     : ((cost[i] < 0.0f) ? TILE_PENALTY_DEFAULT : 0.0f);
         tiles[i].cost = (cost[i] < 0.0f) ? TILE_COST_DEFAULT : cost[i];
-        tiles[i].density = density_soa_[i];
+        tiles[i].density = density_soa_[i] * path_weight(i);
         tiles[i].previous = nullptr;
     }
     // `visited` mirrors the reached set for the tile-based readers
@@ -982,28 +1089,31 @@ int PathMap::get_dim_index_by_voxel(long index, int dim){
 void PathMap::sample_obstacles(double extra_radius){
     set_origin(pathMapHeader_.get_origin());
 
+    // The radius each atom obstructs with: its own, or the override's when one
+    // is set. **Zero is transparent** -- it is not inflated, and a binarized
+    // sphere of radius zero contains no point, so the atom blocks nothing
+    // while keeping its place in the list.
+    const bool overridden = !obstacle_radii_.empty();
+    IMP_USAGE_CHECK(!overridden || obstacle_radii_.size() == xyzr_.size(),
+                    "PathMap: " << obstacle_radii_.size() << " obstacle radii "
+                    "for " << xyzr_.size() << " particles");
+
     std::vector<double> radii_original;
-    // 1. Update radii = radius + dye radius
-    if(extra_radius!=0.0){
-        radii_original.reserve(xyzr_.size());
-        for(auto &p : xyzr_){
-            double r = p.get_radius();
-            radii_original.emplace_back(r);
-            p.set_radius(r + extra_radius);
-        }
+    radii_original.reserve(xyzr_.size());
+    for(size_t i = 0; i < xyzr_.size(); i++){
+        const double own = xyzr_[i].get_radius();
+        radii_original.emplace_back(own);
+        const double r = overridden ? obstacle_radii_[i] : own;
+        xyzr_[i].set_radius(r > 0.0 ? r + extra_radius : 0.0);
     }
 
     // 2. Use sampled density map to place atoms (density in map)
     SampledDensityMap::resample();
 
     // Restore radii
-    if(extra_radius!=0.0){
-        radii_original.reserve(xyzr_.size());
-        for (size_t i = 0; i < radii_original.size(); i++) {
-            xyzr_[i].set_radius(radii_original[i]);
-        }
+    for (size_t i = 0; i < radii_original.size(); i++) {
+        xyzr_[i].set_radius(radii_original[i]);
     }
-
 }
 
 std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
@@ -1040,7 +1150,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
                         if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
                         float c = cp[i] * grid_spacing;
                         float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-                        density *= density_soa_[i];
+                        density *= density_soa_[i] * path_weight(i);
                         if(density > 0){
                             const float xf = (run.ix0 + q) * sp + ox, yf = run.iy * sp + oy, zf = run.iz * sp + oz;
                             v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
@@ -1053,7 +1163,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
                     if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
                     float c = cp[i] * grid_spacing;
                     float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-                    density *= density_soa_[i];
+                    density *= density_soa_[i] * path_weight(i);
                     if(density > 0){
                         const float xf = (run.ix0 + k) * sp + ox, yf = run.iy * sp + oy, zf = run.iz * sp + oz;
                         v.emplace_back((double) xf, (double) yf, (double) zf, (double) density);
@@ -1070,7 +1180,7 @@ std::vector<IMP::algebra::Vector4D> PathMap::get_xyz_density(){
             if(!(cost[i] >= 0.0f && cost[i] < TILE_COST_DEFAULT)) continue;
             float c = cost[i] * grid_spacing;
             float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-            density *= density_soa_[i];
+            density *= density_soa_[i] * path_weight(i);
             if(density > 0){
                 v.emplace_back((double) xl[i], (double) yl[i], (double) zl[i], (double) density);
             }
@@ -1127,7 +1237,7 @@ void PathMap::get_xyz_density_soa(std::vector<float> &vx, std::vector<float> &vy
                     if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
                     float c = cp[i] * grid_spacing;
                     float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-                    density *= density_soa_[i];
+                    density *= density_soa_[i] * path_weight(i);
                     if(density > 0){
                         vx.push_back((run.ix0 + q) * sp + ox); vy.push_back(run.iy * sp + oy);
                         vz.push_back(run.iz * sp + oz); vw.push_back(density);
@@ -1140,7 +1250,7 @@ void PathMap::get_xyz_density_soa(std::vector<float> &vx, std::vector<float> &vy
                 if(!(cp[i] >= 0.0f && cp[i] < TILE_COST_DEFAULT)) continue;
                 float c = cp[i] * grid_spacing;
                 float density = (c >= 0.0f && c < linker_length) ? 1.0 : 0.0f;
-                density *= density_soa_[i];
+                density *= density_soa_[i] * path_weight(i);
                 if(density > 0){
                     vx.push_back((run.ix0 + k) * sp + ox); vy.push_back(run.iy * sp + oy);
                     vz.push_back(run.iz * sp + oz); vw.push_back(density);
@@ -1192,7 +1302,7 @@ void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
     *output = t;
 }
 
-void write_path_map(
+void write_map_feature(
     PathMap *d,
     std::string name,
     int value_type,

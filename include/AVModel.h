@@ -91,6 +91,9 @@ public:
         has. With no attachment point either, the origin. */
     void get_mean_position(double** out_view, int* n_out_view) const;
 
+    //! The cloud itself, for a C++ caller. Python gets the numpy view above.
+    const std::vector<double>& get_points_vector() const { return points_; }
+
     int get_n_points() const { return static_cast<int>(points_.size() / 4); }
     bool get_has_volume() const { return !points_.empty(); }
     bool get_has_orientations() const { return !orientations_.empty(); }
@@ -144,11 +147,9 @@ IMP_VALUES(States, StatesList);
     The grid is cubic: #IMP::bff::PathMapHeader sizes it from the linker length
     in all three axes, so `ng` is one number rather than three.
 
-    There is no padding here. The Python this replaces kept a `_padded_points`
-    buffer and an `n_points` count because the numba kernel it once called
-    returned a grid-sized array with unused trailing rows; the C++ kernel
-    returns exactly the points it found, so the count is the cloud's length and
-    the two cannot disagree.
+    There is no padding: the kernel returns exactly the points it found, so
+    the count is the cloud's length and a separate `n_points` cannot disagree
+    with it.
 */
 class IMPBFFEXPORT AccessibleVolume : public States {
 protected:
@@ -181,6 +182,12 @@ public:
     void get_density(double** out_view, int* n_out_view) const;
     void get_grid_origin(double** out_view, int* n_out_view) const;
 
+    //! The grid itself, for a C++ caller. Python gets the numpy views above.
+    const std::vector<double>& get_density_vector() const { return density_; }
+    const std::vector<double>& get_grid_origin_vector() const {
+        return grid_origin_;
+    }
+
     int get_ng() const { return ng_; }
     double get_grid_step() const { return grid_step_; }
 
@@ -197,6 +204,25 @@ public:
                             << ")");
 };
 IMP_VALUES(AccessibleVolume, AccessibleVolumes);
+
+//! Write a volume to \p path; the format follows the file extension.
+/*!
+    The overload for the value type #IMP::bff::compute_av() returns, so the
+    array front door and the decorator front door are written the same way.
+
+    | extension | what is written |
+    |---|---|
+    | `.xyz` | the point cloud, weight in a fifth column |
+    | `.pqr` | the point cloud, weight in the charge column |
+    | `.dx` | the density grid, as OpenDX |
+
+    \param[in] av the volume
+    \param[in] path the output path, whose extension picks the format
+    \throw ValueException on an unknown extension, or on a grid format when
+           the volume carries only a cloud
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_av(const AccessibleVolume& av, const std::string& path);
 
 //! Accessible contact volume: the cloud split by proximity to a surface.
 /*!

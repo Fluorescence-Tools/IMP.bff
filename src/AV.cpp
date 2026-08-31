@@ -1,5 +1,5 @@
 /**
- * \file IMP/bff/AV.h
+ * \file AV.cpp
  * \brief Simple Accessible Volume decorator.
  *
  * \authors Thomas-Otavio Peulen
@@ -7,11 +7,19 @@
  *
  */
 #include <IMP/bff/AV.h>
+#include <IMP/bff/SelectionExpression.h>
+#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/StructureIO.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <chrono>
 
 IMPBFF_BEGIN_NAMESPACE
+
+//! The volume's full point cloud, flat: x, y, z, weight. Defined below.
+static std::vector<double> av_cloud(const AV& av);
+
+
 
 
 void AV::show(std::ostream &out) const {
@@ -34,15 +42,23 @@ std::string AVPairDistanceMeasurement::get_json(){
 
 
 double AVPairDistanceMeasurement::score_model(double model) const{
-    auto ev = [](double f, double m, double en, double ep){
-        double dev = m - f;
-        double w = (dev < 0) ? 1. / en : 1. / ep;
-        return .5 * algebra::get_squared(dev * w);
-    };
+    // One implementation of the asymmetric chi2, `chi2_score`. What stood
+    // here selected the *opposite* error bar -- it measured the deviation as
+    // data minus model and then read the branch as if it were model minus
+    // data, so a model that was too large was judged against error_neg -- and
+    // with asymmetric errors this restraint therefore disagreed with
+    // `chi2_score` and with the FPS tables by up to two orders of magnitude
+    // (experiment 50 A, errors (1, 10): 25.0 against 1.0). Nothing asserted
+    // either number; see okf/validation/two_chi2_conventions.md.
+    //
+    // The factor is 0.5, which is what a Gaussian restraint is worth:
+    // -log L = (dev/sigma)^2 / 2, and it is what `IMP::core::Harmonic` scores
+    // for k = 1/sigma^2. Halve it here and the restraint is worth half an
+    // IMP harmonic, so it mixes with other terms at the wrong weight.
     if(std::isnan(model)){
         return std::numeric_limits<double>::infinity();
     }
-    return 0.5 * ev(model, distance, error_neg, error_pos);
+    return 0.5 * chi2_score(model, distance, error_neg, error_pos);
 }
 
 
@@ -65,7 +81,7 @@ double av_distance(
         InverseSampler<points_type> sampler2(p2, el3getter);
         double val = 0.;
         switch(distance_type){
-            case DYE_PAIR_EFFICIENCY: {
+            case PROBE_PAIR_EFFICIENCY: {
                 for (int s = 0; s < n_samples; s++) {
                     auto tmp = sampler1.get_random() - sampler2.get_random();
                     tmp[3] = 0.0;
@@ -73,23 +89,29 @@ double av_distance(
                 }
                 return val / n_samples;
             }
-            case DYE_PAIR_DISTANCE_E: {
-                double fret_eff = av_distance(av1, av2, forster_radius, DYE_PAIR_EFFICIENCY, n_samples);
+            case PROBE_PAIR_DISTANCE_E: {
+                double fret_eff = av_distance(av1, av2, forster_radius, PROBE_PAIR_EFFICIENCY, n_samples);
                 return distance_fret<double>(fret_eff, forster_radius);
             }
-            case DYE_PAIR_DISTANCE_MP: {
+            case PROBE_PAIR_DISTANCE_MP: {
                 IMP::algebra::Vector3D mp1 = av1.get_mean_position();
                 IMP::algebra::Vector3D mp2 = av2.get_mean_position();
                 return get_l2_norm((mp1 - mp2));
             }
-            case DYE_PAIR_XYZ_DISTANCE: {
+            case PROBE_PAIR_DISTANCE_MIN: {
+                // Exact, and not from `n_samples`: a minimum estimated from a
+                // sample is biased high, so sampling it would answer a
+                // different question than the one the type names.
+                return minimum_distance(av_cloud(av1), av_cloud(av2));
+            }
+            case PROBE_PAIR_XYZ_DISTANCE: {
                 IMP::Particle* p1 = av1.get_particle();
                 IMP::Particle* p2 = av2.get_particle();
                 IMP::algebra::Vector3D mp1 = IMP::core::XYZ(p1).get_coordinates();
                 IMP::algebra::Vector3D mp2 = IMP::core::XYZ(p2).get_coordinates();
                 return get_l2_norm((mp1 - mp2));
             }
-            case DYE_PAIR_DISTANCE_MEAN:
+            case PROBE_PAIR_DISTANCE_MEAN:
             default: {
                 for (int s = 0; s < n_samples; s++) {
                     auto tmp = sampler1.get_random() - sampler2.get_random();
@@ -167,7 +189,12 @@ const std::vector<IMP::algebra::Vector4D> &AV::get_cloud() const{
 
 IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
     IMP::algebra::Vector3D r = {0.0, 0.0, 0.0};
-    double sum = 1.0;
+    /* Zero, not one. `sum` is the total weight the numerator was built from,
+       and starting it at 1.0 added a unit of weight belonging to no point:
+       every mean position was pulled toward the origin by (1+W)/(2+W), and an
+       **empty** volume returned exactly half the source coordinate -- a
+       plausible-looking number for a volume that does not exist. */
+    double sum = 0.0;
     if(include_source){
         r += get_source_coordinates();
         sum += 1.0;
@@ -370,6 +397,12 @@ void AV::set_occupancy_registry(AVOccupancyRegistry *registry){
                   IMP::ValueException);
     }
     auto &st = get_state();
+    // A shared occupancy grid *is* one obstacle set, rasterised once for every
+    // volume in it. A `strip_mask` gives this volume an obstacle set of its
+    // own -- its labelling site's side chain is absent for it and present for
+    // its neighbours -- so it cannot be in that grid, and takes a private map
+    // instead. Sharing stays for the volumes that strip nothing.
+    if(registry && !get_strip_mask().empty()) registry = nullptr;
     st.registry = registry;
     st.have_result = false;
     st.private1 = nullptr;
@@ -406,6 +439,117 @@ void AV::prepare_lattice_window(){
         ->request_window(k0[0], k0[1], k0[2], n, n, n);
 }
 
+namespace {
+
+//! The radius each atom obstructs this volume with; the mask's atoms get zero.
+/*! A stripped atom keeps its place in the list and loses its **size**. That is
+    all "removing an obstacle" means to a rasteriser that tests
+    `distance < radius`, and it is cheaper and safer than handing each volume a
+    list of its own: every volume indexes the same particles whatever it
+    strips, so the incremental window machinery needs no per-volume mapping,
+    and nothing is mutated on a model that another thread is reading.
+
+    The source atom keeps its radius whatever the mask says -- a mask must not
+    be able to delete the anchor. It is dropped from the obstacle set all the
+    same, as FPS drops it (`av_routines.cpp:50`), but by
+    drop_source_obstruction() rather than here: that is one mechanism on every
+    path, where doing it here for some paths and there for others let a shared
+    raster and a private one disagree about the same volume. An empty mask
+    returns an empty override, which means "use the particles' own radii". A
+    mask that cannot be read raises rather than being ignored: computing
+    against obstacles the position said to remove is the failure this
+    guards. */
+std::vector<double> obstacle_radii(IMP::atom::Hierarchy root,
+                                   IMP::Particle* source,
+                                   const IMP::ParticlesTemp& all,
+                                   const std::string& mask) {
+    if (mask.empty()) return std::vector<double>();
+
+    const IMP::atom::Selection selection =
+            selection_from_expression(root, mask);
+    const IMP::ParticleIndexes stripped =
+            selection.get_selected_particle_indexes();
+    std::set<IMP::ParticleIndex> transparent(stripped.begin(), stripped.end());
+    transparent.erase(source->get_index());
+
+    std::vector<double> radii(all.size(), 0.0);
+    for (std::size_t i = 0; i < all.size(); ++i) {
+        if (transparent.count(all[i]->get_index())) continue;  // no size
+        radii[i] = IMP::core::XYZR::get_is_setup(all[i])
+                           ? IMP::core::XYZR(all[i]).get_radius()
+                           : 0.0;
+    }
+    return radii;
+}
+
+}  // namespace
+
+namespace {
+
+//! Subtract the attachment atom's own obstruction from an occupancy window.
+/*!
+    FPS drops the attachment atom before it rasterises anything
+    (`av_routines.cpp:50`: `if (i == atom_i) continue;`), and it has to be
+    dropped: an atom cannot block the linker that is tied to it. `IMP.bff` kept
+    it, so the source sat inside its own inflated sphere and the volume came
+    back empty unless the clearance was raised past it -- a knob standing in
+    for a missing rule. Measured on FPS's own reference cloud, dropping it
+    takes `p_1bp` from 0.88 to **0.99** of FPS's volume (PRD-121).
+
+    It is done here rather than through the radii override because the
+    occupancy raster is **shared** between every volume of the same (spacing,
+    extra-radius) class (PRD-105), and each volume drops a *different* atom.
+    Giving each its own raster would cost that sharing. The raster stores a
+    per-voxel atom **count**, so one atom's contribution subtracts exactly: a
+    voxel only this atom covered falls to zero and opens, a voxel any other
+    atom covers stays blocked.
+
+    \param[in,out] counts the window, as read from the occupancy
+    \param[in] k0,n the window's lattice origin and edge
+    \param[in] spacing the lattice spacing
+    \param[in] c the attachment atom's position
+    \param[in] radius its own radius plus this occupancy's extra radius --
+               the same `r + extra_radius` the raster used, so the voxel set
+               subtracted is exactly the one that was added
+*/
+template <typename T>
+void drop_source_obstruction(T *counts, const IMP::algebra::Vector3D &origin,
+                             int n, double spacing,
+                             const IMP::algebra::Vector3D &c,
+                             double source_radius, double extra) {
+    /* Nothing to subtract when the attachment atom contributed nothing. A
+       radius of zero means it is not an obstacle -- the array door builds its
+       obstacles from a caller's list and the source is not in it -- and
+       subtracting a sphere that was never added would open voxels no rule
+       opened. */
+    if (source_radius <= 0.0) return;
+    const double radius = source_radius + extra;
+    if (radius <= 0.0) return;
+    const double r2 = radius * radius;
+    const long nxy = (long) n * n;
+    for (int iz = 0; iz < n; iz++) {
+        const double dz = origin[2] + iz * spacing - c[2];
+        const double dz2 = dz * dz;
+        if (dz2 >= r2) continue;
+        for (int iy = 0; iy < n; iy++) {
+            const double dy = origin[1] + iy * spacing - c[1];
+            const double dyz2 = dz2 + dy * dy;
+            if (dyz2 >= r2) continue;
+            const long row = (long) iz * nxy + (long) iy * n;
+            for (int ix = 0; ix < n; ix++) {
+                const double dx = origin[0] + ix * spacing - c[0];
+                // strict `<`, as AVOccupancyMap::add_sphere tests
+                if (dyz2 + dx * dx < r2) {
+                    T &v = counts[row + ix];
+                    if (v > 0) v -= 1;
+                }
+            }
+        }
+    }
+}
+
+}  // namespace
+
 void AV::init_path_map(){
     auto path_map_header = create_path_map_header();
     av_map_ = new IMP::bff::PathMap(path_map_header);
@@ -418,7 +562,13 @@ void AV::init_path_map(){
 
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
     auto root = IMP::atom::get_root(h);
-    av_map_->set_particles(get_leaves(root));
+    const IMP::ParticlesTemp leaves = get_leaves(root);
+    av_map_->set_particles(leaves);
+    av_map_->set_obstacle_radii(
+            obstacle_radii(root, parent, leaves, get_strip_mask()));
+    if(get_chain_weighting()){
+        av_map_->set_linker_weighting(linker_weighting(get_linker_length()));
+    }
     // A fresh map: whatever the state remembers about tiles is stale.
     auto &st = get_state();
     st.have_result = false;
@@ -438,9 +588,36 @@ void AV::resample(bool shift_xyz, bool force_full){
     } else {
         resample_legacy(shift_xyz);
     }
+    /* An empty volume is a result, not an error -- a site can genuinely be
+       buried -- but it must not pass for a computed one. It used to: nothing
+       was logged, and the mean position came back as a plausible coordinate
+       near the attachment atom. The clearance is named because it is the cause
+       in every case seen so far, and because it is the one parameter a caller
+       would not think to look at.
+       Only the single-call path warns; the network's split
+       prepare/compute/finish path evaluates thousands of volumes per frame and
+       would drown a run in messages. */
+    if(get_map() != nullptr && get_map()->get_xyz_density().empty()){
+        IMP_WARN("AV " << get_particle()->get_name() << ": no accessible voxel."
+                 << " linker_length=" << get_linker_length()
+                 << " linker_width=" << get_linker_width()
+                 << " radius1=" << get_radius1()
+                 << " grid=" << get_simulation_grid_resolution()
+                 << " clearance=" << get_effective_allowed_sphere_radius()
+                 << ". The search inflates obstacles by half the linker width,"
+                    " so a clearance below that walls the source in."
+                 << std::endl);
+    }
 }
 
 // The pre-PRD-105 evaluation, kept byte-for-byte for `space_fixed=False`.
+/* The pre-PRD-105 evaluation, and deliberately *not* given the attachment-atom
+   drop the lattice path has. `space_fixed=False` exists to reproduce the old
+   numbers -- `references/prd105_legacy_pins.json` is there to prove it still
+   does -- so changing its physics would remove the only thing it is for. The
+   consequence is real and worth knowing: a volume computed with
+   `space_fixed=False` grows out of a source that obstructs itself, and is
+   smaller than the same volume on the default path. */
 void AV::resample_legacy(bool shift_xyz){
     auto map = get_map();
 
@@ -465,7 +642,7 @@ void AV::resample_legacy(bool shift_xyz){
     map->fill_sphere(source, critical_radius, TILE_PENALTY_THRESHOLD, true);
 
     // 3.1 Unblock voxels in initial sphere
-    critical_radius = get_allowed_sphere_radius();
+    critical_radius = get_effective_allowed_sphere_radius();
     map->fill_sphere(source, critical_radius, 0, false);
 
     // 4. Find a path from source to other tiles
@@ -584,6 +761,9 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     const double extra1 = get_linker_width() * 0.5;
     const std::vector<double> dye_radii = get_active_radii();
     const double extra2 = dye_radii[0];
+    st.pending_extra1 = extra1;
+    st.pending_extra2 = extra2;
+    st.pending_extra_dye = dye_radii;
     AVOccupancyMap *occ1; AVOccupancyMap *occ2;
     st.pending_occ_dye.clear();
     if(st.registry){
@@ -599,14 +779,21 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
         }
     } else {
         IMP::ParticlesTemp ps(map->ps_.begin(), map->ps_.end());
+        // The volume's own radii: the mask's atoms carry zero, so they take
+        // part in the raster's indexing and block nothing. A private map is
+        // the only place this can be honoured -- a shared raster is one
+        // obstacle set for every volume in it.
+        const std::vector<double> &radii = map->get_obstacle_radii();
         if(!st.private1 || st.private1->get_extra_radius() != extra1
                         || st.private1->get_spacing() != h){
             st.private1 = new AVOccupancyMap(h, extra1, ps);
+            st.private1->set_obstacle_radii(radii);
             st.private1->set_was_used(true);
         }
         if(!st.private2 || st.private2->get_extra_radius() != extra2
                         || st.private2->get_spacing() != h){
             st.private2 = new AVOccupancyMap(h, extra2, ps);
+            st.private2->set_obstacle_radii(radii);
             st.private2->set_was_used(true);
         }
         occ1 = st.private1.get();
@@ -621,6 +808,7 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
             if(!pm || pm->get_extra_radius() != dye_radii[i]
                    || pm->get_spacing() != h){
                 pm = new AVOccupancyMap(h, dye_radii[i], ps);
+                pm->set_obstacle_radii(radii);
                 pm->set_was_used(true);
             }
             pm->set_window(k0[0], k0[1], k0[2], n, n, n);
@@ -701,7 +889,14 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending_stage = 0;
     st.pending_shift_xyz = shift_xyz;
     st.pending_ll = ll;
-    st.pending_allowed = get_allowed_sphere_radius();
+    st.pending_allowed = get_effective_allowed_sphere_radius();
+    /* Unconditional, shared raster or private: the same subtraction on both,
+       so the two cannot compute different volumes for the same position. */
+    st.pending_source_radius =
+            IMP::core::XYZR::get_is_setup(get_model(), get_particle_index(0))
+                    ? IMP::core::XYZR(get_model(),
+                                      get_particle_index(0)).get_radius()
+                    : 0.0;
     st.pending_source = source;
     st.pending_set_origin = set_origin_needed;
     st.pending_grid_origin = grid_origin;
@@ -736,6 +931,15 @@ void AV::resample_lattice_compute(bool split_stages){
     if(st.window_counts.size() != (size_t) nvox) st.window_counts.resize(nvox);
     int32_t *counts = st.window_counts.data();
     st.pending_occ1->read_window_counts(k0[0], k0[1], k0[2], n, n, n, counts);
+    // The attachment atom does not obstruct the linker tied to it.
+    {
+        const double h_ = map->get_path_map_header()
+                                  .get_simulation_grid_resolution();
+        drop_source_obstruction(
+                counts,
+                IMP::algebra::Vector3D(k0[0] * h_, k0[1] * h_, k0[2] * h_), n,
+                h_, source, st.pending_source_radius, st.pending_extra1);
+    }
 
     // 4./5./6. Block voxels further away from the source than the linker
     //    length, open the allowed sphere, and search -- in one pass over
@@ -843,6 +1047,13 @@ void AV::resample_lattice_compute_carve(){
     if(st.window_counts.size() != (size_t) nvox) st.window_counts.resize(nvox);
     int32_t *counts = st.window_counts.data();
     st.pending_occ2->read_window_counts(k0[0], k0[1], k0[2], n, n, n, counts);
+    const double spacing =
+            map->get_path_map_header().get_simulation_grid_resolution();
+    // ...nor does it obstruct the dye, for the same reason.
+    const IMP::algebra::Vector3D win_origin(k0[0] * spacing, k0[1] * spacing,
+                                            k0[2] * spacing);
+    drop_source_obstruction(counts, win_origin, n, spacing, source,
+                            st.pending_source_radius, st.pending_extra2);
     const size_t n_dye = st.pending_occ_dye.empty() ? 1 : st.pending_occ_dye.size();
     if(n_dye <= 1){
         map->carve_lattice(counts);
@@ -858,6 +1069,9 @@ void AV::resample_lattice_compute_carve(){
             int32_t *c = st.window_counts_dye.data() + (i - 1) * (size_t) nvox;
             st.pending_occ_dye[i]->read_window_counts(k0[0], k0[1], k0[2],
                                                      n, n, n, c);
+            drop_source_obstruction(c, win_origin, n, spacing, source,
+                                    st.pending_source_radius,
+                                    st.pending_extra_dye[i]);
             src[i] = c;
         }
         map->carve_lattice_fractional(src.data(), (int) n_dye);
@@ -876,7 +1090,10 @@ void AV::resample_lattice_compute_carve(){
     st.cloud_generation = st.result_generation;
     st.cloud_valid = true;
     IMP::algebra::Vector3D r = source;
-    double sum = 2.0;
+    /* One, not two: the source is in the numerator once, so it must be in the
+       denominator once. The same phantom unit of weight as in
+       get_mean_position(), in a second copy that sets the AV's coordinates. */
+    double sum = 1.0;
     for(size_t i = 0; i < st.cloud_x.size(); i++){
         const double w = st.cloud_w[i];
         if(w <= 0.0f) continue;
@@ -900,10 +1117,11 @@ void AV::resample_lattice_finish(){
     }
 }
 
-void AV::set_av_parameter(const nlohmann::json &j){
+void AV::set_av_parameter(const std::string &json_text){
+    const nlohmann::json j = nlohmann::json::parse(json_text);
     // Only AV1/AV3 (and XYZ, which the reader turns into a fixed point) are
     // AV models. Rotamer-ensemble positions ("R1", PRD-108) are Python-only
-    // today: an fps.json handed to AVNetworkRestraint must be filtered with
+    // today: an fps.json handed to ProbeNetworkRestraint must be filtered with
     // IMP.bff.fps_positions_for_docking() first -- warn instead of silently
     // building an AV1 with default parameters for them.
     const std::string stype = j.value("simulation_type", std::string("AV1"));
@@ -922,10 +1140,20 @@ void AV::set_av_parameter(const nlohmann::json &j){
     set_radius2(r[1]);
     set_radius3(r[2]);
     set_linker_width(j.value("linker_width", 0.5));
-    set_allowed_sphere_radius(j.value("allowed_sphere_radius", 1.5));
+    // Absent means *derive* (see get_effective_allowed_sphere_radius); a
+    // flat 1.5 here is what made this door return empty volumes at FPS's
+    // standard linker width of 4.5 A.
+    set_allowed_sphere_radius(j.value("allowed_sphere_radius", -1.0));
     set_contact_volume_thickness(j.value("contact_volume_thickness", 0.0));
     set_contact_volume_trapped_fraction(j.value("contact_volume_trapped_fraction", -1));
     set_simulation_grid_resolution(j.value("simulation_grid_resolution", 1.5));
+    // The position's parameters are calibrated against a structure whose
+    // labelling site has been stripped, so the mask is part of the position,
+    // not a convenience of whoever wrote the file.
+    set_strip_mask(j.value("strip_mask", std::string()));
+    // Off unless the file asks for it: turning it on changes every number the
+    // volume reports, so it is opt-in and not a default.
+    set_chain_weighting(j.value("chain_weighting", false));
 }
 
 IMP::bff::PathMapHeader AV::create_path_map_header(){
@@ -1100,8 +1328,12 @@ double av_distance_quadrature(
         int quad_k
 ){
     switch(distance_type){
-        case DYE_PAIR_DISTANCE_MP:
-        case DYE_PAIR_XYZ_DISTANCE:
+        case PROBE_PAIR_DISTANCE_MP:
+        case PROBE_PAIR_XYZ_DISTANCE:
+        case PROBE_PAIR_DISTANCE_MIN:
+            // All three are exact already; there is nothing for a quadrature
+            // to approximate, and a coarsened cloud would give a *wrong*
+            // minimum rather than a cheaper one.
             return av_distance(av1, av2, forster_radius, distance_type, 0);
         default:
             break;
@@ -1116,8 +1348,8 @@ double av_distance_quadrature(
     double w1 = 0, w2 = 0;
     for(const auto &p : *p1) w1 += p[3];
     for(const auto &p : *p2) w2 += p[3];
-    const bool efficiency = (distance_type == DYE_PAIR_EFFICIENCY ||
-                             distance_type == DYE_PAIR_DISTANCE_E);
+    const bool efficiency = (distance_type == PROBE_PAIR_EFFICIENCY ||
+                             distance_type == PROBE_PAIR_DISTANCE_E);
     // Exact weighted double sum over block centroids, with a second-order
     // correction from the blocks' second central moments: for a pair of
     // blocks with joint covariance C = C1 + C2, displacement D, d = |D|,
@@ -1168,7 +1400,7 @@ double av_distance_quadrature(
         val += a[3] * acc;
     }
     val /= (w1 * w2);
-    if(distance_type == DYE_PAIR_DISTANCE_E){
+    if(distance_type == PROBE_PAIR_DISTANCE_E){
         return distance_fret<double>(val, forster_radius);
     }
     return val;
@@ -1207,12 +1439,35 @@ IMP::ParticleIndex search_labeling_site(
         sel.set_atom_type(IMP::atom::AtomType(atom_name));
     }
     auto p_atom = sel.get_selected_particles(false);
-    std::clog << p_chain << p_residue << p_atom << std::endl;
+    IMP_LOG_VERBOSE("labelling site " << chain_id << ":" << residue_seq_number
+                    << ":" << atom_name << " -> " << p_chain.size()
+                    << " chain, " << p_residue.size() << " residue, "
+                    << p_atom.size() << " atom matches" << std::endl);
 
+    /* Emptiness first. This read `p_residue[0]` and *then* asked whether
+       `p_residue` had exactly one element -- and IMP_USAGE_CHECK compiles out
+       of a release build, so a site the structure does not contain indexed
+       element zero of an empty vector. Screening a library segfaulted on the
+       first structure that was missing a chain, which is the ordinary case a
+       library is screened for. Throwing is what the callers already expect:
+       IMP::bff::screen_structures catches IMP::Exception and records the
+       structure with a NaN rather than ending the run. */
+    if(p_residue.empty()){
+        IMP_THROW("no labelling site " << (chain_id.empty() ? "*" : chain_id)
+                  << ":" << residue_seq_number
+                  << (atom_name.empty() ? "" : ":" + atom_name)
+                  << " in this structure", ValueException);
+    }
+    if(p_residue.size() > 1){
+        IMP_THROW("ambiguous labelling site " << (chain_id.empty() ? "*" : chain_id)
+                  << ":" << residue_seq_number << ": " << p_residue.size()
+                  << " residues match", ValueException);
+    }
     auto p = p_residue[0];
-    IMP_USAGE_CHECK(p_residue.size() == 1, "No or ambiguous AV attachment site selected");
     if(p_atom.empty()){
-        IMP_WARN("AV attached to atom but residue level resolution\n")
+        IMP_WARN("labelling site " << chain_id << ":" << residue_seq_number
+                 << " has no atom " << atom_name
+                 << "; attaching at residue resolution" << std::endl);
     } else{
         p = p_atom[0];
     }
@@ -1266,6 +1521,139 @@ std::vector<double> sample_distances(
     return data;
 }
 }  // namespace
+
+static std::vector<double> av_cloud(const AV& av) {
+    std::vector<double> flat;
+    auto m = av.get_map();
+    if (!m) return flat;
+    const auto d = m->get_xyz_density();
+    flat.reserve(d.size() * 4);
+    for (const auto& v : d) {
+        flat.push_back(v[0]); flat.push_back(v[1]);
+        flat.push_back(v[2]); flat.push_back(v[3]);
+    }
+    return flat;
+}
+
+void write_av(const AV& av, const std::string& path) {
+    const std::size_t dot = path.rfind('.');
+    std::string ext = dot == std::string::npos ? "" : path.substr(dot + 1);
+    for (auto& c : ext) c = (char) std::tolower((unsigned char) c);
+
+    if (ext == "xyz") {
+        write_points_xyz(path, av_cloud(av), "He",
+                         "accessible volume, column 5 is the weight");
+        return;
+    }
+    if (ext == "pqr") {
+        write_points_pqr(path, av_cloud(av), 1.0);
+        return;
+    }
+    auto m = av.get_map();
+    if (!m) IMP_THROW("the volume has no map to write", ValueException);
+    if (ext == "dx") {
+        const auto* h = m->get_header();
+        const int nx = h->get_nx(), ny = h->get_ny(), nz = h->get_nz();
+        // The *accessible* density, which is what an accessible volume is:
+        // PathMap derives from em::SampledDensityMap and its own `get_value`
+        // is the obstacle raster it was built from, not the volume. This is
+        // the same feature `write_map_feature` and AVBuilder read, so it also
+        // carries the linker weighting when one is set.
+        const std::vector<float> tile = m->get_tile_values(
+                PM_TILE_ACCESSIBLE_DENSITY);
+        std::vector<double> density((std::size_t) nx * ny * nz, 0.0);
+        // IMP's voxels run x fastest; OpenDX wants z fastest, so this is the
+        // transposition, done once here rather than by every caller.
+        for (int ix = 0; ix < nx; ++ix) {
+            for (int iy = 0; iy < ny; ++iy) {
+                for (int iz = 0; iz < nz; ++iz) {
+                    const long v = m->xyz_ind2voxel(ix, iy, iz);
+                    if (v < 0 || (std::size_t) v >= tile.size()) continue;
+                    density[((std::size_t) ix * ny + iy) * nz + iz] = tile[v];
+                }
+            }
+        }
+        std::vector<double> origin(3);
+        origin[0] = h->get_xorigin();
+        origin[1] = h->get_yorigin();
+        origin[2] = h->get_zorigin();
+        write_opendx(path, density, nx, ny, nz, origin, h->get_spacing());
+        return;
+    }
+    if (ext == "mrc" || ext == "map" || ext == "ccp4") {
+        write_map_feature(m, path, PM_TILE_DENSITY);
+        return;
+    }
+    IMP_THROW("cannot write " << path << ": the extension must be one of "
+                              << "xyz, pqr, dx, mrc, map, ccp4",
+              ValueException);
+}
+
+double rmp_from_measurement(const AV& a, const AV& b,
+                            const AVPairDistanceMeasurement& measurement,
+                            double accuracy, int n_samples, int seed) {
+    return rmp_from_model_distance(av_cloud(a), av_cloud(b),
+                                   measurement.distance,
+                                   measurement.distance_type,
+                                   measurement.forster_radius, accuracy,
+                                   n_samples, seed);
+}
+
+std::vector<double> rmp_flat_bottom_bounds(
+        const AV& a, const AV& b, const AVPairDistanceMeasurement& measurement,
+        double accuracy, int n_samples, int seed) {
+    const std::vector<double> ca = av_cloud(a), cb = av_cloud(b);
+    const int type = measurement.distance_type;
+    const double r0 = measurement.forster_radius;
+    // An efficiency falls with separation, so its low error bar is the high
+    // R_mp bound. Converting each end separately and sorting afterwards keeps
+    // that straight without a special case per convention.
+    const double lo_obs = measurement.distance -
+                          std::max(0.0, measurement.error_neg);
+    const double hi_obs = measurement.distance +
+                          std::max(0.0, measurement.error_pos);
+    auto convert = [&](double target, double fallback) {
+        try {
+            return rmp_from_model_distance(ca, cb, target, type, r0, accuracy,
+                                           n_samples, seed);
+        } catch (const IMP::ValueException&) {
+            // An error bar running past what the volumes can reach is a
+            // one-sided restraint, not a failure.
+            return fallback;
+        }
+    };
+    const double centre = rmp_from_model_distance(ca, cb, measurement.distance,
+                                                  type, r0, accuracy,
+                                                  n_samples, seed);
+    double lo = convert(lo_obs, 0.0);
+    double hi = convert(hi_obs, std::numeric_limits<double>::infinity());
+    if (lo > hi) std::swap(lo, hi);
+    std::vector<double> out(3);
+    out[0] = lo; out[1] = centre; out[2] = hi;
+    return out;
+}
+
+double av_overlap(const AV& av, const IMP::atom::Hierarchy& hierarchy,
+                  const std::string& selection, double radius) {
+    IMP::ParticleIndexes chosen;
+    if (selection.empty()) {
+        for (auto h : IMP::atom::get_leaves(hierarchy)) {
+            chosen.push_back(h.get_particle_index());
+        }
+    } else {
+        chosen = selection_from_expression(hierarchy, selection)
+                         .get_selected_particle_indexes();
+    }
+    IMP::Model* m = hierarchy.get_model();
+    std::vector<double> refs;
+    refs.reserve(chosen.size() * 3);
+    for (auto pi : chosen) {
+        if (!IMP::core::XYZ::get_is_setup(m, pi)) continue;
+        const auto c = IMP::core::XYZ(m, pi).get_coordinates();
+        refs.push_back(c[0]); refs.push_back(c[1]); refs.push_back(c[2]);
+    }
+    return cloud_overlap(av_cloud(av), refs, radius);
+}
 
 void av_random_points(const AV& av, double** out_view, int* n_out_view,
                       int n_samples){

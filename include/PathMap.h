@@ -42,6 +42,85 @@ IMPBFF_BEGIN_NAMESPACE
 class PathMapTile;
 
 
+//! Weight per linker path length: how a flexible linker distributes its dye.
+/*!
+    An accessible volume treats every reachable voxel as equally likely. A real
+    linker does not: a random coil rarely sits fully collapsed against its
+    attachment point, so voxels a short path from the source are less likely
+    than the count of them suggests. This is that correction -- a tabulated
+    \f$P(\ell)\f$ over the **path length** \f$\ell\f$, the geodesic through
+    free space that #IMP::bff::PathMap already computes per voxel.
+
+    The uniform weighting (the default) returns 1 everywhere, which is exactly
+    the unweighted volume, so nothing changes unless a table is set.
+
+    \note Out-of-range path lengths are **clamped** to the table's end values.
+          The reference implementation returns NaN there, which a weight cannot
+          be: one NaN voxel makes every mean position, distance and efficiency
+          computed from the volume NaN too.
+*/
+class IMPBFFEXPORT LinkerWeighting {
+    double x_min_, x_max_;
+    std::vector<double> y_;      //!< empty means uniform
+
+public:
+    //! The uniform weighting: 1 at every path length.
+    LinkerWeighting() : x_min_(0.0), x_max_(0.0) {}
+
+    //! \param[in] x_min,x_max the path-length range the table spans, A
+    /*! \param[in] y the weights, evenly spaced over `[x_min, x_max]`
+        \throw ValueException when \p y has fewer than two entries or the range
+               is empty */
+    LinkerWeighting(double x_min, double x_max, const std::vector<double>& y);
+
+    //! True when this is the uniform weighting and costs nothing to apply.
+    bool get_is_uniform() const { return y_.empty(); }
+
+    //! The weight at \p path_length, linearly interpolated and clamped.
+    double get_weight(double path_length) const;
+
+    //! Fraction of the table's total weight at path lengths at most \p x.
+    /*! A linker can only reach `linker_length`, so this is how much of the
+        tabulated distribution the volume actually samples. When it is
+        vanishing the weighting is not a correction to the volume -- it
+        selects the volume's outer shell and discards the rest. */
+    double get_supported_fraction(double x) const;
+
+    double get_x_min() const { return x_min_; }
+    double get_x_max() const { return x_max_; }
+    //! The tabulated weights.
+    const std::vector<double>& get_weights() const { return y_; }
+
+    IMP_SHOWABLE_INLINE(LinkerWeighting,
+                        out << "LinkerWeighting("
+                            << (y_.empty() ? std::string("uniform")
+                                           : std::to_string(y_.size())
+                                                     + " points)"));
+};
+IMP_VALUES(LinkerWeighting, LinkerWeightings);
+
+//! Read a chain-weighting table and pick the column for \p linker_length.
+/*!
+    The file is tab-separated with a header row: its first field is a label and
+    the rest are the table's axis keys. Each later row is a path length in A
+    followed by one weight per key. The column chosen is the one with the
+    **first key not less than** \p linker_length; a linker longer than every
+    key gets the uniform weighting rather than an extrapolation.
+
+    Lines beginning with `#` are comments.
+
+    \param[in] path the table file
+    \param[in] linker_length the linker this volume uses, A
+    \throw IOException when \p path cannot be read
+    \throw ValueException when the file is not in the format above
+*/
+IMPBFFEXPORT LinkerWeighting read_linker_weighting(const std::string& path,
+                                                   double linker_length);
+
+//! The shipped chain-weighting table, for \p linker_length.
+/*! `data/linker/chain_weighting.csv`, read once and cached. */
+IMPBFFEXPORT LinkerWeighting linker_weighting(double linker_length);
+
 class IMPBFFEXPORT PathMap : public IMP::em::SampledDensityMap {
 
 friend class PathMapTile;
@@ -65,6 +144,20 @@ private:
     // every heap comparison.
     template<class Cmp>
     void find_path_impl(long path_begin_idx, long path_end_idx, Cmp cmp);
+
+    //! The linker weight of voxel \p i, from its path length. 1 if uniform.
+    /*! Applied where the density is *read* rather than folded into
+        `density_soa_`: the raster is rebuilt and the tile copies are taken at
+        different points of a multi-stage resample, and a fold that has to
+        happen between them is a fold that will one day happen on the wrong
+        side of one. This cannot get out of step. */
+    inline float path_weight(long i) const {
+        if (weighting_.get_is_uniform()) return 1.0f;
+        const float c = cost[i];
+        if (!(c >= 0.0f && c < TILE_COST_DEFAULT)) return 0.0f;
+        return (float) weighting_.get_weight(
+                c * pathMapHeader_.get_simulation_grid_resolution());
+    }
 
     // Per-tile "interior" flags for the current shape: an interior tile is
     // at least the neighbour box away from every face and needs no bounds
@@ -123,6 +216,7 @@ private:
     // brings the tiles up to date before any API that reads them.
     std::vector<float> penalty_soa_;
     std::vector<float> density_soa_;
+    LinkerWeighting weighting_;      //!< uniform unless a table is set
     bool soa_valid_ = false;
     void sync_tiles_from_soa();
 
@@ -147,6 +241,8 @@ protected:
 
     std::vector<PathMapTile> tiles;
     PathMapHeader pathMapHeader_;
+    //! Per-particle radii used instead of the model's; 0 = transparent.
+    std::vector<double> obstacle_radii_;
     std::vector<int> offsets_;
     std::vector<PathMapTileEdge>& get_edges(int tile_idx);
 
@@ -309,6 +405,17 @@ public:
     @return A vector of values for the specified parameters.
     @relates PathMapTile::get_value
     */
+    //! Weight accessible voxels by the linker's chain statistics.
+    /*! The weighting multiplies the density of every reached voxel by
+        #IMP::bff::LinkerWeighting::get_weight() of that voxel's path length,
+        so every quantity read from the map -- mean position, distances,
+        efficiencies, the exported grid -- sees it. Setting it invalidates
+        whatever was folded in before, so it can be changed and re-read.
+
+        \param[in] w the weighting; the default-constructed one is uniform */
+    void set_linker_weighting(const LinkerWeighting& w);
+    const LinkerWeighting& get_linker_weighting() const { return weighting_; }
+
     std::vector<float> get_tile_values(
             int value_type = PM_TILE_COST,
             std::pair<float, float> bounds = std::pair<float, float>(
@@ -578,6 +685,24 @@ public:
     */
     void sample_obstacles(double extra_radius=0.0);
 
+    //! Radii to use instead of the particles' own; empty = the particles'.
+    /*! A **zero radius is transparent**: it is not inflated by the probe
+        radius, and a binarized sphere of radius zero contains no point, so it
+        blocks nothing. That is how a `strip_mask` reaches the obstacle set --
+        the atoms stay in the list, at their own coordinates, with no size --
+        so every volume indexes the same particles whatever it strips, and
+        nothing is mutated on a model another thread is reading.
+
+        \param[in] radii one per particle, or empty to clear the override */
+    void set_obstacle_radii(const std::vector<double>& radii) {
+        obstacle_radii_ = radii;
+    }
+
+    //! The radius override, empty when there is none.
+    const std::vector<double>& get_obstacle_radii() const {
+        return obstacle_radii_;
+    }
+
     /**
 
     @brief Constructs a PathMap object.
@@ -598,7 +723,15 @@ public:
 
 
 /**
- * @brief Writes a path map to a file.
+ * @brief Writes one voxel feature of a map to a density file.
+ *
+ * The map is a #PathMap because that is what carries per-voxel features
+ * (`PM_TILE_*`, plus named ones); what is written is a single scalar field
+ * chosen by @p value_type, which is why this is not `write_path_map` -- the
+ * caller picks a field and gets a density file, and nothing about that is
+ * particular to a path search. Anything that fills a lattice and wants to
+ * look at one of its fields -- an occupancy, a learned rate, a diffusion
+ * coefficient -- writes it the same way.
  *
  * Guesses the file type from the file name. The supported file formats are:
  * - .mrc/.map
@@ -613,7 +746,7 @@ public:
  * @param feature_name The name of the feature.
  */
 IMPEMEXPORT
-void write_path_map(
+void write_map_feature(
         PathMap *m,
         std::string filename,
         int value_type,

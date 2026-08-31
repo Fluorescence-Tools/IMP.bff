@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/AVNetworkRestraint.h
+ *  \file IMP/bff/ProbeNetworkRestraint.h
  *  \brief Simple restraint for networks of accessible volumes.
  *
  * \authors Thomas-Otavio Peulen
@@ -7,8 +7,8 @@
  *
  */
 
-#ifndef IMPBFF_AVNETWORKRESTRAINT_H
-#define IMPBFF_AVNETWORKRESTRAINT_H
+#ifndef IMPBFF_PROBENETWORKRESTRAINT_H
+#define IMPBFF_PROBENETWORKRESTRAINT_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -43,10 +43,10 @@ namespace internal { struct AVEvalJob; }
 
 
 /**
- * @class AVNetworkRestraint
+ * @class ProbeNetworkRestraint
  * @brief A restraint that uses an annotated volumetric network to score particle distances.
  *
- * The AVNetworkRestraint class represents a restraint that utilizes an annotated volumetric network
+ * The ProbeNetworkRestraint class represents a restraint that utilizes an annotated volumetric network
  * to score distances between particles. It is designed to be used with the IMP library.
  *
  * The restraint is initialized with a hierarchy, a filename of a fps.json file, a name, and an optional
@@ -55,7 +55,7 @@ namespace internal { struct AVEvalJob; }
  * The score set parameter specifies the name of the score in the fps.json file to be used for scoring. If no
  * score set is provided, all distances are used for scoring.
  */
-class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
+class IMPBFFEXPORT ProbeNetworkRestraint : public IMP::Restraint {
 
     friend class cereal::access;
 
@@ -87,7 +87,7 @@ class IMPBFFEXPORT AVNetworkRestraint : public IMP::Restraint {
         }
     }
 
-    IMP_OBJECT_SERIALIZE_DECL(AVNetworkRestraint);
+    IMP_OBJECT_SERIALIZE_DECL(ProbeNetworkRestraint);
 
 private:
 
@@ -139,9 +139,8 @@ private:
      * This map stores the AVs used to compute the score. The keys are the names of the AVs,
      * and the values are pointers to the AV objects.
      */
-    /* Owned. These used to be bare `new AV(...)` with no destructor on this
-       class at all, so every restraint leaked one decorator per labelled
-       position for the lifetime of the process. */
+    /* Owned. A bare `new AV(...)` with no destructor on this class leaks one
+       decorator per labelled position for the lifetime of the process. */
     std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs_{};
     
     /**
@@ -189,10 +188,10 @@ public:
     IMP::bff::AV get_used_av(std::string name) const;
 
     /**
-     * @brief Constructs an AVNetworkRestraint object.
+     * @brief Constructs an ProbeNetworkRestraint object.
      * @param[in] hier The hierarchy used to obtain particles.
      * @param[in] fps_json_fn The filename of the fps.json file.
-     * @param[in] name The name of this restraint. Default is "AVNetworkRestraint%1%".
+     * @param[in] name The name of this restraint. Default is "ProbeNetworkRestraint%1%".
      * @param[in] score_set The name of the score in the fps.json file. If not provided, all distances are used for scoring.
      */
     /**
@@ -211,10 +210,10 @@ public:
      * @param[in] search_mode "dijkstra" (default, path search) or
      *   "euclidean" (straight linker, visibility only); see AV::set_search_mode.
      */
-    AVNetworkRestraint(
+    ProbeNetworkRestraint(
         const IMP::core::Hierarchy &hier,
         std::string fps_json_fn,
-        std::string name = "AVNetworkRestraint%1%",
+        std::string name = "ProbeNetworkRestraint%1%",
         std::string score_set = "",
         int n_samples = 50000,
         bool space_fixed = true,
@@ -258,8 +257,8 @@ public:
      * typically loading the next frame -- and wait_score() collects the
      * score and writes the AV mean positions. Between the two calls the
      * caller may change the Model freely. Bit-identical to
-     * unprotected_evaluate(). Distance sets that use DYE_PAIR_DISTANCE_MP or
-     * DYE_PAIR_XYZ_DISTANCE read the Model at pair time and are therefore
+     * unprotected_evaluate(). Distance sets that use PROBE_PAIR_DISTANCE_MP or
+     * PROBE_PAIR_XYZ_DISTANCE read the Model at pair time and are therefore
      * evaluated synchronously inside evaluate_async().
      */
     void evaluate_async() const;
@@ -287,7 +286,7 @@ public:
     double get_quad_error_estimate(int reference_k = 1000) const;
 
     //! Default constructor, needed to deserialize the restraint.
-    AVNetworkRestraint() {}
+    ProbeNetworkRestraint() {}
 
     /**
      * @brief Returns exp(score).
@@ -310,6 +309,26 @@ public:
     const std::map<std::string, AVPairDistanceMeasurement> get_used_distances(){
         return distances_;
     }
+
+    //! The candidate pair names, in the order #get_pair_efficiencies reports.
+    /*! The score set's pairs sorted by name. Experiment planning builds an
+        `(n_frames, n_pairs)` efficiency matrix over an ensemble, and which
+        column is which pair has to be stated somewhere; it is stated here,
+        rather than by each caller rediscovering that a `std::map` iterates
+        sorted. */
+    std::vector<std::string> get_pair_names() const;
+
+    //! Mean FRET efficiency of every candidate pair, at the current coordinates.
+    /*! Each pair with its own Förster radius, and as an *efficiency* whatever
+        distance type the file asked to be scored on -- planning weighs a pair
+        by how far apart it places conformers in the observable, and the
+        expected error #IMP::bff::select_informative_pairs takes is quoted in
+        efficiency units.
+
+        The accessible volumes are re-evaluated first, so a caller that has
+        just loaded a new frame does not have to score it to read it.
+    */
+    std::vector<double> get_pair_efficiencies() const;
 
     /**
      * @brief Returns the model distance (or FRET efficiency) between two dyes.
@@ -352,9 +371,9 @@ public:
      * @brief Prints a description of the restraint.
      * @param[in] out The output stream.
      */
-    void show(std::ostream &out) const {out << "AVNetwork restraint";}
+    void show(std::ostream &out) const {out << "ProbeNetworkRestraint";}
 
-    IMP_OBJECT_METHODS(AVNetworkRestraint)
+    IMP_OBJECT_METHODS(ProbeNetworkRestraint)
 
 private:
     /* The evaluation in flight (evaluate_async / wait_score). Declared last
@@ -369,4 +388,4 @@ private:
 IMPBFF_END_NAMESPACE
 
 
-#endif //IMPBFF_AVNETWORKRESTRAINT_H
+#endif //IMPBFF_PROBENETWORKRESTRAINT_H
