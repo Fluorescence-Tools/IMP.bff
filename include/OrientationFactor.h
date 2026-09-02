@@ -51,11 +51,11 @@ IMPBFFEXPORT std::vector<double> dipole_kappa_distance(
 
 //! A \f$\kappa^2\f$ distribution: every value, and a histogram over them.
 /*! The three arrays the two `wobbling_kappa2_distribution` functions produce.
-    They used to be a return *and* two `std::vector<double>&` out-parameters,
-    which meant a Python caller had to build a wrapped vector to pass in -- and
-    the class to build one of is not this module's to give: `std::vector<double>`
-    is wrapped by `IMP.saxs` (see `IMP_bff.types.i`). Three numpy views on a
-    value is what the rest of this module does. */
+    Three numpy views on a value, not a return plus two
+    `std::vector<double>&` out-parameters: a Python caller would have to build
+    a wrapped vector to pass in, and the class to build one of is not this
+    module's to give -- `std::vector<double>` is wrapped by `IMP.saxs` (see
+    `IMP_bff.types.i`). */
 struct IMPBFFEXPORT Kappa2Distribution {
     //! Every computed \f$\kappa^2\f$: one per sample, or row-major over the
     //! swept grid.
@@ -99,11 +99,10 @@ IMPBFFEXPORT Kappa2Distribution wobbling_kappa2_distribution_delta(
 //! \f$p(\kappa^2)\f$ over isotropically oriented dyes.
 /*!
     Dipole directions are drawn **uniformly on the sphere**, by normalising
-    three standard normals. The Python this replaces normalised three
-    *uniform* variates instead, which fills only the positive octant of the
-    cube and does so non-uniformly: it returned \f$\langle\kappa^2\rangle =
-    0.333\f$ where the rigid isotropic limit is \f$2/3\f$, a factor of two.
-    The function had no callers, so nothing downstream carried the error.
+    three standard normals. Normalising three *uniform* variates instead fills
+    only the positive octant of the cube, and non-uniformly: that gives
+    \f$\langle\kappa^2\rangle = 0.333\f$ where the rigid isotropic limit is
+    \f$2/3\f$, a factor of two.
 
     \param[in] sD2,sA2 second-rank order parameters
     \param[in] n_bins histogram edges returned; the histogram has one fewer
@@ -149,9 +148,8 @@ IMPBFFEXPORT Kappa2Distribution wobbling_kappa2_distribution(
     \param[in] seed reproducible sampling; negative draws freely
     \param[out] out_view,n_out_view the bin edges (\p n_bins of them), then the
                 raw counts in the \p n_bins - 1 bins between them, then the
-                \p n_samples sampled values -- the three things the Python
-                returned as a tuple, concatenated, because a numpy view is one
-                array and the shim splits it at known offsets
+                \p n_samples sampled values, concatenated: a numpy view is one
+                array, and the caller splits it at those known offsets
 */
 IMPBFFEXPORT void sample_kappa2_diffusion_with_traps(
         double sD2, double sA2, double fret_efficiency,
