@@ -8,6 +8,18 @@
 #include <IMP/exception.h>
 #include <IMP/bff/internal/OutputView.h>
 
+// The RNG. A byte-identical copy of tttrlib's
+// `modules/math/include/Random.h`, kept in step by
+// `test/photophysics/test_orientation_random_copy_is_identical.py` -- the
+// same arrangement, and for the same reasons, as the decay kernels (see
+// `src/TcspcDecay.cpp`). Only the header-only pieces are used; nothing here
+// links tttrlib. The two Monte-Carlo samplers below (wobbling_kappa2_distribution
+// and sample_kappa2_diffusion_with_traps) draw through it rather than a local
+// std::mt19937_64 so their randomness follows the rest of the app's
+// TTTR_RNG_SEED / TTTR_RNG_ENGINE discipline instead of a third, independent
+// generator.
+#include <IMP/bff/internal/Random.h>
+
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -151,16 +163,19 @@ Kappa2Distribution wobbling_kappa2_distribution(
     k2_hist.assign(k2_scale.empty() ? 0 : k2_scale.size() - 1, 0.0);
 
     std::vector<double> k2(std::max(0, n_samples), 0.0);
-    std::mt19937_64 rng(static_cast<std::uint64_t>(seed));
+    // The centralized RNG (see the file header), seeded from the caller's
+    // seed. Stream 0: donor and acceptor draws interleave on a single stream
+    // rather than each getting their own, matching the loop order below.
+    tttrlib::Random rng;
+    rng.seed(static_cast<std::uint32_t>(seed));
     // Three standard normals, normalised: the only cheap way to hit the sphere
     // uniformly. Normalising three *uniform* variates gives the cube's positive
-    // octant instead, which is what the Python here used to do.
-    std::normal_distribution<double> gauss(0.0, 1.0);
+    // octant instead.
     for (int i = 0; i < n_samples; ++i) {
         double d1[3], d2[3], n1 = 0.0, n2 = 0.0;
         for (int c = 0; c < 3; ++c) {
-            d1[c] = gauss(rng);
-            d2[c] = gauss(rng);
+            d1[c] = rng.normal();
+            d2[c] = rng.normal();
             n1 += d1[c] * d1[c];
             n2 += d2[c] * d2[c];
         }
@@ -202,14 +217,17 @@ void sample_kappa2_diffusion_with_traps(
     // Three standard normals per direction. Normalising a *uniform* draw fills
     // the cube's positive octant rather than the sphere, and that halved
     // <kappa^2> to 0.333 in the isotropic limit where it must be exactly 2/3.
-    std::mt19937_64 rng(seed < 0 ? std::random_device{}()
-                                 : static_cast<std::uint64_t>(seed));
-    std::normal_distribution<double> gauss(0.0, 1.0);
+    // The centralized RNG (see the file header); a negative seed asks for a
+    // non-deterministic draw, same convention as the caller-facing seed
+    // argument had under std::mt19937_64.
+    tttrlib::Random rng;
+    rng.seed(seed < 0 ? static_cast<std::uint32_t>(std::random_device{}())
+                       : static_cast<std::uint32_t>(seed));
     const double x = 1.0 / fret_efficiency - 1.0;
 
     for (int i = 0; i < n_samples; ++i) {
         double d[3], a[3];
-        for (int k = 0; k < 3; ++k) { d[k] = gauss(rng); a[k] = gauss(rng); }
+        for (int k = 0; k < 3; ++k) { d[k] = rng.normal(); a[k] = rng.normal(); }
         const double nd = std::sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
         const double na = std::sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
         const double dot = d[0]*a[0] + d[1]*a[1] + d[2]*a[2];
