@@ -31,11 +31,17 @@ import IMP.pmi.restraints.crosslinking
 import IMP.pmi.restraints.saxs
 import IMP.pmi.restraints.basic
 import IMP.pmi.restraints.stereochemistry
+import sys
+try:
+    import scipy
+except ImportError:
+    print("To run this example, please first install the 'scipy'")
+    print("Python module.")
+    sys.exit(0)
 
 import IMP.bff
 import IMP.bff.tools
 import IMP.bff.restraints
-import sys
 
 IMP.setup_from_argv(sys.argv,
                     "Guanylate binding proteins: Combining restraints")

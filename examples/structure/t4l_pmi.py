@@ -16,6 +16,12 @@ import IMP
 import IMP.core
 import IMP.atom
 import IMP.bff
+try:
+    import scipy
+except ImportError:
+    print("To run this example, please first install the 'scipy'")
+    print("Python module.")
+    sys.exit(0)
 import IMP.bff.tools
 import IMP.bff.restraints
 
