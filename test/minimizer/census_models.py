@@ -15,16 +15,16 @@ one they report.
 
 That second failure is why the census reports what it reports. A model that
 falls back is slower; a model that builds the wrong graph is wrong. So each
-row also compares the graph's curve against ``update_model()``, and a
+row also compares the graph's curve against ``model.update()``, and a
 disagreement is printed as **MISMATCH** rather than as a pass.
 
 A third, more dangerous failure is not wrong -- it is *never run*. On the
-shared decay-shaped fixture, a model whose ``update_model()`` no-ops without
+shared decay-shaped fixture, a model whose update no-ops without
 the payload it needs (no burst folder, no meaningful axis) leaves
 ``ModelCurve``'s zeroed placeholder untouched, and a graph check that only
 compares "the graph" against "``model.y``" calls that a match, because a
 stale array trivially agrees with itself. The **curve** column answers a
-question the graph column cannot: did ``update_model()`` actually compute
+question the graph column cannot: did ``model.update()`` actually compute
 something, or did it hand back the same flat array it started with. A
 **yes** in the graph column beside a **dead** curve is that phantom, made
 visible.
@@ -147,7 +147,7 @@ def make_fit(model_class, polarization="vm"):
 def _curve_is_degenerate(y) -> bool:
     """True when a curve carries no information: empty, non-finite, or constant.
 
-    A flat array is exactly what a silently no-op ``update_model()`` leaves
+    A flat array is exactly what a silently no-op update leaves
     behind -- ``ModelCurve.__init__`` zeros ``y`` to the data's shape, and a
     model that never touches it again hands that same zero array straight
     back. Constant-nonzero is caught too, deliberately: a model that fills the
@@ -163,7 +163,7 @@ def _curve_is_degenerate(y) -> bool:
 
 
 def curve_verdict(model) -> str:
-    """``"live"``, ``"dead"``, or an error tag, for one model's ``update_model()``.
+    """``"live"``, ``"dead"``, or an error tag, for one model's ``update()``.
 
     Deliberately independent of whether a graph builds. The phantom this
     exists to catch is a **yes** in the graph column standing beside a curve
@@ -172,7 +172,7 @@ def curve_verdict(model) -> str:
     itself trivially.
     """
     try:
-        model.update_model()
+        model.update()
     except Exception as exc:
         return "raised %s" % type(exc).__name__
     return "dead" if _curve_is_degenerate(getattr(model, "y", None)) else "live"
@@ -214,7 +214,7 @@ def verdict(model_class, polarization):
         # node first in the keepalive; its curve must be the model's too.
         try:
             node = built[0]._graph[2][0]
-            model.update_model()
+            model.update()
             node.update()
             graph = np.asarray(
                 node.get_output_port(node.get_name()).value, dtype=float)
@@ -228,7 +228,7 @@ def verdict(model_class, polarization):
             return "MISMATCH %.3g" % gap, curve, free
         return "yes", curve, free
     try:
-        model.update_model()
+        model.update()
         decay.update()
         graph = np.asarray(decay.get_curve(), dtype=float)
         python = np.asarray(model.y, dtype=float)
@@ -266,7 +266,7 @@ def main():
     wrong = [short for short, magic, _, p, _ in rows
              if "MISMATCH" in magic or "MISMATCH" in p]
     # The phantom this whole column exists to expose: a graph that reads as
-    # built and agreeing, next to a curve `update_model()` never computed.
+    # built and agreeing, next to a curve the model never computed.
     phantom = [short for short, magic, curve, _, _ in rows
                if magic == "yes" and curve == "dead"]
     dead = [short for short, _, curve, _, _ in rows if curve == "dead"]
@@ -281,13 +281,13 @@ def main():
     else:
         print("no model builds a graph that disagrees with its own curve")
     if phantom:
-        print("PHANTOM GRAPHS (yes beside a curve update_model() never "
+        print("PHANTOM GRAPHS (yes beside a curve the model never "
               "computed): %s" % ", ".join(phantom))
     if dead:
-        print("DEAD CURVES (update_model() left it flat/empty, %d): %s"
+        print("DEAD CURVES (update() left it flat/empty, %d): %s"
               % (len(dead), ", ".join(dead)))
     else:
-        print("no model's update_model() left its curve dead on this fixture")
+        print("no model's update() left its curve dead on this fixture")
 
 
 if __name__ == "__main__":
