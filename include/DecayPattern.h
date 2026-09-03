@@ -93,6 +93,8 @@ public:
     );
 };
 
+IMP_VALUES(DecayPattern, DecayPatterns);
+
 IMPBFF_END_NAMESPACE
 
 #endif //IMPBFF_DECAYPATTERN_H

@@ -1,9 +1,9 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 import numpy.testing
 import IMP.bff
+import IMP.test
 
 x = np.arange(0, 16)
 y = np.ones_like(x) * 100
@@ -18,7 +18,7 @@ settings = {
 }
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_scale_init(self):
         ds = IMP.bff.DecayScale(**settings)
@@ -88,3 +88,7 @@ class Tests(unittest.TestCase):
         ds.add(model)
         np.testing.assert_allclose(model.y, ds.data.y - 100)
         np.testing.assert_almost_equal(ds.number_of_photons, 16000)
+
+
+if __name__ == '__main__':
+    IMP.test.main()

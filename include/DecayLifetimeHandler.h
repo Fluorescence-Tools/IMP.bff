@@ -18,10 +18,18 @@
 #include <limits>
 #include <iostream>
 #include <IMP/bff/DecayRoutines.h>
+#include <IMP/Object.h>
+#include <IMP/object_macros.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
-class IMPBFFEXPORT DecayLifetimeHandler {
+//! Store and handle lifetime spectra
+/** This is responsible for storing and handling lifetime spectra.
+    A lifetime spectrum consists of a set of lifetimes and their corresponding
+    amplitudes. The class provides methods to set and retrieve the lifetime
+    spectrum, as well as to manipulate it.
+ */
+class IMPBFFEXPORT DecayLifetimeHandler : public Object {
 private:
     std::vector<double> _lifetime_spectrum = std::vector<double>();  //!< Lifetime spectrum / original
     std::vector<double> lt_ = std::vector<double>();  //!< Lifetime spectrum / for getter
@@ -105,6 +113,8 @@ public:
         bool abs_lifetime_spectrum = false,
         double amplitude_threshold = std::numeric_limits<double>::epsilon()
     );
+
+    IMP_OBJECT_METHODS(DecayLifetimeHandler);
 };
 
 IMPBFF_END_NAMESPACE

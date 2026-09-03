@@ -1,1 +1,5 @@
-from .AVNetworkRestraint import AVNetworkRestraintWrapper
+"""@namespace IMP.bff.restraints
+   Restraints.
+"""
+
+from .AVNetworkRestraint import AVNetworkRestraintWrapper  # noqa: F401

@@ -1,11 +1,11 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 import IMP.bff
+import IMP.test
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_DecayLifetimeHandler_init(self):
         lt = IMP.bff.DecayLifetimeHandler()
@@ -65,3 +65,7 @@ class Tests(unittest.TestCase):
         l = np.array([1., 4])
         lt.lifetime_spectrum = l
         self.assertEqual(np.allclose(lt.lifetime_spectrum, l), True)
+
+
+if __name__ == '__main__':
+    IMP.test.main()

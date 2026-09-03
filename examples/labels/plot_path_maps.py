@@ -92,7 +92,7 @@ start_idx = path_map.get_voxel_by_location(path_origin)
 path_map.find_path_dijkstra(start_idx, -1)  # if the end_idx
 # %%
 # Now, we can backtrace the shortest path from every tile (voxel) to the
-# start index. A path is a squence of tile/voxel ids.
+# start index. A path is a sequence of tile/voxel ids.
 t = path_map.get_tiles()
 end_idx_1 = 829
 path_1 = t[end_idx_1].backtrack_to_path()
@@ -108,7 +108,8 @@ print(path_2)
 paths = [t[e].backtrack_to_path() for e in range(path_map.get_number_of_voxels())]
 path_length = [len(p) for p in paths]
 plt.hist(path_length, 27)
-plt.show()
+plt.savefig('plot1.png')
+#plt.show()
 
 no_paths = [i for i, p in enumerate(paths) if len(p) <= 1]
 
@@ -129,7 +130,8 @@ PM_TILE_COST_DENSITY = path_map.get_tile_values(IMP.bff.PM_TILE_COST_DENSITY, bo
 #%%
 # These features are returned as 3D arrays.
 plt.imshow(PM_TILE_COST_DENSITY[16])
-plt.show()
+plt.savefig('plot2.png')
+#plt.show()
 
 #%%
 # These features are returned as three dimensional arrays.
@@ -137,4 +139,5 @@ fig, axs = plt.subplots(1, 3, sharex=True)
 axs[0].imshow(BFF_TILE_PENALTY[16])
 axs[1].imshow(PM_TILE_COST[16])
 axs[2].imshow(PM_TILE_COST_DENSITY[16])
-plt.show()
+plt.savefig('plot3.png')
+#plt.show()

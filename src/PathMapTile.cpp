@@ -7,6 +7,8 @@
  *
  */
 #include <IMP/bff/PathMapTile.h>
+#include <IMP/bff/PathMap.h>
+#include <IMP/em/DensityMap.h>
 
 IMPBFF_BEGIN_NAMESPACE
 

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
 import os
-import subprocess
 import sys
 import warnings
 import re
@@ -14,7 +13,7 @@ from pathlib import Path
 # absolute, like shown here.
 sys.path.insert(0, os.path.abspath('sphinxext'))
 
-import sphinx_gallery
+import sphinx_gallery  # noqa: E402
 
 # -- General configuration ---------------------------------------------------
 root_doc = 'contents'
@@ -76,7 +75,7 @@ project = u'IMP.bff'
 copyright = (
     f'2021 - {datetime.now().year}, IMP developers'
 )
-import IMP.bff
+import IMP.bff  # noqa: E402
 version = IMP.bff.__version__
 
 # List of patterns, relative to source directory, that match files and
@@ -108,18 +107,18 @@ if on_rtd:
         html_theme_path = sphinx_rtd_theme.get_html_theme_path()
     html_theme = 'sphinx_rtd_theme'
 else:
-    # Add any paths that contain custom themes here, relative to this directory.
+    # Add any paths that contain custom themes here, relative to this directory
     html_theme_path = ['themes']
     html_theme = 'scikit-learn-modern'
-    # Theme options are theme-specific and customize the look and feel of a theme
-    # further.  For a list of options available for each theme, see the
-    # documentation.
+    # Theme options are theme-specific and customize the look and feel
+    # of a theme further.  For a list of options available for each theme,
+    # see the documentation.
     html_theme_options = {'google_analytics': True,
                           'mathjax_path': mathjax_path}
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
-#html_title = None
+# html_title = None
 
 # A shorter title for the navigation bar.  Default is the same as html_title.
 html_short_title = 'IMP.bff'
@@ -164,9 +163,10 @@ release_highlights_dir = Path("..") / "examples" / "release_highlights"
 # Finds the highlight with the latest version number
 latest_highlights = sorted(release_highlights_dir.glob("*.py"))[-1]
 latest_highlights = latest_highlights.with_suffix('').name
-html_context["release_highlights"] = f"auto_examples/release_highlights/{latest_highlights}"
+html_context["release_highlights"] = \
+    f"auto_examples/release_highlights/{latest_highlights}"
 
-# get version from higlight name assuming highlights have the form
+# get version from highlight name assuming highlights have the form
 # plot_release_highlights_0_22_0
 highlight_version = ".".join(latest_highlights.split("_")[-3:-1])
 html_context["release_highlights_version"] = highlight_version
@@ -192,7 +192,8 @@ trim_doctests_flags = True
 
 # intersphinx configuration
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/{.major}'.format(sys.version_info), None),
+    'python': ('https://docs.python.org/{.major}'.format(sys.version_info),
+               None),
     'numpy': ('https://numpy.org/doc/stable', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
     'matplotlib': ('https://matplotlib.org/', None),
@@ -324,5 +325,3 @@ def setup(app):
 warnings.filterwarnings("ignore", category=UserWarning,
                         message='Matplotlib is currently using agg, which is a'
                                 ' non-GUI backend, so cannot show the figure.')
-
-

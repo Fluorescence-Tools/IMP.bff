@@ -53,8 +53,8 @@ double av_distance(
     // Draw points using Inverse transform sampling
     auto el3getter = [](const IMP::algebra::Vector4D &p) { return p[3]; };
     using points_type = std::vector<IMP::algebra::Vector4D>;
-    auto m1 = av1.get_map();
-    auto m2 = av2.get_map();
+    Pointer<PathMap> m1 = av1.get_map();
+    Pointer<PathMap> m2 = av2.get_map();
     auto p1 = m1->get_xyz_density();
     auto p2 = m2->get_xyz_density();
     if(!p1.empty() && !p2.empty()){
@@ -103,13 +103,13 @@ double av_distance(
 
 IMP::bff::PathMap* AV::get_map() const{
     // get_map needs to be const
-    if(av_map_ == nullptr){
+    if(!av_map_) {
         // cast away const to init map ¯\_(ツ)_/¯
         AV* ptr = (AV*)(this);
         ptr->init_path_map();
         ptr->resample();
     }
-    return av_map_;
+    return av_map_.get();
 }
 
 IMP::algebra::Vector3D AV::get_mean_position(bool include_source) const{
@@ -272,7 +272,7 @@ IMP::ParticleIndex search_labeling_site(
     void get_xyz_density();
 
 std::vector<double> av_random_points(const AV& av, int n_samples){
-    auto m = av.get_map();
+    Pointer<PathMap> m = av.get_map();
     auto d = m->get_xyz_density();
     std::vector<double> data; 
     if(!d.empty()){

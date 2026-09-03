@@ -1,4 +1,5 @@
 IMP_SWIG_DECORATOR(IMP::bff, AV, AVs);
+IMP_SWIG_VALUE(IMP::bff, AVPairDistanceMeasurement, AVPairDistanceMeasurements);
 IMP_SWIG_OBJECT(IMP::bff, AVNetworkRestraint, AVNetworkRestraints);
 
 %template(MapStringAVPairDistanceMeasurement) std::map<std::string, IMP::bff::AVPairDistanceMeasurement>;

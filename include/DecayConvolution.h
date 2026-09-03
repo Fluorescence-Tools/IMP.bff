@@ -27,7 +27,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 
 
-
+//! Compute convolved decay
 class DecayConvolution : public DecayModifier{
 
 public:
@@ -113,7 +113,7 @@ public:
 private:
 
     /// Input lifetime spectrum
-    DecayLifetimeHandler *lifetime_handler;
+    Pointer<DecayLifetimeHandler> lifetime_handler;
 
     /// Background and shift corrected irf
     DecayCurve *corrected_irf = nullptr;
@@ -349,6 +349,7 @@ public:
 
 };
 
+IMP_VALUES(DecayConvolution, DecayConvolutions);
 
 IMPBFF_END_NAMESPACE
 

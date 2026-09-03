@@ -1,3 +1,4 @@
+## \example bff/structure/mGBP2_dimer_fp.py
 """
 Guanylate binding proteins: Combining restraints
 ========================================
@@ -14,9 +15,7 @@ import IMP
 import IMP.core
 import IMP.atom
 
-import RMF
 import IMP.rmf
-import ihm.cross_linkers
 
 import IMP.pmi
 import IMP.pmi.io.crosslink
@@ -32,11 +31,27 @@ import IMP.pmi.restraints.crosslinking
 import IMP.pmi.restraints.saxs
 import IMP.pmi.restraints.basic
 import IMP.pmi.restraints.stereochemistry
+import sys
+try:
+    import scipy
+except ImportError:
+    print("To run this example, please first install the 'scipy'")
+    print("Python module.")
+    sys.exit(0)
 
 import IMP.bff
 import IMP.bff.tools
 import IMP.bff.restraints
 
+IMP.setup_from_argv(sys.argv,
+                    "Guanylate binding proteins: Combining restraints")
+if IMP.get_check_level() >= IMP.USAGE_AND_INTERNAL:
+    print("This example is too slow to test in debug mode - run without")
+    print("internal tests enabled")
+    sys.exit(0)
+if sys.maxsize <= 2**32:
+    print("This example uses too much memory to run well on a 32-bit system")
+    sys.exit(0)
 
 output_objects = list()
 root_dir = pathlib.Path(IMP.bff.get_example_path('structure')) / "GBP/"
@@ -207,6 +222,9 @@ output_objects.append(fret_restraint)
 
 # Monte carlo sampling. For better results increase the number of frames
 num_frames = 100000
+if IMP.get_is_quick_test():
+    num_frames = 10
+
 rex = IMP.pmi.macros.ReplicaExchange(
     mdl,
     simulated_annealing=False,

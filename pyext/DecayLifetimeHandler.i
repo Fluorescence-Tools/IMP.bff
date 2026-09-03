@@ -1,3 +1,5 @@
+IMP_SWIG_OBJECT(IMP::bff, DecayLifetimeHandler, DecayLifetimeHandlers);
+
 %attribute(IMP::bff::DecayLifetimeHandler, bool, abs_lifetime_spectrum, get_abs_lifetime_spectrum, set_abs_lifetime_spectrum);
 %attribute(IMP::bff::DecayLifetimeHandler, bool, use_amplitude_threshold, get_use_amplitude_threshold, set_use_amplitude_threshold);
 %attribute(IMP::bff::DecayLifetimeHandler, double, amplitude_threshold, get_amplitude_threshold, set_amplitude_threshold);

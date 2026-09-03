@@ -1,3 +1,5 @@
+IMP_SWIG_VALUE(IMP::bff, DecayConvolution, DecayConvolutions);
+
 %attribute(IMP::bff::DecayConvolution, IMP::bff::DecayCurve&, corrected_irf, get_corrected_irf);
 %attribute(IMP::bff::DecayConvolution, int, convolution_method, get_convolution_method, set_convolution_method);
 %attribute(IMP::bff::DecayConvolution, double, excitation_period, get_excitation_period, set_excitation_period);

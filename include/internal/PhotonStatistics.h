@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <iostream>
 #include <cstring> /* strcmp */
-#include "omp.h"
 
 
 IMPBFF_BEGIN_NAMESPACE

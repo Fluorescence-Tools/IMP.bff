@@ -7,7 +7,7 @@
 *.gcno
 .vscode
 *.gcda
-*/Files.cmake
+Files.cmake
 db/
 *_run*
 *out
@@ -25,7 +25,7 @@ doc/auto_examples
 examples/CMakeLists.txt
 .history
 doc/IMP.bff.docset
-
+CMakeModules/
 test/CMakeLists.txt
 src/CMakeLists.txt
 pyext/CMakeLists.txt

@@ -21,7 +21,6 @@
 #include <IMP/em/DensityHeader.h>
 
 #include <IMP/bff/internal/json.h>
-#include <IMP/bff/AV.h>
 
 #include <algorithm>
 
@@ -30,6 +29,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 class PathMap;
 
+//!* Header class for path search class PathMap
 class IMPBFFEXPORT PathMapHeader {
 
 friend class IMP::bff::PathMap;
@@ -156,9 +156,8 @@ public:
     //! Set origin on the PathMap (the corner of the grid)
     void set_origin(float x, float y, float z);
 
+    void show(std::ostream& out = std::cout) const;
 };
-
-IMP_OBJECTS(PathMapHeader, PathMapHeaders);
 
 IMPBFF_END_NAMESPACE
 

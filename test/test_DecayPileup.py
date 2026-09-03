@@ -1,11 +1,11 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 import IMP.bff
+import IMP.test
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_pileup(self):
         x = np.arange(0, 16)
@@ -64,3 +64,7 @@ class Tests(unittest.TestCase):
 
         dp.resize(10)
         self.assertEqual(len(dp.data.y), 10)
+
+
+if __name__ == '__main__':
+    IMP.test.main()

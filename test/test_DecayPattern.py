@@ -1,12 +1,12 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 import numpy.testing
 import IMP.bff
+import IMP.test
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_constant_background(self):
         x = np.arange(0, 4, dtype=np.float64)
@@ -41,3 +41,7 @@ class Tests(unittest.TestCase):
         bg.add(dc)
         r = y * (1-f) + bg_pattern * f * y.sum() / np.sum(bg_pattern) + offset
         np.testing.assert_allclose(r, dc.y)
+
+
+if __name__ == '__main__':
+    IMP.test.main()

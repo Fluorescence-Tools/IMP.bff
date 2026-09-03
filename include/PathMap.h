@@ -41,6 +41,7 @@ IMPBFF_BEGIN_NAMESPACE
 class PathMapTile;
 
 
+//! Class to search path on grids
 class IMPBFFEXPORT PathMap : public IMP::em::SampledDensityMap {
 
 friend class PathMapTile;

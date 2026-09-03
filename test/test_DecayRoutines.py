@@ -1,10 +1,8 @@
-from __future__ import division
-
 import unittest
 import numpy as np
-import platform
 
 import IMP.bff
+import IMP.test
 
 
 def norm_pdf(x, mu, sigma):
@@ -28,7 +26,7 @@ def model_irf(
 
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     data = np.array(
         [
@@ -146,7 +144,8 @@ class Tests(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(model_ref, model_fconv)
 
-        if "AMD64" in platform.machine():
+        # Only test AVX functionality if it was enabled
+        if IMP.bff.IMP_BFF_HAS_AVX:
             model_fconv_avx = np.zeros_like(irf)
             IMP.bff.decay_fconv_avx(
                 fit=model_fconv_avx,
@@ -194,8 +193,8 @@ class Tests(unittest.TestCase):
         )
         np.testing.assert_array_almost_equal(model_fconv_per, ref)
 
-        # AVX won't be supported on Apple -> M1
-        if "AMD64" in platform.machine():
+        # Only test AVX functionality if it was enabled
+        if IMP.bff.IMP_BFF_HAS_AVX:
             model_fconv_avx = np.zeros_like(irf)
             IMP.bff.decay_fconv_per_avx(
                 fit=model_fconv_avx,
@@ -318,3 +317,6 @@ class Tests(unittest.TestCase):
         )
         np.testing.assert_array_almost_equal(ref, irf_shift)
 
+
+if __name__ == '__main__':
+    IMP.test.main()

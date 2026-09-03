@@ -139,6 +139,8 @@ public:
 
 };
 
+IMP_VALUES(DecayScore, DecayScores);
+
 IMPBFF_END_NAMESPACE
 
 

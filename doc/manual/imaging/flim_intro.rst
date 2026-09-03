@@ -204,7 +204,7 @@ time resolution by a factor of 2.
 Pixel averaged decays
 ---------------------
 Using selection masks the signal to noise of the fluorescence decays can be greatly
-improved to allow for a detailed analyis. Here it is briefly outlined, how pixels
+improved to allow for a detailed analysis. Here it is briefly outlined, how pixels
 are selected and fluorescence decays of these pixel sub-populations can be created.
 
 #.. plot:: ../examples/imaging/imaging_pixel_masks.py
@@ -400,7 +400,6 @@ object with a ``TTTR`` object that contains the photon stream a set of ``CLSMFra
 
 .. code-block:: python
 
-    from __future__ import print_function
     import tttrlib
     import numpy as np
     import pylab as p

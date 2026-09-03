@@ -18,9 +18,14 @@ The SIMD routines require CPUs with 'modern' instruction sets. Most x86 CPUs tha
 manufacture since 2012 are supported.
 
 """
-from __future__ import annotations
 import IMP.bff
-import scipy.stats
+import sys
+try:
+    import scipy.stats
+except ImportError:
+    print("To run this example, please first install the 'scipy'")
+    print("Python module.")
+    sys.exit(0)
 import time
 import numpy as np
 import pylab as p
@@ -50,11 +55,15 @@ for _ in range(n_runs):
 ex = time.perf_counter() - t_start
 times.append(ex)
 
-t_start = time.perf_counter()
-for _ in range(n_runs):
-    IMP.bff.decay_fconv_avx(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
-ex = time.perf_counter() - t_start
-times_avx.append(ex)
+# If IMP.bff was built with AVX support, repeat the tests using AVX-accelerated
+# code
+if IMP.bff.IMP_BFF_HAS_AVX:
+    t_start = time.perf_counter()
+    for _ in range(n_runs):
+        IMP.bff.decay_fconv_avx(fit=model, irf=irf, x=lifetime_spectrum,
+                                start=start, stop=stop, dt=dt)
+    ex = time.perf_counter() - t_start
+    times_avx.append(ex)
 
 t_start = time.perf_counter()  # in seconds
 for _ in range(n_runs):
@@ -62,14 +71,18 @@ for _ in range(n_runs):
 ex = time.perf_counter() - t_start
 times.append(ex)
 
-t_start = time.perf_counter()
-for _ in range(n_runs):
-    IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
-ex = time.perf_counter() - t_start
-times_avx.append(ex)
+if IMP.bff.IMP_BFF_HAS_AVX:
+    t_start = time.perf_counter()
+    for _ in range(n_runs):
+        IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum,
+                                    period=period, start=start, stop=stop,
+                                    dt=dt)
+    ex = time.perf_counter() - t_start
+    times_avx.append(ex)
 
 times = np.array(times) * 1000.0 / n_runs
-times_avx = np.array(times_avx) * 1000.0 / n_runs
+if IMP.bff.IMP_BFF_HAS_AVX:
+    times_avx = np.array(times_avx) * 1000.0 / n_runs
 
 
 # make plots
@@ -84,17 +97,21 @@ model = np.zeros_like(irf)
 IMP.bff.decay_fconv(fit=model, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv")
 
-model_avx = np.zeros_like(irf)
-IMP.bff.decay_fconv_avx(fit=model_avx, irf=irf, x=lifetime_spectrum, start=start, stop=stop, dt=dt)
-ax[0].semilogy(model, label="fconv_avx")
+if IMP.bff.IMP_BFF_HAS_AVX:
+    model_avx = np.zeros_like(irf)
+    IMP.bff.decay_fconv_avx(fit=model_avx, irf=irf, x=lifetime_spectrum,
+                            start=start, stop=stop, dt=dt)
+    ax[0].semilogy(model, label="fconv_avx")
 
 model = np.zeros_like(irf)
 IMP.bff.decay_fconv_per(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
 ax[0].semilogy(model, label="fconv_per")
 
-model = np.zeros_like(irf)
-IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum, period=period, start=start, stop=stop, dt=dt)
-ax[0].semilogy(model, label="fconv_per_avx")
+if IMP.bff.IMP_BFF_HAS_AVX:
+    model = np.zeros_like(irf)
+    IMP.bff.decay_fconv_per_avx(fit=model, irf=irf, x=lifetime_spectrum,
+                                period=period, start=start, stop=stop, dt=dt)
+    ax[0].semilogy(model, label="fconv_per_avx")
 ax[0].legend()
 
 # Benchmark
@@ -107,8 +124,10 @@ ax[1].set_xticks(ind)
 ax[1].set_xticklabels(names)
 
 width = 0.35
-ax[1].bar(ind, times_avx, width, color='y', label='AVX')
-ax[1].bar(ind + width, times, width, color='r', label='default')
+ax[1].bar(ind, times, width, color='r', label='default')
+if IMP.bff.IMP_BFF_HAS_AVX:
+    ax[1].bar(ind + width, times_avx, width, color='y', label='AVX')
 ax[1].legend()
 
-p.show()
+p.savefig('plot.png')
+#p.show()

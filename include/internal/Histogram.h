@@ -379,7 +379,7 @@ void histogram1D(
 
 }
 
-void bincount1D(int* data, int n_data, int* bins, int n_bins){
+inline void bincount1D(int* data, int n_data, int* bins, int n_bins){
     for(int j=0; j < n_data; j++)
     {
         int v = data[j];

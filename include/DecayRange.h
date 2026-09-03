@@ -15,6 +15,9 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/DecayCurve.h>
+#include <IMP/Value.h>
+#include <IMP/value_macros.h>
+#include <IMP/showable_macros.h>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -27,7 +30,7 @@ IMPBFF_BEGIN_NAMESPACE
  * It allows setting and retrieving the start and stop indices of the range,
  * as well as setting the range using a vector of indices.
  */
-class IMPBFFEXPORT DecayRange {
+class IMPBFFEXPORT DecayRange : public Value {
 private:
     size_t _start = 0; ///< Start index of the decay range
     size_t _stop = -1; ///< Stop index of the decay range
@@ -90,7 +93,12 @@ public:
      * \brief Destructor
      */
     virtual ~DecayRange() = default;
+
+    IMP_SHOWABLE_INLINE(DecayRange,
+                        { out << "DecayRange"; });
 };
+
+IMP_VALUES(DecayRange, DecayRanges);
 
 IMPBFF_END_NAMESPACE
 

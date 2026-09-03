@@ -15,7 +15,6 @@ To install the latest version with conda::
     conda install -c tpeulen imp.bff
 """
 
-import numpy as np
 import pylab as plt
 import pathlib
 
@@ -84,7 +83,8 @@ PM_TILE_COST = path_map.get_tile_values(IMP.bff.PM_TILE_COST, bounds)
 PM_TILE_COST_DENSITY = path_map.get_tile_values(IMP.bff.PM_TILE_COST_DENSITY, bounds)
 
 plt.imshow(PM_TILE_COST_DENSITY[16])
-plt.show()
+plt.savefig('plot1.png')
+#plt.show()
 
 #%%
 # These features are returned as three dimensional arrays.
@@ -92,5 +92,6 @@ fig, axs = plt.subplots(1, 3, sharex=True)
 axs[0].imshow(BFF_TILE_PENALTY[16])
 axs[1].imshow(PM_TILE_COST[16])
 axs[2].imshow(PM_TILE_COST_DENSITY[16])
-plt.show()
+plt.savefig('plot2.png')
+#plt.show()
 

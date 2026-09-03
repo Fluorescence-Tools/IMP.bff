@@ -100,6 +100,8 @@ public:
     }
 };
 
+IMP_VALUES(DecayModifier, DecayModifiers);
+
 IMPBFF_END_NAMESPACE
 
 #endif // IMPBFF_DECAYMODIFIER_H

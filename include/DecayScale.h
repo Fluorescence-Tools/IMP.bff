@@ -99,8 +99,10 @@ public:
      * Add a DecayCurve to be scaled by the DecayScale object.
      * \param decay The DecayCurve to be added.
      */
-    void add(DecayCurve* decay);
+    void add(DecayCurve* decay) override;
 };
+
+IMP_VALUES(DecayScale, DecayScales);
 
 IMPBFF_END_NAMESPACE
 

@@ -1,8 +1,5 @@
-"""@namespace IMP.bff
-Restraints for handling distances between accessible volumes.
+"""Restraints for handling distances between accessible volumes.
 """
-
-from __future__ import print_function
 
 import pathlib
 
@@ -73,8 +70,8 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         for dk in used_avs:
             dye = used_avs[dk]
             p_dye = dye.get_particle()
-            # The coordinates of an AV are the mean AV the density map. Thus, the position of the
-            # AV changes when the AV is resampled.
+            # The coordinates of an AV are the mean AV the density map.
+            # Thus, the position of the AV changes when the AV is resampled.
             dye.resample()
 
             # dye_xyz = IMP.core.XYZ(p_dye)
@@ -141,7 +138,7 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         m = hier.get_model()
         self.mdl: IMP.Model = m
         self.hier: IMP.atom.Hierarchy = hier
-        super(AVNetworkRestraintWrapper, self).__init__(m, label=label, weight=weight)
+        super().__init__(m, label=label, weight=weight)
 
         self.model_ps = []
         self.model_ps += [k.get_particle() for k in IMP.atom.get_leaves(hier)]
@@ -158,11 +155,14 @@ class AVNetworkRestraintWrapper(IMP.pmi.restraints.RestraintBase):
         else:
             raise FileNotFoundError("{}".format(fps_json_fn))
         self.rs = IMP.RestraintSet(m, 'AVNetworkRestraint')
-        self.used_avs = dict([(v.get_name(), v) for v in self.av_network_restraint.get_used_avs()])
+        self.used_avs = dict(
+            [(v.get_name(), v)
+             for v in self.av_network_restraint.get_used_avs()])
         if not self.mean_position_restraint:
             self.rs.add_restraint(self.av_network_restraint)
         else:
-            self.used_distances = self.av_network_restraint.get_used_distances()
+            self.used_distances = \
+                self.av_network_restraint.get_used_distances()
             self.add_used_dyes_to_rb(self.used_avs)
             for dk in self.used_distances:
                 d_exp = self.used_distances[dk]

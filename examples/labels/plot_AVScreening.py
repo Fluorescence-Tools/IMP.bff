@@ -5,7 +5,6 @@ This examples illustrates how to use  ``IMP.bff.AVNetworkRestraint`` for
 scoring structures in a trajectory.
 """
 import json
-import tqdm
 import pylab as plt
 
 import RMF
@@ -13,6 +12,11 @@ import IMP
 import IMP.rmf
 import IMP.atom
 import IMP.bff
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(x): return x
 
 # %%
 # Load an RMF file and create a hierarchy
@@ -43,7 +47,7 @@ v = fret_restraint.unprotected_evaluate(None)
 # Score each frame in the RMF file and plot score
 print("Scoring frames")
 scores = list()
-for frame in tqdm.tqdm(f.get_root_frames()):
+for frame in tqdm(f.get_root_frames()):
     IMP.rmf.load_frame(f, frame)
     v = fret_restraint.unprotected_evaluate(None)
     scores.append(v)
@@ -53,5 +57,6 @@ for frame in tqdm.tqdm(f.get_root_frames()):
 plt.plot(scores, "o-")
 plt.xlabel("Frame")
 plt.ylabel("Score")
-plt.show()
-
+print("See plot.png for score for each frame")
+plt.savefig('plot.png')
+#plt.show()

@@ -57,7 +57,7 @@ DecayLifetimeHandler::DecayLifetimeHandler(
         bool use_amplitude_threshold,
         bool abs_lifetime_spectrum,
         double amplitude_threshold
-){
+) : Object("DecayLifetimeHandler%1%") {
     set_use_amplitude_threshold(use_amplitude_threshold);
     set_abs_lifetime_spectrum(abs_lifetime_spectrum);
     set_amplitude_threshold(amplitude_threshold);

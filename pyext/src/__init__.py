@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 import sys
-import json
-import pathlib
 
-from . import restraints
-from . import fret
+from . import restraints  # noqa: F401
+from . import fret  # noqa: F401
 
 # Take care of typing
 try:
@@ -30,5 +28,3 @@ except ModuleNotFoundError:
     typing = None
 
 __version__ = "0.14.0"
-
-

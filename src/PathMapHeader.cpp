@@ -84,5 +84,8 @@ void PathMapHeader::update_map_dimensions(int nx, int ny, int nz){
     density_header_.compute_xyz_top(true);
 }
 
+void PathMapHeader::show(std::ostream &out) const {
+  out << "PathMapHeader" << std::endl;
+}
 
 IMPBFF_END_NAMESPACE

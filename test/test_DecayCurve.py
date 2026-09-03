@@ -1,10 +1,10 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 import numpy.testing
 import math
 import IMP.bff
+import IMP.test
 
 
 def norm_pdf(x, mu, sigma):
@@ -15,7 +15,7 @@ def norm_pdf(x, mu, sigma):
     return pdf
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_shift(self):
         time_axis = np.linspace(0, 12, 25)
@@ -94,3 +94,7 @@ class Tests(unittest.TestCase):
         np.testing.assert_allclose(d.x, np.array([0. , 0.1, 0.2, 0.3, 0.4]))
         d.resize(6)
         np.testing.assert_allclose(d.x, np.array([0. , 0.1, 0.2, 0.3, 0.4, 0.5]))
+
+
+if __name__ == '__main__':
+    IMP.test.main()

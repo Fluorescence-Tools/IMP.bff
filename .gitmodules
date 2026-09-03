@@ -1,4 +1,0 @@
-[submodule "tools"]
-	path = tools
-	url = https://gitlab.peulen.xyz/build/tools
-	branch = master

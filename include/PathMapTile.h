@@ -16,7 +16,6 @@
 #include <utility> /* std::pair */
 #include <algorithm>
 
-#include <IMP/bff/PathMap.h>
 #include <IMP/bff/PathMapTileEdge.h>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -47,6 +46,7 @@ typedef enum{
 
 class PathMap;
 
+//!* Tile used in path search by PathMap
 class IMPBFFEXPORT PathMapTile{
 
 friend class PathMap;

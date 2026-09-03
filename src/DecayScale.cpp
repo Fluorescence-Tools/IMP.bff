@@ -1,4 +1,5 @@
 #include <IMP/bff/DecayScale.h>
+#include <IMP/check_macros.h>
 
 IMPBFF_BEGIN_NAMESPACE
 

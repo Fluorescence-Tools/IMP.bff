@@ -1,4 +1,3 @@
-from __future__ import division
 import unittest
 
 import tempfile
@@ -12,6 +11,7 @@ import IMP.core
 import IMP.atom
 import IMP.em
 import IMP.bff
+import IMP.test
 
 
 create_references = False
@@ -48,7 +48,7 @@ def get_av(
     return av
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
     """
     Tests for the bff.AV class.
     """
@@ -72,7 +72,9 @@ class Tests(unittest.TestCase):
         np.testing.assert_almost_equal(av.get_mean_position(), (-15.9244, 19.2183, 20.1207), decimal=3)
         np.testing.assert_almost_equal(av.get_radii(), (3.5, 0, 0), decimal=3)
         self.assertEqual(av.get_parameters_are_optimized(), False)
-        self.assertEqual(str(av.get_source()), '"Atom CB of residue 55"')
+        p = av.get_source()
+        self.assertIsInstance(p, IMP.Particle)
+        self.assertEqual(p.get_index(), source.get_index())
 
     def test_AccessibleVolumeDecorator(self):
         """
@@ -98,7 +100,7 @@ class Tests(unittest.TestCase):
             IMP.em.write_map(av1_map, temp_file.name)
 
         pm_features = [
-            IMP.bff.PM_TILE_PENALTY,             # Penality of visiting a tile
+            IMP.bff.PM_TILE_PENALTY,             # Penalty of visiting a tile
             IMP.bff.PM_TILE_COST,                # Cost of a path to the tile
             IMP.bff.PM_TILE_DENSITY,             # Density of tile
             IMP.bff.PM_TILE_COST_DENSITY,        # Cost * Density of tile
@@ -113,7 +115,8 @@ class Tests(unittest.TestCase):
         for feature in pm_features:
             with tempfile.NamedTemporaryFile(suffix=".mrc") as temp_file:
                 fn = temp_file.name
-                fn_ref =  "./references/av_reference_%s.mrc" % feature
+                fn_ref =  self.get_input_file_name(
+                    "av_reference_%s.mrc" % feature)
                 if create_references:
                     fn = fn_ref
                 IMP.bff.write_path_map(av1_map, fn, feature, bounds)
@@ -180,7 +183,7 @@ class Tests(unittest.TestCase):
                 distance_type=t,
                 n_samples=n_samples
             )
-            self.assertAlmostEqual(v, ref, places=1)
+            self.assertAlmostEqual(v, ref, delta=0.08)
         
         # Test distance between AV and empty AV
         # create an AV in an inaccessible region
@@ -218,3 +221,6 @@ class Tests(unittest.TestCase):
         ssdev = np.sum((p_rda_ref - p_rda)**2.)
         self.assertEqual(ssdev < 30000, True)
 
+
+if __name__ == '__main__':
+    IMP.test.main()

@@ -19,7 +19,6 @@ import json
 import numpy as np
 import pylab as plt
 
-import RMF
 import IMP
 import IMP.rmf
 import IMP.atom
@@ -76,4 +75,6 @@ plt.plot(model, experiment, "o")
 plt.plot(x, x, "-")
 plt.xlabel("Model distance [Ang.]")
 plt.ylabel("Experimental distance [Ang.]")
-plt.show()
+print("See plot.png for experiment against model distance")
+plt.savefig('plot.png')
+#plt.show()

@@ -72,6 +72,8 @@ public:
                        int n_window = 5);
 };
 
+IMP_VALUES(DecayLinearization, DecayLinearizations);
+
 IMPBFF_END_NAMESPACE
 
 #endif // IMPBFF_DECAYLINEARIZATION_H

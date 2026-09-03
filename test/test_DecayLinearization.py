@@ -1,12 +1,12 @@
-from __future__ import division
 import unittest
 
 import numpy as np
 
 import IMP.bff
+import IMP.test
 
 
-class Tests(unittest.TestCase):
+class Tests(IMP.test.TestCase):
 
     def test_lin(self):
         dt = 0.0141
@@ -35,3 +35,7 @@ class Tests(unittest.TestCase):
                    1.00678725, 1.00884042, 0.9865171, 1.]
         np.testing.assert_array_almost_equal(ref_lin, lin.y[::256])
         np.testing.assert_array_almost_equal(ref_mdl, model.y[::256])
+
+
+if __name__ == '__main__':
+    IMP.test.main()

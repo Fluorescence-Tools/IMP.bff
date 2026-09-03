@@ -1,3 +1,7 @@
+"""@namespace IMP.bff.tools
+   Utility functions.
+"""
+
 import IMP
 import IMP.core
 import IMP.atom
@@ -37,7 +41,8 @@ def display_mean_av_positions(
             IMP.atom.Bonded.setup_particle(p_dye)
         if not IMP.atom.Bonded.get_is_setup(p_att):
             IMP.atom.Bonded.setup_particle(p_att)
-        if not IMP.atom.get_bond(IMP.atom.Bonded(p_dye), IMP.atom.Bonded(p_att)):
+        if not IMP.atom.get_bond(IMP.atom.Bonded(p_dye),
+                                 IMP.atom.Bonded(p_att)):
             IMP.atom.create_bond(
                 IMP.atom.Bonded(p_dye), IMP.atom.Bonded(p_att), 1)
 
@@ -131,15 +136,18 @@ class FRETDistanceConverter(object):
 
     @property
     def fret_efficiency_mean(self):
-        return np.interp(self.dist_center_center, self._distances_, self._e_mean_)
+        return np.interp(self.dist_center_center, self._distances_,
+                         self._e_mean_)
 
     @property
     def distance_mean(self):
-        return np.interp(self.dist_center_center, self._distances_, self._d_mean_)
+        return np.interp(self.dist_center_center, self._distances_,
+                         self._d_mean_)
 
     @property
     def distance_mean_fret(self):
-        return np.interp(self.dist_center_center, self._distances_, self._d_mean_fret_)
+        return np.interp(self.dist_center_center, self._distances_,
+                         self._d_mean_fret_)
 
     def __call__(self, value: float, distance_type: int):
         self.dist_center_center = value
@@ -159,7 +167,8 @@ class FRETDistanceConverter(object):
     ):
         self._forster_radius_ = forster_radius
         self._sigma_ = sigma
-        self._distances_ = np.linspace(*distance_range, n_distances, dtype=np.float64)
+        self._distances_ = np.linspace(
+            *distance_range, n_distances, dtype=np.float64)
         self._density_ = np.zeros_like(self._distances_)
         self._update_fret_efficiencies_(self._forster_radius_)
         self._update_lookup()
@@ -172,7 +181,7 @@ def read_xlink_table(fn: str) -> typing.Dict[int, typing.Dict]:
     :return:
     """
     # Read the xlink table
-    xlinks = {}  # a dict of the xlinks, the keys are used to address the xlinks
+    xlinks = {}  # dict of the xlinks, the keys are used to address the xlinks
     xlink_idx = 0
     with open(fn, 'r') as fp:
         lines = fp.readlines()
@@ -193,4 +202,3 @@ def read_xlink_table(fn: str) -> typing.Dict[int, typing.Dict]:
             except ValueError:
                 pass
     return xlinks
-

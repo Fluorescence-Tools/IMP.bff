@@ -8,7 +8,13 @@ how pile-up changes the shape of fluorescence decays.
 """
 import pylab as plt
 import numpy as np
-import scipy.stats
+import sys
+try:
+    import scipy.stats
+except ImportError:
+    print("To run this example, please first install the 'scipy'")
+    print("Python module.")
+    sys.exit(0)
 import IMP.bff
 
 n_channels = 128
