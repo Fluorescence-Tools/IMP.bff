@@ -1,5 +1,3781 @@
 # Update Log
 
+## 2026-09-04 (28) — the excitation and emission crosstalk matrices moved here from chisurf
+
+Owner: *"excitation and emission crosstalk matrix definition must be in bff
+not in chisurf."* The compute/display line applied to calibration: what a
+crosstalk matrix **is** — the label convention, how a light-path payload
+becomes values, what forward and inverse mixing mean — is a definition, and a
+second definition in Python would disagree with the first silently. ChiSurf
+keeps the light-path calculator that *builds* a payload and the views that
+display corrected signals; the algebra in between is now
+`IMP/bff/CrosstalkMatrix.h` (+ `src/CrosstalkMatrix.cpp`, exposed through
+`pyext/IMP_bff.crosstalk.i`), the same placement FcsMdf took.
+
+The surface, in three pieces:
+
+* **`CrosstalkMatrix`** — the labelled matrix both crosstalk matrices share
+  (excitation: lasers × chromophores; emission: chromophores × detectors).
+  `select(rows, columns)` re-orders against labels and **zero-fills** a
+  requested label the matrix does not carry — a missing element of a light
+  path is a dark element, not a broken one. `scale_row` / `scale_column` are
+  how a per-chromophore quantum yield and a per-detector efficiency fold in.
+* **`crosstalk_apply_mixing` / `crosstalk_invert_mixing`** — forward and
+  inverse mixing over items (bursts/pixels), with the three solves of the
+  Python module they replace: minimum-norm least squares (complete
+  orthogonal decomposition, the pseudo-inverse a numpy caller means), the
+  Tikhonov closed form, and **non-negative least squares** — Lawson–Hanson,
+  ported because chisurf's stable unmixing leaned on scipy and the stable
+  path is the one ill-conditioned emission matrices need. 30 random systems
+  agree with `numpy.linalg.lstsq`, the closed ridge form and
+  `scipy.optimize.nnls` to 1e-6.
+* **`crosstalk_shuffle_unmix`** — the photon-reassignment unmixing: each
+  detected photon attributed to exactly one source by a binomial chain,
+  integer and exactly count-preserving, `std::mt19937_64`-seeded and
+  reproducible, unbiased against the NNLS estimate on average.
+
+Two traps met on the way, both silent:
+
+1. **Eigen 5.0.1 mis-evaluates `a * b.col(d).asDiagonal()`.** With the
+   diagonal wrapping a **Block**, the product degrades to `a * b(0, d)` — a
+   scalar broadcast — so the shuffle's posterior read the abundance ratio and
+   leaked a third of every donor photon into the acceptor *with the identity
+   matrix*, where the answer is exact by inspection. A dense `VectorXd`
+   diagonal is fine; only the Block wrapper breaks. The posterior is an array
+   broadcast now, and `test_crosstalk_matrix.py` pins the identity case so
+   the idiom cannot creep back. Anyone else in the stack reaching for
+   `Block::asDiagonal()` on this Eigen should check their values.
+2. **Zeroing an augmented system inside the loop wipes it.** The ridge-augmented
+   NNLS zeroes its augmentation rows per item; when there is no augmentation
+   (ridge 0) the "tail" *is* the measurement, and the first solve read a zero
+   vector and answered zero for everything. Zero once at construction.
+
+Deliberately left in chisurf: the scalar three-cube correction
+(`correct_three_cube` / `three_cube_fret_efficiency`) — elementwise numpy on
+display-scale arrays, with a batch twin already in tttrlib's
+`SpectralCrosstalk`; delegating it is tttrlib's decision, not this move.
+`chisurf/core/fluorescence/crosstalk.py` stays as the numpy adapter (payload →
+`CrosstalkMatrix` → ndarray, reshape, int64 cast) and owns no arithmetic; its
+former `rcond` argument is gone with the numpy pseudo-inverse it fed.
+
+**Same-day follow-up — the tttrlib boundary, checked.** The three-cube
+twin did not stay in chisurf long: it now forwards to tttrlib's
+`SpectralCrosstalk.correct_three_cube_batch` (the registered,
+A/B-validated owner), parity exact. The overlap that *does* concern this
+repository: tttrlib's `invert_mixing_ridge` is the same normal-equation
+math as this module's ridge path (≤1.5e-10 apart; the hand-rolled Gaussian
+elimination is the cruder solver), with no caller outside tttrlib's own
+tests. The general mixing algebra is here by the owner's placement, so
+tttrlib's function is the superseded twin — deletion is tttrlib's decision
+(its `spectral_crosstalk` registry entry names it). Verdict recorded in the
+shared duplication register (chisurf `okf/prds/prd-105.md`, phase 4).
+
+### State
+
+`test/test_crosstalk_matrix.py` 15 passed (labels, the three solves against
+references, the shuffle contract, and the Eigen-5 identity pin). On the
+chisurf side the adapter's whole surface passes unchanged:
+`test/fitting/` 1065 passed + `test_crosstalk`/`test_general_correction`/
+`test_photon_shuffle`/`test_fret_species_decay`/light-path crosstalk 40+23,
+and the backend pin `test/architecture/test_bff_is_the_backend.py::
+test_the_crosstalk_matrix_definition_is_bffs` (11 passed) now asserts the
+adapter is wired to this module and owns no second definition.
+
+## 2026-09-02 (27) — a port's type is declared once: writes coerce, they do not convert
+
+Owner: *"issue: type conversion. once port init, do not allow. but still
+accept types of different kind."*
+
+chinet inferred a port's dtype from every write, so an integer port became a
+float port the first time anything stored 1.5 in it. That is what the type
+system inherited, and it is the wrong half: a port whose type can change is
+not typed. Whatever holds a reference to it has already decided what it is,
+and one stray write should not answer differently on their behalf.
+
+**The element type is now declared once** -- by the constructor or by
+`set_value_type()` -- and a write of another kind is **accepted and coerced**,
+never refused and never promoted. 1.5 into an int port stores 1; 3 into a
+float port stores 3.0; 3.7 into a bool port stores `true`. Bool already worked
+this way and was carved out as a special case; it is the general rule now.
+
+**Vector-ness is not part of the declaration.** It is shape, not type, so an
+array write is still allowed and gives an array port of the same element type.
+
+### Three things that had to move with it
+
+1. **A bare `Port()` now defaults to float, not int.** chinet could default to
+   the integer code because the first write retyped it and the default never
+   survived contact with data. With a declared type that default silently
+   truncates the first float anybody stores -- `test_port_bounds` caught it
+   immediately, writing a float array into a fresh port and getting integers.
+   A float port is what almost every caller wants anyway.
+2. **Both loaders restore the type *before* the value.** Restoring the value
+   first would coerce it to the default type and lose it -- a saved 2.5 comes
+   back 2, and the type restore that followed could not put the half back.
+3. **The type is then applied a second time, after the value.** That is not
+   redundancy: the first application makes the value coerce correctly, the
+   second restores the document's exact code, including chinet's quirk that a
+   constructor-built float *vector* reports the scalar code. A retype within
+   the same element type converts nothing, so it costs no precision.
+
+### What it buys
+
+Exactness stops being fragile. Under inferred promotion one float write turned
+an exact int64 port into a rounding one for the rest of the session; now the
+port is still an integer port afterwards and the next wide value is still
+exact. `test_a_wide_integer_port_stays_exact_across_a_float_write` says so.
+
+### Divergence, stated plainly
+
+This is a deliberate break from chinet's semantics, not a port of them. The
+`reference_chinet` parity tests that pinned promotion were **inverted, not
+deleted**, and each says in its own docstring what changed and why:
+`test_port_value_type`, `test_an_int_port_accepts_a_float_and_coerces_it`,
+`test_a_wide_integer_port_stays_exact_across_a_float_write`. `set_value_type()`
+survives as the one declaration path, which is why loading a document uses it.
+
+### State
+
+`test/portnode/test_port_types.py` 56 tests, including the full accept/coerce
+matrix over the three element types. bff 355 passed, chisurf 1468 passed (the
+pre-existing pair).
+
+## 2026-09-02 (26) — one slot buffer and a tag, replacing the double/int64 pair
+
+Owner: *"why no storage buffer in bytes and type casting?"* -- a better
+question than my answer to it deserved. (25) stored an int64 array **and** a
+double mirror, and the answer was that `get_values_ref()` returns
+`const std::vector<double>&` with no copy to ten hot-path call sites. That was
+a real constraint and the wrong conclusion: the mirror created a bug class
+(*which store is authoritative*) that had already cost three bugs in one
+session.
+
+### The shape that keeps both
+
+Storage is now **one** `std::vector<double> buffer_` used as a slot array plus
+the element type in `value_type_`:
+
+* a float slot holds the double itself;
+* an int or bool slot holds the **int64 bit pattern**, copied in and out with
+  `memcpy`.
+
+A double slot is already 8-byte aligned and exactly as wide as an `int64`, so
+there is no alignment question, and `memcpy` keeps it clear of strict
+aliasing -- no `reinterpret_cast` of one live object as another.
+
+The zero-copy contract survives untouched. For a **float** port -- which every
+one of those ten hot-path readers is -- `get_values_ref()` returns `buffer_`
+itself. Nothing downstream changed, no span refactor, no signature churn.
+For a non-float port it materialises `double_cache_`, which is **derived**:
+never read back into `buffer_`, dropped on every write. A cache cannot become
+a second authority; a mirror can, and did.
+
+`bench_fit.py` after: graph TCSPC **2.53 ms**, FRET **6.18 ms**, against 2.26
+and 6.21 recorded before the change. The hot path is where it was.
+
+### What the single store fixed for free
+
+`set_value_type()` used to need a rule for which array to trust -- the source
+of (25)'s worst bug, where restoring a document destroyed the value it had
+just restored. It now reads both forms out of the one buffer, retypes, and
+writes back, so an int -> int retype is exact by construction rather than by a
+special case.
+
+`propagate_to_followers()` was pushing the double array into every follower;
+for an integer port that rounded on the way into the follower's own storage --
+the same mistake one layer further out, and nothing had caught it. It pushes
+typed now.
+
+### The one new risk, and its tests
+
+A derived view can go stale. Five tests cover it: an integer port reads as its
+*value* and not as its bit pattern (a reinterpreted slot would come back a
+denormal near 1e-308, not 5), the view follows writes, follows a type change,
+follows a link, and a wide integer survives being pushed to a follower.
+
+Memory, incidentally: an integer port was 16 bytes an element (double plus
+int64) and is 8, with the double view allocated only if something asks for it.
+
+### State
+
+`test/portnode/test_port_types.py` 45 tests. bff 339 passed, chisurf 1468
+passed (the pre-existing pair). Adding a fourth element type is now a tag and
+a conversion, not a fourth array to keep in step.
+
+## 2026-09-02 (25) — Port types become real: an integer port now holds an integer
+
+Owner: *"make ports have types."* -- said again after (24), which is the tell:
+(24) gave the port a type *code* and a typed read, and left the storage a
+`double` for every type. That is a label, not a type, and I had written the
+caveat myself. This is the part that was missing.
+
+### The two defects, both demonstrable
+
+```
+Port(value=2**53+1).value  ->  9007199254740992   type=float
+```
+
+Wrong twice in one line. **The type was wrong** because a Python int wider
+than 32 bits does not convert to C++ `int`, so SWIG fell through to the
+`double` overload and the port declared itself float. **The value was wrong**
+because storage was `double` regardless.
+
+### What it is now
+
+`Port` carries `std::vector<long long> int_data_` as the exact store for the
+int and bool element types, with `data_` kept as a **double mirror**. The
+mirror is not laziness: `get_values_ref()` hands `data_` out with no copy and
+the evaluation hot path -- `ChiSquared`, `JointChiSquared`, `Minimizer`,
+`TcspcDecay`, the spectrum nodes, ten call sites -- reads it every iteration.
+Those are all float ports, so they keep a branch-free zero-copy read and pay
+nothing for a type system they do not use.
+
+Every integer entry point widened from `int` to `long long` rather than
+gaining an overload -- widening cannot be mis-dispatched, and (24) had just
+been bitten by exactly that. `Node.cpp`'s two `static_cast<int>` writes went
+with it, which also stops an expression yielding 3e9 wrapping through 32 bits.
+
+Exact to `INT64_MAX` on construction, on assignment, through a link, through
+`Port.get_json`, and through a saved `Session`.
+
+### Three places the exactness leaked, each found by a test rather than by reading
+
+1. **`set_value_type()` re-derived the integers from the double mirror.** So
+   saving and reloading `2**60 + 7` came back `2**60`: the value survived the
+   write and was destroyed by the type restore that followed it. Conversion
+   now reads whichever store is authoritative.
+2. **The kwargs constructor sent every list through `vector<double>`**, so a
+   wide integer *vector* was rounded before it ever reached the int store,
+   even though the scalar path was already exact.
+3. **`Session` emitted through `get_value()` and read back through
+   `get<double>()`** -- a path that never touches Python, and rounded twice.
+
+### Two things worth keeping in mind
+
+`Port(value=2**60+7)` then `p.value = 1.5` gives a **float** port holding
+`1.5`, and that is correct: exactness is a property of the int type, not of
+the value, and chinet's int -> float promotion is deliberate. What would be
+wrong is promoting silently while still claiming to be an int port, and a test
+says so.
+
+A numpy `bool` array now builds a `PORT_BOOL_VECTOR` rather than an int
+vector -- it was `dtype.kind in 'iub'` all in one branch before.
+
+### State
+
+`test/portnode/test_port_types.py` 40 tests. bff 339 passed, chisurf 1468
+passed (the pre-existing pair). The `Port.h` file comment no longer says an
+integer port is exact only to 2^53, because it no longer is.
+
+## 2026-09-02 (24) — Port gets a type system: int, float, bool, each as a vector
+
+Owner: *"improve bff Ports of Nodes, also vectors should be possible as input
+and output, make Port have types, support int, float, bool."*
+
+Vectors were already there -- constructor, `set_value_vector`,
+`set_values_array`, `get_value_view`, and links propagate them -- so the real
+gaps were **bool**, and that the "type" was a bare int (0..3) that a port did
+not actually answer in: `Port(value=True).value` was `1.0`. A type nothing
+reads back in is half a type.
+
+### What the codes could and could not become
+
+`Session` writes the code into the chinet document verbatim and
+`test/session/chinet_fixture.jsonl` pins it, so **0-3 keep chinet's meaning**.
+Bool took fresh codes (4, 5) rather than a renumbering, which leaves every
+existing document readable. A named `PortValueType` plus
+`port_value_type_element/_is_vector/_of/_name` replaces comparing magic
+numbers by hand.
+
+### Bool does not promote, and that is the point
+
+int -> float is an *inferred* promotion: chinet takes numpy's dtype rules, so
+writing 1.5 to an integer port makes it a float port. A bool port is a
+**declared** type -- a flag -- so writing 3.7 to it stores `true` and leaves it
+a bool port. Promoting a flag on assignment would silently destroy what the
+port means, which is the opposite of what a type system is for. Only
+`set_value_type()` takes a port out of bool. The int -> float rule is
+untouched, and a test pins each separately.
+
+### Three traps, all found by running rather than reading
+
+1. **`bool` is a subclass of `int` in Python**, so `hasattr(True, '__index__')`
+   is true and the integer branch swallowed every flag. `_set_value` tests
+   `isinstance(v, bool)` first.
+2. **The `std::vector<int>` overload made SWIG decide the element type, and it
+   decided wrong.** A Python list of floats converts to `std::vector<int>` as
+   happily as to `std::vector<double>` -- lossily -- so `Port(value=[1.5,2.5])`
+   came back `[1, 2]`, and two existing tests caught it. The fix is to not
+   overload across int/double on the binding surface at all: the vector
+   constructor is gone and the method is named `set_value_vector_int`. The
+   `value_type` argument already said what the caller meant.
+3. **`true` is not a JSON number**, so the session loader dropped a saved flag
+   and `set_value_type(4)` then read it back as `false`. The loader restores
+   the value *before* the type, so that branch has to accept booleans itself.
+   `emit_port_value` writes real `true`/`false` for bool ports; 0-3 render
+   exactly as before.
+
+### What did not change, deliberately
+
+`Port(value=[1.5, 2.5])` still reports the *scalar* float code, not
+`PORT_FLOAT_VECTOR` -- a chinet quirk, load-bearing because
+`test_kwargs_ctor_chisurf_shape` pins it as the shape chisurf's `Parameter`
+builds. Asserted rather than corrected. Likewise float stays sticky upward:
+`set_value_vector_int` on an already-float port leaves it float.
+
+Storage is still `double`, so an integer port is exact only to 2^53. Closing
+that needs variant storage and was not part of this; the file comment now says
+so instead of claiming more than it does.
+
+### State
+
+`test/portnode/test_port_types.py`, 26 tests. bff 325 passed, chisurf 1468
+passed (the two failures are the pre-existing pair this session opened with).
+
+## 2026-09-02 (23) — the Gaussian mixture in one call, and the third kernel hiding behind a flag
+
+Owner: *"transfer to bff also distance btw gauss, so that all compute can
+happen within bff and minimal cpp python transfer."*
+
+The kernels were already C++. The *loop over them* was not: `Gaussians.
+distribution` called into bff **once per component** and summed the returned
+arrays in numpy, so a five-component model crossed the language boundary five
+times to build one curve, each crossing returning a 96-point ndarray. That is
+the half of the standing rule -- *the data stay where the computation is* --
+that "it is already a C++ kernel" misses.
+
+**`gaussian_distance_mixture` in `Distributions.h`** takes the axis and the
+per-component arrays and returns the finished mixture. Five components ->
+**one call**, measured. `GaussianDistances::evaluate` was rewritten to call the
+same function, so the graph path and the Python path are now one
+implementation and cannot drift; `test_the_node_and_the_free_function_agree`
+pins that in both branches, at exactly zero.
+
+### The graph stopped refusing
+
+`minimizer.py` returned `None` for `is_distance_between_gaussians`, because
+the node carried only the generalised normal — so `GaussianModel` had **no
+graph at all** whenever that flag was on. The node has both kernels now and
+the builder wires the flag through. `test_a_distance_between_gaussians_
+refuses_the_graph` became `..._builds_the_graph`, and rather than asserting a
+refusal it now checks the graph's curve against the model's (1e-8).
+
+### Three kernels, not two — found by measuring
+
+The obvious reading is that pda2c's plain Gaussian is the generalised normal
+at `shape = 0`. It is not, and the mixture was briefly wrong because of it:
+
+* `generalized_normal_distribution` evaluates the **standard** normal at
+  \f$z=(x-\mu)/\sigma\f$, so it omits the \f$1/\sigma\f$ factor;
+* `normal_distribution(norm=False)` keeps it.
+
+With `norm=True` the constant divides out and the two agree — which is why
+this hides. With components of **unequal width** left unnormalised it does
+not: a **2e-2** error on a three-component mixture. So the kernel is chosen by
+an explicit `GaussianMixtureKernel`, and a test asserts the two branches
+*differ*, so nobody folds them back together.
+
+The same care applies to `normalize_components`, which is a parameter rather
+than a constant because **the reference is asymmetric between its own
+branches**: the generalised-normal branch calls a function whose `norm`
+defaults to true, the two-cloud branch one whose `normalize` defaults to
+false. Hiding that in the kernel would silently change one of the two callers.
+
+### Numbers
+
+5 components -> 1 crossing per distribution (was 5), 53.5 us (generalised) and
+43.3 us (two-cloud). Both branches agree with an independent numpy reference
+built from the definition at **5.6e-17** and **0**. bff 125 passed; chisurf
+1468 passed. Census unchanged.
+
+Pre-existing and unrelated, confirmed not caused here: `mmfdb.repository` and
+`IMP.bff.av` missing (import errors), a Qt abort in
+`test_fret_structure_widget`, and the two failures this session started with.
+
+## 2026-09-02 (22) — dedup: the last six copies, and a third `distance_between_gaussian` that was a different function
+
+Owner: *"Dedup."*
+
+Asked of the code rather than of memory: intersect every function name in
+`chisurf.core.math` against `dir(IMP.bff)`, then check which of the shared
+names still carry their own Python body. **14 shared names, 6 still
+duplicated.** Each was compared numerically before being touched.
+
+| | |
+|---|---|
+| `distributions.poisson_0toN` | forwarded, agreed to 1.2e-16 |
+| `distributions.normal_distribution` | forwarded, 5.2e-16 |
+| `distributions.generalized_normal_distribution` | forwarded, 5.3e-15 |
+| `distributions.distance_between_gaussian` | forwarded, 0 |
+| `special.i0_array` | forwarded, 3.8e-20 |
+| `datatools.distance_between_gaussian` | **not a duplicate — see below** |
+
+`sum_distribution` went too: `combine_distributions`' own docstring called the
+two "functionally equivalent", and nothing called it.
+
+### The one that was not a copy
+
+`chisurf.core.math.datatools.distance_between_gaussian` shares its name with
+two other functions in the same codebase and **is not the same function**. It
+returns a plain Gaussian centred at the separation; the other two return the
+distribution of the *distance between two Gaussian clouds*, which carries an
+extra \f$r/s\f$ factor and an antisymmetric second term. On a typical axis
+they are **0.93 apart in relative terms** — different functions, not copies
+that drifted.
+
+Forwarding it to bff on the strength of the matching name would have silently
+replaced it. This is the same confusion that produced the worm-like-chain
+linker bug one entry above, found a second time, in a second place, on the
+same day. A name is not evidence.
+
+**I removed it, and that was wrong**: the grep for callers covered `chisurf/`
+and missed `test/math/test_datatools.py`, which tests it. It is restored, with
+the collision written into its docstring. Renaming it to say what it is would
+end the collision for good and is worth doing — it is left as a decision
+rather than taken, because it is a public name.
+
+### State
+
+No function in `chisurf.core.math` now shares a name with an `IMP.bff` export
+and still computes it in Python. Dead imports left behind by the forwarding
+(`gamma`, `log`, `i0` in `rdf.py`; `math` in `distributions.py`) removed.
+bff 95 passed, chisurf 244 passed, census unchanged. `Qd` and `linear_dist`
+remain: dead, but not duplicates, so not this ticket's business.
+
+## 2026-09-02 (21) — the worm-like chain, the distributions, and a bug the move uncovered
+
+Owner: *"the compute of wlc and ising should be moved, also move the underlying
+distributions to bff."*
+
+### The move found bff computing the wrong function
+
+Forwarding ChiSurf's `worm_like_chain` onto bff's meant comparing them first,
+and they are **not the same function**. bff had
+
+```cpp
+pri *= std::exp(-d * kappa * a * (1.0 + b) * r_n / (1.0 - (b*r_n)*(b*r_n)));
+```
+
+where Becker-Rosa-Everaers -- and ChiSurf -- have \f$I_0\f$ of that same
+argument. The argument is **negative** and \f$I_0\f$ is **even**, so
+\f$I_0(-x)\f$ grows exactly where \f$\exp(-x)\f$ decays: a factor of 4e3 at
+\f$x=-5\f$, 2e16 at \f$x=-20\f$.
+
+It is not a precision bug, it is the wrong shape. Against the exact
+Kratky-Porod \f$\langle R^2\rangle/L^2 = 2\kappa - 2\kappa^2(1-e^{-1/\kappa})\f$:
+
+| \f$\kappa\f$ | exact | with `I0` | with `exp` |
+|---|---|---|---|
+| 0.05 | 0.095 | 0.077 | 0.070 |
+| 0.50 | 0.568 | 0.421 | 0.090 |
+| 2.00 | 0.852 | 0.770 | **0.007** |
+
+A stiffer chain came out *more compact*. **Nothing outside this module's own
+tests called it** -- ChiSurf ran its own Python copy -- so it was latent, and
+the one change that would have made it live is the change that found it. That
+is the "nobody compared them" hazard from `T-20260901-05`, a second time.
+
+Two more divergences in the same family:
+
+* `worm_like_chain_linker` convolved with `normal_density`. The broadening
+  kernel is `distance_between_gaussian` -- the distance between two Gaussian
+  *clouds*, which carries an extra \f$r/s\f$ factor and an antisymmetric
+  second term -- not the density of an offset. It also fed the r^2-weighted
+  chain into the convolution, which must see the bare one.
+* The contour cut was a **mask**; the reference `break`s, which is a
+  **prefix**. On an unsorted axis those differ, and nothing requires the axis
+  to be sorted.
+
+**The test that should have caught the kernel had confirmed it instead.**
+`test_the_linker_convolution_matches_an_independent_one` built a numpy
+reference and made the same two mistakes as the code. An independent reference
+is only independent if it is derived from the definition rather than written
+next to the implementation; it is now, and it says so.
+
+### What moved
+
+New `include/SpecialFunctions.h` / `src/SpecialFunctions.cpp` -- `i0`, the
+Abramowitz & Stegun polynomial. **Including ChiSurf's transposed digit**:
+A&S print 3.5156229, ChiSurf has 3.5156299, and the C++ carries 3.5156299 on
+purpose. The contract of a port is "the same answer, faster", and every
+published WLC fit in the stack was made with that constant. It costs ~1e-6
+near |x|=3.75. If it is ever corrected it should be corrected once,
+deliberately, with the refits that implies. **Flagged, not fixed.**
+
+`saw_nu` added to `PolymerChain.h`. Everything now forwards from
+`chisurf/core/math/functions/{rdf,special}.py`: `i0`, `gaussian_chain`,
+`gaussian_chain_ree`, `saw_nu`, `worm_like_chain`, `worm_like_chain_linker`,
+`distance_between_gaussian`. Every one is parity-exact against the pre-port
+code taken from git -- worst case 3.4e-15, most at 0.
+
+The distributions that already had bff twins were checked rather than assumed,
+and all agree to machine precision (`normal_distribution`,
+`generalized_normal_distribution`, `distance_between_gaussian`, `poisson_0toN`,
+`gaussian_chain`): 0 to 3e-17. Only the worm-like chain had drifted.
+
+### What did not move, and why
+
+* `combine_distributions` takes an arbitrary **callback**. Porting it needs a
+  SWIG director per element, which `okf/log.md` 2026-09-01 already measured as
+  a regression (1.54 ms against scipy's 1.33). The specialised case that
+  matters is already a node -- `GaussianDistances`.
+* `Qd`, `linear_dist`, `sum_distribution`, `i0_array` (the ChiSurf one) have
+  **no callers anywhere in the stack**. Porting dead code buys nothing.
+* `worm_like_chain`'s `distance` flag has **never done anything** in ChiSurf --
+  accepted and dropped. bff implements it properly, so the forwarder passes
+  `False` explicitly to preserve the existing answer. Honouring it would change
+  every WLC fit. **Flagged, not fixed** -- and the Kratky-Porod table above says
+  the r^2 form is the better-behaved one, so this is worth a decision.
+
+### Numbers
+
+`IsingChainModel` 55215 -> 1090 us (**50.7x**). `WormLikeChainModel` 266 -> 210
+us (1.3x), `SawNuModel` 224 -> 211 us (1.1x) -- small, and
+`test/minimizer/bench_models.py` said in advance that they would be: those two
+were 2.0 and 1.5 ms of movable compute between them. They were moved for the
+placement rule and for the bug, not for speed, which is the honest way to
+describe it.
+
+bff suites 239 passed (27 in `test_polymer_chain.py`, including a regression
+test that pins \f$\langle R^2\rangle\f$ *rising* with \f$\kappa\f$ rather
+than any particular number). Census unchanged: no model builds a graph that
+disagrees with its own curve.
+
+## 2026-09-01 (20) — where the model compute actually is, and the Ising chain to C++
+
+Owner: *"benchmark chisurf mdls and move compute to bff."*
+
+### The census was ranking the wrong thing
+
+`test/minimizer/census_models.py` answers *whether* a model becomes a C++
+graph. Both open tickets in this family (`T-20260901-08`, `-09`) were scoped
+off it, and it cannot rank: a model nobody fits scores the same as the one
+every session runs. So the second half got written —
+**`test/minimizer/bench_models.py`** — which times one `update_model()` per
+model and profiles it into three buckets: `native` (inside a `tttrlib`/`IMP`
+extension), `numpy`, `py`. It ranks by `us/LM-iter` — cost times
+`(n_free + 1)`, because LM differences the objective once per free parameter
+— restricted to the share that is **not** already C++.
+
+Three things fell out, and two of them contradict the tickets:
+
+1. **The 7 models that build a graph are the cheap ones**: 4.1 ms of 2174 ms
+   of total per-LM-iteration compute, **0.2%**. The graph work so far bought
+   correctness and structure, not speed. That is worth knowing before the
+   next session promises a speed-up from finishing it.
+2. **`MaxEntLifetimeModel` is the most expensive model in ChiSurf by a factor
+   of three (~190 ms a curve) and has nothing to move** — 97% of it is
+   already inside `tttrlib.solve_tcspc_mem_lifetime`, which is where the
+   layering rule puts it. A benchmark that only measured *time* would have
+   sent someone to port it. This is the entire reason the split exists.
+3. **The distributions `T-20260901-08` scopes are 0.2% of movable compute**
+   between them. Worth doing for the graph; not worth doing for speed.
+
+### The one that mattered
+
+`ising_chain` — 619 ms of the 1192 ms of movable compute, **52% of it, in one
+function**. `chisurf/core/math/functions/rdf.py` looped over 2000 k-points and
+stepped a 2-vector through `n` 2x2 matrix multiplies per point: ~80k
+interpreter iterations of arithmetic numpy has no way to vectorise. It went to
+`include/PolymerChain.h` / `src/PolymerChain.cpp` beside the worm-like chain,
+and `rdf.ising_chain` is now a thin forwarder on the
+`kappa2_to_distance_ratio` pattern.
+
+| | before | after |
+|---|---|---|
+| kernel | 55.6 ms | 0.92 ms (**61x**) |
+| `IsingChainModel.update_model` | 55.2 ms | 1.14 ms (**48x**) |
+| its rank in the table | 1 | 10 |
+| **all movable model compute** | **1192 ms** | **587 ms** |
+
+Parity **5.6e-17** against the numpy original over five parameter sets, and
+**6.9e-17** on the model's own axis against the pre-port code taken from git —
+which is the comparison that actually guards the port, since it is the one a
+user would notice. 7 tests added; polymer + minimizer suites 74 passed.
+
+**The transfer product is formed unscaled, deliberately**, and the header says
+why: `phi` is used only as the ratio `phi(k)/phi(0)`, so a rescaling cancels
+only if it is identical at every `k` — a per-`k` rescaling silently changes the
+answer. The cost is that a long, strongly coupled chain can overflow; those
+entries end up zero rather than NaN, and a test pins that, because a NaN there
+propagates into the FRET rate spectrum downstream.
+
+### Two cautions the benchmark carries in its own docstring
+
+**It over-reports `py` for linear algebra.** Functions are bucketed by the file
+they are defined in, so `np.linalg.inv` — a Python wrapper over LAPACK — is
+charged to `py`. `DeerTikhonovModel` reads 99% `py` and a real part of that is
+BLAS. A high `py%` on a linear-algebra model is a question, not a verdict. The
+`native` column has no equivalent failure: extension calls are always
+attributed correctly, so a row reading `native` really is done.
+
+**`DeerTikhonovModel` is the noisiest row** — 46 to 232 ms a curve on an idle
+machine, without growing within a process. Its rank is real; its absolute
+number is not, and a single-run before/after on it proves nothing.
+
+Both are why `T-20260901-15` says to fix that model's arithmetic before
+porting it: `_gcv_score` recomputes `A.T @ A` and `L.T @ L` inside the loop
+over all 24 alphas though neither depends on alpha, and forms a full
+`A @ inv @ A.T` to take its trace. That is a cheaper experiment than a port.
+
+## 2026-09-01 (19) — the transport nobody counted: the graph was rebuilt once per consumer
+
+Owner: *"minimize transport btw bff and chisurf."*
+
+### What was crossing
+
+Counted rather than guessed — `graph_objective` calls,
+`ChiSquared.set_data_arrays` calls and `Port.set_values_array` calls during
+one `fit.run()`, and then during one `covariance_matrix()`:
+
+```
+tcspc   run():  graph builds 1 | set_data_arrays 1 | update_model 2
+        + one covariance_matrix(): graph builds 1, set_data_arrays 1
+```
+
+`run()` is clean. **`covariance_matrix()` was not**: every call rebuilt the
+entire graph and re-copied `x`/`y`/`ey` into `ChiSquared`. Timed:
+
+| | graph build | whole call | build's share |
+|---|---|---|---|
+| tcspc | 175 µs | 249 µs | **70%** |
+| FRET | 523 µs | 978 µs | **53%** |
+
+And there are **six** consumers of that curvature (the posterior view,
+derived quantities, both sampler preconditioners, `Fit.grad`, the property),
+so the data were marshalled once per consumer. This was introduced by (17),
+which routed all six through the graph and made each of them build one — the
+arithmetic moved to C++ and the transport moved with it, which is precisely
+the half of the rule that gets forgotten.
+
+### The fix, and the bug inside the fix
+
+`_cached_graph` builds once and keys the result on what must not have
+changed. **The first key was wrong in an instructive way**: it included
+`id(fit.data.x)` and `id(fit.data.y)`, and `DataCurve` builds a *fresh array
+on every access*, so those ids are the address of a temporary CPython
+immediately reuses. Two reads in one expression compared **equal**; two reads
+either side of a call compared **unequal**. So the naive stability check said
+the key was fine and the cache never hit once — visible only because the
+measurement did not move.
+
+The key is now structure and window (`id(model)`, `id(fit.data)`, the
+free-parameter identities, `xmin`, `xmax`), and `Fit.run()` drops the cache,
+so a graph cannot outlive the run it was built for. **Uncovered, and written
+into the docstring rather than left implicit**: mutating a data buffer *in
+place* between two analyses of one finished fit. Fingerprinting the contents
+would mean reading the whole array per call, which is the transport being
+removed.
+
+### What it is worth
+
+`covariance_matrix()`: tcspc **249 → 72.8 µs (3.4x)**, FRET **978 → 448 µs
+(2.2x)**. Per fit that is one graph build instead of up to six, and one copy
+of the data instead of up to six.
+
+`test_the_graph_is_not_rebuilt_for_every_curvature` pins the count *and* that
+the cached answer is bit-identical to the first — a cache that returns a
+different answer is worse than no cache. `test_a_rerun_does_not_reuse_the_previous_graph`
+pins the invalidation.
+
+### Where transport now stands
+
+Per `fit.run()`: **one** graph build, **one** data copy, **two** Python
+`update_model()` calls. The two remaining known crossings are unchanged and
+both already ticketed: the post-fit curve is recomputed for display rather
+than read off the port (`T-20260901-11`), and `DataCurve` still holds
+`x`/`y`/`ey` in numpy beside the node's copy — one copy per fit, so "the data
+stay local" is close but still not literally true.
+
+### Tests
+
+`chisurf test/fitting` **1003 passed** plus the same two pre-existing
+failures, and the two new tests above.
+
+## 2026-09-01 (18) — the reconvolution stops waiting for itself: 5.9x on the kernel, 3x on a FRET fit
+
+Owner: *"bff and tttrlib are the engine, chisurf is the car. move more to
+bff cpp to make the engine go fast."* Ticket `T-20260901-12`, opened by (16).
+
+### The one-line version
+
+`fconv_per_cs_ad` computed one species at a time, and each species is a
+**serial dependency chain** over the channels. The species are independent of
+one another, so eight of their recursions now run interleaved and the
+pipeline is full instead of empty. **A FRET fit is 18.6 -> 6.18 ms.**
+
+### Measured before it was written, which is why it was written
+
+A standalone A/B of the serial kernel against a blocked one, min-of-many,
+interleaved in one process, 512 channels:
+
+```
+species    serial     B=2      B=4      B=8
+      1    2.0 us    1.9      2.0      2.5
+      2    3.9 us    1.9      2.0      2.5
+      4    7.8 us    3.8      2.0      2.5
+     53  103.2 us   50.3     27.6     17.4     <- 5.9x
+     97  188.2 us   91.2     49.3     32.4     <- 5.8x
+```
+
+The prediction in (16) was ~62 µs of the 106 was FMA latency; recovering
+86 µs of it says that was right. **Plain `-O3` gives the same figures as
+`-mcpu=native`**, so this is ILP and not autovectorisation — it should hold
+on x86, which matters because x86 has no AVX kernel for this variant and
+takes the scalar path for the plain-`double` case too.
+
+### What it cost, stated plainly
+
+Interleaving changes the **order** the per-species contributions are summed
+into `fit[i]`: a block is summed and added once rather than each species
+being added in turn. Measured deviation from the serial body: **5e-16**
+relative to the curve peak, against the 1e-10 to 1e-14 the callers pin
+curves at. That is a few ULP, and it is a real change rather than no change.
+
+**Below `FCONV_AD_BLOCK_MIN = 2` the serial body is kept**, for two reasons
+that happen to agree: a one-species spectrum has nothing to interleave and
+B=8 is *slower* there (2.5 vs 2.0 µs), and keeping it means **every
+single-exponential result in the library is bit-identical to what it was**.
+`DecayFitNExp` calls this with `numexp = 1`.
+
+### Where it landed, and where it did not
+
+**tttrlib owns the original and the change is there**, not here: the kernel
+is `tttrlib/modules/spectroscopy/decay/include/DecayConvolution.h`, its test
+is `tttrlib/test/cpp/test_fconv_interleave.cpp`, its registration is
+`tttrlib/CMakeLists.txt`, and its own write-up is `tttrlib/okf/log.md`
+2026-09-01. This entry records the *downstream* effect. `fconv_per_cs_ad` is
+now a dispatcher over `fconv_per_cs_ad_serial` (the old body, kept and named)
+and the blocked one, with the test beside it — bit-identity below the
+threshold, a few ULP above it, and a check that appending zero-amplitude
+species changes nothing, which is the failure a padding lane would cause.
+Vendored into bff by `cp`; `test_decay_convolution_copy_is_identical.py`
+still passes.
+
+tttrlib's *compiled* library was rebuilt too, which was not free to skip:
+its editable install is `editable.rebuild=false`, so the extension was stale
+by design and `DecayFit23/24/NExp` would have kept the old kernel
+indefinitely. Rebuilt through the supported hook
+(`tttrlib.__loader__.rebuild()`); all four decay translation units
+recompiled, and `tttrlib test/python/decayfit` is **172 passed, 1 skipped**.
+`test_ad_gradient` passes against the new header — the `Dual` instantiation
+and DecayFit23/24's objective gradients, which is what (12) asked to be
+checked — and `test_fconv_interleave` passes beside it.
+
+Because that install is **shared**, both suites were then re-run against the
+rebuilt library: imp.bff 1830 passed, chisurf `test/fitting` 1003 passed plus
+the same two. A rebuild under a sibling checkout is exactly what breaks it
+silently, so testing only the repository the change was made in is not
+enough.
+
+### The fit, end to end
+
+`fit.run()`, best-of-many, graph path:
+
+| fit | before (17) | now | |
+|---|---|---|---|
+| parse | 0.477 ms | 0.501 ms | 1 species — serial body, unchanged |
+| group | 2.128 ms | 2.237 ms | unchanged |
+| TCSPC | 2.193 ms | 2.262 ms | 1 species — **bit-identical** |
+| TCSPC VV | 2.993 ms | **2.639 ms** | 1.13x |
+| FRET | 18.135 ms | **6.179 ms** | **2.94x** |
+
+And against the numpy path the graph replaced: TCSPC **5.8x**, VV **6.5x**,
+FRET **4.4x** — the FRET row was 1.2x when the chain was built in (14)/(15),
+and 1.5x after the amplitude threshold in (16).
+
+The decay node alone, which is what actually changed: **106 µs -> 20.0 µs**
+at 53 species. A single-species TCSPC decay is 4.2 µs, exactly what (16)
+recorded for it, because it takes the same code it always did.
+
+### The shape of this, worth remembering
+
+Three sessions attacked a FRET fit and only the third one moved it:
+(14)/(15) removed the crossing — **1.2x**, because the crossing was not the
+cost; (16) stopped computing species that weigh nothing — 1.2x more; (17)
+took the error estimate out of Python — and this one made the arithmetic that
+remained wait less. Each step was worth measuring the node before writing
+code, and (16)'s per-node table is what pointed at this one.
+
+### Tests
+
+`imp.bff` **1830 passed**, none failed — and again after tttrlib was rebuilt
+underneath it. `chisurf test/fitting` **1003 passed** plus the same two
+pre-existing failures (`test_fit_state`, `test_pcf_experiment`), likewise
+twice. `tttrlib test/python/decayfit` **172 passed, 1 skipped**. The curve-parity tests that pin the graph against
+`update_model()` at `rtol=1e-10` pass untouched, which is the check that
+mattered: a 5e-16 shift is four orders inside them.
+
+## 2026-09-01 (17) — the optimiser, and everything it needs, is bff's
+
+Owner: *"lmdif etc must be also in bff."* Ticket `T-20260901-10`; the plan is
+`okf/handover-error-estimate-2026-09-01.md`.
+
+### What was wrong, in one line
+
+A fit optimised entirely in C++ and then called the Python model **five more
+times** to rebuild a Jacobian for its error bars -- 32% of a TCSPC fit. And
+underneath that: **three** implementations of one bounded Levenberg-Marquardt
+lived in this stack, and **two** of its finite-difference Jacobian, *with
+different step rules*.
+
+### The result
+
+`fit.run()`, best-of-6, with Python `update_model()` calls counted inside it:
+
+```
+                 before                                after
+fit        total  optimise errors rest  calls   total  optimise errors rest  calls
+parse      0.50ms   60%      4%   36%     2     0.46ms   60%      4%   36%     2
+tcspc      3.26ms   41%     32%   27%     7     2.25ms   59%      2%   39%     2
+tcspc VV   4.51ms   44%     34%   22%     8     3.00ms   68%      1%   31%     2
+FRET      24.3 ms   80%     12%    8%     9    18.6 ms   90%      0%   10%     2
+```
+
+**Two Python model evaluations per `run()`, whatever the model is**, and none
+of them for the covariance -- which is what a parse fit always did and what
+the ticket asked for. The clock follows: a TCSPC fit is 1.45x, VV 1.50x, FRET
+1.31x, on top of the 4-6x the graph had already bought.
+
+### Why MINPACK's own covariance had to be refused, and what replaced it
+
+`lmdif` differences at `h_j = sqrt(epsfcn)*|x_j|` -- a step **relative to the
+parameter**, floored only at exactly zero. A parameter that converges near
+zero is differenced at a step near zero and its Jacobian column is round-off;
+`covar` then reports an enormous variance for it. Nothing about that is wrong
+in the optimiser, and *scipy's own* covariance for the same fit is no better.
+Every real TCSPC model hits it: a scatter fraction of 1.5e-5 beside a
+lifetime of 3.15.
+
+The fix is not a better matrix in numpy but the **same differences taken over
+the graph**, at chisurf's `approx_grad` step rule -- `eps * max(|x|, 1)`, an
+**absolute floor**, which is exactly what the optimiser's rule lacks.
+`Minimizer::compute_covariance` does that, and `epsfcn` was not touched: the
+optimiser's step is tuned for convergence (1e-6 is worth 23 more converged
+fits in 88) and the covariance's for resolution. Two jobs, two steps.
+
+Pinned against numpy before it was wired, on all four fixtures:
+
+```
+parse    max rel on sigma 2.1e-14      tcspc VV  3.5e-07
+tcspc    max rel on sigma 2.8e-07      FRET      1.4e-07   (same column dropped)
+```
+
+The FRET row is the one that matters most: `E_FRET` is a free parameter
+nothing can move, so its column is exactly zero **by design**, and both paths
+must *drop* it rather than invert a singular `J'J`. They do.
+
+### Three implementations became one
+
+| where | lines | what happened |
+|---|---|---|
+| `imp.bff/src/Minimizer.cpp` | 1041 | the one that survives |
+| `chisurf/core/math/optimization/leastsqbound.py` | 794 | **deleted** |
+| `chisurf/plugins/.../lltf/core/optimization/leastsqbound.py` | 365 | **deleted** |
+
+`minimize`'s fallback is now `ResidualNode` + `bff.Minimizer` -- the same C++
+optimiser driving a Python residual through a director -- so the algorithm is
+bff's whatever the model is.
+
+**The measurement that once rejected that fallback: I could not reproduce the
+handover's "it is a wash".** Timing `minimize` alone, interleaved,
+min-of-many, with the covariance switched off so both do the same work:
+
+```
+                scipy      director    ratio
+parse           0.863 ms   0.961 ms    1.11x
+tcspc          11.74  ms  12.47  ms    1.06x
+```
+
+So the director is **6-11% slower**, not equal. It was 1.29x / 1.22x before I
+cached `ResidualNode`'s port lookups -- `get_input_port` was being called once
+per parameter per residual evaluation, for an answer settled in the
+constructor. The remaining few per cent is paid deliberately: it is a few per
+cent of the path taken by models that build *no* graph, against two
+implementations of one algorithm that disagree quietly. This stack has
+already paid for that once -- the permuted covariance in (9) was found only
+because two of them were finally run against each other.
+
+The reference did not die with the implementation: `leastsqbound.py` is
+frozen at **`test/minimizer/reference_leastsqbound.py`**, imported by nothing,
+and the parity tests still assert the port is 1:1 against it. A skipped parity
+test on a 1:1 port is worth nothing.
+
+### The scope surprise: six other consumers
+
+`covariance_matrix` is not only the error estimate. It is also the posterior
+view, error propagation onto derived quantities, both sampler
+preconditioners, and `Fit.grad`. Rather than edit six call sites, the choice
+was made **inside `covariance_matrix` itself**: it tries
+`curvature_over_the_graph` first and falls through to numpy for a model that
+builds no graph. Measured, per call:
+
+```
+              update_model() calls        covariance   grad
+              graph   numpy
+parse           0       5                 2.1e-14      bit-identical
+tcspc           0       6                 2.8e-07      7.5e-06 abs
+tcspc VV        0       7                 3.5e-07      7.5e-06 abs
+FRET            0       8                 2.2e-07      1.1e-05 abs
+```
+
+### Two things found on the way, neither of them mine
+
+* **A Python `Node` held by a `Minimizer` can be collected, and it segfaults.**
+  `Minimizer` holds `std::shared_ptr<Node>`, but a SWIG director keeps only a
+  *weak* reference to its Python proxy, so a `ResidualNode` that falls out of
+  scope while its minimiser is alive is a use-after-free. Reproduced on plain
+  `run()`, so it predates this work; advertised as `T-20260901-12`. It is the
+  same defect `IMP_SWIG_DIRECTOR` fixes for `MinimizerObserver`. Binding the
+  node to `_` is enough to lose it, because the next tuple unpacking rebinds
+  `_` -- which is how it was found.
+
+* **A sampler is chaotic in the last digits of the error estimates that seed
+  it.** `test_a_skewed_ratio_...` in chisurf compares a sampled quantile
+  against a hand-picked factor of 1.5. The error estimates moved by **3e-8**
+  when they started coming from `Minimizer` rather than numpy -- and the
+  upper arm of the sampled interval moved by **7%**, from 0.1535 to 0.1648,
+  taking the assertion from 1.51 to 1.48. The property it defends is intact
+  (the symmetric width is still 48% wider than one arm and 43% narrower than
+  the other); the factor was tuned to three digits against a chain that
+  cannot honour three digits. Loosened to 1.4, with the measurement written
+  into the test.
+
+### Where the tests stand
+
+* `imp.bff`: **1830 passed**, none failed, up from 1816 -- the new ones
+  cover `compute_covariance`: agreement with numpy, the step rule *read off
+  the objective it is handed* rather than inferred from the matrix, the zero
+  column dropped, external coordinates, the ports restored, `p + 1`
+  evaluations.
+* `chisurf test/fitting`: **1003 passed** with the same two pre-existing
+  failures (`test_fit_state`, `test_pcf_experiment`), plus
+  `test_optimization_progress.py` (7) rerouted at bff's
+  `minimizer_expected_evaluations` / `minimizer_reported_total`.
+* `test_the_error_estimates_do_not_move` **was not testing anything** for
+  TCSPC: both paths fell back to the same numpy `covariance_matrix`, so it
+  compared numpy against numpy. It now has a sibling in each of the three
+  graph-fit files that compares the matrix actually handed over against
+  `covariance_matrix`'s -- verified by breaking the C++ step rule on purpose
+  and watching them fail.
+* `census_models.py` unchanged: 7 of 42, 3 of 14 under VV, no model builds a
+  graph that disagrees with its own curve.
+
+## 2026-09-01 (16) — the engine's own cost: a decay pays per species, and most of them were free of charge
+
+Owner: *"bff and tttrlib are the engine, chisurf is the car. move more to
+bff cpp to make the engine go fast."*
+
+### Where the time actually is, measured per node
+
+Profiling the graph a node at a time, rather than guessing, put the whole
+question in one table (min-of-many, one `evaluate()` per row):
+
+```
+FRET objective = 195 us      donor   0.4 us    species 1
+                             fret    1.0 us    species 97
+                             dist    1.0 us
+                             decay 192.3 us    species 97   <-- 98.6%
+                             chi2    1.3 us
+TCSPC objective =  5.2 us    decay   4.2 us    species 1
+```
+
+The producers this session added cost **2.4 us of 195**. Essentially all of a
+FRET evaluation is `fconv_per_cs_ad`, and it is linear in the species count:
+1 species is 4.2 us, 97 species is 192 us.
+
+### The species count is not a physical quantity, it is a discretisation
+
+A model whose spectrum comes from a *distribution* has as many species as
+that distribution has bins, **whatever their weight**. A FRET decay over the
+96-point `rda_axis` is 97 species. Asked how many of them carry weight, on a
+Gaussian at 45 A with sigma 6:
+
+| threshold (relative to the largest amplitude) | species | max abs. curve change / peak |
+|---|---|---|
+| `0` (exact) | 97 | 0 |
+| `1e-14` | **53** | **1.0e-15** |
+| `1e-12` | 44 | 5.2e-14 |
+| `1e-10` | 37 | 2.0e-11 |
+| `1e-6` | 26 | 2.1e-7 |
+
+`TcspcDecay` gained `set_amplitude_threshold(relative)`, applied after
+`absolute_amplitudes`/`normalize_amplitudes` because those describe what an
+amplitude *means* and this describes which of them are worth computing.
+
+**The node defaults to `0`** -- which drops only exact zeros and is therefore
+bit-exact, and still fires, because a donor-only fraction of zero contributes
+a whole block of them. ChiSurf asks for `1e-14`
+(`minimizer.AMPLITUDE_THRESHOLD`). That split is deliberate and it is the
+same lesson as (15): a *library* that silently drops terms is the failure
+this module spent the morning fixing, so the application that knows what its
+data are worth makes the choice, in the open, with the table above beside it.
+
+`1e-14` is chosen because **the change it makes to the curve is smaller than
+the change from summing the same species in a different order.** It is not a
+trade of accuracy for speed; it is declining to compute terms whose
+contribution double precision cannot represent. The looser rows are real
+trades and are deliberately not taken.
+
+### What it is worth, A/B'd in one session rather than across two
+
+| | threshold off | threshold `1e-14` |
+|---|---|---|
+| FRET, whole `run()` | 22.40 ms | **18.30 ms** (1.22x) |
+| FRET, decay node alone | 194 us | **106 us** (1.83x) |
+| TCSPC, whole `run()` | 2.189 ms | 2.204 ms (unchanged) |
+
+The TCSPC row is the one worth keeping. Across sessions it *looked* like this
+change had made a plain lifetime fit 1.46x faster -- and it had not: a
+single-species model has nothing to prune, and the apparent gain was the
+machine being in a different state than it had been an hour earlier. The A/B
+in one process says so plainly. **A before/after taken across two sessions on
+this laptop measures the laptop** (the same lesson as 2026-09-01 (5), learned
+again).
+
+### The remaining cost is a serial recursion, and it is tttrlib's
+
+At 53 species the decay node is 106 us. `fconv_per_cs_ad` is two loops per
+species over 512 channels, each a *serial dependency chain*
+(`fitcurr = (fitcurr + c1) * expcurr + c2`), so it is latency-bound rather
+than throughput-bound: at ~4 cycles per dependent FMA, 53 x 512 x 2 x 4 is
+~62 us of the 106 at 3.5 GHz. **The species are independent of one another**,
+so interleaving several recursions would fill the pipeline -- but that
+changes the order the per-species contributions are summed, and the header is
+a byte-identical vendored copy of tttrlib's kept in step by a test. So it is
+a tttrlib change vendored back, the same route `LatticeDiffusion.h` took, and
+it is advertised as `T-20260901-12` rather than forked here.
+
+Also removed: a heap allocation and a 512-double copy *per objective
+evaluation* (the response was copied into a local before being normalised;
+it is a member buffer now, walked twice instead of three times, same
+arithmetic in the same order). **Honestly, it does not measure** -- 108 vs
+106 us, inside the noise. It is kept because it removes an allocation from
+the per-evaluation path, not because a benchmark asked for it.
+
+### Tests
+
+`imp.bff` **1830 passed** (+14: the threshold's own tests, plus one existing
+composition test rewritten -- it compared the decay's spectrum against the
+whole of what the anisotropy published, and at `l1 = 0` a VV channel appends
+VH components scaled by exactly zero, which the node now drops. The property
+it defends is better stated against the *contributing* part). `chisurf`
+**1023 passed** plus the four known pre-existing failures.
+
+One defect caught while writing it, before it could ship: pruning first
+shrank `n_lifetimes_` in place, and nothing on the scalar-port path restores
+that count -- so a component whose amplitude an optimiser walked *through*
+zero would have disappeared permanently rather than for one curve. The kernel
+now takes a separate `n_active_`, and `test_pruning_does_not_consume_the_ports`
+walks an amplitude to zero and back.
+
+
+## 2026-09-01 (15) — the photophysics joins the instrument: polarisation and FRET as nodes
+
+Owner: *"improve all chisurf mdls by making bff the compute kernel."*
+
+Closes the first half of `T-20260901-04`. Three things landed, and the first
+one is a bug the other two would have inherited.
+
+### A graph that builds is not the same as a graph that is the model
+
+The census in (14) asked which models build a bff graph. It did not ask
+whether the graph they build *is* them. Asking that found two:
+`MaxEntLifetimeModel` and `LifetimeMixtureModel` both **override**
+`lifetime_spectrum` -- one from a maximum-entropy inversion, the other from
+other fits' spectra -- while `_lifetime_objective` builds the spectrum from
+the `lifetimes` group's own amplitude and lifetime parameters. Measured on a
+512-channel decay: the graph's curve and the model's were **793.8 counts
+apart** at identical parameters, and nothing said so.
+
+Refusing on the free parameters alone does not catch it, which is why it
+survived. `MaxEntLifetimeModel`'s extra parameters -- its grid, its entropy
+weight -- ship **fixed**, so it offers exactly the four free parameters the
+plain model does, every port is placed, and the graph builds. The check is
+now on the property itself: a model whose `lifetime_spectrum` is not
+`LifetimeModel`'s does not get the plain multi-exponential graph.
+
+`test/minimizer/census_models.py` is the census, checked in, and it now
+compares each built graph's curve against `update_model()` and prints
+**MISMATCH** rather than a pass. *Being representable is not the same as
+being represented*, and only the second is allowed to run.
+
+### The instrument was only half the statement
+
+`TcspcDecay` holds what every TCSPC model shares -- reconvolve, add scatter,
+scale to the data, add a background. What differs between models is entirely
+*upstream* of it, and (14) left the `lifetime_spectrum` port as a mechanism
+with no user. It has users now, in `SpectrumNode.h`/`.cpp`:
+
+| node | what it produces |
+|---|---|
+| `LifetimeSpectrumNode` | the interleaved spectrum from scalar `a`/`t` ports -- the brick everything else starts from |
+| `AnisotropySpectrum` | the polarised spectrum a VV, VH or VV/VH detector sees |
+| `GaussianDistances` | a distance distribution as a weighted sum of generalised normals |
+| `FretSpectrum` | a donor spectrum quenched over a distance distribution, with the donor-only fraction mixed in |
+
+so a model is a chain and the instrument never learns what happened
+upstream:
+
+    [GaussianDistances] -> [FretSpectrum] -> [AnisotropySpectrum] ->
+    TcspcDecay -> ChiSquared -> Minimizer
+
+**Why this composes at all is the physics, not a convenience.** A
+polarisation multiplies the decay by \(r(t)\), and the product of two sums
+of exponentials is a sum of exponentials over the Cartesian product with the
+harmonic mean of the time constants. A FRET quenching adds a transfer rate,
+and rates add, so the quenched spectrum is the product of the donor's rates
+and the transfer rates. Both are therefore *spectrum* transforms, which is
+what lets each be one node with no opinion about the others.
+
+### What it measures, and one number that is honestly small
+
+```
+TCSPC lifetime  14.5 -> 3.2 ms    4.58x
+VV, one rotation 18.6 -> 4.4 ms   4.18x
+FRET (96-point Gaussian)  29.8 -> 24.3 ms   1.23x
+```
+
+The FRET row is small and the reason is worth writing down rather than
+explaining away: a 96-point distance distribution against a one-species
+donor is a **97-species reconvolution**, and that is genuinely most of the
+fit in either path. The crossing was already a small share of it. What the
+graph buys there is not speed, it is that the model is now *in* the graph --
+so a group of FRET fits, or a sampler over one, no longer has a Python leaf.
+
+### The parity that licenses all of it
+
+Every new node was checked against ChiSurf's own kernel before anything was
+wired: `AnisotropySpectrum` against `calculcate_spectrum` over 160 random
+(spectrum, rotation, g, l1, l2, polarisation) draws, `FretSpectrum` against
+`distribution2rates` + `rates2lifetimes` over 30, `GaussianDistances`
+against `combine_distributions` over 30 -- all to 1e-12 or better, entry for
+entry **and in the same order**. Ordering matters here in a way it does not
+elsewhere: a mixed polarisation channel is the *union* of two scaled spectra
+rather than their sum, so its length and its layout are observable, and a
+fit built on a differently-ordered one is wrong in a way no chi-square would
+report.
+
+Then the models: the graph's curve equals `update_model()` to ~1e-15
+relative for VM/VV/VH/VV-VH at one and two rotations, with and without
+amplitude normalisation, and for `FRETModel` and `GaussianModel` at
+`xDOnly` 0 and 0.25 under every polarisation.
+
+### Two things learned about *testing* a fit, not about fitting
+
+**A degenerate fixture measures conditioning, not correctness.** The first
+polarised parity test failed with the two optimisers a whole sigma apart --
+because a rotational correlation time fitted to magic-angle data is a flat
+direction, and a rotational *amplitude* is redundant against `r0` by
+construction (its error estimate comes back `nan`). Same again for the
+Gaussian weight of a single-component distribution. The fixtures now
+generate their data from the model itself and fix what is redundant; the
+objective is pinned separately, and to machine precision, by a test that
+does no fitting at all.
+
+**`E_FRET` is free and neither path can move it.** Its value comes from a
+callable and its setter is ignored, so a write is a no-op in numpy *and* in
+the graph -- where its port is deliberately wired to nothing. Both see a
+column of zeros and agree. Refusing instead would refuse every FRET model,
+since the parameter ships free.
+
+### What still falls back, and why each one is its own kernel
+
+Every remaining `FRETModel` subclass **is** a distance distribution:
+`SingleDistanceModel` (a histogrammed discrete set), `WormLikeChainModel`,
+`SawNuModel`, `IsingChainModel`, `FRETrateModel` (a rate spectrum given
+outright), `MaxEntFRETModel`, `FRETStructure`, and `PDDEMModel` (which
+replaces the lifetime spectrum entirely). Also refused: a kappa-squared
+*spectrum* (`orientation_mode = "slow"`), which convolves the distances
+before they become rates, and `bin_lifetime`, which coarse-grains the
+spectrum afterwards. Outside the decay families, DEER, ICS, PCH/FIDA,
+PDA2C/3C, MFD and the structure model are untouched. Advertised as
+`T-20260901-06`.
+
+### The rule this was converging on, now written down
+
+The owner stated it in general on the same day: *"keep it all in bff and
+tttrlib, and only things that get displayed should be moved to chisurf /
+Python, so that the data stays local."* Written up as a cross-stack page --
+`../chisurf/okf/architecture/compute-display-line.md`, linked from the
+architecture index and summarised in `AGENTS.md` -- with a decision procedure
+(*who consumes the value: a human, or another computation?*), what
+legitimately stays in chisurf, and where it is enforced.
+
+Measuring the distance from it found the largest remaining violation, and it
+is **not** in the optimisation, which crosses zero times per iteration. It is
+the **error estimate**: `fit.run()` timed and Python `update_model()` calls
+counted gives 0.50 ms / 2 calls for a parse fit but 3.26 ms / **7 calls** for
+a TCSPC one, five of them rebuilding a Jacobian in numpy *after* the
+optimiser stopped -- 32% of the fit. The cause is that `lmdif` differences at
+a step **relative to the parameter**, so a scatter fraction of 1.5e-5 beside a
+lifetime of 3.15 gets a round-off column, and `_forward_differences_resolved`
+correctly refuses the C++ covariance. The fix is to difference the *graph* at
+a step that resolves (chisurf's own `approx_grad` already floors the step at
+1.0, which is the specification), not to compute a better matrix in numpy.
+Handed over as **`T-20260901-10`** with
+[`okf/handover-error-estimate-2026-09-01.md`](handover-error-estimate-2026-09-01.md);
+`T-20260901-11` covers the model curve being recomputed for display rather
+than read off the graph.
+
+### Tests
+
+`imp.bff` **1816 passed** (+17: `test/spectrum/`). `chisurf test/fitting`
+**1000 passed** plus the two known pre-existing failures (`test_fit_state`,
+`test_pcf_experiment`, both failing on `HEAD`); `test/architecture` gained
+two provenance tests and keeps its own two pre-existing failures
+(`test_guarded_imports`, `test_optional_backends`, verified against `HEAD`).
+`test/minimizer/bench_fit.py` grew a VV table and a FRET table.
+
+
+## 2026-09-01 (14) — which models actually run in bff, and the port that composes the rest
+
+Owner: *"make sure that the fits, and models, live and work in bff and
+tttrlib. chisurf is just the glue and interface."*
+
+### The census, because the directive was not actionable without one
+
+52 model classes live under `chisurf.core.models`. Asking `graph_objective`
+which of them build a bff graph, rather than assuming, moved the picture a
+long way:
+
+**Already entirely in bff** -- and this was the surprise -- every
+*equation-based* family, because they are `Expression` nodes and have been
+since that landed. Verified by construction, not by reading:
+
+```
+parse.ParseModel                   graph=YES   free=[a, t, b]
+fcs.ParseFCSModel                  graph=YES   free=[b, N, td, s]
+pcf.ParsePCFModel                  graph=YES   free=[A, sigma, Mode]
+stopped_flow.ParseStoppedFlowModel graph=YES   free=[a1, k1, c]
+```
+
+So **FCS, PCF and stopped-flow are not "waiting for a port"** -- they are
+compiled equations over vectors in C++ already. Add the plain TCSPC
+`LifetimeModel` (2026-09-01 (12)) and any `FitGroup` over any of these
+(2026-09-01 (11)), and the fitted-in-bff set is much larger than the earlier
+entries implied. `T-20260901-04` was written on the assumption that "FCS and
+PDA still fall back"; half of that is wrong and the ticket is corrected.
+
+**Still falling back**: the `LifetimeModel` *subclasses* (FRET, Gaussian,
+SawNu, WormLikeChain, IsingChain, SingleDistance, PDDEM, the mixture and
+max-ent models), plus DEER, ICS, PCH/FIDA, PDA2C/PDA3C, MFD and the structure
+model.
+
+### The one thing that unblocks the whole subclass family
+
+Reading them together makes the shape obvious: **every one of those TCSPC
+subclasses has the same instrument model** -- reconvolve, add scatter, scale
+to the data, add a background -- and differs *only* in how the (amplitude,
+lifetime) pairs are arrived at. A FRET model derives them from a distance, a
+distribution model from a distance distribution, a mixture from two spectra.
+
+`TcspcDecay` took its pairs only from scalar `a0`/`t0`/... ports, so each
+subclass would have needed the deriving done in the caller, once per
+iteration -- the arrangement that measured as a *regression* in (9). It now
+also accepts the interleaved spectrum on an input **port**
+(`set_spectrum_from_port(true)`, key `lifetime_spectrum`), so the graph
+composes:
+
+    <whatever computes a spectrum> -> TcspcDecay -> ChiSquared -> Minimizer
+
+The node keeps its opinion about the instrument and holds none about the
+photophysics. `absolute_amplitudes` and `normalize_amplitudes` still apply,
+because they describe what the *model* means by an amplitude rather than
+where the number came from; an odd-length spectrum is refused rather than
+rounded down, which would silently drop the last amplitude's lifetime; and
+the port does not sanitise, so a NaN lifetime reaches `ChiSquared` and makes
+the misfit infinite instead of being floored to `tiny` and reading as a good
+fit.
+
+The test that matters drives it from a real upstream node (an `Expression`
+standing in for a photophysics model) through a linked vector port, and gets
+the same curve as the scalar path to 0.0 -- what is being checked is the
+wiring, not the arithmetic.
+
+### What is left, honestly
+
+The port is the *mechanism*; no subclass uses it yet. Each still needs its
+spectrum producer to become a node -- and for the FRET family much of that
+physics is already on this side (`LifetimeSpectrum`,
+`lifetime_spectrum_from_rates`, `convolve_distance_with_k2_ratio`,
+`RotamerFret`), so those are wiring jobs rather than ports. The anisotropy
+case is different and better: VV/VH is `dfa_vv_vh_convolved` in tttrlib
+already.
+
+### Tests
+
+`imp.bff` **1799 passed** (+5, `SpectrumPortTests`). `chisurf test/fitting`
+**963 passed** plus the two known pre-existing failures. The benchmark is
+unmoved -- TCSPC 13.76 -> 3.17 ms, **4.34x** -- which is the point: the
+scalar path had to keep costing exactly what it did.
+
+### Also this session
+
+Verified the previous entry's open question. The three setup suites that
+exercise the module moved out of the view in (13) -- `test_fcs_setup`,
+`test_setup_user_migration`, `test_setup_prerequisites` -- **34 passed** once
+`../mmfdb/src` is on the path. The failures reported against them earlier
+were a missing sibling checkout on `sys.path`, not the move. Worth writing
+down because it cost a turn: **`mmfdb` is a sibling checkout, not installed**,
+so `PYTHONPATH=.:../mmfdb/src` is required for `test/fio`.
+
+## 2026-09-01 (13) — the factor graph stops being two implementations, and one of them was wrong
+
+Owner: *"bff must become the core engine of chisurf. in chisurf there is a lot
+of stuff that can probably be simplified once bff fully landed."*
+
+`chisurf.core.fitting.factorgraph.FactorGraph` now answers every structural
+query through `IMP.bff.FactorGraph`. Moralisation, greedy elimination
+(min_fill and min_degree), the maximal cliques, the junction tree, the
+separators, the sampling blocks, the treewidth and the relevance queries
+(`affected_factors`, `affected_fits`, `unexplained_variables`) were **two
+implementations of the same algorithms** -- one in C++ here since the PRD-68
+port, one in ~200 lines of Python there -- and are now one. The engine is a
+lazily built mirror on a new `FactorGraph.engine` property, dropped by
+`invalidate()`.
+
+**What stays in chisurf, and why it is not laziness.** *What a variable is* --
+which parameter, at which position of which model's flat vector, belonging to
+which local fit -- and *what a factor is*. Discovery is the application's
+knowledge: it walks models, resolves parameter links, decides which prior is
+more than its bounds. Triangulating a graph is not. Also staying: `describe()`,
+because it renders parameter *names* rather than keys, and `markov_graph()`,
+because it returns a `chisurf.core.graph.Graph` the posterior views draw.
+
+### The bug this found
+
+**bff's `is_complete()` double-counted, and a star hit it exactly.** The moral
+adjacency is stored symmetrically, so summing the neighbour-set sizes gives
+`2|E|`; it was compared against `n(n-1)/2`. That is true whenever
+`|E| = n(n-1)/4` -- and **three datasets around one shared parameter is four
+variables with three edges**, `2*3 == 4*3/2`. The graph was then taken for a
+clique and the completeness shortcut fired: one clique over everything, a
+treewidth of **3** where the answer is **1**, and a sampler offered one
+4-dimensional block where there are three 2-dimensional ones.
+
+It is the shape a global fit *has*. It survived because the existing bff star
+fixture has ten variables and sixteen edges, which does not hit the
+coincidence, and because nobody was comparing the two implementations -- which
+is precisely what the duplication cost. Fixed in `FactorGraph::is_complete()`;
+regression tests on both sides, the minimal four-variable star and a genuinely
+complete four-variable graph so the guard cannot overshoot.
+
+That is the argument for this whole direction, stated as a measurement: two
+implementations of one algorithm do not average out, they disagree, and the
+disagreement is silent until something forces them to answer the same
+question.
+
+### Two canonical orders, deliberately kept
+
+A clique is a set, so its member order is a convention. bff orders members by
+**flat-vector position**, which is what a C++ caller lining a clique up
+against a parameter array wants; chisurf's documented contract is **sorted by
+key**, which is what a caller using a clique as a dict key or a graph node
+relies on. chisurf sorts on receipt. Sampling *blocks* keep the engine's
+order, because a block is consumed as a slice of the parameter vector.
+
+### Tests
+
+`chisurf test/fitting` **963 passed** plus the two known pre-existing
+failures; `imp.bff` **1794 passed**. Two chisurf tests were rewritten rather
+than repaired: they counted copies of the Python moral graph, which no longer
+exists. The property they defended -- computed once per graph, dropped by
+`invalidate()` -- is now stated against the engine's identity, which is the
+observable that replaced it.
+
+### Left open
+
+The line count barely moved (-14) because the delegation kept the docstrings;
+the substance is that ~200 lines of algorithm became zero. What is genuinely
+next, and is advertised as **T-20260901-05**:
+
+- `chisurf/core/fitting/graphview.py` (880 lines) is *layout* over this graph.
+  It should shrink now that the structure comes from one place, and the parts
+  that are graph algorithms rather than presentation belong beside the engine.
+- `chisurf/core/graph/` (1966 lines: a graph type, algorithms, layout,
+  GraphML) is a general-purpose graph library living in an application. Some
+  of it is already in bff.
+- Sessions are **already** on bff (`bff.Session.load` in
+  `chisurf/core/project/project.py`), so that half of the owner's example is
+  landed; what is left there is the `.csp` archive plumbing around it.
+
+## 2026-09-01 (12) — the decay on the graph: bff builds the network, tttrlib computes the curve
+
+Owner: *"all computation should be offloaded to bff or tttrlib in chisurf.
+bff for network building, tttrlib for some scoring, bff tttrlib must interact
+without chisurf in the middle, minimize friction."*
+
+Closes `T-20260901-03`. `TcspcDecay.h`/`.cpp`: **a TCSPC decay as a node.**
+The model curve of a multi-exponential decay through a real instrument --
+reconvolved with a measured response, shifted against it, scaled to the data,
+plus scatter and a background -- with the amplitudes, lifetimes and nuisance
+scalars on ports. `TcspcDecay -> ChiSquared -> Minimizer` is then a whole
+lifetime fit in one C++ graph, exactly what `Expression` gives a parse model.
+
+**The arithmetic is not in bff, and that is the point.** The periodic
+reconvolution is tttrlib's `fconv_per_cs_ad<double>` and the timeshift is its
+`shift_lamp_ad<double>`, both from the vendored byte-identical copy of
+`DecayConvolution.h`. Same decision as the expression engine, for the same
+reason: a decay is a *curve*, `AGENTS.md` puts curves in tttrlib, and a second
+convolution is how two libraries end up disagreeing about what a lifetime is.
+What bff contributes is the network -- ports, ordering, invalidation -- and
+the composition of the instrument model around those kernels. chisurf is no
+longer between them: it hands over the response and the data once and reads
+the answer back once.
+
+**One small change in tttrlib made the whole thing header-only.**
+`shift_lamp` had its body in `DecayConvolution.cpp`, which a header-only
+consumer cannot reach; it now lives in the header as `shift_lamp_ad<T>` and
+the exported function calls it. `fconv_per_cs_ad` was already that shape and
+is the precedent. So bff needs one vendored header and links nothing --
+which is what "minimize friction" bought here, against the alternative of
+vendoring a 983-line .cpp and its `Registry.h`/`Verbose.h`/`info.h` chain.
+
+**tttrlib's `shift_lamp` *is* chisurf's `shift_array`, sign-flipped.** Found
+while looking for a third implementation to avoid writing.
+`shift_lamp(out, v, -s)` equals `shift_array(v, s)` to 0.0 for every shift
+tested -- integer, fractional, both signs. The two index in opposite
+directions *and* interpolate toward opposite neighbours, and the flips
+cancel. They part company at exactly `s = 0`, where `shift_lamp` zeroes the
+last sample (`out_right = tsint + 1` is 1 when `tsint` is 0) and
+`shift_array` returns the input untouched; chisurf short-circuits `shift ==
+0.0` before calling, so the node does too and is exact. **chisurf's numpy
+`shift_array` is a duplicate of a tttrlib kernel** and is now a candidate for
+deletion rather than a maintained twin.
+
+**chisurf's `rescale_w_bg` is *not* tttrlib's, despite the name.** tttrlib
+guards `decay[i] > 0` and adds `1e-12` to the squared weight; chisurf guards
+`e > 0` *and* a finite weight, adds no epsilon, and returns the factor
+instead of rescaling in place. The node reproduces chisurf's, deliberately
+and with the divergence written down: unifying them moves fitted amplitudes,
+which is a decision about the fit and not about where code lives.
+
+**What the node refuses**, each because it is a term the node does not carry
+and a term left in Python would put the per-iteration crossing back: pile-up
+(Coates), a DNL linearisation table, a measured background curve, VV/VH
+polarisation (which rotates the spectrum before convolving), a non-periodic
+convolution mode, the convolution switched off, a response whose length
+differs from the data's, and any free parameter the node cannot place --
+which is what actually catches a `LifetimeModel` subclass that adds a term.
+
+### A wrong error bar, found by the new model and true of the old path too
+
+The first version reported a standard deviation on the scatter fraction
+**140x** the finite-difference one. It is not the port's doing:
+`lmdif` differences forward at `h_j = sqrt(epsfcn)*|x_j|`, a step *relative
+to the parameter*, and this fit's free vector spans `1.5e-5` (a scatter
+fraction) to `3.15` (a lifetime) -- so the scatter is probed at ~1e-8, its
+Jacobian column is round-off, and `covar` reports nonsense for it.
+**scipy's own `leastsqbound` covariance for the same fit is no better**:
+0.094 for the same parameter and exactly *zero* for two others. Both
+implementations fail together, which is how it is known to be the estimator.
+
+`minimize` now refuses to stash the optimiser's covariance when any
+`|x_j| < sqrt(epsfcn) * max|x|` -- with that step, such a parameter is being
+differenced below the resolution the objective is computed to. The whole
+matrix goes, not one column: the columns are not independent and dropping one
+silently changes what the others mean. Refusing costs a Jacobian rebuild
+(about a third of a *parse* fit, much less of a decay fit) and gives exactly
+the numpy path's answer, which is what `test_the_error_estimates_do_not_move`
+now pins at 5e-3. A well-scaled parse fit still keeps the matrix, and there
+is a test for that too -- the guard must not throw away the saving it was
+built to allow.
+
+### Measured
+
+`test/minimizer/bench_fit.py`, now three tables (interleaved, min-of-many):
+
+```
+parse fit, 512 points, 3 free      1.40 / 1.33 / 0.53 ms    2.64x
+FitGroup, 4 members, 5 free        3.84 -> 2.34 ms          1.64x
+TCSPC lifetime, 512 ch, 4 free    13.92 -> 3.20 ms          4.35x
+```
+
+The decay gains most because it has the most to gain: its per-iteration
+Python was a reconvolution, a shift, a rescale and four numpy copies, not a
+three-term expression.
+
+### Tests
+
+`imp.bff` **1792 passed** (+21: `test/decay/test_tcspc_decay.py`, plus the
+drift guard on the vendored header). The ones that matter pin the node to
+something that is *not* the node: the convolution against tttrlib's exported
+`fconv_per_cs`, the timeshift against chisurf's `shift_array`, and the whole
+curve against a numpy transcription of `LifetimeModel.update_model`.
+`chisurf test/fitting` **962 passed** (+16,
+`test/fitting/test_graph_fit_tcspc.py`) plus the two known pre-existing
+failures. tttrlib's changed translation unit compiles clean; the refactor is
+a body move and the bff tests pin its behaviour transitively.
+
+### Left open
+
+FCS, PDA and the `LifetimeModel` *subclasses* (FRET, anisotropy, PDDEM) still
+fall back. Each adds terms to the same decay, so each is a node beside this
+one rather than a rewrite of it -- the anisotropy one is the obvious next,
+since VV/VH is `dfa_vv_vh_convolved` in tttrlib already.
+
+## 2026-09-01 (11) — the group on the graph: 1.01x becomes 1.74x, and the link that never leaves C++
+
+Closes `T-20260901-02` (handover: `okf/handover-fit-graph-2026-09-01.md`).
+All the code is in chisurf; the bff half shipped in (10).
+
+**The gap this closes.** A plain `Fit` on a parse model has run entirely in
+C++ since (9) and is 2.85x. A `FitGroup` was **1.01x** -- and a `FitGroup` is
+what the GUI builds, `global_optimize_local_first` shipping `false`, so a
+group is exactly one optimisation over `GlobalFitModel` and
+`graph_objective` refused it. The speed-up reached almost nobody.
+
+**The mapping is exact, which is the whole reason this is a graph rather than
+an approximation of one.** `GlobalFitModel.weighted_residuals` is its
+members' residuals concatenated; `JointChiSquared`'s residual is its
+members' blocks end to end, in the order they were added.
+`GlobalFitModel.parameters` is each member's free parameters followed by the
+group's globals; that is the order of the minimiser's ports. Nothing had to
+be reinterpreted.
+
+**The sharing never leaves C++, and that took the most care.** A member
+parameter that is linked is *not free*, so it is not in
+`GlobalFitModel.parameters` and gets no port of the optimiser's. Its equation
+port is instead `set_link`ed to the port of whatever it follows -- the same
+relation ChiSurf's `Parameter.link` is, one level down. Two details that are
+not obvious from the code:
+
+- The chain is **walked**, not stepped once. A master may itself be linked,
+  and a master that is *fixed* stops nothing: the port chain resolves
+  through it exactly as `Parameter.value` does. Stopping at the first master
+  would freeze a follower at its start value whenever the link went through
+  a fixed parameter.
+- A **global parameter appears in no equation.** Members reach it only by
+  linking, so it gets a standalone `Port` that the optimiser writes and the
+  followers follow. There is nothing else for it to be.
+
+**A group is refused whole.** A member the graph cannot represent cannot be
+left in Python and joined to the others: `JointChiSquared` has one objective,
+and half a group crossing the boundary once per iteration measures like the
+director path -- which (9) recorded as a *regression*, not a speed-up. (It
+is 1.06-1.11x, not 1.16x; see the revision on (9) and entry (17). It became
+the fallback in (17) all the same.) The
+lesson from (9) carried straight over: the crossing is the cost, and only
+removing it entirely helps.
+
+**Masks refuse the group, and that is a statement about the Python path, not
+the C++.** `GlobalFitModel.weighted_residuals` concatenates its members'
+residuals *unmasked* -- no member's mask is consulted -- and `_apply_fit_mask`
+then applies the group's own mask, which is the *selected* member's, only when
+its window happens to be as long as the whole concatenation. That is not an
+objective worth reproducing in C++, so a mask anywhere in the group sends it
+back to scipy.
+
+**Three things fell out of the refactor.**
+
+- `_member_objective` builds one dataset's half -- equation, ports, axis,
+  data, window, noise model -- and deliberately does *not* decide what drives
+  those ports. Whether a variable is the optimiser's, a follower, or a
+  constant is a question about the whole fit. The single-fit and group paths
+  share it.
+- **A bug in the single-fit path, fixed by the same code.** A parse parameter
+  linked to another *in the same model* was not free, so the old builder
+  treated it as a constant at its start value while the numpy path had it
+  follow its master. It now links.
+- An equation variable that is `redundant` or callable-driven refuses the
+  graph. Such a value is *derived* from other parameters, so it is neither a
+  constant nor something the optimiser writes, and freezing it would be
+  silent.
+
+**A segfault in `Node::update()`, found by that third item.** Wiring the
+single-fit path's links made the intra-model case reachable, and it crashed
+the interpreter -- not an exception, a stack overflow. `Node::update()` walked
+each linked input to its source *node* and updated it if invalid; for an input
+linked to another port of the **same** node, that node is `this`, so it
+re-entered itself forever. `inputs_valid()` had carried the guard
+(`output_node.get() == this` -> `continue`) since it was written; `update()`
+never got it. One line in `src/Node.cpp`, and a regression test in
+`test/portnode/test_port_node.py` -- the crash is worth a test of its own
+because two ports of one node linked together is *legal* and already had one
+(`test_port_link_same_node_allowed`), which passed because it never updated
+the node.
+
+**Measured** (`test/minimizer/bench_fit.py`, which now carries a `FitGroup`
+table beside the single-fit one; interleaved and min-of-many, as (5) taught):
+four members of 512 points sharing one lifetime, five free parameters.
+
+```
+scipy     3.818 ms
+graph     2.196 ms      <- 1.74x   (was 1.01x)
+```
+
+The single-fit table is unchanged at 1.30 / 1.31 / 0.46 ms, 2.82x.
+
+**Why 1.74x and not 2.9x, which is not a disappointment.** Of the graph's
+2.20 ms, 0.26 ms builds the graph and 1.13 ms is the LM loop -- so the
+optimisation itself is about 2.2x. The remaining ~0.8 ms is the rest of
+`FitGroup.run`: every member updated, the error estimates, the result
+snapshot. That work is identical on both paths and dilutes the whole-run
+ratio. A group also has more free parameters than a member, so it takes more
+iterations of a loop that is already the fast one.
+
+**Error estimates are unchanged, deliberately.** `FitGroup.model` is the
+*selected member's* model, so `update_error_estimates` has always described
+that member. The optimiser's covariance is stashed against the identity of
+the parameters it was computed for, so a multi-member group's stash simply
+does not match and the finite-difference path runs as before; a one-member
+group's does match, and there the group objective *is* the member's.
+`FitGroup.run` now drops a stale `_cpp_covariance` at the start, as
+`Fit.run` already did.
+
+**Tests.** `chisurf/test/fitting/test_graph_fit.py` 14 -> 28. The one that
+earns its place is `test_the_group_is_not_two_separate_fits`: two datasets
+with *different* true lifetimes, so the shared parameter must land strictly
+between the two each recovers alone. A group that quietly optimised its
+members one at a time would pass every other test in the file. It mirrors the
+C++-level claim in `test/minimizer/test_joint.py`.
+`chisurf test/fitting`: **946 passed**, plus the two known pre-existing
+failures (`test_fit_state`, `test_pcf_experiment`, both failing on `HEAD`).
+`imp.bff`: 285 passed (the self-link regression is the new one).
+
+Still open: **T-20260901-03** -- `graph_objective` only builds for a model
+whose curve is one compiled equation, so every TCSPC/FCS/PDA model still
+falls back to scipy and is exactly as fast as before.
+
+## 2026-09-01 (10) — the grouping in bff, and the sanitiser that made a broken model look perfect
+
+Owner: *"bff also should reflect the grouping, do not necessarily call fit
+group."*
+
+`JointChiSquared.h`/`.cpp`: **one misfit over several datasets.** Its residual
+is the members' residuals laid end to end and its chi-square is their sum,
+which is what minimising a joint fit means -- one Levenberg-Marquardt step
+moves the shared parameters using every dataset's curvature at once, rather
+than each dataset in turn hoping they agree.
+
+**Half of a joint fit was already here.** Sharing a parameter between datasets
+is `Port::set_link` -- the members' ports follow one master, cycles refused --
+so the coupling that makes a joint fit *joint* has been on this side of the
+boundary since the Port runtime landed. Only the joint objective was missing,
+and that is all this class is.
+
+**Not named after ChiSurf's `FitGroup`, deliberately.** A `FitGroup` is a
+container that also owns a selection, a result history, plots and a run
+policy. This is the arithmetic underneath it, so the name says what the object
+*is*. It is also not restricted to `ChiSquared` members: anything presenting a
+residual vector on an output port qualifies, including a Python `Node`
+director, so a group may mix representable and unrepresentable members and
+still take one step.
+
+The members are reached the ordinary way -- each member's residual port is
+*linked* to one of this node's inputs -- so `Node::update()` walks the whole
+tree from one call and nothing new had to learn how deep a member's graph
+goes. Members keep their own data, window, mask and noise model, which is the
+normal case rather than an awkward one.
+
+### The defect this found, which is the important part of the entry
+
+Writing a test for "a NaN in one member makes the group infinite" found that
+**it did not** -- and then that the same was true of a *single* fit. chinet's
+ports floor a NaN to `np.finfo(float).tiny` and clamp infinities, so a stored
+value is always JSON-serialisable. For a document that is right. For the
+numeric transport of a fit it is exactly backwards:
+
+| | numpy path | graph path, before |
+|---|---|---|
+| model curve goes NaN | residuals NaN | curve floored to ~0 |
+| chi-square | NaN | **14.0** -- finite and plausible |
+| MINPACK | rejects the step | **accepts it** |
+
+A model that blows up therefore looked like a model that is zero everywhere,
+which for data near zero is a *good* fit -- so the optimiser was attracted to
+the parameters that break the model, silently, and the graph path disagreed
+with the numpy path in the dangerous direction. This had been true of every
+`Expression -> ChiSquared` graph since entry (9), and no test would have found
+it except one that deliberately broke a model.
+
+Fixed with `Port::set_sanitize()`, **default unchanged**: an ordinary port
+still behaves as chinet's, and only the fit's own transport -- an
+`Expression`'s curve, a `ChiSquared`'s model input and residual output, a
+`JointChiSquared`'s blocks -- opts out. `ChiSquared` has to clear it in an
+`update()` override rather than in `evaluate()`, because `Node::update()`
+writes the model input *before* `evaluate()` runs and the NaN would already
+have been floored.
+
+Two smaller things the same test found:
+
+* `ChiSquared::set_data_arrays` and `set_mask_array` -- the **numpy** doors,
+  the ones a per-iteration caller is told to use -- did not `set_valid(false)`
+  where their `std::vector` twins did. Data set through them left the node
+  claiming to be valid, so the next `update()` skipped `evaluate()` and served
+  residuals against the *previous* data.
+* `Node::update()` copied every linked input's value per call. It now reads
+  the reference. A joint objective puts one full residual vector per member
+  through that line on every iteration of a fit.
+
+`std::vector<std::shared_ptr<Node> >` is not a template this module may name,
+and wrapping it anyway leaks (SWIG finds no destructor), so the members are
+reached by `get_member(i)` and `get_member_names()`.
+
+`test/minimizer/test_joint.py`: 13 tests. The one that matters is
+`test_the_group_is_not_two_separate_fits` -- two datasets with *different*
+true lifetimes, where a shared parameter must land between the two separate
+answers. A group that quietly optimised its members one at a time would land
+on one of them and pass every other test in the file.
+
+imp.bff `test/minimizer`, `test/chi2`, `test/expression`, `test/sampler`,
+`test/portnode`, `test/factorgraph`, `test/session`: **283 passed.**
+
+**Handed over:** [`okf/handover-fit-graph-2026-09-01.md`](handover-fit-graph-2026-09-01.md)
+writes the remaining work up to be picked up cold -- the exact ChiSurf-to-bff
+mapping, the eight traps that cost this session time, the build and test
+commands, and `test/minimizer/bench_fit.py` to run before and after.
+
+**Still open:** chisurf's `GlobalFitModel` is not yet wired to this, so a
+`FitGroup` remains the slow path -- ticket `T-20260901-02`, now unblocked and
+with a much shorter description, because the mapping is exact:
+`GlobalFitModel.weighted_residuals` is a concatenation of its members' and
+`GlobalFitModel.parameters` is a concatenation of theirs plus the global
+ones, which is precisely this node's shape.
+
+## 2026-09-01 (9) — the whole fit in C++: 2.85x, and three measurements that changed the design
+
+Owner: *"chisurf must use imp.bff as compute engine... minimize swig boundary
+crossing. Keep data on bff, only move data that is displayed. also port
+minimizer, optimizer that are used in chisurf to bff."* Then: *"super
+important is speed."*
+
+`Minimizer.h`/`Minimizer.cpp`: MINPACK's `lmdif` -- `enorm`, `fdjac2`,
+`qrfac`, `qrsolv`, `lmpar`, `covar` -- transcribed line by line, plus
+chisurf's `leastsqbound` bounds transform, over free-parameter `Port`s and a
+`Node` objective. Shaped like `Sampler`, which is the stochastic half of the
+same idea.
+
+**A plain `chisurf` parse fit is 2.85x**: 1.35 ms -> 0.47 ms at 512 points and
+three free parameters, to the same answer to six decimals. Interleaved and
+min-of-many, because load on this box drifts by more than most of the effects
+below.
+
+### Three measurements, each of which changed what got built
+
+**1. Replacing the optimiser alone is worth nothing (1.02x).** Entry (6)
+predicted it and it held. MINPACK's own arithmetic is ~4% of a fit; the
+callback is 57%. The port is a **precondition**, not a speed-up: an objective
+in C++ under an optimiser in Python still re-enters the interpreter every
+iteration.
+
+**2. The obvious fallback is a REGRESSION, so it was thrown away.** The
+natural shape for a model bff cannot represent is `ResidualNode` -- the C++
+optimiser driving the Python residual through a `Node` director. Measured:
+**1.54 ms against scipy's 1.33 ms.** Wrapping a Python callback in a C++ loop
+buys nothing over wrapping it in a Fortran one and costs the director
+dispatch on top. A refused graph therefore falls back to `leastsqbound`.
+(The director is 1.0 ms of that 1.54 before a separate fix: it was handing
+back its residual through `set_value_vector`, i.e. converting 512 doubles
+into a Python list per iteration. `Port::set_values_array` -- a numpy
+typemap -- took it from 2.54 ms to 1.54. Still not enough to justify it.)
+
+> **Revised twice; read the second revision.**
+>
+> *(15) said the director is "no longer a regression -- a wash or marginally
+> faster",* from three interleaved min-of-many runs of whole `fit.run()`
+> calls: scipy 1.307 / 1.293 / 1.299 ms against director 1.301 / 1.274 /
+> 1.289. **That comparison was confounded and the conclusion was too
+> strong.** A whole `run()` includes the error estimate, and by then a scipy
+> run's error estimate had already moved into C++ while a director run's had
+> not -- so the two rows were not doing the same work.
+>
+> **(17) re-measured `minimize` alone, with the covariance switched off so
+> both do the same work: the director is 1.11x scipy on the parse fit and
+> 1.06x on a TCSPC decay.** Still slower, by a few per cent rather than by a
+> fifth. Half of what remained was `ResidualNode` calling `get_input_port`
+> once per parameter per residual evaluation, for an answer settled in its
+> constructor; caching that took it from 1.29x / 1.22x to the figures above.
+>
+> So the original conclusion -- *only removing the crossing helps* -- stands,
+> and is still why the graph exists. What changed is the *size* of the
+> penalty, from one that made the director an obviously wrong fallback to
+> one worth paying: (17) deleted ChiSurf's second optimiser and a plugin's
+> third, and a few per cent on the models that build no graph is a cheap
+> price for having one implementation of the algorithm rather than three.
+> See [`handover-error-estimate-2026-09-01.md`](handover-error-estimate-2026-09-01.md)
+> and entry (17).
+
+**3. The graph is the only thing that helps.** `Expression -> ChiSquared ->
+Minimizer`: parameters are ports the optimiser writes in C++, the curve is
+computed in C++, the data live in the node, and **nothing crosses per
+iteration**. 0.16 ms for the optimisation alone against 1.33 ms for the whole
+scipy fit.
+
+### The blocker was avoided rather than solved, and that is the design
+
+Driving the model's *own* ports from C++ is the obvious wiring and is wrong:
+`chisurf.core.parameter.Parameter.value` keeps a `_frozen_value` cache inside
+`frozen_structure()`, so a port written from C++ is **not seen** by the next
+Python read -- the model would report its pre-fit values silently. So the
+graph is **private to the fit**: built from the equation, the data and the
+current parameter values, run, and then the answer written back through the
+ordinary setters with one `update_model()`. The only place the numbers change
+language is once per fit, which is also exactly "keep the data on bff and
+move only what is displayed".
+
+`graph_objective` refuses -- and the fit falls back -- on **semantics**, never
+on C++ capability: a smooth prior (it adds rows the graph does not produce),
+an equation the engine will not compile, a free parameter the equation does
+not carry, a duplicate variable name. Bounds are *not* a refusal: they
+synthesise a uniform prior that contributes no rows, and treating that as a
+prior would have refused every bounded fit.
+
+### Error estimation: a third of a fit, deleted
+
+`update_error_estimates` rebuilt the Jacobian by finite differences -- `p + 1`
+model evaluations, **32% of every fit** -- for a matrix `lmdif` already has in
+its final `R`. It now takes the optimiser's, when there is one.
+
+Entry (6) called this out as needing to be done *deliberately* rather than as
+part of a speed pass, so it was: agreement with the finite-difference matrix
+was measured **before** wiring, at **5e-4 relative** on the parameter standard
+deviations across three models, against the four significant figures the
+parameter table displays. It is offered rather than imposed -- stashed only on
+convergence and only at full rank (a zero on the diagonal means a parameter
+the data do not constrain, which chisurf reports by *dropping* the column,
+and that is not what MINPACK's rank-deficient `covar` produces) -- and the
+reader checks the stash against the *identity* of the current free
+parameters, because a re-parse rebuilds them and a covariance for the
+previous set would line up by length and mean nothing.
+
+### What the parity bar could be, measured
+
+Unbounded, the transform is the identity and the *whole trajectory* is
+reproduced: every evaluation point, the same evaluation count, `info` equal,
+x to 1e-12. Bounded it cannot be -- `leastsqbound` maps coordinates with
+numpy's `sin`/`arcsin` and this maps them with libm's, `i2e(e2i(x))`
+round-trips to **2.2e-16**, and twenty-odd LM iterations amplify one ulp to
+~1e-7, inside `xtol = 1.49012e-8` *relative*. scipy's own answer moves by the
+same amount when the bounds are merely respelled.
+
+A fixture lesson worth keeping: a sum of exponentials started at (1, 1, 1, 1)
+sits on its own permutation symmetry, where two pairs of Jacobian columns are
+*identical* and which of two equal norms the pivoted QR takes is decided by
+the last bit. Both optimisers find the same minimum there and label its terms
+differently. The first version of these tests was asking a question that has
+no answer.
+
+### Two defects found on the way, one in each repository
+
+* `chisurf`'s `leastsqbound(full_output=1)` returned a **permuted
+  covariance**. MINPACK's `ipvt` is 1-based in Fortran, so the code did
+  `ipvt - 1`; SciPy made it 0-based (1.18 `_minpack_py.py:488` builds its own
+  `cov_x` from a bare `perm = ipvt`), and subtracting one produces `-1`,
+  which numpy reads as *the last element* -- so the un-pivot was not a
+  permutation at all. Against `scipy.optimize.leastsq`'s own `cov_x`: every
+  element wrong, by up to **9x**. Latent only because error estimation took
+  its own Jacobian -- and entry (6) had named reusing this matrix as the way
+  to remove 32% of a fit, which is what this entry then did. Fixed by
+  *detecting* the convention, so both keep working.
+* `chisurf`'s `_internal2external_grad` tests `is None` while its transform
+  lambdas test `_is_unbounded`, so `(-inf, inf)` yields `(inf - -inf) *
+  cos(v) / 2` = inf. The two tests agree in the C++.
+
+### Smaller things that are now true
+
+* `Port::get_values_ref()` -- the values with no copy, C++-only. `Expression`
+  reading its axis, `ChiSquared` reading the model curve and `Minimizer`
+  reading the residuals each copied a full-length vector per iteration.
+  Worth ~4%; kept because it is strictly less work, not because it showed up.
+* `Expression::evaluate()` no longer copies every operand into a
+  `vector<vector<double>>` per call, and allocates nothing in the loop.
+* `ChiSquared` gained a `residuals` output port, written only when the node
+  has one -- a `Sampler` wants the scalar and would otherwise pay for a copy
+  of the whole residual vector per move.
+* The observer is `IMP_SWIG_DIRECTOR`, not a bare `%feature("director")`,
+  **and that was a segfault first**: C++ holds it across a whole run while
+  SWIG's director keeps only a weak pointer to the Python proxy, so
+  `m.set_observer(MyObserver())` -- how anyone would write it -- lost its
+  proxy to the collector. Cancellation is a *return value*, so a cancelled
+  fit stops at the last accepted point and no Python exception unwinds a C++
+  loop holding raw buffers.
+
+### Tests
+
+`test/minimizer/test_minimizer.py` 31 tests (parity included);
+`test/chi2`, `test/expression`, `test/sampler`, `test/portnode`,
+`test/factorgraph`, `test/session`: **271 passed**. chisurf `test/fitting`:
+**932 passed** (was 909; +14 `test_graph_fit.py`, +9
+`test_leastsqbound_covariance.py`), the two known pre-existing failures
+(`test_fit_state`, `test_pcf_experiment`), both confirmed against `HEAD`.
+
+### What is NOT faster, said plainly
+
+**A `FitGroup` is unchanged.** `global_optimize_local_first` ships as
+`false`, so a group runs exactly one optimisation -- over `GlobalFitModel`,
+whose residual is the *concatenation* of its members' -- and the graph
+refuses it. Since a `FitGroup` is what the GUI builds, the 2.85x above is
+today a plain-`Fit` result. Ticket `T-20260901-02`; the shape is a
+concatenating residual node in C++ over one `ChiSquared` per member, and the
+cross-member parameter *links* are already `Port::set_link`, i.e. already on
+the right side of the boundary.
+
+## 2026-09-01 (8) — the residual path in C++, for every model, and the design that had to be thrown away first
+
+Owner: *"wire residual path in bff, for all mdls."* Done, **2.65x** on that
+path. The route there is worth recording, because the obvious design was
+slower than what it replaced.
+
+**Why it covers all models.** `calculate_weighted_residuals` takes the model's
+*curve*, not the model. Whatever computed that curve -- this library, numpy,
+arbitrary Python -- the residual afterwards is the same operation, so a single
+kernel serves the whole model tree and there is no per-model work.
+
+**The first design lost, and measurably.** A `bff::ChiSquared` holding the data
+and reused across iterations, with numpy setters and a per-data cache: it
+measured **0.72x**, i.e. slower than numpy, interleaved so load was not the
+explanation. The profile said the cache lookup was **4.45 us** of a 5.64 us
+call while the C++ call it guarded was **0.61 us**. The cause is worth
+knowing: **`data.y is data.y` is False** -- `Curve` stores `x` and `y` as rows
+of one 2xN array and each access builds a fresh view -- so the identity check
+never matched and a `ChiSquared` was rebuilt on *every* call. The stable
+identity is the storage array or `.base`, not the view.
+
+Rather than repair the cache, the design went. Caching the data in C++ also
+means holding a *copy*, so a caller editing its curve through `unlocked()`
+would be served residuals against stale data. The kernel is now a **stateless
+free function** reading all three buffers where they lie: no node, no cache,
+no copy, no staleness, and one boundary crossing. **2.65x at 512 points and
+2.64x at 4096**, against the numpy expression *including* the slicing around
+it, and `get_wres` as a whole 1.15x.
+
+**A real divergence the edge cases caught.** With `xmin = -5`, Python slicing
+means "five from the end" and returns *nothing*; the C++ window clamps to zero
+and returned 100 residuals. `ChiSquared::resolve_window` has always had that
+clamp, so this was latent in bff rather than introduced here. Negative `xmin`
+now takes the numpy path -- reproducing Python's slice arithmetic in C++ would
+only invite the next edge case, and the rare path may as well take the one
+that defines the behaviour.
+
+Verified on **80 combinations**: mismatched data/model lengths, empty,
+inverted, past-the-end, zero-width and negative windows, both noise models,
+**bit-identical every time**. Pinned by `ResidualKernelTests`, which compares
+against the previous implementation rather than against itself, checks that the
+C++ kernel is actually resolved (or the comparison passes by testing numpy
+twice), and checks the numpy fallback still works, since it is the definition
+of the behaviour.
+
+`test/fitting` **906 passed** plus the two known pre-existing failures;
+`test/expression` and `test/chi2` green in bff.
+
+One measured caveat on the ambition. The residual is 16% of the callback, so
+2.65x on it is 1.15x on the callback and less on the whole fit. **Crossing the
+boundary is not free** -- a SWIG call is ~0.6 us before any work -- so moving a
+*small* kernel across adds a crossing rather than removing one, which is
+exactly what the first design demonstrated. The remaining large item is the
+opposite trade: crossing **once** for a whole iteration instead of once per
+part.
+
+## 2026-09-01 (7) — the error estimates were wrong, by 22x, whenever the data had no sigma
+
+Owner: *"the error estimates were/are all wrong."* Correct, and the defect is
+specific enough to state exactly.
+
+`covariance_matrix` returns ``(J'J)^-1`` for ``J = d(weighted residuals)/dp``.
+That is the parameter covariance **only when the weights are real standard
+deviations** -- weighted least squares, which is what
+`calculate_weighted_residuals` documents for its ``"default"`` noise model and
+what ``curve_fit(absolute_sigma=True)`` computes. Checked against scipy on a
+400-point exponential with a known sigma: chisurf agrees to 0.3%, which is
+finite-difference noise. **That path was never wrong.**
+
+**`DataCurve` sets `ey` to ones whenever none is supplied** -- five sites in
+`core/data.py`, including the ordinary two-column ``x, y`` file. The residuals
+are then unweighted, the covariance comes out in units of "a residual of 1",
+and the reported errors are too large by ``1/sqrt(chi2r)``:
+
+| | b | a1 | t1 |
+|---|---|---|---|
+| reported, no `ey` | 0.078 | 0.291 | 0.375 |
+| correct (sigma from residuals) | 0.0036 | 0.0133 | 0.0171 |
+
+**A factor of 22.** Not a rounding disagreement -- a number a reader would act
+on. And silent: nothing about a two-column file announces that its error bars
+have become meaningless.
+
+Fixed by estimating sigma from the residuals when the data supplies none,
+which is the standard treatment and what ``curve_fit`` does by default. The
+scale is applied *only* when ``ey`` is exactly one everywhere, so **a dataset
+with genuine uncertainties is untouched and its error bars do not move** --
+pinned by its own test, because a detector that fired too eagerly would
+silently shift every published error bar in the other direction. Both regimes
+now match scipy: 0.00391/0.01454/0.01875 against `absolute_sigma=True`, and
+0.00357/0.01329/0.01714 against `absolute_sigma=False`.
+
+The display layer is **not** at fault and was checked: `parameter_table.py`
+formats `error_estimate` to 4 significant figures and blanks a non-finite one,
+and `FittingParameter.error_estimate` returns NaN when nothing has been
+computed, so an unknown error shows empty rather than stale. Two mapping
+hazards were tested and are sound: a **fixed** parameter is absent from
+`model.parameters` and reports no error while the free ones keep their correct
+values, and a parameter with an identically zero derivative reports NaN rather
+than inheriting a neighbour's column. A stale estimate surviving a re-fit is
+reachable in principle -- `_error_estimate` persists and only
+`important_parameters` are reassigned -- but not through a change of equation,
+which rebuilds the parameter objects.
+
+`test/fitting/test_error_estimates.py`, 7 tests, checks both regimes against
+scipy rather than against chisurf's own output, and one of them guards the
+*size* of the old defect so a future regression cannot pass by being 1% wrong.
+`test/fitting`: **906 passed**, the two known pre-existing failures.
+
+## 2026-09-01 (6) — where a fit's time actually goes, and why porting leastsq is the wrong lever
+
+Owner: *"did you port leastsq to bff? that could add more speed."* No, and
+having measured it: **it would not add much.** The optimiser is not the cost.
+
+`fit.run()` at 512 points, three free parameters, measured without a profiler
+(cProfile inflates this path about 2.3x):
+
+| | ms | share |
+|---|---|---|
+| **residual callbacks (12x)** | **0.441** | **57%** |
+| -- of which `update_model` | 0.186 | 24% |
+| -- of which the rest of `get_wres` | 0.255 | 33% |
+| **post-fit error estimation** | **0.247** | **32%** |
+| MINPACK plus the `leastsqbound` wrapper | ~0.084 | ~11% |
+
+MINPACK's `_lmdif` is compiled Fortran already: its *own* time is
+`tottime 0.003` of 0.085 in the cumulative profile, about **4%**. Replacing it
+with a C++ Levenberg-Marquardt would swap one compiled optimiser for another
+and leave the 57% untouched, because that 57% is the *callback* -- the loop
+returning to Python on every iteration to write parameters, evaluate the model
+and form residuals.
+
+**The productive port is therefore the residual, not the optimiser**, and it is
+the thing the original handover already named: `Expression -> ChiSquared ->
+Sampler` as one C++ graph, so an iteration never re-enters the interpreter.
+bff already has `ChiSquared.h` and `Sampler.h`; what is missing is the wiring
+from a chisurf model to them. That only helps models bff can represent -- which
+parse models now are, and arbitrary Python models are not.
+
+**Error estimation is a third of every fit**, and it recomputes a Jacobian.
+Two observations, one acted on:
+
+- `approx_grad` costs `1 (f0) + p (steps) + 1 (restore)` evaluations. The
+  restore is necessary and its reason is documented in the source. **`f0` was
+  not**: `covariance_matrix` takes the gradient around
+  `xk = model.parameter_values`, and both callers of
+  `update_error_estimates()` run `self.update()` immediately before, so the
+  model already holds the residuals at `xk`. Threading `f0` through takes a
+  fit from **13 model evaluations to 12**, and the covariance comes out
+  **bit-identical** -- `np.array_equal` true, max difference exactly `0.0`,
+  checked on a 3- and a 5-parameter model.
+- **Honestly, that is worth about 1%, not the 8% I first estimated.** I had
+  assumed model evaluations dominated the fit; they are 24% of it. One
+  evaluation of thirteen is ~9 us of ~772 us, which is below this machine's
+  noise -- 0.810 ms against 0.813 ms, indistinguishable. The change is kept
+  because it is strictly less work for a provably identical answer, not
+  because it is measurable.
+
+Not done, and recorded as the alternative that was rejected on inspection:
+MINPACK can return `cov_x` built from the `fjac`/`ipvt` it already computed,
+which is what `scipy.optimize.curve_fit` uses, and it would remove the whole
+32%. **`leastsqbound` transforms parameters when bounds are present**, so that
+covariance is in internal coordinates and would need the transform's Jacobian
+applied before it means anything externally. Silently wrong error bars are a
+worse outcome than slow ones, so this needs doing deliberately rather than as
+part of a speed pass.
+
+`test/fitting`: **899 passed**, the two known pre-existing failures.
+
+## 2026-09-01 (5) — the fit's cost was never the arithmetic
+
+Owner: *"improve fit mdl in chisurf to be faster."* Profiled before touching
+anything, and the profile said something worth recording: after the previous
+entries, **evaluating the equation was 21% of a fit iteration and chisurf's
+own machinery was the rest.**
+
+First correction to my own method. A fit runs inside
+`factorgraph.frozen_structure()`, which collapses parameter reads to a dict
+lookup; measuring `update_model()` outside it measures a path no fit takes.
+Unfrozen 17.81 us, frozen 9.57 us. Everything below is frozen.
+
+Component breakdown at 512 points, FCS:
+
+| | us | share |
+|---|---|---|
+| **`self.y = <array>`** | **4.15** | **45%** |
+| `compute_curve_bound` | 1.92 | 21% |
+| `numpy.array([p.value ...])` | 1.18 | 13% |
+| `fit.data.x`, `ascontiguousarray`, `super()` | 0.50 | 5% |
+
+So the single largest cost of a model evaluation was **assigning the result**,
+at more than double the computation.
+
+`Curve.y`'s setter wraps its write in `self.unlocked('d')`. Three things were
+wrong with that, found by measuring each:
+
+1. It was a `@contextlib.contextmanager`, so every assignment built and tore
+   down a generator frame. Now a small class with `__enter__`/`__exit__`.
+   Semantics unchanged, re-entrancy included.
+2. **The real cost, and not where I first looked.** `self._unlock_depth = ...`
+   went through `Curve.__setattr__`, which exists to lock any per-sample array
+   on its way in -- with two further `__setattr__` overrides above it in the
+   MRO. Assigning that private int cost **0.760 us** against **0.136 us** for
+   the dict write, and it happens twice per unlock. It is bookkeeping, never
+   an array, so none of that machinery applies to it.
+3. Resolving `'d'` to an attribute name is a property of the class, asked
+   again on every iteration. Cached per (class, arguments).
+
+`ParseModel` also stopped rebuilding its parameter array per step (filled in
+place; the size cannot change) and stopped re-checking the axis for contiguity
+(the same object for a fit's life).
+
+**Measured honestly, which took two attempts.** A plain before/after A/B was
+useless: load on this machine drifted from 11.9 to 14.8 between runs, which is
+larger than the effect. Re-done with both implementations **interleaved in one
+process**, alternating and min-of-many:
+
+> `self.y = v` -- **new 2.34 us, old 4.54 us, 1.94x faster**
+
+That is per model evaluation for **every curve model in chisurf**, not only
+parse models, since they all assign `y` through the same setter.
+
+Tests: `test/core` + `test/fitting` **2053 passed, 5 failed**, and all five are
+pre-existing. The two known ones from the previous entry, plus three in
+`test_burst_manifest.py` and `test_tttrlib_registry.py` that I had not run
+before. Established, not assumed: none of those files mentions `unlocked`,
+`Curve`, `Expression` or `compute_curve`, and both changed files were stashed
+back to HEAD and the three re-run -- they fail identically without them. The
+registry two look downstream of another session's live tttrlib work, which is
+also what `test_registry_completeness.py` has been failing on over there.
+`test/core/test_curve.py`, `test_curve_locking.py` and the curve doctests are
+green.
+
+## 2026-09-01 (4) — a fit re-passed its variable names on every iteration
+
+Owner: *"no repassing of str needed on fit."* Correct, and it was costing more
+than it looks.
+
+`compute_curve()` takes the variable names on every call, so SWIG rebuilt a
+`std::vector<std::string>` -- allocating and copying each name -- per fit
+iteration, and the engine then looked each one up again. Measured by holding
+the axis at 8 points so the arithmetic vanishes and only call overhead
+remains: **1 name 1.28 us, 3 names 1.44, 6 names 1.66, 10 names 2.14** --
+about **0.1 us per name**, none of which can change while a fit runs.
+
+`bind_parameters(names, axis)` now resolves the mapping once into a small
+`vector<int>` -- one slot per engine variable, a sentinel for the axis -- and
+`compute_curve_bound(values, axis)` evaluates against it with **no string
+crossing the boundary at all**:
+
+| equation | 8 pts | 512 | 4096 |
+|---|---|---|---|
+| `b+a1*exp(-x/t1)` | **57%** faster | **26%** | 6% |
+| FCS | **59%** | **30%** | 7% |
+
+The 512-point column is the one that matters: that is the length an FCS curve
+actually has. Results are bit-identical to the named call (`rtol=1e-15`), as
+an optimisation's should be.
+
+End to end through `ParseModel.update_model()`, C++ against `eval()`:
+**1.84x** and **2.41x** at 512 points, 1.39x and 1.70x at 4096.
+
+Three things the binding has to refuse rather than guess, each with a test: a
+parameter count that disagrees with the binding (it would read the right
+equation from the wrong slots), evaluating before binding, and a binding left
+over from a previous equation -- `set_expression()` drops it, because keeping
+it would evaluate the new equation through the old slots. chisurf binds
+against `_parameters_equation` rather than `_keys`, since the values array is
+built from that same list, so the two cannot drift.
+
+`test/expression` **79 passed**; `test_parse_uses_bff.py` 26 tests over 69
+subtests; chisurf `test/fitting` **899 passed, 2 failed** -- the same two
+pre-existing failures established as unrelated in the previous entry.
+
+**The bff suite cannot be reported clean, and it is not ours.** It ran 1677
+passed / 12 failed, and after rebuilding against current sources 9 remain, in
+`test_av_lattice.py`, `test_docking_values.py`, `test_fps_screening_ab.py`,
+`test_fps_point_positions.py` and `test_ProbeNetworkRestraint.py`. Grounds for
+saying they are somebody else's: none of those files mentions `bff.Expression`,
+`compute_curve` or `bind_parameters`; `test/expression` is 79/79; the earlier
+run this session -- before this change -- failed **four** tests and all four
+were FPS *export*, a different set entirely; and `src/AV.cpp` was modified at
+**07:11**, during the run, with `Docking.h` at 00:43. The failing areas track
+another session's live edits, not this one's.
+
+## 2026-09-01 (3) — the integration test, and proof the guard bites
+
+The gap left by the previous entry is closed. `update_model()` is now driven
+through a real `Fit`, which is what it needed: a `ModelCurve` is constructed
+*by* a `Fit` and reads its axis from `fit.data`, so a stub cannot assign
+`self.y` -- the pattern already used by `test_models_regression.py`.
+
+Six tests, and the distinction from the `parse_code()` sweep matters: that one
+proves an equation **compiled** for the engine, this one proves the fit
+**uses** it. A model can compile and still fall back on every iteration if
+`compute_curve` throws, because the fallback catches and logs rather than
+failing. Nothing else would report it.
+
+- one update evaluates in C++ and not in Python -- counters `(1, 0)`
+- **fifty consecutive iterations stay in C++**, none drifting onto the
+  interpreter, which is the shape a real fit has
+- the curve equals the one numpy computes, because fast is worthless if wrong
+- the `xD` model that used to raise `NameError` on every evaluation now
+  produces a finite curve end to end
+- **all 67 shipped equations evaluate in C++ through a real fit**
+- and the guard bites: dropping the compiled expression the way a regression
+  would makes the counters report `(0, 1)` and `evaluates_in_cpp` False,
+  rather than the model carrying on looking healthy
+
+That last one is there because the others pass vacuously without it -- a
+counter that never increments would satisfy every assertion above.
+
+`test/fitting/test_parse_uses_bff.py` is now 20 tests over 67 subtests; with
+the two existing parse test files, 32 pass. `test_models_regression.py` passes
+again as well (3) -- it had failed to collect earlier only because of another
+session's in-flight FPS work, which has since been rebuilt.
+
+Whole of `test/fitting`: **893 passed, 2 failed**. The two --
+`test_fit_state.py::test_fret_gaussian_model_get_set_state_preserves_gaussians`
+and `test_pcf_experiment.py::test_pcf_config_block_present` -- are
+**pre-existing and unrelated**. Established rather than asserted: neither file
+mentions `ParseModel`, `parse.` or the attributes touched here, and
+`parse.py` is the only chisurf file changed, so it was stashed back to HEAD
+and both tests were re-run. They fail identically without the change. Stash
+popped and the file verified byte-identical to the working version afterwards.
+
+## 2026-09-01 (2) — asserting chisurf parses with bff, and the two bugs that assertion found
+
+Owner: *"assert that chisurf parse uses bff parsing, so that compute stays in
+bff for max speed."* The assertion is
+`chisurf/test/fitting/test_parse_uses_bff.py`, 14 tests over all **67** shipped
+equations. Writing it was worth more than the assurance: it found two
+pre-existing defects, neither caused by the move to C++.
+
+**Why an assertion was needed at all.** `ParseModel` keeps `eval()` as a
+fallback on purpose -- an equation may use a numpy or scipy function the
+engine lacks. That fallback is silent by design, so anything which stopped the
+C++ path compiling (a renamed method, a missing `IMP.bff`, an engine that
+rejects a spelling) would break nothing: every fit would just go back to an
+interpreter round trip per iteration and nobody would find out except by
+profiling. So `evaluates_in_cpp` and `evaluation_counts` were added to make
+the path taken observable, and the suite pins that **every shipped equation
+parses onto the engine**, driving the real `parse_code()` rather than reaching
+past it.
+
+The sharpest test is not "does it compile" but **"do the scanner and the
+engine find the same free names"** -- a disagreement there means the two
+evaluators bind different things and quietly return different curves. It
+failed on three equations.
+
+**Defect 1: `pi` was a fit parameter, initialised to 1.0.** ChiSurf's scanner
+rewrote every free name to `a[i]`, `pi` included, so three shipped
+dye-diffusion models computing `...-4*pi*Rdye*Ddye*Nq**2/Vav*x*...` were
+running with **pi = 1** -- a factor of pi wrong in the quenching term --
+unless a user noticed the stray "pi" in the parameter table and typed
+3.14159 into it. `models.yaml` gives it no `initial:`, so nothing corrected
+it. `pi` and `e` are now left alone: `eval()` picks them up from the
+`from numpy import *` already at the top of that module, which is also how the
+engine resolves them, so both paths now agree **and are right**.
+
+**Defect 2: a name beginning with `x` was split.** The scanner's first rule
+was the bare `r"x"`, which matched the leading character of any such name, so
+`xD` became the axis `x` followed by a parameter `D` and the generated code
+read `xa[1]`. The shipped two-state quenching model
+`p0*((1-xD)*(...)+xD*(...))` therefore failed with
+**`NameError: name 'xa' is not defined` on every evaluation** -- it has been
+broken outright, not subtly wrong. Narrowed to `r"x(?!\w)"`. Confirmed
+against the old generated string before fixing, and the repaired model now
+produces a finite curve end to end.
+
+Both are pinned by their own regression tests. Existing parse tests
+(`test_parse_widget_expression_editor.py`, `test_parse_latex.py`) still pass,
+12 of them.
+
+`update_model()` is now driven too, through a real `Fit` -- see the following
+entry; the gap noted here is closed.
+
+## 2026-09-01 — Table retired, and the last of ExprTk with it
+
+Owner: *"can retire table, i guess."* Done. Independently re-verified the
+premise before deleting anything: `bff.Table`/`bff::Table` across imp.bff,
+chisurf, imp-tricks, tttrlib, quest, ucfret and fpsimp returns **three hits,
+all in its own test file**.
+
+Deleted: `include/Table.h`, `src/standalone/Table.cpp`, `test/table/`, and
+**`include/internal/exprtk.h` -- 1.6 MB**, which Table was the last thing
+keeping alive. `Expression::compute_pointers()` went too: Table was its only
+caller and it was `%ignore`d from Python, so nothing outside could reach it.
+`grep -rl exprtk` over every header, source, interface and CMake file in the
+repository now returns **nothing**.
+
+Verified after: `bff.Table` gone from Python, `compute_pointers` gone,
+`Expression` intact; `test/expression` 72 passed; full suite **1656 passed**.
+
+Four failures in that run are **not ours** and are actively in flight:
+`test/io/test_fps_export_formats.py` (3) and
+`test/representation/test_fps_error_estimation.py` (1), from the session
+writing the FPS export work -- `src/FPSExport.cpp` was modified at 00:18 and
+the second test file at 00:20, mid-run. Neither test touches `bff.Table` or
+`Expression`; the one "Table" match in them is `IMP.bff.FPSResultTable`, a
+different class.
+
+**A build-system trap worth recording, because it cost most of the time here
+and had nothing to do with the deletion.** The module went from building to
+`ninja: error: unknown target 'IMP.bff-lib'`, which reads like the deletion
+broke the build. It did not. Another session had added
+`bin/imp_bff_fps_export` without a `README.md` section, and this repository
+*disables the whole module* when a program in `bin/` is undocumented --
+`setup_module.py` enforces it, and the symptom is a missing target, not a doc
+warning. That is already recorded in the 2026-08-19 entry; it is recorded
+again because it presented as somebody else's regression. Written a section
+for the tool from its own help text, which re-enabled the module for everyone.
+
+A second, smaller one: after editing `src/Files.cmake`, `build.ninja` kept a
+stale `standalone/Table.cpp` rule through two full `cmake .` runs and only
+dropped it after touching `Files.cmake` and `src/CMakeLists.txt`. If a deleted
+source is still being compiled, the generate step has not noticed --
+re-touching the file that lists it is the fix.
+
+## 2026-08-31 (21) — chisurf's parse models evaluate in C++; ndx filters measured end to end
+
+Owner: *"make sure that ndx uses tttrlib for filter and is fast, chisurf eval,
+parser, must use bff. check speed."* Both done, and the chisurf half needed a
+new entry point before it was worth doing at all.
+
+### chisurf: `eval()` -> `IMP.bff.Expression`
+
+`ParseModel.update_model` ran `eval(self.code)` on every fit iteration, over a
+string a `re.Scanner` had rewritten to replace each free name with `a[0]`,
+`a[1]`... It now compiles the **original** equation with `bff.Expression` --
+bff binds by name, so the rewrite is unnecessary and would only hide the names
+from it -- and evaluates in C++. `eval()` stays as a fallback, deliberately:
+an equation may use a numpy or scipy function the engine does not implement,
+and refusing it would break a model a user already has.
+
+**The obvious wiring was slower than the interpreter, which is why this is not
+a one-line change.** Measured, for the shape a fit actually has (N *scalar*
+parameters and one vector axis):
+
+| entry point | 2exp, 512 | 2exp, 4096 | FCS, 512 | FCS, 4096 |
+|---|---|---|---|---|
+| python `eval` | 7.8 us | 30.5 | 6.6 | 13.0 |
+| `compute()` | 19.1 | **134.8** | 16.6 | **117.0** |
+| `compute_columns()` | 5.6 | 34.5 | 3.5 | 18.1 |
+| **`compute_curve()`** | **5.3** | **31.1** | **2.9** | **13.2** |
+
+`compute()` takes `std::vector`, so from Python every call converts the axis
+to a list -- four times *slower* than the interpreter it replaces.
+`compute_columns()` reads numpy directly but wants every operand the same
+length, so a scalar has to be materialised as a full column and the memcpy per
+operand costs more than the arithmetic. Both lose at 4096 points.
+
+So `Expression::compute_curve()` was added: scalars stay scalars, the axis is
+read where it lies, nothing is copied. The engine already broadcasts a scalar
+-- its `is_vector` flag is exactly that -- so this stops lying to it about the
+shape of the data. It is the fastest of the four at every size measured.
+
+**Across the whole shipped catalogue** -- 67 unique equations -- against
+`eval()`: **zero mismatched, zero refused**, 1.38 ms -> 0.58 ms at 512 points
+(**2.40x**) and 4.60 -> 3.66 ms at 4096 (**1.26x**). The margin is larger at
+the short curves, which is where FCS and most fits live.
+
+### ndx: already tttrlib, now measured through its own API
+
+`DataSource.query_mask` was already delegating to
+`tttrlib.DataStore.select_expression`; the `np.where` calls elsewhere in
+`data_source.py` are log-scaling and histogram binning, not filtering. What
+was missing was a measurement through the API the CLI and GUI actually call
+rather than through `DataStore` directly:
+
+| rows | `query_mask` | vs pandas |
+|---|---|---|
+| 100k | 0.116-0.164 ms | **5.4-7.0x** |
+| 1M | 1.26-2.14 ms | **2.0-4.9x** |
+
+Every query checked against `frame.eval` first; no mismatches. These are
+slower than the raw `count_expression` figures (0.076-0.092 ms at 100k)
+because `query_mask` also saves and restores the store's own selection and
+copies the mask out to numpy. That is the honest cost of the call a user
+makes, and it is the number worth quoting.
+
+bff **1642 passed, 4 xfailed, 0 failed**.
+
+Two cross-session tears hit during this and are worth recording as evidence
+the board's hazard section is not theoretical: `fps_bootstrap` and then
+`FPSMolecule_path_get` were undefined for a while because another session was
+editing `Docking.h` and `FPSExport.h` (the latter at 23:12, mid-run). Both
+cleared on a rebuild, neither was ours.
+
+## 2026-08-31 (20) — the engine is a copied header; imp.bff depends on nothing
+
+Owner: *"simply copy the header over."* Done, and it is the right shape for
+this component.
+
+`include/internal/ExpressionEngine.h` is now a **byte-identical copy** of
+tttrlib's `modules/core/include/ExpressionEngine.h`, included as
+`<IMP/bff/internal/ExpressionEngine.h>` — the same convention the vendored
+ExprTk already used. imp.bff's build now needs **nothing outside IMP**:
+
+| | before today | after |
+|---|---|---|
+| own evaluator | 1,891 lines + 1.6 MB ExprTk | none |
+| link edge to tttrlib | — | **none** (`otool -L` → 0) |
+| build dependency | — | **none** (`dependencies.py` clean, `dependency/` gone) |
+
+The intermediate designs were both heavier than the problem. Linking
+`libtttrlib` coupled two build systems, an ABI and an install contract to a
+computation that opens no file and calls nothing outside libm. Taking the
+header from an installed tttrlib was lighter but still made this repository
+need tttrlib *present* to build a file with no dependencies of its own.
+
+**The hazard of a copy is drift, so it is a test rather than a hope.**
+`test/expression/test_engine_copy_is_identical.py` compares the two files by
+SHA-256 against the sibling checkout. tttrlib owns the original; changes go
+there and are copied here, never the reverse. Verified the guard actually
+bites: a two-line edit to the copy fails it, restoring passes. It *skips*
+rather than fails when the sibling checkout is absent, so a release tarball or
+a bff-only CI job is not reported as broken for a comparison it cannot make.
+
+That leaves one implementation of the language in the ecosystem, in tttrlib,
+with a mechanically-checked copy in imp.bff — which is what "not maintaining
+two split code bases" actually asks for. A second *file* is not a second code
+base; a second *implementation* is, and there is no longer one.
+
+bff **1641 passed, 4 xfailed, 0 failed** (72 in `test/expression`, including
+the two drift guards). No performance change: FCS 2.86x / 2.31x / 1.69x /
+1.28x / 0.98x, 12.5 us at 4096 points.
+
+Still standing, unchanged: `include/internal/exprtk.h`, 1.6 MB, kept alive
+only by `src/standalone/Table.cpp`.
+
+## 2026-08-31 (19) — header-only: one engine, and no link edge at all
+
+Owner, on the previous entry: *"but i do not get, why bff should depend on
+tttrlib, they should just use the same header files. make the stuff header
+only!"* Right, and the earlier design was heavier than the problem.
+
+`ExpressionEngine` is pure arithmetic — a tokeniser, a parser and SIMD kernels
+over arrays. It opens no file, holds no resource and calls nothing outside
+libm. Making imp.bff **link** `libtttrlib` for that coupled two build systems,
+an ABI and an install contract to a computation that needs none of them.
+
+So the engine is now **header-only**: `modules/core/src/ExpressionEngine.cpp`
+is gone, its 1,593 lines merged into `ExpressionEngine.h` (1,900 lines), the
+eight non-template member definitions marked `inline` (`run` is a template and
+must not be). Both callers include the one file —
+`tttrlib::data::DataStore` gates burst columns with it, `IMP::bff::Expression`
+evaluates model equations with it — and neither depends on the other's
+libraries.
+
+**Verified there is no link edge**: `otool -L libimp_bff.dylib | grep -c
+tttrlib` returns **0**. imp.bff's `dependency/tttrlib.description` now
+declares `libraries=""` with only a header.
+
+What remains is a build-time need for tttrlib's *headers* to be present, which
+is a much lighter thing than a library dependency but is not nothing — bff
+includes `<tttrlib/ExpressionEngine.h>` from the conda prefix.
+
+**An honest note on T-20260831-14.** The `install(EXPORT)` /
+`tttrlibConfig.cmake` work done an hour earlier is **not needed for this**. The
+header install already existed and is what is actually used; `find_package`
+support was built for a link dependency that no longer exists. It is kept
+because it stands on its own — there was previously no supported way to be a
+C++ consumer of tttrlib at all — but it was not on the critical path, and
+saying otherwise would be dressing up a detour as a plan.
+
+No regression, and if anything a shade faster now that the compiler can inline
+across what used to be a translation-unit boundary: FCS 3.05x / 2.29x / 1.66x
+/ 1.21x / 1.00x against numpy, 12.4 us at 4096 points (12.5 linked, 13.0 with
+bff's own engine). bff **1639 passed, 4 xfailed, 0 failed**; tttrlib's
+DataStore expression tests 49 passed; 12,000 fuzzed queries agreeing with
+numpy, `known-divergence=0`.
+
+Still standing: `include/internal/exprtk.h`, 1.6 MB, kept alive only by
+`src/standalone/Table.cpp`. Retiring Table removes the last of it.
+
+## 2026-08-31 (18) — one engine: imp.bff now evaluates with tttrlib's
+
+**T-20260831-14 then -12.** `src/standalone/Expression.cpp` went **1891 lines
+-> 300**. What is left is the part that is genuinely imp.bff's: presenting the
+evaluator as a `Node` with ports, and the numpy-facing entry points SWIG
+wraps. The tokeniser, parser, RPN compiler, folding, CSE and the block
+evaluator are gone from this repo; `tttrlib::data::ExpressionEngine` is the
+only copy now.
+
+**The install contract (T-14).** A correction first: this log said tttrlib
+"installs no C++ headers". It does — `BUILD_LIBRARY` and `INSTALL` default ON
+and a plain install lays down 172 headers. The *wheel* sets
+`BUILD_LIBRARY=OFF`, and I generalised from the wheel. The real gap was that
+`find_package(tttrlib)` failed: no `install(EXPORT)`, no config file. Fixed
+with `EXPORT`/`INCLUDES DESTINATION`, a generated `tttrlibConfig.cmake` and a
+`SameMajorVersion` version file. Two snags: the vendored `tiff` is a
+build-tree target in no export set and blocked the whole export (tttrlib links
+third-party libraries at *directory* scope, so they land in every target's
+interface) — cleared the interface, which is accurate rather than a dodge
+since a consumer of the dylib does not re-link what it already records; and
+`EXPORT_NAME`, or the targets export under internal names. Proven with an
+out-of-tree consumer that `find_package`d, linked and ran. Installed into the
+arm64 conda env at the owner's direction, after checking nothing collided.
+
+**Wiring (T-12).** `dependency/tttrlib.description` plus `tttrlib` in
+`dependencies.py`; IMP's own machinery does the rest, and `build_info/tttrlib`
+reports `ok=True`.
+
+**The one real regression, and its cure.** Dropping ExprTk cost the functions
+only it implemented — `floor(x/2)` was the case that proved it. Rather than
+accept the loss, the missing set went into the engine: **18 unary and 2 binary
+functions**, numpy-spelled. So `hypot(x,y)` now returns
+`[1.118 2.5 3.905 5.315]` — the values it was *silently getting wrong*
+before — and T-20260831-10 is cured rather than guarded. Two details worth
+keeping: `round` is `std::nearbyint`, half-to-even as numpy rounds, not
+`std::round`'s half-away-from-zero; and `sign` returns numpy's -1/0/1 with NaN
+for NaN, not `copysign`, which has no zero case.
+
+Four wrapper bugs found by the existing tests and fixed, each of which the
+tests were right to catch: the curve goes to the output port keyed by the
+node's **own name**, not a fixed `"value"`; a missing input port throws rather
+than returning quietly; `get_number_of_compilations()` counts trips to the
+parser *for the equation currently held*, so it is 1 after a new equation, not
+cumulative; and a **failed** `set_expression` must leave the previous program
+intact — compiling in place would let a mistyped equation destroy a running
+fit, so it compiles into a probe and commits only on success.
+
+Verified: bff **1639 passed, 4 xfailed, 0 failed**; tttrlib 3457 passed (its
+one failure is another session's image-kernel WIP); 22,000 fuzzed queries all
+agreeing with numpy with **known-divergence=0**, so T-20260831-09's min/max
+NaN bug is gone from bff too, by construction. **No performance regression on
+the model-curve path**: FCS 2.95x / 2.29x / 1.73x / 1.25x / 0.99x against
+numpy, 12.5 us at 4096 points where bff's own engine measured 13.0 — the port
+carried the constant-folding work.
+
+Not finished: `include/internal/exprtk.h` is **still there, 1.6 MB**, because
+`src/standalone/Table.cpp` still includes it. Table has zero consumers outside
+its own test (T-20260831-07 recommended retiring it), so deleting both is the
+last step — but that removes a public class, which is the owner's call.
+
+## 2026-08-31 (17) — the wrong curve now refuses, and what actually blocks one codebase
+
+Two things, one delivered and one a correction.
+
+**T-20260831-10 fixed.** The ExprTk fallback returned a silently constant
+curve for any multi-argument function — `hypot(x,y)` flat where numpy varies,
+`if(x>2,1,0)` all zeros — with no exception and no warning. It now **refuses**,
+which is what `Expression.h` promised all along: an equation that cannot be
+compiled is refused *"so a caller can fall back rather than get a wrong
+curve"*. Returning the wrong curve was the one outcome the design ruled out.
+
+The guard keys on **arity, not on falling back**, which is the distinction
+that makes it safe: unary functions vectorise correctly in ExprTk, so
+`floor(x/2)` still works. `min`/`max`/`pow` still answer because the vector
+engine implements them — but they are on the guard list anyway, since
+`floor(min(x,y))` drags the whole expression into the fallback and takes `min`
+with it. Identifier boundaries are checked, so `summary + xmin` is untouched.
+No shipped equation is affected: all 86 take the vector path. Five regression
+tests; `test/expression` 70 passed, full suite **1605 passed, 0 failed**.
+
+**Correction on T-20260831-12, the ticket that ends the duplicated engine.**
+An earlier note called its feasibility "settled" because an IMP module may
+carry its own `CMakeModules/Find*.cmake`. That was half the question and the
+wrong half: `find_package` needs something installed to find, and **tttrlib
+installs no C++ headers and exports no CMake package config**.
+`tttrlib_install_modules` (`cmake/TTTRLibModule.cmake:420`) installs
+`LIBRARY`/`ARCHIVE`/`RUNTIME` only, into the Python wheel's "bindings"
+component; the conda prefix has no tttrlib headers, and the only C++ artefact
+anywhere is a dylib inside a build tree. GSL, FFTW3 and HDF5 are *system*
+libraries with installed headers — the precedent covers the mechanism, not the
+availability.
+
+So imp.bff cannot link tttrlib today, and that is not an imp.bff problem:
+**there is currently no supported way to be a C++ consumer of tttrlib at
+all.** Filed as **T-20260831-14**, the prerequisite for -12, with the wheel's
+component split flagged as the thing not to break. Which route to take —
+a real install contract versus compiling tttrlib's one source file from the
+sibling checkout — is left as an owner decision rather than an agent's.
+
+## 2026-08-31 (16) — the engine moves down into tttrlib, and gating halves
+
+User directive: *"must work on tttrlib, not going to maintain two split code
+bases; must be fast on pto and ndx."*
+
+The direction was forced rather than chosen. Layering is tttrlib → imp.bff and
+`imp.bff/dependencies.py` names IMP modules only, so `DataStore` **cannot**
+call `bff::Expression`; and `AGENTS.md`'s placement rule — *"photons/curves →
+tttrlib"* — points the same way for both consumers, since burst columns are
+photon-derived and a model curve is a curve. So the evaluator core goes down
+into tttrlib as `modules/core/{include,src}/ExpressionEngine.{h,cpp}`, and
+`bff::Expression` is left to become a thin `Node` wrapper.
+
+**Gating is about twice as fast, and the comparison is conservative** — the
+baseline was taken at load average 9.7 and the new numbers at 14.3:
+
+| rows | before | after | vs pandas after |
+|---|---|---|---|
+| 100k | 0.154-0.187 ms | 0.076-0.092 ms | 10-16x |
+| 1M | 1.576-1.956 ms | 0.755-0.910 ms | 3.3-4.2x |
+| 5M | 7.905-9.622 ms | 3.831-4.543 ms | 2.5-4.4x |
+
+Two things bought that. The engine is **templated on the working type**, so
+float32 columns — which is how ndxplorer stores burst parameters — run in
+float32 rather than being widened, giving twice the SIMD lanes and an answer
+bit-identical to pandas over the same columns. And `compute_mask` packs
+`BitMask` words **straight out of the block loop**, where the old code wrote a
+float per row and packed bits in a second pass. One exception, recorded rather
+than buried: `g != 3` on float64 went 0.802 → 0.835 ms, the only cell in the
+table that did not improve.
+
+**pto is now measured at all**, which it was not before: a store written to a
+PTO file and read back gates at 0.759-0.895 ms at 1M rows, indistinguishable
+from the in-memory store. Coming off disk costs the gate nothing.
+
+Correctness: 49 new DataStore expression tests; the grammar fuzzer ported
+across and run for 15,000 random valid queries with **every one agreeing with
+numpy**; full tttrlib suite 3,457 passed. Two failures were run down and are
+**both other people's**: `test_registry_completeness` lists only image-kernel
+symbols from another session's untracked WIP, and ndxplorer's three
+`_bff_table` failures reference an attribute that occurs zero times in
+`data_source.py` — stale since the `bff::Table` migration. The three ndxplorer
+tests that actually check queries against pandas pass.
+
+**T-20260831-09 was fixed in the port rather than carried over**: `min`/`max`
+propagate NaN in both operand orders now.
+
+Two things this did *not* finish, both filed. ExprTk survives in tttrlib as a
+fallback and **carries the same silent multi-argument bug** found in bff this
+afternoon — `hypot(g,r) > 5` keeps 8 rows where numpy keeps 6, `atan2(g,r) >
+1.0` keeps 0 where numpy keeps 5, while `pow`/`min`/`max` are right precisely
+because the new engine handles them (**T-20260831-13**). And bff still has its
+own copy of the engine, so right now there are *two* — **T-20260831-12** is
+the ticket that ends that, and until it lands the user's actual request is not
+yet met.
+
+The subagent doing this work hit its session limit and died mid-task; this
+session took over its build lock, finished, and verified every number above
+independently rather than accepting the report.
+
+## 2026-08-31 (15) — the FCS loss was never the thing the ticket said it was
+
+T-20260831-05 asked for common subexpression elimination, on the handover's
+reading that FCS recomputes `x/1.2`. **It does not.** In
+`0.3+1/1.7*(1+x/1.2)**(-1)/sqrt(1+1/2.1**2*x/1.2)` the second occurrence is
+`(1/2.1**2*x)/1.2` -- a structurally different subtree -- and the only shared
+thing is the leaf `x`, which is not worth caching. The whole of that row's
+loss was **`**(-1)`**: it tokenises as a *negated* constant (`OP_CONST 1`,
+`OP_FUN F_NEG`), and the constant-power fold only recognised a bare
+`OP_CONST`, so the exponent stayed a buffer and every element paid a
+`std::pow()`. Isolated: `x**(-1)` cost 39.7 us at 4096 points against 5.1 us
+for `1/x`. numpy never pays it because it rewrites `arr ** -1` into
+`np.reciprocal` before the ufunc ever runs.
+
+Fixed by folding **every** constant subtree before the power fold, using the
+same `apply_scalar_fun`/`apply_binary_scalar` the evaluator's own scalar path
+uses -- so the arithmetic is bit-identical and only its timing moves.
+
+FCS: **1.76x / 0.88x / 0.56x / 0.34x / 0.25x** -> **3.10x / 2.36x / 1.68x /
+1.22x / 0.95x**, or 46.5 us -> 13.0 us at 4096 points. Those are this
+session's independent re-run at load 9.8; the implementing session measured
+3.2 / 2.4 / 1.75 / 1.29 / 1.01 at load 14. The first four cells agree, the
+last does not: **4096 points is parity, not a win**, and both sessions
+independently flagged that same cell as the doubtful one. The other three
+curve rows did not move, and for `0.3+2.0*x` that is provable rather than
+statistical -- its compiled program is instruction-identical.
+
+CSE landed too and **earns its place on its own merits, none of them this
+row**: A/B on the same binary with the cache disabled, at 4096 points,
+`exp(-x/1.5)*exp(-x/1.5)+exp(-x/1.5)` 41.8 -> 17.5 us and a 3-state FRET-FCS
+with 29 repeated subtrees 81.4 -> 46.6 us, while equations without real
+repeats are neutral. It only shares a subtree where recomputing costs more
+than the two block copies sharing costs, and `OP_SAVE`/`OP_LOADC` carry the
+slot's *type*, which is what keeps it correct against the typed-stack
+invariants from entry (12).
+
+`test/expression` is **65 passed** (was 55). The grammar fuzzer returns
+identical known-divergence counts before and after the change (21 and 17 on
+seeds 1 and 2), which is the strongest evidence that nothing about the
+semantics moved.
+
+**The full suite is 1580 passed, 4 xfailed, and 1 failed** --
+`test_docking_values.py::test_screening_ranks_a_library_and_never_reports_a_silent_nan`,
+which asserts a screening CSV header of `["pdb", "score"]` and now gets one
+ending `sigma3`. Not ours: `include/Docking.h` was modified at 19:01, mid-run,
+by another live session adding columns. The same suite was 1569/0-failed at
+18:05. Recorded rather than waved away, because "another agent did it" is the
+easiest excuse in a shared tree and it should carry a timestamp.
+
+Follow-on **T-20260831-11**: let a stack slot alias a column instead of
+memcpy'ing it -- the largest remaining lead, worth two of FCS's ~11 block
+passes and most of `0.3+2.0*x`. Build lock released; **T-20260831-09** and
+**-10** are unblocked.
+
+## 2026-08-31 (14) — two open questions closed, and a wrong curve nobody could see
+
+Both read-only tickets came back, and one of them found a bug worse than the
+one the fuzzer found this morning.
+
+**T-20260831-06, is ExprTk worth keeping: no, after four named gaps.**
+(`okf/validation/exprtk_fate.md`.) All 86 shipped equations take the vector
+path and none falls back, so ExprTk is a validation gate and a dead branch.
+It costs **45.3% of the shipped dylib's `__TEXT`** and takes `Expression.cpp`
+from ~2 s to ~23 s to compile, twice over counting `Table.cpp`'s
+`exprtk<float>`. Runtime is not an argument in either direction. The agent
+also ported `tokenize` + `compile_vector_program` to Python to observe the
+vector parser's verdict on input `compile()` rejects before it can be seen —
+1,753 comparable inputs, 1,753 agreements.
+
+**T-20260831-10, and this is the real find: the fallback returns a silently
+constant curve.** ExprTk's *multi-argument* functions collapse to element 0
+and broadcast it. `hypot(x,y)` gives `[1.118 1.118 1.118 1.118]` where numpy
+gives `[1.118 2.5 3.905 5.315]`; `atan2` likewise; `if(x>2,1,0)` returns all
+zeros. Unary functions are fine, so the split is arity, not vectorisation.
+Reproduced independently before filing. No exception, no warning — a
+plausible flat curve, which is exactly the outcome `Expression.h` designs
+against when it says an uncompilable equation is *refused* "so a caller can
+fall back rather than get a wrong curve". Unreachable from the shipped
+catalogue, which is why 1,569 tests never saw it, and reachable by anyone who
+types `hypot`, `atan2`, `if`, `clamp`, `root` or `inrange`.
+
+**T-20260831-07, `bff::Table`: retire it.**
+(`okf/validation/table_vs_datastore.md`.) Zero consumers outside its own
+test; ndxplorer's `query_mask` already calls tttrlib's `select_expression`.
+The layering rule agrees on both halves, so the tie-break never fires.
+Deletion is confined to imp.bff. Two defects found in passing, both the
+signature of code nobody runs: ten unreachable lines in `count()`, and a test
+class defined after `unittest.main()`.
+
+Both notes correct this repo's own documentation: the claim that ExprTk still
+handles "comparisons, booleans" is stale in the handover *and* in the comment
+at `Expression.cpp:1514` — the vector engine has done both since the typed
+boolean stack landed.
+
+T-20260831-05 (CSE) is still running and holds the build lock; it has taken
+`Expression.cpp` from 1,561 to 1,891 lines adding `OP_SAVE`/`OP_LOADC`.
+Tickets 09 and 10 are both blocked on it, since all three touch that file.
+
+## 2026-08-31 (13) — a fuzzer that reaches the evaluator, and the bug it found in ten minutes
+
+The handover's fuzz harness lived in `/tmp/bang.py` and threw random
+*characters* at the parser. 1,000,000 inputs, zero crashes — but re-run and
+measured, **193,951 of 200,000 inputs are refused and only 2.8% reach the
+evaluator at all.** It was testing `is_supported`, not the arithmetic behind
+it. Now `test/expression/fuzz_expression.py`, with the structural mode kept
+and a second one added: build a random expression *tree*, render it twice —
+once in the engine's syntax, once as the numpy expression that means the same
+thing — and demand the two agree. That reaches the evaluator on 92% of cases.
+
+It found a real bug on the first serious run. **`min`/`max` are not
+commutative under NaN**: `min(y, nan)` returns `y`, `min(nan, y)` returns
+`nan`. The kernel is a plain ternary `(a > b) ? b : a`, which is neither
+numpy's rule (propagate, either order) nor C's `fmin` (ignore, either order),
+while `Expression.h` states the contract as "semantics follow numpy".
+Confirmed on both the SIMD body and the scalar tail. Filed as
+**T-20260831-09**, not fixed: T-20260831-05 (CSE) owns `Expression.cpp` and
+the build lock, and editing under it is the exact collision the board's
+hazards section documents.
+
+Two things had to be built before the fuzzer could be trusted, and both are
+the interesting part:
+
+- **The oracle was wrong first.** Rendering constants as bare Python literals
+  makes `(-3.7) ** 2.1` a *complex number* — Python's semantics — where C's
+  `pow` and numpy both give NaN. That manufactured failures that looked like
+  engine bugs. Constants now render as `np.float64(...)`.
+- **Ill-conditioned cases get no verdict.** `sin((z**z) ** (z/2.192))` reaches
+  an argument near 8e7, where one ulp in becomes 1e-7 out, so the engine and
+  numpy differ in the seventh digit while both are right. Rather than loosen
+  the tolerance for trig — which would hide real bugs everywhere else — the
+  harness nudges every input by one ulp and re-evaluates the twin: if numpy
+  disagrees with *itself* by more than the tolerance the engine is held to,
+  the case is unanswerable and is counted, not reported.
+
+Result: **75,000 valid expressions across five seeds, zero unexplained
+failures**, with the two explainable categories counted separately
+(`known-divergence`, `ill-conditioned`) so a genuinely new failure is visible
+the moment it appears. Every case also cross-checks the byte-mask evaluator
+against the double one — the invariant from entry (12), and the one most
+exposed to a stack optimisation like CSE.
+
+Work handed out on the board: **T-20260831-05** (CSE for FCS-shaped
+equations, holds the build lock), **T-20260831-06** (whether ExprTk still
+earns its 1.6 MB), **T-20260831-07** (`bff::Table` vs `tttrlib::DataStore` —
+**came back "retire": the class has zero consumers outside its own test**, and
+the migration it was written for already went to DataStore), plus
+**T-20260831-08** advertised unowned for the tttrlib gating port, which needs
+coordination with the live tttrlib sessions rather than a second agent in the
+same build.
+
+## 2026-08-31 (12) — the gate answers in bytes, and three bugs in the typed stack
+
+`Expression::compute_mask()` was the one item the expression-engine handover
+marked **known-bad**: it allocated a full `std::vector<double>`, ran the
+ordinary evaluator into it and narrowed afterwards -- strictly more work than
+the plain evaluation it existed to beat, so every mask measurement taken
+before today measured a stub.
+
+It is now what the handover predicted it would be. The block loop already
+carried a typed boolean stack, so `evaluate_vector_program` and
+`evaluate_mask_program` collapsed into one `evaluate_program(..., double* out,
+unsigned char* out_mask)` differing only in the block's closing store.
+Measured at **1.3-2.2x the double path** and 1.3-9.1x pandas
+(`benchmark/expression_mask.py`), with the margin over doubles *growing* with
+row count -- which is what a saving in output bytes ought to do.
+
+Making that path live exposed **three bugs of one shape**: the typed stack's
+slot type was never reconciled at its boundaries. `is_bool` survived a push
+that reused the slot, so `a>0 and b<1 or c>2` loaded `c` into a slot still
+claiming to hold `b<1`; `and`/`or`/`not` read the boolean stack even when an
+operand was a column of doubles; and a comparison used as a number read the
+double stack, so **`(x>2)*3` computed `x*3`** -- wrong in shipped behaviour,
+not merely latent. Fixed with a `booleanise()`/`numerify()` pair at every
+boundary, and truthiness pinned to numpy's rule (nonzero is true, so a
+negative and a NaN are both true; the stub's `> 0.5` threshold had both
+wrong).
+
+`test/expression/test_expression_mask.py`, 21 tests, includes a cross-check
+that the mask and double evaluators can never again disagree. Suite: **1569
+passed, 4 xfailed**. Load average was 12-18 throughout from concurrent builds
+and test runs, so the timings are a floor, not a measurement.
+
+## 2026-08-31 (11) — the labelizer port re-checked against the reference
+
+Owner: *"check again the status against the labelizer."* After a week of
+renames around it -- `DyeLibrary` -> `ProbeLibrary`, `dye_library.cif` ->
+`probe_library.cif`, `find_dye` -> `find_probe`, and the whole `cgdye` ->
+`cgprobe` move -- the question is whether the port still reproduces what it
+claimed on 2026-08-24.
+
+**It does, number for number.** `benchmark/labelizer_ab.py` on 1DDB-39 prints
+what `okf/validation/labelizer_ab.md` recorded: `cr` 195/195 exact, `ss`
+195/195 exact, `se` 146/195 bin-exact with bias +0.015 A, r = 0.9763, 92.3 %
+within a bin, and `cs` off by the same constant 0.72310 that the shipped
+example's own feedback loop produces. `test/label/` is 316 passed. The port's
+four translation units include only `AV*.h`, `SolventAccessibleSurface.h`,
+`StatesDistance.h`, `Pto.h` and `PtoProfile.h`, which is why the restructure
+went past it without touching it. The reference itself has not moved either:
+its scoring modules are unchanged since 2025-09-20, and the commits since are
+nginx and docker-compose.
+
+**Two things had drifted, both in the trim.** The docs still named
+`dye_library.cif` in three places that describe the present tense
+(`okf/labelizer-correspondence.md`, `prd-120.md` twice); fixed. And both
+labelizer examples wrote their containers into the **current directory**, so
+running them from the checkout left `1DDB-39.mmfdb.pto`, `dyes.mmfdb.pto`,
+`MalE_apo_holo.mmfdb.pto` and two recovered PDBs sitting in the repo root,
+where a derived file is indistinguishable from an input. They write into a
+`tempfile.mkdtemp()` now, like `plot_fret_restrained_md.py` already did, and
+the five leftovers are gone.
+
+That is the same defect this port keeps meeting from a new angle -- a derived
+artifact somewhere nothing checks it -- and the root of the tree still holds
+about thirty more of them from other examples (`mGBP2_*.mrc/.txt`,
+`A48_C1R_dry.prmtop`, `hgbp1_rotamer.fps.json`). Those belong to their authors,
+but the cure is the same three lines.
+
+Left alone deliberately: `data/dyes.mmfdb.pto` keeps its name though the CIF it
+derives from was renamed, and `../labelizer-backend` has a staged deletion of
+`terms.dic` that is not ours to resolve.
+
+## 2026-09-01 (6) — the hard sphere becomes configurable, and a silent 147 A walk
+
+Owner: *"make the hardsphere configurable... make it possible to scale such that
+uses hard sphere."* `DockingParameters::clash_radii_source` (`"imp"` default,
+`"olga"` available) and `clash_radii_scale` (default **1.0**, so nothing moves
+unless asked). Source picks the table, scale multiplies it; both reuse
+`VdwRadii.h` and the same spellings as `AV::set_radii_source`, so there is one
+mechanism, not two. On `build_docking_assembly`, `score_structures`,
+`dock_minimize`, `fps_bootstrap`, the CLI and `FPSProject` (schema **1.7** —
+which also carries `coarse_clash`, because a project with the first two and not
+the third resumes into an exception). **1771 pass.**
+
+**No radii are written on the structure.** A substituted set rides *shadow
+spheres* — new `XYZR` particles at the atoms' coordinates, members of the same
+rigid bodies, not hierarchy leaves — so the atoms keep what `read_pdb` gave them
+and an `AV` under `"imp"` still sees its own. FPS's D12 (mutating shared
+molecules and never reverting) is not reproduced. Coarse beads plus a substituted
+table is **refused**: a 2.5 A bead stands for a residue, a table keyed by atom
+name has no entry for one, and a scale on it is `bead_radius` spelled twice.
+
+**A silent catastrophic defect, found on the way, and it is IMP-level not
+ours.** Adding rigid-body members after the model has computed dependencies once
+leaves the body's position constraint reporting a **stale output list**; a
+scoring function built afterwards then drops it from
+`get_required_score_states()` entirely. Measured: 3 required states -> 1,
+HIV-RT body-1 gradient exactly `(0,0,0)`, and `dock_minimize` walked the DNA
+**147 A to the origin while reporting a better score** (31.69), because the
+frozen proxies rode along. `RigidBody::add_member` calls `Model::clear_caches()`,
+which does not cover it; `set_has_dependencies(false)` on the score states does.
+Reproduced in 25 lines of plain IMP with no `IMP.bff` involved.
+
+**One global scale is not defensible, measured rather than argued.** Bisected
+against the HIV-RT interface, **0.8206** reproduces Olga's pair count, **0.8386**
+its overlap, **0.8476** its energy — three answers, and at the first the energy
+is off by 2x. IMP's ratio to Bondi is per element (C 0.8083, N 0.838, P 0.841,
+O 0.889, S 0.900) and IMP's carbon alone spans 1.70-2.275 A where Bondi's is a
+single 1.70. A scale matches one statistic of the contact distribution, never
+the distribution. Selecting the source is the honest route; the scale is a
+convenience and is documented as one.
+
+**The bootstrap: resolved, not solved.** On HIV-RT `resolved`, clash goes from
+**74 % of the score to 5 %** and the spread stops being identically zero:
+
+| clash radii | parent | clash/score | RMSD spread |
+|---|---|---|---|
+| `imp` x1.00 (default) | 150.69 | 0.737 | **0.0000 +/- 0.0000** |
+| `olga` x1.00 | 35.88 | 0.054 | **0.0689 +/- 0.0155** |
+| `imp` x0.80 | 39.96 | 0.022 | 0.4040 +/- 0.0953 |
+| `ev_weight = 0` | 24.34 | 0.000 | 2.1297 +/- 1.4584 |
+
+0.069 A is still **thirty times** below the clash-free 2.13 A, and ~0.4 A only
+arrives once clash is under 2 % of the score — well past any radii set FPS would
+recognise. The radii artefact was real and is now controllable; **it was not the
+whole story.** Whatever else pins this pose is not the size of an atom, and that
+is the next thing to find rather than something to explain away.
+
+Not done: `refine_docking` and `screen_structures` take no clash-radii arguments
+(they take no `clash_tolerance` either) and run at the defaults.
+
+## 2026-09-01 (5) — the default goes back to IMP's radii, and a test that could not see it
+
+Owner, reversing entry (4): *"no use the IMP radii, charmm, as otherwise wont be
+consistent with IMP docking."* Right, and for the reason now written into the
+code in four places: the excluded-volume term is `clash_container`, which reads
+`IMP::core::XYZR` — the **particles'** radii. A volume on Olga's table and a
+clash term on IMP's are two halves of one score disagreeing about how big an
+atom is. Internal consistency beats matching Olga's numbers.
+
+Default `"olga"` -> **`"imp"`** (`AV_RADII_IMP = 0`), schema **1.5 -> 1.6**.
+Olga's table stays vendored and selectable — it is what reproduces Olga-era
+references. `"model"`, the previous spelling, is **refused rather than aliased**:
+two names for one quantity is the failure being avoided, and that spelling was
+one day old and had never left this repo. `"imp"` rather than `"charmm"` because
+the value means *the radius on the particle*, which is CHARMM-derived only after
+`read_pdb` — on a bead model `"charmm"` would be a lie.
+
+**1741 pass**, exactly the baseline. Every pin returned to its pre-Olga value
+except two AV mean positions, which land ~0.002 A away because the separate,
+still-uncommitted attachment-atom change also moved them; those were re-pinned to
+the measured values rather than forced.
+
+**A test that could not detect the default it was running under.**
+`test_fps_av_parity.py` writes FPS's Bondi radii onto the particles, so the whole
+A/B is premised on the volume reading *those*. Under the Olga default that
+substitution became **dead code and the test kept passing anyway** — because both
+tables are Bondi-derived and carbon is 1.70 in each. It agreed for the wrong
+reason. It now names its radii source explicitly and says why in the comment.
+That is the shape to watch for: a test whose premise is silently satisfied by
+something other than the code under test.
+
+**The overturned finding survives the revert as a checkable pair.** Entry (4)
+showed that "the authored clearance buries the structure" was a *radii* artefact,
+not a clearance one. Reverting the default would have quietly re-established the
+wrong conclusion, so the test now asserts **both** behaviours against their own
+sources — default 9 authored / 24 derived, Olga 33 / 33 — and its docstring says
+it is a statement about the two tables, not about which is default.
+
+**The price of the default is pinned, not hidden.** With IMP's radii, nine of the
+33 published <R_DA> have **no model value at all**, and the Zenodo agreement is
+worse: **+0.223 / 0.908 / 0.99602** over 24 pairs against Olga's **-0.023 /
+0.713 / 0.99536** over all 33. Against the FPS oracle, IMP **-0.315 / 1.204 /
+0.99259** over 24; Olga +0.020 / 1.624 / 0.97772 over 33, or -0.616 / 1.131 /
+0.99399 over the same 24. `fps_screening_ab.md` leads with the default, labels
+Olga's as the alternative, states the cost in its own paragraph and tells anyone
+reproducing Olga-era numbers to set `"radii_source": "olga"` — one sentence, so
+the default does not read as free.
+
+Consequence worth recording: this makes the HIV-RT bootstrap collapse a plain
+**calibration** question rather than an inconsistency. FPS's `ClashTolerance`
+constants were fitted against Bondi-scale radii; on IMP's larger ones they
+over-penalise. A number to recalibrate, not a mismatch to reconcile.
+
+## 2026-09-01 (4) — Olga's radii, vendored; and a finding of ours that was a radii artefact
+
+Owner: *"the clash radii are different in fps, must use consistent set. use what
+is in olga, include in bff and use that."* Done. `data/olga_vdw_radii.csv`
+(derived; `src/VdwRadii.cpp` is the definition and `olga_vdw_radii_csv()`
+regenerates it, the same contract as `data/fps_json_schema.json`),
+`include/VdwRadii.h`, `AV::set_radii_source("olga"|"model")` **defaulting to
+olga**, and a per-position `radii_source` field at schema **1.5**.
+**1741 pass.**
+
+**Three schemes were in play and they are not interchangeable**: FPS keys by
+*element* (Bondi, Angstrom); IMP uses *united-atom* radii carrying implicit
+hydrogens (carbon 1.85-2.275); Olga keys by **atom name** — 128 entries, `CA`,
+`CB`, `CD1` each listed — with a flat fallback. Not a numeric swap, a different
+lookup.
+
+**The unit was established, not assumed.** `Olga/src/AV/Position.cpp:118-124`
+scales the coordinate *and* the radius by the same `10.0f` on one line, because
+pteros stores nm and `calculateAV` works in Angstrom. So C 0.17 nm =
+**1.70 Angstrom** — Bondi's carbon, and FPS's, which is independent
+corroboration. Pinned. A 10x error here would have been silent.
+
+The fallback is **1.50 Angstrom flat, no element lookup** — within 0.01 of
+Olga's own oxygen, so not transparent, but below every heavy atom, so it only
+bites carbons. Misses on the shipped fixtures: T4L **none**; HIV-RT DNA 85 of
+1018 atoms, all old spellings (`C1*`, `O1P/O2P`, `O3*`-`O5*`). Reproduced, not
+corrected. Olga's JSON also overrides its own built-in P = 0.1 with 0.186, so
+**1.86 is Olga's phosphorus**.
+
+**Both A/Bs improve, and one widens.** Against the Zenodo table with the ACV on:
++0.22 / 0.91 / 0.9960 on 24 pairs becomes **-0.02 / 0.71 / 0.9954 on all 33** —
+every published <R_DA> now has a model value where nine did not. Against the FPS
+oracle the headline rmsd got *worse* (1.20 -> 1.62) **because the set grew**;
+over the same 24 pairs Olga's radii win on both (rmsd 1.20 -> 1.13, r 0.9926 ->
+0.9940). Both figures are asserted so neither can be quoted alone.
+
+**A finding of ours was overturned.** Entry (10) recorded "the authored clearance
+buries the structure" — 8 of 17 sites empty at `allowed_sphere_radius: 2`. That
+was a **radii** artefact, not a clearance one: with Olga's table the same file
+resolves all 33 pairs. The test's assertion is inverted and the old behaviour is
+still asserted under `radii_source="model"`, so the attribution stays checkable.
+Volumes grow accordingly on T4L — 132 CB +16 %, 55 CB +5 %, and **99 CB from 710
+to 29 586 voxels, x42**, which is the site the whole empty-volume thread of
+2026-08-31 was about.
+
+**The HIV-RT bootstrap collapse is not resolved, and the reason is structural.**
+Clash 110.98 of 150.69 -> 110.85 of 140.58; spread 0.000 +/- 0.000 either way.
+The radii source is the **volume's**; the clash term is `clash_container`, which
+reads `IMP::core::XYZR` — the *particles'* radii — so it never saw the change.
+That the collapse *is* a radii artefact is nonetheless measurable: statically
+over the protein-DNA interface at k = 8, united-atom radii give 268 overlapping
+pairs / 90.5 Angstrom overlap / energy 198.4 against Olga's 30 / 7.6 / 11.1 — a
+factor of **17.9**. Giving `clash_container` its own radii source is the
+remaining half and moves every docking number, so it is a protocol decision and
+was left for the owner.
+
+Concurrency note: another agent was editing this tree at the same time, dropped
+`include/Minimizer.h` with no `src/Minimizer.cpp` and broke the shared build,
+and its `test/minimizer` segfaulted two full-suite runs. Both had resolved by the
+verification run above.
+
+## 2026-09-01 (3) — G9: the contact volume was real, and it was the +2 A
+
+The last gap, and it **overturns entry (10)**. That entry concluded the +2 A
+offset against the Zenodo table "is in the reference, not the code". Wrong — it
+was the accessible-contact volume, silently inert.
+
+**Wired, not invented.** The definition was authoritative and in reach: Olga's
+`path2points()` (`../ucfret/thirdparty/olga/src/AV/fretAV.cpp:236`), the program
+the shipped files were authored for. `PathMap::apply_contact_weighting` marks a
+cloud voxel as *in contact* when the obstacle raster inflated by the **dye**
+radius — Olga's `occupancyVdWDye`, the same array the carve uses — lies within
+`thickness` of it, then scales those voxels to carry `trapped_fraction` of the
+cloud's total weight. Two departures documented: shares rather than a fixed
+ratio (identical for uniform base weights, i.e. Olga's own case; better defined
+for AV3 and chain weighting), and no wrap-around at the grid faces. Olga's
+whole-voxel **truncation** of the layer *is* reproduced, and the measurement
+below is why. `space_fixed=False` refuses it and warns: that path exists to
+reproduce pre-PRD-105 numbers byte-for-byte.
+
+**The defect behind the defect.** `AV::set_av_parameter` read
+`j.value("contact_volume_trapped_fraction", -1)` — an **`int`** default, so
+nlohmann deduced `int` and **every fps.json trapped fraction was truncated to 0
+or 1**. Invisible while the value was unused. The first round of measurements
+was taken with it still in place and said the ACV *lengthened* <R_DA>; that was
+the bug, not the feature. One character of type, and it inverted the sign of the
+answer.
+
+**Against the Zenodo table**, 3GUN, 24 pairs: ACV **off** +2.06 A / rmsd 2.54 /
+r 0.9901; ACV **on** **+0.22 A / 0.91 / 0.9960**. Under the authored clearance,
++1.70 -> **+0.06 A**. So the file **is** the parameter set the table was computed
+with, and the program was **Olga**, which has an ACV — not FPS, which has none.
+The owner's "FPS has no ACV" was right; the inference drawn from it was not —
+and the reason the two facts sit together is chronological: **the ACV did not
+exist yet when FPS was written** (owner, 2026-09-01). It is an Olga-era
+addition. The two references are therefore from two eras, and there is no single
+answer to match: the FPS oracle is pre-ACV and the comparison against it drops
+`contact_volume_*` as a key FPS never had, while the Zenodo table asks for an
+ACV and honouring the ask is what closes it. A file gets an ACV if and only if it
+asks for one.
+
+The discretisation is decided empirically too: a true 3 A sphere gives
++0.49 / 1.04 where Olga's truncated shell gives +0.22 / 0.91. The truncation is
+part of what produced the reference.
+
+**The FPS oracle A/B is unchanged at -0.31 A / 1.20 A / r 0.9926**, because the
+comparison now drops `contact_volume_*` for the same reason it drops
+`allowed_sphere_radius`: FPS has no such key. Two references, two conventions,
+and the port now matches each on its own terms.
+
+On the shipped T4L file the ACV moves the mean 2.3 A on average and **closer to
+the nearest atom at 16 of 17 sites**; mean <R_DA> 46.91 -> **43.88 A** (all 33
+pairs shorter), the model-vs-experiment bias +3.93 -> **+0.84 A**, and the
+network score 22.5277 -> **11.3268**. Five pinned numbers moved and were re-pinned
+with the reason inline. **1698 pass**, one xfail flipped to a passing test.
+
+Unverified and named: Olga was **read, not run** — there is no Olga oracle here
+(it is a Qt GUI), so the parity rests on the source plus the agreement with the
+table. That the table was produced **by Olga, with an ACV**, is no longer an
+inference from the 24-pair fit — the owner stated it (2026-09-01), so the fit is
+corroboration of a known provenance rather than the evidence for it. And AV3
+classifies contact against
+the first radius's raster where Olga uses each radius's own; no in-tree AV3 file
+requests an ACV, so it is unmeasured.
+
+## 2026-09-01 (2) — G1: a project, and a selection that was being silently mis-named
+
+`FPSProject.h`/`.cpp` land: structure paths in body order, the labelling source
+(fps.json **or** the legacy pair), the selected distances, the five per-mode
+parameter blocks at FPS's shipped values, the conversion and AV globals, and the
+poses — so `capture_poses`/`apply_poses` become store-and-continue. Both doors
+per D3: the legacy `OptionsManager.cs::Export` **text twin** is read, the `.bin`
+stays a non-goal, and the extended fps.json is read *and* written. Schema
+**1.3 -> 1.4**, additive, with a new `FPS_OBJECT` field type for the nested
+blocks. `imp_bff_fps project init/show/convert`, and `-P/--project` on every run
+mode with `--save-project`/`--resume`. **1681 pass.**
+
+**A silent mis-naming, found and fixed.** FPS's `SelectedDistances` is a
+`Boolean[]` parallel to the **line order** of the legacy distances file, but
+`read_old_distances_txt` returns a JSON object whose keys come out **sorted** —
+so naming a positional selection through it pairs every flag with the wrong
+distance. On HIV-RT the two `p66_K287C` entries at positions 8-9 became
+`p51_K173C_p_19bp` and `p51_E194C_p_1bp`. That is a wrong answer with no
+symptom: the run scores a different distance set than the file asked for.
+`read_old_distances_order` now preserves file order, and without the distances
+file the flags survive as unnamed `selected_flags` rather than being guessed at.
+
+Three `Export` traps handled and commented, all of which produce a wrong read
+rather than an error: array elements are space-separated and **unquoted on the
+following line**, so a path containing a space is unrecoverable (FPS loses it
+too); a **zero-length** array still writes that line, blank, so it must be
+consumed unconditionally; and `Double.ToString()` follows the writer's culture,
+so `0,0005` reads as **0** under `strtod` unless retried.
+
+Kept deliberately separate: FPS's integrator settings are *stored and not
+obeyed*, and `max_iterations` sits beside a distinct `iterations`, because
+200 000 Verlet steps is not 500 conjugate-gradient iterations and silently
+equating them would be the same category of error as the rest of this log.
+
+**Measured, and not a bug — the size of an approximation.** A dock freezes its
+volumes at the input pose and rides their means on the bodies; a **resume**
+re-samples them in the pose it resumes from. HIV-RT, `-c resolved --shuffle 0
+--seed 1 -n 30`: **41.8586** at the input pose, **30.6265** at the end,
+**39.0207** at that same end pose with the volumes recomputed. The gap between
+the last two is what the frozen-volume approximation is worth; `dock --help` now
+says so with the numbers.
+
+Also: every overridable CLI flag now defaults to `None`, because click cannot
+otherwise tell "typed the default" from "typed nothing" — and that distinction
+is exactly what decides whether a project's stored setting survives.
+
+## 2026-09-01 — G2 and G5: the bootstrap, the tables, and three FPS defects made into choices
+
+`fps_bootstrap` and `FPSExport.h`/`.cpp` land, with `bin/imp_bff_fps_export`
+(`errors` / `table` / `screen`). **1661 pass.**
+
+**The three FPS defects are implemented as *choices*, not guesses** — correct by
+default, FPS-compatible pinned beside it, difference measured.
+
+* **The perturbation.** `BFF_SPLIT_NORMAL` (two-piece, continuous, half-masses
+  `sigma±/(sigma+ + sigma-)`) is the default; `FPS_SIGN_SPLIT_NORMAL` reproduces
+  FPS. Over 400 000 draws at 3/10 A: mean **+2.7926** (FPS) against **+5.5852 A**
+  (split, *exactly twice*), P(X>0) 0.500 against 0.769, density ratio at the
+  target 0.30 against 1.00. **Worth knowing before choosing: fixing the
+  discontinuity doubles the outward drift.** Neither is unbiased — an asymmetric
+  density has its mean away from its mode. What the split normal buys is
+  quantiles that mean what the error bars claim.
+* **The zero-noise pins.** `perturb_deselected` defaults **true**, so every
+  scored distance gets noise; false reproduces FPS's downward bias. On HIV-RT
+  `resolved`, 20/0 against 18/2.
+* **The RMSD sign error.** `pose_rmsd(..., fps_sign_convention)`, pinned to
+  machine precision through the identity
+  `rmsd_correct^2 - rmsd_fps^2 = (4/N) sum (U r_i) . t`. On HIV-RT the effect is
+  ~1 % of the RMSD.
+* **`BestFitRotation`** is not reproduced: the superposition is computed against
+  the stated reference where it is used, so fitting a row onto itself gives the
+  identity rather than FPS's zero-matrix 180 degrees.
+
+**A silent failure found in our own code, not FPS's.** IMP's `create_rigid_body`
+starts a body in its **principal-axis frame**, so `capture_poses` is *not* the
+transform a PyMOL script needs — it has to be composed with the inverse of the
+input frame. HIV-RT body 0 is a 55 degree rotation at the input pose. The
+failure mode is why it matters: every structure rotates by the same amount, so
+the overlay still *looks* right. `FPSMolecule::frame` and a test now pin it.
+
+**And a physical one worth carrying into G7's defaults.** With FPS's
+`ClashTolerance = 0.5` (k = 8) and IMP's united-atom radii, HIV-RT's
+protein-DNA interface scores **102.9 of a parent score of 134.8 as clash**, and
+the bootstrap spread collapses to **0.000 +/- 0.000 A** — the restraints cannot
+move anything. At `ev_weight = 0` the same run gives **1.935 +/- 1.133 A**.
+`parent_e_clash` is reported, the program warns, and it is pinned. This is the
+radii question from 2026-08-31 (10) arriving with consequences: FPS's clash
+constants assume FPS's Bondi radii.
+
+Also carried: `chi2` raw with `chi2_r` beside it (FPS's `dof = max(N-6(M-1),1)`);
+`chi2_bond` a subset; Filter `Number` 1-based with `--fps-filter-number` to
+restore FPS's 0-based one; `_tmp.pdb` absolute and removed; `camera=0`; all *N*
+transforms written; **one** R table rather than FPS's two, because this port's
+model distance is simulated where FPS's second Dock-mode file is a polynomial
+estimate wearing the name its Filter mode gives a simulated one. `results.json`
+replaces the unreadable `.bin`.
+
+Smaller finds: `-0.000` reached exported files and made identical exports compare
+unequal; the unity build means anonymous namespaces do not isolate helpers, so
+`open_for_write`/`stem_of`/`basename_of` collided with `StructureIO.cpp`.
+
+**Not A/B'd against FPS.** No FPS reference output exists for error estimation or
+for any export file, so all of this is pinned against the reference pages and
+against closed forms — never against FPS output. PRD-121's open item 1 already
+records that there is no FPS docked pose anywhere.
+
+Left open and named: `estimate_errors` in `bin/imp_bff` measures optimiser
+reproducibility, not measurement uncertainty; the two now point at each other but
+it keeps its name. `fps_label_positions` reads a `dye` key no current fps.json
+writes, so the pseudoatom colouring path is exercised but never coloured.
+
+## 2026-08-31 (12) — fixed positions become scorable; bonds and the protocol land
+
+**A position with no volume can now be scored.** `ProbeNetworkRestraint` sent
+every position through `search_labeling_site`, and an `XYZ` position has no
+chain/residue/atom, so the selection matched the whole structure and threw
+*ambiguous* — a network containing one was **unbuildable**. Such a position is
+now carried as a **point**. Two spellings: `XYZ`, a fixed coordinate, optionally
+transported onto the structure being scored by a Kabsch fit of its
+`reference_atoms` (which is where G3's `fit_reference_atoms` finally reaches
+*scoring* rather than only reporting); and `ATOM`, a plain atom of the structure
+— FPS's fifth LP type (`LabelingPositions.cs:203`), schema **1.3**.
+
+FPS's rule (`FilterEngine.cs:305-307`) — a distance with a point end is scored
+as **R_mp** whatever the file's `distance_type` — is applied to the
+*measurement*, once, so the restraint, the transfer function, the CSV column and
+the table agree by construction and the column reports what was scored rather
+than what was asked for. Pinned: a fixed point written in a rotated frame comes
+back to its atom to **2.2e-14 A**, and three files differing only in
+`distance_type` give **identical** model distances while the same two positions
+as *volumes* differ by more than 1 A — so the equality is the rule, not the
+geometry.
+
+**G4 (bonds).** Both ends `ATOM` makes a bond (`SpringEngine.cs:111-116`; an
+`XYZ` end does not qualify, FPS requires `AtomID > 0`); both anchors drop to
+0.4 A and leave clash detection; `e_bond` is reported as a **subset** of the
+score, never added. FPS's D12 — the radius write leaking into shared `Molecule`
+objects forever — is **not** reproduced, and a test proves a second assembly
+sees the reader's radius. Measured: excluded volume exactly **0.0** with the
+anchors dropped against **0.19531** without.
+
+**G7 (protocol).** `optimize_selected`, `max_force`, `clash_tolerance` on
+`DockingParameters`, with FPS's Huber form `chi2_score_capped`. Clashes are
+**never** gated, as in FPS. The linear tail is verified as linear: slope
+**400.0** to 1e-9 past `drmax`, at three different errors. `k_clash =
+2/ClashTolerance^2` confirmed across four values (CT 0.5 is exactly 4x CT 1.0).
+The scoring door keeps IMP's historical `k = 1` — its numbers are pinned — so
+FPS's constant is opt-in through `DockingParameters`.
+
+**A silent wrong answer, found and fixed here.**
+`score_structures(...).pairs[0]` raised `IndexError` while
+`r = score_structures(...); r.pairs[0]` worked: SWIG returns a bare
+`std::vector` **member of a temporary** as a pointer into freed memory, and a
+freed vector reports size **0** — so the expression read as *"this structure has
+no distances"*. A wrong answer, not an error, and it looked intermittent because
+binding to a name happened to work. Typing the member as `PairDistances` (the
+`IMP_VALUES` vector, which IMP wraps properly) fixes it; the three assignment
+sites construct from the iterators. Regression test in `test_docking_values.py`.
+**1637 pass.**
+
+Two more found and not fixed, both recorded rather than papered over:
+`ProbeNetworkRestraint::get_model_distance` called **before the first
+`evaluate()`** on a registry-backed network **segfaults** in
+`AVOccupancyMap::atom_reach` — the shared registry's coordinate snapshot is only
+taken in `begin_evaluation`, so this is PRD-105 registry-lifecycle work. And
+`read_old_lps_txt` was silently dropping FPS's `ATOM` LP lines as an unknown
+dialect, so a converted legacy file had **fewer restraints than the original**
+— that one *is* fixed.
+
+Still missing from G7: FPS's clash-free random shuffle (±5 A per axis, uniform
+orientation, accumulating until no clash, molecule 0 fixed). `shuffle_bodies` is
+still a single displacement with no clash test.
+
+## 2026-08-31 (11) — G3 lands, and two FPS reference pages
+
+**G3 (screening diagnostics), by subagent, verified here.** `ScreenedStructure`
+grew `chi2_r`, `sigma1/2/3`, `invalid_r`, `ref_rmsd` and the per-structure pair
+table; the sigma counting follows `FilterEngine.CalculateChi2` exactly
+(`error_pos` when the model is long, `error_neg` when short, counts nesting).
+New value types `ReferenceAtom`/`ReferenceFit` and the kernels
+`fps_reference_atoms`, `fit_reference_atoms`, `fit_reference_positions`,
+`reference_rmsd` — the Kabsch fit **reuses**
+`IMP::algebra::get_transformation_aligning_first_to_second` rather than becoming
+a second copy of the same SVD-with-determinant-flip. `reference_atoms` is in the
+schema at **1.2**, and `imp_bff_fps screen` reports the columns and gained
+`--pairs-csv`. **1595 pass** (was 1547).
+
+Measured on T4L `chi2_C2_33p`: `3GUN_faspr_port.pdb` 22.3165 / chi2_r 1.3525 /
+sigma 12-3-0; `3GUN.pdb` 22.5277 / 1.3653 / 10-3-0. `2*score == chi2_r*33` on
+both, because `score_model` is half the chi-square — now documented on the field
+rather than left to be rediscovered.
+
+**The gap that keeps it from being finished.** `ProbeNetworkRestraint` cannot
+build a network containing an `XYZ` position at all:
+`create_av_decorated_particles` calls `search_labeling_site` for every used
+position, and an `XYZ` position has no chain/residue/atom, so the selection
+matches everything and throws *"ambiguous labelling site"*. The transported
+coordinate is therefore computed and reported but **has nowhere to be scored** —
+a distance touching a fixed position still cannot enter chi-square. FPS's rule is
+that either end of type `None` makes the model distance R_mp; wiring that belongs
+with the scoring core. Also open: `read_old_lps_txt` drops the `ATOM` lines
+trailing an LP line (FPS's `ReadRefAtoms`), so reference frames arrive only
+through `.json` — and no in-tree fixture contains a reference atom or an `XYZ`
+position at all.
+
+Pre-existing and confirmed, not introduced: `data/fps_json_schema.json` **at
+HEAD is at `x-schema-version` 1.0**, stale against the authored tables by the
+whole 1.1 step. The drift test would fail at HEAD. The working tree already
+carried the fix.
+
+**Two FPS reference pages**, from read-only research agents, in
+`okf/references/`. They cite `File.cs:line` throughout and each carries a defect
+index; reading them is cheaper than rediscovering what they found.
+
+* [`fps-export-formats.md`](references/fps-export-formats.md) — the six outputs,
+  byte by byte. **`SimulationResult.RMSD` has a sign error**: it accumulates
+  `|U*r - t|^2` where the displacement is `U*r + t`, so every RMSD FPS has ever
+  printed is wrong unless the two translations coincide. And `BestFitRotation`
+  is **never computed by any `Save*` method** — it is a side effect of the GUI's
+  RMSD refresh mutating the live array, so an exported "Overlay" is a chain of
+  *pairwise* fits, not a common superposition, and a zero matrix (spurious 180
+  degree rotation) if best-fit was off.
+* [`fps-sampling-and-protocol.md`](references/fps-sampling-and-protocol.md) —
+  error estimation is a parametric bootstrap on a **sign-split** normal (each
+  half mass 1/2 regardless of width, so the density jumps by `err-/err+` at the
+  target and the perturbation carries a mean shift of
+  `(err+ - err-)/sqrt(2*pi)` — +2.79 A for 10/3 errors). `rkT` is `1/kT`, so
+  larger is **colder**; the default 10 accepts a 1-chi-square uphill move with
+  probability 4.5e-5. `Molecule.Selected` means **not** randomised, the opposite
+  of what the UI comment says.
+
+**And the answer to a question this PRD had open.** FPS computes docking AVs on
+**isolated subunits** and `Refinement.RedoAV` rebuilds them **inside the docked
+complex** (`new Molecule(sr)` merges every subunit in its docked pose, the AV is
+computed there, and the mean position is mapped back to the home frame). So a
+partner subunit does occlude a dye, and refinement is the step that accounts for
+it — a first-order self-consistent loop, not iterated. That is the design to
+follow, and it explains `p66_K287C` in the HIV-RT example.
+
+Also landed: `bin/imp_bff_fps_av` and `bin/imp_bff_fps_distance` (G6), FPS's AV
+dialog and distance calculator, with FPS's own dye presets and grid rule. The
+distance tool reads FPS's duplicate-expanded `.xyz` and reports the unique voxel
+count separately, so 5473 lines are never mistaken for 5473 voxels.
+
+## 2026-08-31 (10) — the +2 A was the reference, not the code
+
+Owner: *"FPS has no ACV. find issue with 2Ang."* Both halves right, and the
+second one took the oracle to settle.
+
+**Ask FPS.** `prototypes/fps_oracle/` was built to reproduce a shipped cloud; it
+also *generates* one, so it can be pointed at the same T4L structure with the
+same file and asked what FPS computes. Over the 33 pairs:
+
+| | bias | rmsd | r |
+|---|---|---|---|
+| **this module vs FPS's own routine** | **-0.31 A** | **1.20 A** | **0.9926** |
+| this module vs the published table | +2.05 A | 2.54 A | 0.9901 |
+| **FPS's own routine vs the published table** | **+2.37 A** | 2.73 A | 0.9735 |
+
+The two implementations agree. **Neither reproduces the table, and FPS misses
+it by more than this module does.** So there was never a bias in `IMP.bff` to
+explain, and the ACV story in entry (9) was wrong twice over: FPS has no ACV,
+and the premise it was explaining did not exist.
+
+**Not a mislabelled distance type** either -- on FPS's own clouds <R_DA> is
++2.03, <R_DA>_E +3.11, R_mp -1.40 against the table, so no statistic fits. **Not
+AV1-vs-AV3**: recomputing with FPS's own AV3 radii from `Fps/data/linker.txt`
+(donor 5/4.5/1.5, acceptor 11/3/1.5) makes it *worse*, +6.36 A.
+
+What is left is the file. `FRET_screening.fps.json` is **not the parameter set
+the Zenodo table was computed with**, and says so on its face: seven of its
+seventeen sites carry a linker width of **2.5 or 3.5 A** where FPS's own
+`linker.txt` gives **4.5 A** for both dyes, and it carries
+`allowed_sphere_radius`, `contact_volume_thickness` and
+`contact_volume_trapped_fraction`, three keys FPS has no concept of. It is an
+`IMP.bff`/Olga file sitting beside an FPS table; pairing them measures the
+pairing.
+
+**The end-to-end pin moved accordingly.** It is now the oracle
+(`test/references/fps_screening_oracle_pins.json` -- FPS, reproducible,
+parameter-matched by construction), and the published table stays in the suite
+only as the record of a mismatch that would otherwise be rediscovered by the
+next person. [`okf/validation/fps_screening_ab.md`](validation/fps_screening_ab.md)
+rewritten; G9 keeps the defect and loses the causal claim.
+
+The lesson is the one this log keeps relearning in a new costume: **an
+agreement measured against the wrong reference is not a measurement.** Three
+times now on this port -- a `//4`, a duplicate-expanded cloud, and a file that
+was never the table's.
+
+## 2026-08-31 (9) — PRD-121 phase 0 closed: two A/B pins, and the contact volume that does nothing
+
+**The single-volume pin.** `test/input/fps/` gets the FPS frame and
+`p_1bp_D.xyz` -- FPS's own cloud, verbatim -- with `p66`'s numbers in
+`test/references/fps_av_pins.json` rather than its 3 MB cloud, because
+`prototypes/fps_oracle/` regenerates that one exactly. 1.3 MB, not 53.
+`test_fps_av_parity.py` pins it: `p_1bp` at **0.985** of FPS's volume and
+**0.121 A** of its mean position, **99.04 %** of this module's voxels within
+one voxel of an FPS voxel and **100 %** within two, furthest 1.130 A -- and the
+reverse, 99.0 % of FPS's within one of ours. The two are one volume on lattices
+that do not line up.
+
+Two traps the test now states rather than leaving for the next reader: FPS's
+`.xyz` line count is the **sum of densities**, not the voxel count (5473 lines
+over 3187 voxels), and its `Dmp` is the **density-weighted** mean. Getting
+either wrong makes agreement look like disagreement -- it did, twice, earlier
+in this log. A hand-rolled neighbour search in the first cut of the test made
+the same class of error a third time: it searched a fixed +-1 cell
+neighbourhood at a two-cell tolerance and under-reported coverage as 99.7 %
+when it is 100 %.
+
+**The end-to-end pin, and what it found.** Zenodo 3376527 holds what the real
+FPS produced for 421 T4L structures. One of them is **3GUN**, which this module
+already ships -- so the whole path is measurable against FPS's own answer with
+**no new structure data at all**. `test_fps_screening_ab.py`;
+[`okf/validation/fps_screening_ab.md`](validation/fps_screening_ab.md).
+
+* **The authored clearance buries the structure.** `allowed_sphere_radius: 2`
+  leaves **8 of 17** sites empty and only 9 of 33 pairs with a model value;
+  deriving it leaves **one** and gives 24. That field is an `IMP.bff` key
+  somebody chose, not an FPS parameter -- FPS seeds from
+  `LinkerInitialSphere x linker_width` and has no such concept, and its seed is
+  *unconditional* where this module's is carved out of an already-inflated
+  obstacle map. Any fps.json with a small explicit clearance is asking for
+  something other than it appears to.
+* **A systematic +2.05 A.** Not scatter: r = **0.9901** over 24 pairs, rmsd
+  2.54 A, and this module's <R_DA> consistently *longer* than FPS's.
+* **The contact volume is inert.** `contact_volume_thickness: 3`,
+  `trapped_fraction: 0.55`: turning it off changes **nothing** -- on T4L
+  132/CB the volume, the per-voxel weights and the mean position are
+  bit-identical. Accepted and ignored, and pinned as a **strict xfail**. It was
+  first written up here as the likely cause of the +2 A; entry (10) shows that
+  was wrong.
+
+Phase 0 is closed. 1546 pass, 4 xfail.
+
+## 2026-08-31 (8) — `imp_bff_fps`, a docking example, and a segfault the example found
+
+**A program for the FPS run modes.** `bin/imp_bff_fps` with `score`, `dock`,
+`refine`, `screen` and `convert`. Every mode takes either an fps.json or the
+**legacy C# FPS pair** directly (`--positions` / `--distances`), so a decade of
+files runs without a conversion step; `convert` exists only for when the
+fps.json should be kept. Each mode's `--help` carries worked examples on
+shipped data rather than placeholders. `README.md` gains the section that
+`setup_module.py` requires of any new `bin/` program.
+
+**Example data that is actually a docking problem.** T4L is one rigid body and
+mGBP2 has a single distance, so neither demonstrates docking. Shipped
+`examples/structure/HIV_RT/` instead: HIV-1 reverse transcriptase (p66/p51,
+1R0A) with its DNA primer/template -- FPS's own docking test case, two bodies,
+11 positions, 20 distances -- with the original `LabelingPositions.txt` and
+`Distances.txt` beside the converted `hiv_rt.fps.json`, so the legacy readers
+have a shipped example too. `examples/structure/fret_docking.py` walks
+convert -> score -> dock -> refine -> screen on it. Docking from a random start
+reaches chi2 38.4, 31.0 and 27.5 on three seeds against 59.0 for the deposited
+complex, which is also the honest lesson the example makes: one run is one
+local minimum.
+
+Two things that file is honest about rather than hiding. Its `all` score set
+carries all 20 distances and scores **inf**, because the two involving
+`p66_K287C` have no model value -- that site is buried at the protein-DNA
+interface and its volume is **empty**; `resolved` is the other 18. And the
+reason it is buried here at all: **FPS builds each volume on its own subunit in
+isolation, `IMP.bff` builds them in the assembled complex.** A modelling
+difference worth a PRD-121 open item, because it decides whether a docking
+score is separable from the pose being searched.
+
+**Running the example segfaulted, and the cause was worth the trip.**
+`search_labeling_site` read `p_residue[0]` and *then* asked whether
+`p_residue` held exactly one element -- and `IMP_USAGE_CHECK` compiles out of a
+release build, so a structure that does not contain the chain a position names
+indexed element zero of an empty vector and the process died. That is the
+**ordinary** case for a screen: candidates differ, and some do not carry every
+site. `screen_structures` already caught `IMP::Exception` to record such a
+structure with a NaN; there was simply no exception to catch. Now there is one,
+naming the site. Two regression tests in `test_docking_values.py`.
+
+Found in the same function and removed: a bare
+`std::clog << p_chain << p_residue << p_atom` that printed
+`["Chain B", ...]["GLU"]["Atom CB of residue 194"]` to stderr for **every
+labelling site of every evaluation** -- the noise that has been burying the
+output of every run in this log. It is an `IMP_LOG_VERBOSE` now.
+
+1535 pass.
+
+## 2026-08-31 (7) — one mechanism for the attachment atom, and the invariant that caught two
+
+Owner: *"do what FPS does with the attachment atom."* Two things came out of
+making that literally true.
+
+**The subtraction is a true exclusion, measured.** Running the same volume two
+ways -- the attachment atom present with `drop_source_obstruction()` doing the
+work, and the attachment atom given radius zero so it is genuinely not an
+obstacle -- gives **identical point sets** on both FPS reference sites, 3331
+and 50 920 voxels, zero difference either way. So the count subtraction is not
+an approximation of FPS's `if (i == atom_i) continue;`, it is that.
+
+**Trying to do it in two places broke an invariant, and the invariant said so.**
+The first attempt at extending the drop beyond the default path made the anchor
+transparent in the *obstacle radii override* as well. Both mechanisms are
+correct alone; together they disagree, because the shared raster cannot honour
+a per-volume override (it is one obstacle set for every volume in its class)
+while a private raster is built from exactly that override. `shared` and
+`private` then computed different volumes for the same position -- 141.02
+against 143.09 on T4L frame 0, 14 of 17 AVs differing --  and
+`TestTier1Exactness::test_shared_equals_private` failed. It failed only on a
+**moving** structure; on a static one the two agreed, which is what a test over
+five trajectory frames is for. Collapsed back to one mechanism: the anchor is a
+normal particle in the override, and `drop_source_obstruction()` runs on every
+lattice path, shared or private. shared == private on all five frames again.
+
+**`space_fixed=False` is deliberately left obstructing itself.** It is the
+pre-PRD-105 opt-out and `references/prd105_legacy_pins.json` exists to prove it
+still reproduces the old numbers; giving it new physics would remove the only
+thing it is for. The consequence is stated where the two paths part: a volume
+computed with `space_fixed=False` is smaller than the same volume on the
+default path. `p66` is 22 182 voxels there against 50 920 on the default path.
+
+Parity against FPS's own cloud, final for this pass -- FPS's atoms and radii,
+`p_1bp`: **0.99** of its voxel count at **0.121 A**. `p66`: **0.92** on heavy
+atoms, and still empty on explicit hydrogens, where FPS's three-voxel link hop
+tunnels through channels narrower than a voxel and this module's search will
+not. 1520 pass.
+
+Noted in passing: `test/expression/test_expression.py`'s four "compiled once"
+tests flaked once in a full run and passed alone and on a re-run. They count
+compilations across a shared plan cache, so they are sensitive to state left by
+another run. Unrelated to this work, but they are a false-alarm generator.
+
+## 2026-08-31 (6) — the attachment atom does not obstruct its own linker
+
+Owner, on reading the parity table: *"you must drop the attachment atom,
+otherwise it won't work."* Correct, and it was the last structural difference
+between this module's AV and FPS's. FPS drops it before it rasterises anything
+(`av_routines.cpp:50`, `if (i == atom_i) continue;`); `IMP.bff` kept it, so
+every volume grew out of a source sitting inside its own inflated sphere, and
+the `allowed_sphere_radius` had been standing in for the missing rule.
+
+**How, without losing PRD-105.** The obvious implementation -- give the source
+radius zero in the obstacle override -- costs the shared occupancy raster,
+because that raster is one obstacle set for every volume in its (spacing,
+extra-radius) class and each volume drops a *different* atom. But the raster
+stores a per-voxel **atom count**, so one atom's contribution subtracts
+exactly: `drop_source_obstruction()` decrements the window inside
+`r_source + extra`, a voxel only that atom covered falls to zero and opens, a
+voxel any other atom covers stays blocked. Sharing is untouched. Applied to
+the linker pass and to every dye radius of the carve, with the source's radius
+read in `prepare()` because the compute phase may not touch the Model.
+
+**Measured against FPS's own cloud** (`p_1bp`, its parameters, its radii):
+0.88 -> **0.99** of FPS's voxel count, mean position 0.179 -> **0.121 A**.
+`p66`, which was **empty**, computes at **0.92** on heavy atoms. On explicit
+hydrogens `p66` is still empty: FPS's link search hops `linknodes = 3` voxels
+and tunnels through channels narrower than a voxel, which is exactly the leak
+PRD-105 deliberately closed. That difference is real, is FPS's, and is not
+being reproduced.
+
+**A bug in the first cut, worth recording.** The subtraction fired even when
+the attachment atom was not in the obstacle set at all -- the array door builds
+its obstacles from a caller's list and the source is not among them -- so it
+opened voxels no rule had opened. `test_av3_matches_labellib_rule` caught it:
+two voxels out of 10 683, on the level-set property rather than the
+mean-of-indicators one. The guard is `source_radius <= 0` means nothing to
+subtract.
+
+**And a second copy of the phantom weight**, found while editing next to it:
+`st.last_mean` on the lattice fast path had its own `sum = 2.0` -- the source
+in the numerator once, in the denominator twice -- and *that* is the value
+`resample()` writes into the AV's coordinates. Yesterday's fix to
+`get_mean_position()` had left it. Two places, one quantity, exactly what
+AGENTS.md is about.
+
+**Blast radius, all repinned deliberately:** the T4L quadrature score
+22.5933 -> 22.5277 (`test_docking_values`, `test_ProbeNetworkRestraint`), the
+stencil-30/26 values 22.1322 -> 22.1203 and 22.7055 -> 22.6933, two AV mean
+pins, and the Olga A/B decay tolerance 1e-2 -> 1.5e-2 -- where the pair
+**selection and its order are unchanged** and only the RMSD the selection
+reaches moved, by 0.3 %. Two fixtures that deliberately built an *inaccessible*
+volume at T4L residue 99 stopped being empty (437 voxels) and were moved to
+linker width 4.5, where the site is inaccessible at every clearance from 1 to
+6 A. 1520 pass.
+
+## 2026-08-31 (5) — PRD-121 phase 0: two AV defects, and a pin that had recorded one
+
+Both found by measuring against the rebuilt FPS AV, and both produced a
+plausible-looking number for a volume that did not exist.
+
+**One clearance derivation, not two.** `max(1.5, 0.5*linker_width + 0.5*grid)`
+lived in `compute_av_from_structure()` alone, so the two doors onto the same
+volume disagreed about a parameter neither caller passes: the fps.json door
+derived it, the **decorator** door took a flat 1.5 and returned **nothing** at
+FPS's standard linker width of 4.5 A. It reached users --
+`imp_bff av-export -c A -r 132 -a CB --linker-width 4.5` wrote an `.xyz` whose
+first line was `0`, printed a mean position, and exited 0. The rule is now
+`AV::get_effective_allowed_sphere_radius()`, negative means *derive*, and
+`AVBuilder` delegates rather than keeping its own copy. `data/fps_json_schema.json`
+said the default was `1.5`, which was never the value an omitted key took --
+now the sentinel, because "no default" in that table means *required*.
+
+**A phantom unit of weight.** `AV::get_mean_position()` started its weight sum
+at `1.0` while the source contributed `1.0` more, so the numerator held the
+source once and the denominator counted it twice. Every mean position was
+pulled toward the origin by `(1+W)/(2+W)` -- negligible on a big cloud,
+**0.175 A** on T4L residue 99 at 81 points, which is exactly where a
+constrained site needs it most -- and an **empty** volume returned precisely
+half the source coordinate. That is where the `source/2` signature came from.
+An empty volume now reports its anchor, `get_mean_position(False)` returns NaN
+when there is nothing to average, and a resample that finds no voxel **warns**,
+naming the clearance, because in every case seen so far that is the cause.
+
+**The pins had recorded it.** Four of the twelve `prd105_legacy_pins.json`
+cases are empty volumes (`n == 0`), and each pinned "mean" was half its source
+atom -- a fiction asserted as reference data. The pin file now carries an
+`empty` flag and the test asserts emptiness explicitly for those cases instead
+of comparing a centre. PRD-105's guarantee is untouched: the *maps* are still
+byte-identical, only the derived mean moved, which is what the fix is.
+`restraint_mp` (33) and `traj_mp` (165) regenerated for the same reason.
+
+**What is deliberately not fixed.** `IMP.bff` keeps the attachment atom in the
+obstacle set; FPS drops it (`av_routines.cpp:50`). So the derived clearance
+clears the *inflation* but not the source atom's **own** radius, and at a fine
+grid the source is still walled in: T4L 132/55/19/86 all come back empty at
+width 4.5 / grid 0.5, and all are non-empty under
+`r_source + width/2 + grid/2`. That rule would also grow volumes that already
+compute -- T4L 132 at width 0.5 goes 66 805 -> 85 456 points -- so it is a
+change to a physics default across the module, not a bug fix, and it is the
+owner's. `test/representation/test_av_source_clearance.py` pins today's answer
+so that changing it is deliberate; 1520 pass.
+
+Measured on the way, and worth carrying into the parity table: reading FPS's
+atoms and radii, the `p_1bp` volume is **0.99** of FPS's at 0.121 A once the
+attachment atom is made transparent as FPS does, against 0.88 with it opaque.
+
+## 2026-08-31 (4) — FPS surveyed, its AV rebuilt and run, and PRD-121 authored
+
+Read the C# FPS toolkit (`../chisurf/junk/fps`, `Fluorescence-Tools/fps` at
+`eb3489f`) against this module to plan a port. The survey is
+[`okf/prds/prd-121.md`](prds/prd-121.md); the summary is that the docking half
+is mostly here already and the **product** is not.
+
+Already covered: AV1/AV3 and mean positions, R_mp/⟨R_DA⟩/⟨R_DA⟩_E/σ_DA,
+asymmetric ±χ², both legacy `.txt` readers, rigid-body assembly with excluded
+volume, `dock_minimize` (whose own docstring calls itself "the FPS approach"),
+`refine_docking`, `screen_structures`, pose capture/resume, and the polynomial
+distance conversion. Three of those — `screen_structures`, `refine_docking`,
+`score_structures` — exist in C++ with **no door**: no CLI reaches them.
+
+Seven gaps, two of which carry the PRD:
+
+* **Error estimation is not what `imp_bff dock-errors` measures.** FPS takes
+  the *model* distances as truth, perturbs each by a Gaussian scaled by that
+  distance's own asymmetric ±error, and re-docks — a parametric bootstrap of
+  the coordinate uncertainty. `dock-errors` re-docks from random starts, which
+  measures optimiser reproducibility. Different quantity, same name.
+* **`screen_structures` returns `(path, score)`.** FPS also returns 1/2/3σ
+  violation counts, `InvalidR`, the per-structure R table in both R_mp and the
+  file's own distance type, and RefRMSD — a Kabsch fit of per-position
+  *reference atoms*, which is how an `XYZ` position is transplanted onto each
+  library structure.
+
+The other five: no project object; no per-repetition results table and none of
+the exports (PyMOL, overlays, Rtable, chi2table); no bond restraints (in FPS a
+distance between two plain atoms drops both vdW radii to 0.4 Å and reports
+`Ebond` separately); no doors for the three tool dialogs; and the protocol
+details that change the answer (`OptimizeSelected` Selected/All/SelectedThenAll,
+the clash-free shuffle, the force cap).
+
+Found while reading, worth recording: `AVS` (real dye structure) and `EDF`
+(external density file) are **enum values FPS never implemented** —
+`LabelingPositions.cs` parses them, `AVEngine` has only `Calculate1R` and
+`Calculate3R`. They are not being ported because there is nothing to port. And
+the legacy project `.bin` is a gzipped .NET `BinaryFormatter` payload
+(`OptionsManager.cs:287`), but `om.Export` writes a readable text twin beside
+it on **every** save — so the project is readable without implementing MS-NRBF.
+
+**The fixture is FPS's own test bundle**, and testing it found a bug.
+`../chisurf/examples/4w_junction/fps_test_data/` is FPS's shipped test data,
+2014-05-19, still carrying its author's `C:\Users\doroshen\Desktop\` paths.
+The directory name is wrong — the contents are HIV-1 reverse transcriptase
+(p66/p51, 1R0A) with its DNA primer/template, not a four-way junction. It
+carries docking inputs, 20 screening frames, and — the find — **two AV point
+clouds FPS itself exported**, `p66(D).xyz` (130 531 points) and `p_1bp(D).xyz`
+(5 473 points), each with its mean position and its parameters in the header.
+Those parameters *disagree with the LP file beside them*: they were typed into
+the AV interface by hand, so the header is the truth and the `.txt` is not.
+The grid follows from them with nothing guessed — FPS's
+`dg = max(min(0.2·L, 0.2·W, 0.4·Rᵢ), 0.4)` gives 0.6 Å for both, and the grid
+extent `IMP.bff` builds matches exactly.
+
+Trying the pin found **an AV that fails silently**. When the clearance is too
+small the volume comes back empty, `get_is_valid()` still answers `true`,
+nothing is logged, and `get_mean_position()` returns **exactly half the source
+atom's coordinate**. It reaches users:
+`imp_bff av-export -p 3GUN.pdb -c A -r 132 -a CB --linker-width 4.5` writes an
+`.xyz` whose first line is `0`, prints a mean position of `(0.68, -8.60, -2.73)`
+— half of CB at `(1.353, -17.196, -5.469)` — and exits 0; at the default width
+1.5 the same command writes 2734 points. **4.5 Å is FPS's standard linker
+width**, used by every position in both fixtures, so this is not an exotic
+input. With `linker_width = 4.5` and `dg = 0.6` the derived
+`allowed_sphere_radius` is 1.5 and the volume is empty; 2.5 is still empty; 3.0
+produces points.
+
+**Then FPS's own AV was rebuilt and run**, which is the only way this was
+going to be settled. `Fps.Native/av_routines.cpp` is x86 SSE and this machine
+is arm64, so it was compiled `-arch x86_64` and run under Rosetta behind a
+driver replicating `Molecule.cs` (PDB parsing), `StaticData.cs` (the element
+ladder, the Bondi table) and `AVEngine.Calculate3R` (the grid). It reproduces
+both shipped clouds **exactly** — `p_1bp` 3187 unique voxels and `p66` 55 514,
+identical point sets, zero difference either way. It lives in
+`prototypes/fps_oracle/`; FPS is LGPL-2.1 and is **not vendored**, the script
+compiles it in place from the sibling checkout. That is an **oracle**, not a fixture: FPS's AV can
+now be run on any structure, site and parameters, so Phase 0 is not limited to
+the two clouds that happen to be on disk.
+
+**The apparent disagreement was a reading error, twice over.** FPS's `.xyz` is
+a **duplicate-expanded, density-weighted cloud** and its line count is not a
+voxel count: `calculate3R` returns `n += dn`, the *sum* of densities — one per
+(voxel, dye radius) that fits — not the number of voxels
+(`av_routines.cpp:414`), and `AVEngine` sizes the point array by that sum and
+emits a voxel once per radius that fits. `p_1bp(D).xyz` is 5473 lines over
+**3187** unique voxels (901 once, 2286 twice — R₁ = 11 Å never fits);
+`p66(D).xyz` is 130 531 lines over **55 514**. FPS's `Dmp` is the mean of all
+5473 lines, i.e. the density-weighted mean, reproduced here to the last digit.
+`IMP.bff` carries the same information as unique voxels plus a weight column
+(`0.3333` = one radius of three) — same content, different packing, which is
+precisely the marshalling difference AGENTS.md is about.
+
+**Parity, measured properly.** `p_1bp` at L = 8.5, W = 4.5, R = 11/3/1.5,
+dg = 0.6, clearance 3.0, against FPS's 3187 voxels: heavy atoms with IMP's
+united-atom radii give 2816 (0.88) at 0.324 Å; heavy atoms with FPS's Bondi
+radii give 3178 (1.00) at 0.222 Å; **all 17 733 atoms with Bondi radii — what
+FPS actually reads — give 2991 (0.94) at 0.104 Å**. And they are the same
+volume, not merely the same size: **100 %** of bff's voxels lie within one
+voxel of an FPS voxel, 99.8 % within 0.52 Å (the largest offset two
+same-spacing lattices can have), 95.3 % within half a voxel. bff finds no
+volume FPS does not; it is conservative by 6 %. An exact voxel-set comparison
+reports **zero** overlap however well the two agree, because bff anchors on the
+global absolute lattice (PRD-105) and FPS on the source atom — the wrong metric
+to reach for.
+
+What is left of G8 is one documented knob: FPS's `LinkerInitialSphere` is 0.5
+and `allowed_sphere_radius` is not the same quantity, and the mapping has never
+been written down.
+
+**One trap, recorded so it is not repeated:** `AV::get_map().get_xyz_density()`
+returns **one entry per point**, not a flat `x, y, z, w` array. Dividing its
+length by four under-reports the volume by exactly 4×, and was the first of the
+two reading errors above. `IMP.bff.write_av()` is the honest count.
+
+Owner decisions (2026-08-31): IMP backend, so **scores are pinned and
+coordinates explicitly are not**; five programs in `bin/` mirroring FPS's own
+split; both project formats in (legacy text export, extended `.fps.json`) and
+only fps.json out; both input doors everywhere (the legacy positions+distances
+pair, or one fps.json), which puts `reference_atoms` into the schema at 1.2.
+
+Two open items closed the same day (owner): there is **no FPS docked
+reference anywhere**, so docking is pinned self-consistently and against the
+crystal structure, never against FPS — D1 had given up coordinate parity and
+this makes it unconditional; and the fixtures ship as a **reduced set in
+`test/input/` with `.bcif` permitted**, except the two FPS `.xyz` clouds, which
+ship verbatim because re-encoding a reference answer is how a pin stops being
+one.
+
+The second (end-to-end) screening pin was already in the tree and unused:
+`prototypes/fast_label_score/cache/anisotropy/zenodo3376527_FRET_screening/` —
+421 T4L structures × 33 pairs of ⟨R_DA⟩ plus χ² for three states, produced by
+the real FPS, with its own `FRET_screening.fps.json` and experimental distances
+beside it. Phase 0 is G8 first — localise the volume deficit on the two clouds,
+where one site gives one answer — then wire the Zenodo set, where 421 answers
+say whether the fix generalises. No engine work before an AV matches.
+
 ## 2026-08-31 (3) — the OpenMM run, rebuilt volumes, and pRDA as a distribution
 
 Follow-ups on the six, all from the user reading the previous entry.
@@ -249,6 +4025,614 @@ the accumulated chi-squared differs and the scores are no longer comparable.
 Still open, and the owner's call (PRD-120): whether the Labelizer's pair layer
 should rank with this rather than with its own published score.
 
+## 2026-08-30 — three new dyes parameterized the AmberTools way; exhaustive queue running
+
+The original 12-library queue is **finished** (T51_C3R completed at 2 fs,
+723 ns/day — the C16/water 4 fs diagnosis was right); all trajectories are
+on cordeshub awaiting clustering. The three high-priority dyes — **ATTO 655
+(T65), Cy3B (C3B), Lumiprobe AF488 (AF4)**, each on C2R/L1R/B1R — went
+through `prototypes/dye_library/parameterize_dye.py`: the standard
+AmberTools route applied to the **whole label** (ACE–linker–NME–dye as ONE
+molecule): antechamber AM1-BCC/GAFF2 → parmchk2 → `loadmol2`. One fit, one
+frcmod, no dye/linker junction to splice. All nine labels validate (charges
+±0.005 of the conjugated net: 0/0/−2) and produce `labels/<stem>.mol2 +
+.frcmod` in the repo and on cordeshub. `make_library.build()` routes through
+the label automatically when one exists, seeds inject by (residue, name).
+
+Hard-won specifics, all recorded in the script: no AMBER-format
+parameterization webserver covers these dyes (CHARMM-DYES has Cy3B in
+GROMACS/CHARMM36 with its own linker — wrong force field family, kept only
+as a structure cross-check); sqm needs mol2 input with bond orders (PDB
+bond-perception fails on the conjugated dyes) and a clash-free geometry
+(the dye is Kabsch-placed onto a shipped template's C99/O99/d1 frame, then
+MMFF-relaxed via RDKit); RDKit needs the formal charges derived
+structurally (bond-order-sum 4 on N = the cation; one O⁻ per
+delocalized S/C group) and carried to the label by coordinate match; and
+tleap reads mol2 fixed-width — **four-character residue names from mol2
+substructures lose their first character in the prmtop** ("Cy3b"→"y3b"),
+hence the three-character codes. **Exhaustive libraries** per decision:
+27 runs (9 stems × 3 donor-rank replicas × 140 ns) now grinding serially on
+cordeshub (`run_queue_newdyes.sh`), then `cluster_dihedral.py --cutoff 1`
+over the concatenated replicas.
+
+## 2026-08-28 — cordeshub dye-library queue: L2R batch unblocked, T51_C3R NaN outstanding
+
+State of the `prototypes/dye_library` MD queue on `cordeshub` (resumed from the
+"rotamer" session): the overnight pass finished 8 of 12 seeded libraries
+(C5W/C3W/C5N/C7N/C3N `_L1R`, C5N_C2R, T51_C3R — see below, A64_B1R); three
+`L2R` dyes (T51/T48/Tth) died in tleap with
+`1-4: cannot add bond 33 75`. Root cause: `compact()` writes the compact PDB
+with OpenMM's `PDBFile.writeFile`, which emits **CONECT records**, and the
+solvated `build()` then re-adds the N99–C99 bond explicitly — tleap refuses a
+duplicate. Every finished library was seed-grafted (tleap-written compact PDB,
+no CONECT), so the compaction path had never actually reached the solvated
+build before. Fixed in `compact()` by dropping CONECT (lossless: all other
+bonds come from residue templates), applied identically to the local
+`prototypes/dye_library/make_library.py` and the cordeshub copy (backup at
+`make_library.py.bak-20260828`); smoke-tested end-to-end on T51_L2R at
+`--ns 0.02`. Also generated the missing `A53_C1R_seed.pdb` locally via
+`cheap_library.py A48 C1R --donor A53_C1R` (the `A48_C1R_gate` entry had in
+fact already completed on 08-26; its log was below my first listing's fold).
+Queue relaunched detached (`~/dye_library/queue.log`): the skip guard re-runs
+only the unfinished — the three L2R dyes, ~4 h each serial on the RTX 4000 Ada.
+
+**Outstanding:** T51_C3R's 01:57 "finish" was itself a NaN —
+`Particle coordinate is NaN` at the *first 4 fs block* of `produce()`'s ramp
+(minimize + 160 ps at 1–2 fs survive; the queue retried it and it reproduced
+deterministically, same velocity seed). **Diagnosed same day**, by replaying
+the ramp instrumented and stepping 4 fs one at a time: the ramp's PE rise
+(−198.6 → −159.2 MJ/mol) is exculpatory — controls C5N_C2R (+40.6 MJ) and
+A64_B1R (+48.7 MJ) rise the same and still hold 4 fs for 150 ns. The failure
+is a genuine 4 fs detonation: C16 of the C3R linker is flung 42 Å in a single
+step as a neighbouring water is pressed to near-zero distance (a hydrophobic
+carbon in a tight dye–linker pocket); three runs at 1–2 fs survive, three at
+4 fs die within ~100 ps. Ship path: `--dt-fs 2.0` added to `make_library.py`
+(same HMR/physics, honest `md_record.timestep_fs`, ~2× wall time), queued via
+a cordeshub watcher that waits for the L2R queue to drain and then runs
+T51_C3R at 2 fs into the usual `~/dye_out/T51_C3R.log`.
+
+## 2026-08-27 (late) — four headers folded into the families they belong to
+
+`DunbrackLibrary.h` and `Faspr.h` are gone into `RotamerLibrary.h`, and
+`RotamerStatistics.h` and `DistanceCalibration.h` into `RotamerEnsemble.h` and
+`StatesDistance.h`. Four files that each declared one or two functions and a
+page of prose.
+
+**Is the Dunbrack code needed, given `IMP::rotamer::RotamerLibrary`?** Yes,
+and the reason is the file format rather than the question. IMP's reads the
+Dunbrack *text* library and answers `get_rotamers(residue, phi, psi, thr)`;
+this module's reads the **binary** `dun2010bbdep.bin` that FASPR ships, and
+the `.drot.pto` container that carries it. Neither can read the other's, and
+both are used here: `get_anchor_cb_position` goes through IMP's, and
+`faspr_pack` needs ours -- it unpacks the shipped container back to a scratch
+`dun2010bbdep.bin` because the vendored engine seeks in that file by byte
+offset. `write_dunbrack_bin` reproduces the input byte for byte, which is both
+the correctness proof and what keeps the parity pin meaningful. That the two
+coexist is now said in the header rather than left to be rediscovered.
+
+`Faspr.h` was 74 lines of documentation for **one function**. What a caller
+needs -- what it does, the parameters, what it throws, that it is
+deterministic -- is eight lines; the rest was porting narrative and a
+redistribution question that PRD-118 owns. The citation and the licence
+pointer stay, now aimed at `RotamerLibrary.h`, which is where the vendored
+sources' notices point too.
+
+1208 passed, 3 xfailed, 30 subtests; the docs sweep 36. 77 public headers,
+down from 81.
+
+
+## 2026-08-27 (night) — the selection language, and PRD-106 closed
+
+**A `strip_mask` is a selection expression now**, not a four-term dialect.
+`SelectionExpression.h`/`.cpp`: a tokenizer, a precedence parser, an evaluator
+over a flat atom table, and a compiler to **#IMP::atom::Selection** -- which is
+the point. IMP already has the algebra (`set_intersection`, `set_union`,
+`set_difference`) and the predicates (`set_chain_ids`, `set_residue_indexes`,
+`set_residue_types`, `set_atom_types`, `set_element`), so `chain A and resi
+10-20 and not name CA+CB` compiles term by term and composes with everything
+that takes a Selection. Four kinds of term have no IMP predicate -- wildcards,
+the fields IMP's hierarchy does not carry (`segi`, `alt`, `id`), `index`, and
+the whole-structure operators -- and enter the algebra as a Selection over
+exactly the particles they matched.
+
+**Two spellings, one parser, detected.** The files in this stack are written
+both ways: `resi`/`resid`, `name CA+CB`/`name CA CB`, `50-60`/`50 to 60`,
+`segi`/`segname`, `id`/`serial`, `byres`/`same residue as`, `solvent`/`water`.
+Both are accepted, including mixed -- every shipped T4L mask *is* mixed. The
+spelling is detected from the expression's own markers, because the two
+disagree about one thing: whether `index` counts from 0 or from 1. A caller
+may declare it instead. `within`/`beyond`/`around` are answered against
+coordinates; `pbc` is refused rather than ignored, there being no cell.
+
+**A strip is a radius of zero, not a shorter list** (maintainer, 2026-08-27).
+The first cut handed each volume its own filtered particle list. Giving the
+stripped atoms **no size** instead is simpler and better: a rasteriser asks
+`distance < radius`, so an atom of radius zero blocks nothing, and every
+volume indexes the same particles whatever it strips -- which is what the
+incremental window machinery wants, and it mutates nothing on a model that
+another thread is reading (AVs resample in parallel).
+
+It needed one rule in each rasteriser, because both inflate every radius by
+the probe radius before testing it: **a non-positive radius is not inflated
+and is not sampled**. Without that, a stripped atom still carves a
+probe-sized hole. Three pieces of delta bookkeeping came with it, each a
+silent-wrong if missed: `full_raster` records a transparent atom's `last_`
+entry anyway, so a later frame has a truthful "before"; `apply_local`
+subtracts only what was added; and the moved-set classification does *not*
+skip a transparent atom, because `r != last[3]` is exactly what catches one
+that has just become transparent.
+
+The rule is one rule everywhere: `strip_obstacles`, the array form, zeroes a
+radius rather than dropping a row, so the array keeps row-for-atom
+correspondence with the structure. A test proves the equivalence through the
+public API -- a volume built from zeroed rows equals one built from the
+shorter array those rows were dropped from.
+
+**PRD-106 is done**: six of its seven acceptance criteria as written, and the
+seventh's substance by a different rule. Asked whether it really was, the
+check found two holes in my own tests -- worth recording, because both would
+have passed silently:
+
+* The authored-mask fixture ran **every** shipped mask against T4L's 3GUN,
+  including TG2's 26. Those name TG2 residues, so they selected nothing, and
+  the assertion was `set() == set()`: 23 of 43 cases proved nothing. Each file
+  is checked against its own structure now, and an empty result has to be a
+  *checked* claim -- the residue really has no atom outside the keep set.
+  Which is how TG2 position A52 turned out to be an **alanine**: its only
+  side-chain atom is CB, which the mask keeps, so it legitimately strips
+  nothing. That is also why acceptance 7 ("a mask selecting zero atoms
+  raises") is not met and should not be.
+* The AV parity test compared the number of density points, where the
+  criterion says *bit-identical*. Two clouds of equal size can be different
+  clouds; it compares the densities now.
+
+Asked a second time, the **Requirements** section (which I had not checked --
+only the acceptance criteria) gave two more:
+
+* `strip_obstacles`, requirement 1's second output -- the `(M, 4)` obstacle
+  array the flat kernels take -- existed before the C++ port and was lost in
+  it. Restored, with the attachment atom kept even when the mask names it.
+* Requirement 3 asks for the `("N","CA","C","O","OXT")` keep-set in exactly
+  one place, and there were two: the labelling site's, and the selection
+  language's answer to `backbone`. They are one list now
+  (`protein_backbone_atom_names`), ordered N-CA-C-O-OXT rather than sorted,
+  because a mask written from it should read the way a person writes one.
+
+Two findings on the way:
+
+* The decorator path read no `strip_mask` at all. `AV::set_av_parameter` took
+  `linker_length`, the radii, `linker_width` and `allowed_sphere_radius`; the
+  field was absent from it, so `probe_network_restraint_set`, docking and the
+  lattice suite built **unstripped** volumes from files that ask to be
+  stripped. It reads it now, and the T4L quadrature score moved from
+  22.69935116408601 to 22.593263882270314 -- the number the file had always
+  been asking for. `set_av_parameter` takes JSON *text* now, like every other
+  reader in this module, rather than an `nlohmann::json` no Python caller can
+  build.
+* A masked volume cannot join a **shared** occupancy raster: a shared grid is
+  one obstacle set for every volume in it, and each position strips its own
+  residue. Masked volumes take a private map. `test_av_lattice.py` measures
+  the lattice on a mask-free copy of that fixture, so its pre-PRD-105 pins
+  still mean what they were recorded to mean, and three new tests pin the
+  interaction itself.
+
+**fps.json 1.1** adds a document-level `strip_mask` -- what the *structure*
+carries that no volume should be blocked by (waters, ions, an additive) --
+beside the per-position one, which is about the labelling site. The two are a
+**union**, folded in by the readers so a position taken alone is
+self-contained. Additive, so every 1.0 file is a valid 1.1 file.
+
+1208 passed, 3 xfailed, 30 subtests; 37 in the expensive sweeps. PRD-106's
+own document, its `Consumers` and `Requirements` sections and its index entry
+were rewritten to describe what was built rather than what was wrong: a closed
+PRD that still states the defect in the present tense is a trap for the next
+reader.
+
+
+## 2026-08-27 (evening) — TCSPC out of the docs, and every PRD says where it stands
+
+**TCSPC is tttrlib's, and now the documentation agrees.** PRD-113 stage 0
+deleted the instrument layer from this package; the manual kept describing it.
+`doc/manual/decays/` is gone -- three of its pages called `IMP.bff.DecayCurve`
+and friends, two were empty stubs whose toctree entries (`_decay_convolution`)
+matched no file, and the sixth was a page about ChiSurf. With them went
+`concepts/decay.ipynb` (phasor theory) and `programming/programming_imp_decorator.ipynb`,
+whose subject was `DecayLifetimeHandler` -- the decorator pattern is taught by
+`structure_accessible_volumes.ipynb` and `getting_started.ipynb` on live API.
+`examples/spectroscopy/plot_convolution_routines.py` and `plot_pile_up.py` were
+literal duplicates of tttrlib's own
+`examples/fluorescence_decay/`, and are deleted rather than moved.
+
+`test/expensive_test_docs_and_examples.py` skipped four pages by name for this
+reason; the skip list is gone and **every** notebook under `doc/` now runs. The
+manual index carries a note saying where decays live: `tttrlib`'s
+`modules/spectroscopy/decay` -- the `fconv` family, `BlindIRF`,
+`DecayFit23`--`26`, `MaxEntTcspc`, `DecayStatistics`. `test/standards_exceptions`
+lost 45 entries naming deleted `Decay*` classes and `decay_*` functions.
+
+**Every PRD states four things under its title**: Status, Done, Missing, Next.
+Sixteen PRDs, one block each, and `okf/prds/index.md` opens with a table of the
+status and next move of all of them. Two were verified rather than transcribed:
+
+* **PRD-113 is done.** All eight stages, checked against the tree. Of its three
+  recorded todos, one is open (the κ² surrogate, which it never found), one is
+  superseded (PRD-110/111 have their own reasons now) and one was already done
+  (`PET_QUENCHING_REFERENCE` no longer exists; `QuenchingModel` takes
+  `PETParameters`). Its Layout and stage-7 sections describe `pyext/src` domain
+  packages that PRD-117 later deleted -- the header says to read them as
+  history.
+* **PRD-117 is done.** `pyext/src` is empty and no `.i` file holds library
+  logic. What remains is `types.i`'s `%attribute_np*` macros -- numpy
+  `.reshape` sugar with no C++ spelling -- and one `import numpy as np`.
+
+The index was also missing PRD-109 entirely, and claimed PRD-117 still had
+11,607 lines to port.
+
+1099 passed, 3 xfailed, 30 subtests; docs/examples sweep 38 passed with nothing
+skipped.
+
+
+## 2026-08-27 (later still) — a cleanup pass: one of each thing, and the port narrative out of the code
+
+Consolidation, naming and comment scrub across the module. Pre-release, so
+nothing was kept for compatibility's sake.
+
+**One of each thing.** The merges had left duplicates that agreed by luck:
+
+| was | now |
+|---|---|
+| `has`/`txt`/`dbl` in `ForceFieldCIF.cpp`, again in `ProbeLibrary.cpp`, and as `tc_has`/`tc_str`/`tc_int`/`tc_bool` in `ComponentTemplate.cpp` | `internal/CifReader.h`, mirroring the writer header |
+| `upper()` in `AVBuilder.cpp`, `Scoring.cpp`, `StripMask.cpp` | `internal/Text.h`, with the other shared string helpers |
+| `normalize_weights` (leaves a zero-sum library at zero) and `rs_normalize` (makes it uniform) | `normalize_weights_in_place`, uniform fallback -- a library whose weights were never filled in is one where every conformer counts the same, and leaving them at zero silently drops it out of any average |
+| `effective_distance` in `Docking.cpp` shadowing the public one | `modelled_distance`, which says which converter it goes through |
+
+**Three writers with no caller are gone**: `write_component_template_cif`,
+`write_probe_template_cif`, `write_rotamer_library`. Nothing in `bin/`,
+`examples/`, `doc/` or the siblings called them -- templates are authored by
+hand and rotamer libraries are written as `.drot` or RMF -- so their only job
+was round-tripping their own readers. Those tests now read the **shipped**
+templates and a fixture numpy writes, which is the only arrangement in which a
+reader test fails because the reader is wrong about the format rather than
+merely self-consistent with our writer.
+
+**Names against flrCIF and mmfdb.** `../mmfdb/src/mmfdb/data/mmfdb_flr_ext.dic`
+is the authority. `_mmfdb_probe.probe_type` enumerates `dye`,
+`fluorescent_protein`, `spin_label`, `unspecified` -- which `ProbeType` already
+matched -- so the work was the surface around it: `DYE_PAIR_*` ->
+`PROBE_PAIR_*`, `LlDyeModel`/`LL_DYE_*` -> `ProbeModel`/`PROBE_MODEL_*`,
+`DEFAULT_DYE_RADIUS` -> `DEFAULT_PROBE_RADIUS`,
+`pair_distribution_from_dyes` -> `pair_distribution_from_probes`,
+`data/rotamer_library/R0/dye_library.cif` -> `probe_library.cif` (its constant
+already read `PROBE_LIBRARY_CIF`), and the `_mmfdb_operation.algorithm` value
+`dye_library` -> `probe_library`. `REFERENCE_DYE` stays: it names an actual
+dye, which is a probe *type* in the dictionary. Four include guards still said
+`IMPBFF_DYE…`/`IMPBFF_LABELDYNAMICS_H`, and six `\file` tags in `src/` named
+the header instead of the source.
+
+**The port narrative is out of the code.** The PRD-113 banner (8 files), ~35
+inline "which is what the Python did" justifications, the narrative blocks
+atop ten SWIG interface files, and the same in `bin/`, `test/` and one
+notebook. Rationale that explains a live decision was kept and moved to the
+present tense; what a reader needs is the rule, not its provenance. The
+history stays here, which is what this file is for.
+
+**Deduplication against IMP** turned up less than expected: no second PDB or
+MOL2 parser, no local RMSD or superposition, no hand-rolled rotation math.
+Two overlaps are deliberate and now say so in their headers --
+`IMP::saxs::SolventAccessibleSurface` returns a *fraction* of an isolated
+surface for a form factor where this returns area in square Angstrom, and
+`IMP::algebra::get_uniform_surface_cover` is a different point set from
+`sphere_points`, which every sampled quantity in the module is pinned against.
+
+1101 passed, 3 xfailed, 30 subtests; docs/examples sweep 42 passed.
+
+
+## 2026-08-27 (later) — the same defect a fourth time: three probe fields the container dropped
+
+Yesterday's note said any derived artifact wants a test that reads *it*, not a
+copy of it, and that only the probe container had that gap closed. Going
+looking closed it properly and turned up a fourth instance of the same defect.
+
+`data/potentials.pto` and the two `template_av_*.fps.json` turned out to be
+guarded already -- `test_potential_tables.py` reads the shipped container and
+checks its manifest, shapes, NaN handling and proline sentinel;
+`test_fps_schema.py` validates the shipped templates against the schema. So the
+files were fine. **The fields were not.**
+
+### `dipole_atoms`, `positive_atoms`, `negative_atoms` never survived a round trip
+
+`probe_write_pto` wrote five flrCIF columns and the optical-property triples,
+and silently dropped those three. They had no flrCIF item, so they were left
+out; the reader had nothing to look for.
+
+`dipole_atoms` is the one that does damage without looking like it. A `Probe`
+with no dipole is **legal** -- it means the probe is modelled as an isotropic
+emitter -- so the loss produces a valid probe, not an error. An anisotropic
+probe comes back isotropic, kappa^2 falls back to 2/3, and the R0 that follows
+is wrong by a factor nothing in the output reveals. The charges decide how a
+probe behaves beside a charged surface, which is not decoration either.
+
+Fixed: `_mmfdb_probe.{dipole_atoms,positive_atoms,negative_atoms}` in the
+dictionary (arrays, following `_mmfdb_spectrum.wavelengths`), written and read.
+All fourteen `Probe` fields now round-trip.
+
+### The test enumerates rather than checks three
+
+`test_no_probe_field_is_silently_dropped` walks `dir(probe)` and compares every
+field before and after, so a field added later is covered without anyone
+remembering. Checking the three that were broken would have left the next one
+to be found the same way this one was.
+
+### And the column check was checking a prefix
+
+`test_every_column_name_is_a_dictionary_item` asserted that each column name
+*started with* `_flr_probe_list.` / `_flr_probe_descriptor.` / `_mmfdb_probe.`.
+That passes for `_mmfdb_probe.dipole_atoms` whether or not the item was ever
+declared -- which is precisely the failure the container exists to prevent, a
+name that looks like a dictionary item and resolves to nothing. It now looks
+each name up in `mmfdb_flr_ext.dic`. Verified the check discriminates:
+`_mmfdb_probe.not_a_real_item` and `_flr_probe_list.invented` both fail it. A
+guard that cannot fail is the same defect wearing a test's clothes.
+
+1100 passed, 3 xfailed. `data/dyes.mmfdb.pto` regenerated so its column
+metadata matches.
+
+## 2026-08-27 — the labelizer port, re-aligned to the restructured package
+
+The package moved a long way under the labelizer port: `cgdye` became
+`cgprobe`, `AVNetworkRestraint` became `ProbeNetworkRestraint`, and
+`DyeSampling.h`, `DyeDiffusion.h`, `DyeForceField.h`, `CifIO.h` and
+`LabelingRestraints.h` were deleted outright along with most of `test/cgdye/`.
+This pass checked what that cost the port and fixed what it found.
+
+**The C++ needed nothing.** It builds clean and 1099 pass. The labelizer
+includes only `AV*.h`, `StatesDistance.h`, `SolventAccessibleSurface.h`,
+`ProbeLibrary.h`, `Pto.h` and its own headers -- no deleted header, no renamed
+symbol. Surviving a restructuring of that size untouched is the useful evidence
+that "code like AV must not be duplicated" was actually followed, rather than
+asserted.
+
+### The shipped container had gone stale, and nothing could see it
+
+`data/dyes.mmfdb.pto` was written 2026-08-25, before `probe_type` and `vendor`
+existed. Every one of its 40 probes read back `unspecified` with no vendor
+while the CIF beside it had both.
+
+The reason it went unnoticed is worth more than the fix: **every test in
+`test_probe_container.py` writes its own container into `tmp_path` and reads
+that back.** That proves the round trip perfectly and says nothing whatever
+about the file that ships. Regenerated, and
+`test_the_shipped_container_still_matches_the_library` now compares the shipped
+artifact against `read_probe_library()` field by field, so the next schema
+change fails a test instead of shipping.
+
+Same shape as the `probe_type`-holding-a-vendor bug and the reference's
+`-1`/`0` sentinel collision: a value that is wrong because nothing reads it.
+Three instances in three days is a pattern, not a coincidence -- a derived
+artifact needs a test that reads *it*, not a copy of it.
+
+### A rename that reached a section title
+
+`examples/labels/README.txt` had been swept to "ProbePosition simulations" over
+a 17-character underline, which is both wrong (the gallery is AV decorators,
+screening, path maps and label-site scoring -- not probe positions) and a
+docutils error. Now "Labelling simulations", underlined to match. This is the
+`dye_name` lesson from the sweep two days ago in a different costume: a renamed
+identifier is free, a renamed *literal* is a break, and prose in an `.rst`
+title is a literal.
+
+### Docs re-pointed
+
+PRD-120 and `labelizer-correspondence.md` carried `DyeContainer.h`,
+`dye_write_pto`, `resolve_dye_name`, `test_dye_container.py`,
+`cgdye_fretpredict_pins.json` and "38 dyes". All corrected, and PRD-120 gained
+a **What changed after it shipped** section, because a reader who finds a
+symbol that no longer exists cannot otherwise tell a rename from a deletion.
+The PRD index entry still described the 1.8 dictionary pass as the single term
+it started as; it now lists what it actually became.
+
+Verified end to end rather than by inspection: `imp_bff_labelizer` both ways
+(195 sites; 20 pairs against the regenerated container, R0 53.8 A), both
+examples, and the notebook's whole `bff.*` surface resolved.
+
+## 2026-08-27 (later) — `CifIO.h` is gone: IMP parses, this module only writes
+
+"IMP has CIF, why need another CIF?" -- it doesn't, and it never did. What
+looked like a second CIF implementation was one file named after a format.
+
+**Nothing here parses CIF.** Every read in this module -- the force-field
+system, the `_cgprobe_*` template, the probe library, trajectories -- drives
+`ihm_reader` from `ihm_format.h`, the C parser IMP vendors at
+`modules/core/dependency/python-ihm/src/` and uses for its own
+`IMP::atom::read_mmcif`. That was already true before this change.
+
+**Writing has nothing to borrow.** The vendored ihm library is read-only (the
+string `write` does not occur in its header), `IMP::atom` has `read_mmcif`,
+`read_bcif` and no writer, and `IMP.mmcif` is a Python module over python-ihm
+that builds deposition systems -- unreachable from C++, and with no spelling
+for `_ff_*`, `_cgprobe_*` or `_flr_*`. So ~60 lines of category emission stay,
+and the useful question is how many copies of them there are. There were
+three: `CifWriter` in `CifIO.cpp`, a weaker `cif_val` in the same file, and a
+hand-rolled `_atom_site` loop in `StructureIO.cpp`.
+
+That second one was a live defect. `CifWriter::quote` carries a comment
+explaining that quoting must happen in the writer, because the reader splits
+rows on whitespace and an unquoted multi-word value makes the loop come up
+short. Forty lines below it, `cif_val` quoted on space, `#` and a leading `_`
+only -- not commas, not tabs. The force-field writer used `cif_val` for all 58
+of its values.
+
+**And consolidating them surfaced a bug in the good one.** `CifWriter::quote`
+escaped an embedded `"` by doubling it. That is the CSV convention; CIF has no
+escape at all. A quoted value ends at its delimiter *followed by whitespace or
+end of line*, so an embedded quote is ordinary text unless whitespace follows
+it -- and `""` reads back as two literal quotes. `a "quoted" word` was written
+as `"a ""quoted"" word"` and came back `a ""quoted"" word`. The delimiter is
+now **chosen** rather than escaped: `"` when it closes the value, else `'`,
+else a semicolon text field (whose delimiters each start a line, so nothing
+inside can end it early -- `write_loop` puts the next column on its own line
+after one). Four values pin the three branches in
+`test_an_awkward_value_survives_the_forcefield_round_trip`.
+
+**The fold.** `CifIO.h`/`.cpp` held four unrelated things that shared a file
+format. Each went to the header that owns its data:
+
+| was in `CifIO.h` | now in |
+|---|---|
+| `write_probe_forcefield_cif`, site-id and range utilities | `ForceFieldCIF.h` -- beside `read_forcefield_cif` |
+| `ComponentTemplate` + its reader, writer, `region_features` | `ComponentTemplate.h` -- named for the thing |
+| `read_rotamer_library` / `write_rotamer_library` | `RotamerLibrary.h` -- with the value they return |
+| `CifWriter`, `cif_val` | `internal/CifWriter.h` -- one copy, internal |
+
+`pyext/IMP_bff.cif.i` is `IMP_bff.componenttemplate.i`. `StructureIO.cpp`'s
+`convert_pdb_to_cif` writes through the shared class, so a component or atom
+name with a space in it is quoted the way every other category's is.
+`RotamerLibrary.h` documented itself against `CifIO.h`; it now points at its
+own bottom half.
+
+
+## 2026-08-27 — Dye -> Probe, and cgdye -> cgprobe
+
+The last of the generalisation. A probe is a dye, a spin label or a quencher,
+and the structural layer never needed to know which; the naming now says so.
+`Probe` rather than `Label` because the tree was already five headers to one
+that way -- `ProbeAttachment`, `ProbeContainer`, `ProbeLibrary`,
+`ProbeNetworkRestraint`, `ProbeRestraints` -- and a second session was adding
+more while this one ran.
+
+| was | is |
+|---|---|
+| `DyeDiffusion.h/.cpp` | `ProbeDiffusion.h/.cpp` |
+| `DyeForceField.h/.cpp` | `ProbeForceField.h/.cpp` |
+| `DyeSampling.h/.cpp` | `ProbeSampling.h/.cpp` |
+| `LabelDynamics.h/.cpp` | `ProbeDynamics.h/.cpp` -- the one `Label*` holdout |
+| `DyeForceFieldSystem` (26 uses) | `ProbeForceFieldSystem` |
+| `DyeDiffusionSimulation`, `DyeDiffusionTrajectory`, `DyePairMeasures`, `DyeDistributionNormal` | `Probe...` |
+| `build_dye_restraints`, `write_dye_forcefield_cif`, `simulate_dye_diffusion`, `dye_radius`, `find_dye_structure`, ... | `..._probe_...` |
+| `bin/imp_bff_dye_pdb2cif`, `--dye-id` | `bin/imp_bff_probe_pdb2cif`, `--probe-id` |
+| `data/cgdye/`, `test/cgdye/`, `okf/cgdye.md` | `data/cgprobe/`, `test/cgprobe/`, `okf/cgprobe.md` |
+| `get_cgdye_data_dir` | `get_cgprobe_data_dir` |
+
+### What is **not** renamed, and why
+
+**Wire format is not naming.** These are keys in files this package did not
+write and cannot rewrite:
+
+- `dye_name` in the fps.json schema -- every fps.json ever written carries it;
+- `dye_template`, the default component-template name.
+
+The template CIF's categories **were** renamed, on the maintainer's call:
+`_cgdye_template`, `_cgdye_feature`, `_cgdye_feature_atom`, `_cgdye_improper`,
+`_cgdye_metadata` and `_cgdye_integration` are `_cgprobe_*`, in the reader, the
+writer and the four shipped templates together.
+
+That is a format break, so it fails **loudly**: a template in the old spelling
+matches no category, every handler stays silent, and the reader used to return
+an empty value -- not even obviously empty, because an unnamed template takes
+the file's stem for a name, so `name` was never empty and a guard on it never
+fired. The context carries a `saw_category` flag now, and an old file gets the
+sed line that migrates it.
+`test_a_template_in_the_old_spelling_fails_loudly` pins that.
+
+The sweep renamed all of them. `test_shipped_json_schema_matches_authored_definition`
+caught `dye_name` on the first run; the rest came out by reading the diff for
+changed *string literals*, which is the check worth keeping for a rename of
+this size: **a renamed identifier is free, a renamed literal is a format
+break.**
+
+`labelizer` keeps its name (a program), and so do `dyes.mmfdb.pto` and
+`dyes.drot.pto` (shipped binaries whose rename buys nothing).
+
+### A self-inflicted one, worth remembering
+
+Restoring the `_cgdye_*` categories with a substring replace of `_cgprobe_`
+also hit **`get_cgprobe_data_dir`**, which contains it -- so the header
+reverted while the `.cpp` kept the new name. The library exported one symbol
+and the wrapper called the other, and every import died with
+`symbol not found: get_cgdye_data_dir`. The same over-broad-replace mistake as
+the container typemap two rounds ago: a substring is not a token.
+
+### Verification
+
+`ninja` clean; **1092 passed, 3 xfailed, 30 subtests** -- the same count as
+before the rename, which is what a rename should do -- plus the 53 of
+`expensive_test_docs_and_examples.py`, `test_bin_programs.py` and
+`test_dye_commands.py`.
+
+## 2026-08-26 — `DyeLibrary` is `ProbeLibrary`, and a column that lied
+
+`DyeLibrary` modelled a dye, and that was already untrue of the package:
+`ProbeAttachment.h` spoke of probes while holding a `Dye`, the rotamer stores
+are partitioned `dyes` / `spinlabels` / `sidechains`, and the flrCIF vocabulary
+the fields follow calls all of them probes. So `Probe` is the type, with a
+`ProbeType` of `dye` / `fluorescent_protein` / `spin_label` / `unspecified`.
+
+**No compatibility shim.** The owner's call, and the right one pre-release:
+`DyeLibrary.h` and `DyeContainer.h` are deleted, every call site is renamed,
+and there is one name for the thing.
+
+### The column called `probe_type` held the vendor
+
+`_bff_dye.probe_type` was the second column of the bundled library CIF, and its
+values are `ATTO`, `Lumiprobe`, `AlexaFluor`. That is a vendor, not a type --
+and the reader never read it at all, so nothing noticed. Adding a real
+`probe_type` would have collided with a name already used for something else.
+
+The categories are now `_bff_probe` / `_bff_probe_spectrum`, the vendor column
+is called `vendor` and is read into `Probe::vendor` instead of dropped, and
+`probe_type` means what it says. Every one of the 40 bundled rows is `dye`.
+
+### `forster_radius` refuses a spin label by name
+
+It used to say "both dyes need a spectrum", which reads as a missing file. A
+nitroxide has no spectrum *by construction*, so it now says so and names the
+probe: a category error and a missing file should not look the same.
+`PROBE_UNSPECIFIED` still counts as fluorescent -- a library that does not
+state a type is a dye library, and refusing it would break callers over a
+column they never had.
+
+### Dictionary 1.8 gains `_mmfdb_probe`
+
+`probe_type` and `vendor` have no flrCIF item, and squatting on
+`_flr_probe_list.` for them would collide with a future IHM-FLR one. So
+`_mmfdb_probe.{probe_id,probe_type,vendor}` in the mmfdb namespace, bound by
+`_mmfdb_schema.table_name` onto the `probes` table the databases already have:
+new columns, not a new table. `PtoProfile` enumerates the four type values and
+`probe_write_pto` checks against them at the write.
+
+`_mmfdb_probe.probe_type` is a different question from
+`_flr_probe_list.probe_origin`, which is *how the probe got onto the molecule*
+(intrinsic / extrinsic). A fluorescent protein is intrinsic and a spin label
+extrinsic; neither fact tells you which one fluoresces.
+
+### `clustering` added to `_mmfdb_operation.operation_type`
+
+Asked for by the rotamer session, and it was a real gap rather than a
+convenience: `mfdb_operation_tags` throws on a non-term, so without it there
+was no honest way to record which protocol built a `.drot` library. `analysis`
+would have fitted the signature and said nothing -- the same failure mode as
+the `probe_type` column above, a wrong value that survives because nothing
+looks at it.
+
+Not `ndxplorer_clustering`, which is one tool's burst-selection step. This one
+is grouping conformations: a rotamer library built from a trajectory, MSM
+microstate construction, `cluster_frames_leader`. More than one caller.
+
+It matters right now because the regenerated rotamer libraries are
+**deliberately not comparable** to the shipped ones -- dihedral k-means with a
+periodic (cos, sin) metric rather than leader RMSD, which stops the trans well
+at 180 deg from splitting in two (0.948 self-fidelity against 0.864; the
+FRETpredict libraries they descend from sit at 0.815). Two libraries of the
+same probe with different conformer counts have to be able to say why.
+
+### Not renamed, deliberately
+
+`imp_bff_dye_pdb2cif`, `--dye`, `dye_name` in the FPS schema, `DyeDiffusion`,
+`cgdye`. The FPS field is literally `dye_name` in an external format, and the
+cgdye subsystem simulates dyes. Renaming the description of a field called
+`dye_name` to "Probe name" makes it worse, not more general.
+
+1083 passed, 3 xfailed on the full suite.
 
 ## 2026-08-26 (night, last +7) — a use-after-free that returned zeros
 
@@ -655,7 +5039,7 @@ all typemaps or features:
 **`avmeandistance.i`** (93 lines). `AVNetworkRestraintWrapper` subclassed
 `IMP.pmi.restraints.RestraintBase`, so it was built lazily -- naming it at
 import time would have made `import IMP.bff` require IMP.pmi. What it did
-besides PMI's bookkeeping is `av_network_restraint_set` in
+besides PMI's bookkeeping is `probe_network_restraint_set` in
 `AVMeanDistanceRestraint.h`: the network restraint, or one
 `AVMeanDistanceRestraint` per distance over volumes made rigid-body members,
 plus `add_avs_to_rigid_bodies` and `set_av_xyzr_mass`. **IMP.pmi stays
@@ -1371,7 +5755,7 @@ Python class that *subclassed a C++ value*; zero now. `RotamerEnsemble` is a
 C++ `States` (`include/RotamerEnsemble.h`) carrying the atoms, the energies,
 the partition function and the site, with `from_frame` / `from_site` placing a
 library on a residue and `pair_geometry` / `pair_distribution` /
-`pair_distribution_from_dyes` answering with the typed pair values instead of
+`pair_distribution_from_probes` answering with the typed pair values instead of
 rebuilding dicts out of them. It reproduces the FRETpredict parity pins
 exactly -- E_static, E_dyn1, E_dyn2, ⟨κ²⟩, R0 and both partition functions,
 `test/cgdye/rotamer/test_rotamer_ensemble.py`, all eight tests green.
@@ -6347,3 +10731,21 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   builder never fills `impropers`, which left 81 of them unbuilt across the two
   shipped components, hid a `TypeError` in `scoring.build_dye_restraints`
   (fixed, 192a763), and is the only reason the two exclusion derivations agree.
+
+## 2026-09-06 — PRD-135, av.pinn
+
+- [PRD-135](prds/prd-135.md): a voxel-encoder PINN replacing `qpinn/forward.py::simulate`,
+  built and accepted on the forward criteria at the frozen 300k checkpoint (τ_x 0.102 ns,
+  r_inf 0.0199, calibrated) and on reverse recovery at 88 % coverage. Findings that changed
+  the design on the way: a leaking validation split, a silent OOM death of a trainer that
+  loaded every chunk, a precision head pinned at its bound (the emitted covariance was a
+  constant), a non-finite Hessian behind every "identified, not covered" verdict, and a kink
+  in the likelihood behind every "not converged". The identifiability-vs-sites table
+  (`prototypes/quench_pinn/figures/s90_identifiability_set2.png`) is the number the
+  literature search needed.
+- `qpinn/measurements.py`: reads the table's `__error` columns (none populated for the four
+  fitted proteins); pools every Alexa Fluor 488 spelling; registers p27 (1JSU) — which loads
+  nothing usable, and why is in the PRD.
+- The evidence bundle was synced to cordeshub and `pinn_table.csv` recompiled from the
+  current `measurements.csv` (14,889 rows, 370 proteins; 36 conflicts and 697 disagreeing
+  overlaps flagged for review, previous table kept as `pinn_table_2026-08-27.csv.bak`).
