@@ -115,7 +115,7 @@ struct PymolTransform {
 //! The transforms of one result, one per molecule, in molecule order.
 /*!
     `capture_poses` writes one entry per rigid body in body order and
-    `build_docking_assembly` creates one body per input PDB in the order given,
+    `create_docking_assembly` creates one body per input PDB in the order given,
     so entry *i* is molecule *i*. The `body_id` is carried in the JSON and is
     checked against nothing here on purpose: matching by position is what the
     assembly itself does, and a second matching rule would be a second place
@@ -277,7 +277,7 @@ FPSMolecules fps_molecules(const std::vector<std::string>& pdb_paths) {
             IMP_THROW("PDB file not found: " << pdb_paths[i], IOException);
         }
         // The same read and the same rigid-body construction
-        // `build_docking_assembly` performs, so the centre recorded here is
+        // `create_docking_assembly` performs, so the centre recorded here is
         // the frame the pose was captured in -- by construction, not by a
         // second formula that could drift from it.
         IMP_NEW(IMP::Model, model, ());

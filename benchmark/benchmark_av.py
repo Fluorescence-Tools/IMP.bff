@@ -9,9 +9,9 @@ improves, and until now there was nothing to measure it against --
 Two doors are timed because they cost differently and can regress
 independently:
 
-* **structure** -- `compute_av_from_structure`, which parses the PDB, applies
+* **structure** -- `get_av_from_structure`, which parses the PDB, applies
   the strip mask and resamples. This is what a caller with a file pays.
-* **array** -- `compute_av`, handed the obstacle array directly. This isolates
+* **array** -- `get_av`, handed the obstacle array directly. This isolates
   the path search from the parsing, so a regression can be attributed.
 
 Grid resolution dominates: cost goes as the voxel count, so a 0.5 A step is
@@ -121,15 +121,15 @@ def run_sweep(args):
         arr = obstacles_for(pdb)
         # the attachment coordinate, so the array door measures the same volume
         try:
-            src = bff.find_attachment_point(pdb, chain, resseq, atom)
+            src = bff.get_attachment_point(pdb, chain, resseq, atom)
         except Exception as exc:
             print("  skip %s (%s)" % (label, exc))
             continue
         for step in args.steps:
             k = "%s@%.1f" % (label, step)
-            s = timeit(lambda: bff.compute_av_from_structure(
+            s = timeit(lambda: bff.get_av_from_structure(
                 pdb, chain, resseq, atom, ll, lw, r1, 0.0, 0.0, step), args.repeats)
-            a = timeit(lambda: bff.compute_av(
+            a = timeit(lambda: bff.get_av(
                 arr, list(src), ll, lw, r1, 0.0, 0.0, step), args.repeats)
             out[k] = {"structure": s, "array": a, "n_atoms": int(arr.shape[0])}
             print("%-18s structure %8.2f ms   array %8.2f ms   (%d atoms)"

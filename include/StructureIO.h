@@ -162,7 +162,7 @@ IMPBFFEXPORT void load_structure(const std::string& path, double** out_view,
                than a crop.
     \throw ValueException on a length mismatch
 */
-IMPBFFEXPORT double compute_rmsd(const std::vector<double>& coords_a,
+IMPBFFEXPORT double get_rmsd(const std::vector<double>& coords_a,
                                  const std::vector<double>& coords_b,
                                  const std::vector<int>& selection_mask =
                                          std::vector<int>(),

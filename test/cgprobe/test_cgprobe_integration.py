@@ -15,10 +15,10 @@ class TestIntegration(unittest.TestCase):
         # instead of expecting a pre-built output/systems/*.system.cif: the
         # test used to skip everywhere the build-system task had not run.
         from IMP.bff import write_probe_forcefield_cif
-        from IMP.bff import build_probe_protein_system
+        from IMP.bff import create_probe_protein_system
         from IMP.bff import get_template_dir
         cls._tmp = tempfile.TemporaryDirectory()
-        system = build_probe_protein_system(
+        system = create_probe_protein_system(
             str(get_structure_dir("cx4.mol2")),
             str(get_structure_dir("atto655.mol2")),
             "CX4",

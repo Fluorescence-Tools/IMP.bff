@@ -246,7 +246,7 @@ IMPBFFEXPORT double forster_radius(
         `_cgprobe_metadata` category.
     \throw ValueException if the dye is not in the table
 */
-IMPBFFEXPORT Probe find_probe(std::string name, std::string library_cif = "",
+IMPBFFEXPORT Probe get_probe(std::string name, std::string library_cif = "",
                           std::string template_cif = "");
 
 //! Chromophore names of every dye in a library, sorted.
@@ -259,7 +259,7 @@ IMPBFFEXPORT std::vector<std::string> available_probes(std::string library_cif =
     is what new code should use.
 
     Names resolve through #IMP::bff::resolve_probe_name, exactly as
-    #IMP::bff::find_probe does, so `"Alexa488"` reaches `AlexaFluor488` here too.
+    #IMP::bff::get_probe does, so `"Alexa488"` reaches `AlexaFluor488` here too.
     It used to match on whitespace alone, which meant a spelling worked through
     one door and not the other -- worse than neither working, because the
     failure looked like a missing dye rather than a missing alias.

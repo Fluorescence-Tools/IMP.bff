@@ -28,9 +28,9 @@ def test_test_module_basenames_are_unique():
 
 
 def test_the_array_door_computes_an_accessible_volume():
-    """``compute_av`` end to end -- four atoms and a source between them is
+    """``get_av`` end to end -- four atoms and a source between them is
     enough: what is pinned is that the flat C++ door is callable at all."""
-    av = IMP.bff.compute_av(
+    av = IMP.bff.get_av(
         np.column_stack([
             np.array([[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 6.0, 0.0],
                       [0.0, 0.0, 6.0]]),

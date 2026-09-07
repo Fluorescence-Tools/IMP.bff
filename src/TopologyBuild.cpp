@@ -192,7 +192,7 @@ std::map<int, std::string> serial_to_site_atom_names(
     return out;
 }
 
-ProbeForceFieldSystem build_forcefield_system(
+ProbeForceFieldSystem create_forcefield_system(
         const std::string& components_json, double bond_k, double angle_k,
         double pi_dihedral_k, double linker_dihedral_k, double ring_improper_k,
         double pi_improper_k, double flat_improper_k, double orient_improper_k,
@@ -418,7 +418,7 @@ ProbeForceFieldSystem build_forcefield_system(
                           {"k", orient_improper_k}}}};
 
     // LJ types: one per element the site names imply, from the single C++
-    // table (build_lj_type_table -> charmm36), so there is no second source
+    // table (get_lj_type_table -> charmm36), so there is no second source
     std::set<std::string> all_elements;
     for (const auto& c : components) {
         for (const auto& [serial, atom] : c.atoms) {
@@ -428,7 +428,7 @@ ProbeForceFieldSystem build_forcefield_system(
     }
     nlohmann::json lj_types = nlohmann::json::object();
     for (const auto& [key, t] :
-             build_lj_type_table(std::vector<std::string>(all_elements.begin(),
+             get_lj_type_table(std::vector<std::string>(all_elements.begin(),
                                                           all_elements.end()))) {
         lj_types[key] = {{"element", t.element},
                          {"rmin_half", t.rmin_half},
@@ -458,7 +458,7 @@ std::string json_quote(const std::string& v) {
 }
 }  // namespace
 
-ProbeForceFieldSystem build_forcefield_system(
+ProbeForceFieldSystem create_forcefield_system(
         const std::vector<FFComponentSpec>& components, double bond_k,
         double angle_k, double pi_dihedral_k, double linker_dihedral_k,
         double ring_improper_k, double pi_improper_k, double flat_improper_k,
@@ -479,7 +479,7 @@ ProbeForceFieldSystem build_forcefield_system(
              << ",\"role\":" << json_quote(c.role) << '}';
     }
     json << ']';
-    return build_forcefield_system(json.str(), bond_k, angle_k, pi_dihedral_k,
+    return create_forcefield_system(json.str(), bond_k, angle_k, pi_dihedral_k,
                                    linker_dihedral_k, ring_improper_k,
                                    pi_improper_k, flat_improper_k,
                                    orient_improper_k, n_steps, write_every,
@@ -488,7 +488,7 @@ ProbeForceFieldSystem build_forcefield_system(
                                    relative_to);
 }
 
-ProbeForceFieldSystem build_probe_protein_system(
+ProbeForceFieldSystem create_probe_protein_system(
         const std::string& protein_mol2, const std::string& dye_mol2,
         const std::string& protein_name, const std::string& probe_name,
         const std::string& protein_template, const std::string& probe_template,
@@ -498,7 +498,7 @@ ProbeForceFieldSystem build_probe_protein_system(
                                     protein_template, "fixed"));
     specs.push_back(FFComponentSpec(probe_name, dye_mol2, probe_template,
                                     "mobile"));
-    return build_forcefield_system(specs, 2000.0, 400.0, 12.0, 1.5, 40.0,
+    return create_forcefield_system(specs, 2000.0, 400.0, 12.0, 1.5, 40.0,
                                    180.0, 120.0, 220.0, 20000, 100,
                                    default_radius, default_mass, 5.0, 6.0,
                                    200, "");
@@ -512,7 +512,7 @@ ProbeForceFieldSystem probe_forcefield_system(const std::string& dye_mol2,
     std::vector<FFComponentSpec> specs;
     specs.push_back(FFComponentSpec(probe_name, dye_mol2, probe_template,
                                     "mobile"));
-    ProbeForceFieldSystem system = build_forcefield_system(
+    ProbeForceFieldSystem system = create_forcefield_system(
             specs, 2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
             20000, 100, default_radius, default_mass, 5.0, 6.0, 200, "");
 

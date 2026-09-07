@@ -202,7 +202,7 @@ def test_the_bootstrap_defaults_choose_the_correct_density_and_fix_d2():
 
 @pytest.fixture(scope="module")
 def assembly():
-    return IMP.bff.build_docking_assembly(PDBS, FPS_JSON)
+    return IMP.bff.create_docking_assembly(PDBS, FPS_JSON)
 
 
 def _poses(assembly):
@@ -352,7 +352,7 @@ def bootstrap(tmp_path_factory):
     boot = IMP.bff.BootstrapParameters()
     boot.n_replicas = 3
     boot.seed = 5
-    assembly = IMP.bff.build_docking_assembly(PDBS, FPS_JSON,
+    assembly = IMP.bff.create_docking_assembly(PDBS, FPS_JSON,
                                               score_set="resolved")
     parent = IMP.bff.capture_poses(assembly)
     return IMP.bff.fps_bootstrap(PDBS, FPS_JSON, str(out), parent, params,
@@ -420,7 +420,7 @@ def test_d2_leaves_the_deselected_distances_as_zero_noise_pins(tmp_path):
     params = IMP.bff.fps_error_estimation_parameters()
     params.score_set = "resolved"
     params.n_frames = 20
-    assembly = IMP.bff.build_docking_assembly(PDBS, FPS_JSON,
+    assembly = IMP.bff.create_docking_assembly(PDBS, FPS_JSON,
                                               score_set="resolved")
     parent = IMP.bff.capture_poses(assembly)
 

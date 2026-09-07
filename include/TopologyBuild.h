@@ -3,7 +3,7 @@
  *  \brief The one force-field system builder, from components to the typed
  *         value.
  *
- * `build_forcefield_system` is one function over the MOL2 reader, the
+ * `create_forcefield_system` is one function over the MOL2 reader, the
  * molecular graph, the improper expanders and the template reader: it reads
  * the components, derives sites/bonds/angles/dihedrals/impropers/groups and
  * assembles the system's JSON, then builds the typed system through
@@ -52,7 +52,7 @@ IMP_VALUES(FFComponentSpec, FFComponentSpecs);
 //! The same builder, from typed component specs.
 /*! Composes the JSON the other overload takes, so there is one conversion
     path rather than two. */
-IMPBFFEXPORT ProbeForceFieldSystem build_forcefield_system(
+IMPBFFEXPORT ProbeForceFieldSystem create_forcefield_system(
         const std::vector<FFComponentSpec>& components,
         double bond_k = 2000.0, double angle_k = 400.0,
         double pi_dihedral_k = 12.0, double linker_dihedral_k = 1.5,
@@ -64,7 +64,7 @@ IMPBFFEXPORT ProbeForceFieldSystem build_forcefield_system(
         int minimize_steps = 200, const std::string& relative_to = "");
 
 //! A system for a protein and a dye, both from MOL2 -- two components.
-IMPBFFEXPORT ProbeForceFieldSystem build_probe_protein_system(
+IMPBFFEXPORT ProbeForceFieldSystem create_probe_protein_system(
         const std::string& protein_mol2, const std::string& dye_mol2,
         const std::string& protein_name, const std::string& probe_name,
         const std::string& protein_template = "",
@@ -105,7 +105,7 @@ IMPBFFEXPORT ProbeForceFieldSystem probe_forcefield_system(
            components
     \throw IOException when a MOL2 or template file cannot be read
 */
-IMPBFFEXPORT ProbeForceFieldSystem build_forcefield_system(
+IMPBFFEXPORT ProbeForceFieldSystem create_forcefield_system(
         const std::string& components_json,
         double bond_k = 2000.0, double angle_k = 400.0,
         double pi_dihedral_k = 12.0, double linker_dihedral_k = 1.5,

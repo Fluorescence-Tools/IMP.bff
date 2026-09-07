@@ -153,7 +153,7 @@ class Tests(IMP.test.TestCase):
         out because its link search hops `linknodes = 3` voxels and tunnels
         through them, which is exactly the leak PRD-105 closed deliberately.
         On heavy atoms -- this module's own convention, and what
-        `build_docking_assembly` reads -- the two agree to a few percent.
+        `create_docking_assembly` reads -- the two agree to a few percent.
         """
         pin = self.pins["p66"]
         model, serials = _structure(hydrogens=False)

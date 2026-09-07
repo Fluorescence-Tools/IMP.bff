@@ -42,7 +42,7 @@ IMPBFFEXPORT std::vector<std::string> backbone_atom_names();
 
 //! The obstacles a volume sees: `(x, y, z, r)` per atom, flat.
 /*! The array form of a strip, for the kernels that take obstacles as numbers
-    rather than as a hierarchy -- #IMP::bff::compute_av and everything built on
+    rather than as a hierarchy -- #IMP::bff::get_av and everything built on
     it. Four doubles per atom, in hierarchy order, **every** atom present: the
     ones \p mask names carry a **radius of zero**, which is what a strip is
     everywhere in this module. A rasteriser asks `distance < radius`, so an

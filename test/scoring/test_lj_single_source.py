@@ -68,7 +68,7 @@ def test_scalar_and_pairwise_kernels_agree():
 
 def test_rotamer_scoring_uses_the_shared_kernel():
     """The end-to-end score's 12-6 energy equals lj_energy on the same pairs."""
-    from IMP.bff import compute_rotamer_score
+    from IMP.bff import get_rotamer_score
     rng = np.random.default_rng(5)
     n_prot, n_rot = 12, 5
     protein_coords = rng.uniform(0, 8, size=(n_prot, 3))
@@ -76,12 +76,12 @@ def test_rotamer_scoring_uses_the_shared_kernel():
     protein_resnames = ["ALA"] * n_prot
     rotamer_coords = rng.uniform(0, 8, size=(1, n_rot, 3))
     rotamer_names = ["C1", "N1", "O1", "C2", "S1"]
-    res = compute_rotamer_score(
+    res = get_rotamer_score(
         rotamer_coords, protein_coords, protein_names, protein_resnames, rotamer_names,
         rotamer_weights=np.ones(1), temperature=300.0, electrostatic=False,
         potential="lj", sigma_scaling=1.0, epsilon_scaling=1.0, ignore_h=True,
     )
-    # compute_rotamer_score masks hydrogens on both sides and backbone names
+    # get_rotamer_score masks hydrogens on both sides and backbone names
     # (CA, C, N, O) on the rotamer side only (the protein keeps its backbone;
     # only the labelled residue is masked, and no site is given here).
     keep_p = list(range(len(protein_names)))

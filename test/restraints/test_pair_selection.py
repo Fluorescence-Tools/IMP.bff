@@ -56,7 +56,7 @@ def test_pairwise_rmsd_agrees_with_compute_rmsd_pair_by_pair(ensemble):
                 if i == j:
                     continue
                 assert got[i, j] == pytest.approx(
-                    IMP.bff.compute_rmsd(ensemble[i].ravel(),
+                    IMP.bff.get_rmsd(ensemble[i].ravel(),
                                          ensemble[j].ravel(), [], superpose),
                     abs=1e-9)
 

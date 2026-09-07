@@ -226,7 +226,7 @@ void load_structure_with_vdw(const std::string& pdb_path, double** out_view,
     }
 }
 
-void find_attachment_point(const std::string& pdb_path, const std::string& chain,
+void get_attachment_point(const std::string& pdb_path, const std::string& chain,
                            int resseq, const std::string& atom_name,
                            double** out_view, int* n_out_view) {
     const std::vector<PDBAtomRecord> rows = read_pdb_records(pdb_path);
@@ -318,7 +318,7 @@ AccessibleVolume resample_av(IMP::Model* model, IMP::Particle* source_particle,
                             attachment);
 }
 
-AccessibleVolume compute_av(double* atoms_xyzr, int n_atoms, int n_cols,
+AccessibleVolume get_av(double* atoms_xyzr, int n_atoms, int n_cols,
                             const std::vector<double>& source_xyz,
                             double linker_length, double linker_width,
                             double r1, double r2, double r3,
@@ -400,7 +400,7 @@ AccessibleVolume compute_av(double* atoms_xyzr, int n_atoms, int n_cols,
     return av;
 }
 
-AccessibleVolume compute_av_from_structure(
+AccessibleVolume get_av_from_structure(
         const std::string& pdb_path, const std::string& chain, int resseq,
         const std::string& atom_name, double linker_length, double linker_width,
         double r1, double r2, double r3, double disc_step,
@@ -503,7 +503,7 @@ AccessibleVolume av_from_position(const std::string& pdb_path,
                              "built at disc_step=1.5",
                   ValueException);
     }
-    return compute_av_from_structure(
+    return get_av_from_structure(
             pdb_path, chain, resseq, atom, linker_length, linker_width, r1, r2,
             r3, step, position.value("strip_mask", ""),
             position.contains("allowed_sphere_radius")
@@ -514,14 +514,14 @@ AccessibleVolume av_from_position(const std::string& pdb_path,
 }
 }
 
-AccessibleVolume compute_av_from_structure(
+AccessibleVolume get_av_from_structure(
         const std::string& pdb_path, const std::string& position_json,
         double disc_step) {
     return av_from_position(pdb_path, nlohmann::json::parse(position_json),
                             disc_step);
 }
 
-std::map<std::string, AccessibleVolume> compute_avs_for_structure(
+std::map<std::string, AccessibleVolume> get_avs_for_structure(
         const std::string& positions_json, const std::string& pdb_path_or_json,
         double disc_step) {
     const nlohmann::json positions = nlohmann::json::parse(positions_json);
@@ -564,7 +564,7 @@ std::map<std::string, AccessibleVolume> compute_avs_for_structure(
                           : 1.5;
         double* found = NULL;
         int n_found = 0;
-        find_attachment_point(path, p.value("chain_identifier", ""),
+        get_attachment_point(path, p.value("chain_identifier", ""),
                               static_cast<int>(p.value("residue_seq_number", 0)),
                               p.value("atom_name", "CA"), &found, &n_found);
         if (found == NULL || n_found == 0) {

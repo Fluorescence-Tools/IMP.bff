@@ -271,7 +271,7 @@ LabelDistributionAV::LabelDistributionAV(
                           << atoms_vdw.size() << " radii",
                   IMP::ValueException);
     }
-    // Interleave (x, y, z, ball-radius) so compute_av sees its (N, 4) layout.
+    // Interleave (x, y, z, ball-radius) so get_av sees its (N, 4) layout.
     atoms_xyzr_.resize(4 * n);
     for (std::size_t i = 0; i < n; ++i) {
         atoms_xyzr_[4 * i + 0] = atoms_xyz[3 * i + 0];
@@ -287,7 +287,7 @@ LabelDistributionAV::LabelDistributionAV(
 }
 
 void LabelDistributionAV::do_compute() const {
-    av_ = compute_av(const_cast<double*>(atoms_xyzr_.data()),
+    av_ = get_av(const_cast<double*>(atoms_xyzr_.data()),
                      static_cast<int>(atoms_xyzr_.size() / 4), 4, source_xyz_,
                      linker_length_, linker_width_, r1_, r2_, r3_,
                      simulation_grid_resolution_, DEFAULT_ALLOWED_SPHERE_RADIUS,

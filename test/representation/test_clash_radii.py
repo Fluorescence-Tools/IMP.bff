@@ -193,7 +193,7 @@ def test_an_unknown_source_is_refused_by_name():
     assert params.clash_radii_source == "imp"
     assert params.clash_radii_scale == 1.0
     with pytest.raises(Exception):
-        IMP.bff.build_docking_assembly(PDBS, FPS_JSON, "resolved", True, 1.0,
+        IMP.bff.create_docking_assembly(PDBS, FPS_JSON, "resolved", True, 1.0,
                                        6.0, 0.0, 0.0, "bondi")
 
 

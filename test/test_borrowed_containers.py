@@ -24,7 +24,7 @@ import pytest
 
 import IMP.bff
 
-#: `build_forcefield_system` is overloaded, so SWIG allows no keywords: every
+#: `create_forcefield_system` is overloaded, so SWIG allows no keywords: every
 #: parameter up to `relative_to` is positional, and these are its own defaults.
 DEFAULTS = (2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
             20000, 100, 1.7, 12.0, 5.0, 6.0, 200)
@@ -34,7 +34,7 @@ DEFAULTS = (2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
 def system_cif():
     tmp = tempfile.mkdtemp()
     mol2 = str(IMP.bff.get_structure_dir("atto655.mol2"))
-    system = IMP.bff.build_forcefield_system(
+    system = IMP.bff.create_forcefield_system(
         [IMP.bff.FFComponentSpec("dye", mol2, "", "mobile")], *DEFAULTS, "")
     path = f"{tmp}/system.cif"
     IMP.bff.write_probe_forcefield_cif(path, system)

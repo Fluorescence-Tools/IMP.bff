@@ -123,7 +123,7 @@ def test_an_xyz_position_lands_where_its_frame_says(tmp_path, structure):
     answer is an atom we can look up rather than a plausible coordinate.
     """
     path, _, target = _fixed_on_atom(tmp_path, structure)
-    assembly = IMP.bff.build_docking_assembly([PDB], path, "s")
+    assembly = IMP.bff.create_docking_assembly([PDB], path, "s")
     network = assembly.get_network()
 
     assert list(network.get_point_position_names()) == ["fixed"]
@@ -155,7 +155,7 @@ def test_a_distance_touching_a_fixed_position_enters_chi2(tmp_path, structure):
     # a shared occupancy registry has to be evaluated once before an AV handle
     # can be resampled on its own (the registry's coordinate snapshot is taken
     # there), and reaching into one before that segfaults -- see the report.
-    assembly = IMP.bff.build_docking_assembly([PDB], path, "s")
+    assembly = IMP.bff.create_docking_assembly([PDB], path, "s")
     assembly.evaluate()
     av = assembly.get_network().get_used_av(av_name)
     av.resample()
@@ -252,7 +252,7 @@ def test_an_xyz_position_without_a_frame_is_taken_as_written(tmp_path,
                                 "Forster_radius": 52.0}},
            "χ²": {"s": {"distances": ["dd"]}}}
     path = _write(tmp_path, out, "bare.json")
-    assembly = IMP.bff.build_docking_assembly([PDB], path, "s")
+    assembly = IMP.bff.create_docking_assembly([PDB], path, "s")
     got = IMP.core.XYZ(assembly.get_model(),
                        assembly.get_network().get_position_particle_index(
                            "fixed")).get_coordinates()
@@ -297,7 +297,7 @@ def test_an_atom_position_is_the_atom_itself(tmp_path, structure):
                                 "Forster_radius": 52.0}},
            "χ²": {"s": {"distances": ["dd"]}}}
     path = _write(tmp_path, out, "atom.json")
-    assembly = IMP.bff.build_docking_assembly([PDB], path, "s")
+    assembly = IMP.bff.create_docking_assembly([PDB], path, "s")
     network = assembly.get_network()
     assert list(network.get_atom_position_names()) == ["anchor"]
     pi = network.get_position_particle_index("anchor")

@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             whence = str(args.dyes)
         else:
             fret.forster_radius = bff.forster_radius(
-                bff.find_probe(args.donor), bff.find_probe(args.acceptor),
+                bff.get_probe(args.donor), bff.get_probe(args.acceptor),
                 args.kappa2, args.refractive_index)
             whence = "the bundled dye library"
         print("R0(%s -> %s) = %.1f A  [kappa2=%.3f, n=%.2f, from %s]"

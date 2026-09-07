@@ -1045,7 +1045,7 @@ RotamerEnsemble RotamerEnsemble::from_frame(
         if (meta.is_discarded()) meta = nlohmann::json::object();
     }
 
-    const RotamerScoreResult score = compute_rotamer_score(
+    const RotamerScoreResult score = get_rotamer_score(
             rotamers, frame.coords, frame.atom_names, frame.resnames,
             library.atom_names, selector_list(meta, "positive"),
             selector_list(meta, "negative"), library.resnames,

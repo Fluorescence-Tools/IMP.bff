@@ -116,7 +116,7 @@ IMP_VALUES(AccessibleVolume, AccessibleVolumes);
 
 //! Write a volume to \p path; the format follows the file extension.
 /*!
-    The overload for the value type #IMP::bff::compute_av() returns, so the
+    The overload for the value type #IMP::bff::get_av() returns, so the
     array front door and the decorator front door are written the same way.
 
     | extension | what is written |

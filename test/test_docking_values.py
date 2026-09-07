@@ -229,7 +229,7 @@ def test_minimisation_improves_the_score_and_writes_its_pose(tmp_path):
     poses = json.loads(result.poses)
     assert poses and set(poses[0]) == {"body_id", "t", "q"}
     # the state goes back onto an assembly built from the same inputs
-    fresh = IMP.bff.build_docking_assembly([pdb], fps,
+    fresh = IMP.bff.create_docking_assembly([pdb], fps,
                                            score_set="chi2_C2_33p")
     IMP.bff.apply_poses(fresh, result.poses)
     assert IMP.bff.score_assembly(fresh).score == pytest.approx(result.score,
@@ -301,7 +301,7 @@ def test_a_structure_missing_a_labelling_site_scores_nan_and_does_not_crash():
 
     # and the reason is available rather than silent
     with pytest.raises(Exception) as excinfo:
-        IMP.bff.build_docking_assembly([dna], fps, "resolved")
+        IMP.bff.create_docking_assembly([dna], fps, "resolved")
     assert "labelling site" in str(excinfo.value)
 
 

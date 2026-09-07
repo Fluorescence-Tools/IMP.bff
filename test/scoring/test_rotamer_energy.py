@@ -127,11 +127,11 @@ def test_empty_inputs_do_not_crash():
 
 
 def test_the_scorer_still_produces_normalised_weights():
-    """The kernel feeds compute_rotamer_score; its contract is unchanged."""
-    from IMP.bff import compute_rotamer_score
+    """The kernel feeds get_rotamer_score; its contract is unchanged."""
+    from IMP.bff import get_rotamer_score
     rng = np.random.default_rng(11)
     n_rot, n_dye, n_prot = 12, 6, 40
-    result = compute_rotamer_score(
+    result = get_rotamer_score(
         rotamer_coords=rng.normal(0, 5, (n_rot, n_dye, 3)),
         protein_coords=rng.normal(0, 8, (n_prot, 3)),
         protein_atom_names=["CA"] * n_prot,
@@ -144,10 +144,10 @@ def test_the_scorer_still_produces_normalised_weights():
 
 
 def test_an_unknown_potential_is_refused():
-    from IMP.bff import compute_rotamer_score
+    from IMP.bff import get_rotamer_score
     rng = np.random.default_rng(1)
     with pytest.raises(ValueError, match="Unknown potential"):
-        compute_rotamer_score(
+        get_rotamer_score(
             rotamer_coords=rng.normal(0, 5, (3, 4, 3)),
             protein_coords=rng.normal(0, 8, (10, 3)),
             protein_atom_names=["CA"] * 10, protein_resnames=["ALA"] * 10,

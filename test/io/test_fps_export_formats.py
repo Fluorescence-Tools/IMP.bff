@@ -46,7 +46,7 @@ def molecules():
 
 @pytest.fixture(scope="module")
 def assembly():
-    return IMP.bff.build_docking_assembly(PDBS, FPS_JSON)
+    return IMP.bff.create_docking_assembly(PDBS, FPS_JSON)
 
 
 def _pair(name, p1, p2, exp, model, err=4.0, dtype="RDAMeanE"):

@@ -165,7 +165,7 @@ std::string fp_library_json() {
     return buffer.str();
 }
 
-std::vector<SequenceSegment> find_fp_domains(const std::string& sequence,
+std::vector<SequenceSegment> get_fp_domains(const std::string& sequence,
                                              double min_identity) {
     nlohmann::json library = nlohmann::json::parse(fp_library_json(), NULL,
                                                    false);

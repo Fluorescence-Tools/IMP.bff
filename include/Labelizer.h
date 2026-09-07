@@ -656,7 +656,7 @@ IMPBFF_END_NAMESPACE
  * deployed backend calls `calc_fret_score(..., weights=False)`
  * (`backendapp/tasks.py:167`), running `removeWeights` to set every occupied
  * voxel of the LabelLib grid to 1 — a parameter its own documentation calls
- * "I DON'T KNOW" (`labelizer.py:279`). Measured here: #IMP::bff::compute_av
+ * "I DON'T KNOW" (`labelizer.py:279`). Measured here: #IMP::bff::get_av
  * already returns a uniformly weighted cloud (2327 points at a real site, one
  * distinct weight, exactly 1), so weighted and binarised are the same cloud
  * and there is nothing to switch. An option for it was written, measured to
@@ -664,7 +664,7 @@ IMPBFF_END_NAMESPACE
  *
  * **The accessible volume is the module's own.** The reference calls LabelLib,
  * which is banned here (owner rule, 2026-08-11); the cloud comes from
- * #IMP::bff::compute_av and the distance from #IMP::bff::model_distance, so
+ * #IMP::bff::get_av and the distance from #IMP::bff::model_distance, so
  * there is one AV implementation in this package and this is not it.
  *
  * \authors Thomas-Otavio Peulen
@@ -685,7 +685,7 @@ enum ProbeModel {
     //! The reference's `GEBHARDT` analytic mean position; see
     //! #ll_alpha_cone_mean_position.
     PROBE_MODEL_ALPHA_CONE = 1,
-    //! A real accessible volume, through #IMP::bff::compute_av. The
+    //! A real accessible volume, through #IMP::bff::get_av. The
     //! reference's `KALININ`, with its LabelLib call replaced.
     PROBE_MODEL_ACCESSIBLE_VOLUME = 2
 };

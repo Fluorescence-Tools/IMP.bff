@@ -4,7 +4,7 @@
  * `bin/imp_bff`, beside the command that runs it.
  *
  * What it *computes* does not. The restraint builders
- * (`build_probe_restraints`, `build_steric_restraint`, `build_go_restraints`)
+ * (`create_probe_restraints`, `create_steric_restraint`, `create_go_restraints`)
  * and the placement search (`place_guest_by_score`) are C++ in `Scoring.h`,
  * because those are kernels rather than orchestration -- and because a runner
  * with its own copy of the restraint builder disagrees with the shared one
@@ -12,5 +12,5 @@
  * score repulsion.
  *
  * There is one repulsion, for dynamics and for Monte Carlo alike:
- * `build_steric_restraint`, soft spheres over every non-excluded pair.
+ * `create_steric_restraint`, soft spheres over every non-excluded pair.
  */

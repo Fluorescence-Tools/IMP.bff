@@ -159,7 +159,7 @@ def test_overlap_rejects_a_reference_that_is_not_three_per_point(clouds):
 def t4l_av():
     IMP.set_log_level(IMP.SILENT)
     pdb = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
-    return IMP.bff.compute_av_from_structure(pdb, "A", 132, "CB", 20.5, 1.5,
+    return IMP.bff.get_av_from_structure(pdb, "A", 132, "CB", 20.5, 1.5,
                                              3.5, 0.0, 0.0, 1.5)
 
 
@@ -397,7 +397,7 @@ def test_rmin_reaches_the_av_level_distances(two_avs):
 
 def test_the_decorator_writes_the_same_formats_as_the_value(two_avs, tmp_path):
     """`write_av` has two overloads -- the AV decorator and the value
-    `compute_av` returns -- and the decorator's one also does the grid formats
+    `get_av` returns -- and the decorator's one also does the grid formats
     IMP.em writes."""
     m, h, build = two_avs
     av = build(132)

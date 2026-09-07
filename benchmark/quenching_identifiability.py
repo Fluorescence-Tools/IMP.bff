@@ -127,13 +127,13 @@ class Site:
         self.site = site
         self.atoms = load_atoms(pdb_path)
         # `disc_step` is the grid resolution, and it is the *only* way in.
-        # `compute_av` overwrites `source_info["simulation_grid_resolution"]`
+        # `get_av` overwrites `source_info["simulation_grid_resolution"]`
         # from this argument (`fret/av.py:167`) rather than reading it, so
         # passing the resolution in `source_info` is silently ignored -- which
         # is how every run before 2026-08-18 was made at the 1.5 A default while
         # reporting whatever `--resolution` said. Asserted below rather than
         # trusted.
-        self.av = IMP.bff.compute_av(
+        self.av = IMP.bff.get_av(
             np.zeros((1, 4)), np.zeros(3), linker_length, 0.5, (3.5, 3.5, 3.5),
             disc_step=resolution,
             pdb_path=pdb_path,

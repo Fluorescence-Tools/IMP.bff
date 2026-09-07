@@ -338,7 +338,7 @@ typedef std::vector<RotamerScoreResult> RotamerScoreResults;
             mask leaves nothing to score
     \throw ValueException for any other \p potential
 */
-IMPBFFEXPORT RotamerScoreResult compute_rotamer_score(
+IMPBFFEXPORT RotamerScoreResult get_rotamer_score(
         const std::vector<double>& rotamer_coords,
         const std::vector<double>& protein_coords,
         const std::vector<std::string>& protein_atom_names,
@@ -419,7 +419,7 @@ struct LJSitePair {
 
 //! Every non-excluded site pair of a system, with LJ cross parameters.
 /*! The exclusions are the system's own (bonds, angle and dihedral end pairs). */
-IMPBFFEXPORT std::vector<LJSitePair> compute_lj_pair_sites(
+IMPBFFEXPORT std::vector<LJSitePair> get_lj_pair_sites(
         const ProbeForceFieldSystem& system);
 
 //! The \c IMP::core::Cosine a torsion type spells, converted from CHARMM.
@@ -445,7 +445,7 @@ IMPBFFEXPORT IMP::core::Cosine* torsion_cosine(const FFTorsionType& type);
     \param[in] system the typed system (bonds, angles, torsions, impropers)
     \param[in] site_ids,particles the decorated sites, parallel; a site id
                that appears twice takes its last particle
-    \param[in] nonbonded add the repulsion (#build_steric_restraint). False
+    \param[in] nonbonded add the repulsion (#create_steric_restraint). False
                leaves it to the caller, which is what a run wants when it
                scores rigid moves against the repulsion *alone*.
     \throw ValueException when the two sequences disagree in length
@@ -455,7 +455,7 @@ IMPBFFEXPORT IMP::core::Cosine* torsion_cosine(const FFTorsionType& type);
     That is what a system built without a template carries, and refusing it
     would refuse the systems this module builds itself.
 */
-IMPBFFEXPORT IMP::Restraints build_probe_restraints(
+IMPBFFEXPORT IMP::Restraints create_probe_restraints(
         IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles, bool nonbonded = true);
@@ -485,13 +485,13 @@ IMPBFFEXPORT IMP::Restraints build_probe_restraints(
     so this and the bonded terms cannot disagree about which pairs are 1-2,
     1-3 or 1-4.
 
-    \param[in] model,system,site_ids,particles as for #build_probe_restraints
+    \param[in] model,system,site_ids,particles as for #create_probe_restraints
     \param[in] k the soft-sphere force constant; negative takes the system's
                own `nonbonded.k`
     \return the restraint; null when the system's non-bonded term is off or
             it has no non-excluded pair
 */
-IMPBFFEXPORT IMP::Restraint* build_steric_restraint(
+IMPBFFEXPORT IMP::Restraint* create_steric_restraint(
         IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles, double k = -1.0);
@@ -549,7 +549,7 @@ IMPBFFEXPORT double place_guest_by_score(
     placed on top of each other would otherwise get a harmonic at zero, which
     is a singularity a minimiser walks straight into.
 */
-IMPBFFEXPORT IMP::Restraints build_go_restraints(
+IMPBFFEXPORT IMP::Restraints create_go_restraints(
         IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles,
@@ -559,13 +559,13 @@ IMPBFFEXPORT IMP::Restraints build_go_restraints(
         double k = 3.0, double cutoff = 6.0);
 
 //! `_ff_lj_type` entries (`LJ_<elem>`) for a set of elements.
-IMPBFFEXPORT std::map<std::string, FFLJType> build_lj_type_table(
+IMPBFFEXPORT std::map<std::string, FFLJType> get_lj_type_table(
         const std::vector<std::string>& elements);
 
 //! Evaluates the internal LJ energy of dye conformations.
 /*!
     The pair list is every non-excluded site pair of \p system (see
-    #compute_lj_pair_sites), so bonded neighbours do not sterically block each
+    #get_lj_pair_sites), so bonded neighbours do not sterically block each
     other. \c evaluate takes one frame; \c evaluate_batch one per frame;
     \c evaluate_batch_filtered pre-filters with a #BoundingBoxFilter and gives
     non-overlapping frames zero energy.

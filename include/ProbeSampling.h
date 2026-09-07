@@ -348,7 +348,7 @@ IMPBFFEXPORT RotamerLibrary load_rotamer_library_trajectory(
 //! `(pdb, trajectory, weights)` for a reference dye+linker name.
 /*! The weights entry is empty when there is no weights file. \throw
     IOException when the PDB or the trajectory is missing. */
-IMPBFFEXPORT std::vector<std::string> find_reference_rotamer_files(
+IMPBFFEXPORT std::vector<std::string> get_reference_rotamer_files(
         const std::string& lib_dir, const std::string& probe_name,
         int cutoff = 30);
 

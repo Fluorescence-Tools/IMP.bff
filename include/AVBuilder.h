@@ -6,9 +6,9 @@
  * this is what stands between them. There are two front doors and they differ
  * only in what identifies the label:
  *
- * - #IMP::bff::compute_av takes **raw arrays** — atoms, radii and an attachment
+ * - #IMP::bff::get_av takes **raw arrays** — atoms, radii and an attachment
  *   coordinate. No file, no fps position. It is what a restraint has.
- * - #IMP::bff::compute_av_from_structure takes a **PDB and an fps position
+ * - #IMP::bff::get_av_from_structure takes a **PDB and an fps position
  *   definition**, applies the FPS strip and resolves the attachment atom by
  *   `(chain, residue, atom name)`.
  *
@@ -131,7 +131,7 @@ IMPBFFEXPORT void load_structure_with_vdw(const std::string& pdb_path,
     \param[in] resseq,atom_name the site
     \param[out] out_view,n_out_view three coordinates, or zero-length
 */
-IMPBFFEXPORT void find_attachment_point(const std::string& pdb_path,
+IMPBFFEXPORT void get_attachment_point(const std::string& pdb_path,
                                         const std::string& chain, int resseq,
                                         const std::string& atom_name,
                                         double** out_view, int* n_out_view);
@@ -181,7 +181,7 @@ IMPBFFEXPORT AccessibleVolume resample_av(
     \param[in] allowed_sphere_radius see #DEFAULT_ALLOWED_SPHERE_RADIUS
     \param[in] search_stencil see #IMP::bff::resample_av
 */
-IMPBFFEXPORT AccessibleVolume compute_av(
+IMPBFFEXPORT AccessibleVolume get_av(
         double* atoms_xyzr, int n_atoms, int n_cols,
         const std::vector<double>& source_xyz, double linker_length = 20.0,
         double linker_width = 0.5, double r1 = 3.5, double r2 = 0.0,
@@ -217,7 +217,7 @@ IMPBFFEXPORT AccessibleVolume compute_av(
                request.
     \throw ValueException when the attachment site is not in the structure
 */
-IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
+IMPBFFEXPORT AccessibleVolume get_av_from_structure(
         const std::string& pdb_path, const std::string& chain, int resseq,
         const std::string& atom_name, double linker_length, double linker_width,
         double r1, double r2, double r3, double disc_step = 1.5,
@@ -245,7 +245,7 @@ IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
                disagrees
     \throw ValueException on a disagreeing resolution or a missing attachment site
 */
-IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
+IMPBFFEXPORT AccessibleVolume get_av_from_structure(
         const std::string& pdb_path, const std::string& position_json,
         double disc_step = -1.0);
 
@@ -259,7 +259,7 @@ IMPBFFEXPORT AccessibleVolume compute_av_from_structure(
 
     \return `{name: AccessibleVolume}`, one per key of \p positions_json
 */
-IMPBFFEXPORT std::map<std::string, AccessibleVolume> compute_avs_for_structure(
+IMPBFFEXPORT std::map<std::string, AccessibleVolume> get_avs_for_structure(
         const std::string& positions_json, const std::string& pdb_path,
         double disc_step = -1.0);
 

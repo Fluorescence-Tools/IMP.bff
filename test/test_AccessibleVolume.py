@@ -147,7 +147,7 @@ class Tests(unittest.TestCase):
         4. the result does not depend on the order of the radii (LabelLib sorts).
         """
         import numpy as np
-        from IMP.bff import compute_av
+        from IMP.bff import get_av
 
         rng = np.random.default_rng(0)
         xyz = rng.normal(scale=8.0, size=(150, 3))
@@ -157,7 +157,7 @@ class Tests(unittest.TestCase):
                   grid_resolution=1.0, allowed_sphere_radius=2.55)
 
         def dens(radii):
-            av = compute_av(
+            av = get_av(
                 np.column_stack([xyz, vdw]), source, kw["linker_length"],
                 kw["linker_width"], radii[0], radii[1], radii[2],
                 kw["grid_resolution"], kw["allowed_sphere_radius"])

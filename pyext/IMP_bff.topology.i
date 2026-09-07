@@ -1,9 +1,9 @@
 /*
  * The probe topology: MOL2 in, a typed force-field system out.
  *
- *  - `build_forcefield_system` takes `FFComponentSpec` values, so a caller
+ *  - `create_forcefield_system` takes `FFComponentSpec` values, so a caller
  *    describes components directly rather than marshalling a dict.
- *    `build_probe_protein_system` and `probe_forcefield_system` are two- and
+ *    `create_probe_protein_system` and `probe_forcefield_system` are two- and
  *    one-component calls of it, the second adding the probe's `N`/`CA`/`C`/`O`
  *    anchor group. All three are in `TopologyBuild.h`. The impropers are the
  *    templates': a builder that fills `impropers = []` costs 81 of them on the

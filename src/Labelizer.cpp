@@ -1649,7 +1649,7 @@ void ll_probe_mean_position(const LlStructure& s, const std::string& pdb_path,
     // here an empty cloud says the same thing without a magic count.
     const LlResidue& r = s.residues[residue];
     const std::string atom = r.cb >= 0 ? "CB" : "CA";
-    AccessibleVolume av = compute_av_from_structure(
+    AccessibleVolume av = get_av_from_structure(
             pdb_path, r.chain, r.seq_id, atom, options.linker_length,
             options.linker_width, options.r1, options.r2, options.r3,
             options.grid_resolution);
@@ -1697,7 +1697,7 @@ std::vector<LfSite> lf_place_sites(
             // Keep the cloud: the pair distance is a property of the two
             // distributions, not of their two mean positions.
             const std::string atom = r.cb >= 0 ? "CB" : "CA";
-            const AccessibleVolume built = compute_av_from_structure(
+            const AccessibleVolume built = get_av_from_structure(
                     pdb_path, r.chain, r.seq_id, atom, options.linker_length,
                     options.linker_width, options.r1, options.r2, options.r3,
                     options.grid_resolution);

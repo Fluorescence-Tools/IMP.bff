@@ -383,7 +383,7 @@ def test_the_clash_restraint_is_imps_soft_sphere_with_the_ported_constant():
     ((sigma - r)/t)^2, so k = 2/t^2 -- and with no bonds to filter and no pair
     below the covalent floor, the two agree exactly."""
     m, root, atoms = _structure(missing=False)
-    r = IMP.bff.build_clash_restraint(root, 2.0)
+    r = IMP.bff.create_clash_restraint(root, 2.0)
     xyz = _coords().ravel()
     vdw = np.array(VDW * N_RES)
     kernel = IMP.bff.clash_energy(xyz, vdw, 2.0, 0.0)
@@ -396,7 +396,7 @@ def test_the_clash_restraint_is_imps_soft_sphere_with_the_ported_constant():
 def test_the_ca_internal_restraints_vanish_at_the_reference():
     m, root, atoms = _structure(missing=False)
     cas = [a.get_index() for i, a in enumerate(atoms) if i % N_SITES == 1]
-    rs = IMP.bff.build_ca_internal_restraints(m, cas, cas, 1.0, 0.2, 0.1)
+    rs = IMP.bff.create_ca_internal_restraints(m, cas, cas, 1.0, 0.2, 0.1)
     assert len(rs) == (N_RES - 1) + (N_RES - 2) + (N_RES - 3)
     assert sum(r.unprotected_evaluate(None) for r in rs) == pytest.approx(0.0)
 
@@ -404,7 +404,7 @@ def test_the_ca_internal_restraints_vanish_at_the_reference():
 def test_the_ca_internal_restraints_grow_when_the_trace_moves():
     m, root, atoms = _structure(missing=False)
     cas = [a.get_index() for i, a in enumerate(atoms) if i % N_SITES == 1]
-    rs = IMP.bff.build_ca_internal_restraints(m, cas, cas, 1.0, 0.0, 0.0)
+    rs = IMP.bff.create_ca_internal_restraints(m, cas, cas, 1.0, 0.0, 0.0)
     xyz = IMP.core.XYZ(m, cas[0])
     xyz.set_coordinate(0, xyz.get_coordinate(0) + 1.0)
     moved = sum(r.unprotected_evaluate(None) for r in rs)

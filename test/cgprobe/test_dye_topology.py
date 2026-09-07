@@ -30,8 +30,8 @@ def as_forcefield_system(system):
 # (rmin_half, epsilon)); there is no second dict to drift.
 from IMP.bff import charmm36_lj, lj_cross
 from IMP.bff import (
-    build_lj_type_table,
-    compute_lj_pair_sites,
+    get_lj_type_table,
+    get_lj_pair_sites,
     lj_score,
     site_element_map,
 )
@@ -101,7 +101,7 @@ class TestDyeTopologyBuilder:
     # by nothing but these tests, and what they asserted about a four-atom
     # chain -- 3 bonds, 2 angles, 1 dihedral -- the three tests above assert
     # directly against the graph. What it added beyond them was `distance > 0`.
-    # The shipped derivation is `build_forcefield_system` (C++), covered on
+    # The shipped derivation is `create_forcefield_system` (C++), covered on
     # real MOL2 input by test_combined_system.py and test_scoring.py.
 
 
@@ -170,7 +170,7 @@ class TestLJTypeCifRoundtrip:
             os.unlink(path)
 
     def test_build_lj_type_table(self):
-        table = build_lj_type_table(["C", "S", "N"])
+        table = get_lj_type_table(["C", "S", "N"])
         assert len(table) == 3
         assert table["LJ_C"].element == "C"
         assert table["LJ_S"].element == "S"
@@ -255,7 +255,7 @@ class TestLJScoring:
             ],
             "bonds": [], "angles": [], "dihedrals": [], "impropers": [],
         }))
-        pairs = compute_lj_pair_sites(system)
+        pairs = get_lj_pair_sites(system)
         assert len(pairs) == 1
         assert pairs[0].rmin > 0
         assert pairs[0].eps > 0

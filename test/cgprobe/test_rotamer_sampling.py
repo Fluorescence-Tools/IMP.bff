@@ -13,7 +13,7 @@ import numpy as np
 
 from IMP.bff import (
     apply_coordinates,
-    find_reference_rotamer_files,
+    get_reference_rotamer_files,
     load_rotamer_library_trajectory,
     sample_weighted_index,
 )
@@ -26,7 +26,7 @@ class TestRotamerSampling(unittest.TestCase):
         import IMP.bff
         lib_dir = IMP.bff.get_data_path("rotamer_library")
 
-        pdb, dcd, weights = find_reference_rotamer_files(
+        pdb, dcd, weights = get_reference_rotamer_files(
             lib_dir, "A48_C1R", cutoff=10
         )
         data = load_rotamer_library_trajectory(pdb, dcd, weights, max_frames=8)

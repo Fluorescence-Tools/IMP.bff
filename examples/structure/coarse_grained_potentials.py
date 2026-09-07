@@ -8,7 +8,7 @@ with IMP's containers, scoring functions and optimizers like any other term.
 
 What is what:
 
-* ``IMP.bff.build_clash_restraint`` -- soft-sphere overlap, which is
+* ``IMP.bff.create_clash_restraint`` -- soft-sphere overlap, which is
   ``IMP.core.SoftSpherePairScore`` over an ``IMP.container.ClosePairContainer``
   with the bonded pairs filtered out;
 * ``IMP.bff.GoRestraint`` -- a Gō model: a truncated Lennard-Jones well per
@@ -71,7 +71,7 @@ xyz.set_coordinates(home)
 # ``k(sigma - r)^2/2``, so the restraint uses ``k = 2/t^2``.
 for a in IMP.atom.get_leaves(hierarchy):
     IMP.core.XYZR(a).set_radius(2.5)
-clash = IMP.bff.build_clash_restraint(hierarchy, clash_tolerance=2.0)
+clash = IMP.bff.create_clash_restraint(hierarchy, clash_tolerance=2.0)
 print(f"clash energy: "
       f"{IMP.core.RestraintsScoringFunction([clash]).evaluate(False):.2f}")
 

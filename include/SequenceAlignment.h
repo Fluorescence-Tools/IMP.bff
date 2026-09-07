@@ -94,7 +94,7 @@ IMPBFFEXPORT std::string fp_library_json();
     \param[in] min_identity below this a hit is not a domain
     \return one segment per domain, `kind` `fp`, in the order taken
 */
-IMPBFFEXPORT std::vector<SequenceSegment> find_fp_domains(
+IMPBFFEXPORT std::vector<SequenceSegment> get_fp_domains(
         const std::string& sequence, double min_identity = 0.35);
 
 //! Per-residue pLDDT from an AlphaFold PDB's B-factor column.
@@ -115,7 +115,7 @@ IMPBFFEXPORT std::map<int, double> parse_plddt_from_pdb(
 
     \param[in] sequence_length how many residues
     \param[in] plddt per-residue scores (#parse_plddt_from_pdb)
-    \param[in] fp_domains what #find_fp_domains found
+    \param[in] fp_domains what #get_fp_domains found
     \param[in] rigid_threshold the pLDDT a rigid residue reaches
     \param[in] min_rigid_length the shortest run that stays rigid
     \return the segments, in sequence order, covering every residue

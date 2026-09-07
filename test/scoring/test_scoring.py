@@ -98,9 +98,9 @@ if __name__ == "__main__":
 
 
 def test_improper_restraints_are_built_from_a_typed_system():
-    """The improper branch of ``build_probe_restraints``, which had never run.
+    """The improper branch of ``create_probe_restraints``, which had never run.
 
-    No builder of a combined system fills ``impropers`` -- ``build_probe_protein_system``
+    No builder of a combined system fills ``impropers`` -- ``create_probe_protein_system``
     hard-codes an empty list -- so the loop that turns them into
     ``IMP.core.DihedralRestraint``s had no iterations, and the ``t["k"]`` inside
     it (``t`` is an ``FFTorsionType``, not a dict) could not raise. Injecting one
@@ -110,10 +110,10 @@ def test_improper_restraints_are_built_from_a_typed_system():
     import IMP.bff
     import IMP.atom
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_probe_protein_system
-    from IMP.bff import build_probe_restraints
+    from IMP.bff import create_probe_protein_system
+    from IMP.bff import create_probe_restraints
 
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
@@ -140,14 +140,14 @@ def test_improper_restraints_are_built_from_a_typed_system():
         return sum(r.get_name().startswith("DihedralRestraint")
                    for r in restraints)
 
-    before = build_probe_restraints(model, system, list(site_particles),
+    before = create_probe_restraints(model, system, list(site_particles),
                                  [p.get_index() for p in site_particles.values()])
     without = len(before)
 
     # the builder produces 81; dropping them is what the count must show
     kept = list(system.impropers)
     system.impropers = []
-    stripped = build_probe_restraints(model, system, list(site_particles),
+    stripped = create_probe_restraints(model, system, list(site_particles),
                                  [p.get_index() for p in site_particles.values()])
     system.impropers = kept
 
@@ -165,9 +165,9 @@ def _dye_system_and_particles(spacing=2.0, with_radii=True):
     import IMP
     import IMP.algebra
     import IMP.core
-    from IMP.bff import build_probe_protein_system, get_structure_dir, get_template_dir
+    from IMP.bff import create_probe_protein_system, get_structure_dir, get_template_dir
 
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
@@ -185,7 +185,7 @@ def _dye_system_and_particles(spacing=2.0, with_radii=True):
 
 
 def test_the_repulsion_is_one_term_shared_by_dynamics_and_monte_carlo():
-    """`build_probe_restraints` ends with the same restraint MC is scored on.
+    """`create_probe_restraints` ends with the same restraint MC is scored on.
 
     One clash term, not two. Per-pair Lennard-Jones lower bounds *and* soft
     spheres over a container would be two implementations of one piece of
@@ -194,33 +194,33 @@ def test_the_repulsion_is_one_term_shared_by_dynamics_and_monte_carlo():
     run wants when it scores rigid moves against the repulsion *alone*: a
     rigid move cannot change a bond, an angle or a torsion.
     """
-    from IMP.bff import build_probe_restraints, build_steric_restraint
+    from IMP.bff import create_probe_restraints, create_steric_restraint
 
     system, model, site_particles = _dye_system_and_particles()
     ids = list(site_particles)
     idx = [site_particles[s].get_index() for s in ids]
 
-    with_repulsion = list(build_probe_restraints(model, system, ids, idx))
-    bonded_only = list(build_probe_restraints(model, system, ids, idx,
+    with_repulsion = list(create_probe_restraints(model, system, ids, idx))
+    bonded_only = list(create_probe_restraints(model, system, ids, idx,
                                             nonbonded=False))
 
     assert len(with_repulsion) == len(bonded_only) + 1     # one, not thousands
     assert with_repulsion[-1].get_name() == "steric"
     assert not any(r.get_name() == "steric" for r in bonded_only)
 
-    steric = build_steric_restraint(model, system, ids, idx)
+    steric = create_steric_restraint(model, system, ids, idx)
     assert steric is not None
     assert steric.unprotected_evaluate(None) > 0.0
 
 
 def test_the_repulsion_rises_when_two_atoms_are_pushed_together():
     import IMP.core
-    from IMP.bff import build_steric_restraint
+    from IMP.bff import create_steric_restraint
 
     system, model, site_particles = _dye_system_and_particles(spacing=8.0)
     ids = list(site_particles)
     idx = [site_particles[s].get_index() for s in ids]
-    steric = build_steric_restraint(model, system, ids, idx)
+    steric = create_steric_restraint(model, system, ids, idx)
 
     apart = steric.unprotected_evaluate(None)
     far = IMP.core.XYZ(site_particles[ids[-1]]).get_coordinates()
@@ -238,13 +238,13 @@ def test_a_site_without_a_radius_still_repels():
     gives it that one.
     """
     import IMP.core
-    from IMP.bff import build_steric_restraint
+    from IMP.bff import create_steric_restraint
 
     system, model, site_particles = _dye_system_and_particles(with_radii=False)
     ids = list(site_particles)
     idx = [site_particles[s].get_index() for s in ids]
     assert not IMP.core.XYZR.get_is_setup(site_particles[ids[0]])
 
-    steric = build_steric_restraint(model, system, ids, idx)
+    steric = create_steric_restraint(model, system, ids, idx)
     assert IMP.core.XYZR.get_is_setup(site_particles[ids[0]])
     assert steric.unprotected_evaluate(None) > 0.0

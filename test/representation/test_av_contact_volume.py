@@ -174,16 +174,16 @@ def test_the_legacy_anchoring_refuses_it(structure):
 
 
 def test_the_array_door_keeps_the_contact_weights():
-    """`compute_av_from_structure` forces uniform weights -- except this one.
+    """`get_av_from_structure` forces uniform weights -- except this one.
 
     An ACV *is* the weighting, so flattening it there would have handed back a
     volume that silently ignored the request.
     """
     path = IMP.bff.get_example_path(PDB)
-    plain = IMP.bff.compute_av_from_structure(
+    plain = IMP.bff.get_av_from_structure(
         path, "A", 132, "CB", 20.0, 4.5, 3.5, 0.0, 0.0, 1.0, "", -1.0,
         0.0, -1.0)
-    contact = IMP.bff.compute_av_from_structure(
+    contact = IMP.bff.get_av_from_structure(
         path, "A", 132, "CB", 20.0, 4.5, 3.5, 0.0, 0.0, 1.0, "", -1.0,
         3.0, 0.6)
     p0 = np.asarray(plain.get_points(), dtype=float).reshape(-1, 4)

@@ -378,8 +378,8 @@ def test_a_zero_radius_row_is_transparent_to_the_array_kernel():
     dropped = zeroed[zeroed[:, 3] > 0.0]
     assert len(dropped) < len(zeroed)
 
-    a = IMP.bff.compute_av(zeroed, source, 20.0, 0.5, 3.5, 0.0, 0.0, 1.5)
-    b = IMP.bff.compute_av(dropped, source, 20.0, 0.5, 3.5, 0.0, 0.0, 1.5)
+    a = IMP.bff.get_av(zeroed, source, 20.0, 0.5, 3.5, 0.0, 0.0, 1.5)
+    b = IMP.bff.get_av(dropped, source, 20.0, 0.5, 3.5, 0.0, 0.0, 1.5)
     assert np.array_equal(np.asarray(a.get_points()),
                           np.asarray(b.get_points())), (
         "a zero radius is not transparent to the array kernel")

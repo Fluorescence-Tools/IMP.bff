@@ -40,7 +40,7 @@ holo_pdb = os.path.join(data, "1anf.pdb")    # closed, maltose bound
 # traceable; asserting `52.0` does not. Names resolve loosely, so the spelling
 # an experimenter uses works: `Alexa488`, not `AlexaFluor488`.
 donor, acceptor = "Alexa488", "Alexa647"
-r0 = bff.forster_radius(bff.find_probe(donor), bff.find_probe(acceptor))
+r0 = bff.forster_radius(bff.get_probe(donor), bff.get_probe(acceptor))
 print("R0(%s -> %s) = %.1f A" % (donor, acceptor, r0))
 
 # The same dyes, and the same R0, out of a container whose every column name is

@@ -7,7 +7,7 @@ rule is enforced rather than remembered.
 
 Two kinds of test, and they catch different things.
 
-**The golden AV records** pin `compute_av_from_structure` on three structures
+**The golden AV records** pin `get_av_from_structure` on three structures
 at three grid steps, as SHA-256 of the density and of the point cloud, taken
 from the `IMP.em`-backed build before the swap. They are what a change to the
 sampling, the bounding box or the voxel/location arithmetic shows up in. They
@@ -80,7 +80,7 @@ class TestGoldenAV(unittest.TestCase):
             for step in (1.5, 1.0, 0.5):
                 key = "%s@%.1f" % (label, step)
                 with self.subTest(key=key):
-                    av = bff.compute_av_from_structure(
+                    av = bff.get_av_from_structure(
                         pdb, chain, resseq, atom, ll, lw, r1, 0.0, 0.0, step)
                     d = np.asarray(av.get_density())
                     p = np.asarray(av.get_points())

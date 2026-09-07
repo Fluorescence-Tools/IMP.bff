@@ -31,14 +31,14 @@ RMF_NAMES = [
 
 #: A sample of the always-defined flat surface, one per source `.i` group.
 FLAT_NAMES = [
-    "compute_av",                    # avbuilder
+    "get_av",                    # avbuilder
     "AccessibleVolume",              # avmodel
     "read_fps_json",                 # fps
     "read_component_template_cif",   # cif
     "forcefield_system_from_json",   # forcefield / ProbeForceField
-    "compute_rotamer_score",         # scoring (pythoncode, flat)
+    "get_rotamer_score",         # scoring (pythoncode, flat)
     "attach_probes",                   # label (pythoncode, flat)
-    "build_probe_protein_system",      # topology (C++, TopologyBuild.h)
+    "create_probe_protein_system",      # topology (C++, TopologyBuild.h)
     "probe_forcefield_system",         # topology (C++, TopologyBuild.h)
     "AttachedProbeDynamics",            # sampling (pythoncode, flat)
     "RotamerEnsemble",               # rotamer_ensemble (C++, Rotamer.h)
@@ -47,9 +47,9 @@ FLAT_NAMES = [
     # `build_system_from_specs` was here. It was the `build-system` command's
     # body -- build a system, write the CIF, print what it holds -- so it is
     # in `bin/imp_bff` with the command, not in the library. What the library
-    # offers is `build_forcefield_system`, which takes `FFComponentSpec`
+    # offers is `create_forcefield_system`, which takes `FFComponentSpec`
     # values rather than the CLI's `name=X,mol2=Y` strings.
-    "build_forcefield_system",       # topology (C++, TopologyBuild.h)
+    "create_forcefield_system",       # topology (C++, TopologyBuild.h)
     "simulate_probe_diffusion",        # probesampling
     "fret_rate_trace",               # quenching / FRETRateTrace
 ]

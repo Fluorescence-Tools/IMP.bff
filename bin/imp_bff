@@ -51,7 +51,7 @@ from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff import (
     read_component_template_cif, read_forcefield_cif, region_features)
-from IMP.bff import AccessibleVolume, compute_av_from_structure
+from IMP.bff import AccessibleVolume, get_av_from_structure
 from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
 from IMP.bff import RotamerEnsemble
@@ -1334,7 +1334,7 @@ def label_fp(pdb_id_or_path, site, output):
 @click.option("--output", help="Output labeled PDB")
 def label_fusion(pdb_path, chain, output):
     """Automatically detect and label FPs in a fusion protein."""
-    from IMP.bff import find_fp_domains, parse_plddt_from_pdb, segments_from_plddt
+    from IMP.bff import get_fp_domains, parse_plddt_from_pdb, segments_from_plddt
     model = IMP.Model()
     protein = IMP.atom.read_pdb(pdb_path, model, IMP.atom.NonWaterPDBSelector())
 
@@ -1350,7 +1350,7 @@ def label_fusion(pdb_path, chain, output):
     click.echo(f"Analyzing chain {chain} (length {len(seq)})...")
     
     # 1. Detect FP domains
-    fp_domains = find_fp_domains(seq)
+    fp_domains = get_fp_domains(seq)
     if not fp_domains:
         click.echo("No FP domains detected.")
         sys.exit(0)
@@ -1520,7 +1520,7 @@ def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = 
     """The accessible volume of one fps.json position on ``pdb``."""
     p = _av_position(pos)
     ds = float(disc_step or p.get("simulation_grid_resolution", 1.5))
-    return compute_av_from_structure(pdb, json.dumps(p), ds)
+    return get_av_from_structure(pdb, json.dumps(p), ds)
 
 
 def ensemble_for_position(pdb: str, pos: Dict[str, Any], library: str,
@@ -2680,15 +2680,15 @@ def simulate(system_cif, systems_dir, output_root, md_steps, write_every, sampli
 # twenty-five options into another module.
 #
 # Its kernels did not come with it. The restraint builders
-# (`build_probe_restraints`, `build_steric_restraint`, `build_go_restraints`)
+# (`create_probe_restraints`, `create_steric_restraint`, `create_go_restraints`)
 # and the placement search (`place_guest_by_score`) are C++ in `Scoring.h`,
 # because they are what the runner *computes* rather than what it *drives*.
 
 from IMP.bff import (
     LabelledGraph,
-    build_probe_restraints,
-    build_go_restraints,
-    build_steric_restraint,
+    create_probe_restraints,
+    create_go_restraints,
+    create_steric_restraint,
     forcefield_system_from_json,
     place_guest_by_score,
     read_forcefield_cif,
@@ -2934,16 +2934,16 @@ def _build_restraints(model, system, site_particles):
     """The system's restraints, and the steric subset a rigid move feels.
 
     Both come from C++ (`Scoring.h`): the bonded terms from
-    `build_probe_restraints`, the sterics from `build_steric_restraint` -- one
+    `create_probe_restraints`, the sterics from `create_steric_restraint` -- one
     `PairsRestraint` over every non-excluded pair rather than one restraint
     per pair. The exclusions are the system's own, so the two cannot disagree
     about which pairs are 1-2, 1-3 or 1-4.
     """
     site_ids = list(site_particles)
     particles = [site_particles[s].get_index() for s in site_ids]
-    restraints = list(build_probe_restraints(model, system, site_ids, particles,
+    restraints = list(create_probe_restraints(model, system, site_ids, particles,
                                            nonbonded=False))
-    steric = build_steric_restraint(model, system, site_ids, particles)
+    steric = create_steric_restraint(model, system, site_ids, particles)
     softsphere_restraints = [steric] if steric is not None else []
     return restraints + softsphere_restraints, softsphere_restraints
 
@@ -3026,12 +3026,12 @@ def _build_go_restraints(
     particles = [site_particles[s].get_index() for s in site_ids]
     names = {s: site_atom_names.get(s, "") for s in site_ids}
 
-    restraints = list(build_go_restraints(
+    restraints = list(create_go_restraints(
         model, system, site_ids, particles, names, mobile_component,
         k=go_mobile_k, cutoff=cutoff))
     released = sorted(_fixed_flex_ids(system, fixed_flex_mode, fixed_component))
     if released:
-        restraints += list(build_go_restraints(
+        restraints += list(create_go_restraints(
             model, system, site_ids, particles, names, fixed_component,
             only_sites=released, k=go_fixed_k, cutoff=cutoff))
     return restraints
@@ -4068,14 +4068,14 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
     """Build a force-field system from component MOL2 files and templates.
 
     Note this is not the same builder as
-    `IMP.bff.cgprobe.topology.build_probe_protein_system`: on the same two
+    `IMP.bff.cgprobe.topology.create_probe_protein_system`: on the same two
     components they agree on sites, bonds, angles and dihedrals and differ on
     impropers, which this one builds (81) and that one leaves empty. See
     okf/validation/impropers_are_dropped.md.
     """
     import click as _click
     import os
-    from IMP.bff import (FFComponentSpec, build_forcefield_system,
+    from IMP.bff import (FFComponentSpec, create_forcefield_system,
                          write_probe_forcefield_cif)
 
     # `name=X,mol2=Y,template=Z,role=fixed|mobile` is this command's own
@@ -4097,7 +4097,7 @@ def build_system(components, output_cif, bond_k, angle_k, pi_dihedral_k, linker_
 
     out_dir = os.path.dirname(os.path.abspath(output_cif))
     try:
-        system = build_forcefield_system(
+        system = create_forcefield_system(
             specs, bond_k, angle_k, pi_dihedral_k, linker_dihedral_k,
             ring_improper_k, pi_improper_k, flat_improper_k,
             orient_improper_k, n_steps, write_every, default_radius,
@@ -4174,7 +4174,7 @@ def run_replica_exchange_docking(
     params = params or IMP.bff.DockingParameters()
     os.makedirs(output_dir, exist_ok=True)
 
-    asm = IMP.bff.build_docking_assembly(
+    asm = IMP.bff.create_docking_assembly(
         [str(p) for p in pdb_paths], fps_json_path,
         score_set=params.score_set,
         mean_position_restraint=params.mean_position_restraint,
@@ -4483,7 +4483,7 @@ def _compute_distance_distributions(
     import numpy as np
 
 
-    avs = IMP.bff.compute_avs_for_structure(positions, pdb_path)
+    avs = IMP.bff.get_avs_for_structure(positions, pdb_path)
 
     rda_axis = None
     pairs: Dict[str, Dict] = {}

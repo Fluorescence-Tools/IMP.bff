@@ -58,7 +58,7 @@ void pairwise_rmsd(double* cluster_coords, int n_frames, int n_atoms, int n_dim,
     *n_output2 = out == nullptr ? 0 : n_frames;
     if (out == nullptr || n_frames == 0) return;
 
-    // One copy of each frame, not one per pair: `compute_rmsd` takes vectors,
+    // One copy of each frame, not one per pair: `get_rmsd` takes vectors,
     // and at n_frames^2 pairs the slicing would cost more than the SVD.
     const std::size_t stride = (std::size_t) n_atoms * 3;
     std::vector<std::vector<double> > frames(n_frames);
@@ -69,7 +69,7 @@ void pairwise_rmsd(double* cluster_coords, int n_frames, int n_atoms, int n_dim,
     const std::vector<int> every_atom;
     for (int i = 0; i < n_frames; ++i) {
         for (int j = i + 1; j < n_frames; ++j) {
-            const double r = compute_rmsd(frames[i], frames[j], every_atom, superpose);
+            const double r = get_rmsd(frames[i], frames[j], every_atom, superpose);
             out[(std::size_t) i * n_frames + j] = r;
             out[(std::size_t) j * n_frames + i] = r;
         }

@@ -520,7 +520,7 @@ std::string resolve_probe_name(std::string name, std::string library_cif) {
                      "look like " << known, ValueException);
 }
 
-Probe find_probe(std::string name, std::string library_cif, std::string template_cif) {
+Probe get_probe(std::string name, std::string library_cif, std::string template_cif) {
     const std::map<std::string, Probe> library = read_probe_library(library_cif);
     std::map<std::string, Probe>::const_iterator hit =
             library.find(resolve_probe_name(name, library_cif));
@@ -546,7 +546,7 @@ double forster_radius_from_spectra(std::string donor, std::string acceptor,
                                    double k2, std::string library_cif,
                                    double refractive_index) {
     const std::map<std::string, Probe> library = read_probe_library(library_cif);
-    // Resolve the way find_probe does. This used to match on whitespace alone,
+    // Resolve the way get_probe does. This used to match on whitespace alone,
     // so the name-based route rejected `Alexa488` while the Probe-based route
     // accepted it -- one spelling working through one door and not the other
     // is worse than neither working.
@@ -1041,7 +1041,7 @@ double probe_pto_forster_radius(const std::string& path,
     // Resolution has to work against *this* container rather than the shipped
     // library, so the same folding rules are applied to its keys: a caller
     // naming `Alexa488` must reach `AlexaFluor488` here exactly as it does
-    // through find_probe, or the container is harder to use than the CIF it
+    // through get_probe, or the container is harder to use than the CIF it
     // replaces.
     std::map<std::string, Probe>::const_iterator d = dc_lookup(dyes, donor);
     std::map<std::string, Probe>::const_iterator a = dc_lookup(dyes, acceptor);

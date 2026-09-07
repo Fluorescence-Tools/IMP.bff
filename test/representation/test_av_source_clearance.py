@@ -4,7 +4,7 @@ Two defects found while measuring `IMP.bff` against the FPS toolkit's own AV
 (PRD-121), both of which produced a plausible-looking number for a volume that
 did not exist:
 
-* the clearance derivation lived in `compute_av_from_structure()` only, so the
+* the clearance derivation lived in `get_av_from_structure()` only, so the
   decorator door -- and `imp_bff av-export` behind it -- took a flat 1.5 and
   returned **nothing** at FPS's standard linker width of 4.5 A;
 * `get_mean_position()` started its weight sum at 1.0, a unit of weight
@@ -122,7 +122,7 @@ class Tests(IMP.test.TestCase):
             "linker_width": FPS_WIDTH, "radius1": 3.5,
             "simulation_grid_resolution": 1.5,
         }
-        through_json = IMP.bff.compute_av_from_structure(
+        through_json = IMP.bff.get_av_from_structure(
             PDB, json.dumps(position), 1.5)
         av = _av(self.mdl, self.hier, linker_length=20.0,
                  radii=(3.5, 0.0, 0.0), linker_width=FPS_WIDTH,

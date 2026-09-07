@@ -539,7 +539,7 @@ def test_a_dye_resolves_under_the_name_people_actually_use(name):
     fifteen while holding the right row.
     """
     quantum_yield, extinction = LABELIZER_DYES[name]
-    dye = bff.find_probe(name)
+    dye = bff.get_probe(name)
     # Both libraries derive from the same upstream tables, so this is exact.
     assert dye.quantum_yield == pytest.approx(quantum_yield)
     assert dye.extinction_coefficient == pytest.approx(extinction)
@@ -552,7 +552,7 @@ def test_resolution_never_guesses_between_two_dyes():
     assert bff.resolve_probe_name("Cy55") == "LumiprobeCy55"
     assert bff.resolve_probe_name("cy3b") == "LumiprobeCy3b"
     with pytest.raises(Exception):
-        bff.find_probe("NotADye123")
+        bff.get_probe("NotADye123")
 
 
 def test_an_exact_vendor_name_still_wins():
@@ -569,7 +569,7 @@ def test_the_whole_labelizer_dye_set_is_covered():
     `utility/import_labelizer_dyes.py`.
     """
     for name in LABELIZER_DYES:
-        bff.find_probe(name)
+        bff.get_probe(name)
     assert len(LABELIZER_DYES) == 15
 
 
@@ -577,7 +577,7 @@ def test_a_dye_that_really_is_absent_still_fails_loudly():
     """A wrong dye is worse than no dye: R0 goes as the sixth root of the
     overlap, so a substituted spectrum is a quietly wrong distance."""
     with pytest.raises(Exception) as excinfo:
-        bff.find_probe("Atto999")
+        bff.get_probe("Atto999")
     assert "not in the probe library" in str(excinfo.value)
 
 
@@ -591,7 +591,7 @@ def test_the_imported_spectra_peak_where_the_dye_says_they_do(name, ex_nm, em_nm
     peaks move. ATTO532 and ATTO643 are named for their excitation maxima, so
     the data states its own expected answer.
     """
-    spectrum = bff.find_probe(name).spectrum
+    spectrum = bff.get_probe(name).spectrum
     wavelength = np.asarray(spectrum.wavelength)
     excitation = np.asarray(spectrum.excitation)
     emission = np.asarray(spectrum.emission)
@@ -611,7 +611,7 @@ def test_every_dye_shares_one_wavelength_grid():
     its own grid would break every pair involving it rather than just itself."""
     grids = set()
     for name in bff.available_probes():
-        spectrum = bff.find_probe(name).spectrum
+        spectrum = bff.get_probe(name).spectrum
         if spectrum.size():
             wavelength = np.asarray(spectrum.wavelength)
             grids.add((len(wavelength), wavelength[0], wavelength[-1]))

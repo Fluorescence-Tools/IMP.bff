@@ -122,7 +122,7 @@ def test_a_bond_is_atom_to_atom_and_nothing_else(tmp_path, t4l):
         },
         "χ²": {"s": {"distances": ["bond", "atom_to_av", "atom_to_xyz"]}},
     }
-    assembly = IMP.bff.build_docking_assembly([PDB], _write(tmp_path, payload),
+    assembly = IMP.bff.create_docking_assembly([PDB], _write(tmp_path, payload),
                                               "s")
     network = assembly.get_network()
     assert list(network.get_bond_names()) == ["bond"]
@@ -146,7 +146,7 @@ def test_the_anchors_of_a_bond_stop_clashing(tmp_path):
                              "b1": _anchor("B", 1, "N", 1)},
                "Distances": {"bond": _distance("a1", "b1")},
                "χ²": {"s": {"distances": ["bond"]}}}
-    assembly = IMP.bff.build_docking_assembly([a, b], _write(tmp_path, payload),
+    assembly = IMP.bff.create_docking_assembly([a, b], _write(tmp_path, payload),
                                               "s")
     network = assembly.get_network()
     model = assembly.get_model()
@@ -184,7 +184,7 @@ def test_the_radius_change_does_not_leak_into_another_run(tmp_path):
                             "b1": _anchor("B", 1, "N", 1)},
               "Distances": {"bond": _distance("a1", "b1")},
               "χ²": {"s": {"distances": ["bond"]}}}
-    first = IMP.bff.build_docking_assembly([a, b], _write(tmp_path, bonded),
+    first = IMP.bff.create_docking_assembly([a, b], _write(tmp_path, bonded),
                                            "s")
     assert IMP.core.XYZR(
         first.get_model(),
@@ -197,7 +197,7 @@ def test_the_radius_change_does_not_leak_into_another_run(tmp_path):
                                  "x": 4.0, "y": 0.0, "z": 0.0}},
              "Distances": {"d": _distance("a1", "p")},
              "χ²": {"s": {"distances": ["d"]}}}
-    second = IMP.bff.build_docking_assembly(
+    second = IMP.bff.create_docking_assembly(
         [a, b], _write(tmp_path, plain, "plain.fps.json"), "s")
     assert list(second.get_network().get_bond_names()) == []
     radius = IMP.core.XYZR(
@@ -215,7 +215,7 @@ def test_e_bond_is_a_subset_of_the_score_never_an_addition(tmp_path, t4l):
                "Distances": {"bond": _distance("a1", "a2", 12.0, 1.0),
                              "fret": _distance("a1", av_name, 30.0, 2.0)},
                "χ²": {"s": {"distances": ["bond", "fret"]}}}
-    assembly = IMP.bff.build_docking_assembly([PDB], _write(tmp_path, payload),
+    assembly = IMP.bff.create_docking_assembly([PDB], _write(tmp_path, payload),
                                               "s")
     result = IMP.bff.score_assembly(assembly)
 
@@ -369,7 +369,7 @@ def test_clash_tolerance_becomes_the_soft_sphere_constant(tmp_path):
     overlap = (R_CA + R_N) - 3.5
 
     def clash_of(tolerance):
-        assembly = IMP.bff.build_docking_assembly(
+        assembly = IMP.bff.create_docking_assembly(
             [a, b], path, "s", clash_tolerance=tolerance)
         return [r for r in assembly.get_restraints().get_restraints()
                 if r.get_name() == "excluded_volume"][0].evaluate(False)
@@ -388,7 +388,7 @@ def test_clash_tolerance_becomes_the_soft_sphere_constant(tmp_path):
 def test_the_default_scoring_door_keeps_imps_own_constant():
     """The default is deliberately *not* FPS's, and this pins that.
 
-    `build_docking_assembly` is the scoring door and its numbers are pinned
+    `create_docking_assembly` is the scoring door and its numbers are pinned
     elsewhere (HIV-RT `resolved` at 59.0404, of which 24.8 is the clash term).
     FPS's docking constant is opted into through `DockingParameters`, which is
     where the docking protocol lives.

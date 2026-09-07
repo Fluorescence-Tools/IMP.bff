@@ -112,9 +112,9 @@ def test_write_pdb_and_rmsd(tmp_path):
     assert "2.000" in text  # translated x of atom 2
 
     shifted = coords + 5.0
-    assert fio.compute_rmsd(coords.ravel(), shifted.ravel()) == pytest.approx(
+    assert fio.get_rmsd(coords.ravel(), shifted.ravel()) == pytest.approx(
         np.sqrt(3 * 25.0))
-    assert fio.compute_rmsd(coords.ravel(), shifted.ravel(), superpose=True) == \
+    assert fio.get_rmsd(coords.ravel(), shifted.ravel(), superpose=True) == \
         pytest.approx(0.0, abs=1e-9)
 
 
@@ -144,9 +144,9 @@ def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
     import IMP.bff
     from IMP.bff import write_probe_forcefield_cif
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_probe_protein_system
+    from IMP.bff import create_probe_protein_system
 
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
@@ -215,10 +215,10 @@ def test_an_awkward_value_survives_the_forcefield_round_trip(tmp_path, awkward):
     `""` came back as two literal quotes.
     """
     import IMP.bff
-    from IMP.bff import (build_probe_protein_system, get_structure_dir,
+    from IMP.bff import (create_probe_protein_system, get_structure_dir,
                          get_template_dir, write_probe_forcefield_cif)
 
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),

@@ -531,7 +531,7 @@ AABBFilterResult BoundingBoxFilter::filter_frames(
     return out;
 }
 
-RotamerScoreResult compute_rotamer_score(
+RotamerScoreResult get_rotamer_score(
         const std::vector<double>& rotamer_coords,
         const std::vector<double>& protein_coords,
         const std::vector<std::string>& protein_atom_names,
@@ -762,7 +762,7 @@ std::map<std::string, std::string> site_element_map(
     return out;
 }
 
-std::vector<LJSitePair> compute_lj_pair_sites(
+std::vector<LJSitePair> get_lj_pair_sites(
         const ProbeForceFieldSystem& system) {
     const std::set<std::pair<std::string, std::string>> excluded =
             system.get_exclusions();
@@ -790,7 +790,7 @@ std::vector<LJSitePair> compute_lj_pair_sites(
     return out;
 }
 
-std::map<std::string, FFLJType> build_lj_type_table(
+std::map<std::string, FFLJType> get_lj_type_table(
         const std::vector<std::string>& elements) {
     std::map<std::string, FFLJType> out;
     for (const auto& elem : elements) {
@@ -806,7 +806,7 @@ std::map<std::string, FFLJType> build_lj_type_table(
 
 IntramolecularEnergy::IntramolecularEnergy(
         const ProbeForceFieldSystem& system) {
-    pairs_ = compute_lj_pair_sites(system);
+    pairs_ = get_lj_pair_sites(system);
     std::map<std::string, int> id_to_idx;
     const std::vector<FFSite>& sites = system.get_sites();
     for (std::size_t i = 0; i < sites.size(); i++) id_to_idx[sites[i].id] = i;
@@ -970,12 +970,12 @@ IMP::core::Cosine* torsion_cosine(const FFTorsionType& type) {
                                  type.phase + IMP::algebra::PI);
 }
 
-IMP::Restraints build_probe_restraints(
+IMP::Restraints create_probe_restraints(
         IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles, bool nonbonded) {
     if (site_ids.size() != particles.size()) {
-        IMP_THROW("build_probe_restraints: " << site_ids.size() << " site ids "
+        IMP_THROW("create_probe_restraints: " << site_ids.size() << " site ids "
                   << "against " << particles.size() << " particles",
                   IMP::ValueException);
     }
@@ -1088,7 +1088,7 @@ IMP::Restraints build_probe_restraints(
     // thousands of restraints where one does.
     if (nonbonded) {
         IMP::Restraint* steric =
-                build_steric_restraint(model, system, site_ids, particles);
+                create_steric_restraint(model, system, site_ids, particles);
         if (steric != NULL) out.push_back(steric);
     }
     (void)has_all;
@@ -1164,7 +1164,7 @@ double place_guest_by_score(IMP::ScoringFunction* scoring_function,
     return best_score;
 }
 
-IMP::Restraints build_go_restraints(
+IMP::Restraints create_go_restraints(
         IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles,
@@ -1173,7 +1173,7 @@ IMP::Restraints build_go_restraints(
         const std::vector<std::string>& only_sites, double k, double cutoff) {
     IMP::Restraints out;
     if (site_ids.size() != particles.size()) {
-        IMP_THROW("build_go_restraints: " << site_ids.size() << " site ids "
+        IMP_THROW("create_go_restraints: " << site_ids.size() << " site ids "
                   << "against " << particles.size() << " particles",
                   IMP::ValueException);
     }
@@ -1224,13 +1224,13 @@ IMP::Restraints build_go_restraints(
     return out;
 }
 
-IMP::Restraint* build_steric_restraint(IMP::Model* model,
+IMP::Restraint* create_steric_restraint(IMP::Model* model,
                                        const ProbeForceFieldSystem& system,
                                        const std::vector<std::string>& site_ids,
                                        const IMP::ParticleIndexes& particles,
                                        double k) {
     if (site_ids.size() != particles.size()) {
-        IMP_THROW("build_steric_restraint: " << site_ids.size()
+        IMP_THROW("create_steric_restraint: " << site_ids.size()
                   << " site ids against " << particles.size() << " particles",
                   IMP::ValueException);
     }

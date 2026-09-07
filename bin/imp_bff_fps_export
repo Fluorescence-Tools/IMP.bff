@@ -252,7 +252,7 @@ def errors(pdb, fps_json, positions, score_set, output_dir, replicas, seed,
             "FRET network alone constrains."
             % (100.0 * result.parent_e_clash / result.parent_score), err=True)
 
-    assembly = IMP.bff.build_docking_assembly(pdbs, labelling)
+    assembly = IMP.bff.create_docking_assembly(pdbs, labelling)
     table = IMP.bff.fps_bootstrap_table(result, len(pdbs))
     table = IMP.bff.add_rmsd_columns(table, assembly, bool(fps_rmsd_sign))
     if best_fit:
@@ -335,7 +335,7 @@ def table(pdb, results, output_dir, fps_json, prefix, best_fit, save_pdb,
                 "--best-fit needs an assembly to superpose with, and this "
                 "results file records no labelling file: pass --fps-json")
         parsed = IMP.bff.add_best_fit(
-            parsed, IMP.bff.build_docking_assembly(pdbs, labelling))
+            parsed, IMP.bff.create_docking_assembly(pdbs, labelling))
     options = _options(prefix, best_fit, save_pdb, fps_camera, None)
     _write_all(output_dir, parsed, IMP.bff.fps_molecules(pdbs), options,
                labelling)

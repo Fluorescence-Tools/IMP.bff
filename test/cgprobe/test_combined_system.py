@@ -12,12 +12,12 @@ import IMP.core
 
 
 from IMP.bff import read_forcefield_cif, write_probe_forcefield_cif
-from IMP.bff import build_probe_restraints
-from IMP.bff import build_probe_protein_system
+from IMP.bff import create_probe_restraints
+from IMP.bff import create_probe_protein_system
 
 
 def test_build_combined_system_basic():
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",
@@ -37,7 +37,7 @@ def test_build_combined_system_basic():
 
 
 def test_combined_system_cif_roundtrip(tmp_path):
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",
@@ -54,7 +54,7 @@ def test_combined_system_cif_roundtrip(tmp_path):
 
 
 def test_build_dye_restraints_smoke():
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")),
         str(get_structure_dir("atto655.mol2")),
         "CX4",
@@ -73,7 +73,7 @@ def test_build_dye_restraints_smoke():
         )
         site_particles[s.id] = p
 
-    restraints = build_probe_restraints(model, system, list(site_particles),
+    restraints = create_probe_restraints(model, system, list(site_particles),
                                  [p.get_index() for p in site_particles.values()])
     assert len(restraints) > 0
 

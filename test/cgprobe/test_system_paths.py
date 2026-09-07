@@ -22,7 +22,7 @@ import pytest
 
 import IMP.bff
 
-#: `build_forcefield_system` is overloaded (typed specs, or the JSON string),
+#: `create_forcefield_system` is overloaded (typed specs, or the JSON string),
 #: and SWIG turns off keyword arguments for an overloaded function -- so every
 #: parameter up to `relative_to` has to be given, in order. These are its own
 #: defaults; `bin/imp_bff` passes them the same way.
@@ -31,7 +31,7 @@ DEFAULTS = (2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
 
 
 def _build(components, relative_to=""):
-    return IMP.bff.build_forcefield_system(components, *DEFAULTS, relative_to)
+    return IMP.bff.create_forcefield_system(components, *DEFAULTS, relative_to)
 
 
 def _components():

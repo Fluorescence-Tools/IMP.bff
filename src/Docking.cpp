@@ -387,7 +387,7 @@ int body_for_pdb_index(int idx, std::size_t n_pdb,
 
 }  // namespace
 
-DockingAssembly build_docking_assembly(
+DockingAssembly create_docking_assembly(
         const std::vector<std::string>& pdb_paths,
         const std::string& fps_json_path, const std::string& score_set,
         bool mean_position_restraint, double ev_weight, double sigma_da,
@@ -709,7 +709,7 @@ DockingResult score_structures(const std::vector<std::string>& pdb_paths,
                                const std::string& output_csv,
                                const std::string& clash_radii_source,
                                double clash_radii_scale) {
-    const DockingAssembly assembly = build_docking_assembly(
+    const DockingAssembly assembly = create_docking_assembly(
             pdb_paths, fps_json_path, score_set, mean_position_restraint, 1.0,
             sigma_da, 0.0, 0.0, clash_radii_source, clash_radii_scale);
     return score_assembly(assembly, output_csv);
@@ -763,7 +763,7 @@ IMP::ParticleIndexes docking_clash_spheres(IMP::Model* m,
             out.push_back(pi);
             continue;
         }
-        // A shadow that already exists is reused: `build_docking_assembly`
+        // A shadow that already exists is reused: `create_docking_assembly`
         // builds the container once, but a caller is free to ask twice and a
         // second set of spheres would double every overlap.
         if (m->get_has_attribute(docking_clash_shadow_key(), pi)) {
@@ -1001,7 +1001,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
     // `mean_position_restraint=false`: the assembly must not attach the dye
     // particles as body members here, because the proxies below do that job in
     // the one way that keeps the gradients (see the header).
-    const DockingAssembly assembly = build_docking_assembly(
+    const DockingAssembly assembly = create_docking_assembly(
             pdb_paths, fps_json_path,
             needs_all ? std::string() : params.score_set, false,
             params.ev_weight, params.sigma_da, params.clash_tolerance,
@@ -1061,7 +1061,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
         proxy_of.insert(std::make_pair(name, q->get_index()));
     }
     // A point position needs no proxy: it is already a plain XYZ member of its
-    // rigid body (an atom, or the fixed point `build_docking_assembly`
+    // rigid body (an atom, or the fixed point `create_docking_assembly`
     // attached), so it moves with the body and propagates gradients the same
     // classic way a proxy does.
     {
@@ -1254,7 +1254,7 @@ DockingResult refine_docking(const std::vector<std::string>& pdb_paths,
                      const std::string& score_set, int steps,
                      double ev_weight) {
     internal::make_directory(output_dir);
-    const DockingAssembly assembly = build_docking_assembly(
+    const DockingAssembly assembly = create_docking_assembly(
             pdb_paths, fps_json_path, score_set, true, ev_weight);
     const IMP::core::RigidBodies bodies = assembly.get_rigid_bodies();
     for (std::size_t i = 0; i < bodies.size(); ++i) {
@@ -1497,7 +1497,7 @@ std::vector<ScreenedStructure> screen_structures(
                 positions_json = document.positions;
             }
         } catch (const std::exception&) {
-            // Diagnostics only; build_docking_assembly reports the real
+            // Diagnostics only; create_docking_assembly reports the real
             // failure, per structure and with the structure's name on it.
         }
     }
@@ -1511,7 +1511,7 @@ std::vector<ScreenedStructure> screen_structures(
         entry.ref_rmsd = std::numeric_limits<double>::quiet_NaN();
         try {
             std::vector<std::string> one(1, structures[i]);
-            const DockingAssembly assembly = build_docking_assembly(
+            const DockingAssembly assembly = create_docking_assembly(
                     one, fps_json_path, score_set, mean_position_restraint);
             entry.score = assembly.evaluate();
             const std::vector<PairDistance> ep_ = collect_pair_distances(assembly.get_network(),
@@ -1686,7 +1686,7 @@ namespace {
 
 //! Every atom of an assembly as (body index, body-local coordinate).
 /*! Atoms that are not members of a rigid body cannot move with a pose and are
-    left out; there are none in an assembly `build_docking_assembly` made. */
+    left out; there are none in an assembly `create_docking_assembly` made. */
 struct AssemblyAtoms {
     std::vector<int> body;
     std::vector<IMP::algebra::Vector3D> local;
@@ -1899,7 +1899,7 @@ BootstrapResult fps_bootstrap(const std::vector<std::string>& pdb_paths,
     //    place, because that is where a replica's run will compute them, and a
     //    volume carried rigidly from the input pose would state a truth the
     //    replicas cannot reproduce.
-    const DockingAssembly reference = build_docking_assembly(
+    const DockingAssembly reference = create_docking_assembly(
             pdb_paths, fps_json_path, std::string(), false, params.ev_weight,
             params.sigma_da, params.clash_tolerance, params.max_force,
             params.clash_radii_source, params.clash_radii_scale);

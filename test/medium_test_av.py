@@ -17,7 +17,7 @@ from IMP.bff import (
     ACV,
     AccessibleVolume,
     average_distance,
-    compute_av,
+    get_av,
     density_to_points,
     mean_fret_distance,
     points_weighted_mean,
@@ -232,12 +232,12 @@ class TestACV:
 
 
 class TestComputeAvBackends:
-    """`compute_av` end-to-end, through the array front door.
+    """`get_av` end-to-end, through the array front door.
 
     Written 2026-07-27, when the `imp_bff` branch turned out never to have run:
     it raised `UsageException` on any input because it read its density by
     handing the source particle to an `IMP.em.SampledDensityMap`, which needs an
-    `IMP.atom.Mass` it never set. Nothing in this suite touched `compute_av`, so
+    `IMP.atom.Mass` it never set. Nothing in this suite touched `get_av`, so
     a backend that could not work looked fine.
     """
 
@@ -276,7 +276,7 @@ class TestComputeAvBackends:
         if not self._available():
             pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
-        av = compute_av(
+        av = get_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
             grid_resolution=0.5,
@@ -294,7 +294,7 @@ class TestComputeAvBackends:
         if not self._available():
             pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
-        av = compute_av(
+        av = get_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
             grid_resolution=0.5,
@@ -316,7 +316,7 @@ class TestComputeAvBackends:
         if not self._available():
             pytest.skip("this build does not expose IMP.bff's AV decorator")
         atoms_xyz, atoms_vdw, source_xyz = self._system()
-        av = compute_av(
+        av = get_av(
             atoms_xyz, atoms_vdw, source_xyz,
             linker_length=12.0, linker_width=1.0, dye_radii=(2.0, 0.0, 0.0),
             grid_resolution=0.5,
@@ -338,7 +338,7 @@ class TestComputeAvBackends:
 
 
 class TestComputeAvIsThreadSafe:
-    """`compute_av` from a thread pool must not die inside SWIG.
+    """`get_av` from a thread pool must not die inside SWIG.
 
     IMP builds its decorators through SWIG, which is not safe from several
     threads at once. Without `_IMP_BUILD_LOCK` this raises
@@ -381,7 +381,7 @@ class TestComputeAvIsThreadSafe:
         atoms_xyz, atoms_vdw, source_xyz = self._system(self.N_ATOMS)
 
         def build(_):
-            return compute_av(
+            return get_av(
                 atoms_xyz, atoms_vdw, source_xyz,
                 linker_length=12.0, linker_width=1.0,
                 dye_radii=(2.0, 0.0, 0.0), grid_resolution=1.0,

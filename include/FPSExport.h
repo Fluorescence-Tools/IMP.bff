@@ -92,7 +92,7 @@ struct IMPBFFEXPORT FPSMolecule {
 IMP_VALUES(FPSMolecule, FPSMolecules);
 
 //! Read the structures an export will `load`, and where their frames sit.
-/*! \param[in] pdb_paths the same list `build_docking_assembly` was given
+/*! \param[in] pdb_paths the same list `create_docking_assembly` was given
     \throw IOException when a file is missing */
 IMPBFFEXPORT FPSMolecules fps_molecules(
         const std::vector<std::string>& pdb_paths);

@@ -250,7 +250,7 @@ IMP_VALUES(GoContacts, GoContactsList);
 
     inside \f$r_m < r < 2.5 r_m\f$ and \f$-\epsilon_{ij}\f$ outside it.
 
-    \note #IMP::bff::build_go_restraints in `Scoring.h` is a *harmonic* native
+    \note #IMP::bff::create_go_restraints in `Scoring.h` is a *harmonic* native
     contact over force-field sites. This is the truncated-LJ form over beads;
     they are different terms and both stay.
 
@@ -433,7 +433,7 @@ public:
     \param[in] slack the container's slack, A
     \return one restraint, named `clash`
 */
-IMPBFFEXPORT IMP::Restraint* build_clash_restraint(
+IMPBFFEXPORT IMP::Restraint* create_clash_restraint(
         IMP::atom::Hierarchy hierarchy, double clash_tolerance = 2.0,
         double slack = 2.0);
 
@@ -456,7 +456,7 @@ IMPBFFEXPORT IMP::Restraint* build_clash_restraint(
                family entirely
     \return the restraints, bonds then angles then dihedrals
 */
-IMPBFFEXPORT IMP::Restraints build_ca_internal_restraints(
+IMPBFFEXPORT IMP::Restraints create_ca_internal_restraints(
         IMP::Model* m, const IMP::ParticleIndexes& cas,
         const IMP::ParticleIndexes& reference, double k_bond = 1.0,
         double k_angle = 0.2, double k_dihedral = 0.1);
@@ -490,7 +490,7 @@ IMPBFFEXPORT double residue_solvent_accessible_surface(
 //! Soft-sphere overlap energy over every atom pair, on flat coordinates.
 /*!
     \f$E = \sum_{i<j} ((\sigma_{ij} - r_{ij})/t)^2\f$ over the pairs with
-    \f$r_c < r_{ij} < \sigma_{ij}\f$. What #build_clash_restraint scores
+    \f$r_c < r_{ij} < \sigma_{ij}\f$. What #create_clash_restraint scores
     through IMP, for a caller holding arrays.
 
     \param[in] xyz flat coordinates, three per atom

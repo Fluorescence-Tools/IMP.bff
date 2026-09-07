@@ -274,9 +274,9 @@ def test_the_molecular_graph_is_the_systems_own():
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
     import IMP.bff
-    from IMP.bff import build_probe_protein_system
+    from IMP.bff import create_probe_protein_system
 
-    system = build_probe_protein_system(
+    system = create_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
@@ -586,10 +586,10 @@ def test_system_self_consistency_is_the_systems_own_check():
     """
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_probe_protein_system
+    from IMP.bff import create_probe_protein_system
 
     def fresh():
-        return build_probe_protein_system(
+        return create_probe_protein_system(
             str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
             "CX4", "atto655",
             protein_template=str(get_template_dir("cx4.template.cif")),

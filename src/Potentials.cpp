@@ -761,7 +761,7 @@ IMP::ModelObjectsTemp RamachandranRestraint::do_get_inputs() const {
 // Built out of IMP's own scores
 // ---------------------------------------------------------------------------
 
-IMP::Restraint* build_clash_restraint(IMP::atom::Hierarchy hierarchy,
+IMP::Restraint* create_clash_restraint(IMP::atom::Hierarchy hierarchy,
                                       double clash_tolerance, double slack) {
     if (clash_tolerance == 0.0) {
         IMP_THROW("clash_tolerance divides the overlap and cannot be zero",
@@ -795,7 +795,7 @@ IMP::Restraint* build_clash_restraint(IMP::atom::Hierarchy hierarchy,
     return r.release();
 }
 
-IMP::Restraints build_ca_internal_restraints(
+IMP::Restraints create_ca_internal_restraints(
         IMP::Model* m, const IMP::ParticleIndexes& cas,
         const IMP::ParticleIndexes& reference, double k_bond, double k_angle,
         double k_dihedral) {

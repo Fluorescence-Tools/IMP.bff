@@ -491,7 +491,7 @@ public:
         clear that inflation plus a grid step of slack, or the source voxel is
         walled in and the volume comes back **empty**.
 
-        This lived in `compute_av_from_structure()` only, so the two doors onto
+        This lived in `get_av_from_structure()` only, so the two doors onto
         the same volume disagreed: the fps.json door derived, the decorator
         door (and `imp_bff av-export` behind it) took a flat 1.5 and returned
         nothing at FPS's standard linker width of 4.5 Å. One place now.

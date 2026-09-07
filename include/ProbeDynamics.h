@@ -104,7 +104,7 @@ IMP_VALUES(LangevinTrajectory, LangevinTrajectories);
 
 //! Langevin (`md`) or Brownian (`bd`) dynamics of an attached label.
 /*!
-    The label's own force field holds it together (#build_probe_restraints), its
+    The label's own force field holds it together (#create_probe_restraints), its
     `N`/`CA`/`C`/`O` anchor is held still, and the protein's heavy atoms near
     the site repel it (#IMP::core::SoftSpherePairScore over a bipartite close
     pair container). The labelled residue is not an obstacle to its own label,

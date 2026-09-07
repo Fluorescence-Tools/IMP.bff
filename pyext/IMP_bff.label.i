@@ -37,7 +37,7 @@ IMP_SWIG_VALUE(IMP::bff, SequenceSegment, SequenceSegments);
 %feature("kwargs") IMP::bff::strip_sidechain_at_site;
 %feature("kwargs") IMP::bff::ProbePosition::ProbePosition;
 %feature("kwargs") IMP::bff::probe_position_from_source_info;
-%feature("kwargs") IMP::bff::find_fp_domains;
+%feature("kwargs") IMP::bff::get_fp_domains;
 %feature("kwargs") IMP::bff::segments_from_plddt;
 %feature("kwargs") IMP::bff::parse_plddt_from_pdb;
 

@@ -1,6 +1,6 @@
 """The density and the point cloud must describe the same volume.
 
-``IMP.bff.compute_av`` returns both a voxel ``density`` and a ``points`` cloud.
+``IMP.bff.get_av`` returns both a voxel ``density`` and a ``points`` cloud.
 They are two readings of one accessible volume and they have to agree — but a
 mirrored grid keeps the right voxel count, the right bounding box and the right
 total volume, so nothing but a voxel-by-voxel comparison catches it.
@@ -12,7 +12,7 @@ the volume transposed. Of 2180 cloud points on T4L A132 at 1.5 Å, 1548 (71 %)
 landed on a voxel the density called occupied. Downstream, on the same site at
 2.0 Å, the mean donor lifetime came out 3.3974 ns instead of 3.5626 ns.
 
-The array path in ``IMP.bff.compute_av`` had found and fixed this already, and
+The array path in ``IMP.bff.get_av`` had found and fixed this already, and
 its test is the model for this one: it reads the point cloud from IMP rather
 than deriving it from the grid, precisely so the two are independent readings.
 Two readings can disagree; one cannot.
@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 import IMP.bff
-from IMP.bff import compute_av_from_structure
+from IMP.bff import get_av_from_structure
 
 _SITE = dict(chain_identifier="A", residue_seq_number=132, atom_name="CB",
              simulation_type="AV1", linker_length=20.0, linker_width=0.5,
@@ -37,7 +37,7 @@ def pdb_path():
 
 
 def _build(pdb_path, resolution):
-    return compute_av_from_structure(pdb_path, json.dumps(dict(_SITE)),
+    return get_av_from_structure(pdb_path, json.dumps(dict(_SITE)),
                                      resolution)
 
 

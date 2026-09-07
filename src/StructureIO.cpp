@@ -499,7 +499,7 @@ void load_structure(const std::string& path, double** out_view,
     structure_coordinates(read_pdb_hierarchy(path, m), out_view, n_out_view);
 }
 
-double compute_rmsd(const std::vector<double>& coords_a,
+double get_rmsd(const std::vector<double>& coords_a,
                     const std::vector<double>& coords_b,
                     const std::vector<int>& selection_mask, bool superpose) {
     if (coords_a.size() != coords_b.size()) {

@@ -670,7 +670,7 @@ public:
     lazy name it was reached by is what made the whole engine unrunnable
     (`okf/log.md`, 2026-08-25).
 */
-IMPBFFEXPORT DockingAssembly build_docking_assembly(
+IMPBFFEXPORT DockingAssembly create_docking_assembly(
         const std::vector<std::string>& pdb_paths,
         const std::string& fps_json_path, const std::string& score_set = "",
         bool mean_position_restraint = true, double ev_weight = 1.0,
@@ -697,7 +697,7 @@ IMPBFFEXPORT DockingAssembly build_docking_assembly(
     leaks into every later clone, mode and run, never reverted -- deselect the
     bond, change mode, re-dock, and the atom still cannot clash until the file
     is reloaded from disk. Here the radius is written on the particles of one
-    `IMP::Model`, which #IMP::bff::build_docking_assembly creates per call from
+    `IMP::Model`, which #IMP::bff::create_docking_assembly creates per call from
     its own `read_pdb`, so the mutation cannot outlive the assembly.
 
     \note It has to be applied **after** anything that rewrites radii.
@@ -798,7 +798,7 @@ IMPBFFEXPORT std::vector<PairDistance> pair_distances_at_positions(
     \param[in] sigma_da the mean-position transfer width, Å
     \param[in] output_csv where to write the per-pair table; empty writes none
     \param[in] clash_radii_source `"imp"` or `"olga"`; see
-               #IMP::bff::build_docking_assembly. The default leaves the
+               #IMP::bff::create_docking_assembly. The default leaves the
                pinned score (HIV-RT `resolved` 59.0404) where it is.
     \param[in] clash_radii_scale multiplies that source's radii; 1.0 default
 */

@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from IMP.bff import Probe, find_probe
+from IMP.bff import Probe, get_probe
 from IMP.bff import (
     ProbePosition, Quencher, PETParameters, pet_quenching_reference,
     reference_quenchers, reference_pet_parameters, REFERENCE_DYE,
@@ -37,7 +37,7 @@ class TestProbePosition:
         # turns keyword arguments off for anything overloaded. The probe is a
         # *name*; `set_probe` attaches the photophysics and the name together.
         label = ProbePosition("A", 132, "CB", "AlexaFluor488", "donor")
-        label.set_probe(find_probe("AlexaFluor 488"))
+        label.set_probe(get_probe("AlexaFluor 488"))
         assert label.key == "A:132:CB"
         assert label.dye.name == "AlexaFluor488"
 

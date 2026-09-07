@@ -3,7 +3,7 @@
  *
  *  - The **values** a run is told and reports (`DockingParameters`,
  *    `PairDistance`, `DockingResult`) and the **assembly** it starts from are
- *    `Docking.h`. `build_docking_assembly` resamples each volume, attaches it
+ *    `Docking.h`. `create_docking_assembly` resamples each volume, attaches it
  *    to the rigid body of the atom it hangs off, gives it a radius and a mass
  *    and adds the mean-distance and excluded-volume terms -- in plain IMP, so
  *    the scoring path pulls no sampler dependency.
@@ -60,7 +60,7 @@ IMP_SWIG_OBJECT(IMP::bff, ScoreTrace, ScoreTraces);
 %feature("director") IMP::bff::DockingStop;
 
 %feature("kwargs") IMP::bff::DockingResult::DockingResult;
-%feature("kwargs") IMP::bff::build_docking_assembly;
+%feature("kwargs") IMP::bff::create_docking_assembly;
 %feature("kwargs") IMP::bff::score_assembly;
 %feature("kwargs") IMP::bff::score_structures;
 %feature("kwargs") IMP::bff::dock_minimize;

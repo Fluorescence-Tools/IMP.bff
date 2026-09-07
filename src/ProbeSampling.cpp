@@ -587,7 +587,7 @@ RotamerLibrary load_rotamer_library_trajectory(const std::string& pdb_path,
     return out;
 }
 
-std::vector<std::string> find_reference_rotamer_files(
+std::vector<std::string> get_reference_rotamer_files(
         const std::string& lib_dir, const std::string& probe_name, int cutoff) {
     std::ostringstream pdb, stem, weights;
     pdb << lib_dir << "/" << probe_name << ".pdb";

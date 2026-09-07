@@ -235,7 +235,7 @@ def test_a_dye_container_can_be_written_from_a_caller_s_own_dyes(tmp_path):
     which is the point of exporting it beside `probe_library_to_pto`."""
     subset = {}
     for name in ("AlexaFluor488", "AlexaFluor647"):
-        subset[name] = bff.find_probe(name)
+        subset[name] = bff.get_probe(name)
 
     out = str(tmp_path / "two.mmfdb.pto")
     bff.probe_write_pto(out, subset, "a subset, for this test")

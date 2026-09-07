@@ -261,7 +261,7 @@ AttachedProbeDynamics::AttachedProbeDynamics(
         obstacles_.push_back(candidates[i]);
     }
 
-    IMP::Restraints restraints = build_probe_restraints(model_, system_,
+    IMP::Restraints restraints = create_probe_restraints(model_, system_,
                                                       site_ids_,
                                                       label_particles_);
     if (!obstacles_.empty()) {

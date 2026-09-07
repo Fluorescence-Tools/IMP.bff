@@ -123,8 +123,8 @@ def test_the_forster_radius_is_unchanged_by_the_round_trip(container):
     for donor, acceptor in [("AlexaFluor488", "AlexaFluor647"),
                             ("AlexaFluor488", "AlexaFluor594"),
                             ("LumiprobeCy3", "LumiprobeCy5")]:
-        from_cif = bff.forster_radius(bff.find_probe(donor),
-                                      bff.find_probe(acceptor))
+        from_cif = bff.forster_radius(bff.get_probe(donor),
+                                      bff.get_probe(acceptor))
         from_pto = bff.probe_pto_forster_radius(path, donor, acceptor)
         assert from_pto == pytest.approx(from_cif, abs=1e-9)
 
@@ -140,8 +140,8 @@ def test_the_container_hands_out_angstrom(container):
     reading them out of the CIF, which is this function's actual claim.
     """
     path, _ = container
-    direct = bff.forster_radius(bff.find_probe("AlexaFluor488"),
-                                bff.find_probe("AlexaFluor647"))
+    direct = bff.forster_radius(bff.get_probe("AlexaFluor488"),
+                                bff.get_probe("AlexaFluor647"))
     from_container = bff.probe_pto_forster_radius(path, "AlexaFluor488",
                                                 "AlexaFluor647")
     assert from_container == pytest.approx(direct)
@@ -290,8 +290,8 @@ def test_the_readme_explains_the_normalisation(container):
 #: Every route in the package that hands back a Forster radius.
 def _all_r0_routes(container, donor, acceptor):
     return {
-        "forster_radius": bff.forster_radius(bff.find_probe(donor),
-                                             bff.find_probe(acceptor)),
+        "forster_radius": bff.forster_radius(bff.get_probe(donor),
+                                             bff.get_probe(acceptor)),
         "forster_radius_from_spectra": bff.forster_radius_from_spectra(
             donor, acceptor, 2.0 / 3.0),
         "probe_pto_forster_radius": bff.probe_pto_forster_radius(
@@ -378,8 +378,8 @@ def test_a_spin_label_is_refused_a_forster_radius_by_name():
     type existed the only thing the code could say was "both dyes need a
     spectrum", which reads as a missing file rather than a category error.
     """
-    donor = bff.find_probe("AlexaFluor488")
-    label = bff.find_probe("AlexaFluor647")
+    donor = bff.get_probe("AlexaFluor488")
+    label = bff.get_probe("AlexaFluor647")
     label.name = "MTSSL"
     label.probe_type = bff.PROBE_SPIN_LABEL
 
@@ -392,15 +392,15 @@ def test_a_spin_label_is_refused_a_forster_radius_by_name():
     with pytest.raises(Exception):
         bff.forster_radius(label, donor)
     # While the two real dyes still work.
-    assert bff.forster_radius(donor, bff.find_probe("AlexaFluor647")) > 40.0
+    assert bff.forster_radius(donor, bff.get_probe("AlexaFluor647")) > 40.0
 
 
 def test_the_probe_type_survives_a_container_round_trip(tmp_path):
     """Losing it would silently turn a spin label back into something that
     claims a Forster radius."""
     probes = {}
-    probes["AlexaFluor488"] = bff.find_probe("AlexaFluor488")
-    label = bff.find_probe("AlexaFluor647")
+    probes["AlexaFluor488"] = bff.get_probe("AlexaFluor488")
+    label = bff.get_probe("AlexaFluor647")
     label.name = "MTSSL"
     label.probe_type = bff.PROBE_SPIN_LABEL
     label.vendor = "Toronto Research Chemicals"
@@ -467,7 +467,7 @@ def test_no_probe_field_is_silently_dropped(tmp_path):
     The test enumerates the fields rather than checking the three, so a field
     added later is covered without anyone remembering to come back here.
     """
-    probe = bff.find_probe("AlexaFluor488")
+    probe = bff.get_probe("AlexaFluor488")
     # Every field set to something distinguishable from its default, so a
     # dropped one cannot coincide with what a fresh Probe already holds.
     probe.vendor = "TestVendor"

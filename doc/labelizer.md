@@ -91,8 +91,8 @@ Which pair to measure
 ---------------------
 
     LlFretOptions options;
-    options.forster_radius = forster_radius(find_probe("Alexa488"),
-                                            find_probe("Alexa647"));
+    options.forster_radius = forster_radius(get_probe("Alexa488"),
+                                            get_probe("Alexa647"));
     const std::vector<LlPairScore> pairs = ll_pair_scores(
             "protein.pdb", ll_combined_by_key(scores), options);
 
