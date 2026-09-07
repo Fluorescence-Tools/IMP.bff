@@ -26,4 +26,3 @@
 #include "imp/Potentials.cpp"
 #include "imp/ProbeDynamics.cpp"
 #include "imp/ProbeNetworkRestraint.cpp"
-#include "imp/Scoring.cpp"

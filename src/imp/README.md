@@ -23,8 +23,7 @@ tree, so a public subdirectory is not an option -- and are named in
 | `AVOccupancyMap.h` | `AVOccupancyMap.cpp` | an `IMP::Object` cache of AV occupancy keyed by particle |
 | `ProbeNetworkRestraint.h` | `ProbeNetworkRestraint.cpp` | an `IMP::Restraint` over a network of AVs |
 | `AVMeanDistanceRestraint.h` | `AVMeanDistanceRestraint.cpp` | an `IMP::Restraint` on the mean AV distance |
-| `Potentials.h` | `Potentials.cpp` | `IMP::Restraint` factories for coarse-grained potentials |
-| `Scoring.h` | `Scoring.cpp` | `IMP::Restraint` factories and scoring over `IMP::core` particles |
+| `Potentials.h` | `Potentials.cpp` | `IMP::Restraint` factories for coarse-grained potentials, and the restraint factories over a typed dye system (formerly the IMP half of `Scoring.h`) |
 | `Docking.h` | `Docking.cpp` | rigid-body docking assemblies over `IMP::atom::Hierarchy` |
 | `ProbeDynamics.h` | `ProbeDynamics.cpp` | `IMP::atom::Simulator` (Langevin / Brownian) for an attached probe |
 | `FPSProject.h`, `FPSExport.h` | `FPSProject.cpp`, `FPSExport.cpp` | the fps.json project and its exports, which drive `Docking.h` |
@@ -37,5 +36,4 @@ stay in `pyext/` at the positions SWIG's ordering needs.
 Core files that still include a layer header are the remaining cross-section,
 listed in PRD-137 step 5 (`include/PathMap.h`, `internal/AVLatticeState.h`,
 `internal/FPSReaderWriter.h`, `src/AVBuilder.cpp`, `src/Labelizer.cpp`,
-`src/Linker.cpp`, `src/Rotamer.cpp`, `src/TopologyBuild.cpp`). A core file
-must not gain a new one.
+`src/Linker.cpp`). A core file must not gain a new one.

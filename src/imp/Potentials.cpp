@@ -28,6 +28,25 @@
 #include <IMP/core/XYZR.h>
 #include <IMP/bff/Base.h>
 
+// for the restraint factories that came from Scoring.cpp
+#include <IMP/bff/Mol2IO.h>
+#include <IMP/bff/Rotamer.h>
+#include <IMP/algebra/vector_generators.h>
+#include <IMP/constants.h>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_real.hpp>
+#include <IMP/core/HarmonicLowerBound.h>
+#include <IMP/container/ListPairContainer.h>
+#include <IMP/core/XYZ.h>
+#include <IMP/core/internal/dihedral_helpers.h>
+#include <cctype>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <map>
+#include <set>
+#include <string>
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -863,6 +882,331 @@ double residue_solvent_accessible_surface(IMP::atom::Hierarchy hierarchy,
         centres.push_back(v[2]);
     }
     return residue_asa(centres, n_sphere, probe, radius);
+}
+
+// -------- from Scoring.cpp (the restraint factories over a typed dye system) --------
+
+IMP::core::Cosine* torsion_cosine(const FFTorsionType& type) {
+    // CHARMM's k(1 + cos(n phi - delta)) against Cosine's k(1 - cos(...)):
+    // the same curve with the phase shifted by pi.
+    return new IMP::core::Cosine(type.k, type.periodicity,
+                                 type.phase + IMP::algebra::PI);
+}
+
+IMP::Restraints create_probe_restraints(
+        IMP::Model* model, const ProbeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles, bool nonbonded) {
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("create_probe_restraints: " << site_ids.size() << " site ids "
+                  << "against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    const bool has_all = true;
+    IMP::Restraints out;
+
+    // -- bonds ------------------------------------------------------------
+    const std::map<std::string, double>& bt = system.get_bond_types();
+    for (std::size_t i = 0; i < system.get_bonds().size(); ++i) {
+        const FFBond& b = system.get_bonds()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator a =
+                site.find(b.site_a), c = site.find(b.site_b);
+        if (a == site.end() || c == site.end()) continue;
+        std::map<std::string, double>::const_iterator k = bt.find(b.type_id);
+        if (k == bt.end()) continue;
+        // A length of zero is a length nobody set: restrain about the
+        // geometry as it stands rather than pulling the sites together.
+        const double length =
+                b.length > 0.0
+                        ? b.length
+                        : IMP::core::get_distance(
+                                  IMP::core::XYZ(model, a->second),
+                                  IMP::core::XYZ(model, c->second));
+        out.push_back(new IMP::core::DistanceRestraint(
+                model, new IMP::core::Harmonic(length, k->second),
+                model->get_particle(a->second),
+                model->get_particle(c->second)));
+    }
+
+    // -- angles -----------------------------------------------------------
+    const std::map<std::string, double>& at = system.get_angle_types();
+    for (std::size_t i = 0; i < system.get_angles().size(); ++i) {
+        const FFAngle& an = system.get_angles()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator a =
+                site.find(an.site_a), b = site.find(an.site_b),
+                c = site.find(an.site_c);
+        if (a == site.end() || b == site.end() || c == site.end()) continue;
+        std::map<std::string, double>::const_iterator k = at.find(an.type_id);
+        if (k == at.end()) continue;
+        const double theta =
+                an.theta > 0.0
+                        ? an.theta
+                        : bond_angle_rad(
+                                  IMP::core::XYZ(model, a->second)
+                                          .get_coordinates(),
+                                  IMP::core::XYZ(model, b->second)
+                                          .get_coordinates(),
+                                  IMP::core::XYZ(model, c->second)
+                                          .get_coordinates());
+        out.push_back(new IMP::core::AngleRestraint(
+                model, new IMP::core::Harmonic(theta, k->second),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second)));
+    }
+
+    // -- torsions ---------------------------------------------------------
+    const std::map<std::string, FFTorsionType>& tt = system.get_torsion_types();
+    for (std::size_t i = 0; i < system.get_dihedrals().size(); ++i) {
+        const FFTorsion& t = system.get_dihedrals()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator
+                a = site.find(t.site_a), b = site.find(t.site_b),
+                c = site.find(t.site_c), d = site.find(t.site_d);
+        if (a == site.end() || b == site.end() || c == site.end() ||
+            d == site.end()) continue;
+        std::map<std::string, FFTorsionType>::const_iterator ty =
+                tt.find(t.type_id);
+        if (ty == tt.end()) continue;
+        out.push_back(new IMP::core::DihedralRestraint(
+                model, torsion_cosine(ty->second),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second),
+                model->get_particle(d->second)));
+    }
+
+    // -- impropers: harmonic about the geometry as it stands now ----------
+    const std::map<std::string, FFTorsionType>& it =
+            system.get_improper_types();
+    for (std::size_t i = 0; i < system.get_impropers().size(); ++i) {
+        const FFTorsion& t = system.get_impropers()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator
+                a = site.find(t.site_a), b = site.find(t.site_b),
+                c = site.find(t.site_c), d = site.find(t.site_d);
+        if (a == site.end() || b == site.end() || c == site.end() ||
+            d == site.end()) continue;
+        std::map<std::string, FFTorsionType>::const_iterator ty =
+                it.find(t.type_id);
+        if (ty == it.end()) continue;
+        const IMP::core::XYZ xa(model, a->second), xb(model, b->second),
+                xc(model, c->second), xd(model, d->second);
+        const double theta0 = IMP::core::get_dihedral(xa, xb, xc, xd);
+        out.push_back(new IMP::core::DihedralRestraint(
+                model, new IMP::core::Harmonic(theta0, ty->second.k),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second),
+                model->get_particle(d->second)));
+    }
+
+    // -- repulsion --------------------------------------------------------
+    // One soft-sphere restraint over every non-excluded pair: the same term a
+    // Monte-Carlo step is scored against, and differentiable, so a dynamics
+    // run uses it too. It was per-pair Lennard-Jones lower bounds here and
+    // soft spheres there -- two implementations of one piece of physics, and
+    // thousands of restraints where one does.
+    if (nonbonded) {
+        IMP::Restraint* steric =
+                create_steric_restraint(model, system, site_ids, particles);
+        if (steric != NULL) out.push_back(steric);
+    }
+    (void)has_all;
+    return out;
+}
+
+namespace {
+
+//! The mean position of a set of particles.
+IMP::algebra::Vector3D centre_of(IMP::Model* model,
+                                 const IMP::ParticleIndexes& ps) {
+    IMP::algebra::Vector3D c(0.0, 0.0, 0.0);
+    for (std::size_t i = 0; i < ps.size(); ++i) {
+        c += IMP::core::XYZ(model, ps[i]).get_coordinates();
+    }
+    return ps.empty() ? c : c / static_cast<double>(ps.size());
+}
+
+}  // namespace
+
+double place_guest_by_score(IMP::ScoringFunction* scoring_function,
+                            IMP::Model* model,
+                            const IMP::ParticleIndexes& host,
+                            const IMP::ParticleIndexes& guest, double distance,
+                            int n_trials, int seed) {
+    if (guest.empty() || scoring_function == NULL) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const IMP::algebra::Vector3D host_centre = centre_of(model, host);
+    const IMP::algebra::Vector3D guest_centre = centre_of(model, guest);
+    IMP::algebra::Vector3Ds shape;
+    for (std::size_t i = 0; i < guest.size(); ++i) {
+        shape.push_back(IMP::core::XYZ(model, guest[i]).get_coordinates() -
+                        guest_centre);
+    }
+
+    boost::mt19937 rng(static_cast<boost::uint32_t>(seed));
+    boost::uniform_real<double> unit(0.0, 1.0);
+
+    IMP::algebra::Vector3Ds best = shape;
+    IMP::algebra::Vector3D best_offset = host_centre;
+    double best_score = std::numeric_limits<double>::infinity();
+    for (int trial = 0; trial < std::max(1, n_trials); ++trial) {
+        const IMP::algebra::Rotation3D rotation =
+                IMP::algebra::get_random_rotation_3d();
+        // A direction drawn uniformly on the sphere: z uniform in [-1, 1] and
+        // the azimuth uniform, which is the one construction that does not
+        // crowd the poles.
+        const double z = 2.0 * unit(rng) - 1.0;
+        const double azimuth = 2.0 * IMP::PI * unit(rng);
+        const double r = std::sqrt(std::max(0.0, 1.0 - z * z));
+        const IMP::algebra::Vector3D direction(r * std::cos(azimuth),
+                                               r * std::sin(azimuth), z);
+        const IMP::algebra::Vector3D offset = host_centre + direction * distance;
+
+        IMP::algebra::Vector3Ds pose;
+        for (std::size_t i = 0; i < shape.size(); ++i) {
+            pose.push_back(offset + rotation.get_rotated(shape[i]));
+        }
+        for (std::size_t i = 0; i < guest.size(); ++i) {
+            IMP::core::XYZ(model, guest[i]).set_coordinates(pose[i]);
+        }
+        const double score = scoring_function->evaluate(false);
+        if (score < best_score) {
+            best_score = score;
+            best = pose;
+        }
+    }
+    for (std::size_t i = 0; i < guest.size(); ++i) {
+        IMP::core::XYZ(model, guest[i]).set_coordinates(best[i]);
+    }
+    (void)best_offset;
+    return best_score;
+}
+
+IMP::Restraints create_go_restraints(
+        IMP::Model* model, const ProbeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles,
+        const std::map<std::string, std::string>& site_atom_names,
+        const std::string& component,
+        const std::vector<std::string>& only_sites, double k, double cutoff) {
+    IMP::Restraints out;
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("create_go_restraints: " << site_ids.size() << " site ids "
+                  << "against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    const std::set<std::string> released(only_sites.begin(), only_sites.end());
+
+    // The component's heavy sites, sorted, so the restraints come out in the
+    // site ids' order and a repeated run builds the same set.
+    std::vector<std::string> heavy;
+    for (std::size_t i = 0; i < system.get_sites().size(); ++i) {
+        const FFSite& s = system.get_sites()[i];
+        if (s.component != component) continue;
+        if (site.find(s.id) == site.end()) continue;
+        std::map<std::string, std::string>::const_iterator name =
+                site_atom_names.find(s.id);
+        if (name != site_atom_names.end() && !name->second.empty() &&
+            (name->second[0] == 'H' || name->second[0] == 'h')) {
+            continue;
+        }
+        heavy.push_back(s.id);
+    }
+    std::sort(heavy.begin(), heavy.end());
+
+    for (std::size_t i = 0; i < heavy.size(); ++i) {
+        for (std::size_t j = i + 1; j < heavy.size(); ++j) {
+            if (!released.empty() && released.count(heavy[i]) == 0 &&
+                released.count(heavy[j]) == 0) {
+                continue;
+            }
+            // Within two bonds the bonded terms already say what the distance
+            // is; a contact there would be a second opinion.
+            if (system.is_within_bonds(heavy[i], heavy[j], 2)) continue;
+            const IMP::core::XYZ a(model, site[heavy[i]]),
+                    b(model, site[heavy[j]]);
+            const double d = IMP::core::get_distance(a, b);
+            if (d > cutoff) continue;
+            IMP::Restraint* r = new IMP::core::DistanceRestraint(
+                    model, new IMP::core::Harmonic(std::max(d, 1.0), k),
+                    model->get_particle(site[heavy[i]]),
+                    model->get_particle(site[heavy[j]]));
+            r->set_name("go_" + component + "_" + heavy[i] + "_" + heavy[j]);
+            out.push_back(r);
+        }
+    }
+    return out;
+}
+
+IMP::Restraint* create_steric_restraint(IMP::Model* model,
+                                       const ProbeForceFieldSystem& system,
+                                       const std::vector<std::string>& site_ids,
+                                       const IMP::ParticleIndexes& particles,
+                                       double k) {
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("create_steric_restraint: " << site_ids.size()
+                  << " site ids against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    // A system that says its non-bonded term is off has no steric restraint,
+    // rather than one nobody asked for.
+    if (!system.get_nonbonded().enabled) return NULL;
+    const std::set<std::pair<std::string, std::string> > excluded =
+            system.get_exclusions();
+
+    // Sorted, so the pair order is the site ids' and not a hash's: a run that
+    // is repeated has to build the same container.
+    std::vector<std::string> ids;
+    for (std::map<std::string, IMP::ParticleIndex>::const_iterator it =
+                 site.begin();
+         it != site.end(); ++it) {
+        ids.push_back(it->first);
+    }
+
+    // A soft sphere is a sphere: a site the caller decorated without a radius
+    // would contribute nothing at all, silently. The system says what radius
+    // each site has, so give it that rather than score an empty term.
+    for (std::map<std::string, IMP::ParticleIndex>::const_iterator it =
+                 site.begin();
+         it != site.end(); ++it) {
+        IMP::Particle* p = model->get_particle(it->second);
+        if (IMP::core::XYZR::get_is_setup(p)) continue;
+        double radius = 1.7;
+        for (std::size_t i = 0; i < system.get_sites().size(); ++i) {
+            if (system.get_sites()[i].id != it->first) continue;
+            radius = system.get_sites()[i].radius;
+            break;
+        }
+        IMP::core::XYZR::setup_particle(p, radius);
+    }
+
+    IMP::ParticleIndexPairs pairs;
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+        for (std::size_t j = i + 1; j < ids.size(); ++j) {
+            if (excluded.count(std::make_pair(ids[i], ids[j])) > 0) continue;
+            pairs.push_back(IMP::ParticleIndexPair(site[ids[i]], site[ids[j]]));
+        }
+    }
+    if (pairs.empty()) return NULL;
+
+    IMP_NEW(IMP::container::ListPairContainer, container, (model, pairs));
+    const double strength = k >= 0.0 ? k : system.get_nonbonded().k;
+    return new IMP::container::PairsRestraint(
+            new IMP::core::SoftSpherePairScore(strength), container,
+            "steric");
 }
 
 IMPBFF_END_NAMESPACE
