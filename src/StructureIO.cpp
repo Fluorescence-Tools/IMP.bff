@@ -35,11 +35,15 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+// PRD-137 step 5c residue: load_structure reads the PDB through IMP::atom and
+// the connection layer's readers (HierarchyBridge.h); the core reader
+// (AVBuilder.h's read_pdb_records) is the replacement.
+IMP::atom::Hierarchy read_pdb_hierarchy(const std::string& path, IMP::Model* m);
+void structure_coordinates(IMP::atom::Hierarchy hierarchy, double** out_view, int* n_out_view);
+
 // Named, not anonymous: IMP compiles this module as one translation unit.
 namespace structio {
 using IMP::bff::internal::trimmed;
-
-
 
 std::string field(const std::string& line, std::size_t at, std::size_t n) {
     if (at >= line.size()) return std::string();
@@ -402,97 +406,6 @@ void write_pdb(const std::vector<double>& coords, const std::string& path,
     out << "ENDMDL\nEND\n";
 }
 
-void LoadedStructure::get_coords(double** output, int* n_output1,
-                                 int* n_output2) const {
-    double* out = internal::new_double_view(coords_.size(), output, n_output1);
-    if (out == NULL) return;
-    if (!coords_.empty()) {
-        std::memcpy(out, coords_.data(), coords_.size() * sizeof(double));
-    }
-    *n_output1 = static_cast<int>(coords_.size() / 3);
-    *n_output2 = 3;
-}
-
-LoadedStructure load_structure_with_particles(const std::string& path,
-                                              IMP::Model* model) {
-    const IMP::atom::Hierarchy hier = read_pdb_hierarchy(path, model);
-    const IMP::ParticlesTemp leaves = IMP::atom::get_leaves(hier);
-    std::vector<double> coords;
-    coords.reserve(leaves.size() * 3);
-    for (unsigned int i = 0; i < leaves.size(); ++i) {
-        const IMP::algebra::Vector3D v =
-                IMP::core::XYZ(leaves[i]).get_coordinates();
-        coords.push_back(v[0]);
-        coords.push_back(v[1]);
-        coords.push_back(v[2]);
-    }
-    return LoadedStructure(hier, leaves, coords);
-}
-
-FlexFitSelection read_angle_file(IMP::atom::Hierarchy hier,
-                                 const std::string& flexfit_json) {
-    nlohmann::json block;
-    try {
-        block = nlohmann::json::parse(flexfit_json);
-    } catch (const std::exception& e) {
-        IMP_THROW("read_angle_file: the FlexFit block does not parse: "
-                  << e.what(), IMP::ValueException);
-    }
-    if (!block.contains("Flexible residues") || !block.contains("Bonds")) {
-        IMP_THROW("read_angle_file: a FlexFit block needs 'Flexible residues' "
-                  "and 'Bonds'", IMP::ValueException);
-    }
-    IMP::Model* model = hier.get_model();
-
-    std::vector<AtomReference> residues;
-    for (const nlohmann::json& fr : block["Flexible residues"]) {
-        residues.push_back(AtomReference(
-                fr.value("chain_identifier", std::string()),
-                fr.value("residue_seq_number", 0)));
-    }
-    std::vector<AtomReference> ends;
-    for (const nlohmann::json& bond : block["Bonds"]) {
-        for (int e = 0; e < 2 && e < static_cast<int>(bond.size()); ++e) {
-            const nlohmann::json& end = bond[e];
-            ends.push_back(AtomReference(
-                    end.value("chain_identifier", std::string()),
-                    end.value("residue_seq_number", 0),
-                    end.value("atom_name", std::string())));
-        }
-    }
-
-    IMP::ParticlesTemp residue_particles;
-    const IMP::ParticleIndexes flexible =
-            select_flexible_residues(hier, residues);
-    for (unsigned int i = 0; i < flexible.size(); ++i) {
-        residue_particles.push_back(model->get_particle(flexible[i]));
-    }
-    IMP::atom::Bonds bond_decorators;
-    const IMP::ParticleIndexes bonds = create_named_bonds(hier, ends);
-    for (unsigned int i = 0; i < bonds.size(); ++i) {
-        bond_decorators.push_back(IMP::atom::Bond(model, bonds[i]));
-    }
-    return FlexFitSelection(residue_particles, bond_decorators);
-}
-
-IMP::atom::Hierarchy read_pdb_hierarchy(const std::string& path,
-                                        IMP::Model* m) {
-    return IMP::atom::read_pdb(path, m, new IMP::atom::NonWaterPDBSelector());
-}
-
-void structure_coordinates(IMP::atom::Hierarchy hierarchy, double** out_view,
-                           int* n_out_view) {
-    const IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
-    double* out = internal::new_double_view(leaves.size() * 3, out_view,
-                                           n_out_view);
-    if (out == nullptr) return;
-    for (unsigned int i = 0; i < leaves.size(); ++i) {
-        const IMP::algebra::Vector3D xyz =
-                IMP::core::XYZ(leaves[i]).get_coordinates();
-        for (int k = 0; k < 3; ++k) out[3 * i + k] = xyz[k];
-    }
-}
-
 void load_structure(const std::string& path, double** out_view,
                     int* n_out_view) {
     IMP_NEW(IMP::Model, m, ());
@@ -742,61 +655,6 @@ std::vector<CrossLink> read_xlink_table(const std::string& path) {
         x.residue_1 = static_cast<int>(residue_1);
         x.residue_2 = static_cast<int>(residue_2);
         out.push_back(x);
-    }
-    return out;
-}
-
-IMP::ParticleIndexes select_flexible_residues(
-        IMP::atom::Hierarchy hierarchy,
-        const std::vector<AtomReference>& residues) {
-    IMP::ParticleIndexes out;
-    for (std::size_t i = 0; i < residues.size(); ++i) {
-        IMP::atom::Selection sel(hierarchy);
-        sel.set_chain_ids(
-                IMP::Strings(1, residues[i].chain_identifier));
-        sel.set_residue_indexes(IMP::Ints(1, residues[i].residue_seq_number));
-        const IMP::ParticleIndexes found = sel.get_selected_particle_indexes(false);
-        if (found.empty()) {
-            IMP_THROW("no residue " << residues[i].chain_identifier << ":"
-                                    << residues[i].residue_seq_number
-                                    << " in the hierarchy",
-                      ValueException);
-        }
-        out.push_back(found[0]);
-    }
-    return out;
-}
-
-IMP::ParticleIndexes create_named_bonds(
-        IMP::atom::Hierarchy hierarchy,
-        const std::vector<AtomReference>& atom_pairs) {
-    if (atom_pairs.size() % 2 != 0) {
-        IMP_THROW("a bond takes two atoms; got " << atom_pairs.size()
-                                                 << " references",
-                  ValueException);
-    }
-    IMP::ParticleIndexes out;
-    for (std::size_t i = 0; i < atom_pairs.size(); i += 2) {
-        IMP::ParticleIndex ends[2];
-        for (int k = 0; k < 2; ++k) {
-            const AtomReference& ref = atom_pairs[i + k];
-            IMP::atom::Selection sel(hierarchy);
-            sel.set_chain_ids(IMP::Strings(1, ref.chain_identifier));
-            sel.set_residue_indexes(IMP::Ints(1, ref.residue_seq_number));
-            sel.set_atom_type(IMP::atom::AtomType(ref.atom_name));
-            const IMP::ParticleIndexes found = sel.get_selected_particle_indexes();
-            if (found.empty()) {
-                IMP_THROW("no atom " << ref.chain_identifier << ":"
-                                     << ref.residue_seq_number << ":"
-                                     << ref.atom_name << " in the hierarchy",
-                          ValueException);
-            }
-            ends[k] = found[0];
-        }
-        IMP::atom::Bonded b1(hierarchy.get_model(), ends[0]);
-        IMP::atom::Bonded b2(hierarchy.get_model(), ends[1]);
-        out.push_back(IMP::atom::create_bond(b1, b2, IMP::atom::Bond::SINGLE)
-                              .get_particle_index());
     }
     return out;
 }

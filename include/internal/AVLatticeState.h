@@ -11,6 +11,7 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/Pointer.h>
+#include <IMP/Particle.h>
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/VectorD.h>
 #include <IMP/bff/AVOccupancyMap.h>
@@ -27,6 +28,7 @@ IMPBFF_BEGIN_INTERNAL_NAMESPACE
 /** Lives beside the path map on the AV handle (shared between copies of the
     handle) -- it is *not* particle state, so a fresh handle starts cold. */
 struct AVLatticeState {
+    IMP::ParticlesTemp particles;         //!< the leaves the map was built over (the lattice itself keeps no particle)
     // The window: lattice index of voxel 0 and the (cubic) edge in voxels
     bool have_window = false;
     int k0[3] = {0, 0, 0};

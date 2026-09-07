@@ -22,11 +22,8 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/ZMatrix.h>
 
-#include <IMP/atom/bond_decorators.h>
 #include <IMP/bff/AVBuilder.h>
 
-#include <IMP/Model.h>
-#include <IMP/atom/Hierarchy.h>
 #include <IMP/bff/Base.h>
 
 #include <map>
@@ -137,15 +134,6 @@ IMPBFFEXPORT void write_pdb(const std::vector<double>& coords,
 IMPBFFEXPORT void apply_transform(const std::vector<double>& coords,
                                   const std::vector<double>& transform,
                                   double** out_view, int* n_out_view);
-
-//! Read a PDB into \p m and return its hierarchy.
-/*! `NonWaterPDBSelector`, which is what every caller of this wanted. */
-IMPBFFEXPORT IMP::atom::Hierarchy read_pdb_hierarchy(const std::string& path,
-                                                     IMP::Model* m);
-
-//! `(N, 3)` coordinates of a hierarchy's XYZ leaves, in hierarchy order.
-IMPBFFEXPORT void structure_coordinates(IMP::atom::Hierarchy hierarchy,
-                                        double** out_view, int* n_out_view);
 
 //! Load a PDB and return its `(N, 3)` coordinates.
 IMPBFFEXPORT void load_structure(const std::string& path, double** out_view,
@@ -267,72 +255,19 @@ struct IMPBFFEXPORT AtomReference {
 };
 IMP_VALUES(AtomReference, AtomReferences);
 
-//! A PDB read into a model: the hierarchy, its leaves and their coordinates.
-class IMPBFFEXPORT LoadedStructure {
-    IMP::atom::Hierarchy hierarchy_;
-    IMP::ParticlesTemp leaves_;
-    std::vector<double> coords_;
-
- public:
-    LoadedStructure() {}
-    LoadedStructure(IMP::atom::Hierarchy h, const IMP::ParticlesTemp& leaves,
-                    const std::vector<double>& coords)
-        : hierarchy_(h), leaves_(leaves), coords_(coords) {}
-
-    //! By value: IMP's value types may not be handed out by non-const ref.
-    IMP::atom::Hierarchy get_hierarchy() const { return hierarchy_; }
-    //! The leaf particles, in hierarchy order -- three coordinates each.
-    IMP::ParticlesTemp get_leaves() const { return leaves_; }
-    int get_number_of_leaves() const {
-        return static_cast<int>(leaves_.size());
-    }
-    //! `(n_leaves, 3)` in Angstrom.
-    void get_coords(double** output, int* n_output1, int* n_output2) const;
-};
-
 //! Read a PDB into \p model and return its hierarchy, leaves and coordinates.
 /*! The model is the caller's because it owns the particles: drop it and the
     hierarchy decorates nothing. */
-IMPBFFEXPORT LoadedStructure load_structure_with_particles(
-        const std::string& path, IMP::Model* model);
-
-//! What a FlexFit block names: flexible residues and the bonds to add.
-class IMPBFFEXPORT FlexFitSelection {
-    IMP::ParticlesTemp residues_;
-    IMP::atom::Bonds bonds_;
-
- public:
-    FlexFitSelection() {}
-    FlexFitSelection(const IMP::ParticlesTemp& residues,
-                     const IMP::atom::Bonds& bonds)
-        : residues_(residues), bonds_(bonds) {}
-
-    //! One particle per flexible residue, in the order the block lists them.
-    IMP::ParticlesTemp get_residues() const { return residues_; }
-    //! The bonds the block declares between named atoms, created in the model.
-    IMP::atom::Bonds get_bonds() const { return bonds_; }
-};
 
 //! Resolve one FlexFit block against a hierarchy.
 /*! \param[in] hier the structure the names resolve against
     \param[in] flexfit_json one FlexFit set as JSON -- the `"Flexible
                residues"` and `"Bonds"` arrays of an angle file
     \throw ValueException when the JSON does not parse or lacks those keys */
-IMPBFFEXPORT FlexFitSelection read_angle_file(IMP::atom::Hierarchy hier,
-                                              const std::string& flexfit_json);
 
 //! Resolve the flexible residues a flexfit file names.
 /*! \param[in] residues one entry per flexible residue; `atom_name` is ignored
     \return the first selected particle of each, in the order given */
-IMPBFFEXPORT IMP::ParticleIndexes select_flexible_residues(
-        IMP::atom::Hierarchy hierarchy,
-        const std::vector<AtomReference>& residues);
-
-//! Create the single bonds a flexfit file names between two named atoms.
-/*! \param[in] atom_pairs two entries per bond, in order */
-IMPBFFEXPORT IMP::ParticleIndexes create_named_bonds(
-        IMP::atom::Hierarchy hierarchy,
-        const std::vector<AtomReference>& atom_pairs);
 
 IMPBFF_END_NAMESPACE
 

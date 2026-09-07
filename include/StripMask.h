@@ -26,7 +26,6 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/SelectionExpression.h>
 
-#include <IMP/atom/Hierarchy.h>
 
 #include <IMP/bff/Base.h>
 
@@ -38,7 +37,6 @@ IMPBFF_BEGIN_NAMESPACE
 
 //! The backbone a labelling site keeps when its side chain is stripped.
 IMPBFFEXPORT std::vector<std::string> backbone_atom_names();
-
 
 //! The obstacles a volume sees: `(x, y, z, r)` per atom, flat.
 /*! The array form of a strip, for the kernels that take obstacles as numbers
@@ -56,9 +54,6 @@ IMPBFFEXPORT std::vector<std::string> backbone_atom_names();
                let a volume grow through its own anchor. Empty keeps nothing
                extra.
     \throw ValueException when the mask cannot be read */
-IMPBFFEXPORT std::vector<double> strip_obstacles(
-        IMP::atom::Hierarchy hierarchy, const std::string& mask,
-        const std::string& keep = "");
 
 //! What a mask removes from a structure, atom by atom.
 /*! The diagnostic a caller needs to answer "did my mask do what I meant":
@@ -88,8 +83,6 @@ IMP_VALUES(StripReport, StripReports);
 /*! \throw ValueException when the mask cannot be read. A mask that reads and
            selects nothing is **not** an error -- it is reported as
            `n_selected == 0`, which is the answer the caller asked for. */
-IMPBFFEXPORT StripReport strip_report(IMP::atom::Hierarchy hierarchy,
-                                      const std::string& mask);
 
 //! Parse an fps `strip_mask`.
 /*! \throw ValueException on a syntax error or an unanswerable keyword; see

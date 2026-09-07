@@ -223,8 +223,6 @@ IMPBFF_END_NAMESPACE
 #include <IMP/bff/RotamerLibrary.h>
 
 
-#include <IMP/atom/Hierarchy.h>
-
 #include <string>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -327,7 +325,6 @@ IMPBFFEXPORT void equilibrium_occupancy(
         const std::string& flux_form = "smoluchowski", double** out_view = NULL,
         int* n_out_view = NULL);
 
-
 //! Load a rotamer library from a PDB plus a trajectory.
 /*!
     Atom names come from the PDB and coordinates from the trajectory, so this
@@ -364,12 +361,6 @@ IMPBFFEXPORT int sample_weighted_index(const std::vector<double>& weights,
 /*! The coordinates are one conformer's, flat and in the hierarchy's own atom
     order; the hierarchy may be a dye, a side chain or anything else whose
     atoms that order describes. */
-/*!
-    The hierarchy's leaves must be the dye's atoms and \p coords three values
-    per leaf. \throw ValueException on an atom-count mismatch.
-*/
-IMPBFFEXPORT void apply_coordinates(const IMP::atom::Hierarchy hierarchy,
-                                            const std::vector<double>& coords);
 
 // The two frame writers that were here are in `bin/imp_bff`, with the one
 // command that attaches them. They are `IMP::OptimizerState`s, so they could be
@@ -378,6 +369,5 @@ IMPBFFEXPORT void apply_coordinates(const IMP::atom::Hierarchy hierarchy,
 // program lives, and its Python already imports RMF.
 
 IMPBFF_END_NAMESPACE
-
 
 #endif  // IMPBFF_PROBESAMPLING_H

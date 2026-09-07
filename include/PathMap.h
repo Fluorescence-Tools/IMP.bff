@@ -25,11 +25,8 @@
 
 #include <cmath> /* ceil */
 
-#include <IMP/Particle.h>
 #include <IMP/algebra/Vector3D.h>
-#include <IMP/atom/Atom.h>
-#include <IMP/atom/Hierarchy.h>
-#include <IMP/atom/Selection.h>
+#include <functional>
 
 #include <cereal/access.hpp>
 #include <IMP/bff/DensityGrid.h>
@@ -497,7 +494,6 @@ IMPBFF_END_NAMESPACE
 #include <Eigen/Dense>
 
 #include <IMP/Object.h>
-#include <IMP/core/XYZR.h>
 
 
 
@@ -1249,25 +1245,28 @@ public:
     IMP::em::DensityMap* create_density_map() const;
 
     //! Take the obstacles from IMP particles.
-    /*! The grid underneath stores spheres, not particles -- this is the
-        adapter, and it lives here rather than in `DensityGrid` so that the
-        lattice itself owes nothing to `IMP.core`. `ps_` is kept because
-        callers read the particle list back off the map. */
-    void set_particles(const IMP::ParticlesTemp &ps);
-
-    //! Re-read the obstacle spheres from the particles they came from.
-    /*! Called by #sample_obstacles, so a map samples the particles where they
-        are now, not where they were when #set_particles ran. */
-    void refresh_spheres_from_particles();
-
-    //! The particles the obstacles came from, in the order they were given.
-    IMP::ParticlesTemp ps_;
+    /*! Where the obstacle spheres come from at every sample.
+        The lattice owes nothing to particles: it keeps spheres (set_spheres()).
+        A source, when installed, is asked for fresh spheres at the start of
+        every sample_obstacles(), so a caller whose obstacles move -- the
+        decorator over an IMP::Model, which the connection layer installs
+        through set_path_map_particles() -- samples where they are now, not
+        where they were when the spheres were set. With no source the spheres
+        set last are used as they are. */
+    void set_sphere_source(std::function<void(GridSpheres&)> source) {
+        sphere_source_ = std::move(source);
+        if (sphere_source_) sphere_source_(xyzr_);
+    }
+    bool get_has_sphere_source() const { return static_cast<bool>(sphere_source_); }
+public:
+    std::function<void(GridSpheres&)> sphere_source_;
 
     explicit PathMap(
             const PathMapHeader &header,
             std::string name = "PathMap%1%",
             float resolution = -1.0
     );
+protected:
 
 };
 

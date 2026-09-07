@@ -42,7 +42,6 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/Particle.h>
 
 #include <map>
 #include <string>
@@ -127,7 +126,6 @@ IMPBFFEXPORT std::string olga_vdw_radii_csv();
 //! Olga's radius for a particle, by its #IMP::atom::Atom name (Angstrom).
 /*! Falls back to #IMP::bff::get_olga_vdw_fallback_radius() for a particle that
     is not an atom, or whose name the table does not carry. */
-IMPBFFEXPORT double olga_vdw_particle_radius(IMP::Particle *p);
 
 //! The atom names of `ps` that Olga's table does not carry, sorted, unique.
 /*! Every one of them takes the 1.50 A fallback. Worth looking at before
@@ -136,15 +134,11 @@ IMPBFFEXPORT double olga_vdw_particle_radius(IMP::Particle *p);
     `O1P`/`O2P` (the phosphate oxygens, `OP1`/`OP2` in the table) -- 94 atoms
     of 9023, and all but the thymine methyl within 0.01 A of the radius the
     table would have given them. */
-IMPBFFEXPORT std::vector<std::string> olga_vdw_unknown_atom_names(
-        const IMP::ParticlesTemp &ps);
 
 #ifndef SWIG
 //! The whole table, atom name -> radius in Angstrom.
 IMPBFFEXPORT const std::map<std::string, double> &get_olga_vdw_radii();
 
-//! Olga's radius for every particle of `ps`, in order (Angstrom).
-IMPBFFEXPORT std::vector<double> olga_vdw_radii(const IMP::ParticlesTemp &ps);
 #endif
 
 IMPBFF_END_NAMESPACE

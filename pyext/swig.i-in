@@ -1113,6 +1113,10 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    the accessible-surface kernels it composes and the residue types it reads. */
 %include "IMP_bff.potentials.i"
 
+/* The connection layer's Hierarchy and Particle overloads of core functions,
+   last: they return the core's values and take the core's lattice. */
+%include "IMP_bff.hierarchybridge.i"
+
 /*
  * The flat user-facing surface: every public name is an attribute of `IMP.bff`
  * itself, a SWIG wrapper over a C++ declaration.

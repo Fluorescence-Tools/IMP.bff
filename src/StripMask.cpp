@@ -22,13 +22,9 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-
 namespace strip {
 
 using internal::upper;
-
-
-
 
 bool all_digits(const std::string& s) {
     if (s.empty()) return false;
@@ -124,61 +120,6 @@ std::map<CacheKey, std::string>& stripped_cache() {
 std::vector<std::string> backbone_atom_names() {
     static const char* const names[] = {"N", "CA", "C", "O"};
     return std::vector<std::string>(names, names + 4);
-}
-
-std::vector<double> strip_obstacles(IMP::atom::Hierarchy hierarchy,
-                                    const std::string& mask,
-                                    const std::string& keep) {
-    const std::vector<SelectionAtom> atoms = selection_atoms(hierarchy);
-    const IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
-
-    std::vector<int> drop(atoms.size(), 0);
-    const std::string text = internal::trimmed(mask);
-    if (!text.empty()) drop = SelectionExpression(text).evaluate(atoms);
-
-    std::vector<double> out;
-    out.reserve(atoms.size() * 4);
-    for (std::size_t i = 0; i < atoms.size(); ++i) {
-        double radius = 0.0;
-        bool stripped = drop[i] != 0;
-        if (stripped && !keep.empty()) {
-            const std::string id = atoms[i].chain + "/" +
-                    std::to_string(atoms[i].resi) + "/" + atoms[i].name;
-            if (id == keep) stripped = false;
-        }
-        if (!stripped && IMP::core::XYZR::get_is_setup(leaves[i])) {
-            radius = IMP::core::XYZR(leaves[i]).get_radius();
-        }
-        out.push_back(atoms[i].x);
-        out.push_back(atoms[i].y);
-        out.push_back(atoms[i].z);
-        out.push_back(radius);
-    }
-    return out;
-}
-
-StripReport strip_report(IMP::atom::Hierarchy hierarchy,
-                         const std::string& mask) {
-    StripReport report;
-    report.mask = mask;
-    const std::vector<SelectionAtom> atoms = selection_atoms(hierarchy);
-    report.n_atoms = static_cast<int>(atoms.size());
-    if (internal::trimmed(mask).empty()) return report;
-
-    const SelectionExpression sel = parse_strip_mask(mask);
-    const std::vector<int> selected = sel.evaluate(atoms);
-    std::set<std::string> seen;
-    for (std::size_t i = 0; i < selected.size(); ++i) {
-        if (!selected[i]) continue;
-        const SelectionAtom& a = atoms[i];
-        const std::string residue =
-                a.chain + "/" + (a.resi_text.empty() ? std::to_string(a.resi)
-                                                     : a.resi_text);
-        report.atoms.push_back(residue + "/" + a.name);
-        if (seen.insert(residue).second) report.residues.push_back(residue);
-    }
-    report.n_selected = static_cast<int>(report.atoms.size());
-    return report;
 }
 
 SelectionExpression parse_strip_mask(const std::string& mask) {

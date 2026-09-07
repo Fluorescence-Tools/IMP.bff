@@ -315,7 +315,6 @@ IMPBFF_END_NAMESPACE
 
 // -------- from ProbeSampling.cpp --------
 
-
 #include <IMP/bff/RotamerLibrary.h>
 #include <IMP/bff/TrajectoryIO.h>
 #include <IMP/bff/internal/Text.h>
@@ -634,22 +633,6 @@ int sample_weighted_index(const std::vector<double>& weights, int seed) {
                                  : static_cast<unsigned int>(seed));
     std::discrete_distribution<int> draw(weights.begin(), weights.end());
     return draw(engine);
-}
-
-void apply_coordinates(const IMP::atom::Hierarchy hierarchy,
-                               const std::vector<double>& coords) {
-    IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
-    const std::size_t n_atoms = leaves.size();
-    if (coords.size() != n_atoms * 3) {
-        IMP_THROW("Atom count mismatch: coords=" << coords.size() / 3
-                          << " hierarchy=" << n_atoms,
-                  ValueException);
-    }
-    for (std::size_t i = 0; i < n_atoms; ++i) {
-        IMP::core::XYZ atom(leaves[i]);
-        atom.set_coordinates(IMP::algebra::Vector3D(
-                coords[3 * i], coords[3 * i + 1], coords[3 * i + 2]));
-    }
 }
 
 IMPBFF_END_NAMESPACE

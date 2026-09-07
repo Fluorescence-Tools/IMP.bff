@@ -22,8 +22,6 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/atom/Atom.h>
-#include <IMP/atom/Hierarchy.h>
 
 #include <IMP/bff/Base.h>
 
@@ -32,38 +30,12 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-//! Coordinates and residue index of every XYZ leaf, in hierarchy order.
-/*!
-    \param[in] hierarchy the frame to read
-    \return four values per atom: x, y, z, and the residue index as a double
-            (-1 where the leaf has no residue parent)
-*/
-IMPBFFEXPORT void hierarchy_atom_coordinates(
-        IMP::atom::Hierarchy hierarchy,
-        double** out_view, int* n_out_view);
-
 //! An atom's name as its structure spells it, without a `HET:` prefix.
 /*! IMP names a heteroatom `HET: C3 `; every reader in this module wants `C3`.
     It was written out three times in three files before it was written down
     once here. */
-IMPBFFEXPORT std::string atom_name(IMP::atom::Atom atom);
 
 //! Names of every XYZ leaf, in the same order as #hierarchy_atom_coordinates.
-/*!
-    \param[in] hierarchy the frame to read
-    \return four strings per atom: atom name, atom type, residue name, chain id.
-            Empty strings where the leaf carries no such information.
-
-    The atom name is the last whitespace-separated field of IMP's particle
-    name: IMP names an atom `"Atom CB"`, and the caller wants `CB`.
-*/
-IMPBFFEXPORT std::vector<std::string> hierarchy_atom_metadata(
-        IMP::atom::Hierarchy hierarchy);
-
-// --------------------------------------------------------------------------
-// A frame as parallel arrays
-// --------------------------------------------------------------------------
-
 //! One frame of a structure: coordinates and the labels that identify atoms.
 /*! What the rotamer scorer needs of a protein and no more, as six parallel
     arrays. A frame is one model of a multi-MODEL PDB, or one frame of a
@@ -90,8 +62,6 @@ IMP_VALUES(ProteinFrame, ProteinFrames);
 /*! The bridge for the formats this module does not read itself: a caller that
     has a hierarchy -- from RMF, from a CHARMM build, from its own sampling --
     gets a frame without going through a file. */
-IMPBFFEXPORT ProteinFrame protein_frame_from_hierarchy(
-        IMP::atom::Hierarchy hierarchy);
 
 //! Every model of a PDB, as frames.
 /*!

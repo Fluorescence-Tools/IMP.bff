@@ -23,6 +23,8 @@
 #include "imp/Docking.cpp"
 #include "imp/FPSExport.cpp"
 #include "imp/FPSProject.cpp"
+#include "imp/HierarchyBridge.cpp"
 #include "imp/Potentials.cpp"
+#include "imp/ProbeAttachment.cpp"
 #include "imp/ProbeDynamics.cpp"
 #include "imp/ProbeNetworkRestraint.cpp"

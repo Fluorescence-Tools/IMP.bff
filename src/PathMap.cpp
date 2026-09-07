@@ -7,7 +7,6 @@
  *
  */
 #include <IMP/bff/PathMap.h>
-#include <IMP/core/XYZR.h>
 
 // Only `write_map_feature` needs these, and only until it moves to the
 // connection layer; `PathMap` itself no longer knows what an EM map is.
@@ -1204,32 +1203,10 @@ int PathMap::get_dim_index_by_voxel(long index, int dim){
     }
 }
 
-void PathMap::set_particles(const IMP::ParticlesTemp &ps) {
-    ps_ = ps;
-    refresh_spheres_from_particles();
-}
 
-void PathMap::refresh_spheres_from_particles() {
-    // The obstacles are re-read from the particles every time they are
-    // sampled, not once when they are set. IMP's `SampledDensityMap` held
-    // `core::XYZR` *decorators* -- views onto live particles -- so a sample
-    // taken after `load_frame` moved the atoms saw where they had moved to.
-    // A value copy taken at `set_particles` does not: the legacy trajectory
-    // path sets the particles once and samples every frame, and with a stale
-    // copy every frame was sampled against frame 0 -- AV mean positions
-    // fifteen angstroms from IMP's, on the trajectory tests and nowhere else.
-    if (ps_.empty()) return;
-    GridSpheres spheres;
-    spheres.reserve(ps_.size());
-    for (std::size_t i = 0; i < ps_.size(); ++i) {
-        IMP::core::XYZR x(ps_[i]);
-        spheres.push_back(GridSphere(x.get_coordinates(), x.get_radius()));
-    }
-    set_spheres(spheres);
-}
 
 void PathMap::sample_obstacles(double extra_radius){
-    refresh_spheres_from_particles();
+    if (sphere_source_) sphere_source_(xyzr_);
     set_origin(pathMapHeader_.get_origin());
 
     // The radius each atom obstructs with: its own, or the override's when one

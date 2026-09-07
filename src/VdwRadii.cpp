@@ -113,37 +113,6 @@ std::vector<std::string> get_olga_vdw_atom_names() {
     return out;
 }
 
-double olga_vdw_particle_radius(IMP::Particle *p) {
-    if (p == nullptr) return get_olga_vdw_fallback_radius();
-    if (!IMP::atom::Atom::get_is_setup(p)) {
-        return get_olga_vdw_fallback_radius();
-    }
-    return olga_vdw_radius(
-            IMP::atom::Atom(p).get_atom_type().get_string());
-}
-
-std::vector<double> olga_vdw_radii(const IMP::ParticlesTemp &ps) {
-    std::vector<double> out;
-    out.reserve(ps.size());
-    for (std::size_t i = 0; i < ps.size(); ++i) {
-        out.push_back(olga_vdw_particle_radius(ps[i]));
-    }
-    return out;
-}
-
-std::vector<std::string> olga_vdw_unknown_atom_names(
-        const IMP::ParticlesTemp &ps) {
-    const std::map<std::string, double> &t = vdwradii_olga_table();
-    std::set<std::string> missing;
-    for (std::size_t i = 0; i < ps.size(); ++i) {
-        if (!IMP::atom::Atom::get_is_setup(ps[i])) continue;
-        const std::string n =
-                IMP::atom::Atom(ps[i]).get_atom_type().get_string();
-        if (t.find(n) == t.end()) missing.insert(n);
-    }
-    return std::vector<std::string>(missing.begin(), missing.end());
-}
-
 AVRadiiSource av_radii_source_from_string(const std::string &s) {
     if (s == "imp") return AV_RADII_IMP;
     if (s == "olga") return AV_RADII_OLGA;

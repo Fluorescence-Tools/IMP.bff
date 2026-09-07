@@ -960,61 +960,6 @@ std::vector<std::string> protein_backbone_atom_names() {
     return protein_backbone_order();
 }
 
-std::vector<SelectionAtom> selection_atoms(IMP::atom::Hierarchy hierarchy) {
-    std::vector<SelectionAtom> out;
-    const IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
-    out.reserve(leaves.size());
-    int index = 0;
-    for (IMP::atom::Hierarchy leaf : leaves) {
-        SelectionAtom a;
-        a.index = ++index;
-        if (IMP::core::XYZ::get_is_setup(leaf)) {
-            const IMP::algebra::Vector3D xyz =
-                    IMP::core::XYZ(leaf).get_coordinates();
-            a.x = xyz[0]; a.y = xyz[1]; a.z = xyz[2];
-        }
-        if (IMP::atom::Atom::get_is_setup(leaf)) {
-            IMP::atom::Atom atom(leaf);
-            a.name = trimmed(atom.get_atom_type().get_string());
-            a.id = atom.get_input_index();
-            a.elem = IMP::atom::get_element_table().get_name(atom.get_element());
-            a.hetatm = a.name.compare(0, 4, "HET:") == 0;
-            if (a.hetatm) a.name = a.name.substr(4);
-        } else {
-            a.name = trimmed(leaf->get_name());
-        }
-        IMP::atom::Hierarchy parent = leaf.get_parent();
-        if (parent && IMP::atom::Residue::get_is_setup(parent)) {
-            IMP::atom::Residue residue(parent);
-            a.resn = trimmed(residue.get_residue_type().get_string());
-            a.resi = residue.get_index();
-            const char icode = residue.get_insertion_code();
-            if (icode != ' ' && icode != '\0') {
-                a.resi_text = std::to_string(a.resi) + std::string(1, icode);
-            }
-            IMP::atom::Hierarchy chain_h = parent.get_parent();
-            if (chain_h && IMP::atom::Chain::get_is_setup(chain_h)) {
-                a.chain = IMP::atom::Chain(chain_h).get_id();
-            }
-        }
-        out.push_back(a);
-    }
-    return out;
-}
-
-std::vector<int> select_atom_indices(IMP::atom::Hierarchy hierarchy,
-                                     const std::string& expression) {
-    const std::vector<SelectionAtom> atoms = selection_atoms(hierarchy);
-    const SelectionExpression selection(expression);
-    const std::vector<int> mask = selection.evaluate(atoms);
-    std::vector<int> out;
-    for (std::size_t i = 0; i < mask.size(); ++i) {
-        if (mask[i]) out.push_back(static_cast<int>(i));
-    }
-    return out;
-}
-
-
 // --------------------------------------------------------------------------
 // Compiling to IMP's own selection algebra
 // --------------------------------------------------------------------------
@@ -1220,6 +1165,14 @@ IMP::ParticleIndexes compile_node(const NodePtr& n, IMP::atom::Hierarchy hierarc
 }
 
 }  // namespace
+
+// PRD-137 step 5c residue: declared in HierarchyBridge.h (the connection
+// layer), defined here because it compiles the parsed expression against an
+// IMP::atom::Hierarchy through this file's private AST. Moving it out needs
+// the AST in an internal header; until then this core source keeps its
+// IMP::atom includes for this one function.
+IMP::atom::Selection selection_from_expression(IMP::atom::Hierarchy hierarchy,
+                                               const std::string& expression);
 
 IMP::atom::Selection selection_from_expression(IMP::atom::Hierarchy hierarchy,
                                      const std::string& expression) {

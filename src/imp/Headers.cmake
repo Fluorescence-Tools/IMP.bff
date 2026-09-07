@@ -4,4 +4,4 @@
 # what names them. The standalone (IMP-free) build reads it to leave them
 # out; the IMP build ignores it. Sources need no list: src/imp/ is globbed.
 set(imp_bff_layer_headers
-    "AV.h;AVOccupancyMap.h;ProbeNetworkRestraint.h;AVMeanDistanceRestraint.h;Potentials.h;Docking.h;ProbeDynamics.h;FPSProject.h;FPSExport.h;internal/AVLatticeState.h")
+    "AV.h;AVOccupancyMap.h;ProbeNetworkRestraint.h;AVMeanDistanceRestraint.h;Potentials.h;Docking.h;ProbeDynamics.h;FPSProject.h;FPSExport.h;ProbeAttachment.h;HierarchyBridge.h;internal/AVLatticeState.h")

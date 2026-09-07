@@ -27,12 +27,25 @@ tree, so a public subdirectory is not an option -- and are named in
 | `Docking.h` | `Docking.cpp` | rigid-body docking assemblies over `IMP::atom::Hierarchy` |
 | `ProbeDynamics.h` | `ProbeDynamics.cpp` | `IMP::atom::Simulator` (Langevin / Brownian) for an attached probe |
 | `FPSProject.h`, `FPSExport.h` | `FPSProject.cpp`, `FPSExport.cpp` | the fps.json project and its exports, which drive `Docking.h` |
+| `ProbeAttachment.h` | `ProbeAttachment.cpp` | attaching a probe hierarchy to a protein hierarchy: site resolution, backbone frame, placement, alignment (all over `IMP::atom::Hierarchy`) |
+| `HierarchyBridge.h` | `HierarchyBridge.cpp` | the `IMP::atom::Hierarchy` / `IMP::Particle` overloads of core functions -- a `ProteinFrame` from a hierarchy, a PDB into a Model, a selection expression on a hierarchy, the strip mask, coordinates written back, Olga's radii per particle, a `PathMap`'s spheres from particles |
 
 The SWIG topic files that wrap these -- `IMP_bff.av.i`, `avmeandistance.i`,
 `potentials.i`, `scoring.i`, `docking.i`, `sampling.i` (its `ProbeDynamics`
 part), `fpsexport.i`, `fpsproject.i` -- are the layer's Python surface and
 stay in `pyext/` at the positions SWIG's ordering needs.
 
-No core file includes a layer header any more (PRD-137 step 5); a core file
-must not gain one. `include/PathMap.h` names the decorator as a friend by
-forward declaration only.
+No core *header* names an IMP particle, hierarchy or model any more, and no
+core file includes a layer header (PRD-137 step 5); a core file must not gain
+one. `include/PathMap.h` names the decorator as a friend by forward
+declaration only.
+
+What is left (step 5c) is implementation, not interface: four core sources
+still *read a PDB through `IMP::atom`* behind an IMP-free declaration --
+`load_protein_frames` (HierarchyFrame.cpp), `load_structure` (StructureIO.cpp),
+the PDB branch of the trajectory loader (ProbeSampling.cpp), and
+`selection_from_expression`, which is declared here but defined in
+SelectionExpression.cpp because it compiles the parser's private AST against
+a hierarchy. Each is marked `PRD-137 step 5c residue` at its definition. The
+replacement for the readers is the core's own `read_pdb_records`
+(AVBuilder.h); the selection needs its AST in an internal header.

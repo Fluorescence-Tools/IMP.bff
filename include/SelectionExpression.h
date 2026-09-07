@@ -23,8 +23,6 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/atom/Hierarchy.h>
-#include <IMP/atom/Selection.h>
 #include <IMP/bff/Base.h>
 
 #include <memory>
@@ -220,18 +218,10 @@ IMP_VALUES(SelectionExpression, SelectionExpressions);
     the same way.
 
     \throw ValueException on a syntax error or an unsupported keyword. */
-IMPBFFEXPORT IMP::atom::Selection selection_from_expression(
-        IMP::atom::Hierarchy hierarchy, const std::string& expression);
-
-//! The atoms of \p hierarchy, in hierarchy order, as a selection sees them.
-IMPBFFEXPORT std::vector<SelectionAtom> selection_atoms(
-        IMP::atom::Hierarchy hierarchy);
 
 //! The indices of the atoms of \p hierarchy that \p expression selects.
 /*! Indices into #IMP::atom::get_leaves order, which is the order
     #selection_atoms reports. */
-IMPBFFEXPORT std::vector<int> select_atom_indices(
-        IMP::atom::Hierarchy hierarchy, const std::string& expression);
 
 //! The atoms a protein backbone is made of: `N`, `CA`, `C`, `O`, `OXT`.
 /*! What `backbone` selects, and what a labelling site keeps when its side

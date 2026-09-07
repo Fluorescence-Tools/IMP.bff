@@ -7,6 +7,7 @@
  *
  */
 #include <IMP/bff/AV.h>
+#include <IMP/bff/HierarchyBridge.h>
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/StripMask.h>
 #include <IMP/atom/Atom.h>
@@ -561,7 +562,8 @@ void AV::init_path_map(){
     auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
     auto root = IMP::atom::get_root(h);
     const IMP::ParticlesTemp leaves = get_leaves(root);
-    av_map_->set_particles(leaves);
+    set_path_map_particles(av_map_, leaves);
+    get_state().particles = leaves;
     /* The legacy anchoring keeps the legacy radii, and refuses Olga's the way
        it refuses the accessible contact volume (see resample_legacy step 5b).
        `space_fixed=False` exists for exactly one thing -- reproducing the
@@ -845,7 +847,7 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
             st.pending_occ_dye.push_back(o);
         }
     } else {
-        IMP::ParticlesTemp ps(map->ps_.begin(), map->ps_.end());
+        IMP::ParticlesTemp ps(st.particles);
         // The volume's own radii: the mask's atoms carry zero, so they take
         // part in the raster's indexing and block nothing. A private map is
         // the only place this can be honoured -- a shared raster is one
