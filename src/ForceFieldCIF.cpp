@@ -7,8 +7,7 @@
 
 #include <IMP/bff/ForceFieldCIF.h>
 
-#include <IMP/bff/internal/CifReader.h>
-#include <IMP/bff/internal/CifWriter.h>
+#include <IMP/bff/internal/Cif.h>
 
 #include <regex>
 

@@ -12,7 +12,7 @@
 
 // Vendored with IMP and exported by libimp_atom; ForceFieldCIF.cpp reads its
 // eighteen `_ff_*` categories through the same parser, in the same text mode.
-#include <IMP/bff/internal/CifReader.h>
+#include <IMP/bff/internal/Cif.h>
 
 #include "ihm_format.h"
 

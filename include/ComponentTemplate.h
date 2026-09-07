@@ -10,7 +10,7 @@
  * The file it is read from and written to is mmCIF, in `_cgprobe_*`
  * categories. Reading goes through IMP's parser (the vendored `ihm_format.h`
  * that `IMP::atom::read_mmcif` uses); writing goes through this module's one
- * writer, `internal/CifWriter.h`, because IMP has no CIF writer in C++.
+ * writer, `internal/Cif.h`, because IMP has no CIF writer in C++.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.

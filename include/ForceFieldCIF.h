@@ -4,7 +4,7 @@
  *
  * Reading is IMP's parser -- the vendored `ihm_format.h` behind
  * `IMP::atom::read_mmcif`. Writing is this module's own, through the one
- * writer in `internal/CifWriter.h`, because IMP can write no CIF from C++: the
+ * writer in `internal/Cif.h`, because IMP can write no CIF from C++: the
  * vendored ihm library is read-only, `IMP::atom` has readers only, and
  * `IMP.mmcif` is Python with no spelling for these `_ff_*` tables.
  *

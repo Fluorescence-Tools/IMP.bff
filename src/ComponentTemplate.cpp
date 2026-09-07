@@ -6,7 +6,7 @@
 
 #include <IMP/bff/ComponentTemplate.h>
 
-#include <IMP/bff/internal/CifReader.h>
+#include <IMP/bff/internal/Cif.h>
 
 #include <IMP/bff/Base.h>
 

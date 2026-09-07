@@ -3,7 +3,7 @@
  * probe metadata look like in Python.
  *
  * Nothing in this module parses CIF -- that is IMP's vendored ihm reader --
- * and the writer it does carry is one internal class, `internal/CifWriter.h`.
+ * and the writer it does carry is one internal class, `internal/Cif.h`.
  */
 
 IMP_SWIG_VALUE(IMP::bff, ComponentTemplate, ComponentTemplates);

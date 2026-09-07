@@ -8,7 +8,7 @@
 #include <IMP/bff/StructureIO.h>
 #include <iomanip>
 
-#include <IMP/bff/internal/CifWriter.h>
+#include <IMP/bff/internal/Cif.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
 
@@ -667,7 +667,7 @@ void convert_pdb_to_cif(const std::string& pdb_path,
     if (!out) IMP_THROW("Cannot write " << cif_path, IOException);
 
     // The same writer every other category in this module goes through
-    // (`internal/CifWriter.h`), so an atom or component name with a space in
+    // (`internal/Cif.h`), so an atom or component name with a space in
     // it is quoted here as it is there. IMP has no C++ CIF writer to borrow;
     // it has the reader, and that is what reads this back.
     internal::CifWriter w(out);
