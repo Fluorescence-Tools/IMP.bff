@@ -7,18 +7,11 @@
 
 #include <IMP/bff/Mol2IO.h>
 
-#include <IMP/Model.h>
-#include <IMP/atom/Atom.h>
-#include <IMP/atom/Hierarchy.h>
-#include <IMP/atom/Residue.h>
-#include <IMP/atom/bond_decorators.h>
-#include <IMP/atom/mol2.h>
-#include <IMP/core/XYZ.h>
-#include <IMP/log.h>
 
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -56,60 +49,66 @@ Mol2Component read_mol2_component(const std::string& path,
                                   const std::string& component) {
     Mol2Component out;
 
-    IMP_NEW(Model, model, ());
-    const LogLevel previous = IMP::get_log_level();
-    IMP::set_log_level(SILENT);
-    atom::Hierarchy hierarchy;
-    try {
-        hierarchy = atom::read_mol2(path, model);
-    } catch (...) {
-        IMP::set_log_level(previous);
-        throw;
-    }
-    IMP::set_log_level(previous);
-
-    const std::map<int, std::string> names = read_mol2_atom_names(path);
-
-    const atom::Hierarchies atoms = atom::get_by_type(hierarchy, atom::ATOM_TYPE);
-    for (size_t i = 0; i < atoms.size(); ++i) {
-        atom::Atom a(atoms[i]);
-        Mol2Atom site;
-        site.serial = a.get_input_index();
-        site.component = component;
-
-        std::map<int, std::string>::const_iterator it = names.find(site.serial);
-        if (it != names.end() && !it->second.empty()) {
-            site.atom_name = it->second;
-        } else {
-            // fall back to the TRIPOS type with IMP's prefixes stripped
-            std::string t = a.get_atom_type().get_string();
-            const char* strip[] = {"HET: ", "HET:", "ATOM: ", "ATOM:"};
-            for (int s = 0; s < 4; ++s) {
-                const size_t at = t.find(strip[s]);
-                if (at != std::string::npos) t.erase(at, std::string(strip[s]).size());
-            }
-            const size_t b = t.find_first_not_of(" \t");
-            const size_t e = t.find_last_not_of(" \t");
-            site.atom_name = (b == std::string::npos) ? "" : t.substr(b, e - b + 1);
-        }
-
-        atom::Residue residue = atom::get_residue(a, true);
-        site.resname = residue ? residue.get_residue_type().get_string() : "UNK";
-        if (site.resname.empty()) site.resname = "UNK";
-        site.element = element_from_atom_name(site.atom_name);
-
-        const algebra::Vector3D c = core::XYZ(atoms[i]).get_coordinates();
-        site.x = c[0]; site.y = c[1]; site.z = c[2];
-        out.atoms.push_back(site);
-    }
-
-    const Particles bonds = atom::get_internal_bonds(hierarchy);
+    // The Tripos file, walked the way IMP::atom::read_mol2 walks it (PRD-137
+    // step 5c; test/io/test_mol2_matches_imp.py pins the answer): a MOLECULE
+    // block's third header line names the residue type ("UNK" when blank);
+    // an ATOM section runs to an empty line or the next '@' record, every
+    // line an atom (IMP's AllMol2Selector); a BOND section likewise, a bond
+    // kept only when both atoms are in the molecule. Coordinates are read as
+    // doubles, as IMP's Float is.
+    std::ifstream in(path.c_str());
+    if (!in) IMP_THROW("Cannot open " << path, IOException);
+    std::string line;
+    std::string resname = "UNK";
+    std::map<int, std::size_t> serial_to_atom;    // this molecule's atoms
     std::vector<std::pair<int, int> > pairs;
-    for (size_t i = 0; i < bonds.size(); ++i) {
-        atom::Bond b(bonds[i]);
-        const int s1 = atom::Atom(b.get_bonded(0).get_particle()).get_input_index();
-        const int s2 = atom::Atom(b.get_bonded(1).get_particle()).get_input_index();
-        pairs.push_back(s1 <= s2 ? std::make_pair(s1, s2) : std::make_pair(s2, s1));
+    while (std::getline(in, line)) {
+        if (line.compare(0, 17, "@<TRIPOS>MOLECULE") == 0) {
+            resname = "UNK";
+            serial_to_atom.clear();
+            for (int i = 0; i < 6; ++i) {
+                if (in.peek() == '@') break;
+                std::string header;
+                if (!std::getline(in, header) || header.empty()) break;
+                if (i == 2) {
+                    std::istringstream fields(header);
+                    std::string mol_type;
+                    if (fields >> mol_type && !mol_type.empty()) resname = mol_type;
+                }
+            }
+        } else if (line.compare(0, 13, "@<TRIPOS>ATOM") == 0) {
+            while (in.peek() != '@' && std::getline(in, line) && !line.empty()) {
+                std::istringstream fields(line);
+                Mol2Atom site;
+                std::string type_field;
+                if (!(fields >> site.serial >> site.atom_name >> site.x >> site.y >> site.z)) continue;
+                fields >> type_field;
+                if (site.atom_name.empty()) {
+                    // IMP's spelling of the Sybyl type, its prefixes stripped:
+                    // ".ar"/".am" cut at the dot, the first dot erased
+                    std::string n = type_field;
+                    if (n.find(".ar") != std::string::npos || n.find(".am") != std::string::npos) {
+                        n = n.substr(0, n.find('.'));
+                    }
+                    if (n.find('.') != std::string::npos) n.erase(n.find('.'), 1);
+                    site.atom_name = n;
+                }
+                site.component = component;
+                site.resname = resname.empty() ? "UNK" : resname;
+                site.element = element_from_atom_name(site.atom_name);
+                serial_to_atom[site.serial] = out.atoms.size();
+                out.atoms.push_back(site);
+            }
+        } else if (line.compare(0, 13, "@<TRIPOS>BOND") == 0) {
+            while (in.peek() != '@' && std::getline(in, line) && !line.empty()) {
+                std::istringstream fields(line);
+                int id = 0, s1 = 0, s2 = 0;
+                if (!(fields >> id >> s1 >> s2)) continue;
+                if (serial_to_atom.find(s1) == serial_to_atom.end() ||
+                    serial_to_atom.find(s2) == serial_to_atom.end()) continue;
+                pairs.push_back(s1 <= s2 ? std::make_pair(s1, s2) : std::make_pair(s2, s1));
+            }
+        }
     }
     std::sort(pairs.begin(), pairs.end());
     pairs.erase(std::unique(pairs.begin(), pairs.end()), pairs.end());

@@ -6,20 +6,14 @@
  */
 
 #include <IMP/bff/StructureIO.h>
+#include <IMP/bff/internal/PdbFrames.h>
 #include <iomanip>
 
 #include <IMP/bff/internal/Cif.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
 
-#include <IMP/atom/Atom.h>
-#include <IMP/atom/Residue.h>
-#include <IMP/atom/Selection.h>
-#include <IMP/atom/bond_decorators.h>
-#include <IMP/atom/pdb.h>
-#include <IMP/core/XYZ.h>
 #include <IMP/bff/internal/json.h>
-#include <IMP/atom/Hierarchy.h>
 #include <IMP/bff/Base.h>
 
 #include <Eigen/Dense>
@@ -35,11 +29,6 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-// PRD-137 step 5c residue: load_structure reads the PDB through IMP::atom and
-// the connection layer's readers (HierarchyBridge.h); the core reader
-// (AVBuilder.h's read_pdb_records) is the replacement.
-IMP::atom::Hierarchy read_pdb_hierarchy(const std::string& path, IMP::Model* m);
-void structure_coordinates(IMP::atom::Hierarchy hierarchy, double** out_view, int* n_out_view);
 
 // Named, not anonymous: IMP compiles this module as one translation unit.
 namespace structio {
@@ -408,8 +397,10 @@ void write_pdb(const std::vector<double>& coords, const std::string& path,
 
 void load_structure(const std::string& path, double** out_view,
                     int* n_out_view) {
-    IMP_NEW(IMP::Model, m, ());
-    structure_coordinates(read_pdb_hierarchy(path, m), out_view, n_out_view);
+    // the first model, without water: IMP's NonWaterPDBSelector, in the core
+    const std::vector<ProteinFrame> frames =
+            internal::read_pdb_frames(path, internal::PDB_NON_WATER, true, 1);
+    internal::copy_to_view(frames[0].coords, out_view, n_out_view);
 }
 
 double get_rmsd(const std::vector<double>& coords_a,
@@ -568,13 +559,11 @@ void write_opendx(const std::string& path, const std::vector<double>& density,
 void convert_pdb_to_cif(const std::string& pdb_path,
                         const std::string& cif_path,
                         const std::string& probe_id) {
-    IMP_NEW(IMP::Model, m, ());
-    // AllPDBSelector, because dyes often carry HETATM records and unusual
-    // residue names and a NonWater selector drops them.
-    IMP::atom::Hierarchy hierarchy =
-            IMP::atom::read_pdb(pdb_path, m, new IMP::atom::AllPDBSelector());
-    const IMP::atom::Hierarchies atoms =
-            IMP::atom::get_by_type(hierarchy, IMP::atom::ATOM_TYPE);
+    // Every ATOM/HETATM of the first model (IMP's AllPDBSelector, because dyes
+    // often carry HETATM records and unusual residue names and a NonWater
+    // selector drops them), read by the core (internal/PdbFrames.h).
+    const ProteinFrame atoms =
+            internal::read_pdb_frames(pdb_path, internal::PDB_ALL, true, 1)[0];
 
     std::ofstream out(cif_path.c_str());
     if (!out) IMP_THROW("Cannot write " << cif_path, IOException);
@@ -591,18 +580,14 @@ void convert_pdb_to_cif(const std::string& pdb_path,
             "label_asym_id", "label_entity_id", "label_seq_id",
             "Cartn_x", "Cartn_y", "Cartn_z", "occupancy", "B_iso_or_equiv"};
     std::vector<std::vector<std::string> > rows;
-    rows.reserve(atoms.size());
+    rows.reserve(atoms.get_n_atoms());
     char coord[32];
-    for (unsigned int i = 0; i < atoms.size(); ++i) {
-        const IMP::algebra::Vector3D xyz =
-                IMP::core::XYZ(atoms[i]).get_coordinates();
-        std::string name = IMP::atom::Atom(atoms[i]).get_atom_type().get_string();
-        name = structio::trimmed(name);
-        std::string comp = "DYE";
-        IMP::atom::Hierarchy parent = atoms[i].get_parent();
-        if (parent && IMP::atom::Residue::get_is_setup(parent)) {
-            comp = IMP::atom::Residue(parent).get_residue_type().get_string();
-        }
+    for (int i = 0; i < atoms.get_n_atoms(); ++i) {
+        const double xyz[3] = {atoms.coords[3 * i], atoms.coords[3 * i + 1],
+                               atoms.coords[3 * i + 2]};
+        std::string name = structio::trimmed(atoms.atom_types[i]);
+        // every ATOM/HETATM line has a residue (`UNK` when the field is empty)
+        const std::string comp = atoms.resnames[i];
         std::vector<std::string> row = {
                 "HETATM", std::to_string(i + 1),
                 structio::element_from_name(name), name, comp, "A", "1", "1"};

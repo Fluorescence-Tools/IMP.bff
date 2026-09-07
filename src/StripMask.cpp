@@ -8,7 +8,6 @@
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/StripMask.h>
 
-#include <IMP/core/XYZR.h>
 
 #include <IMP/bff/Base.h>
 

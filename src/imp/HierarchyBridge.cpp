@@ -34,6 +34,15 @@ IMPBFF_BEGIN_NAMESPACE
 
 // -------- from HierarchyFrame.cpp --------
 namespace {
+IMP::ParticlesTemp xyz_leaves(IMP::atom::Hierarchy hierarchy) {
+    IMP::ParticlesTemp out;
+    for (IMP::atom::Hierarchy leaf : IMP::atom::get_leaves(hierarchy)) {
+        IMP::Particle* p = leaf.get_particle();
+        if (IMP::core::XYZ::get_is_setup(p)) out.push_back(p);
+    }
+    return out;
+}
+
 std::vector<double> hierarchy_atom_coordinates_impl(IMP::atom::Hierarchy hierarchy) {
     const IMP::ParticlesTemp particles = xyz_leaves(hierarchy);
     std::vector<double> out(particles.size() * 4, 0.0);
@@ -461,6 +470,29 @@ std::vector<double> olga_vdw_radii(const IMP::ParticlesTemp &ps) {
         out.push_back(olga_vdw_particle_radius(ps[i]));
     }
     return out;
+}
+
+
+// -------- from SelectionExpression.cpp --------
+// The expression is evaluated by the core over the hierarchy's atoms
+// (select_atom_indices); the layer turns the chosen leaves into an
+// IMP::atom::Selection. It used to compile the parsed expression against the
+// hierarchy through the parser's private AST; the particle set is the same
+// (pinned by 114 recorded expressions over two structures, PRD-137 step 5c),
+// and the core keeps its parser to itself.
+IMP::atom::Selection selection_from_expression(IMP::atom::Hierarchy hierarchy,
+                                               const std::string& expression) {
+    const std::vector<int> chosen = select_atom_indices(hierarchy, expression);
+    const IMP::ParticlesTemp leaves = xyz_leaves(hierarchy);
+    IMP::atom::Hierarchies picked;
+    picked.reserve(chosen.size());
+    for (std::size_t i = 0; i < chosen.size(); ++i) {
+        const int k = chosen[i];
+        IMP_USAGE_CHECK(k >= 0 && static_cast<std::size_t>(k) < leaves.size(),
+                        "selection index out of range");
+        picked.push_back(IMP::atom::Hierarchy(leaves[k]));
+    }
+    return IMP::atom::Selection(picked);
 }
 
 // -------- from PathMap.cpp --------

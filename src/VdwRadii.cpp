@@ -9,7 +9,6 @@
 
 #include <IMP/bff/VdwRadii.h>
 
-#include <IMP/atom/Atom.h>
 #include <IMP/bff/Base.h>
 
 #include <algorithm>

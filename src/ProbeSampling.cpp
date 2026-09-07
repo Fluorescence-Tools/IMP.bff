@@ -16,6 +16,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/ProbeSampling.h>
+#include <IMP/bff/internal/PdbFrames.h>
 #include <IMP/bff/BrownianWalk.h>
 #include <IMP/bff/internal/GridShape.h>
 #include <IMP/bff/internal/OutputView.h>
@@ -319,11 +320,7 @@ IMPBFF_END_NAMESPACE
 #include <IMP/bff/TrajectoryIO.h>
 #include <IMP/bff/internal/Text.h>
 
-#include <IMP/atom/Atom.h>
-#include <IMP/atom/Hierarchy.h>
-#include <IMP/atom/pdb.h>
 #include <IMP/algebra/Vector3D.h>
-#include <IMP/core/XYZ.h>
 
 #include <cctype>
 #include <fstream>
@@ -519,13 +516,12 @@ RotamerLibrary load_rotamer_library_trajectory(const std::string& pdb_path,
         return out;
     }
 
-    IMP_NEW(IMP::Model, model, ());
-    IMP::atom::Hierarchy hierarchy = IMP::atom::read_pdb(
-            pdb_path, model, new IMP::atom::AllPDBSelector());
-    const IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
-    for (unsigned int i = 0; i < leaves.size(); ++i) {
-        std::string name =
-                IMP::atom::Atom(leaves[i]).get_atom_type().get_string();
+    // every ATOM/HETATM of the first model (IMP's AllPDBSelector), the atom
+    // type string trimmed -- the core reader, no Model
+    const std::vector<ProteinFrame> pdb_frames =
+            internal::read_pdb_frames(pdb_path, internal::PDB_ALL, true, 1);
+    for (std::size_t i = 0; i < pdb_frames[0].atom_types.size(); ++i) {
+        const std::string& name = pdb_frames[0].atom_types[i];
         const std::size_t a = name.find_first_not_of(' ');
         const std::size_t b = name.find_last_not_of(' ');
         out.atom_names.push_back(a == std::string::npos
