@@ -10877,3 +10877,8 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   `PathMap.set_particles` kept via %extend). No core header names a particle/hierarchy/model. Suite 1780/0, oracle
   18/18. Residue 5c (implementation): `load_protein_frames`, `load_structure`, the trajectory loader's PDB branch,
   `selection_from_expression` still read PDBs / compile the AST through IMP::atom -- marked at their definitions.
+- **PRD-137 step 5c** (imp-bff-ce): the core reads PDB (`internal/PdbFrames.h`, IMP's rules incl. float-rounded
+  coordinates) and MOL2 itself; `selection_from_expression` built from the core's evaluation. Gated by equality
+  tests against the IMP road on every shipped .pdb/.mol2, 240 selection records, AV oracle 18/18. Suite 1783/0.
+  No core source names a particle/hierarchy/model. Left: PathMap's IMP::em interop (core MRC writer), and the
+  IMP::Object/algebra/Pointer vocabulary in nine headers (Base.h shims, step 6).
