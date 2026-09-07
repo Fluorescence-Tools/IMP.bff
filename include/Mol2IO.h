@@ -9,7 +9,7 @@
 #define IMPBFF_MOL2IO_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/ProbeForceField.h>
+#include <IMP/bff/ProbeLibrary.h>
 
 #include <IMP/bff/Base.h>
 

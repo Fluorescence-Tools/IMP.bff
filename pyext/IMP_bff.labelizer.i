@@ -24,7 +24,6 @@ IMP_SWIG_VALUE(IMP::bff, LlPairScore, LlPairScores);
    RotamerLibrary.h, which needs MfdbTags for `write_drot_with_provenance`. */
 
 %include "IMP/bff/Labelizer.h"
-%include "IMP/bff/ProbeContainer.h"
 
 /* The containers the free functions above take and return. Instantiated after
    the headers, on types SWIG has already seen. */

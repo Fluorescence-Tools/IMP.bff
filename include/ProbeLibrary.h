@@ -1,6 +1,15 @@
+#ifndef IMPBFF_PROBELIBRARY_H
+#define IMPBFF_PROBELIBRARY_H
+
 /**
  *  \file IMP/bff/ProbeLibrary.h
- *  \brief A probe as a species: what it is, independent of how it is modelled.
+ *  \brief A probe as a species: what it is, its library file, and the
+ *         coarse-grained system it is simulated as.
+ *
+ *  Three sections: the **species** (the former body of this file), the
+ *  **container** (formerly `ProbeContainer.h`: a dye library as one
+ *  `.mmfdb.pto`) and the **force field** (formerly `ProbeForceField.h`: a
+ *  coarse-grained dye/protein system -- sites, bonds, and their terms).
  *
  * A **probe** is anything attached to a molecule to report on it: an organic
  * dye, a genetically encoded fluorescent protein, a nitroxide spin label for
@@ -27,9 +36,8 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_PROBELIBRARY_H
-#define IMPBFF_PROBELIBRARY_H
 
+// -------- from ProbeLibrary.h --------
 #include <IMP/bff/bff_config.h>
 
 #include <IMP/bff/Base.h>
@@ -327,4 +335,433 @@ IMPBFFEXPORT std::map<std::string, std::string> forster_radius_flrcif_items();
 
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_PROBELIBRARY_H
+ //IMPBFF_PROBELIBRARY_H
+
+// -------- from ProbeContainer.h --------
+/**
+ *  (formerly IMP/bff/ProbeContainer.h, now a section of this file)
+ *  \brief A dye library as one `.mmfdb.pto`: probes, their optical properties
+ *         and their spectra, in the vocabulary the database already uses.
+ *
+ * The bundled library is a CIF with two bff-native categories, `_bff_probe` and
+ * `_bff_probe_spectrum`, invented because no dictionary in the stack declared an
+ * item for a quantum yield, an extinction coefficient or a fluorescence
+ * spectrum. Those items exist now — `_mmfdb_optical_property.*` and
+ * `_mmfdb_spectrum.*`, dictionary 1.8 — and they describe the `probes`,
+ * `optical_properties` and `spectra` tables this stack's databases already
+ * have. So a dye library can be written in the same words a database row uses,
+ * and this writes it.
+ *
+ * The point is not the file format. It is that a labelling run reads its dyes
+ * from something whose every name resolves to a dictionary item, so
+ * \f$R_0\f$ can be traced back to the quantum yield and the two spectra it was
+ * derived from rather than taken on trust from a number in a config.
+ *
+ * Kinds are under `mfdb.` — the generic probe namespace, not `label.`, because
+ * nothing here is specific to label-site scoring; `drot.` and `rot.bbdep.`
+ * belong to the rotamer containers.
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ *
+ */
+
+
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! The probe table: one row per dye, at `species` grain.
+IMPBFFEXPORT extern const char* const PROBE_PTO_PROBES;
+//! The spectra, one row per curve, at `spectrum` grain.
+IMPBFFEXPORT extern const char* const PROBE_PTO_SPECTRA;
+//! Container, artifact, operation and edge tags.
+IMPBFFEXPORT extern const char* const PROBE_PTO_MODEL;
+
+//! Write dyes as a PTO.MFDB container.
+/*!
+    Two tabular objects, because they count different things and the profile
+    forbids joining by position:
+
+    - `probes` — one row per dye (`species`), carrying the flrCIF identity
+      (`_flr_probe_list.chromophore_name`, `probe_origin`, `probe_link_type`,
+      `reactive_probe_name`, `_flr_probe_descriptor.chromophore_center_atom`)
+      and its scalars as `_mmfdb_optical_property` triples of
+      `property_name` / `property_value` / `unit`;
+    - `spectra` — one row per (dye, `spectrum_type`) curve (`spectrum`),
+      carrying the wavelength axis and the intensities as **arrays**, which is
+      what `_mmfdb_spectrum.wavelengths` and `.intensity_values` are declared
+      as and what the `spectra` table stores. A point-per-row serialisation of
+      the same data was ten times larger, almost all of it repeated keys.
+
+    A scalar that is NaN in the library is **absent** from the container, not
+    written as zero: a quantum yield of 0 is a real and unusual claim about a
+    dye, and the reference libraries carry several.
+
+    \param[in] path the container to write
+    \param[in] dyes the dyes, keyed as `_flr_probe_list.chromophore_name`
+    \param[in] source what the data was made from, for the attribution tags
+    \throw IOException when the container cannot be written
+    \throw ValueException when a value is not a dictionary term
+*/
+IMPBFFEXPORT void probe_write_pto(const std::string& path,
+                                const std::map<std::string, Probe>& dyes,
+                                const std::string& source = "");
+
+//! Read a dye container back.
+/*! \param[in] path a container written by #probe_write_pto
+    \return the dyes, keyed by chromophore name
+    \throw IOException when the file is not a PTO document or holds no probes */
+IMPBFFEXPORT std::map<std::string, Probe> probe_read_pto(const std::string& path);
+
+//! Convert the bundled CIF library to a container.
+/*!
+    \param[in] path where to write
+    \param[in] library_cif the source library, or empty for the shipped one
+    \return how many dyes were written
+*/
+IMPBFFEXPORT int probe_library_to_pto(const std::string& path,
+                                    const std::string& library_cif = "");
+
+//! The Forster radius of a donor/acceptor pair named in a container, Angstrom.
+/*!
+    The convenience a labelling run wants: two names in, \f$R_0\f$ out, with the
+    spectra and the quantum yield coming from a file whose vocabulary is
+    checkable. Names resolve through #IMP::bff::resolve_probe_name, so
+    `"Alexa488"` works as well as `"AlexaFluor488"`.
+
+    **Angstrom**, like every length in this package --
+    #IMP::bff::LlFretOptions::forster_radius (default 52),
+    #IMP::bff::av_distance, #IMP::bff::fret_efficiency. This function used to
+    be the one place nanometres met Angstrom, because
+    #IMP::bff::forster_radius returned nm; since 2026-08-25 that conversion
+    lives inside `forster_radius` itself, so this one simply forwards. The
+    reason it mattered either way: a caller who forgets the factor of ten
+    scores every pair against an \f$R_0\f$ ten times too small, which does not
+    look like an error -- it looks like a protein where no pair is worth
+    measuring.
+
+    \param[in] path a dye container
+    \param[in] donor,acceptor the two dyes
+    \param[in] kappa2 the orientation factor; 2/3 is the isotropic average and
+               is an assumption, not a measurement
+    \param[in] refractive_index of the medium between them
+    \return \f$R_0\f$ in **Angstrom**
+    \throw ValueException when either dye is missing or lacks a spectrum
+*/
+IMPBFFEXPORT double probe_pto_forster_radius(const std::string& path,
+                                           const std::string& donor,
+                                           const std::string& acceptor,
+                                           double kappa2 = 2.0 / 3.0,
+                                           double refractive_index = 1.4);
+
+IMPBFF_END_NAMESPACE
+
+ /* IMPBFF_PROBECONTAINER_H */
+
+// -------- from ProbeForceField.h --------
+/**
+ *  (formerly IMP/bff/ProbeForceField.h, now a section of this file)
+ *  \brief A coarse-grained dye/protein system: sites, bonds, and their terms.
+ *
+ * The topology and parameters of one simulation system — what
+ * #IMP::bff::cgprobe builds, writes to mmCIF, reads back, and hands to IMP to
+ * become particles and restraints.
+ *
+ * Every term is a named field of a typed record: a bond carries `site_a`,
+ * `site_b`, `length` and `type_id` by name, so what a slot means is stated
+ * rather than conventional, and a consumer reads `system.bonds` without
+ * having to guard against the key being absent.
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ *
+ */
+
+
+#include <set>
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! One molecule taking part in the system.
+struct IMPBFFEXPORT FFComponent {
+    std::string mol2_path;
+    std::string pdb_path;
+    //! `"fixed"` or `"mobile"` — whether the sampler may move it.
+    std::string role;
+    IMP_SHOWABLE_INLINE(FFComponent, out << "FFComponent(" << role << ")");
+};
+
+//! One coarse-grained interaction site.
+struct IMPBFFEXPORT FFSite {
+    std::string id;
+    std::string component;
+    std::string atom_name;
+    //! Chemical element, which is what picks the site's LJ type.
+    //!
+    //! Present because the two producers of this structure disagreed about it:
+    //! the mmCIF reader set `site_no` and no element, the topology builder set
+    //! an element and no `site_no`, and `read_dye_forcefield_cif` guarded with
+    //! `s.get("site_no")` because it might not be there. One type, one shape.
+    std::string element;
+    //! Index within the system, and within its component's own numbering.
+    int site_no = 0;
+    int site_serial = 0;
+    //! Angstrom and Dalton. The defaults are carbon-ish, and are what the
+    //! reader falls back to when the file omits them.
+    double radius = 1.7;
+    double mass = 12.0;
+    IMP_SHOWABLE_INLINE(FFSite, out << "FFSite(" << id << ")");
+};
+
+//! A harmonic bond between two sites.
+struct IMPBFFEXPORT FFBond {
+    std::string site_a, site_b;
+    //! Equilibrium length, Angstrom.
+    double length = 0.0;
+    //! Key into ProbeForceFieldSystem::get_bond_types().
+    std::string type_id;
+    IMP_SHOWABLE_INLINE(FFBond, out << "FFBond(" << site_a << "-" << site_b << ")");
+};
+
+//! A harmonic angle over three sites.
+struct IMPBFFEXPORT FFAngle {
+    std::string site_a, site_b, site_c;
+    //! Equilibrium angle, radians.
+    double theta = 0.0;
+    std::string type_id;
+    IMP_SHOWABLE_INLINE(FFAngle, out << "FFAngle(" << site_b << ")");
+};
+
+//! A torsion or improper over four sites. Its parameters live in its type.
+struct IMPBFFEXPORT FFTorsion {
+    std::string site_a, site_b, site_c, site_d;
+    std::string type_id;
+    IMP_SHOWABLE_INLINE(FFTorsion, out << "FFTorsion(" << type_id << ")");
+};
+
+//! Periodic torsion parameters.
+struct IMPBFFEXPORT FFTorsionType {
+    int periodicity = 1;
+    //! Phase, radians.
+    double phase = 0.0;
+    //! Force constant, kcal/mol.
+    double k = 0.0;
+    IMP_SHOWABLE_INLINE(FFTorsionType, out << "FFTorsionType(n=" << periodicity << ")");
+};
+
+//! Lennard-Jones parameters for one site type.
+struct IMPBFFEXPORT FFLJType {
+    std::string element;
+    //! \f$R_{min}/2\f$ in Angstrom, and \f$\epsilon\f$ in kcal/mol — the
+    //! CHARMM convention, not \f$\sigma\f$.
+    double rmin_half = 0.0;
+    double epsilon = 0.0;
+    IMP_SHOWABLE_INLINE(FFLJType, out << "FFLJType(" << element << ")");
+};
+
+//! A fluorophore in the system, for the flrCIF probe list.
+/*!
+    One per *mobile* component: in this model a component that the sampler may
+    move is a dye, and a fixed one is what it is attached to.
+*/
+struct IMPBFFEXPORT FFProbe {
+    int id = 0;
+    std::string name;
+    //! `"extrinsic"` for a dye added to the structure, `"intrinsic"` for a
+    //! native fluorophore such as a tryptophan.
+    std::string origin;
+    std::string link_type;
+    IMP_SHOWABLE_INLINE(FFProbe, out << "FFProbe(" << name << ")");
+};
+
+//! The soft-sphere non-bonded term.
+struct IMPBFFEXPORT FFNonbonded {
+    bool enabled = true;
+    double k = 5.0;
+    //! Angstrom.
+    double cutoff = 6.0;
+    IMP_SHOWABLE_INLINE(FFNonbonded, out << "FFNonbonded(k=" << k << ")");
+};
+
+//! How the system is to be sampled. Defaults are the ones the reader supplies.
+struct IMPBFFEXPORT FFSampling {
+    double temperature_K = 300.0;
+    double friction_ps = 10.0;
+    double timestep_fs = 0.25;
+    int n_steps = 500000;
+    int write_every = 1000;
+    int minimize_steps = 200;
+    IMP_SHOWABLE_INLINE(FFSampling, out << "FFSampling(" << temperature_K << " K)");
+};
+
+IMP_VALUES(FFComponent, FFComponents);
+IMP_VALUES(FFSite, FFSites);
+IMP_VALUES(FFBond, FFBonds);
+IMP_VALUES(FFAngle, FFAngles);
+IMP_VALUES(FFTorsion, FFTorsions);
+IMP_VALUES(FFTorsionType, FFTorsionTypes);
+IMP_VALUES(FFLJType, FFLJTypes);
+IMP_VALUES(FFProbe, FFProbes);
+IMP_VALUES(FFNonbonded, FFNonbondeds);
+IMP_VALUES(FFSampling, FFSamplings);
+
+//! A coarse-grained dye/protein system: what to simulate, and with what terms.
+/*!
+    Groups are named sets of sites, and there are three kinds because they
+    answer three different questions: `groups` is the general naming mechanism,
+    `rb_groups` says which sites move as one rigid body, and `md_fixed_groups`
+    says which are held still during molecular dynamics. They were three keys
+    of the same dictionary and nothing said they were different in kind.
+
+    Members are **site id tokens**, as strings. The mmCIF schema spells a
+    member two ways -- by index (`n`, or `n_start`/`n_end` for a run) or by id
+    (`site_id`, or `site_id_start`/`site_id_end`). Carrying whichever the file
+    happened to use would hand a consumer `4` or `"CX4/S1"` for the same site
+    with no way to tell which; one canonical form is the point of having a type
+    at all, and resolving an index to its id is the reader's job.
+*/
+class IMPBFFEXPORT ProbeForceFieldSystem {
+    std::string name_;
+    std::map<std::string, FFComponent> components_;
+    std::vector<FFSite> sites_;
+    std::map<std::string, std::vector<std::string> > groups_;
+    std::map<std::string, std::vector<std::string> > rb_groups_;
+    std::map<std::string, std::vector<std::string> > md_fixed_groups_;
+    std::vector<std::string> fixed_groups_;
+    std::map<std::string, double> bond_types_;
+    std::map<std::string, double> angle_types_;
+    std::map<std::string, FFTorsionType> torsion_types_;
+    std::map<std::string, FFTorsionType> improper_types_;
+    std::map<std::string, FFLJType> lj_types_;
+    std::vector<FFBond> bonds_;
+    std::vector<FFAngle> angles_;
+    std::vector<FFTorsion> dihedrals_;
+    std::vector<FFTorsion> impropers_;
+    std::vector<FFProbe> probes_;
+    FFNonbonded nonbonded_;
+    FFSampling sampling_;
+
+public:
+    ProbeForceFieldSystem(const std::string& name = "") : name_(name) {}
+
+    std::string get_name() const { return name_; }
+    void set_name(const std::string& n) { name_ = n; }
+
+    const std::map<std::string, FFComponent>& get_components() const { return components_; }
+    const std::vector<FFSite>& get_sites() const { return sites_; }
+    const std::map<std::string, std::vector<std::string> >& get_groups() const { return groups_; }
+    const std::map<std::string, std::vector<std::string> >& get_rb_groups() const { return rb_groups_; }
+    const std::map<std::string, std::vector<std::string> >& get_md_fixed_groups() const { return md_fixed_groups_; }
+    const std::vector<std::string>& get_fixed_groups() const { return fixed_groups_; }
+    const std::map<std::string, double>& get_bond_types() const { return bond_types_; }
+    const std::map<std::string, double>& get_angle_types() const { return angle_types_; }
+    const std::map<std::string, FFTorsionType>& get_torsion_types() const { return torsion_types_; }
+    const std::map<std::string, FFTorsionType>& get_improper_types() const { return improper_types_; }
+    const std::map<std::string, FFLJType>& get_lj_types() const { return lj_types_; }
+    const std::vector<FFBond>& get_bonds() const { return bonds_; }
+    const std::vector<FFAngle>& get_angles() const { return angles_; }
+    const std::vector<FFTorsion>& get_dihedrals() const { return dihedrals_; }
+    const std::vector<FFTorsion>& get_impropers() const { return impropers_; }
+    const std::vector<FFProbe>& get_probes() const { return probes_; }
+    FFNonbonded get_nonbonded() const { return nonbonded_; }
+    FFSampling get_sampling() const { return sampling_; }
+
+    void set_components(const std::map<std::string, FFComponent>& v) { components_ = v; }
+    void set_sites(const std::vector<FFSite>& v) { sites_ = v; }
+    void set_groups(const std::map<std::string, std::vector<std::string> >& v) { groups_ = v; }
+    void set_rb_groups(const std::map<std::string, std::vector<std::string> >& v) { rb_groups_ = v; }
+    void set_md_fixed_groups(const std::map<std::string, std::vector<std::string> >& v) { md_fixed_groups_ = v; }
+    void set_fixed_groups(const std::vector<std::string>& v) { fixed_groups_ = v; }
+    void set_bond_types(const std::map<std::string, double>& v) { bond_types_ = v; }
+    void set_angle_types(const std::map<std::string, double>& v) { angle_types_ = v; }
+    void set_torsion_types(const std::map<std::string, FFTorsionType>& v) { torsion_types_ = v; }
+    void set_improper_types(const std::map<std::string, FFTorsionType>& v) { improper_types_ = v; }
+    void set_lj_types(const std::map<std::string, FFLJType>& v) { lj_types_ = v; }
+    void set_bonds(const std::vector<FFBond>& v) { bonds_ = v; }
+    void set_angles(const std::vector<FFAngle>& v) { angles_ = v; }
+    void set_dihedrals(const std::vector<FFTorsion>& v) { dihedrals_ = v; }
+    void set_impropers(const std::vector<FFTorsion>& v) { impropers_ = v; }
+    void set_probes(const std::vector<FFProbe>& v) { probes_ = v; }
+    void set_nonbonded(const FFNonbonded& v) { nonbonded_ = v; }
+    void set_sampling(const FFSampling& v) { sampling_ = v; }
+
+    //! Sites belonging to a component, by name.
+    std::vector<int> get_component_sites(const std::string& component) const;
+
+    //! Component names the sampler may **not** move.
+    std::vector<std::string> get_fixed_components() const;
+    //! Component names the sampler may move -- the dyes.
+    std::vector<std::string> get_mobile_components() const;
+
+    // ----------------------------------------------------------------------
+    // The molecular graph
+    //
+    // Derived from the bonds this object already holds, so it belongs here
+    // rather than in three Python copies over the same data. `cgprobe.sim`,
+    // `cgprobe.topology` and `scoring` each had their own; they agreed on the
+    // shipped system and had drifted in shape (a set of tuples, a set of
+    // frozensets, a defaultdict of sets).
+    // ----------------------------------------------------------------------
+
+    //! Site ids adjacent to each site, keyed by site id.
+    std::map<std::string, std::vector<std::string> > get_bonded_neighbors() const;
+
+    //! The 1-2, 1-3 and 1-4 pairs, each as a sorted (a, b).
+    /** Bonds give 1-2, angle ends 1-3, dihedral ends 1-4. Impropers contribute
+        their a-c, a-d and b-d pairs when `include_impropers` is true. That
+        flag is moot for a combined system today, because no builder of one
+        fills `impropers`: okf/validation/impropers_are_dropped.md.
+
+        A `std::set`, not a vector: its caller tests membership and takes
+        subsets, and a deduplicated, sorted container is what the answer is. */
+    std::set<std::pair<std::string, std::string> > get_exclusions(
+            bool include_impropers = true) const;
+
+    //! Simple cycles of at most `max_len` sites, each as sorted site ids.
+    std::vector<std::vector<std::string> > find_rings(int max_len = 8) const;
+
+    //! Whether `a` reaches `b` in at most `max_depth` bonds.
+    bool is_within_bonds(const std::string& a, const std::string& b,
+                         int max_depth) const;
+
+    //! Why this system is not self-consistent, or an empty string.
+    /** Components and sites present, site ids unique, every site's component
+        declared, and every bonded term referring to sites that exist. The
+        caller decides whether that is an error -- `cgprobe.sim` raises; a reader
+        may prefer to report. */
+    std::string get_inconsistency() const;
+
+    IMP_SHOWABLE_INLINE(ProbeForceFieldSystem,
+                        out << "ProbeForceFieldSystem(\"" << name_ << "\", "
+                            << sites_.size() << " sites, " << bonds_.size()
+                            << " bonds, " << components_.size() << " components)");
+};
+IMP_VALUES(ProbeForceFieldSystem, ProbeForceFieldSystems);
+
+//! Build a typed system from a JSON object (the dict-literal convenience).
+/*!
+    The topology builder assembles a system as a plain JSON-shaped object --
+    easier to author and to diff than eighteen typed vectors -- and this is
+    the one conversion into #IMP::bff::ProbeForceFieldSystem. The accepted shape
+    mirrors the reader: `name`, `components` (`{id: {mol2_path|mol2,
+    pdb_path|pdb, role}}`), `sites` (a list of `{id, component, atom_name,
+    element, site_no, site_serial, radius, mass}`), `groups`/`rb_groups`/
+    `md_fixed_groups` (`{gid: [site-id...]}`, integers resolved to site ids by
+    `site_no`), `fixed_groups`, `bond_types`/`angle_types` (`{tid: {k}}`),
+    `torsion_types`/`improper_types` (`{tid: {periodicity, phase_rad, k}}`),
+    `lj_types` (`{tid: {element, rmin_half, epsilon}}`), `bonds`
+    (`[a, b, length, tid]`), `angles` (`[a, b, c, theta, tid]`), `dihedrals`/
+    `impropers` (`[a, b, c, d, tid]`), `probes`, `nonbonded`
+    (`{enabled, k, cutoff_A}`) and `sampling` (`{temperature_K, friction_ps,
+    timestep_fs, n_steps, write_every, minimize_steps}`).
+    Missing keys take the same defaults the reader does.
+    \throw ValueException for a row of the wrong arity or a non-object root
+*/
+IMPBFFEXPORT ProbeForceFieldSystem forcefield_system_from_json(
+        const std::string& json);
+
+IMPBFF_END_NAMESPACE
+
+ //IMPBFF_PROBEFORCEFIELD_H
+
+#endif  // IMPBFF_PROBELIBRARY_H

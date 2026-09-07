@@ -15,7 +15,7 @@
 #define IMPBFF_FORCEFIELDCIF_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/ProbeForceField.h>
+#include <IMP/bff/ProbeLibrary.h>
 
 #include <string>
 #include <utility>

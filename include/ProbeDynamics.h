@@ -22,7 +22,7 @@
 #define IMPBFF_PROBEDYNAMICS_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/ProbeForceField.h>
+#include <IMP/bff/ProbeLibrary.h>
 
 #include <IMP/Pointer.h>
 #include <IMP/ScoringFunction.h>

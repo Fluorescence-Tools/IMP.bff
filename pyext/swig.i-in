@@ -867,7 +867,7 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
    Wrapped before av.i for the same reason: AV.h names AVRadiiSource. The
    `std::map` accessor and the per-particle vector stay C++-only (`#ifndef
    SWIG` in the header) -- `MapStringDouble` is not declared until
-   IMP_bff.forcefield.i, far below, and this module cannot name
+   IMP_bff.probe.i, below, and this module cannot name
    `std::vector<double>` at all (IMP_bff.types.i). Python reads the table
    through olga_vdw_radius(), get_olga_vdw_atom_names() and
    olga_vdw_radii_csv(). */
@@ -897,7 +897,8 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP_bff.fps.i"
 
 /* A probe as a species -- dye, fluorescent protein or spin label: what it is,
-   its spectra where it has them, and the Förster radius they give. */
+   its spectra where it has them, the Förster radius they give, its .pto
+   library, and the coarse-grained system it is simulated as. */
 %include "IMP_bff.probe.i"
 
 /* Distances and orientations over point clouds. */
@@ -920,9 +921,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP/bff/PhotonSimulation.h"
 
 
-
-/* The coarse-grained system, typed: what cgprobe builds and simulates. */
-%include "IMP_bff.forcefield.i"
 
 /* Scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, rotamer score. */
 %include "IMP_bff.scoring.i"
