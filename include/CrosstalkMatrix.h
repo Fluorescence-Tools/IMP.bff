@@ -16,7 +16,7 @@
  *  Moved here from ChiSurf's ``core/fluorescence/crosstalk.py`` (owner,
  *  2026-09-04: the excitation and emission crosstalk matrix definition lives
  *  in bff, not in chisurf) — this is the same placement the FCS forward model
- *  took (FcsMdf.h). The matrix *definition* is the part that two
+ *  took (Fcs.h). The matrix *definition* is the part that two
  *  implementations disagree on silently: the label convention, what a row and
  *  a column mean, how a payload is ordered into values, and what the forward
  *  and inverse mixing do. ChiSurf keeps the light-path calculator that

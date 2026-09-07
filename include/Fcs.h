@@ -1,5 +1,26 @@
+#ifndef IMPBFF_FCS_H
+#define IMPBFF_FCS_H
+
 /**
- *  \file IMP/bff/FcsMdf.h
+ *  \file IMP/bff/Fcs.h
+ *  \brief FCS forward models beyond the closed forms: the MDF and saturation shapes.
+ *
+ * Three former headers, in the order a reader needs them:
+ *
+ * 1. **MDF** (formerly `FcsMdf.h`) -- Enderlein's molecule-detection-function
+ *    diffusion shape, and #IMP::bff::FcsMdfCurve, the graph node that puts the
+ *    `"mdf"` FCS mode next to the closed-form ones.
+ * 2. **Saturation** (formerly `FcsSaturation.h`) -- steady-state photophysics
+ *    on a grid, the kernel of the saturated diffusion shape.
+ * 3. **Saturation as a node** (formerly `FcsSaturationCurve.h`) --
+ *    #IMP::bff::FcsSaturationCurve, that kernel on the graph.
+ *
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+// -------- from FcsMdf.h --------
+/**
+ *  (formerly IMP/bff/FcsMdf.h, now a section of this file)
  *  \brief Enderlein molecule-detection-function FCS forward model.
  *
  *  The Gauss--Lorentz MDF of Enderlein et al. (2005): a confocal detection
@@ -27,9 +48,6 @@
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#ifndef IMPBFF_FCS_MDF_H
-#define IMPBFF_FCS_MDF_H
-
 #include <IMP/bff/bff_config.h>
 
 #include <string>
@@ -324,4 +342,278 @@ class IMPBFFEXPORT FcsMdfCurve : public Node {
 
 IMPBFF_END_NAMESPACE
 
-#endif /* IMPBFF_FCS_MDF_H */
+ /* IMPBFF_FCS_MDF_H */
+
+// -------- from FcsSaturation.h --------
+/**
+ *  (formerly IMP/bff/FcsSaturation.h, now a section of this file)
+ *  \brief Saturated FCS forward model: steady-state photophysics on a grid.
+ *
+ *  Port of chisurf's `core/fluorescence/fcs/saturation.py` compute core —
+ *  the numerically integrated, power-dependent FCS saturation shape. Moved
+ *  here on the owner's placement ruling (2026-09-02): a forward model
+ *  belongs in bff regardless of how fast its Python is; the measurement
+ *  (1.0 ms/evaluation, BLAS-bound) set the port's priority, never its
+ *  placement.
+ *
+ *  The pipeline: a Gaussian excitation profile scaled to the measured laser
+ *  power becomes a spatial excitation rate; an N-state master-equation
+ *  scheme (dark rates + excitation cross sections, `K[target, source]`,
+ *  diagonals derived so columns sum to zero) is solved for its steady state
+ *  at every grid point; the brightness-weighted populations form the
+ *  emission profile; its spatial autocorrelation under free diffusion is
+ *  evaluated in reciprocal space (0th-order Hankel transform along r — the
+ *  quadrature matrix is cached on its grids, exactly as the Python's
+ *  lru_cache did — and a real DFT along z, with the separable propagator
+ *  factored so the exponentials are (n_kr + n_kz) * n_tau, not their
+ *  product); and the photokinetic bunching factor X(tau) comes from the
+ *  eigen-decomposition of the generator (Eigen::EigenSolver — the modes may
+ *  be complex for a cyclic scheme, the sum is real).
+ *
+ *  All quantities SI: lengths m, times s, power W, rates Hz. The scheme
+ *  matrices arrive flat row-major with their state count.
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! Bessel J0, to machine precision, via the periodic trapezoid.
+/*!
+    \f$J_0(x) = \frac{1}{\pi}\int_0^\pi \cos(x\sin\theta)\,d\theta\f$; the
+    integrand is smooth and periodic, so the trapezoid converges
+    geometrically — 64 nodes give ~1e-15 for the |x| <= 40 this model
+    reaches. Exposed because the library deliberately carries no special-
+    functions dependency, and a truncated polynomial here would put a 1e-7
+    floor under every curve parity test downstream.
+*/
+IMPBFFEXPORT double bessel_j0(double x);
+
+//! Peak focal excitation rate \f$k_{exc}(0,0)\f$ in 1/s.
+/*!
+    \f$\sigma_{abs}\, 2\Phi/(\pi w_0^2)\f$ with
+    \f$\Phi = P/(h c/\lambda)\f$ and
+    \f$\sigma_{abs} = 10^{-4}\cdot 1000\ln(10)\,\epsilon/N_A\f$.
+    \param[in] power_w total measured excitation power (W)
+    \param[in] extinction molar extinction coefficient (1/M/cm)
+    \param[in] w0 radial beam waist (1/e^2, m)
+    \param[in] wavelength_m excitation wavelength (m)
+*/
+IMPBFFEXPORT double fcs_excitation_rate_peak(
+        double power_w, double extinction, double w0,
+        double wavelength_m = 488e-9);
+
+//! Analytical 3D-Gaussian diffusion autocorrelation shape, G(0) = 1.
+IMPBFFEXPORT void fcs_gaussian_g_diff(
+        const std::vector<double>& tau,
+        double w0, double z0, double diffusion,
+        double** out_view = 0, int* n_out_view = 0);
+
+//! Photokinetic state-relaxation (bunching) factor X(tau).
+/*!
+    \f$X(\tau) = q_a^T e^{K\tau} (q_b \circ p_{eq}) /
+    ((q_a\cdot p_{eq})(q_b\cdot p_{eq}))\f$ for the generator
+    \f$K = K_{dark} + k_{exc} K_{exc}\f$, via its eigen-decomposition —
+    the eigenvalues ARE the relaxation rates a bunching fit reports.
+    Degenerate schemes (no stationary state, dark scheme with no bright
+    reachable state) return ones, as the reference does.
+
+    \param[in] tau lag times (s)
+    \param[in] k_exc_0 excitation rate to evaluate at (1/s)
+    \param[in] dark_matrix flat row-major N x N dark rates (Hz),
+               K[target, source], diagonal derived internally
+    \param[in] exc_matrix flat row-major N x N excitation cross sections
+    \param[in] n_states N
+    \param[in] brightness per-state brightness of channel a (N)
+    \param[in] brightness_b channel b; empty = autocorrelation (b = a)
+    \param[out] out_view,n_out_view X(tau), one value per lag
+*/
+IMPBFFEXPORT void fcs_bunching_factor(
+        const std::vector<double>& tau,
+        double k_exc_0,
+        const std::vector<double>& dark_matrix,
+        const std::vector<double>& exc_matrix,
+        int n_states,
+        const std::vector<double>& brightness,
+        const std::vector<double>& brightness_b = std::vector<double>(),
+        double** out_view = 0, int* n_out_view = 0);
+
+//! The numerically integrated saturated FCS diffusion shape G(tau).
+/*!
+    The steady-state emission profile on an (r, z) grid spanning five beam
+    waists, spatially (cross-)correlated in reciprocal space, amplitude
+    \f$V_0/V_{eff}\f$ (the saturation volume expansion), optionally times
+    the bunching factor. At zero power the exact limit — the unsaturated
+    Gaussian at amplitude one — is returned.
+
+    \param[in] tau lag times (s)
+    \param[in] power_w total measured excitation power (W)
+    \param[in] extinction molar extinction coefficient (1/M/cm)
+    \param[in] dark_matrix,exc_matrix,n_states the scheme, as in
+               fcs_bunching_factor
+    \param[in] brightness per-state brightness (N)
+    \param[in] w0,z0 radial/axial beam waists (1/e^2, m)
+    \param[in] diffusion diffusion coefficient (m^2/s)
+    \param[in] include_bunching multiply by X(tau)
+    \param[in] n_r,n_z radial/axial grid points
+    \param[in] wavelength_m excitation wavelength (m)
+    \param[in] brightness_b second channel; empty = autocorrelation
+    \param[out] out_view,n_out_view G(tau), one value per lag
+*/
+IMPBFFEXPORT void fcs_saturated_curve_shape(
+        const std::vector<double>& tau,
+        double power_w,
+        double extinction,
+        const std::vector<double>& dark_matrix,
+        const std::vector<double>& exc_matrix,
+        int n_states,
+        const std::vector<double>& brightness,
+        double w0, double z0, double diffusion,
+        bool include_bunching = true,
+        int n_r = 120, int n_z = 40,
+        double wavelength_m = 488e-9,
+        const std::vector<double>& brightness_b = std::vector<double>(),
+        double** out_view = 0, int* n_out_view = 0);
+
+IMPBFF_END_NAMESPACE
+
+ /* IMPBFF_FCS_SATURATION_H */
+
+// -------- from FcsSaturationCurve.h --------
+/**
+ *  (formerly IMP/bff/FcsSaturationCurve.h, now a section of this file)
+ *  \brief Saturated FCS forward model as a graph node.
+ *
+ *  The saturated FCS diffusion shape (the section above) wrapped as a
+ *  `Node`, so an FCS kinetics model in "full" mode joins the graph the way
+ *  `FcsMdfCurve` does for the MDF mode.  The ports carry the quantities a
+ *  fit varies (power, extinction, beam waists, diffusion, N, baseline b,
+ *  background bg); the photokinetic scheme (dark matrix, excitation matrix,
+ *  brightness) and the quadrature grids are configuration -- set once at
+ *  build time, not re-set per evaluation -- so the expensive Hankel-matrix
+ *  cache built inside `fcs_saturated_curve_shape` survives across the
+ *  evaluations the optimiser drives rather than being rebuilt every time.
+ *
+ *  Port names follow the model's FittingParameter names (power, extinction,
+ *  w0, z0, D, N, b, bg) so the minimizer's `_claim` matches them up with the
+ *  free parameters.  The node reads them in the units the model exposes
+ *  (power in mW, lengths in nm, D in um^2/s) and scales to SI internally,
+ *  exactly as the Python wrapper `saturated_curve_shape` does.
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! Saturated FCS diffusion shape as a graph node over `fcs_saturated_curve_shape`.
+/*!
+    Ports (all scalar, created by build_ports()):
+
+    | port | what it is | unit |
+    |---|---|---|
+    | `power` | total measured excitation power | mW |
+    | `extinction` | molar extinction coefficient | M^-1 cm^-1 |
+    | `w0` | lateral 1/e^2 beam waist | nm |
+    | `z0` | axial 1/e^2 beam waist | nm |
+    | `D` | translational diffusion coefficient | um^2/s |
+    | `N` | average number of molecules | count |
+    | `b` | baseline offset | dimensionless |
+    | `bg` | background count rate | kHz |
+
+    Configuration (set once, not ports):
+
+    | config | what it is |
+    |---|---|
+    | dark_matrix | flat row-major N x N dark rates (Hz) |
+    | exc_matrix | flat row-major N x N excitation cross sections |
+    | brightness | per-state brightness (N) |
+    | n_r, n_z | radial/axial grid points |
+    | wavelength_m | excitation wavelength (m) |
+    | include_bunching | multiply by X(tau) |
+
+    `evaluate()` reads the ports, scales to SI, and calls
+    `fcs_saturated_curve_shape` to produce the shape G(tau) (amplitude
+    V0/Veff, before the 1/N normalisation and baseline the caller applies).
+    The shape is published as the output port keyed by the node's name.
+
+    \see the FcsSaturation section above, Node, Expression, ChiSquared
+*/
+class IMPBFFEXPORT FcsSaturationCurve : public Node {
+ public:
+  explicit FcsSaturationCurve(const std::string& name = "fcs_saturation");
+
+  //! Build the scalar input ports.  Not in the constructor (see FcsMdfCurve).
+  void build_ports();
+
+  //! The lag axis, in **seconds**, set once from the data.
+  void set_axis(const std::vector<double>& tau);
+  //! Numpy in, for the axis a caller holds as an array.
+  void set_axis_array(double* in_axis, int n_axis);
+  const std::vector<double>& get_axis() const { return tau_; }
+
+  //! The fixed photokinetic scheme: dark rates (Hz), excitation cross
+  //! sections, and per-state brightness.  Set once at build time.
+  void set_scheme(const std::vector<double>& dark_matrix,
+                  const std::vector<double>& exc_matrix,
+                  int n_states,
+                  const std::vector<double>& brightness);
+
+  //! Quadrature resolution.
+  void set_quadrature(int n_r, int n_z);
+  int get_n_r() const { return n_r_; }
+  int get_n_z() const { return n_z_; }
+
+  //! Excitation wavelength (m).
+  void set_wavelength(double wavelength_m);
+  double get_wavelength() const { return wavelength_m_; }
+
+  //! Whether to include the bunching factor X(tau).
+  void set_include_bunching(bool v);
+  bool get_include_bunching() const { return include_bunching_; }
+
+  //! The shape from the last evaluation.
+  const std::vector<double>& get_curve() const { return curve_; }
+
+  void evaluate() override;
+
+  std::string describe() const;
+
+ private:
+  std::vector<double> tau_;
+  std::vector<double> curve_;
+
+  Port* power_port_ = nullptr;
+  Port* extinction_port_ = nullptr;
+  Port* w0_port_ = nullptr;
+  Port* z0_port_ = nullptr;
+  Port* d_port_ = nullptr;
+  Port* n_port_ = nullptr;
+  Port* b_port_ = nullptr;
+  Port* bg_port_ = nullptr;
+
+  // Fixed configuration (set once, not ports).
+  std::vector<double> dark_matrix_;
+  std::vector<double> exc_matrix_;
+  std::vector<double> brightness_;
+  int n_states_ = 0;
+  int n_r_ = 120;
+  int n_z_ = 40;
+  double wavelength_m_ = 488e-9;
+  bool include_bunching_ = true;
+
+  //! The port values the published curve belongs to.
+  bool curve_built_ = false;
+  double curve_power_ = 0.0, curve_extinction_ = 0.0;
+  double curve_w0_ = 0.0, curve_z0_ = 0.0, curve_d_ = 0.0;
+};
+
+IMPBFF_END_NAMESPACE
+
+ /* IMPBFF_FCS_SATURATION_CURVE_H */
+
+#endif  // IMPBFF_FCS_H
