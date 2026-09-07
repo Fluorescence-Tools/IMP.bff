@@ -10872,3 +10872,8 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   `get_av_from_structure`, `get_avs_for_structure`) → AV.h. No core file includes a layer header. Suite 1780/0.
   Shared-tree note: another agent's uncommitted ptolib vendoring does not link under the unity build
   (PTOLIB_IMPLEMENTATION skipped by the header guard) -- built against HEAD's Pto files, restored after.
+- **PRD-137 step 5, interface complete** (imp-bff-ce, 813a418): 21 Hierarchy/Particle overloads → `HierarchyBridge.h`
+  (layer), ProbeAttachment → layer, PathMap takes spheres from a pluggable source (`set_path_map_particles`; Python
+  `PathMap.set_particles` kept via %extend). No core header names a particle/hierarchy/model. Suite 1780/0, oracle
+  18/18. Residue 5c (implementation): `load_protein_frames`, `load_structure`, the trajectory loader's PDB branch,
+  `selection_from_expression` still read PDBs / compile the AST through IMP::atom -- marked at their definitions.
