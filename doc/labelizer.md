@@ -72,7 +72,7 @@ published four.
 Getting a number out
 --------------------
 
-    #include <IMP/bff/LabelizerScore.h>
+    #include <IMP/bff/Labelizer.h>
 
     const std::vector<LlScore> scores = ll_score_structure(
             "protein.pdb", ll_model_paper(), LlOptions(), "grades.txt");
