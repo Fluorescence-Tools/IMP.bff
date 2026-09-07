@@ -208,9 +208,6 @@ IMP_VALUES(PathMapHeader, PathMapHeaders);
 
 IMPBFF_END_NAMESPACE
 
-
- //IMPBFF_PATHMAPHEADER_H
-
 // -------- from PathMapTileEdge.h --------
 /**
  *  (formerly IMP/bff/PathMapTileEdge.h, now a section of this file)
@@ -275,8 +272,6 @@ IMP_VALUES(PathMapTileEdge, PathMapTileEdges);
 
 
 IMPBFF_END_NAMESPACE
-
- //IMPBFF_PATHMAPTILEEDGE_H
 
 // -------- from PathMapTile.h --------
 /**
@@ -487,8 +482,6 @@ IMP_VALUES(PathMapTile, PathMapTiles);
 
 
 IMPBFF_END_NAMESPACE
-
- //IMPBFF_PATHMAPTILE_H
 
 // -------- from PathMap.h --------
 
@@ -1315,6 +1308,5 @@ void write_map_feature(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PATHMAP_H
 
 #endif  // IMPBFF_PATHMAP_H

@@ -308,8 +308,6 @@ IMPBFFEXPORT void atomic_quenching_parameters(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PETQUENCHING_H
-
 // -------- from QuenchingGrid.h --------
 /**
  *  (formerly IMP/bff/QuenchingGrid.h, now a section of this file)
@@ -455,8 +453,6 @@ IMPBFFEXPORT void av_contact_mask(
         int** out_view_i, int* n_out_view_i);
 
 IMPBFF_END_NAMESPACE
-
- //IMPBFF_QUENCHINGGRID_H
 
 // -------- from QuenchingMap.h --------
 /**
@@ -657,8 +653,6 @@ IMPBFFEXPORT void fret_rate_map(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_QUENCHINGMAP_H
-
 // -------- from QuenchedDecay.h --------
 /**
  *  (formerly IMP/bff/QuenchedDecay.h, now a section of this file)
@@ -735,6 +729,5 @@ IMPBFFEXPORT void quenched_donor_photons(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_QUENCHEDDECAY_H
 
 #endif  // IMPBFF_QUENCHING_H

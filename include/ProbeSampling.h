@@ -219,8 +219,6 @@ IMP_VALUES(ProbeDiffusionSimulation, ProbeDiffusionSimulations);
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PROBEDIFFUSION_H
-
 // -------- from ProbeSampling.h --------
 #include <IMP/bff/RotamerLibrary.h>
 
@@ -381,6 +379,5 @@ IMPBFFEXPORT void apply_coordinates(const IMP::atom::Hierarchy hierarchy,
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PROBESAMPLING_H
 
 #endif  // IMPBFF_PROBESAMPLING_H

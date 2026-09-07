@@ -193,8 +193,6 @@ IMPBFFEXPORT FPSValidation fps_schema_validate(const std::string& payload_json);
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_FPSSCHEMA_H
-
 // -------- from FPSIO.h --------
 /**
  *  (formerly IMP/bff/FPSIO.h, now a section of this file)
@@ -337,6 +335,5 @@ IMPBFFEXPORT void write_evaluators_json(const std::string& path,
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_FPSIO_H
 
 #endif  // IMPBFF_FPS_H

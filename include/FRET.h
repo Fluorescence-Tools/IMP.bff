@@ -200,8 +200,6 @@ IMPBFFEXPORT FRETPairEfficiencies fret_pair_distribution(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_FRETPAIR_H
-
 // -------- from FRETRateTrace.h --------
 /**
  *  (formerly IMP/bff/FRETRateTrace.h, now a section of this file)
@@ -358,6 +356,5 @@ IMPBFFEXPORT void fret_rate_pair_trace(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_FRETRATETRACE_H
 
 #endif  // IMPBFF_FRET_H

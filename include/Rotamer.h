@@ -156,8 +156,6 @@ IMPBFFEXPORT std::vector<double> lj_pair_energies(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_ROTAMERENERGY_H
-
 // -------- from RotamerSite.h --------
 /**
  *  (formerly IMP/bff/RotamerSite.h, now a section of this file)
@@ -352,8 +350,6 @@ IMPBFFEXPORT std::vector<std::string> infer_rotamer_resnames(
         const std::string& metadata_json);
 
 IMPBFF_END_NAMESPACE
-
- //IMPBFF_ROTAMERSITE_H
 
 // -------- from RotamerEnsemble.h --------
 /**
@@ -627,8 +623,6 @@ IMPBFFEXPORT double effective_frame_fraction(double* weights, int n_weights);
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_ROTAMERENSEMBLE_H
-
 // -------- from RotamerFps.h --------
 /**
  *  (formerly IMP/bff/RotamerFps.h, now a section of this file)
@@ -835,8 +829,6 @@ IMPBFFEXPORT void write_rotamer_fps(const std::string& path,
                                     bool validate = true);
 
 IMPBFF_END_NAMESPACE
-
- //IMPBFF_ROTAMERFPS_H
 
 // -------- from RotamerFret.h --------
 /**
@@ -1070,6 +1062,5 @@ IMPBFFEXPORT RotamerFRET rotamer_fret_from_fps(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_ROTAMERFRET_H
 
 #endif  // IMPBFF_ROTAMER_H

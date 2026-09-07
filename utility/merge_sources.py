@@ -88,7 +88,10 @@ def _strip_guard(body):
     # the closing #endif is the last one in the file
     last = body.rfind("#endif")
     if last >= 0:
-        body = body[:last] + body[last + len("#endif"):]
+        # take the whole line: `#endif // X_H` and `#endif  /* X_H */` both
+        # leave a dangling comment otherwise, and the first merges did
+        eol = body.find("\n", last)
+        body = body[:last] + (body[eol:] if eol >= 0 else "")
     return body.rstrip() + "\n"
 
 

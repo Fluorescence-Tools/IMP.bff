@@ -62,8 +62,6 @@ inline bool flag(ihm_keyword* k, bool fallback) {
 
 IMPBFF_END_INTERNAL_NAMESPACE
 
-  // IMPBFF_INTERNAL_CIFREADER_H
-
 // -------- from CifWriter.h --------
 /**
  *  (formerly IMP/bff/internal/CifWriter.h, now a section of this file)
@@ -200,6 +198,5 @@ inline std::string cif_val_or_omit(const std::string& s) { return cif_val(s); }
 
 IMPBFF_END_INTERNAL_NAMESPACE
 
-  // IMPBFF_INTERNAL_CIFWRITER_H
 
 #endif  // IMPBFF_INTERNAL_CIF_H

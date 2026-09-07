@@ -89,8 +89,6 @@ public:
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_LINKERGEOMETRY_H
-
 // -------- from LinkerSampling.h --------
 /**
  *  (formerly IMP/bff/LinkerSampling.h, now a section of this file)
@@ -224,6 +222,5 @@ IMPBFFEXPORT RotamerLibrary generate_linker_rotamers(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_LINKERSAMPLING_H
 
 #endif  // IMPBFF_LINKER_H

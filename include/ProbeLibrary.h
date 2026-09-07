@@ -335,8 +335,6 @@ IMPBFFEXPORT std::map<std::string, std::string> forster_radius_flrcif_items();
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PROBELIBRARY_H
-
 // -------- from ProbeContainer.h --------
 /**
  *  (formerly IMP/bff/ProbeContainer.h, now a section of this file)
@@ -762,6 +760,5 @@ IMPBFFEXPORT ProbeForceFieldSystem forcefield_system_from_json(
 
 IMPBFF_END_NAMESPACE
 
- //IMPBFF_PROBEFORCEFIELD_H
 
 #endif  // IMPBFF_PROBELIBRARY_H
