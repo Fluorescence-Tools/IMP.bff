@@ -7,7 +7,7 @@
 #include <IMP/bff/RotamerEnsemble.h>
 
 #include <IMP/bff/ProbeLibrary.h>
-#include <IMP/bff/FPSIO.h>
+#include <IMP/bff/FPS.h>
 #include <IMP/bff/RotamerSite.h>
 #include <IMP/bff/Scoring.h>
 #include <IMP/bff/internal/OutputView.h>

@@ -23,7 +23,7 @@
  *    section, beside `Positions`, `Distances` and `χ²`. That file can be
  *    self-contained -- one path for a whole run.
  *
- * Writing the legacy format is a non-goal, exactly as `FPSIO.h` argues for the
+ * Writing the legacy format is a non-goal, exactly as `FPS.h` argues for the
  * other two: the formats stay readable so a decade of measurements is not
  * lost, and nothing should produce another one.
  *

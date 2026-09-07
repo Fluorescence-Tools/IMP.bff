@@ -7,7 +7,7 @@
 #include <IMP/bff/FPSExport.h>
 
 #include <IMP/bff/AV.h>
-#include <IMP/bff/FPSIO.h>
+#include <IMP/bff/FPS.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
 

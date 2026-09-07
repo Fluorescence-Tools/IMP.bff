@@ -7,8 +7,7 @@
 
 #include <IMP/bff/FPSProject.h>
 
-#include <IMP/bff/FPSIO.h>
-#include <IMP/bff/FPSSchema.h>
+#include <IMP/bff/FPS.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
 

@@ -7,7 +7,7 @@
  *
  */
 #include <IMP/bff/internal/FPSReaderWriter.h>
-#include <IMP/bff/FPSSchema.h>
+#include <IMP/bff/FPS.h>
 
 IMPBFF_BEGIN_NAMESPACE
 

@@ -25,7 +25,7 @@
  * repository that is not a dependency of this one; parsing it at run time would
  * make writing a file depend on a checkout being present. This is the pattern
  * the package already uses for flrCIF names in
- * #IMP::bff::probe_flrcif_items and `FPSSchema.h`, and it comes with the same
+ * #IMP::bff::probe_flrcif_items and `FPS.h`, and it comes with the same
  * obligation: `test/label/test_pto_profile.py` re-reads the dictionary and
  * fails when these lists drift from it. A term is *checked*, never *recalled*.
  *

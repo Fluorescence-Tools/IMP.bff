@@ -4,7 +4,7 @@
 rather than parsing `mmfdb_flr_ext.dic` at run time, because that dictionary
 lives in a sibling repository which is not a dependency of this one and writing
 a file must not require a checkout to be present. That is the same choice
-`ProbeLibrary.h` and `FPSSchema.h` already made for flrCIF item names.
+`ProbeLibrary.h` and `FPS.h` already made for flrCIF item names.
 
 The choice comes with an obligation, and this file is it: a term is **checked,
 never recalled**. Every value the C++ claims is re-read from the dictionary

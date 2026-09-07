@@ -160,7 +160,7 @@ std::string av_radii_source_to_string(AVRadiiSource s) {
 
 std::string olga_vdw_radii_csv() {
     /* data/olga_vdw_radii.csv is *derived* from the table above, the way
-       data/fps_json_schema.json is derived from FPSSchema.h's tables: the C++
+       data/fps_json_schema.json is derived from FPS.h's schema tables: the C++
        is the definition, the data file is the shipped, human-readable record
        of provenance, and a test regenerates it and fails on drift. */
     static const char *header = R"CSVHDR(# Olga's van der Waals radii, keyed by PDB atom name.

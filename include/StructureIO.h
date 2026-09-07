@@ -3,7 +3,7 @@
  *  \brief Structures in and out: PDB, MOL2, mmCIF, and the tables beside them.
  *
  * Nothing here is about fluorescence. It is serialisation, and it is a separate
- * header from `FPSIO.h` because a labelling file and a coordinate file are
+ * header from `FPS.h` because a labelling file and a coordinate file are
  * different formats that change for different reasons — they shared one module
  * until PRD-113 stage 7, which is how "the fps reader" came to be the thing that
  * writes PDBs.

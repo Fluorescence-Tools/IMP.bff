@@ -22,7 +22,6 @@ IMP_SWIG_VALUE(IMP::bff, FPSDocument, FPSDocuments);
 
 %attribute(IMP::bff::FPSValidation, bool, is_valid, get_is_valid);
 
-%include "IMP/bff/FPSSchema.h"
-%include "IMP/bff/FPSIO.h"
+%include "IMP/bff/FPS.h"
 
 %template(FPSFieldList) std::vector<IMP::bff::FPSField>;
