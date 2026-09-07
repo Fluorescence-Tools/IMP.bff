@@ -943,9 +943,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP/bff/SequenceAlignment.h"
 %template(AlignedBlocks) std::vector<IMP::bff::AlignedBlock>;
 
-/* A linker's rotatable degrees of freedom, and applying a setting of them. */
-%include "IMP/bff/LinkerGeometry.h"
-
 /* Weighted averaging over a rotamer ensemble. */
 
 /* Protein side-chain packing: the 1:1 FASPR port (Dunbrack 2010).

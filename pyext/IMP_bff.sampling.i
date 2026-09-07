@@ -6,7 +6,8 @@
  *    coefficient for each particle's own radius), `AttachedProbeDynamics` sets up
  *    the dye's force field, its held anchor and the wall of protein spheres
  *    around the site, and `LangevinTrajectory` is what a run returns.
- *  - **The linker sampler** is `LinkerSampling.h`. It has no IMP model at
+ *  - **The linker sampler** is `Linker.h`, beside the torsion geometry it
+ *    applies. It has no IMP model at
  *    all: routing each trial through `XYZ` decorators would use the
  *    particles as a scratch buffer for numbers `LinkerGeometry::apply` has
  *    just returned.
@@ -45,7 +46,9 @@ IMP_SWIG_OBJECT(IMP::bff, RRTCollision, RRTCollisions);
 %feature("kwargs") IMP::bff::markov_state_trajectory;
 
 %include "IMP/bff/ProbeDynamics.h"
-%include "IMP/bff/LinkerSampling.h"
+/* Linker.h needs RotamerLibrary (wrapped above, in swig.i-in): the sampler
+   returns one. Its geometry half used to be wrapped earlier, on its own. */
+%include "IMP/bff/Linker.h"
 %include "IMP/bff/RRT.h"
 
 // The trajectory's shapes: `(n_frames, n_atoms, 3)` for the coordinates and
