@@ -418,6 +418,10 @@ struct LJSitePair {
 IMPBFFEXPORT std::vector<LJSitePair> get_lj_pair_sites(
         const ProbeForceFieldSystem& system);
 
+//! Boltzmann's constant in kcal/(mol K), the unit the force field is in.
+/*! Was in ProbeDynamics.h; the Metropolis linker sampler needs it and is core. */
+IMPBFFEXPORT double kb_kcal();
+
 //! `_ff_lj_type` entries (`LJ_<elem>`) for a set of elements.
 IMPBFFEXPORT std::map<std::string, FFLJType> get_lj_type_table(
         const std::vector<std::string>& elements);

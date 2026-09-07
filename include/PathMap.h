@@ -35,11 +35,12 @@
 #include <IMP/bff/DensityGrid.h>
 
 #include <IMP/bff/internal/json.h>
-#include <IMP/bff/AV.h>
 
 #include <algorithm>
 
 IMPBFF_BEGIN_NAMESPACE
+
+class AV;  // the decorator (connection layer) is a friend; a name is all a friend needs
 
 
 class PathMap;

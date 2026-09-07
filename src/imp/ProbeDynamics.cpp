@@ -44,7 +44,6 @@ namespace {
 const char* const kComponentName = "label";
 }  // namespace
 
-double kb_kcal() { return 0.0019872041; }
 
 void prepare_particles(IMP::Model* model, const IMP::ParticleIndexes& particles,
                        double temperature, const std::string& integrator,

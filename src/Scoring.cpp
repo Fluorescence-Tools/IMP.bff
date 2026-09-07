@@ -948,4 +948,6 @@ std::vector<std::vector<double> > rotamer_mean_field_weights_multi_probe(
     return q;
 }
 
+double kb_kcal() { return 0.0019872041; }
+
 IMPBFF_END_NAMESPACE

@@ -119,7 +119,6 @@ IMPBFF_END_NAMESPACE
  */
 
 #include <IMP/bff/Clustering.h>
-#include <IMP/bff/ProbeDynamics.h>
 #include <IMP/bff/MolecularGraph.h>
 #include <IMP/bff/Scoring.h>
 #include <IMP/bff/TopologyBuild.h>

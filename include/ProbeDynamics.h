@@ -34,8 +34,6 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-//! Boltzmann's constant in kcal/mol/K, spelled once.
-IMPBFFEXPORT double kb_kcal();
 
 //! Give particles the decorators an integrator needs.
 /*!
