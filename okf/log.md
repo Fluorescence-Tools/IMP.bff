@@ -10850,3 +10850,11 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   seven flipped verdict at load 13–18). Provisional baseline in `okf/validation/av_solver_baseline.md`.
 - **Fork**: `tpeulen/IMP.bff` created (public, parent `Fluorescence-Tools/IMP.bff`), remote `fork` added. Owner
   decision: commit locally on `independent-core`, **do not push yet**. Layout stays flat (IMP-compatible); merges only.
+- **PRD-138 merges done** (imp-bff-ce): 14 commits on `independent-core`, 97 → 75 headers, 106 → 76 sources,
+  40 → 35 topic `.i`; suite 1780/0 after each. Lessons: SWIG `%include` is first-wins, so a merge that folds a
+  late-wrapped header into an early-wrapped one must move the survivor *late* and carry the value declarations
+  with it (Rotamer, FRET); typemaps are global, so headers can move freely past them (Quenching); a header-only
+  merge does not reconfigure — run `cmake .` (Cif). Narrowed rows: QuenchingModel (cycle via InteractionTerms),
+  FPSExport/Project, ProbeDynamics, ProbeNetworkRestraint (IMP-side, PRD-137), and `AVModel` → `States` +
+  `AVModel` after the owner objected that an AV is one representation ("there are also rotamers"). Pre-existing,
+  uncollected failure noted on the board: `medium_test_av.py` / `States.pRDA()`. Build lock released.
