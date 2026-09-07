@@ -18,7 +18,7 @@
  * earlier batch.
  *
  * **One backbone frame** serves both halves of the package: `backbone_rotation`
- * in `RotamerSite.h`, which places rotamer libraries, is the flat-matrix view
+ * in `Rotamer.h`, which places rotamer libraries, is the flat-matrix view
  * of `backbone_frame`, which places explicit probes. One atom-name accessor
  * too: `atom_name` in `HierarchyFrame.h`.
  *

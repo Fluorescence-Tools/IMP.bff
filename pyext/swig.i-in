@@ -921,9 +921,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 
 
 
-/* Scoring: how hard a conformer collides with its structure. */
-%include "IMP/bff/RotamerEnergy.h"
-
 /* The coarse-grained system, typed: what cgprobe builds and simulates. */
 %include "IMP_bff.forcefield.i"
 
@@ -1016,9 +1013,6 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 /* The cgprobe topology builder: force-field system assembly, graph helpers. */
 %include "IMP_bff.topology.i"
 
-/* The rotamer library, ensemble, and FRET driver. */
-%include "IMP_bff.rotamer.i"
-
 /* The cgprobe samplers: linker Metropolis, rotamer libraries, RRT, kinetics. */
 %include "IMP_bff.sampling.i"
 
@@ -1101,9 +1095,10 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    psi) rather than an ensemble and so has kinds of its own. */
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
 
-/* RotamerEnsemble subclasses States (a SWIG value type), so it is defined
-   here -- after all SWIG types -- rather than in the main rotamer.i block. */
-%include "IMP_bff.rotamer_ensemble.i"
+/* The rotamer layer, all of it: RotamerEnsemble subclasses States (a SWIG
+   value type) and returns the FRET pair values, so the whole header waits
+   until after both. */
+%include "IMP_bff.rotamer.i"
 
 /* The coarse-grained protein potentials: contacts, sterics, solvation. After
    the accessible-surface kernels it composes and the residue types it reads. */

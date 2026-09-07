@@ -5,7 +5,7 @@
  *
  * The inner kernels (all-pairs steric/electrostatic energy, the pair energy
  * matrix, the per-frame LJ over an explicit pair list) are in
- * \ref RotamerEnergy.h. What lives here is the orchestration around them: the
+ * \ref Rotamer.h (its RotamerEnergy section). What lives here is the orchestration around them: the
  * CHARMM36 parameter table and the Lorentz-Berthelot combining rules, the
  * Boltzmann weight, the axis-aligned bounding-box pre-filter, and the
  * end-to-end rotamer score that builds masks, assembles parameters, calls the
@@ -111,7 +111,7 @@ IMPBFFEXPORT double lj_pairs_sum(const std::vector<double>& coords_a,
 //! The conformer-pair energy matrix between two sets, AABB-prefiltered.
 /*!
     Builds the Lorentz-Berthelot cross parameters for
-    `elements_a x elements_b` and calls the kernel in RotamerEnergy.h.
+    `elements_a x elements_b` and calls the kernel in Rotamer.h.
 
     \param[in] coords_a flat, `n_a_conf * n_a_atoms * 3`
     \param[in] coords_b flat, `n_b_conf * n_b_atoms * 3`

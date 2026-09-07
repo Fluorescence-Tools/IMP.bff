@@ -1,7 +1,7 @@
 /*
  * Stage-2 scoring.
  *
- * The inner kernels are in RotamerEnergy.h, wrapped directly in swig.i-in;
+ * The inner kernels are in Rotamer.h, wrapped in rotamer.i;
  * the orchestration -- the CHARMM36 table, the Lorentz-Berthelot rules, the
  * Boltzmann weight, the AABB pre-filter, the masks and selectors, the
  * end-to-end rotamer score, the mean-field updates and the typed-system

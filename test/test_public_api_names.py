@@ -41,8 +41,8 @@ FLAT_NAMES = [
     "build_probe_protein_system",      # topology (C++, TopologyBuild.h)
     "probe_forcefield_system",         # topology (C++, TopologyBuild.h)
     "AttachedProbeDynamics",            # sampling (pythoncode, flat)
-    "RotamerEnsemble",               # rotamer_ensemble (C++, RotamerEnsemble.h)
-    "RotamerFRET",                   # rotamer_ensemble (C++, RotamerFret.h)
+    "RotamerEnsemble",               # rotamer_ensemble (C++, Rotamer.h)
+    "RotamerFRET",                   # rotamer_ensemble (C++, Rotamer.h)
     "load_rotamer_library",          # rotamer (C++, RotamerSite.h)
     # `build_system_from_specs` was here. It was the `build-system` command's
     # body -- build a system, write the CIF, print what it holds -- so it is

@@ -3,13 +3,13 @@
  *  \brief Stage-2 scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, and
  *         the end-to-end rotamer score.
  *
- * The inner kernels are in RotamerEnergy.cpp; this file is the layer that
+ * The inner kernels are in Rotamer.cpp (the RotamerEnergy section); this file is the layer that
  * builds parameters, calls them, and turns the energies into weights.
  */
 
 #include <IMP/bff/Scoring.h>
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/RotamerEnergy.h>
+#include <IMP/bff/Rotamer.h>
 #include <IMP/bff/ZMatrix.h>
 
 #include <IMP/algebra/vector_generators.h>

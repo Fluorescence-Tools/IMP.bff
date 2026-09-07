@@ -10,7 +10,7 @@
  * another's.
  *
  * \note One frame serves both halves of the package: `backbone_rotation` in
- * `RotamerSite.h`, which places rotamer libraries, is a view of this one,
+ * `Rotamer.h`, which places rotamer libraries, is a view of this one,
  * which places explicit probes.
  *
  * \authors Thomas-Otavio Peulen
