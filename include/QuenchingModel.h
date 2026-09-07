@@ -38,7 +38,7 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
-#include <IMP/bff/ProbeDiffusion.h>
+#include <IMP/bff/ProbeSampling.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/LifetimeSpectrum.h>
 #include <IMP/bff/Quenching.h>

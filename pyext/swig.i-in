@@ -1074,10 +1074,8 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    model's precision. */
 %include "IMP_bff.avmeandistance.i"
 
-/* The particle picture of a tethered dye. */
-%include "IMP_bff.probediffusion.i"
-
-/* Sampling a tethered dye: the walk, the photons, the equilibrium. */
+/* The particle picture of a tethered dye: the walk, the photons, the
+   equilibrium, as kernels and as an object. */
 %include "IMP_bff.probesampling.i"
 
 /* ...and the field picture. */
