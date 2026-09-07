@@ -20,7 +20,7 @@
 #include <IMP/core/XYZ.h>
 #include <IMP/bff/internal/json.h>
 #include <IMP/atom/Hierarchy.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <Eigen/Dense>
 

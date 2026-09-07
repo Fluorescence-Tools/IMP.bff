@@ -4,7 +4,7 @@ Two things changed when this moved to C++, and only one of them is a port.
 
 **The port.** Every conformer of one dye against every conformer of another is
 an all-pairs problem with a bounding-box pre-filter, and it is now
-``rotamer_pair_energy_matrix``. Single dye, 60 clusters x 14 atoms against 900
+``pair_energy_matrix_kernel``. Single dye, 60 clusters x 14 atoms against 900
 protein atoms: 27 ms -> 7 ms.
 
 **The algorithm.** Those energies do not depend on the weights, so they are
@@ -31,7 +31,7 @@ from IMP.bff import (
     lj_pairs_sum,
     pair_energy_matrix,
     rotamer_mean_field_weights,
-    rotamer_mean_field_weights_multi_dye,
+    rotamer_mean_field_weights_multi_probe,
 )
 
 
@@ -139,7 +139,7 @@ def test_multi_dye_weights_are_normalised_per_dye():
     els = [list(rng.choice(["C", "N", "O"], 5)), list(rng.choice(["S", "C", "H"], 8))]
     w0s = [np.full(14, 1 / 14), np.full(11, 1 / 11)]
 
-    out = rotamer_mean_field_weights_multi_dye(rots, w0s, prot, els, pe)
+    out = rotamer_mean_field_weights_multi_probe(rots, w0s, prot, els, pe)
     assert len(out) == 2
     for w, n in zip(out, (14, 11)):
         assert w.shape == (n,)
@@ -158,7 +158,7 @@ def test_dyes_far_apart_do_not_influence_each_other():
     els = [["C", "N", "O", "S"], ["C", "N", "O", "S"]]
     w0 = [np.full(10, 0.1), np.full(9, 1 / 9)]
 
-    joint = rotamer_mean_field_weights_multi_dye([a, b], w0, prot, els, pe)
+    joint = rotamer_mean_field_weights_multi_probe([a, b], w0, prot, els, pe)
     alone = rotamer_mean_field_weights(a, w0[0], prot, els[0], pe)
     np.testing.assert_allclose(joint[0], alone, rtol=1e-12, atol=1e-15)
 

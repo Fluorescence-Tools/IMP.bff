@@ -50,10 +50,10 @@ def _cube(fn, density, *args):
     return np.asarray(fn(_flat(density), *args)).reshape(ng, ng, ng)
 
 
-def _qrmap(density, r0, dg, atoms_xyz, kQ, rC, tau0, dye_radius):
+def _qrmap(density, r0, dg, atoms_xyz, kQ, rC, tau0, probe_radius):
     return _cube(maps.quenching_rate_map, density, _flat(r0), float(dg),
                  _flat(atoms_xyz), _flat(kQ), _flat(rC), float(tau0),
-                 float(dye_radius))
+                 float(probe_radius))
 
 
 def _dcmap(density, r0, dg, atoms_xyz, free_diffusion, min_distance,

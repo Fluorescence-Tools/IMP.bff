@@ -285,7 +285,7 @@ class TestComputeAvBackends:
         assert av.points.shape[1] == 4
 
     def test_the_volume_sits_on_the_attachment_site(self):
-        """Regression: the map used to be left at the coordinate origin.
+        """Regression: the map must not be left at the coordinate origin.
 
         With `shift_xyz=False` and the AV decorated onto the source particle
         itself, the header origin came back (0, 0, 0) and most of the grid was

@@ -2,17 +2,11 @@
  *  \file IMP/bff/Potentials.h
  *  \brief The coarse-grained protein potentials, as IMP scores and restraints.
  *
- * One family, ported from two places that had grown copies of it: the kernels
- * were `numba.njit` functions in `IMP.cgmol.{statpot,sterics,solvation}`
- * (imp-tricks) and the objects around them were classes in chisurf's
- * `structure/potential/potentials.py`, which imported the kernels -- so the
- * arithmetic had one home and the API another, and neither was C++.
- *
- * **They are IMP scores here, not a second scoring world.** The Python passed
- * flat coordinate arrays, a residue lookup table and a C-alpha distance matrix
- * from function to function; IMP has all three already -- particles in a
- * #IMP::Model, an #IMP::atom::Hierarchy over them, and
- * #IMP::container::ClosePairContainer for the pair loop with its cutoff. So:
+ * **These are IMP scores, not a second scoring world.** A coarse-grained
+ * potential needs coordinates, a residue lookup and a pair loop with a cutoff,
+ * and IMP has all three -- particles in a #IMP::Model, an
+ * #IMP::atom::Hierarchy over them, and #IMP::container::ClosePairContainer.
+ * So:
  *
  *  - the typed contact potentials are #IMP::core::StatisticalPairScore
  *    subclasses, the same shape #IMP::atom::DopePairScore has, with a
@@ -29,12 +23,10 @@
  * numpy should not have to build a model to score one -- and because they are
  * what the parity tests pin.
  *
- * **Distances are plain, everywhere.** The Python passed a C-alpha distance
- * matrix that `atom_dist` filled with `sqrt(...)` and then compared against
- * *squared* cutoffs, so three of its prefilters never engaged. For the contact
- * and surface terms that cost only time; for the hydrogen bond it meant the
- * advertised 8 A C-alpha cutoff was not applied at all. It is applied here;
- * see `okf/validation/hbond_ca_cutoff.md`.
+ * **Distances are plain, everywhere.** Every C-alpha distance is a distance,
+ * not a squared one, and each kernel squares what it needs. Mixing the two is
+ * how a prefilter silently stops filtering -- the hydrogen bond's 8 A C-alpha
+ * cutoff is the documented case, `okf/validation/hbond_ca_cutoff.md`.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -53,9 +45,7 @@
 #include <IMP/atom/Hierarchy.h>
 #include <IMP/atom/Residue.h>
 #include <IMP/core/StatisticalPairScore.h>
-#include <IMP/object_macros.h>
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <vector>
@@ -169,10 +159,10 @@ public:
 /*!
     A distance-binned energy per residue-type pair -- the GBV side-chain
     potential -- which is #IMP::core::StatisticalPairScore exactly. The
-    repulsion the Python applied below `min_dist` and the clamp it applied
-    above `max_dist` are **in the table**: the bins below the minimum hold the
-    penalty and the bins above the last measured distance repeat it, so the
-    behaviour is the data's and not a branch in a loop.
+    repulsion below `min_dist` and the clamp above `max_dist` are **in the
+    table**: the bins below the minimum hold the penalty and the bins above the
+    last measured distance repeat it, so the behaviour is the data's and not a
+    branch in a loop.
 
     The shipped table is in kcal/mol; multiply the restraint's weight by 0.593
     for kT at 298 K, which is what chisurf's `CEPotential` did.
@@ -356,9 +346,9 @@ public:
 
     \note The shift that smooths the cutoff uses `cutoff` where the squared
     distance would be dimensionally right (`sqrt(cutoff + ...)`, not
-    `sqrt(cutoff^2 + ...)`). That is what the Python did, in both repos, and
-    changing it would move every energy this has ever produced; it is kept, and
-    said out loud here.
+    `sqrt(cutoff^2 + ...)`). That is what the reference implementations do,
+    and changing it would move every energy this has ever produced; it is kept
+    deliberately, and said out loud here.
 */
 class IMPBFFEXPORT GeneralizedBornRestraint : public IMP::Restraint {
     IMP::ParticleIndexes pis_;
@@ -453,7 +443,7 @@ IMPBFFEXPORT IMP::Restraint* build_clash_restraint(
     an #IMP::core::Harmonic at the value the reference has. chisurf's
     `internal_potential` summed \f$k(x - x_0)^2\f$ over the three; an IMP
     harmonic scores \f$\frac{1}{2}k(x-x_0)^2\f$, so the constants here are
-    twice the Python's and the energy is the same.
+    twice the reference's and the energy is the same.
 
     \note #IMP::atom::CAAngleRestraint and #IMP::atom::CADihedralRestraint are
     IMP's *statistical* C-alpha terms -- a score per angle bin. These are the

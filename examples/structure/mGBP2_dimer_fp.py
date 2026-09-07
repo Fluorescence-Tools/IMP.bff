@@ -212,7 +212,8 @@ output_objects.append(fret_restraint)
 
 # # %%
 # # Adds the AV to the atom Hierarchy to display the dye mean position:
-# used_avs = fret_restraint.av_network_restraint.get_used_avs()
+# net = IMP.bff.ProbeNetworkRestraint(hier, fps_json_fn)
+# used_avs = net.get_used_avs()
 # (display_mean_av_positions went with representation/av.py)
 
 # %%

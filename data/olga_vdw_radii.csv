@@ -1,0 +1,174 @@
+# Olga's van der Waals radii, keyed by PDB atom name.
+#
+# Provenance
+# ----------
+#   upstream file : Olga/src/vdWRadii.json  (128 entries; 131 lines, of which
+#                   "H1", "H2" and "H3" appear twice with identical values)
+#   upstream repo : Fluorescence-Tools/Olga -- the FRET-restrained structural
+#                   modelling program by Mykola Dimura et al., the program that
+#                   produced the Zenodo 3376527 T4L screening table
+#                   (Sanabria et al., Nat. Commun. 11, 1231 (2020)).
+#   local checkout: ../ucfret/thirdparty/olga/src/vdWRadii.json
+#   loader        : Olga/src/AV/Position.cpp:79-110, loadvdWRadii/pterosVDW.
+#   licence       : Olga is GPL-3.0. Only the numeric table is vendored here,
+#                   as data; no Olga code is copied into this module.
+#
+# Unit -- nanometre upstream, Angstrom here
+# -----------------------------------------
+# The upstream JSON is in NANOMETRES: pteros stores coordinates in nm, and
+# Olga converts both coordinate and radius on the same line when it builds the
+# (x, y, z, vdW) array the AV kernel consumes:
+#
+#     Olga/src/AV/Position.cpp:118-124, coordsVdW()
+#         xyzw.emplace_back(frame.coord.at(i)[0] * 10.0f,
+#                           frame.coord.at(i)[1] * 10.0f,
+#                           frame.coord.at(i)[2] * 10.0f,
+#                           pterosVDW(system, i) * 10.0f);
+#
+# so calculateAV() -- and every linker length, linker width and dye radius
+# beside it -- works in ANGSTROM. IMP.bff works in Angstrom too, so the table
+# is stored here already multiplied by 10: carbon 0.17 nm -> 1.70 A, which is
+# the Bondi carbon radius and the same number FPS's own vdW.txt carries.
+#
+# Unknown atom names
+# ------------------
+# Olga does NOT fall back to an element lookup. pterosVDW is
+#     vdWRMap.value(name, 0.15)
+# (Position.cpp:110), i.e. a flat 0.15 nm = 1.50 A for any atom name not in
+# this table -- smaller than every heavy atom in it. That fallback is Olga's
+# code, not its table, so it is not a row here; see
+# IMP::bff::get_olga_vdw_fallback_radius().
+#
+# This file is DERIVED from the C++ table in src/VdwRadii.cpp by
+# IMP::bff::olga_vdw_radii_csv(); test/representation/test_olga_vdw_radii.py
+# regenerates it and fails on drift. Edit the C++ table, not this file.
+#
+atom_name,radius_angstrom
+C,1.7000
+C1',1.7000
+C2,1.7000
+C2',1.7000
+C3',1.7000
+C4,1.7000
+C4',1.7000
+C5,1.7000
+C5',1.7000
+C6,1.7000
+C8,1.7000
+CA,1.7000
+CB,1.7000
+CD,1.7000
+CD1,1.7000
+CD2,1.7000
+CE,1.7000
+CE1,1.7000
+CE2,1.7000
+CE3,1.7000
+CG,1.7000
+CG1,1.7000
+CG2,1.7000
+CH2,1.7000
+CZ,1.7000
+CZ2,1.7000
+CZ3,1.7000
+H,1.0000
+H1,1.0000
+H1',1.0000
+H2,1.0000
+H2',1.0000
+H21,1.0000
+H22,1.0000
+H3,1.0000
+H3',1.0000
+H4',1.0000
+H41,1.0000
+H42,1.0000
+H5,1.0000
+H5',1.0000
+H5'',1.0000
+H6,1.0000
+H61,1.0000
+H62,1.0000
+H8,1.0000
+HA,1.0000
+HA2,1.0000
+HA3,1.0000
+HB,1.0000
+HB1,1.0000
+HB2,1.0000
+HB3,1.0000
+HD1,1.0000
+HD11,1.0000
+HD12,1.0000
+HD13,1.0000
+HD2,1.0000
+HD21,1.0000
+HD22,1.0000
+HD23,1.0000
+HD3,1.0000
+HE,1.0000
+HE1,1.0000
+HE2,1.0000
+HE21,1.0000
+HE22,1.0000
+HE3,1.0000
+HG,1.0000
+HG1,1.0000
+HG11,1.0000
+HG12,1.0000
+HG13,1.0000
+HG2,1.0000
+HG21,1.0000
+HG22,1.0000
+HG23,1.0000
+HG3,1.0000
+HH,1.0000
+HH11,1.0000
+HH12,1.0000
+HH2,1.0000
+HH21,1.0000
+HH22,1.0000
+HO2',1.0000
+HO3',1.0000
+HO5',1.0000
+HZ,1.0000
+HZ1,1.0000
+HZ2,1.0000
+HZ3,1.0000
+N,1.6250
+N1,1.6250
+N2,1.6250
+N3,1.6250
+N4,1.6250
+N6,1.6250
+N7,1.6250
+N9,1.6250
+ND1,1.6250
+ND2,1.6250
+NE,1.6250
+NE1,1.6250
+NE2,1.6250
+NH1,1.6250
+NH2,1.6250
+NZ,1.6250
+O,1.4900
+O2,1.4900
+O2',1.4900
+O3',1.4900
+O4,1.4900
+O4',1.4900
+O5',1.4900
+O6,1.4900
+OD1,1.4900
+OD2,1.4900
+OE1,1.4900
+OE2,1.4900
+OG,1.4900
+OG1,1.4900
+OH,1.4900
+OP1,1.4900
+OP2,1.4900
+OXT,1.4900
+P,1.8600
+SD,1.7820
+SG,1.7820

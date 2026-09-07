@@ -8,9 +8,6 @@
  * *multiplies* (identity 1) and rates *add* (identity 0), because rates of
  * parallel channels add.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
- *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *

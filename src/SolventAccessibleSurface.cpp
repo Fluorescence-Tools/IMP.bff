@@ -6,6 +6,7 @@
  */
 #include <IMP/bff/SolventAccessibleSurface.h>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -75,6 +76,63 @@ std::vector<double> solvent_accessible_surface_area(
             if (accessible) ++n_accessible;
         }
         asa[i] = c * static_cast<double>(n_accessible) * vdw[p] * vdw[p];
+    }
+    return asa;
+}
+
+std::vector<double> solvent_accessible_surface_area_per_atom(
+        const std::vector<double>& xyz, const std::vector<double>& vdw,
+        const std::vector<int>& probe_atom_indices,
+        const std::vector<double>& points, double probe) {
+    const std::size_t n_probe = probe_atom_indices.size();
+    const std::size_t n_sphere = points.size() / 3;
+    const std::size_t n_atoms = xyz.size() / 3;
+    std::vector<double> asa(n_probe, 0.0);
+    if (n_probe == 0 || n_sphere == 0 || n_atoms == 0) return asa;
+
+    // The largest sphere any atom is sampled on, so one cutoff serves all.
+    double r_max = 0.0;
+    for (std::size_t a = 0; a < n_atoms; ++a) r_max = std::max(r_max, vdw[a]);
+
+    const double c = 4.0 * M_PI / static_cast<double>(n_sphere);
+    std::vector<std::size_t> neighbours(n_atoms);
+
+    for (std::size_t i = 0; i < n_probe; ++i) {
+        const std::size_t p = static_cast<std::size_t>(probe_atom_indices[i]);
+        const double rp = vdw[p] + probe;
+        const double ax = xyz[3 * p + 0], ay = xyz[3 * p + 1], az = xyz[3 * p + 2];
+        // A sample sits rp from p and is occluded within (r_b + probe) of b,
+        // so only atoms closer than rp + r_max + probe can occlude anything.
+        const double cut = rp + r_max + probe;
+        const double cut2 = cut * cut;
+        std::size_t n_neighbour = 0;
+        for (std::size_t a = 0; a < n_atoms; ++a) {
+            if (a == p) continue;
+            const double dx = ax - xyz[3 * a + 0];
+            const double dy = ay - xyz[3 * a + 1];
+            const double dz = az - xyz[3 * a + 2];
+            if (dx * dx + dy * dy + dz * dz < cut2) neighbours[n_neighbour++] = a;
+        }
+        std::size_t n_accessible = 0;
+        for (std::size_t j = 0; j < n_sphere; ++j) {
+            const double sx = points[3 * j + 0] * rp + ax;
+            const double sy = points[3 * j + 1] * rp + ay;
+            const double sz = points[3 * j + 2] * rp + az;
+            bool accessible = true;
+            for (std::size_t k = 0; k < n_neighbour; ++k) {
+                const std::size_t b = neighbours[k];
+                const double rb = vdw[b] + probe;
+                const double dx = sx - xyz[3 * b + 0];
+                const double dy = sy - xyz[3 * b + 1];
+                const double dz = sz - xyz[3 * b + 2];
+                if (dx * dx + dy * dy + dz * dz < rb * rb) {
+                    accessible = false;
+                    break;
+                }
+            }
+            if (accessible) ++n_accessible;
+        }
+        asa[i] = c * static_cast<double>(n_accessible) * rp * rp;
     }
     return asa;
 }

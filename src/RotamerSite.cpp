@@ -6,13 +6,16 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/RotamerSite.h>
+#include <IMP/bff/RotamerLibrary.h>
+#include <IMP/bff/ProbeSampling.h>
+#include <IMP/bff/internal/Text.h>
 
 #include <IMP/bff/Scoring.h>
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/json.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cctype>
@@ -51,6 +54,28 @@ bool rs_exists(const std::string& path) {
     return in.good();
 }
 
+//! The family containers a rotamer library may be filed in, in the order
+//! they are consulted. Named rather than globbed: a directory listing is the
+//! one thing this lookup cannot do portably, and three names are the whole
+//! shipped set. A container that is not there is simply skipped.
+const char* const kFamilies[] = {"dyes", "spinlabels", "sidechains"};
+
+//! `dyes.drot.pto::A48_C1R_cutoff10` when a family container holds
+//! `library`, otherwise empty. Only each catalog is read.
+std::string library_in_family(const std::string& data_dir,
+                              const std::string& library) {
+    for (std::size_t i = 0; i < sizeof(kFamilies) / sizeof(kFamilies[0]); ++i) {
+        const std::string path =
+                data_dir + "/" + kFamilies[i] + ".drot.pto";
+        if (!rs_exists(path)) continue;
+        const std::vector<std::string> listed = drot_catalog(path);
+        for (std::size_t j = 0; j < listed.size(); ++j) {
+            if (listed[j] == library) return path + "::" + library;
+        }
+    }
+    return std::string();
+}
+
 //! The registry, read once. Throws through the caller when unreadable.
 const nlohmann::json& registry() {
     static const nlohmann::json cached = [] {
@@ -65,6 +90,12 @@ const nlohmann::json& registry() {
     }();
     return cached;
 }
+
+}  // namespace
+
+std::string rotamer_library_registry() { return registry().dump(); }
+
+namespace {
 
 //! The registry's entry for a key, with the resolved spelling added.
 nlohmann::json entry_for(const std::string& key, const std::string& asked) {
@@ -278,6 +309,31 @@ std::string rotamer_library_metadata(const std::string& name) {
     return entry_for(normalize_library_name(name), name).dump();
 }
 
+std::string rotamer_library_metadata_for_path(const std::string& path) {
+    // basename, extension off
+    std::string stem = path;
+    const std::size_t slash = stem.find_last_of("/\\");
+    if (slash != std::string::npos) stem = stem.substr(slash + 1);
+    const std::size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos) stem = stem.substr(0, dot);
+
+    const int cutoff = library_name_cutoff(stem);
+    const std::string base = strip_cutoff(stem);
+    const nlohmann::json& reg = registry();
+    for (nlohmann::json::const_iterator it = reg.begin(); it != reg.end();
+         ++it) {
+        const std::string filename = it.value().value("filename",
+                                                      std::string());
+        if (strip_cutoff(filename) != base) continue;
+        nlohmann::json out = it.value();
+        out["name"] = it.key();
+        out["library_name"] = it.key();
+        out["cutoff"] = cutoff < 0 ? nlohmann::json() : nlohmann::json(cutoff);
+        return out.dump();
+    }
+    return nlohmann::json::object().dump();
+}
+
 std::string library_filename(const std::string& metadata_json, int cutoff) {
     const nlohmann::json meta = nlohmann::json::parse(metadata_json);
     const std::string base = meta.value("filename", std::string());
@@ -297,8 +353,22 @@ std::string resolve_rotamer_library_path(const std::string& name,
     const std::string stem = strip_cutoff(filename);
 
     // The canonical FRETpredict set first: the requested cutoff is the one
-    // loaded here, not whatever the RMF templates happen to hold.
+    // loaded here, not whatever the RMF templates happen to hold. Within it
+    // `.drot` wins over `.bcif` -- it is the shipped form (PRD-118) and it
+    // carries its own template, so unlike the frame store it needs no `.pdb`
+    // beside it.
+    //
+    // The libraries ship one container per family, so the answer for a dye is
+    // usually a locator into `dyes.drot.pto` rather than a file of its own.
+    // A standalone container still wins when one is there: that is how a user
+    // drops their own library in beside the shipped set.
     const std::string data_dir = get_data_path("rotamer_library");
+    const std::string pto = data_dir + "/" + filename + ".drot.pto";
+    if (rs_exists(pto)) return pto;
+    const std::string drot = data_dir + "/" + filename + ".drot";
+    if (rs_exists(drot)) return drot;
+    const std::string in_family = library_in_family(data_dir, filename);
+    if (!in_family.empty()) return in_family;
     const std::string canonical = data_dir + "/" + filename + ".bcif";
     if (rs_exists(canonical) &&
         rs_exists(data_dir + "/" + stem + ".pdb")) {
@@ -307,9 +377,11 @@ std::string resolve_rotamer_library_path(const std::string& name,
 
     const std::string template_dir =
             lib_dir.empty() ? get_template_dir("rotamer") : lib_dir;
-    // the Python order: the cutoff-specific file first, then the RMF
+    // most specific first: the cutoff-specific file, then the RMF
     // templates, then the plain PDBs
     const std::string candidates[] = {
+            template_dir + "/" + filename + ".drot.pto",
+            template_dir + "/" + filename + ".drot",
             template_dir + "/" + filename + ".bcif",
             template_dir + "/" + filename + ".rmf3",
             template_dir + "/" + stem + ".rmf3",
@@ -332,6 +404,221 @@ std::string resolve_rotamer_library_path(const std::string& name,
         return path;
     }
     IMP_THROW("No rotamer library found for '" << name << "'", IOException);
+}
+
+// --------------------------------------------------------------------------
+// Reading a library
+// --------------------------------------------------------------------------
+
+namespace {
+
+//! The directory part of a path, or "." when it has none.
+std::string rs_dirname(const std::string& path) {
+    const std::size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos) return std::string(".");
+    return path.substr(0, slash);
+}
+
+//! The file part of a path.
+std::string rs_basename(const std::string& path) {
+    const std::size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos) return path;
+    return path.substr(slash + 1);
+}
+
+//! A library file's stem: its name without a cutoff suffix or extensions.
+/*! `A48_C1R_cutoff10.drot.pto` -> `A48_C1R`, which is what the shared `.pdb`
+    template beside it is named. */
+std::string rs_library_stem(const std::string& file_name) {
+    std::string stem = file_name;
+    const std::size_t dot = stem.find('.');
+    if (dot != std::string::npos) stem = stem.substr(0, dot);
+    const std::size_t cut = stem.find("_cutoff");
+    if (cut != std::string::npos) stem = stem.substr(0, cut);
+    return stem;
+}
+
+//! The residue names of a PDB's atom records, in file order.
+std::vector<std::string> rs_resnames_from_pdb(const std::string& path) {
+    std::vector<std::string> out;
+    std::ifstream in(path);
+    if (!in) return out;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.compare(0, 6, "ATOM  ") != 0 &&
+            line.compare(0, 6, "HETATM") != 0) {
+            continue;
+        }
+        if (line.size() < 20) continue;
+        out.push_back(internal::trimmed(line.substr(17, 3)));
+        if (out.size() >= 10000) break;
+    }
+    return out;
+}
+
+//! The bundled `<stem>.pdb` a registry entry's `filename` names, or "".
+std::string rs_pdb_for_metadata(const nlohmann::json& meta) {
+    if (!meta.is_object() || !meta.contains("filename")) return std::string();
+    const std::string filename = meta["filename"].is_string()
+                                         ? meta["filename"].get<std::string>()
+                                         : std::string();
+    const std::string stem = rs_library_stem(filename);
+    if (stem.empty()) return std::string();
+    const std::string dir = get_data_path("rotamer_library");
+    const std::string candidates[2] = {dir + "/" + stem + ".pdb",
+                                       dir + "/" + filename + ".pdb"};
+    for (int i = 0; i < 2; ++i) {
+        if (rs_exists(candidates[i])) return candidates[i];
+    }
+    return std::string();
+}
+
+}  // namespace
+
+std::vector<std::string> infer_rotamer_resnames(
+        const std::vector<std::string>& atom_names,
+        const std::string& metadata_json) {
+    std::vector<std::string> out;
+    nlohmann::json meta = nlohmann::json::parse(metadata_json, NULL, false);
+    if (meta.is_discarded() || !meta.is_object()) return out;
+
+    // The dye's residue name is whatever its own selectors name.
+    std::vector<std::string> selectors;
+    const char* keys[4] = {"mu", "r", "positive", "negative"};
+    for (int k = 0; k < 4; ++k) {
+        if (!meta.contains(keys[k]) || meta[keys[k]].is_null()) continue;
+        const nlohmann::json& v = meta[keys[k]];
+        if (v.is_string()) {
+            selectors.push_back(v.get<std::string>());
+        } else if (v.is_array()) {
+            for (nlohmann::json::const_iterator it = v.begin(); it != v.end();
+                 ++it) {
+                if (it->is_string()) selectors.push_back(it->get<std::string>());
+            }
+        }
+    }
+    const std::vector<std::string> resnames = selector_resnames(selectors);
+    if (resnames.empty()) return out;
+    const std::string dye_resname = resnames[0];
+
+    // The linker's is the registry name's suffix: `A48_C1R` -> `C1R`.
+    std::string linker_resname;
+    const std::string name = meta.contains("name") && meta["name"].is_string()
+                                     ? meta["name"].get<std::string>()
+                                     : std::string();
+    const std::size_t underscore = name.find_last_of('_');
+    if (underscore != std::string::npos && underscore + 1 < name.size()) {
+        const std::string tail = name.substr(underscore + 1);
+        const bool shaped =
+                (tail.size() == 3 || tail.size() == 4) &&
+                std::isupper(static_cast<unsigned char>(tail[0])) &&
+                tail[tail.size() - 1] == 'R' &&
+                std::isupper(static_cast<unsigned char>(tail[tail.size() - 2]));
+        if (shaped) linker_resname = tail;
+    }
+    if (linker_resname.empty()) {
+        out.assign(atom_names.size(), dye_resname);
+        return out;
+    }
+
+    // The linker's atoms, which the FRETpredict libraries name identically in
+    // every dye. An atom outside the set is the dye's.
+    static const char* kLinkerAtoms[] = {
+            "CA", "HA", "C",  "O",  "C6",  "H10", "H11", "S1",  "C7",
+            "C8", "H12", "C9", "O3", "N3",  "C10", "O4",  "C11", "H13",
+            "H14", "C12", "H15", "H16", "C13", "H17", "H18", "C14", "H19",
+            "H20", "C15", "H21", "H22", "N99", "H23", "N",   "H",   "HX2",
+            "HX3"};
+    const std::size_t n_linker = sizeof(kLinkerAtoms) / sizeof(kLinkerAtoms[0]);
+    out.reserve(atom_names.size());
+    for (std::size_t i = 0; i < atom_names.size(); ++i) {
+        bool is_linker = false;
+        for (std::size_t j = 0; j < n_linker; ++j) {
+            if (atom_names[i] == kLinkerAtoms[j]) {
+                is_linker = true;
+                break;
+            }
+        }
+        out.push_back(is_linker ? linker_resname : dye_resname);
+    }
+    return out;
+}
+
+RotamerLibrary load_rotamer_library(const std::string& name,
+                                    const std::string& lib_dir) {
+    const std::string locator = resolve_rotamer_library_path(name, lib_dir);
+    // A locator addresses one library inside a family container
+    // (`dyes.drot.pto::A48_C1R_cutoff10`); a plain path is a container of its
+    // own. `read_drot` takes either, but everything here that reasons about
+    // the file -- its suffix, its sidecars -- wants the container.
+    std::string container = locator, inside;
+    const std::size_t sep = locator.find("::");
+    if (sep != std::string::npos) {
+        container = locator.substr(0, sep);
+        inside = locator.substr(sep + 2);
+    }
+
+    // A path names its dye only through the registry: the coordinates are in
+    // the file, the transition-dipole and attachment selectors are not.
+    const std::string metadata = rs_exists(name)
+                                         ? rotamer_library_metadata_for_path(
+                                                   container)
+                                         : rotamer_library_metadata(name);
+    nlohmann::json meta = nlohmann::json::parse(metadata, NULL, false);
+    if (meta.is_discarded()) meta = nlohmann::json::object();
+
+    const std::string dir = rs_dirname(container);
+    const std::string file_name = rs_basename(container);
+    RotamerLibrary lib;
+    std::string sidecar_pdb;
+
+    if (internal::ends_with(file_name, ".drot") ||
+        internal::ends_with(file_name, ".drot.pto")) {
+        // The shipped form (PRD-118): the template, the Z-matrix and the
+        // per-conformer internal coordinates in one container, so nothing
+        // beside it is read -- names, residues and elements are all in it.
+        lib = read_drot(locator);
+        // `.drot` keeps the weights the encoder found (cluster populations);
+        // this loader's contract is the normalised form.
+        normalize_weights_in_place(lib.weights);
+        sidecar_pdb = dir + "/" +
+                      rs_library_stem(inside.empty() ? file_name : inside) +
+                      ".pdb";
+    } else if (internal::ends_with(file_name, ".bcif") ||
+               internal::ends_with(file_name, ".dcd")) {
+        // FRETpredict's library set: `<stem>.pdb` for the names and residues,
+        // frames beside it, and per-rotamer weights in a text file.
+        sidecar_pdb = dir + "/" + rs_library_stem(file_name) + ".pdb";
+        std::string stem_with_cutoff = file_name;
+        const std::size_t dot = stem_with_cutoff.find_last_of('.');
+        if (dot != std::string::npos) {
+            stem_with_cutoff = stem_with_cutoff.substr(0, dot);
+        }
+        const std::string weights = dir + "/" + stem_with_cutoff +
+                                    "_weights.txt";
+        lib = load_rotamer_library_trajectory(
+                sidecar_pdb, container, rs_exists(weights) ? weights : "");
+    } else {
+        IMP_THROW("Unsupported rotamer library file: "
+                          << container
+                          << " (an .rmf3 template is read through "
+                             "read_rotamer_library_rmf, which needs IMP.rmf)",
+                  ValueException);
+    }
+
+    lib.path = locator;
+    lib.metadata = meta.dump();
+    if (lib.resnames.empty() && rs_exists(sidecar_pdb)) {
+        lib.resnames = rs_resnames_from_pdb(sidecar_pdb);
+    }
+    if (lib.resnames.empty()) {
+        const std::string bundled = rs_pdb_for_metadata(meta);
+        if (!bundled.empty()) lib.resnames = rs_resnames_from_pdb(bundled);
+    }
+    if (lib.resnames.empty()) {
+        lib.resnames = infer_rotamer_resnames(lib.atom_names, lib.metadata);
+    }
+    return lib;
 }
 
 IMPBFF_END_NAMESPACE

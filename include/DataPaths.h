@@ -1,12 +1,12 @@
 /**
  *  \file IMP/bff/DataPaths.h
- *  \brief Where the shipped cgdye data lives, and how to reach it.
+ *  \brief Where the shipped cgprobe data lives, and how to reach it.
  *
  * Templates, input structures and restraint files are IMP module *data*, not
- * package sources: they live in `imp.bff/data/cgdye` and are reached through
+ * package sources: they live in `imp.bff/data/cgprobe` and are reached through
  * #IMP::bff::get_data_path. Deriving them from a source file's location instead
  * ties them to where the package happens to sit, which is exactly what broke
- * when cgdye moved out of imp-tricks.
+ * when cgprobe moved out of imp-tricks.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -21,8 +21,8 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-//! The cgdye data directory.
-IMPBFFEXPORT std::string get_cgdye_data_dir();
+//! The cgprobe data directory.
+IMPBFFEXPORT std::string get_cgprobe_data_dir();
 
 //! The component-template directory, optionally with a subpath.
 IMPBFFEXPORT std::string get_template_dir(std::string subpath = "");

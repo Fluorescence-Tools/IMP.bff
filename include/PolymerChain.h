@@ -6,9 +6,6 @@
  * end-to-end distribution is what an accessible volume approximates
  * geometrically. These give it analytically instead.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
- *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
@@ -94,6 +91,80 @@ IMPBFFEXPORT void worm_like_chain_linker(
         double chain_length = 0.0,
         double sigma = 6.0,
         bool normalize = true,
+        double** out_view = 0, int* n_out_view = 0
+);
+
+//! End-to-end distance distribution of an Ising two-state Gaussian chain.
+/*!
+    The tractable Ising-worm-like-chain form for a partially structured chain:
+    every residue is **structured** (S) or **unstructured** (U) under a
+    nearest-neighbour Ising Hamiltonian -- \p coupling is the cooperativity
+    \f$J\f$, \p field the bias \f$h\f$ towards S -- and each residue
+    contributes a Gaussian bond of mean-square extension \f$b_S^2\f$ or
+    \f$b_U^2\f$.
+
+    Because the bonds are Gaussian the characteristic function factorises per
+    residue, so the Boltzmann-weighted end-to-end \f$\varphi(k)\f$ is an exact
+    2x2 **transfer-matrix product**,
+
+    \f$\varphi(k) = \mathbf{1}^\top[\prod_i M_i(k)]\mathbf{1} / \varphi(0)\f$,
+    \f$M(k)_{\sigma\sigma'} = W(\sigma,\sigma')e^{-k^2b_{\sigma'}^2/6}\f$,
+
+    and \f$P(R)\f$ follows from the isotropic inverse transform
+    \f$P(R) = (2R/\pi)\int_0^\infty k\sin(kR)\varphi(k)\,dk\f$, taken on a
+    \p n_k -point trapezoidal grid. With \f$b_S = b_U\f$ it reduces to
+    gaussian_chain().
+
+    The product is formed **as written**, without rescaling between residues.
+    That is deliberate rather than careless: \f$\varphi\f$ is used only as the
+    ratio \f$\varphi(k)/\varphi(0)\f$, so a per-residue rescaling would cancel
+    only if it were the same at every \p k -- and a per-\p k rescaling silently
+    changes the answer. The cost is that a long chain with a large \p coupling
+    can overflow to a non-finite \f$\varphi\f$; those entries end up zero, as
+    they do in the numpy original this reproduces.
+
+    \param[in] distances the r axis
+    \param[in] number_of_residues residues (bonds) between the dyes
+    \param[in] b_structured RMS bond contribution of a structured residue
+    \param[in] b_unstructured RMS bond contribution of an unstructured residue
+    \param[in] coupling Ising nearest-neighbour coupling \f$J\f$
+    \param[in] field Ising field \f$h\f$; positive biases towards structured
+    \param[in] n_k number of k points in the inverse transform
+    \param[out] out_view,n_out_view the normalised distribution as a view
+*/
+IMPBFFEXPORT void ising_chain(
+        const std::vector<double>& distances,
+        int number_of_residues,
+        double b_structured,
+        double b_unstructured,
+        double coupling = 1.5,
+        double field = 0.0,
+        int n_k = 2000,
+        double** out_view = 0, int* n_out_view = 0
+);
+
+//! Radial distribution of a self-avoiding walk with Flory exponent \p nu.
+/*!
+    The des Cloizeaux form (Zheng et al., JACS 2018), the standard model for
+    disordered and unfolded chains in single-molecule FRET:
+
+    \f$P(r) \propto r^{2+\theta}\exp[-(r/r_0)^{\delta}]\f$, with
+    \f$\theta = (\gamma-1)/\nu\f$ and \f$\delta = 1/(1-\nu)\f$, and the
+    scale \f$r_0\f$ fixed so that \f$\sqrt{\langle r^2\rangle}\f$ is
+    \p r_rms. With \p nu = 0.5 and \p gamma_exp = 1 it reduces to
+    gaussian_chain().
+
+    \param[in] distances the r axis, positive
+    \param[in] r_rms target root-mean-square inter-dye distance
+    \param[in] nu Flory exponent; ~0.588 expanded, 0.5 theta, < 0.4 collapsed
+    \param[in] gamma_exp SAW susceptibility exponent; 1.0 is ideal
+    \param[out] out_view,n_out_view the normalised density as a managed view
+*/
+IMPBFFEXPORT void saw_nu(
+        const std::vector<double>& distances,
+        double r_rms,
+        double nu = 0.588,
+        double gamma_exp = 1.1615,
         double** out_view = 0, int* n_out_view = 0
 );
 

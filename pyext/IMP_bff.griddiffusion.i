@@ -1,11 +1,10 @@
 /*
- * The field picture of a tethered dye, as a C++ object.
+ * The field picture of a tethered probe, as a C++ object.
  *
- * The Python held four ng^3 grids and folded `dt` into two of them on every
- * call -- `d = D dt/dg^2` and `decay = exp(-k dt)` -- then handed all four
- * across the boundary. All of that is C++ now: the solver takes the grids
- * straight from numpy, and `run()`/`gradient()` return the result as C++ value
- * types whose arrays are read back as numpy views through `get_*()` methods.
+ * The solver takes its four ng^3 grids straight from numpy and folds `dt` into
+ * them itself -- `d = D dt/dg^2` and `decay = exp(-k dt)` -- so a caller never
+ * carries pre-scaled grids across the boundary. `run()` and `gradient()`
+ * return C++ values whose arrays are managed numpy views.
  */
 
 IMP_SWIG_VALUE(IMP::bff, GridDiffusionSolver, GridDiffusionSolvers);

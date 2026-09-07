@@ -1,13 +1,10 @@
-"""`RmfIO.h`: the four RMF readers and writers, in C++ since 2026-08-26.
+"""`RmfIO.h`: the four RMF readers and writers.
 
-They were `%pythoncode` builders in `IMP_bff.structureio.i`, registered in a
-`_LAZY` table so `import IMP.bff` would not require `IMP.rmf`; `rmf` is one of
-this module's modules now. What that changed for a caller, and what these
-tests pin:
+`rmf` is one of this module's modules (`dependencies.py`), so these are
+ordinary C++. What these tests pin:
 
 * the rotamer pair reads and writes an `IMP.bff.RotamerLibrary` -- the same
-  value `read_drot` and `read_rotamer_library` return -- where it used to hand
-  back a dict with 1-indexed `coords`;
+  value `read_drot` and `read_rotamer_library` return;
 * paths are `std::string`, so a `pathlib.Path` is `str()`-ed by the caller;
 * `write_rmf` takes the description as JSON text rather than a dict.
 """
@@ -49,7 +46,7 @@ def test_rotamer_library_round_trips(tmp_path):
 
 
 def test_the_rmf3_suffix_is_supplied_at_both_ends(tmp_path):
-    """The writer appends it and the reader looks for it, as the Python did."""
+    """The writer appends it and the reader looks for it."""
     stem = str(tmp_path / "lib")
     fio.write_rotamer_library_rmf(stem, _library())
     assert (tmp_path / "lib.rmf3").is_file()
@@ -124,3 +121,89 @@ def test_protein_frames_round_trip_through_rmf(tmp_path):
 def test_reading_a_trajectory_that_is_not_there_raises(tmp_path):
     with pytest.raises(IOError):
         fio.protein_frames_from_rmf(str(tmp_path / "absent.rmf3"))
+
+
+# ---------------------------------------------------------------------------
+# Reference frames. The reader composes them itself now that `RmfIO.cpp` is
+# written against RMF's own API rather than `IMP.rmf`, and both of the bugs
+# below shipped silently past a "does it read at all" test.
+# ---------------------------------------------------------------------------
+
+import os as _os
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+_TRAJ = _os.path.join(_ROOT, "examples", "structure", "T4L", "t4l_docking.rmf3")
+
+
+def _imp_reference(path, n_frames):
+    """What `IMP.rmf` says the coordinates are -- the oracle these pin against."""
+    RMF = pytest.importorskip("RMF")
+    IMP = pytest.importorskip("IMP")
+    pytest.importorskip("IMP.rmf")
+    pytest.importorskip("IMP.atom")
+    import IMP.rmf
+    import IMP.atom
+    import IMP.core
+
+    fh = RMF.open_rmf_file_read_only(path)
+    m = IMP.Model()
+    hs = IMP.rmf.create_hierarchies(fh, m)
+    out = []
+    for f in range(n_frames):
+        IMP.rmf.load_frame(fh, RMF.FrameID(f))
+        out.append(np.array([list(IMP.core.XYZ(l).get_coordinates())
+                             for l in IMP.atom.get_leaves(hs[0])]))
+    return out
+
+
+@pytest.mark.skipif(not _os.path.exists(_TRAJ),
+                    reason="the T4L docking trajectory is not in this checkout")
+def test_reference_frames_are_composed_per_frame():
+    """Rigid bodies move, so the transform cannot be composed once and reused.
+
+    Composing at the structural walk and reusing it for every frame reads
+    frame 0 correctly and puts every later frame up to 43 A out -- which looks
+    like a plausible structure, not like a failure. Ten frames, because the
+    bug is invisible in one.
+    """
+    n = 10
+    ref = _imp_reference(_TRAJ, n)
+    mine = fio.protein_frames_from_rmf(_TRAJ, n)
+    for f in range(n):
+        got = np.asarray(mine[f].coords, dtype=float).reshape(-1, 3)
+        d = np.linalg.norm(got - ref[f], axis=1).max()
+        # 1e-4 A, not equality: RMF stores float32, and bff composes in float
+        # where IMP used double. Measured worst case is 3.5e-06 A.
+        assert d < 1e-4, "frame %d is %.3e A from IMP's answer" % (f, d)
+
+
+@pytest.mark.skipif(not _os.path.exists(_TRAJ),
+                    reason="the T4L docking trajectory is not in this checkout")
+def test_every_reference_frame_is_seen():
+    """`get_is` is answered from the *current* frame, so the walk must set one.
+
+    On this file as RMF opens it only 17 of the 20 reference frames answer
+    yes; a structural walk done before positioning on a frame therefore builds
+    ancestor chains with three transforms missing. Frame 0 is the cheapest
+    place to catch that, since the count is what goes wrong first.
+    """
+    RMF = pytest.importorskip("RMF")
+    fh = RMF.open_rmf_file_read_only(_TRAJ)
+    ff = RMF.ReferenceFrameFactory(fh)
+
+    def count():
+        n = [0]
+        def walk(node):
+            if ff.get_is(node):
+                n[0] += 1
+            for c in node.get_children():
+                walk(c)
+        walk(fh.get_root_node())
+        return n[0]
+
+    as_opened = count()
+    fh.set_current_frame(RMF.FrameID(0))
+    on_frame_0 = count()
+    assert on_frame_0 >= as_opened, "positioning on a frame lost frames"
+    # The reader must agree with the larger count, not the smaller one.
+    frames = fio.protein_frames_from_rmf(_TRAJ, 1)
+    assert frames[0].get_n_atoms() > 0

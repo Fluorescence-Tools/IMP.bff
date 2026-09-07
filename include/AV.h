@@ -13,8 +13,7 @@
 
 #include <IMP/Pointer.h>
 
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <IMP/decorator_macros.h>
 #include <IMP/Decorator.h>
@@ -28,6 +27,7 @@
 #include <IMP/bff/AVDistance.h>
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/AVOccupancyMap.h>
+#include <IMP/bff/VdwRadii.h>
 #include <IMP/bff/internal/AVLatticeState.h>
 
 #include <algorithm>
@@ -296,6 +296,42 @@ public:
     IMP_DECORATOR_GET_SET(radius3, get_av_key(3), Float, Float);
     IMP_DECORATOR_GET_SET(linker_width, get_av_key(4), Float, Float);
     IMP_DECORATOR_GET_SET(allowed_sphere_radius, get_av_key(5), Float, Float);
+    //! The accessible **contact** volume: how deep the surface layer is, and
+    //! how much of the dye's time it holds.
+    /*! `contact_volume_thickness` is the depth in Angstrom of the layer above
+        the surface the dye cannot enter; a cloud voxel is *in contact* when
+        excluded volume lies within that distance of it.
+        `contact_volume_trapped_fraction` is the share of the cloud's total
+        weight those voxels then carry, the rest sharing the remainder -- a dye
+        that touches the protein stays there longer than free diffusion would
+        put it. Both have to ask for it: a thickness of 0 or a negative
+        fraction leaves the volume unweighted, and a fraction at or above 1
+        (which would leave the free part weightless) is refused with a warning.
+
+        This is Olga's ACV, not FPS's -- **FPS has no contact volume at all**.
+        The rule and the two deliberate differences from Olga's source are in
+        IMP::bff::PathMap::apply_contact_weighting(); the one worth knowing
+        here is that the layer is quantised to whole grid steps, so a thickness
+        below `simulation_grid_resolution` is no layer at all.
+
+        The cloud does not change -- the same voxels, with different weights.
+        What moves is the mean position, towards the surface. Measured on 3GUN
+        with the seventeen fitted fractions of
+        `examples/structure/T4L/fret.fps.json`: the mean moves 2.3 A on average
+        (0.04-4.6 A) and *closer to the nearest atom* at sixteen of the
+        seventeen sites, by 1.8 A. Those fractions are all well above the
+        geometric contact share (0.13-0.47 of the cloud, mean 0.20), so the
+        layer is up-weighted, and the 33 <R_DA> of that file all shorten, by
+        3.04 A on average.
+
+        Inert until 2026-09-01 (PRD-121 G9): both fields were read, stored, and
+        never used. Wiring them up immediately found a second defect behind the
+        first -- set_av_parameter() read the fraction with an `int` default, so
+        every fps.json value was truncated to 0 or 1 -- and answered the +2 A
+        offset against Zenodo 3376527's published <R_DA> that
+        `okf/validation/fps_screening_ab.md` had recorded as unexplained: that
+        table was computed *with* the contact volume its file asks for, and
+        honouring it brings this module from +2.06 A to **+0.22 A** of it. */
     IMP_DECORATOR_GET_SET(contact_volume_thickness, get_av_key(6), Float, Float);
     IMP_DECORATOR_GET_SET(contact_volume_trapped_fraction, get_av_key(7), Float, Float);
     IMP_DECORATOR_GET_SET(simulation_grid_resolution, get_av_key(8), Float, Float);
@@ -621,6 +657,48 @@ public:
     std::string get_search_mode() const;
     void set_search_mode(std::string mode);
     static IntKey get_search_mode_key();
+
+    /**
+     * @brief Which van der Waals radii the obstacles are inflated by.
+     *
+     * `"imp"` (**the default**) uses whatever radius each particle carries,
+     * which after `IMP::atom::read_pdb` is IMP's CHARMM-derived
+     * **united-atom** set: a carbon of 1.85-2.275 A, standing in for hydrogens
+     * that are not in the file.
+     * `"olga"` takes every atom's radius from Olga's name-keyed table,
+     * #IMP::bff::olga_vdw_radius -- carbon 1.70 A, nitrogen 1.625, oxygen
+     * 1.49, sulphur 1.782, phosphorus 1.86, hydrogen 1.00, and a flat 1.50 A
+     * for a name the table does not carry.
+     *
+     * **Why IMP's is the default** (owner, 2026-09-01, reversing a one-day
+     * default of `"olga"`): the excluded-volume half of a docking score is
+     * `clash_container`, which measures overlap through #IMP::core::XYZR --
+     * the *particles'* radii. A volume built on Olga's table and a clash term
+     * built on IMP's are two halves of one score that disagree about how big
+     * an atom is, and neither half reports the disagreement. Consistency with
+     * IMP docking outweighs agreement with Olga's published numbers, and the
+     * cost of that choice is real and written down:
+     * `okf/validation/fps_screening_ab.md` measures it (nine of 33 published
+     * <R_DA> lose their model value, and the agreement with the Zenodo table
+     * worsens from -0.02 A / 0.71 A rmsd to +0.22 A / 0.91 A).
+     *
+     * `"olga"` is therefore kept and selectable, and is what a caller
+     * reproducing Olga-era numbers -- the fitted
+     * `contact_volume_trapped_fraction` of a `.fps.json`, the published
+     * <R_DA> of Zenodo 3376527 -- should ask for. It also *opens volumes up*:
+     * its heavy atoms are smaller, so sites IMP's united-atom radii wall in
+     * come back with a cloud.
+     *
+     * The choice is per volume, but it is not free to differ *within* one
+     * shared occupancy raster: the raster is one obstacle set for every volume
+     * in it, so an #IMP::bff::AVOccupancyRegistry adopts the first radii
+     * vector handed to it and throws if a second volume asks for another. It
+     * also invalidates the volume, like every other parameter that feeds the
+     * raster.
+     */
+    std::string get_radii_source() const;
+    void set_radii_source(std::string source);
+    static IntKey get_radii_source_key();
 
     /**
      * @brief Read occupancy from a shared per-class raster registry.

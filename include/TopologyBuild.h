@@ -3,13 +3,12 @@
  *  \brief The one force-field system builder, from components to the typed
  *         value.
  *
- * `build_forcefield_system` was 410 lines of Python orchestration over
- * already-C++ pieces (the MOL2 reader, the molecular graph, the improper
- * expanders, the template reader). It is one C++ function now: it reads the
- * components, derives sites/bonds/angles/dihedrals/impropers/groups, and
- * assembles the same JSON the Python dict held -- then builds the typed
- * system through #IMP::bff::forcefield_system_from_json, which is the one
- * conversion path and guarantees the same semantics the Python produced.
+ * `build_forcefield_system` is one function over the MOL2 reader, the
+ * molecular graph, the improper expanders and the template reader: it reads
+ * the components, derives sites/bonds/angles/dihedrals/impropers/groups and
+ * assembles the system's JSON, then builds the typed system through
+ * #IMP::bff::forcefield_system_from_json -- **the** conversion path, so every
+ * route into a system has the same semantics.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -20,7 +19,7 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/DyeForceField.h>
+#include <IMP/bff/ProbeForceField.h>
 
 #include <string>
 #include <vector>
@@ -30,12 +29,11 @@ IMPBFF_BEGIN_NAMESPACE
 //! One component of a system to build: a MOL2, its template, and its role.
 /*! The typed form of the `{"name": ..., "mol2": ..., "template": ...,
     "role": ...}` object the JSON builder takes. It exists so a caller says
-    what it means in C++ instead of composing JSON, which is what the Python
-    wrapper did. */
+    what it means in C++ instead of composing JSON by hand. */
 struct IMPBFFEXPORT FFComponentSpec {
     std::string name;
     std::string mol2;
-    //! A cgdye component template; empty when the component has none.
+    //! A cgprobe component template; empty when the component has none.
     std::string template_path;
     //! `"fixed"` or `"mobile"`.
     std::string role;
@@ -52,10 +50,9 @@ struct IMPBFFEXPORT FFComponentSpec {
 IMP_VALUES(FFComponentSpec, FFComponentSpecs);
 
 //! The same builder, from typed component specs.
-/*! Composes the JSON the other overload takes -- one conversion path, and it
-    is in C++ now rather than in a `%pythoncode` wrapper that turned dicts
-    into a string. */
-IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
+/*! Composes the JSON the other overload takes, so there is one conversion
+    path rather than two. */
+IMPBFFEXPORT ProbeForceFieldSystem build_forcefield_system(
         const std::vector<FFComponentSpec>& components,
         double bond_k = 2000.0, double angle_k = 400.0,
         double pi_dihedral_k = 12.0, double linker_dihedral_k = 1.5,
@@ -67,21 +64,21 @@ IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
         int minimize_steps = 200, const std::string& relative_to = "");
 
 //! A system for a protein and a dye, both from MOL2 -- two components.
-IMPBFFEXPORT DyeForceFieldSystem build_dye_protein_system(
+IMPBFFEXPORT ProbeForceFieldSystem build_probe_protein_system(
         const std::string& protein_mol2, const std::string& dye_mol2,
-        const std::string& protein_name, const std::string& dye_name,
+        const std::string& protein_name, const std::string& probe_name,
         const std::string& protein_template = "",
-        const std::string& dye_template = "",
+        const std::string& probe_template = "",
         double default_radius = 1.7, double default_mass = 12.0);
 
 //! A system for one dye alone, with its backbone anchor held fixed.
 /*! One mobile component and no protein. What this adds over the plain
     builder: the dye's `N`, `CA`, `C` and `O` sites are collected into a
-    `<dye_name>_anchor` group and named in `fixed_groups`, so a sampler can
+    `<probe_name>_anchor` group and named in `fixed_groups`, so a sampler can
     hold the labelled residue's backbone still. */
-IMPBFFEXPORT DyeForceFieldSystem probe_forcefield_system(
-        const std::string& dye_mol2, const std::string& dye_name = "dye",
-        const std::string& dye_template = "", double default_radius = 1.7,
+IMPBFFEXPORT ProbeForceFieldSystem probe_forcefield_system(
+        const std::string& dye_mol2, const std::string& probe_name = "dye",
+        const std::string& probe_template = "", double default_radius = 1.7,
         double default_mass = 12.0);
 
 //! The one force-field system builder, from components to the typed value.
@@ -108,7 +105,7 @@ IMPBFFEXPORT DyeForceFieldSystem probe_forcefield_system(
            components
     \throw IOException when a MOL2 or template file cannot be read
 */
-IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
+IMPBFFEXPORT ProbeForceFieldSystem build_forcefield_system(
         const std::string& components_json,
         double bond_k = 2000.0, double angle_k = 400.0,
         double pi_dihedral_k = 12.0, double linker_dihedral_k = 1.5,
@@ -127,18 +124,16 @@ IMPBFFEXPORT DyeForceFieldSystem build_forcefield_system(
     dye's own Lennard-Jones sum. No equilibrium lengths, no force constants --
     those come from a template, and a lone dye in vacuum has none.
 
-    Site ids are `dye:<serial>:<atom_name>`, which is what the Python this
-    replaces produced.
+    Site ids are `dye:<serial>:<atom_name>`.
 
-    \note The sites carry the MOL2's **element**. The Python version did not:
-    it built its JSON with `id` and `atom_name` only, so every site reached the
-    LJ table elementless and a hydrogen was parameterised as whatever the
-    fallback is. The element is in the file and in `FFSite`; dropping it was an
-    oversight, not a choice.
+    \note The sites carry the MOL2's **element**, and must: a site that reaches
+    the LJ table elementless is parameterised by whatever the fallback is, so a
+    hydrogen silently becomes something else. The element is in the file and in
+    `FFSite`.
 
     \param[in] component the parsed MOL2 (see #read_mol2_component)
 */
-IMPBFFEXPORT DyeForceFieldSystem internal_topology_system(
+IMPBFFEXPORT ProbeForceFieldSystem internal_topology_system(
         const Mol2Component& component);
 
 //! `{serial: site atom name}` -- the MOL2 names deduplicated per component.

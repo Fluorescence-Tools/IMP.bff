@@ -19,10 +19,9 @@ IMPBFF_BEGIN_NAMESPACE
     fixed for the whole of a sampling run, so it is set once here and only the
     configuration changes per call.
 
-    The Python this replaces rebuilt an `IMP.core.XYZ` decorator and made a
-    SWIG round trip per moving atom per rotation, which for a dye linker is
-    thousands of crossings per configuration and was the largest remaining
-    Python cost in the test suite.
+    Rebuilding an `IMP.core.XYZ` decorator per moving atom per rotation would
+    cost a boundary crossing each time, which for a probe linker is thousands
+    per configuration.
 
     Rotations are applied **sequentially, in the order given**, each about the
     axis as it stands after the previous one. That is not the same as applying
@@ -52,11 +51,27 @@ public:
     unsigned int get_number_of_torsions() const { return (unsigned int) torsion_fixed_.size(); }
     unsigned int get_number_of_angles() const { return (unsigned int) angle_b_.size(); }
 
+    //! Which atoms each degree of freedom is defined by, and what it moves.
+    /*! Rows into the coordinate array, in the order the degrees of freedom
+        were added -- which is the order a configuration vector is in. A
+        caller that wants to check this class against its own rotation needs
+        to know what it claims to turn. */
+    const std::vector<int>& get_torsion_fixed() const { return torsion_fixed_; }
+    const std::vector<int>& get_torsion_moving() const { return torsion_moving_; }
+    std::vector<int> get_torsion_set(unsigned int i) const {
+        return i < torsion_sets_.size() ? torsion_sets_[i] : std::vector<int>();
+    }
+    const std::vector<int>& get_angle_b() const { return angle_b_; }
+    const std::vector<int>& get_angle_c() const { return angle_c_; }
+    const std::vector<int>& get_angle_a() const { return angle_a_; }
+    std::vector<int> get_angle_set(unsigned int i) const {
+        return i < angle_sets_.size() ? angle_sets_[i] : std::vector<int>();
+    }
+
     //! The reference geometry with `config` applied, `(n_atoms, 3)` flattened.
     /** `config` is the torsion settings followed by the angle settings, in
-        radians. An axis shorter than 1e-8 is skipped rather than normalised,
-        which is what the Python did -- two atoms at the same point define no
-        rotation. */
+        radians. An axis shorter than 1e-8 is skipped rather than normalised:
+        two atoms at the same point define no rotation. */
     std::vector<double> apply(const std::vector<double>& config) const;
 };
 

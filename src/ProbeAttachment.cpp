@@ -16,7 +16,7 @@
 #include <IMP/atom/Selection.h>
 #include <IMP/atom/hierarchy_tools.h>
 #include <IMP/core/XYZ.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 #include <IMP/rotamer/RotamerCalculator.h>
 #include <IMP/rotamer/RotamerLibrary.h>
 
@@ -111,17 +111,16 @@ IMP::ParticlesTemp resolve_probe_site(IMP::atom::Hierarchy hierarchy,
 
 IMP::ParticlesTemp select_atoms(IMP::atom::Hierarchy hierarchy,
                                 const std::string& mask_text) {
-    const StripSelection mask = parse_strip_mask(mask_text);
+    // Through IMP's own selection algebra, so what a mask names here is what
+    // it names anywhere else a Selection is taken.
+    IMP::atom::Selection selection =
+            selection_from_expression(hierarchy, internal::trimmed(mask_text));
+    const IMP::ParticleIndexes pis = selection.get_selected_particle_indexes();
     IMP::ParticlesTemp out;
-    const IMP::atom::Hierarchies atoms =
-            IMP::atom::get_by_type(hierarchy, IMP::atom::ATOM_TYPE);
-    for (std::size_t i = 0; i < atoms.size(); ++i) {
-        std::string chain, name;
-        int residue = -1;
-        atom_fields(IMP::atom::Atom(atoms[i]), chain, residue, name);
-        if (mask.matches(chain, residue, name)) {
-            out.push_back(atoms[i].get_particle());
-        }
+    out.reserve(pis.size());
+    IMP::Model* model = hierarchy.get_model();
+    for (std::size_t i = 0; i < pis.size(); ++i) {
+        out.push_back(model->get_particle(pis[i]));
     }
     return out;
 }
@@ -136,11 +135,25 @@ std::vector<int> strip_keep_mask(const std::vector<std::string>& chains,
                                       << names.size() << " names",
                   ValueException);
     }
-    const StripSelection mask = parse_strip_mask(mask_text);
+    const SelectionExpression mask = parse_strip_mask(mask_text);
+    if (mask.get_needs_coordinates()) {
+        IMP_THROW("strip_keep_mask: `" << mask_text << "` measures a distance,"
+                  " and this table carries chains, residues and names only --"
+                  " evaluate it against the structure instead",
+                  ValueException);
+    }
+    std::vector<SelectionAtom> atoms(chains.size());
+    for (std::size_t i = 0; i < chains.size(); ++i) {
+        atoms[i].index = static_cast<int>(i) + 1;
+        atoms[i].chain = chains[i];
+        atoms[i].resi = resseqs[i];
+        atoms[i].name = names[i];
+    }
+    const std::vector<int> selected = mask.evaluate(atoms);
     std::vector<int> keep;
     keep.reserve(chains.size());
     for (std::size_t i = 0; i < chains.size(); ++i) {
-        keep.push_back(mask.matches(chains[i], resseqs[i], names[i]) ? 0 : 1);
+        keep.push_back(selected[i] ? 0 : 1);
     }
     return keep;
 }
@@ -158,13 +171,12 @@ int strip_hierarchy(IMP::atom::Hierarchy hierarchy,
 }
 
 std::vector<std::string> site_keep_atom_names() {
-    std::vector<std::string> out;
-    out.push_back("N");
-    out.push_back("CA");
-    out.push_back("C");
-    out.push_back("O");
-    out.push_back("OXT");
-    return out;
+    // The protein backbone, which is what a labelling site keeps: the
+    // selection language's own answer to `backbone`, so the two cannot drift
+    // apart. **CB is not in it** -- that is what separates this keep-set from
+    // the AV default (#IMP::bff::backbone_atom_names plus the attachment
+    // atom), and the difference is the point, not an oversight.
+    return protein_backbone_atom_names();
 }
 
 int strip_sidechain_at_site(IMP::atom::Hierarchy hierarchy,
@@ -273,7 +285,7 @@ ProbePosition::ProbePosition(const std::string& asym_id, int seq_id, const std::
     }
 }
 
-void ProbePosition::set_dye(const Dye& d) {
+void ProbePosition::set_probe(const Probe& d) {
     dye = d;
     probe = d.name;
 }
@@ -299,14 +311,14 @@ bool ProbePosition::operator==(const ProbePosition& other) const {
 }
 
 ProbePosition probe_position_from_source_info(const std::string& source_info_json,
-                             const Dye& dye) {
+                             const Probe& dye) {
     nlohmann::json info = nlohmann::json::parse(source_info_json, NULL, false);
     if (info.is_discarded() || !info.is_object()) info = nlohmann::json::object();
     ProbePosition out;
     out.asym_id = info.value("chain_identifier", std::string());
     out.seq_id = info.value("residue_seq_number", 0);
     out.atom_id = info.value("atom_name", std::string("CB"));
-    out.set_dye(dye);
+    out.set_probe(dye);
     return out;
 }
 

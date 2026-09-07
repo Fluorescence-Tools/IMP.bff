@@ -9,7 +9,7 @@ respect to a reader, and a container format that round-trips through its own
 two halves has still proved nothing until the numbers come back.
 
 The gate that matters is **losslessness**. The FRETpredict parity pins
-(`test/cgdye/rotamer/test_fretpredict_pins.py`) are recorded at 1e-5 in E, and
+(`test/cgprobe/rotamer/test_fretpredict_pins.py`) are recorded at 1e-5 in E, and
 a rotamer library that reconstructs to 0.02 A moves them by 1.3e-3 -- which is
 how the torsion-only v8 layout was caught. The default rung stores what a
 conformer actually has and comes back at ~1e-6 A.

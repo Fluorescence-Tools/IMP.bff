@@ -2,10 +2,9 @@
  *  \file IMP/bff/DiffusionSolver.h
  *  \brief Explicit propagation of an excited-state density on an AV grid.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++. The kernel and
- * its adjoint are tttrlib's LatticeDiffusion.h, vendored verbatim at
- * internal/LatticeDiffusion.h; this header is the IMP-facing shell.
+ * The kernel and its adjoint are tttrlib's LatticeDiffusion.h, vendored
+ * verbatim at internal/LatticeDiffusion.h; this header is the IMP-facing
+ * shell.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -78,12 +77,13 @@ enum FluxForm {
     negative, which for a probability density is not an acceptable answer
     either.
 
-    **The rate term dominates, and it used to be left out.** On T4L site 19 at
-    2.5 A, diffusion contributed 0.16 to that coefficient and quenching 2.01 --
-    twelve times more -- and the sum of 2.17 is past the divergence threshold,
-    so the decay reached 7e36 while the check called the step safe. Worse, the
-    divergence need not look like one: site 124, at 2.10, returned a smooth,
-    finite, entirely plausible decay that was 2.6 % wrong at 25 ns.
+    **The rate term dominates, so \p k_max is not optional.** On T4L site 19
+    at 2.5 A, diffusion contributes 0.16 to that coefficient and quenching
+    2.01 -- twelve times more -- and their sum of 2.17 is past the divergence
+    threshold. Omit the rate and the check calls the step safe while the decay
+    reaches 7e36. Worse, the divergence need not look like one: site 124, at
+    2.10, gives a smooth, finite, entirely plausible decay that is 2.6 % wrong
+    at 25 ns.
 */
 inline double diffusion_stability_limit(double d_max, double dg,
                                         double k_max = 0.0) {
@@ -122,12 +122,11 @@ IMPBFFEXPORT void diffusion_step(
     \param[out] out_view,n_out_view the final density
 
     Both outputs are managed numpy views: the caller owns the buffers, and in
-    C++ frees them with `std::free`. The fluorescence used to be a
-    `std::vector<double>&` out-parameter, which made a Python caller construct
-    a wrapped vector to pass in -- and after this module took on `rmf` (and
-    with it `isd`, and `saxs`) the class to construct is `IMP.saxs.DistBase`,
-    because SWIG wraps `std::vector<double>` once across a module and its
-    imports. Two views, no wrapped vector, and a 2-tuple of arrays in Python.
+    C++ frees them with `std::free`. Not `std::vector<double>&`
+    out-parameters -- SWIG wraps `std::vector<double>` once across a module and
+    its imports, so with `rmf` (and with it `isd` and `saxs`) in the
+    dependencies the class a Python caller would have to construct is
+    `IMP.saxs.DistBase`. Two views give a 2-tuple of arrays instead.
 */
 IMPBFFEXPORT void diffusion_propagate(
         const std::vector<double>& cur,

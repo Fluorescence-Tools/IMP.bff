@@ -7,13 +7,13 @@
  */
 #include <IMP/bff/TopologyBuild.h>
 
-#include <IMP/bff/CifIO.h>
+#include <IMP/bff/ComponentTemplate.h>
 #include <IMP/bff/Mol2IO.h>
 #include <IMP/bff/MolecularGraph.h>
 #include <IMP/bff/Scoring.h>
 #include <IMP/bff/internal/json.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cctype>
@@ -192,7 +192,7 @@ std::map<int, std::string> serial_to_site_atom_names(
     return out;
 }
 
-DyeForceFieldSystem build_forcefield_system(
+ProbeForceFieldSystem build_forcefield_system(
         const std::string& components_json, double bond_k, double angle_k,
         double pi_dihedral_k, double linker_dihedral_k, double ring_improper_k,
         double pi_improper_k, double flat_improper_k, double orient_improper_k,
@@ -242,13 +242,13 @@ DyeForceFieldSystem build_forcefield_system(
                     c.atoms.size(), c.bonds.size());
         components.push_back(c);
     }
-    // fixed first, mobile after -- the site order the Python emitted
+    // fixed first, mobile after -- the site order the writer emits
     std::stable_sort(components.begin(), components.end(),
                      [](const Component& a, const Component& b) {
                          return (a.role == "fixed") && (b.role != "fixed");
                      });
 
-    // -- the JSON the Python dict held, then the one conversion path --------
+    // -- the system as JSON, then the one conversion path -----------------
     nlohmann::json system;
     std::string system_name;
     for (const auto& c : components) {
@@ -458,7 +458,7 @@ std::string json_quote(const std::string& v) {
 }
 }  // namespace
 
-DyeForceFieldSystem build_forcefield_system(
+ProbeForceFieldSystem build_forcefield_system(
         const std::vector<FFComponentSpec>& components, double bond_k,
         double angle_k, double pi_dihedral_k, double linker_dihedral_k,
         double ring_improper_k, double pi_improper_k, double flat_improper_k,
@@ -488,15 +488,15 @@ DyeForceFieldSystem build_forcefield_system(
                                    relative_to);
 }
 
-DyeForceFieldSystem build_dye_protein_system(
+ProbeForceFieldSystem build_probe_protein_system(
         const std::string& protein_mol2, const std::string& dye_mol2,
-        const std::string& protein_name, const std::string& dye_name,
-        const std::string& protein_template, const std::string& dye_template,
+        const std::string& protein_name, const std::string& probe_name,
+        const std::string& protein_template, const std::string& probe_template,
         double default_radius, double default_mass) {
     std::vector<FFComponentSpec> specs;
     specs.push_back(FFComponentSpec(protein_name, protein_mol2,
                                     protein_template, "fixed"));
-    specs.push_back(FFComponentSpec(dye_name, dye_mol2, dye_template,
+    specs.push_back(FFComponentSpec(probe_name, dye_mol2, probe_template,
                                     "mobile"));
     return build_forcefield_system(specs, 2000.0, 400.0, 12.0, 1.5, 40.0,
                                    180.0, 120.0, 220.0, 20000, 100,
@@ -504,15 +504,15 @@ DyeForceFieldSystem build_dye_protein_system(
                                    200, "");
 }
 
-DyeForceFieldSystem probe_forcefield_system(const std::string& dye_mol2,
-                                          const std::string& dye_name,
-                                          const std::string& dye_template,
+ProbeForceFieldSystem probe_forcefield_system(const std::string& dye_mol2,
+                                          const std::string& probe_name,
+                                          const std::string& probe_template,
                                           double default_radius,
                                           double default_mass) {
     std::vector<FFComponentSpec> specs;
-    specs.push_back(FFComponentSpec(dye_name, dye_mol2, dye_template,
+    specs.push_back(FFComponentSpec(probe_name, dye_mol2, probe_template,
                                     "mobile"));
-    DyeForceFieldSystem system = build_forcefield_system(
+    ProbeForceFieldSystem system = build_forcefield_system(
             specs, 2000.0, 400.0, 12.0, 1.5, 40.0, 180.0, 120.0, 220.0,
             20000, 100, default_radius, default_mass, 5.0, 6.0, 200, "");
 
@@ -533,15 +533,15 @@ DyeForceFieldSystem probe_forcefield_system(const std::string& dye_mol2,
     std::sort(anchor.begin(), anchor.end());
     std::map<std::string, std::vector<std::string> > groups =
             system.get_groups();
-    groups[dye_name + "_anchor"] = anchor;
+    groups[probe_name + "_anchor"] = anchor;
     system.set_groups(groups);
     std::vector<std::string> fixed;
-    fixed.push_back(dye_name + "_anchor");
+    fixed.push_back(probe_name + "_anchor");
     system.set_fixed_groups(fixed);
     return system;
 }
 
-DyeForceFieldSystem internal_topology_system(const Mol2Component& component) {
+ProbeForceFieldSystem internal_topology_system(const Mol2Component& component) {
     // Sites in serial order, so the ids and the derived terms come out in the
     // order the MOL2 lists its atoms.
     std::vector<Mol2Atom> ordered = component.atoms;
@@ -600,7 +600,7 @@ DyeForceFieldSystem internal_topology_system(const Mol2Component& component) {
         ff_torsions.push_back(t);
     }
 
-    DyeForceFieldSystem out;
+    ProbeForceFieldSystem out;
     out.set_sites(sites);
     out.set_bonds(ff_bonds);
     out.set_angles(ff_angles);

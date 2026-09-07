@@ -1,6 +1,7 @@
 """The 1:1 FASPR C++ port: backbone fidelity and parity with the reference.
 
-``IMP.bff.faspr_pack`` (``src/faspr/``, ``include/Faspr.h``) is a
+``IMP.bff.faspr_pack`` (``src/Faspr*``, declared in
+``include/RotamerLibrary.h``) is a
 behaviour-identical vendoring of FASPR 20200309 wrapped in
 ``IMP::bff::faspr``: same energies, same DEE / tree-decomposition search,
 same tie-breaking, float math untouched. These tests pin that claim:

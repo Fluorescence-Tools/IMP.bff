@@ -36,7 +36,7 @@
 // iteration), and a copy per iteration is quadratic.
 //
 // So the copy is made **at the boundary**, where the cost is one copy per
-// Python access and the lifetime becomes Python's.
+// Python access, and the lifetime becomes Python's.
 // The local typedef is not decoration: `SWIG_NewPointerObj` is a C macro, and
 // a template argument list carrying a comma would be read as two arguments of
 // it. `%arg()` does the same for the commas in the invocations below.
@@ -57,7 +57,7 @@
 %owned_container_out(%arg(std::map<std::string, std::vector<std::string> >))
 
 // ...and the ones whose element is a value of this module's own. The list is
-// every `const container&` a `DyeForceFieldSystem` accessor returns; a type
+// every `const container&` a `ProbeForceFieldSystem` accessor returns; a type
 // left off it is not wrong, only still borrowed.
 %owned_container_out(%arg(std::map<std::string, IMP::bff::FFComponent>))
 %owned_container_out(%arg(std::map<std::string, IMP::bff::FFLJType>))
@@ -222,11 +222,11 @@
  *
  * Measured 2026-08-19 on this box, on `quenched_decay` and
  * `lifetime_spectrum_decay` at 10k-400k elements. Every adapter in
- * `pyext/src` hands these kernels `np.ascontiguousarray(x).ravel()`, so the
- * package was paying the worst of the three everywhere. `diffusion_propagate`
- * takes four ng^3 grids: at ng = 41 one call spent 9.5 ms crossing the boundary
- * before doing any work -- the cost of 53 solver steps, and
- * `equilibrium_occupancy` chunks that call up to 200 times.
+ * A caller that hands a kernel `np.ascontiguousarray(x).ravel()` pays the
+ * worst of the three. `diffusion_propagate` takes four ng^3 grids: at
+ * ng = 41 that is 9.5 ms of boundary crossing before any work -- the cost of
+ * 53 solver steps, and `equilibrium_occupancy` chunks that call up to 200
+ * times.
  *
  * This typemap takes the fast path when the argument is a 1-D contiguous
  * float64 array and falls back to SWIG's own converter otherwise, so lists,
@@ -249,13 +249,13 @@
         const double* imp_bff_data = (const double*) array_data($input);
         const npy_intp imp_bff_n = PyArray_SIZE((PyArrayObject*)$input);
         // Grid kernels take a flat `ng^3` buffer; a caller's cube is C-
-        // contiguous, so copying it row-major is exactly the ravel the Python
-        // wrappers used to do. Any-dimensional, contiguous, and flat out.
+        // contiguous, so copying it row-major is exactly a ravel.
+        // Any-dimensional, contiguous, and flat out.
         imp_bff_tmp.assign(imp_bff_data, imp_bff_data + imp_bff_n);
         $1 = &imp_bff_tmp;
     } else if ($input == Py_None) {
-        // An absent optional grid (the Python wrappers spelled it `None` for
-        // "use the default"). The empty vector is what the kernels expect.
+        // An absent optional grid: `None` means "use the default", and the
+        // empty vector is what the kernels read that as.
         $1 = &imp_bff_tmp;
     } else if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**) &imp_bff_ptr,
                                          $descriptor(std::vector<double>*), 0))
@@ -267,10 +267,9 @@
         $1 = imp_bff_ptr;
     } else {
         // Any other array-like -- an int8/uint8 mask, a float32 or an
-        // F-contiguous layout -- is converted to a flat float64 copy, the way
-        // the Python wrappers' `astype(float64)`+ravel did. swig::asptr does
-        // not iterate numpy buffers of the wrong flavour, so it cannot serve
-        // here.
+        // F-contiguous layout -- is converted to a flat float64 copy.
+        // swig::asptr does not iterate numpy buffers of the wrong flavour,
+        // so it cannot serve here.
         imp_bff_arr = (PyArrayObject*) PyArray_FROMANY(
                 $input, NPY_DOUBLE, 0, 0,
                 NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_FORCECAST |
@@ -302,9 +301,9 @@
  * its traits to turn each element into a `std::vector<double>` -- and those
  * traits only know sequences, so a 3-D ndarray arrives as a sequence of 2-D
  * ndarrays and the conversion fails with a type error naming the whole nested
- * type. Flattening at the call site would work and is what the Python version
- * did; doing it here means the C++ signature says what it means and the
- * caller still passes the arrays it has.
+ * type. Flattening at the call site would work; doing it here means the C++
+ * signature says what it means and the caller still passes the arrays it
+ * has.
  *---------------------------------------------------------------------------*/
 %typemap(in, fragment="NumPy_Macros")
         const std::vector<std::vector<double> >&
@@ -367,8 +366,8 @@
 
 // The int sibling: an occupancy/field grid `std::vector<int>`. Anything
 // array-like is converted through `PyArray_FromAny` to a flat C-contiguous
-// int32 copy, mirroring what the Python wrappers' `astype(int32)` did -- so a
-// uint8 mask, a float grid, or an F-contiguous float32 layout all land here as
+// int32 copy, so a uint8 mask, a float grid, or an F-contiguous float32
+// layout all land here as
 // one flat int vector (zeros where a value does not cast). `None` is the empty
 // vector; an already-wrapped `std::vector<int>` passes through untouched.
 %typemap(in, fragment="NumPy_Macros")

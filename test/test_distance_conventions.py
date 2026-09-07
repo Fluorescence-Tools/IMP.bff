@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 
+import IMP.bff
 import numpy as np
 import pytest
 
@@ -39,16 +40,23 @@ from IMP.bff import (
 
 
 class TestChi2Score:
-    """Asymmetric chi-squared contribution."""
+    """Asymmetric chi-squared contribution.
 
-    def test_model_below_exp(self):
-        """Negative deviation uses error_neg."""
+    The residual is **model minus data**: a model distance that is too large
+    is a positive deviation. Squaring hides that sign, so what the convention
+    actually decides is which error bar divides -- a positive residual against
+    ``error_pos``, a negative one against ``error_neg``. The point of these
+    tests is the branch, not the value.
+    """
+
+    def test_model_below_exp_uses_error_neg(self):
+        """Model 50 against data 55: residual -5, so error_neg divides."""
         s = chi2_score(50.0, 55.0, 3.0, 5.0)
         expected = (5.0 / 3.0) ** 2
         assert s == pytest.approx(expected, rel=1e-9)
 
-    def test_model_above_exp(self):
-        """Positive deviation uses error_pos."""
+    def test_model_above_exp_uses_error_pos(self):
+        """Model 60 against data 55: residual +5, so error_pos divides."""
         s = chi2_score(60.0, 55.0, 3.0, 5.0)
         expected = (5.0 / 5.0) ** 2
         assert s == pytest.approx(expected, rel=1e-9)
@@ -56,6 +64,36 @@ class TestChi2Score:
     def test_perfect_fit(self):
         s = chi2_score(55.0, 55.0, 3.0, 5.0)
         assert s == pytest.approx(0.0, abs=1e-12)
+
+    def test_the_restraint_scores_the_same_shape_as_the_diagnostic(self):
+        """`score_model` is half a `chi2_score` -- a Gaussian restraint.
+
+        They were not: the restraint every optimisation minimises measured
+        the deviation as data minus model and then read the branch as if it
+        were model minus data, so a model that was too large was judged
+        against ``error_neg``. On asymmetric errors it disagreed with the
+        FPS-style tables by up to 100x (experiment 50 A, errors (1, 10): 25.0
+        against 1.0), and nothing in the suite asserted either number. The
+        The surviving difference is the 0.5 a Gaussian is worth
+        (-log L = z^2 / 2, which is what IMP::core::Harmonic scores for
+        k = 1/sigma^2). It read 0.25 until 2026-08-24 because one factor of a
+        half was applied twice, which mixed this restraint into a scoring
+        function at half the weight of every IMP harmonic beside it.
+        """
+        m = IMP.bff.AVPairDistanceMeasurement()
+        m.distance, m.error_neg, m.error_pos = 50.0, 1.0, 10.0
+        for model in (40.0, 45.0, 50.0, 55.0, 60.0):
+            chi2 = chi2_score(model, 50.0, 1.0, 10.0)
+            assert m.score_model(model) == pytest.approx(0.5 * chi2, rel=1e-12)
+        # The asymmetry is real and this is which way round it goes: with a
+        # wide error_pos and a tight error_neg, overshooting is cheap and
+        # undershooting is expensive.
+        assert m.score_model(60.0) < m.score_model(40.0)
+
+    def test_a_nan_model_is_infinitely_bad(self):
+        m = IMP.bff.AVPairDistanceMeasurement()
+        m.distance, m.error_neg, m.error_pos = 50.0, 1.0, 10.0
+        assert m.score_model(float("nan")) == float("inf")
 
 
 class TestFretEfficiency:

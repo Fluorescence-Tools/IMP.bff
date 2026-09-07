@@ -1,8 +1,4 @@
-"""IMP.bff.io — the fps.json reader, the legacy C# formats, and structure IO.
-
-The three used to be one module (``fret/io.py``) and are three now; the tests
-reach them through the package, which is the surface a caller sees.
-"""
+"""The fps.json reader, the legacy C# formats, and structure IO."""
 
 import json
 from pathlib import Path
@@ -146,20 +142,20 @@ def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
     term may name a number whose `_ff_site` row appears later in the file.
     """
     import IMP.bff
-    from IMP.bff import write_dye_forcefield_cif
+    from IMP.bff import write_probe_forcefield_cif
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_dye_protein_system
+    from IMP.bff import build_probe_protein_system
 
-    system = build_dye_protein_system(
+    system = build_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
-        dye_template=str(get_template_dir("atto655.template.cif")),
+        probe_template=str(get_template_dir("atto655.template.cif")),
     )
     import tempfile, os
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "system.cif")
-        write_dye_forcefield_cif(path, system)
+        write_probe_forcefield_cif(path, system)
         back = IMP.bff.read_forcefield_cif(path)
 
     assert back.name == system.name
@@ -194,3 +190,65 @@ def test_the_forcefield_cif_reader_is_cpp_and_matches_the_python():
     assert back.nonbonded.enabled == system.nonbonded.enabled
     assert abs(back.nonbonded.cutoff - system.nonbonded.cutoff) < 1e-12
     assert back.sampling.n_steps == system.sampling.n_steps
+
+
+@pytest.mark.parametrize("awkward", [
+    'CX4, atto655 and a comma',            # a comma: the reader splits rows on it
+    'a "quoted" word',                     # a double quote, but never before a space
+    'he said "hi" and left',               # `" ` -- a double quote cannot close this
+    "it's 5' from the C-term",             # `\' ` too: neither delimiter closes it
+])
+def test_an_awkward_value_survives_the_forcefield_round_trip(tmp_path, awkward):
+    """One writer, one quoting rule -- and the rule is CIF's.
+
+    The module wrote CIF from three places: a `CifWriter` whose quoting is the
+    reason a multi-word value survives (the ihm reader splits rows on
+    whitespace), a second `cif_val` in the same file that quoted on space and
+    `#` but not on a comma or a tab, and a hand-rolled `_atom_site` loop in the
+    structure writer. The force-field writer used the second one for all of its
+    values, so a name with a comma in it made the row come up short.
+
+    Consolidating them surfaced the first one's own bug: it doubled an embedded
+    quote, which is the CSV convention and not CIF's. CIF has no escape at all
+    -- a quoted value ends at its delimiter followed by whitespace -- so the
+    delimiter has to be *chosen*: `"`, else `'`, else a semicolon text field.
+    `""` came back as two literal quotes.
+    """
+    import IMP.bff
+    from IMP.bff import (build_probe_protein_system, get_structure_dir,
+                         get_template_dir, write_probe_forcefield_cif)
+
+    system = build_probe_protein_system(
+        str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
+        "CX4", "atto655",
+        protein_template=str(get_template_dir("cx4.template.cif")),
+        probe_template=str(get_template_dir("atto655.template.cif")),
+    )
+    system.name = awkward
+
+    path = tmp_path / "awkward.cif"
+    write_probe_forcefield_cif(str(path), system)
+    back = IMP.bff.read_forcefield_cif(str(path))
+
+    assert back.name == awkward
+    # and the rest of the file still parses: a mis-quoted value shifts every
+    # column after it, so the counts are the second half of the check
+    assert len(back.sites) == len(system.sites)
+    assert len(back.bonds) == len(system.bonds)
+
+
+def test_the_pdb_to_cif_writer_quotes_like_every_other_category(tmp_path):
+    """`convert_pdb_to_cif` wrote its `_atom_site` loop by hand, with no
+    quoting at all. It goes through the shared writer now, so IMP's own mmCIF
+    reader can read what it wrote."""
+    import IMP
+    import IMP.atom
+    import IMP.bff
+
+    pdb = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
+    out = tmp_path / "converted.cif"
+    IMP.bff.convert_pdb_to_cif(str(pdb), str(out), "T4L")
+
+    m = IMP.Model()
+    hier = IMP.atom.read_mmcif(str(out), m)
+    assert len(IMP.atom.get_by_type(hier, IMP.atom.ATOM_TYPE)) > 0

@@ -2,9 +2,6 @@
  *  \file IMP/bff/QuenchingMap.h
  *  \brief Mobility, quenching-rate and FRET-rate fields on an AV grid.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
- *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
@@ -55,7 +52,7 @@ IMPBFFEXPORT void slow_near_atoms(
     \param[in] atoms_xyz obstacle coordinates, flat
     \param[in] kQ per-atom rate constant; zero means the atom does not quench
     \param[in] rC per-atom attenuation length
-    \param[in] dye_radius subtracted from the centre-to-centre distance
+    \param[in] probe_radius subtracted from the centre-to-centre distance
     \param[in] inv_tau0 the radiative floor
 */
 IMPBFFEXPORT void quenching_map(
@@ -65,7 +62,7 @@ IMPBFFEXPORT void quenching_map(
         const std::vector<double>& atoms_xyz,
         const std::vector<double>& kQ,
         const std::vector<double>& rC,
-        double dye_radius,
+        double probe_radius,
         double inv_tau0,
         double** out_view, int* n_out_view
 );
@@ -173,7 +170,7 @@ IMPBFFEXPORT void quenching_rate_map(
         const std::vector<double>& kQ,
         const std::vector<double>& rC,
         double tau0,
-        double dye_radius,
+        double probe_radius,
         double** out_view, int* n_out_view);
 
 //! An effective FRET rate for every donor voxel, from the acceptor cloud.

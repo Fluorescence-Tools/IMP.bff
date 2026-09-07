@@ -2,8 +2,12 @@
  *  \file IMP/bff/SolventAccessibleSurface.h
  *  \brief Shrake-Rupley solvent-accessible surface of selected atoms.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
+ * Not `IMP::saxs::SolventAccessibleSurface`, which answers a different
+ * question: it returns each atom's accessibility as a *fraction* of its
+ * isolated surface, for a form factor. These return **area in square
+ * Angstrom**, per atom or summed, which is what a quenching or burial term
+ * integrates -- and they take flat arrays, so a caller with coordinates from
+ * anywhere does not have to build particles first.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -21,6 +25,12 @@ IMPBFF_BEGIN_NAMESPACE
 //! \p n roughly equidistant points on the unit sphere, by the golden spiral.
 /*!
     Returned flat, three doubles per point.
+
+    Not `IMP::algebra::get_uniform_surface_cover`, which covers a sphere by a
+    different construction: every sampled quantity in this module -- the
+    surface areas below, the coarse-grained potentials' residue ASA -- is
+    pinned against *this* point set, so the two are not interchangeable at the
+    precision those pins assert.
 
     \param[in] n number of points
 */
@@ -55,6 +65,36 @@ IMPBFFEXPORT std::vector<double> solvent_accessible_surface_area(
         const std::vector<double>& points,
         double probe = 1.4,
         double radius = 2.5
+);
+
+//! Solvent-accessible surface area with a per-atom radius (Shrake-Rupley).
+/*!
+    The textbook form, and the one a *relative* accessibility needs: atom \p i
+    is sampled on a sphere of radius \f$r_i + probe\f$ and a sample is occluded
+    when it falls within \f$r_j + probe\f$ of another atom's centre, so each
+    atom is occluded by its neighbour's real size. The area returned is the
+    accessible surface \f$4\pi (r_i + probe)^2 f_i\f$.
+
+    solvent_accessible_surface_area() above differs deliberately and is not a
+    worse version of this: it samples every atom at one radius and scales the
+    count by \f$r_i^2\f$, which is what the contact and quenching estimates
+    want (a probe of fixed size rolling over a uniform obstacle set) and is
+    cheaper. The two answer different questions; a caller comparing an area
+    against a tabulated maximum wants this one.
+
+    \param[in] xyz atom coordinates, flat, three per atom
+    \param[in] vdw per-atom van der Waals radii
+    \param[in] probe_atom_indices which atoms to compute the area for
+    \param[in] points unit-sphere samples, flat, from sphere_points()
+    \param[in] probe probe-sphere radius in Angstrom
+    \return one accessible area per entry of \p probe_atom_indices
+*/
+IMPBFFEXPORT std::vector<double> solvent_accessible_surface_area_per_atom(
+        const std::vector<double>& xyz,
+        const std::vector<double>& vdw,
+        const std::vector<int>& probe_atom_indices,
+        const std::vector<double>& points,
+        double probe = 1.4
 );
 
 //! Total quenching rate at each frame of a trajectory.

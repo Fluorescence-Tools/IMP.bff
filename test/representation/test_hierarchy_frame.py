@@ -8,7 +8,7 @@ largest single cost in loading a rotamer library: the FRETpredict pins spent
 
 Two C++ calls now, and the rotamer suite went from ~44 s to 6 s.
 
-The tests compare against the Python loop, kept verbatim, because the metadata
+The tests compare against a reference loop, kept verbatim, because the metadata
 is fiddly in a way that is easy to get subtly wrong — and was. IMP names an atom
 ``"Atom CB of residue 1"``: five fields, not two. A first cut took the *last*
 one, so every atom in the structure came back named for its residue number, and

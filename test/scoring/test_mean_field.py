@@ -1,17 +1,17 @@
 import numpy as np
-from IMP.bff import rotamer_mean_field_weights, rotamer_mean_field_weights_multi_dye
+from IMP.bff import rotamer_mean_field_weights, rotamer_mean_field_weights_multi_probe
 
 def test_mean_field_weights_single():
     n_clusters = 5
-    n_dye_atoms = 8
+    n_probe_atoms = 8
     n_prot = 20
     
     np.random.seed(42)
-    rotamer_coords = np.random.randn(n_clusters, n_dye_atoms, 3) * 5
+    rotamer_coords = np.random.randn(n_clusters, n_probe_atoms, 3) * 5
     initial_weights = np.ones(n_clusters) / n_clusters
     protein_coords = np.random.randn(n_prot, 3) * 3
     
-    dye_elems = ['C'] * n_dye_atoms
+    dye_elems = ['C'] * n_probe_atoms
     prot_elems = ['C'] * n_prot
     
     w = np.asarray(rotamer_mean_field_weights(
@@ -42,7 +42,7 @@ def test_mean_field_weights_multi():
     dye2_elems = ['C'] * n_dye_atoms_2
     prot_elems = ['C'] * n_prot
     
-    w_list = rotamer_mean_field_weights_multi_dye(
+    w_list = rotamer_mean_field_weights_multi_probe(
         [rot_1, rot_2],
         [w1_init, w2_init],
         protein_coords,

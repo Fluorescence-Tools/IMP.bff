@@ -7,9 +7,9 @@
  * types that read them in the other. They are one header now, because a rate
  * that takes two partners to define cannot live in only one of them.
  *
- * `quench_radius` and `attenuation_length` are **NaN** where the Python had
- * `None`: NaN is what a C++ double carries, and for the radius it means
- * "inherit the model-wide critical distance" exactly as `None` did.
+ * `quench_radius` and `attenuation_length` are **NaN** when unset: NaN is
+ * what a C++ double carries, and for the radius it means "inherit the
+ * model-wide critical distance".
  *
  * The tables come back as SWIG `std::map` proxies, which iterate and support
  * `[]`, `in`, `len()` and `items()` but not `.get()`.

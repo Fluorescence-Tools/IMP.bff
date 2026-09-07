@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/PathMapTile.h
+ *  \file PathMapTile.cpp
  *  \brief Tile used in path search by PathMap
  *
  * \authors Thomas-Otavio Peulen
@@ -17,7 +17,7 @@ void PathMapTile::update_edges(
         const double nr,
         const float tile_penalty_threshold
 ){
-    const IMP::em::DensityHeader* header = av->get_header();
+    const GridHeader* header = av->get_header();
     const int nn = ceil(nr);
     const double nr2 = nr * nr;
 

@@ -17,8 +17,8 @@ FRETpredict libraries ship as module data) or sampled over its linker degrees
 of freedom, screened against the protein and turned into R0/κ²/FRET
 efficiencies (`IMP.bff.RotamerFRET`, `IMP.bff.attach_dyes`, ...). Every public
 name is reachable flat as `IMP.bff.<Name>`; the manual page
-`doc/manual/structure/structure_cgdye.ipynb` walks the explicit route, and
-`okf/cgdye.md` records how the code is organised.
+`doc/manual/structure/structure_cgprobe.ipynb` walks the explicit route, and
+`okf/cgprobe.md` records how the code is organised.
 
 
 ## Inter-label distance score usage:
@@ -59,11 +59,10 @@ is written out in `examples/structure/t4l_pmi.py`.
 The command tree is one tree. `imp_bff --help` lists every command:
 `flexfit` and `rmsd` fit against distance restraints, `select-pairs` ranks
 labelling pairs before an experiment is done, `openmm` writes a restrained
-OpenMM run and `av-export` writes one volume for a viewer, `decays` runs the
-automated decay analysis, `dye` is explicit-dye labelling and sampling,
-`rotamer` is rotamer-library FRET, and `av-vs-rotamer` regenerates the
-comparison note. Two of those groups used to live *inside* the package and
-were reachable only as `python -m IMP.bff.cgdye.cli` and
+OpenMM run and `av-export` writes one volume for a viewer, `decays` runs the automated decay
+analysis, `dye` is explicit-dye labelling and sampling, `rotamer` is
+rotamer-library FRET, and `av-vs-rotamer` regenerates the comparison note. Two of those groups used to live *inside* the package and
+were reachable only as `python -m IMP.bff.cgprobe.cli` and
 `python -m IMP.bff.cli`; a click command is a decorated function, so a library
 module carrying one cannot be imported without click, which is why command
 trees belong in `bin/`.
@@ -251,6 +250,112 @@ for corpora where dipole directions do not matter. `--cluster A` takes the
 raw-MD path: leader clustering, leaders become rotamers and cluster
 populations become weights. `--all DIR` re-encodes a whole library directory.
 
+# imp_bff_fps: FRET-restrained docking and screening {#imp_bff_fps}
+
+The run modes of FPS, the FRET Positioning and Screening toolkit (Kalinin
+*et al.*, *Nat. Methods* **9**, 1218, 2012), on IMP. FPS is a Windows C#
+application; the physics it needs -- accessible volumes, the asymmetric
+chi-square, rigid bodies, excluded volume -- is native here, and this program
+is the door onto it.
+
+```bash
+imp_bff_fps score  -p bodyA.pdb -p bodyB.pdb -j labels.fps.json -c set
+imp_bff_fps dock   -p bodyA.pdb -p bodyB.pdb -j labels.fps.json -c set -o out/
+imp_bff_fps refine -p bodyA.pdb -p bodyB.pdb -j labels.fps.json -c set -o out/
+imp_bff_fps screen -s ./library -j labels.fps.json -o ranked.csv
+imp_bff_fps convert --positions LabelingPositions.txt -p bodyA.pdb -o labels.fps.json
+```
+
+`-p` is repeated once per rigid body and the order given is the body order;
+`--fixed-body 0` (the default) holds the first still, so the first structure is
+the frame everything is reported in. Every mode also reads the **legacy C# FPS
+pair** directly -- `--positions LabelingPositions.txt --distances
+Distances.txt` -- with no conversion step; `convert` exists only for when the
+fps.json should be kept. The legacy formats are read-only by design.
+
+Worked examples run on the shipped data in
+`examples/structure/HIV_RT/`: HIV-1 reverse transcriptase with its DNA
+primer/template (1R0A), FPS's own docking test case, with the original C# FPS
+`LabelingPositions.txt` and `Distances.txt` beside the converted
+`hiv_rt.fps.json` -- 11 labelling positions, 20 measured distances, two rigid
+bodies.
+
+```bash
+E=$IMP/examples/bff/structure/HIV_RT
+imp_bff_fps score -p $E/protein_1R0A.pdb -p $E/dna.pdb -j $E/hiv_rt.fps.json -c resolved
+imp_bff_fps dock  -p $E/protein_1R0A.pdb -p $E/dna.pdb -j $E/hiv_rt.fps.json -c resolved \
+                  -o dock_out --seed 1
+```
+
+Two things that file is honest about, and worth knowing before trusting any
+docking result. Its `all` score set carries all 20 distances and scores `inf`,
+because the two involving `p66_K287C` have no model value: that site is buried
+at the protein-DNA interface and its accessible volume is **empty**. The
+`resolved` set is the other 18. And FPS builds each volume on its own subunit
+in isolation, where `IMP.bff` builds them in the assembled complex -- which is
+why a site can be open in FPS and buried here.
+
+The optimiser underneath differs from FPS's damped rigid-body dynamics, so
+**scores are comparable with FPS and coordinates are not**. A single run is one
+local minimum: repeat with different `--seed`s and compare before believing a
+pose. See [`okf/prds/prd-121.md`](okf/prds/prd-121.md) for what has been
+measured against FPS itself.
+
+# imp_bff_fps_av: compute one accessible volume {#imp_bff_fps_av}
+
+FPS's standalone AV dialog, which FPS itself reaches as `FpsGui -av`. One site,
+one dye, one volume, written where PyMOL or VMD can open it (`.xyz`, `.pqr`,
+`.dx`, `.mrc`).
+
+```bash
+imp_bff_fps_av -p 3GUN.pdb -c A -r 55 -d alexa488-long -o d55.xyz
+imp_bff_fps_av -p 3GUN.pdb -r 132 -l 20 -w 4.5 --radii 3.5 -o d132.xyz
+```
+
+The dye presets are FPS's own, from its `Fps/data/linker.txt`. Each row carries
+a single AV1 radius **and** three AV3 radii; they are not interchangeable, so
+both are kept and `--av1` selects the single-radius column. The grid spacing
+defaults to FPS's rule, `max(min(0.2L, 0.2W, 0.4R_i), 0.4)`, so a preset
+reproduces FPS's grid.
+
+Leave `--clearance` unset unless you know why you are setting it. The path
+search inflates every obstacle by half the linker width, and a clearance below
+that walls the source in and returns an **empty** volume; an unset clearance
+derives one that does not. FPS's `LinkerInitialSphere x width` is a different
+quantity — its seed is unconditional — so an FPS number does not transfer.
+An empty volume is a legitimate answer for a buried site, and this program says
+so and exits non-zero rather than writing a file that looks computed.
+
+# imp_bff_fps_distance: the distances between two dye clouds {#imp_bff_fps_distance}
+
+FPS's distance calculator. Two accessible volumes in, and the numbers a FRET
+measurement is compared against out:
+
+```bash
+imp_bff_fps_distance d55.xyz a86.xyz            # R0 = 52 A
+imp_bff_fps_distance d55.xyz a86.xyz -r 60 --json
+```
+
+```
+Rmp       =    59.43 A     distance between the mean positions
+<RDA>     =    61.72 A     mean donor-acceptor distance
+sigma_DA  =     7.45 A     width of that distribution
+<E>       =    0.292       mean transfer efficiency (R0 = 52 A)
+<RDA>_E   =    60.28 A     what a measured <E> reads as
+```
+
+The three distances are **not** interchangeable and an experiment measures one
+of them; `<RDA>_E` is always the shortest, because efficiency weights close
+pairs as `1/r^6`. Reporting one where the data mean another is a
+several-Angstrom error.
+
+It reads both `.xyz` dialects. One trap it handles rather than hides: an FPS
+`.xyz` is **duplicate-expanded** — its AV3 export writes a voxel once per dye
+radius that fits, so the line count is the sum of densities and not the volume
+(5473 lines over 3187 voxels in the shipped example). That is a weighting, so
+the duplicates are kept and counted, and the unique voxel count is reported
+separately.
+
 # imp_bff_labelizer: score the labelling sites of a structure {#imp_bff_labelizer}
 
 Scores every residue of a structure for how good a fluorescent-labelling site
@@ -288,7 +393,35 @@ settings. A position that was not scored carries a status and no number, which
 is the thing the reference's output cannot express -- it writes `-1` for
 "excluded" and `0` for "no contribution" into the same column as real scores.
 
-# imp_bff_dye_pdb2cif: convert a dye PDB to mmCIF {#imp_bff_dye_pdb2cif}
+# imp_bff_fps_export: FPS's result files, and the errors that fill them {#imp_bff_fps_export}
+
+The door onto FPS's `SaveForm` -- the dialog every result file is written from
+-- and onto `ErrorEstimation`, the mode that produces a table with more than
+one row in it.
+
+```
+imp_bff_fps_export errors  ...   perturb the docked model's own distances,
+                                 re-fit, and report the spread (FPS's
+                                 parametric bootstrap)
+imp_bff_fps_export table   ...   write the five export files from a results table
+imp_bff_fps_export screen  ...   rank a library and write FPS's two Filter-mode tables
+```
+
+`errors` and `table` each write five files: one PyMOL script per row
+(`<prefix><N>.pml`), every row as its own object (`<prefix>Overlay.pml`), one
+object with a state per row (`<prefix>OverlayStates.pml`), the model distances
+(`<prefix>Rtable_<T>.txt`) and the results grid (`<prefix>chi2table.txt`).
+
+FPS's sixth output, `SimulationResults.bin`, is deliberately not reproduced: it
+is a .NET `BinaryFormatter` dump, unreadable outside a legacy .NET target and
+meaningless away from the project beside it. `results.json` replaces it, and
+carries the molecule manifest that FPS's reload-by-position needed and never
+had.
+
+Run `imp_bff_fps_export --help` for the flags, including the three that
+reproduce known FPS defects on demand.
+
+# imp_bff_probe_pdb2cif: convert a probe PDB to mmCIF {#imp_bff_probe_pdb2cif}
 
 Writes the `_atom_site` records for a dye structure, deriving the element from
 the atom name where the PDB does not carry one. The conversion itself is

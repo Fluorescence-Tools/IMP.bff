@@ -7,6 +7,11 @@
  *
  */
  #include <IMP/bff/ProbeNetworkRestraint.h>
+// For the reference-frame fit an `XYZ` position is transported through. It
+// lives beside the screening diagnostics that first needed it; this is the
+// second caller, not a second copy.
+#include <IMP/bff/Docking.h>
+#include <IMP/core/XYZ.h>
 
 #include <algorithm>
 #include <atomic>
@@ -83,6 +88,15 @@ ProbeNetworkRestraint::ProbeNetworkRestraint(
     for(IMP::core::Hierarchy &h : IMP::core::get_leaves(hier)){
         model_ps_.emplace_back(h.get_particle_index());
     }
+    // The fixed (`XYZ`) points are this restraint's own particles, not leaves
+    // of the hierarchy, so they are not in the loop above and the model would
+    // not know the score depends on them. The `ATOM` ones already are leaves.
+    for(const auto &kv : points_){
+        if(std::find(atom_points_.begin(), atom_points_.end(), kv.first)
+           == atom_points_.end()){
+            model_ps_.emplace_back(kv.second);
+        }
+    }
     configure_avs();
 }
 
@@ -135,6 +149,51 @@ std::map<std::string, std::unique_ptr<IMP::bff::AV> > ProbeNetworkRestraint::cre
         nlohmann::json position = it.value();
         std::string position_name = it.key();
 
+        const std::string stype =
+                position.value("simulation_type", std::string("AV1"));
+
+        if(stype == "ATOM"){
+            // The atom itself is the point. Nothing is created and nothing is
+            // resampled; the position moves because the structure does.
+            points_[position_name] =
+                    IMP::bff::search_labeling_site(hier, "", position);
+            atom_points_.push_back(position_name);
+            continue;
+        }
+        if(stype == "XYZ"){
+            // A coordinate, in whatever frame it was measured in. The frame is
+            // carried by `reference_atoms`; with one, the point is Kabsch-fitted
+            // onto *this* structure before it is used, which is what makes a
+            // measured mean dye position mean anything on a library structure
+            // (FilterEngine.cs:225-278). Without one it is taken as given --
+            // right when the file was written against this very structure, and
+            // silently wrong otherwise, which is why the fps.json schema
+            // documents `reference_atoms` on exactly this type.
+            IMP::algebra::Vector3D r(position.value("x", 0.0),
+                                     position.value("y", 0.0),
+                                     position.value("z", 0.0));
+            const ReferenceAtoms frame = fps_reference_atoms(position.dump());
+            if(!frame.empty()){
+                const ReferenceFit fit = fit_reference_atoms(
+                        frame, IMP::atom::Hierarchy(hier.get_particle()), r);
+                if(fit.fitted){
+                    r = fit.coordinates;
+                } else {
+                    IMP_WARN("ProbeNetworkRestraint: position '" << position_name
+                             << "' declares " << frame.size()
+                             << " reference atoms but only " << fit.n_atoms
+                             << " were found here (three fix a rotation); its "
+                             << "coordinate is used as written, in the frame it "
+                             << "was measured in.\n");
+                }
+            }
+            IMP_NEW(IMP::Particle, point_particle, (model));
+            point_particle->set_name(position_name);
+            IMP::core::XYZ::setup_particle(point_particle, r);
+            points_[position_name] = point_particle->get_index();
+            continue;
+        }
+
         // Create new Particle for AV
         IMP_NEW(IMP::Particle, av_particle, (model));
         av_particle->set_name(position_name);
@@ -162,13 +221,55 @@ IMP::bff::AV ProbeNetworkRestraint::get_used_av(std::string name) const{
     return *av;
 }
 
+IMP::bff::AV* ProbeNetworkRestraint::find_av(const std::string &name) const{
+    auto it = avs_.find(name);
+    return it == avs_.end() ? nullptr : it->second.get();
+}
+
 IMP::bff::AV* ProbeNetworkRestraint::get_av(std::string name) const{
-    for (const auto& n : avs_)
-        if(n.first == name){
-            return n.second.get();
-        }
-    IMP_WARN("AV not found in ProbeNetworkRestraint");
-    return nullptr;
+    IMP::bff::AV* av = find_av(name);
+    if(av == nullptr){
+        IMP_WARN("AV not found in ProbeNetworkRestraint");
+    }
+    return av;
+}
+
+IMP::ParticleIndex ProbeNetworkRestraint::get_position_particle_index(
+        std::string name) const{
+    auto p = points_.find(name);
+    if(p != points_.end()) return p->second;
+    IMP::bff::AV* av = find_av(name);
+    return av == nullptr ? IMP::ParticleIndex() : av->get_particle_index();
+}
+
+IMP::algebra::Vector3D ProbeNetworkRestraint::get_position_coordinates(
+        const std::string &name) const{
+    auto p = points_.find(name);
+    if(p != points_.end()){
+        return IMP::core::XYZ(get_model(), p->second).get_coordinates();
+    }
+    IMP::bff::AV* av = find_av(name);
+    IMP_USAGE_CHECK(av != nullptr,
+                    "ProbeNetworkRestraint: no position named " << name);
+    return av->get_mean_position();
+}
+
+bool ProbeNetworkRestraint::get_is_bond(std::string distance_name) const{
+    auto it = distances_.find(distance_name);
+    if(it == distances_.end()) return false;
+    auto is_atom = [this](const std::string &n){
+        return std::find(atom_points_.begin(), atom_points_.end(), n)
+               != atom_points_.end();
+    };
+    return is_atom(it->second.position_1) && is_atom(it->second.position_2);
+}
+
+std::vector<std::string> ProbeNetworkRestraint::get_bond_names() const{
+    std::vector<std::string> out;
+    for(const auto &kv : distances_){
+        if(get_is_bond(kv.first)) out.push_back(kv.first);
+    }
+    return out;
 }
 
 namespace internal {
@@ -180,7 +281,10 @@ struct AVEvalJob {
     std::vector<const AVPairDistanceMeasurement*> pairs;
     std::vector<double> model;
     std::vector<std::pair<size_t, size_t> > pair_slots;
-    std::vector<size_t> pair_order;      // pair tasks in start-ready order
+    std::vector<size_t> pair_order;      // AV/AV pair tasks in start-ready order
+    // Pairs with a point (XYZ / ATOM) end: they read the Model rather than a
+    // cloud, so they are not pool tasks and carry no AV dependency.
+    std::vector<size_t> serial_pairs;
     bool pipelined = false;
     bool quad = true;
     int qk = 50;
@@ -252,7 +356,9 @@ std::shared_ptr<internal::AVEvalJob> ProbeNetworkRestraint::begin_evaluation() c
     for(const auto &it : distances_){
         job->pairs.push_back(&it.second);
         if(it.second.distance_type == PROBE_PAIR_DISTANCE_MP ||
-           it.second.distance_type == PROBE_PAIR_XYZ_DISTANCE){
+           it.second.distance_type == PROBE_PAIR_XYZ_DISTANCE ||
+           get_position_is_point(it.second.position_1) ||
+           get_position_is_point(it.second.position_2)){
             job->has_model_reading_pairs = true;
         }
     }
@@ -261,15 +367,24 @@ std::shared_ptr<internal::AVEvalJob> ProbeNetworkRestraint::begin_evaluation() c
     for(size_t i = 0; i < job->all.size(); i++) av_slot[job->all[i]] = i;
     job->pair_slots.resize(job->pairs.size());
     for(size_t j = 0; j < job->pairs.size(); j++){
-        job->pair_slots[j] = std::make_pair(av_slot[get_av(job->pairs[j]->position_1)],
-                                            av_slot[get_av(job->pairs[j]->position_2)]);
+        const IMP::bff::AV *a = find_av(job->pairs[j]->position_1);
+        const IMP::bff::AV *b = find_av(job->pairs[j]->position_2);
+        if(a == nullptr || b == nullptr){
+            // A point end. There is no volume to wait for, so this pair is not
+            // a pool task at all -- and giving it a made-up slot would index
+            // `stage[]` out of bounds when *both* ends are points and `all` is
+            // empty.
+            job->serial_pairs.push_back(j);
+            job->pair_slots[j] = std::make_pair((size_t) 0, (size_t) 0);
+            continue;
+        }
+        job->pair_slots[j] = std::make_pair(av_slot[a], av_slot[b]);
+        job->pair_order.push_back(j);
     }
     // Pair tasks in the order they can start: by the later of their two AVs
     // (AVs are queued longest-first), so a worker never idles on a pair whose
     // AVs are still searching while ready pairs wait behind it. The score is
     // summed in the original (map) order regardless.
-    job->pair_order.resize(job->pairs.size());
-    for(size_t j = 0; j < job->pairs.size(); j++) job->pair_order[j] = j;
     std::stable_sort(job->pair_order.begin(), job->pair_order.end(), [&](size_t a, size_t b){
         return std::max(job->pair_slots[a].first, job->pair_slots[a].second) <
                std::max(job->pair_slots[b].first, job->pair_slots[b].second);
@@ -289,7 +404,8 @@ void ProbeNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
                                           job.pairs[j]->forster_radius, job.pairs[j]->distance_type);
     };
     if(job.pipelined){
-        const size_t nr = job.rtasks.size(), na = job.all.size(), np = job.pairs.size();
+        const size_t nr = job.rtasks.size(), na = job.all.size();
+        const size_t np = job.pair_order.size();
         std::atomic<size_t> rasters_left(nr);
         std::vector<std::atomic<int> > stage(na);   // 0 none, 1 searched, 2 ready
         for(auto &f : stage) f.store(0);
@@ -324,7 +440,9 @@ void ProbeNetworkRestraint::run_evaluation(internal::AVEvalJob &job) const {
         // on a task that an earlier worker has not started.
         get_pool().run(nr + 2 * na + (quad ? np : 0), work);
         if(!quad){
-            for(size_t j = 0; j < np; j++) eval_pair(j);
+            for(size_t j = 0; j < job.pairs.size(); j++) eval_pair(j);
+        } else {
+            for(size_t j : job.serial_pairs) eval_pair(j);
         }
     } else {
         for(size_t i = 0; i < job.all.size(); i++){
@@ -415,6 +533,24 @@ double ProbeNetworkRestraint::get_model_distance(
         double forster_radius,
         int distance_type
 ) const {
+    if(get_position_is_point(position1_name) ||
+       get_position_is_point(position2_name)){
+        // FPS's rule, and the whole of what a point end changes:
+        //   if (dist.DataType == Rmp || lp1.AVType == None || lp2.AVType == None)
+        //       d.R = dmp.R;   // i.e. no clouds -> Rmp
+        // (FilterEngine.cs:305-307). Nothing at that end has a distribution, so
+        // <R_DA> and <R_DA>_E have nothing to average and collapse onto the
+        // separation itself -- exactly, not approximately.
+        const double d = (get_position_coordinates(position1_name) -
+                          get_position_coordinates(position2_name))
+                                 .get_magnitude();
+        // The one type that is not a distance still has to answer in its own
+        // units; for a delta at d that is the single-pair efficiency.
+        if(distance_type == PROBE_PAIR_EFFICIENCY){
+            return fret_efficiency<double>(d, forster_radius);
+        }
+        return d;
+    }
     auto av1 = get_av(position1_name);
     auto av2 = get_av(position2_name);
     if(distance_ == "quad"){
@@ -497,8 +633,10 @@ double ProbeNetworkRestraint::get_quad_error_estimate(int reference_k) const{
     double worst = 0.0;
     for(const auto &it : distances_){
         const auto &d = it.second;
-        auto av1 = get_av(d.position_1);
-        auto av2 = get_av(d.position_2);
+        auto av1 = find_av(d.position_1);
+        auto av2 = find_av(d.position_2);
+        // A point end is exact -- there is no quadrature to estimate an error of.
+        if(av1 == nullptr || av2 == nullptr) continue;
         double a = av_distance_quadrature(*av1, *av2, d.forster_radius,
                                           d.distance_type, quad_k_);
         double b = av_distance_quadrature(*av1, *av2, d.forster_radius,

@@ -27,14 +27,7 @@ class FPSReaderWriter{
 
 private:
 
-    /// Converts distance names (also used in fps.json files) to internal distance types
-    std::map<std::string, int> DyePairMeasure_name_to_type = {
-            {"RDAMean",    DYE_PAIR_DISTANCE_MEAN},
-            {"RDAMeanE",   DYE_PAIR_DISTANCE_E},
-            {"Rmp",        DYE_PAIR_DISTANCE_MP},
-            {"Efficiency", DYE_PAIR_EFFICIENCY},
-            {"pRDA",    DYE_PAIR_DISTANCE_DISTRIBUTION}
-    };
+    // The name/type vocabulary is `probe_pair_distance_type()` in `AV.h`.
 
     std::string fn_json_;
     std::string score_set_;

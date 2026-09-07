@@ -13,7 +13,7 @@
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cstring>

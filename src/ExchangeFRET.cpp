@@ -7,7 +7,7 @@
 
 #include <IMP/bff/ExchangeFRET.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>

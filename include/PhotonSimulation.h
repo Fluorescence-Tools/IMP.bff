@@ -35,10 +35,10 @@ IMPBFF_BEGIN_NAMESPACE
     a photon emitted before it was excited, 2.4e-4 of all photons, each then
     silently dropped by any histogram starting at zero.
 
-    Parallel **and** reproducible: each thread gets its own generator seeded from
-    \p seed and the photon index, so the result does not depend on how the
-    scheduler distributed the work. The numba this replaces had to choose
-    between the two.
+    Parallel **and** reproducible: each thread gets its own generator seeded
+    from \p seed and the photon index, so the result does not depend on how the
+    scheduler distributed the work. Seeding per thread instead would force a
+    choice between the two.
 
     \param[in] n_ph excitation events to simulate
     \param[in] k_quench per-frame quenching rate, 1/ns

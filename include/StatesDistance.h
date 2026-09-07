@@ -5,17 +5,15 @@
  * Everything here takes #IMP::bff::States, so one implementation serves an
  * accessible volume, a rotamer library, a Gaussian, a coarse-grained ensemble
  * and an MD trajectory. That is the point: this was the third of **six**
- * implementations of dye-pair distances in the package, and they were checked
+ * implementations of probe-pair distances in the package, and they were checked
  * against each other before being merged — on T4L A132 x A65, 2180 x 3087
  * points, 2e5 samples, \f$\langle R_{DA}\rangle\f$ came out 51.945 against
  * 51.940 A and \f$\langle R_{DA}\rangle_E\f$ 51.696 against 51.692 A, with
  * \f$R_{mp}\f$ identical. The spread is Monte-Carlo sampling noise.
  *
- * There is **one sampler** now, #IMP::bff::random_distances. The Python this
- * replaces drew from `numpy.random.RandomState`, so every quantity built on it
- * agreed with the compiled kernel only to about \f$1/\sqrt{n}\f$ — two
- * estimators of the same integral rather than two computations of the same
- * number. Anything pinned against the old stream has to be regenerated.
+ * There is **one sampler**, #IMP::bff::random_distances, so two callers
+ * asking for the same quantity compute the same number rather than two
+ * estimates of one integral agreeing to \f$1/\sqrt{n}\f$.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -27,8 +25,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <vector>
@@ -254,7 +251,7 @@ public:
 };
 
 //! A label modelled as an isotropic 3-D Gaussian. No structure needed.
-class IMPBFFEXPORT DyeDistributionNormal : public LabelDistribution {
+class IMPBFFEXPORT ProbeDistributionNormal : public LabelDistribution {
     double width_;
     int n_points_;
     int seed_;
@@ -265,11 +262,11 @@ public:
     //! \param[in] origin the mean position
     /*! \param[in] width the per-axis standard deviation, A
         \param[in] n_points states to draw
-        \param[in] seed for reproducibility -- the Python this replaces drew
-                   from the global `numpy.random` state, so two labels built in
-                   the same process were not reproducible at all
+        \param[in] seed for reproducibility. A generator seeded here, rather
+                   than a process-global one, is what makes two labels built in
+                   one process reproducible
         \param[in] position_name a human-readable label */
-    DyeDistributionNormal(const std::vector<double>& origin, double width = 6.0,
+    ProbeDistributionNormal(const std::vector<double>& origin, double width = 6.0,
                           int n_points = 50000, int seed = 0,
                           const std::string& position_name = "");
 
@@ -311,7 +308,7 @@ public:
     //! \f$\langle E\rangle\f$ at a centre-to-centre distance.
     double get_fret_efficiency_mean(double dist_center_center) const;
 
-    //! The distance of a named convention, by the `DYE_PAIR_DISTANCE_*` codes.
+    //! The distance of a named convention, by the `PROBE_PAIR_DISTANCE_*` codes.
     double get_effective_distance(double value, int distance_type) const;
 
     IMP_SHOWABLE_INLINE(FRETDistanceConverter,
@@ -319,6 +316,31 @@ public:
                             << ", sigma=" << sigma_ << ")");
 };
 IMP_VALUES(FRETDistanceConverter, FRETDistanceConverters);
+
+// --------------------------------------------------------------------------
+// Empirical corrections from a computed distance to a measured one
+// --------------------------------------------------------------------------
+
+//! Evaluate a polynomial by Horner's method.
+/*!
+    \param[in] x abscissa
+    \param[in] coefficients **highest power first** -- what `np.polyfit`
+               returns, and therefore what a fitted calibration carries. The
+               opposite order was in use elsewhere and evaluated the same
+               calibration to a different number (85.5 against 45.02 at
+               `x = 45`, `c = [0, 1, 0.02]`); a caller holding ascending
+               coefficients must reverse them.
+    \return the polynomial's value; 0 for no coefficients
+*/
+IMPBFFEXPORT double polynomial_transfer(
+        double x, const std::vector<double>& coefficients);
+
+//! Evaluate a polynomial at many abscissae, as a managed view.
+/*! The direct vector form; a caller with many abscissae uses this rather than
+    dispatching a scalar across them. */
+IMPBFFEXPORT void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view);
 
 IMPBFF_END_NAMESPACE
 

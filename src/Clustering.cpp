@@ -10,7 +10,7 @@
 #include <IMP/bff/StructureIO.h>
 
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_real.hpp>

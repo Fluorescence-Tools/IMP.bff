@@ -2,12 +2,12 @@
 Accessible Volume Restraint
 ===========================
 Accessible volume (AV) restraints can be used for integrative modeling and for
-scoring structures. There are two versions of AV restraints ``IMP.bff.AVNetworkRestraint``
-and ``IMP.bff.AVNetworkRestraintWrapper``. The AV restraint wrapped for PMI,
-``AVNetworkRestraintWrapper`` provides a mean dye positions, an approximation that
+scoring structures. There are two versions of AV restraints ``IMP.bff.ProbeNetworkRestraint``
+and ``IMP.bff.probe_network_restraint_set``. The latter builds the whole set an
+fps.json asks for, and can score mean dye positions -- an approximation that
 is faster when working with rigid bodies.
 
-In this example a T4 lysozme structure is loaded and scored using ``IMP.bff.AVNetworkRestraint``
+In this example a T4 lysozme structure is loaded and scored using ``IMP.bff.ProbeNetworkRestraint``
 by experimental data in a fps.json file.
 """
 
@@ -42,7 +42,7 @@ with open(fps_json_path) as fp:
     fps_json = json.load(fp)
 
 score_set_c1 = "chi2_C2_33p"
-fret_restraint = IMP.bff.AVNetworkRestraint(hier, str(fps_json_path), score_set=score_set_c1)
+fret_restraint = IMP.bff.ProbeNetworkRestraint(hier, str(fps_json_path), score_set=score_set_c1)
 
 # %%
 # The score is computed
@@ -50,7 +50,7 @@ v = fret_restraint.unprotected_evaluate(None)
 print("Score: {:.1f}".format(v))
 
 # %%
-# The computed model distances and the experimental distances contained ``IMP.bff.AVNetworkRestraint``
+# The computed model distances and the experimental distances contained ``IMP.bff.ProbeNetworkRestraint``
 # objects can be accesses as follows, e.g., to identify outliers.
 experimental_distances = fret_restraint.get_used_distances()
 

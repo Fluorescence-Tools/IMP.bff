@@ -10,7 +10,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <map>
 #include <string>
@@ -75,7 +75,7 @@ struct IMPBFFEXPORT SequenceSegment {
 };
 IMP_VALUES(SequenceSegment, SequenceSegments);
 
-//! The bundled fluorescent-protein library (`data/cgdye/fp_library.json`).
+//! The bundled fluorescent-protein library (`data/cgprobe/fp_library.json`).
 /*! A copy of fpsim's registry, as JSON text. **fpsim is the home of this
     algorithm**; the copy exists so `imp_bff dye label-fp` works without it,
     and the drift between them is tracked in chisurf PRD-96. Do not extend it

@@ -1,0 +1,67 @@
+data_dye_template_A48_C1R
+
+_cgprobe_template.name A48_C1R
+
+loop_
+_cgprobe_feature.feature_id
+_cgprobe_feature.feature_type
+_cgprobe_feature.rb
+_cgprobe_feature.md_fixed
+_cgprobe_feature.region_color
+backbone_N  region NO YES  .
+backbone_CA  region NO YES  .
+backbone_C  region NO YES  .
+linker  dof NO NO   "#e07b39"
+dye_core  dof YES NO   .
+transition_dipole  region NO NO   "#5bc46a"
+
+loop_
+_cgprobe_feature_atom.feature_id
+_cgprobe_feature_atom.atom_name
+_cgprobe_feature_atom.occurrence
+backbone_N N 1
+backbone_CA CA 1
+backbone_C C 1
+linker S1 1
+linker C2 1
+linker C3 1
+linker C4 1
+linker C5 1
+linker C6 1
+dye_core A48/C1 1
+dye_core A48/C2 1
+dye_core A48/C3 1
+dye_core A48/C4 1
+dye_core A48/C5 1
+dye_core A48/C6 1
+dye_core A48/C7 1
+dye_core A48/C8 1
+dye_core A48/C9 1
+dye_core A48/C10 1
+dye_core A48/C11 1
+dye_core A48/C12 1
+dye_core A48/C13 1
+dye_core A48/N1 1
+dye_core A48/N2 1
+dye_core A48/O1 1
+dye_core A48/O2 1
+dye_core A48/S1 1
+dye_core A48/S2 1
+transition_dipole C2 1
+transition_dipole C13 1
+
+loop_
+_cgprobe_improper.center_atom
+_cgprobe_improper.type
+C7 ring
+S1 flat
+S1 orient
+
+loop_
+_cgprobe_metadata.key
+_cgprobe_metadata.value
+center_atom "C7 and resname A48"
+dipole_atom_1 "C2 and resname A48"
+dipole_atom_2 "C13 and resname A48"
+positive_atoms "N1 and resname A48, N2 and resname A48"
+negative_atoms "S1 and resname A48, S2 and resname A48"

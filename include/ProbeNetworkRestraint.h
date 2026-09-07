@@ -26,6 +26,7 @@
 #include <cereal/types/map.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/types/string.hpp>
+#include <cereal/types/vector.hpp>
 #include <IMP/UnaryFunction.h>
 
 #include <IMP/bff/AV.h>
@@ -67,7 +68,7 @@ class IMPBFFEXPORT ProbeNetworkRestraint : public IMP::Restraint {
         ar(cereal::base_class<IMP::Restraint>(this),
            n_samples, av_pi_, model_ps_, distances_,
            space_fixed_, shared_map_, distance_, quad_k_, search_grid_factor_,
-           search_stencil_, search_mode_);
+           search_stencil_, search_mode_, points_, atom_points_);
         // On save this is built from avs_; on load ar() overwrites it and the
         // decorators are rebuilt from it below. A single serialize() (rather
         // than a save/load pair) is required here because IMP::Restraint
@@ -142,7 +143,44 @@ private:
     /* Owned. A bare `new AV(...)` with no destructor on this class leaks one
        decorator per labelled position for the lifetime of the process. */
     std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs_{};
-    
+
+    /**
+     * @brief Positions the network carries as a **point**, not a volume.
+     *
+     * FPS's `AVSimlationType.None`: a position that has no cloud to average
+     * over. Two spellings reach it, and they differ only in where the point
+     * comes from:
+     *
+     *  - `simulation_type = "XYZ"` -- a mean dye position measured once, in
+     *    some other structure's frame. A particle of its own is created at
+     *    `x`/`y`/`z`; if the position declares `reference_atoms` the frame is
+     *    Kabsch-fitted onto this structure first and the coordinate is
+     *    transported through the fit (`FilterEngine.cs:225-278`).
+     *  - `simulation_type = "ATOM"` -- an atom of the structure itself
+     *    (`LabelingPositions.cs:203`). No new particle: the atom *is* the
+     *    point, so it moves with the body for free.
+     *
+     * A distance touching either is scored as **R_mp** whatever the file's
+     * `distance_type` says (`FilterEngine.cs:305-307`) -- there is no
+     * distribution at that end for an average to be taken over.
+     */
+    std::map<std::string, IMP::ParticleIndex> points_{};
+
+    //! Which of #points_ are `ATOM` positions -- backed by a structure atom.
+    /*! The `XYZ` ones are not: their particle is this restraint's own. The
+        distinction is what FPS's bond rule tests (`SpringEngine.cs:111-116`),
+        and what says whether a radius may be written on the particle. */
+    std::vector<std::string> atom_points_{};
+
+    //! The volume of a position, or `nullptr` when it has none. Silent.
+    /*! #get_av warns, which is right for a name that should have resolved and
+        wrong for a position that is deliberately a point. */
+    IMP::bff::AV* find_av(const std::string &name) const;
+
+    //! Where a position is right now: an AV's mean position, or a point.
+    IMP::algebra::Vector3D get_position_coordinates(const std::string &name) const;
+
+
     /**
      * @brief ParticleIndexes of AVs used to compute the score.
      *
@@ -166,6 +204,13 @@ private:
     /** This is method is automatically called by the constructor.
      *  You only need to call this if you change parameters of
      *  AVs (e.g., the linker length).
+     *
+     *  Positions of `simulation_type` `XYZ` or `ATOM` are **not** volumes and
+     *  do not appear in the returned map; they go to #points_. Sending them
+     *  through the labelling-site search is what used to make a network
+     *  containing one unbuildable: an `XYZ` position names no chain, residue
+     *  or atom, so the selection matched the whole structure and
+     *  IMP::bff::search_labeling_site threw *ambiguous labelling site*.
      */
     std::map<std::string, std::unique_ptr<IMP::bff::AV> > create_av_decorated_particles(
             nlohmann::json used_positions,
@@ -309,6 +354,59 @@ public:
     const std::map<std::string, AVPairDistanceMeasurement> get_used_distances(){
         return distances_;
     }
+
+    //! The positions carried as a point rather than a volume: name -> particle.
+    /*! `XYZ` and `ATOM` positions (see #points_). Empty for the ordinary
+        all-AV network, which is why nothing had to know about it before. */
+    std::map<std::string, IMP::ParticleIndex> get_point_positions() const {
+        return points_;
+    }
+
+    //! The names of #get_point_positions, sorted. The Python-facing spelling.
+    std::vector<std::string> get_point_position_names() const {
+        std::vector<std::string> names;
+        names.reserve(points_.size());
+        for(const auto &kv : points_) names.push_back(kv.first);
+        return names;
+    }
+
+    //! Names of the point positions that are an atom of the structure (`ATOM`).
+    std::vector<std::string> get_atom_position_names() const {
+        return atom_points_;
+    }
+
+    //! The particle standing for a position, volume or point.
+    /*! An AV's particle carries its mean position, an `ATOM` position's *is*
+        the atom and an `XYZ` position's is a fixed point this restraint owns.
+        A name the network does not know gives a default-constructed index. */
+    IMP::ParticleIndex get_position_particle_index(std::string name) const;
+
+    //! True when \p name is a position with no volume (`XYZ` or `ATOM`).
+    bool get_position_is_point(std::string name) const {
+        return points_.find(name) != points_.end();
+    }
+
+    //! FPS's **bond** test, on one of the used distances.
+    /*!
+        `SpringEngine.cs:111-116`: a distance is a bond iff **both** ends are
+        plain atoms -- no dye, a real atom, and no accessible volume. Here that
+        is: both positions are `ATOM` positions. Such a restraint is a
+        crosslink or a covalent tie between subunits, not a FRET measurement,
+        and FPS treats it differently in two ways -- its two anchor atoms are
+        excluded from clash detection (#IMP::bff::set_bond_anchor_radii) and
+        its energy is reported separately as `Ebond`, **a subset of the total
+        and never an addition to it**.
+
+        An `XYZ` position does not qualify: it is a coordinate, not an atom,
+        and FPS's test requires `AtomID > 0`.
+
+        \param[in] distance_name a key of #get_used_distances
+        \return false for a name the network does not use
+    */
+    bool get_is_bond(std::string distance_name) const;
+
+    //! The names of the used distances that are bonds, in map order.
+    std::vector<std::string> get_bond_names() const;
 
     //! The candidate pair names, in the order #get_pair_efficiencies reports.
     /*! The score set's pairs sorted by name. Experiment planning builds an

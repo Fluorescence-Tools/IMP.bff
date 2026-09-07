@@ -2,17 +2,9 @@
  *  \file IMP/bff/RmfIO.h
  *  \brief Structures, rotamer libraries and trajectories through RMF.
  *
- * These four were `%pythoncode` in `IMP_bff.structureio.i`, built lazily
- * through a `_LAZY` table so that `import IMP.bff` would not require
- * `IMP.rmf`. The argument for that was that RMF is one optional module and
- * these are three functions; what it cost was a door in the module's
- * `__getattr__`, four names that existed only after something asked for them,
- * and a rotamer library that came back as a **dict** from here and as an
- * #IMP::bff::RotamerLibrary from every other reader.
- *
- * `rmf` is one of this module's modules now (see `dependencies.py`), the
- * functions are C++ beside the readers they belong with, and the library they
- * read is the same value `read_drot` and `read_rotamer_library` return.
+ * `rmf` is one of this module's modules (see `dependencies.py`), so these sit
+ * beside the readers they belong with and the library they read is the same
+ * #IMP::bff::RotamerLibrary every other reader returns.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.

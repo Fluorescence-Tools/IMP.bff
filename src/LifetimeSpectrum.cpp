@@ -5,7 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/LifetimeSpectrum.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 #include <cstdlib>
 #include <limits>
 #include <IMP/bff/internal/OutputView.h>

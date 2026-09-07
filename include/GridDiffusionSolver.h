@@ -2,7 +2,7 @@
  *  \file IMP/bff/GridDiffusionSolver.h
  *  \brief The field picture of a tethered dye: an occupancy density, propagated.
  *
- * The counterpart of #DyeDiffusionSimulation. That one walks a particle and
+ * The counterpart of #ProbeDiffusionSimulation. That one walks a particle and
  * resolves the dye's history; this one propagates the density of where the dye
  * is, which is cheaper and smoother but cannot produce a correlation function
  * because it has thrown the history away. They agree on equilibrium and on the
@@ -18,8 +18,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/DiffusionSolver.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <utility>

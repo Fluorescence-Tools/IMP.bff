@@ -97,26 +97,26 @@ pm_features = [
 # These features can be written to density maps
 
 
-# IMP.bff.write_path_map(
+# IMP.bff.write_map_feature(
 #     av_map, "BFF_TILE_PENALTY.mrc",
 #     IMP.bff.PM_TILE_PENALTY,
 #     (0, 1)
 # )
 
 # PM_TILE_PATH_LENGTH_WEIGHT : filter by path length and write tile weight
-# IMP.bff.write_path_map(
+# IMP.bff.write_map_feature(
 #     av_map, "PM_TILE_PATH_LENGTH.mrc",
 #     IMP.bff.PM_TILE_PATH_LENGTH,
 #     bounds
 # )
 
-# IMP.bff.write_path_map(
+# IMP.bff.write_map_feature(
 #     av_map, "PM_TILE_PATH_LENGTH_DENSITY_132.mrc",
 #     IMP.bff.PM_TILE_PATH_LENGTH_DENSITY,
 #     bounds
 # )
 
-# IMP.bff.write_path_map(
+# IMP.bff.write_map_feature(
 #     av_map, "PM_TILE_ACCESSIBLE_DENSITY.mrc",
 #     IMP.bff.PM_TILE_ACCESSIBLE_DENSITY,
 #     bounds
@@ -141,12 +141,12 @@ print(v)
 # Distance types
 # --------------
 distance_types = [
-    IMP.bff.DYE_PAIR_DISTANCE_E,             # Mean FRET averaged distance R_E
-    IMP.bff.DYE_PAIR_DISTANCE_MEAN,          # Mean distance <R_DA>
-    IMP.bff.DYE_PAIR_DISTANCE_MP,            # Distance between AV mean positions
-    IMP.bff.DYE_PAIR_EFFICIENCY,             # Mean FRET efficiency
-    IMP.bff.DYE_PAIR_DISTANCE_DISTRIBUTION,  # (reserved for Distance distributions)
-    IMP.bff.DYE_PAIR_XYZ_DISTANCE            # Distance between XYZ of dye particles
+    IMP.bff.PROBE_PAIR_DISTANCE_E,             # Mean FRET averaged distance R_E
+    IMP.bff.PROBE_PAIR_DISTANCE_MEAN,          # Mean distance <R_DA>
+    IMP.bff.PROBE_PAIR_DISTANCE_MP,            # Distance between AV mean positions
+    IMP.bff.PROBE_PAIR_EFFICIENCY,             # Mean FRET efficiency
+    IMP.bff.PROBE_PAIR_DISTANCE_DISTRIBUTION,  # (reserved for Distance distributions)
+    IMP.bff.PROBE_PAIR_XYZ_DISTANCE            # Distance between XYZ of dye particles
 ]
 
 forster_radius = 52.0 # Optional (default 52.0)
@@ -154,20 +154,20 @@ n_samples = 20000     # Optional (default 10000)
 fret_efficiency = IMP.bff.av_distance(
     av1, av2,
     forster_radius=forster_radius,
-    distance_type=IMP.bff.DYE_PAIR_EFFICIENCY,
+    distance_type=IMP.bff.PROBE_PAIR_EFFICIENCY,
     n_samples=n_samples
 )
 distance_fret = IMP.bff.av_distance(
     av1, av2,
     forster_radius,
-    IMP.bff.DYE_PAIR_DISTANCE_E,
+    IMP.bff.PROBE_PAIR_DISTANCE_E,
     n_samples
 )
-mean_inter_dye_distance = IMP.bff.av_distance(av1, av2, distance_type=IMP.bff.DYE_PAIR_DISTANCE_MEAN)
+mean_inter_dye_distance = IMP.bff.av_distance(av1, av2, distance_type=IMP.bff.PROBE_PAIR_DISTANCE_MEAN)
 print("Mean FRET efficiency   : {:.2f}".format(fret_efficiency))
 print("Distance FRET          : {:.1f}".format(distance_fret))
 print("Mean inter-dye distance: {:.1f}".format(mean_inter_dye_distance))
-print("Distance mean position : {:.1f}".format(IMP.bff.av_distance(av1, av2, IMP.bff.DYE_PAIR_DISTANCE_MP)))
+print("Distance mean position : {:.1f}".format(IMP.bff.av_distance(av1, av2, IMP.bff.PROBE_PAIR_DISTANCE_MP)))
 
 # %%
 # Distance distribution between two AVs

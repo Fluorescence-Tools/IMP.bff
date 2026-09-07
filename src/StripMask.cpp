@@ -5,9 +5,12 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
+#include <IMP/bff/internal/Text.h>
 #include <IMP/bff/StripMask.h>
 
-#include <IMP/exception.h>
+#include <IMP/core/XYZR.h>
+
+#include <IMP/bff/Base.h>
 
 #include <cctype>
 #include <cstdio>
@@ -19,56 +22,13 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+
 namespace strip {
 
-std::string upper(const std::string& s) {
-    std::string out(s);
-    for (std::size_t i = 0; i < out.size(); ++i) {
-        out[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[i])));
-    }
-    return out;
-}
+using internal::upper;
 
-std::string trim(const std::string& s) {
-    const std::string space = " \t\n\r\f\v";
-    const std::size_t a = s.find_first_not_of(space);
-    if (a == std::string::npos) return std::string();
-    return s.substr(a, s.find_last_not_of(space) - a + 1);
-}
 
-//! Split on ` and `, case-insensitively, which is the mask's only connective.
-std::vector<std::string> split_and(const std::string& mask) {
-    std::vector<std::string> out;
-    const std::string haystack = upper(mask);
-    std::size_t start = 0;
-    while (true) {
-        std::size_t at = std::string::npos;
-        // A separator is the word "and" with whitespace on both sides; the
-        // grammar has no other keyword, so this cannot swallow a name.
-        for (std::size_t i = start; i + 4 < haystack.size() + 1; ++i) {
-            if (haystack.compare(i, 5, " AND ") == 0) { at = i; break; }
-        }
-        if (at == std::string::npos) {
-            out.push_back(trim(mask.substr(start)));
-            break;
-        }
-        out.push_back(trim(mask.substr(start, at - start)));
-        start = at + 5;
-    }
-    return out;
-}
 
-//! `keyword rest` when \p term starts with \p keyword, else false.
-bool word_arg(const std::string& term, const char* keyword, std::string* rest) {
-    const std::string key = upper(keyword);
-    const std::string up = upper(term);
-    if (up.compare(0, key.size(), key) != 0) return false;
-    if (term.size() <= key.size()) return false;
-    const char next = term[key.size()];
-    if (next != ' ' && next != '\t') return false;
-    *rest = trim(term.substr(key.size()));
-    return !rest->empty();
-}
 
 bool all_digits(const std::string& s) {
     if (s.empty()) return false;
@@ -80,21 +40,6 @@ bool all_digits(const std::string& s) {
     return true;
 }
 
-std::vector<std::string> split_plus(const std::string& s) {
-    std::vector<std::string> out;
-    std::size_t start = 0;
-    while (start <= s.size()) {
-        const std::size_t at = s.find('+', start);
-        const std::string part =
-                s.substr(start, at == std::string::npos ? std::string::npos
-                                                        : at - start);
-        if (!part.empty()) out.push_back(part);
-        if (at == std::string::npos) break;
-        start = at + 1;
-    }
-    return out;
-}
-
 //! (chain, resseq, name) of an ATOM/HETATM line; false when it is not one.
 bool pdb_atom_fields(const std::string& line, std::string* chain, int* resseq,
                      std::string* name) {
@@ -102,11 +47,54 @@ bool pdb_atom_fields(const std::string& line, std::string* chain, int* resseq,
         return false;
     }
     if (line.size() < 27) return false;
-    const std::string res = trim(line.substr(22, 4));
+    const std::string res = internal::trimmed(line.substr(22, 4));
     if (!all_digits(res)) return false;
     *resseq = std::atoi(res.c_str());
-    *chain = trim(line.substr(21, 1));
-    *name = upper(trim(line.substr(12, 4)));
+    *chain = internal::trimmed(line.substr(21, 1));
+    *name = upper(internal::trimmed(line.substr(12, 4)));
+    return true;
+}
+
+//! Every field of a PDB ATOM/HETATM line a selection can name.
+/*! A mask may ask about the residue name, the element, the alternate location
+    or a distance, and a reader that only pulled out chain/resid/name would
+    answer those with silence. */
+bool pdb_selection_atom(const std::string& line, int index, SelectionAtom* out) {
+    if (line.compare(0, 6, "ATOM  ") != 0 && line.compare(0, 6, "HETATM") != 0) {
+        return false;
+    }
+    if (line.size() < 27) return false;
+    const std::string res = internal::trimmed(line.substr(22, 4));
+    if (!all_digits(res)) return false;
+
+    out->index = index;
+    out->hetatm = line.compare(0, 6, "HETATM") == 0;
+    out->id = std::atoi(internal::trimmed(line.substr(6, 5)).c_str());
+    out->name = upper(internal::trimmed(line.substr(12, 4)));
+    out->alt = internal::trimmed(line.substr(16, 1));
+    out->resn = upper(internal::trimmed(line.substr(17, 3)));
+    out->chain = internal::trimmed(line.substr(21, 1));
+    out->resi = std::atoi(res.c_str());
+    const std::string icode = line.size() > 26
+            ? internal::trimmed(line.substr(26, 1)) : std::string();
+    if (!icode.empty()) out->resi_text = res + icode;
+    if (line.size() >= 54) {
+        out->x = std::atof(internal::trimmed(line.substr(30, 8)).c_str());
+        out->y = std::atof(internal::trimmed(line.substr(38, 8)).c_str());
+        out->z = std::atof(internal::trimmed(line.substr(46, 8)).c_str());
+    }
+    out->elem = line.size() >= 78
+            ? upper(internal::trimmed(line.substr(76, 2))) : std::string();
+    if (out->elem.empty()) {
+        // No element column: the first letter of the name's leading alphabetic
+        // run, which is what the rest of this module reads a MOL2 name as.
+        for (std::size_t i = 0; i < out->name.size(); ++i) {
+            if (std::isalpha(static_cast<unsigned char>(out->name[i]))) {
+                out->elem = std::string(1, out->name[i]);
+                break;
+            }
+        }
+    }
     return true;
 }
 
@@ -138,124 +126,63 @@ std::vector<std::string> backbone_atom_names() {
     return std::vector<std::string>(names, names + 4);
 }
 
-StripSelection::StripSelection(const std::string& chain,
-                               const std::vector<int>& resids,
-                               const std::vector<std::string>& names,
-                               bool has_names, bool negate)
-    : chain_(chain), resids_(resids), has_names_(has_names), negate_(negate) {
-    for (std::size_t i = 0; i < names.size(); ++i) {
-        names_.insert(strip::upper(names[i]));
+std::vector<double> strip_obstacles(IMP::atom::Hierarchy hierarchy,
+                                    const std::string& mask,
+                                    const std::string& keep) {
+    const std::vector<SelectionAtom> atoms = selection_atoms(hierarchy);
+    const IMP::atom::Hierarchies leaves = IMP::atom::get_leaves(hierarchy);
+
+    std::vector<int> drop(atoms.size(), 0);
+    const std::string text = internal::trimmed(mask);
+    if (!text.empty()) drop = SelectionExpression(text).evaluate(atoms);
+
+    std::vector<double> out;
+    out.reserve(atoms.size() * 4);
+    for (std::size_t i = 0; i < atoms.size(); ++i) {
+        double radius = 0.0;
+        bool stripped = drop[i] != 0;
+        if (stripped && !keep.empty()) {
+            const std::string id = atoms[i].chain + "/" +
+                    std::to_string(atoms[i].resi) + "/" + atoms[i].name;
+            if (id == keep) stripped = false;
+        }
+        if (!stripped && IMP::core::XYZR::get_is_setup(leaves[i])) {
+            radius = IMP::core::XYZR(leaves[i]).get_radius();
+        }
+        out.push_back(atoms[i].x);
+        out.push_back(atoms[i].y);
+        out.push_back(atoms[i].z);
+        out.push_back(radius);
     }
+    return out;
 }
 
-std::vector<std::string> StripSelection::get_names() const {
-    return std::vector<std::string>(names_.begin(), names_.end());
+StripReport strip_report(IMP::atom::Hierarchy hierarchy,
+                         const std::string& mask) {
+    StripReport report;
+    report.mask = mask;
+    const std::vector<SelectionAtom> atoms = selection_atoms(hierarchy);
+    report.n_atoms = static_cast<int>(atoms.size());
+    if (internal::trimmed(mask).empty()) return report;
+
+    const SelectionExpression sel = parse_strip_mask(mask);
+    const std::vector<int> selected = sel.evaluate(atoms);
+    std::set<std::string> seen;
+    for (std::size_t i = 0; i < selected.size(); ++i) {
+        if (!selected[i]) continue;
+        const SelectionAtom& a = atoms[i];
+        const std::string residue =
+                a.chain + "/" + (a.resi_text.empty() ? std::to_string(a.resi)
+                                                     : a.resi_text);
+        report.atoms.push_back(residue + "/" + a.name);
+        if (seen.insert(residue).second) report.residues.push_back(residue);
+    }
+    report.n_selected = static_cast<int>(report.atoms.size());
+    return report;
 }
 
-bool StripSelection::matches(const std::string& chain, int resseq,
-                             const std::string& name) const {
-    if (name.empty()) return false;
-    if (!chain_.empty() && chain != chain_) return false;
-    if (!resids_.empty()) {
-        bool found = false;
-        for (std::size_t i = 0; i < resids_.size(); ++i) {
-            if (resids_[i] == resseq) { found = true; break; }
-        }
-        if (!found) return false;
-    }
-    if (has_names_) {
-        const bool in_set = names_.count(strip::upper(name)) > 0;
-        if (!in_set != negate_) return false;
-    }
-    return true;
-}
-
-StripSelection parse_strip_mask(const std::string& mask) {
-    std::string chain;
-    std::vector<int> resids;
-    std::vector<std::string> names;
-    bool has_names = false, negate = false, seen_name_term = false;
-
-    const std::vector<std::string> terms = strip::split_and(mask);
-    for (std::size_t t = 0; t < terms.size(); ++t) {
-        const std::string term = terms[t];
-        if (term.empty()) continue;
-        std::string rest;
-
-        if (strip::word_arg(term, "chain", &rest)) {
-            // One token: `chain A or resid 3` is not `chain "A or resid 3"`,
-            // it is a mask using a connective the dialect does not have.
-            if (rest.find_first_of(" \t") != std::string::npos) {
-                IMP_THROW("strip_mask '"
-                              << mask
-                              << "' is outside the fps dialect (chain <id> and "
-                                 "resid <n> and [not] name A+B+...); evaluate "
-                                 "the selection externally and hand the "
-                                 "stripped structure to the consumer",
-                          ValueException);
-            }
-            if (!chain.empty()) {
-                IMP_THROW("strip_mask: repeated 'chain' term in '" << mask << "'",
-                          ValueException);
-            }
-            chain = rest;
-            continue;
-        }
-        if (strip::word_arg(term, "resid", &rest) ||
-            strip::word_arg(term, "resi", &rest)) {
-            if (rest.find_first_of(" \t") != std::string::npos ||
-                !strip::all_digits(rest)) {
-                IMP_THROW("strip_mask '"
-                              << mask
-                              << "' is outside the fps dialect ('resid " << rest
-                              << "' is not a plain residue number)",
-                          ValueException);
-            }
-            if (!resids.empty()) {
-                IMP_THROW("strip_mask: repeated 'resid' term in '" << mask << "'",
-                          ValueException);
-            }
-            resids.push_back(std::atoi(rest.c_str()));
-            continue;
-        }
-        bool is_not = false;
-        std::string name_rest;
-        if (strip::word_arg(term, "not", &rest) &&
-            strip::word_arg(rest, "name", &name_rest)) {
-            is_not = true;
-        } else if (!strip::word_arg(term, "name", &name_rest)) {
-            IMP_THROW("strip_mask '"
-                          << mask
-                          << "' is outside the fps dialect (chain <id> and "
-                             "resid <n> and [not] name A+B+...); evaluate the "
-                             "selection externally and hand the stripped "
-                             "structure to the consumer",
-                      ValueException);
-        }
-        if (seen_name_term) {
-            IMP_THROW("strip_mask: repeated name term in '" << mask << "'",
-                      ValueException);
-        }
-        // A space-separated name list is a parse error in PyMOL and here: the
-        // separator is `+`, and accepting a space would silently select one
-        // atom where the document named several.
-        if (name_rest.find(' ') != std::string::npos ||
-            name_rest.find('\t') != std::string::npos) {
-            IMP_THROW("strip_mask '" << mask
-                          << "' is outside the fps dialect (the name separator "
-                             "is '+', not a space)",
-                      ValueException);
-        }
-        seen_name_term = true;
-        negate = is_not;
-        names = strip::split_plus(name_rest);
-        if (names.empty()) {
-            IMP_THROW("strip_mask: empty name list in '" << mask << "'",
-                      ValueException);
-        }
-        has_names = true;
-    }
-    return StripSelection(chain, resids, names, has_names, negate);
+SelectionExpression parse_strip_mask(const std::string& mask) {
+    return SelectionExpression(internal::trimmed(mask));
 }
 
 std::string site_strip_mask(const std::string& chain, int resseq,
@@ -297,23 +224,40 @@ std::vector<std::string> strip_pdb_lines(const std::vector<std::string>& lines,
                                          const std::string& keep_chain,
                                          int keep_resseq,
                                          const std::string& keep_atom_name) {
-    const StripSelection sel = parse_strip_mask(mask);
-    const std::string keep_name = strip::upper(strip::trim(keep_atom_name));
+    const SelectionExpression sel = parse_strip_mask(mask);
+    const std::string keep_name = strip::upper(internal::trimmed(keep_atom_name));
+
+    // The whole file first: `byres`, `within` and `same chain as` are
+    // questions about the structure, not about one line.
+    std::vector<SelectionAtom> atoms;
+    std::vector<std::size_t> line_of;
+    atoms.reserve(lines.size());
+    line_of.reserve(lines.size());
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        SelectionAtom atom;
+        if (strip::pdb_selection_atom(lines[i], static_cast<int>(atoms.size()) + 1,
+                                      &atom)) {
+            atoms.push_back(atom);
+            line_of.push_back(i);
+        }
+    }
+    const std::vector<int> selected = sel.evaluate(atoms);
+
+    std::vector<char> drop(lines.size(), 0);
+    for (std::size_t k = 0; k < selected.size(); ++k) {
+        if (!selected[k]) continue;
+        const SelectionAtom& atom = atoms[k];
+        const bool is_attachment =
+                !keep_name.empty() && atom.name == keep_name &&
+                atom.resi == keep_resseq &&
+                (keep_chain.empty() || atom.chain == keep_chain);
+        if (!is_attachment) drop[line_of[k]] = 1;
+    }
 
     std::vector<std::string> kept;
     kept.reserve(lines.size());
     for (std::size_t i = 0; i < lines.size(); ++i) {
-        std::string chain, name;
-        int resseq = 0;
-        if (strip::pdb_atom_fields(lines[i], &chain, &resseq, &name) &&
-            sel.matches(chain, resseq, name)) {
-            const bool is_attachment =
-                    !keep_name.empty() && name == keep_name &&
-                    resseq == keep_resseq &&
-                    (keep_chain.empty() || chain == keep_chain);
-            if (!is_attachment) continue;
-        }
-        kept.push_back(lines[i]);
+        if (!drop[i]) kept.push_back(lines[i]);
     }
     return kept;
 }
@@ -322,7 +266,7 @@ std::string stripped_pdb_for(const std::string& pdb_path,
                              const std::string& chain, int resseq,
                              const std::string& atom_name,
                              const std::string& strip_mask) {
-    const std::string mask = strip::trim(strip_mask);
+    const std::string mask = internal::trimmed(strip_mask);
 
     struct stat info;
     strip::CacheKey key;

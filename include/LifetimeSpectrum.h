@@ -25,8 +25,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/InteractionTerms.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <vector>
@@ -64,10 +63,16 @@ class IMPBFFEXPORT LifetimeSpectrum {
 
 public:
     //! \throws IMP::ValueException on a length mismatch or a negative rate
-    LifetimeSpectrum(const std::vector<double>& amplitudes,
-                     const std::vector<double>& rate_constants,
+    /*! One constructor, not two: an overloaded one cannot carry keyword
+        arguments through SWIG, and the 28 lines of Python that used to
+        reconstruct them by hand are what this default-argument form
+        replaces. Default-constructed is the empty spectrum the value-vector
+        template needs. */
+    LifetimeSpectrum(const std::vector<double>& amplitudes =
+                             std::vector<double>(),
+                     const std::vector<double>& rate_constants =
+                             std::vector<double>(),
                      bool exact = true);
-    LifetimeSpectrum() : exact_(true) {}
 
     //! Population fraction per species. A numpy view over the object's buffer.
     void get_amplitudes(double** out_view, int* n_out_view) const;

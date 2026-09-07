@@ -17,6 +17,7 @@
 #define IMPBFF_ROTAMERSITE_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/RotamerLibrary.h>
 
 #include <string>
 #include <vector>
@@ -109,12 +110,31 @@ IMPBFFEXPORT std::string normalize_library_name(const std::string& name);
 //! The cutoff of a library name, or -1 when the name carries none.
 IMPBFFEXPORT int library_name_cutoff(const std::string& name);
 
+//! The bundled library registry, as JSON text.
+/*! `libraries.json` read once and cached. The whole table, for a caller that
+    wants to list what is available rather than ask about one name. */
+IMPBFFEXPORT std::string rotamer_library_registry();
+
 //! One registry entry of `libraries.json`, plus the resolved spelling.
 /*! The returned JSON object is the registry's own entry with `name` (the
-    key), `library_name` (the name as asked) and `cutoff` added -- the shape
-    the Python `rotamer_library_metadata` returned. The registry is read once
-    and cached. An unknown library raises. */
+    key), `library_name` (the name as asked) and `cutoff` added. The registry
+    is read once and cached. An unknown library raises. */
 IMPBFFEXPORT std::string rotamer_library_metadata(const std::string& name);
+
+//! The registry entry a library *file* belongs to, or `{}` for none.
+/*! The inverse of \c library_filename: a path names a library by its stem,
+    so `A48_C1R_cutoff30.drot`, `A48_C1R_cutoff30.bcif` and the `A48_C1R.rmf3`
+    template all resolve to Alexa488 C1R -- the first two carrying `cutoff`
+    30, the third none. This is how an explicit path still knows its *dye*:
+    the coordinates are in the file, but the transition-dipole and attachment
+    selectors are in the registry, and without them an ensemble cannot orient
+    itself.
+
+    A library outside the registry -- a user's own dye -- returns the empty
+    object `{}` rather than raising, because that is not an error: the caller
+    supplies the selectors instead. */
+IMPBFFEXPORT std::string rotamer_library_metadata_for_path(
+        const std::string& path);
 
 //! The library file stem the metadata and cutoff select.
 /*! The registry's `filename` carries FRETpredict's default cutoff; a name
@@ -140,6 +160,40 @@ IMPBFFEXPORT std::string library_filename(const std::string& metadata_json,
 */
 IMPBFFEXPORT std::string resolve_rotamer_library_path(
         const std::string& name, const std::string& lib_dir = "");
+
+//! Read the library a name (or a path) resolves to, with its metadata.
+/*!
+    The one door to a rotamer library: it resolves the name, reads whichever
+    container the resolution lands on, attaches the registry entry, and fills
+    the residue names -- from the container when it carries them, from the
+    `<stem>.pdb` beside it when it does not, and by inference from the dye and
+    linker names as a last resort. Weights come back normalised whatever the
+    file stored.
+
+    \param[in] name a registry name (`"AlexaFluor 488 C1R cutoff10"`), a
+               locator (`"dyes.drot.pto::A48_C1R_cutoff10"`) or a path
+    \param[in] lib_dir an extra directory to search; empty searches the
+               module's own
+    \throw IOException when nothing resolves, or the container cannot be read
+    \throw ValueException for a container this module does not read -- an
+           `.rmf3` template is one, because reading it needs `IMP.rmf`
+*/
+IMPBFFEXPORT RotamerLibrary load_rotamer_library(const std::string& name,
+                                                 const std::string& lib_dir =
+                                                         "");
+
+//! Residue names per atom, inferred from a library's registry metadata.
+/*!
+    The fallback for a library whose container carries no residue names and
+    has no `<stem>.pdb` beside it. The dye's own residue name comes from its
+    selectors; the linker's from the registry name's `_C1R` suffix, whose
+    atoms are a fixed set. Empty when the metadata names no residue at all --
+    an inference with nothing to infer from is a guess, and a wrong residue
+    name silently selects the wrong atom.
+*/
+IMPBFFEXPORT std::vector<std::string> infer_rotamer_resnames(
+        const std::vector<std::string>& atom_names,
+        const std::string& metadata_json);
 
 IMPBFF_END_NAMESPACE
 

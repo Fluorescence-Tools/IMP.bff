@@ -11,8 +11,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <vector>
 

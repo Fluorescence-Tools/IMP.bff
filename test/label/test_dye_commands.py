@@ -14,7 +14,7 @@ reason a command can be dead. What each was:
 
 They are smoke tests: a few steps each, checking the command runs and writes
 what it says it wrote. What the samplers *compute* is pinned elsewhere
-(`test/cgdye/test_langevin_sampler.py`).
+(`test/cgprobe/test_langevin_sampler.py`).
 """
 
 import pytest

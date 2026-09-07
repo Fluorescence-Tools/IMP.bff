@@ -270,6 +270,48 @@ IMPBFFEXPORT double chi2_score(double model_distance,
                                double experimental_distance,
                                double error_neg, double error_pos);
 
+//! The same \f$\chi^2\f$ with FPS's force cap: harmonic near zero, linear far.
+/*!
+    FPS's `SpringEngine.ForceAndTorque` (`SpringEngine.cs:432-443`) does not
+    score a plain parabola. With \f$k = 2/\sigma^2\f$ and
+    \f$\Delta r_{max} = F_{max}/k = F_{max}\sigma^2/2\f$
+    (`SpringEngine.cs:141-142`) it scores
+
+    \f[
+      E(\Delta r) = \begin{cases}
+        (\Delta r/\sigma)^2                      & |\Delta r| \le \Delta r_{max}\\
+        F_{max}\,(|\Delta r| - \Delta r_{max}/2) & |\Delta r| >  \Delta r_{max}
+      \end{cases}
+    \f]
+
+    -- a Huber-like robustification, joined \f$C^1\f$: past the knee the force
+    is exactly \p max_force and the cost grows only linearly, so one grossly
+    violated restraint cannot dominate a docking run. **A pure harmonic does
+    not reproduce FPS under docking's `MaxForce = 400`**, which is the
+    situation every random restart starts in.
+
+    \p max_force is stated in FPS's units -- it caps \f$dE/d|\Delta r|\f$ of
+    the \f$\chi^2\f$ this returns, so the knee sits at
+    \f$F_{max}\sigma^2/2\f$ exactly where FPS puts it. A restraint that scores
+    half a \f$\chi^2\f$ (which is what a Gaussian \f$-\log L\f$ is, and what
+    #IMP::bff::AVPairDistanceMeasurement::score_model returns) therefore feels
+    half that slope; the *knee position*, which is what changes a docked
+    answer, is unaffected by the factor.
+
+    The cap engages on tight restraints and leaves loose ones alone: with
+    \f$\sigma = 0.1\f$ Å and `max_force = 400` the knee is at 2 Å, with
+    \f$\sigma = 3\f$ Å it is at 1800 Å and the cap is inert.
+
+    \param[in] max_force the force cap; **non-positive means no cap**, and
+               #IMP::bff::chi2_score is then returned unchanged
+    \see IMP::bff::chi2_score for the sign convention (model minus data, and
+         which error bar that selects)
+*/
+IMPBFFEXPORT double chi2_score_capped(double model_distance,
+                                      double experimental_distance,
+                                      double error_neg, double error_pos,
+                                      double max_force);
+
 //! Single-pair FRET efficiency \f$1/(1 + (r/R_0)^6)\f$.
 IMPBFFEXPORT double fret_efficiency(double distance,
                                     double forster_radius = 52.0);

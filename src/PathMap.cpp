@@ -7,6 +7,17 @@
  *
  */
 #include <IMP/bff/PathMap.h>
+#include <IMP/core/XYZR.h>
+
+// Only `write_map_feature` needs these, and only until it moves to the
+// connection layer; `PathMap` itself no longer knows what an EM map is.
+#include <IMP/em/DensityHeader.h>
+#include <IMP/em/DensityMap.h>
+#include <IMP/em/MRCReaderWriter.h>
+#include <IMP/em/XplorReaderWriter.h>
+#include <IMP/em/EMReaderWriter.h>
+#include <IMP/em/SpiderReaderWriter.h>
+#include <algorithm>
 #include <sstream>
 #include <fstream>
 #include <IMP/bff/DataPaths.h>
@@ -23,9 +34,8 @@ constexpr float PathMap::BLOCKED_COST;
 PathMap::PathMap(
         const PathMapHeader &av_header,
         std::string name,
-        IMP::em::KernelType kt,
         float resolution
-) : SampledDensityMap(kt), pathMapHeader_(av_header)
+) : DensityGrid(name), pathMapHeader_(av_header)
 {
     set_name(name);
     set_path_map_header(av_header, resolution);
@@ -33,7 +43,7 @@ PathMap::PathMap(
 
 void PathMap::set_path_map_header(const PathMapHeader &av_header, float resolution)
 {
-    const IMP::em::DensityHeader *nh = av_header.get_density_header();
+    const GridHeader *nh = av_header.get_density_header();
     if(nh->get_nx() != header_.get_nx() || nh->get_ny() != header_.get_ny()
        || nh->get_nz() != header_.get_nz()){
         // neighbour offsets are linear-index deltas of the old shape
@@ -49,13 +59,11 @@ void PathMap::set_path_map_header(const PathMapHeader &av_header, float resoluti
     // allocate the data
     long nvox = get_number_of_voxels();
     resize(nvox);
-    kernel_params_ = IMP::em::KernelParameters(header_.get_resolution());
     // The location arrays must match the new shape: calc_all_voxel2loc()
     // alone is a no-op when locations were computed for the old shape (and
     // the lattice path then wrote nvox entries into arrays of the old size).
     reset_all_voxel2loc();
     calc_all_voxel2loc();
-    loc_size_ = nvox;
 }
 
 LinkerWeighting::LinkerWeighting(double x_min, double x_max,
@@ -345,9 +353,6 @@ void PathMap::update_tiles(
         // recomputed and a moved structure kept the old connectivity.
         edge_computed.assign(nvox, false);
     }
-
-    normalized_ = false;
-    rms_calculated_ = false;
     reached_valid_ = false;
     soa_valid_ = false;
     for(int idx = 0; idx < nvox; idx++){
@@ -674,8 +679,6 @@ void PathMap::search_lattice(long source_idx, float max_cost){
     for(long i = 0; i < n_voxel; i++){
         penalty_soa_[i] = (data_[i] > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
     }
-    normalized_ = false;
-    rms_calculated_ = false;
     dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
     // the historical search never wrote the source tile's cost
     cost[source_idx] = TILE_COST_DEFAULT;
@@ -712,8 +715,6 @@ void PathMap::search_lattice(long source_idx, float max_cost,
         else value = data_[v];
         penalty_soa_[v] = (value > obstacle_threshold) ? TILE_PENALTY_DEFAULT : 0.0f;
     }
-    normalized_ = false;
-    rms_calculated_ = false;
     dijkstra_bounded_core(source_idx, -1, max_cost, penalty_soa_.data(), false);
     cost[source_idx] = TILE_COST_DEFAULT;
     if(density_soa_.size() != (size_t) n_voxel){
@@ -733,8 +734,6 @@ void PathMap::search_lattice(long source_idx, float max_cost,
     const double bsq = block_radius * block_radius;
     const double osq = open_radius * open_radius;
     const double x0 = r0[0], y0 = r0[1], z0 = r0[2];
-    normalized_ = false;
-    rms_calculated_ = false;
     if(!euclidean_search_){
         // Obstacles straight into `cost`: fill_sphere(block, inverse) then
         // fill_sphere(open) then binarise -- inside the open sphere wins,
@@ -941,8 +940,6 @@ void PathMap::carve_lattice(const int32_t *occupancy){
         data_[i] = d;
         density_soa_[i] = (d > TILE_OBSTACLE_THRESHOLD) ? 0.0f : 1.0f;
     }
-    normalized_ = false;
-    rms_calculated_ = false;
 }
 
 void PathMap::carve_lattice_fractional(const int32_t *const *occupancy, int n){
@@ -960,8 +957,130 @@ void PathMap::carve_lattice_fractional(const int32_t *const *occupancy, int n){
         data_[i] = (double) occupancy[0][i];
         density_soa_[i] = (float) (k * inv);
     }
-    normalized_ = false;
-    rms_calculated_ = false;
+}
+
+// --------------------------------------------------------------------------
+// The accessible *contact* volume (PRD-121 G9)
+// --------------------------------------------------------------------------
+// Distinctly named rather than file-static: src/*.cpp are compiled as one
+// translation unit here, so an anonymous namespace would not isolate it.
+
+//! Voxel offsets of the contact shell around a voxel, Olga's rule.
+/*! `deltaIlist(contactR / discretizationStep, edgeL)` (`Olga/src/AV/fretAV.cpp:34`)
+    takes its radius as an **`int`**, so the layer is truncated to whole voxels
+    first and the shell is then `dx^2 + dy^2 + dz^2 <= delta^2` in voxel units.
+
+    That truncation is reproduced rather than corrected, and it is worth being
+    explicit about why, because it is not the more accurate rule. The contact
+    layer is only half of the ACV: the other half is
+    `contact_volume_trapped_fraction`, a number **fitted per site against this
+    discretisation**, and a fitted share is only meaningful against the region
+    it was fitted for. The seventeen sites of
+    `examples/structure/T4L/fret.fps.json` carry fitted fractions of 0.33-0.72
+    at `thickness = 3` and `simulation_grid_resolution = 2`, where this rule
+    gives a 7-offset shell one voxel deep and a true 3 A sphere gives a
+    19-offset one. Measured on 3GUN with those fitted fractions, over the 33
+    pairs of `chi2_C1_33p`: this rule shortens <R_DA> by **3.04 A** on average,
+    the true sphere by 2.23 A.
+
+    The measurement that decides it is against Zenodo 3376527's published
+    <R_DA> for the same structure, which this rule reproduces to a bias of
+    **+0.22 A** (rmsd 0.91, r 0.996) and the true sphere to +0.49 A (rmsd 1.04)
+    -- see `okf/validation/fps_screening_ab.md`. The truncation is not an
+    approximation to correct; it is part of what produced the reference.
+
+    The consequence, stated so it is not rediscovered: the contact layer is
+    quantised by the grid, and `thickness` below one grid step is no layer at
+    all.
+
+ */
+static void path_map_contact_offsets(double thickness, double spacing,
+                                     std::vector<int> &dx,
+                                     std::vector<int> &dy,
+                                     std::vector<int> &dz){
+    dx.clear(); dy.clear(); dz.clear();
+    if(!(spacing > 0.0)) return;
+    const int d = (int) (thickness / spacing);      // Olga's int conversion
+    const int d2 = d * d;
+    for(int k = -d; k <= d; k++){
+        for(int j = -d; j <= d; j++){
+            for(int i = -d; i <= d; i++){
+                if(i * i + j * j + k * k > d2) continue;
+                dx.push_back(i); dy.push_back(j); dz.push_back(k);
+            }
+        }
+    }
+}
+
+void PathMap::apply_contact_weighting(const int32_t *occupancy,
+                                      double thickness,
+                                      double trapped_fraction){
+    // Both parameters have to ask for it: `thickness <= 0` is the fps.json
+    // default and a negative trapped fraction is this module's "unset".
+    if(occupancy == nullptr) return;
+    if(!(thickness > 0.0) || !(trapped_fraction >= 0.0)) return;
+    if(!(trapped_fraction < 1.0)){
+        // Olga computes volFree * f / (volTrapped * (1 - f)) and divides by
+        // zero here, then writes an infinite weight into every trapped point.
+        // Refusing is the only answer that leaves a usable cloud.
+        IMP_WARN("contact_volume_trapped_fraction=" << trapped_fraction
+                 << " is not below 1, so the free part of the volume would "
+                    "carry no weight at all; the contact weighting is skipped."
+                 << std::endl);
+        return;
+    }
+    const int nx = header_.get_nx(), ny = header_.get_ny(), nz = header_.get_nz();
+    const long n_voxel = (long) nx * ny * nz;
+    if(n_voxel <= 0 || density_soa_.size() != (size_t) n_voxel) return;
+    if(cost.size() != (size_t) n_voxel) return;
+
+    std::vector<int> ox, oy, oz;
+    path_map_contact_offsets(thickness, header_.get_spacing(), ox, oy, oz);
+    if(ox.empty()) return;
+
+    const float linker_length = pathMapHeader_.get_max_path_length();
+    const float grid_spacing = pathMapHeader_.get_simulation_grid_resolution();
+
+    // Pass one: who is in the cloud, who of them is in contact, and what the
+    // two sides weigh. The membership test is get_xyz_density()'s, voxel for
+    // voxel -- the normalisation has to be over the points that are actually
+    // emitted, or the trapped share is a share of something else.
+    std::vector<char> contact((size_t) n_voxel, 0);
+    double sum_contact = 0.0, sum_free = 0.0;
+    for(long i = 0; i < n_voxel; i++){
+        const float c = cost[i];
+        if(!(c >= 0.0f && c < TILE_COST_DEFAULT)) continue;
+        if(!(c * grid_spacing < linker_length)) continue;
+        const double w = (double) density_soa_[i] * (double) path_weight(i);
+        if(!(w > 0.0)) continue;
+        const int iz = (int) (i / ((long) nx * ny));
+        const int iy = (int) ((i / nx) % ny);
+        const int ix = (int) (i % nx);
+        bool touched = false;
+        for(size_t k = 0; k < ox.size() && !touched; k++){
+            const int jx = ix + ox[k], jy = iy + oy[k], jz = iz + oz[k];
+            if(jx < 0 || jx >= nx || jy < 0 || jy >= ny || jz < 0 || jz >= nz){
+                continue;   // Olga's 1-D offsets wrap here; this does not
+            }
+            const long j = (long) jx + (long) nx * (jy + (long) ny * jz);
+            if((double) occupancy[j] > TILE_OBSTACLE_THRESHOLD) touched = true;
+        }
+        if(touched){ contact[i] = 1; sum_contact += w; }
+        else        { sum_free += w; }
+    }
+    // Nothing to set a ratio between: a volume entirely in contact (a buried
+    // site) or entirely free (a linker that never reaches the surface) has one
+    // population, and scaling it is a global factor that cancels. Olga does
+    // nothing in both cases too, for the same reason.
+    if(!(sum_contact > 0.0) || !(sum_free > 0.0)) return;
+
+    const double c_scale = trapped_fraction / sum_contact;
+    const double f_scale = (1.0 - trapped_fraction) / sum_free;
+    for(long i = 0; i < n_voxel; i++){
+        if(density_soa_[i] <= 0.0f) continue;
+        density_soa_[i] = (float) (density_soa_[i] *
+                                   (contact[i] ? c_scale : f_scale));
+    }
 }
 
 void PathMap::carve_lattice(){
@@ -996,7 +1115,6 @@ void PathMap::set_origin_fast(const IMP::algebra::Vector3D &origin){
     // The location arrays are dropped and recomputed by whoever needs them
     // (calc_all_voxel2loc); the lattice path computes locations inline.
     reset_all_voxel2loc();
-    loc_size_ = -1;
 }
 
 void PathMap::sync_tiles_from_soa(){
@@ -1086,7 +1204,32 @@ int PathMap::get_dim_index_by_voxel(long index, int dim){
     }
 }
 
+void PathMap::set_particles(const IMP::ParticlesTemp &ps) {
+    ps_ = ps;
+    refresh_spheres_from_particles();
+}
+
+void PathMap::refresh_spheres_from_particles() {
+    // The obstacles are re-read from the particles every time they are
+    // sampled, not once when they are set. IMP's `SampledDensityMap` held
+    // `core::XYZR` *decorators* -- views onto live particles -- so a sample
+    // taken after `load_frame` moved the atoms saw where they had moved to.
+    // A value copy taken at `set_particles` does not: the legacy trajectory
+    // path sets the particles once and samples every frame, and with a stale
+    // copy every frame was sampled against frame 0 -- AV mean positions
+    // fifteen angstroms from IMP's, on the trajectory tests and nowhere else.
+    if (ps_.empty()) return;
+    GridSpheres spheres;
+    spheres.reserve(ps_.size());
+    for (std::size_t i = 0; i < ps_.size(); ++i) {
+        IMP::core::XYZR x(ps_[i]);
+        spheres.push_back(GridSphere(x.get_coordinates(), x.get_radius()));
+    }
+    set_spheres(spheres);
+}
+
 void PathMap::sample_obstacles(double extra_radius){
+    refresh_spheres_from_particles();
     set_origin(pathMapHeader_.get_origin());
 
     // The radius each atom obstructs with: its own, or the override's when one
@@ -1107,8 +1250,8 @@ void PathMap::sample_obstacles(double extra_radius){
         xyzr_[i].set_radius(r > 0.0 ? r + extra_radius : 0.0);
     }
 
-    // 2. Use sampled density map to place atoms (density in map)
-    SampledDensityMap::resample();
+    // 2. Rasterise the obstacles into the lattice
+    DensityGrid::resample();
 
     // Restore radii
     for (size_t i = 0; i < radii_original.size(); i++) {
@@ -1302,6 +1445,36 @@ void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
     *output = t;
 }
 
+namespace {
+
+//! IMP's header for this grid: the seven fields the map writers read.
+IMP::em::DensityHeader em_header_of(const GridHeader &gh) {
+    IMP::em::DensityHeader eh;
+    eh.update_map_dimensions(gh.get_nx(), gh.get_ny(), gh.get_nz());
+    eh.Objectpixelsize_ = gh.get_spacing();
+    eh.set_xorigin(gh.get_xorigin());
+    eh.set_yorigin(gh.get_yorigin());
+    eh.set_zorigin(gh.get_zorigin());
+    eh.set_resolution(gh.get_resolution());
+    eh.compute_xyz_top(true);
+    return eh;
+}
+
+}  // namespace
+
+IMP::em::DensityMap* PathMap::create_density_map() const {
+    const GridHeader *gh = get_header();
+    IMP_NEW(IMP::em::DensityMap, dm, ());
+    // set_void_map allocates and zeroes; the spacing and origin go on after,
+    // in the order IMP's own readers use, so the tops come out consistent.
+    dm->set_void_map(gh->get_nx(), gh->get_ny(), gh->get_nz());
+    dm->update_voxel_size(gh->get_spacing());
+    dm->set_origin(gh->get_xorigin(), gh->get_yorigin(), gh->get_zorigin());
+    dm->get_header_writable()->set_resolution(gh->get_resolution());
+    std::copy(data_.begin(), data_.end(), dm->get_data());
+    return dm.release();
+}
+
 void write_map_feature(
     PathMap *d,
     std::string name,
@@ -1327,7 +1500,16 @@ void write_map_feature(
     d->set_was_used(true);
     std::vector<float> f_data;
     f_data = d->get_tile_values(value_type, bounds, feature_name);
-    rw->write(name.c_str(), f_data.data(), *d->get_header());
+
+    // The lattice is this module's own (`GridHeader`); IMP's map writers want
+    // IMP's header, so one is filled in here. This is the last thing in the
+    // path-map family that still speaks `IMP.em`, and it is a leaf: it writes
+    // a file and returns. It moves to the connection layer with the rest of
+    // the IMP-facing surface -- the point of the change underneath it was to
+    // get `PathMap` itself off `SampledDensityMap`, not to reimplement four
+    // volume formats today.
+    const IMP::em::DensityHeader eh = em_header_of(*d->get_header());
+    rw->write(name.c_str(), f_data.data(), eh);
 }
 
 std::vector<float> PathMap::get_tile_values(
@@ -1368,8 +1550,12 @@ void PathMap::get_tile_values(
     *output = o;
 }
 
-void PathMap::resize(unsigned int nvox){
-    data_.reset(new double[nvox]);
+void PathMap::resize(long nvox){
+    // The grid does the allocation *and* drops the location caches, so a
+    // resize can never leave `x_loc_` sized for the old shape. Previously the
+    // only caller (`set_path_map_header`) reset them by hand afterwards; the
+    // invariant belongs where the size changes, not in every caller.
+    DensityGrid::resize(nvox);
     reached_valid_ = false;
     ball_source_ = -1;
     ballc_source_ = -1;
@@ -1381,8 +1567,8 @@ void PathMap::resize(unsigned int nvox){
     edge_computed.resize(nvox, false);
 
     tiles.resize(0);
-    for(int i = 0; i < nvox; i++){
-        auto tile = PathMapTile(i);
+    for(long i = 0; i < nvox; i++){
+        auto tile = PathMapTile(static_cast<int>(i));
         tiles.emplace_back(tile);
     }
 

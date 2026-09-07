@@ -1,30 +1,27 @@
 /*
- * Sampling an explicit dye. This file holds no Python.
+ * Sampling an explicit probe. What each piece is:
  *
- * Where its 1,041 lines went, by what each piece is:
- *
- *  - **The dynamics** are `LabelDynamics.h`: `make_langevin_simulator` builds
+ *  - **The dynamics** are `ProbeDynamics.h`: `make_langevin_simulator` builds
  *    the integrator (`md` gets a Langevin thermostat, `bd` gets Einstein's
  *    coefficient for each particle's own radius), `AttachedProbeDynamics` sets up
  *    the dye's force field, its held anchor and the wall of protein spheres
  *    around the site, and `LangevinTrajectory` is what a run returns.
- *  - **The linker sampler** is `LinkerSampling.h`. It has no IMP model at all:
- *    the Python wrote every configuration into `XYZ` decorators and read the
- *    coordinates straight back, using the particles as a scratch buffer for
- *    numbers `LinkerGeometry::apply` had just returned.
+ *  - **The linker sampler** is `LinkerSampling.h`. It has no IMP model at
+ *    all: routing each trial through `XYZ` decorators would use the
+ *    particles as a scratch buffer for numbers `LinkerGeometry::apply` has
+ *    just returned.
  *  - **The planners** are `RRT.h` -- one tree, two metrics. A caller's
  *    collision test crosses back through the `RRTCollision` director.
  *  - **The Markov walk** (`reconstruct_rotamer_trajectory`) is
  *    `markov_state_trajectory` in `Clustering.h`, beside the transition matrix
  *    it draws from.
- *  - **The clustering and Markov shims** were ravel-and-reshape wrappers over
- *    C++ that already took those shapes. Deleted; `Clustering.h` is the API.
+ *  - **The clustering and Markov API** is `Clustering.h`, which takes the
+ *    flat shapes directly.
  *
- * Two conveniences did not survive, deliberately: `is_collision_sphere` was
- * eight lines of arithmetic a caller writes inside its own `RRTCollision`,
- * and the sampler's `out_rmf=` pulled `IMP.rmf` into an engine that had no
- * other need of it -- a trajectory comes back as coordinates and the caller
- * writes RMF through the lazy door that exists for exactly that.
+ * Two conveniences are deliberately absent. `is_collision_sphere` is eight
+ * lines of arithmetic a caller writes inside its own `RRTCollision`; and the
+ * sampler has no `out_rmf=`, because a trajectory comes back as coordinates
+ * and writing it is `write_rmf`'s job, not the engine's.
  */
 
 IMP_SWIG_VALUE(IMP::bff, LangevinTrajectory, LangevinTrajectories);
@@ -47,7 +44,7 @@ IMP_SWIG_OBJECT(IMP::bff, RRTCollision, RRTCollisions);
 %feature("kwargs") IMP::bff::grow_rigid_body_rrt;
 %feature("kwargs") IMP::bff::markov_state_trajectory;
 
-%include "IMP/bff/LabelDynamics.h"
+%include "IMP/bff/ProbeDynamics.h"
 %include "IMP/bff/LinkerSampling.h"
 %include "IMP/bff/RRT.h"
 

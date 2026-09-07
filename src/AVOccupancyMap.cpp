@@ -29,7 +29,9 @@ void AVOccupancyMap::atom_reach(int lo[3], int hi[3]) const {
     }
     for (size_t i = 0; i < xyzr_.size(); i++) {
         IMP::algebra::Vector3D c = coord(i);
-        double R = radius(i) + extra_radius_;
+        const double r_i = radius(i);
+        if (r_i <= 0.0) continue;   // transparent: no size, no obstacle
+        double R = r_i + extra_radius_;
         for (int d = 0; d < 3; d++) {
             int a = (int) std::floor((c[d] - R) / spacing_);
             int b = (int) std::ceil((c[d] + R) / spacing_);
@@ -275,7 +277,11 @@ void AVOccupancyMap::full_raster() {
     for (size_t i = 0; i < xyzr_.size(); i++) {
         IMP::algebra::Vector3D c = coord(i);
         double r = radius(i);
+        // A transparent atom (radius 0) blocks nothing, but it still records
+        // what was rasterised for it -- nothing -- so a later delta has a
+        // truthful "before" to subtract.
         last_[i] = IMP::algebra::Vector4D(c[0], c[1], c[2], r);
+        if (r <= 0.0) continue;
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
     force_full_ = false;
@@ -332,6 +338,9 @@ int AVOccupancyMap::begin_update(bool force_full) {
         IMP::algebra::Vector3D c = coord(i);
         double r = radius(i);
         const IMP::algebra::Vector4D &l = last_[i];
+        // No skip for a transparent atom: `r != l[3]` is what catches one that
+        // has just *become* transparent, and its old sphere still has to come
+        // off the raster.
         if (c[0] != l[0] || c[1] != l[1] || c[2] != l[2] || r != l[3]) {
             pending_moved_.push_back(i);
         }
@@ -352,7 +361,10 @@ int AVOccupancyMap::begin_update(bool force_full) {
     for (size_t i : pending_moved_) {
         const IMP::algebra::Vector4D &l = last_[i];
         IMP::algebra::Vector3D c = coord(i);
-        double R_old = l[3] + extra_radius_, R_new = radius(i) + extra_radius_;
+        // A radius of zero is no sphere at all, so it claims no box.
+        const double r_new = radius(i);
+        double R_old = l[3] > 0.0 ? l[3] + extra_radius_ : 0.0;
+        double R_new = r_new > 0.0 ? r_new + extra_radius_ : 0.0;
         for (int d = 0; d < 3; d++) {
             pending_lo_[d] = std::min(pending_lo_[d], (int) std::ceil((std::min(l[d] - R_old, c[d] - R_new)) / spacing_));
             pending_hi_[d] = std::max(pending_hi_[d], (int) std::floor((std::max(l[d] + R_old, c[d] + R_new)) / spacing_));
@@ -380,6 +392,7 @@ void AVOccupancyMap::raster_slab(int z_lo, int z_hi) {
     for (size_t i = 0; i < xyzr_.size(); i++) {
         IMP::algebra::Vector3D c = coord(i);
         double r = radius(i);
+        if (r <= 0.0) continue;   // transparent: no size, no obstacle
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
 }
@@ -389,10 +402,15 @@ void AVOccupancyMap::apply_local() {
     int hi[3] = {k0_[0] + n_[0] - 1, k0_[1] + n_[1] - 1, k0_[2] + n_[2] - 1};
     for (size_t i : pending_moved_) {
         const IMP::algebra::Vector4D &l = last_[i];
-        add_sphere(IMP::algebra::Vector3D(l[0], l[1], l[2]),
-                   l[3] + extra_radius_, -1, lo, hi);
+        // Subtract only what was actually added: a transparent atom's `last_`
+        // carries radius 0, and there is no sphere of it to take away.
+        if (l[3] > 0.0) {
+            add_sphere(IMP::algebra::Vector3D(l[0], l[1], l[2]),
+                       l[3] + extra_radius_, -1, lo, hi);
+        }
         IMP::algebra::Vector3D c = coord(i);
         double r = radius(i);
+        if (r <= 0.0) continue;
         add_sphere(c, r + extra_radius_, +1, lo, hi);
     }
 }
@@ -517,9 +535,35 @@ AVOccupancyMap *AVOccupancyRegistry::get_map(double spacing, double extra_radius
         IMP::Pointer<AVOccupancyMap> m = new AVOccupancyMap(spacing, extra_radius, ps_);
         m->set_was_used(true);
         m->set_coordinate_snapshot(snapshot_);
+        if (!obstacle_radii_.empty()) m->set_obstacle_radii(obstacle_radii_);
         it = maps_.emplace(key, m).first;
     }
     return it->second.get();
+}
+
+void AVOccupancyRegistry::adopt_obstacle_radii(
+        AVRadiiSource source, const std::vector<double> &radii) {
+    if (adopted_) {
+        if (source == adopted_source_) return;  // O(1): the hot path
+        /* Two volumes of one shared raster disagreeing about how big the
+           atoms are. Whichever answer were kept, one of them would be scored
+           against a raster it did not ask for -- and silently, because the
+           volume would still come back full of plausible voxels. See
+           IMP::bff::AV::set_radii_source. */
+        IMP_THROW("AVOccupancyRegistry: the shared occupancy raster was built "
+                  "with the \"" << av_radii_source_to_string(adopted_source_)
+                  << "\" radii; a volume sharing it cannot ask for \""
+                  << av_radii_source_to_string(source)
+                  << "\" (see AV::set_radii_source)", IMP::ValueException);
+    }
+    if (!radii.empty() && radii.size() != ps_.size()) {
+        IMP_THROW("AVOccupancyRegistry: " << radii.size() << " obstacle radii "
+                  "for " << ps_.size() << " particles", IMP::ValueException);
+    }
+    adopted_ = true;
+    adopted_source_ = source;
+    obstacle_radii_ = radii;
+    for (auto &kv : maps_) kv.second->set_obstacle_radii(radii);
 }
 
 void AVOccupancyRegistry::refresh_snapshot() {

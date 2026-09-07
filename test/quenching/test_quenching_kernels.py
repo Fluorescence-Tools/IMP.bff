@@ -124,10 +124,10 @@ class PetParameterTests(IMP.test.TestCase):
                 # NaN is what `None` was: inherit the model-wide distance.
                 self.assertTrue(math.isnan(params.quench_radius))
 
-    def test_the_dye_radius_offsets_the_surface_contact_distance(self):
+    def test_the_probe_radius_offsets_the_surface_contact_distance(self):
         """The table is quoted dye-surface-to-quencher; the walk tracks centres."""
         radius = 5.0
-        table = _q.amino_acid_quenching_defaults(dye_radius=radius)
+        table = _q.amino_acid_quenching_defaults(probe_radius=radius)
         reference = _q.pet_quenching_reference()
         for residue, ref in reference.items():
             self.assertAlmostEqual(
@@ -325,7 +325,7 @@ class QuenchingGridTests(IMP.test.TestCase):
         self.assertGreater(int(mask.sum()), 0)
 
 
-class DyeDiffusionTests(IMP.test.TestCase):
+class ProbeDiffusionTests(IMP.test.TestCase):
 
     def setUp(self):
         super().setUp()
@@ -337,7 +337,7 @@ class DyeDiffusionTests(IMP.test.TestCase):
             t_max=200.0, t_step=0.002, D=40.0, slow_fact=[0.1], random_seed=7
         )
         options.update(kwargs)
-        return diffusion.simulate_dye_diffusion(
+        return diffusion.simulate_probe_diffusion(
             self.density, self.slow, self.dg, **options
         )
 
@@ -418,7 +418,7 @@ class DyeDiffusionTests(IMP.test.TestCase):
     def test_an_empty_volume_yields_no_accepted_steps(self):
         """Rather than looping forever looking for a start point."""
         empty = np.zeros_like(self.density)
-        walk = diffusion.simulate_dye_diffusion(
+        walk = diffusion.simulate_probe_diffusion(
             empty, empty, self.dg, t_max=10.0, t_step=0.002, random_seed=1
         )
         self.assertEqual(walk.n_accepted, 0)

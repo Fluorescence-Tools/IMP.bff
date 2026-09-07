@@ -70,7 +70,7 @@ def test_free_walk_step_variance_is_2Ddt_per_component():
     D, t_step = 8.0, 0.005
     box = np.ones((45, 45, 45), dtype=np.uint8)
     steps = [np.diff(_xyz(t), axis=0) for t in
-             (dif.simulate_dye_diffusion(box, dg=1.0, t_max=4000 * t_step,
+             (dif.simulate_probe_diffusion(box, dg=1.0, t_max=4000 * t_step,
                                          t_step=t_step, D=D, random_seed=s)
               for s in range(40))
              if t.acceptance_ratio > 0.9999]
@@ -85,7 +85,7 @@ def test_free_walk_diffuses_at_the_stated_D():
     box = np.ones((45, 45, 45), dtype=np.uint8)
     d = []
     for seed in range(300):
-        t = dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step,
+        t = dif.simulate_probe_diffusion(box, dg=1.0, t_max=n * t_step,
                                        t_step=t_step, D=D, random_seed=seed)
         if t.acceptance_ratio > 0.999:      # untouched by the walls
             xy = _xyz(t)
@@ -119,7 +119,7 @@ def test_the_two_models_agree_on_D():
     D, t_step, n = 8.0, 0.005, 60
     box = np.ones((45, 45, 45), dtype=np.uint8)
     d = []
-    for t in (dif.simulate_dye_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
+    for t in (dif.simulate_probe_diffusion(box, dg=1.0, t_max=n * t_step, t_step=t_step,
                                          D=D, random_seed=s) for s in range(300)):
         if t.acceptance_ratio > 0.999:
             xy = _xyz(t)
@@ -147,7 +147,7 @@ def test_the_two_models_agree_on_D():
 def test_walk_never_leaves_the_accessible_region():
     ng = 31
     ball = _ball(ng, 12)
-    t = dif.simulate_dye_diffusion(ball, dg=1.0, t_max=2000.0, t_step=0.005,
+    t = dif.simulate_probe_diffusion(ball, dg=1.0, t_max=2000.0, t_step=0.005,
                                    D=8.0, random_seed=1)
     idx = np.floor(_xyz(t)).astype(int) + (ng - 1) // 2
     inside = ball[np.clip(idx[:, 0], 0, ng - 1),
@@ -162,14 +162,14 @@ def test_confined_walk_samples_the_region_uniformly():
     This is what rejection sampling buys, and it is why a rejected step still
     emits a frame: dropping them would bias the walk away from the boundary.
     """
-    t = dif.simulate_dye_diffusion(_ball(31, 12), dg=1.0, t_max=4000.0,
+    t = dif.simulate_probe_diffusion(_ball(31, 12), dg=1.0, t_max=4000.0,
                                    t_step=0.005, D=8.0, random_seed=1)
     r = np.linalg.norm(_xyz(t), axis=1)
     assert r.mean() == pytest.approx(0.75 * 12.0, abs=1.5)
 
 
 def test_walk_emits_one_frame_per_step_accepted_or_not():
-    t = dif.simulate_dye_diffusion(_ball(21, 4), dg=1.0, t_max=100.0,
+    t = dif.simulate_probe_diffusion(_ball(21, 4), dg=1.0, t_max=100.0,
                                    t_step=0.01, D=40.0, random_seed=2)
     assert t.n_frames == 10000
     assert _accepted(t).shape == (10000,)
@@ -180,11 +180,11 @@ def test_walk_emits_one_frame_per_step_accepted_or_not():
 def test_walk_is_reproducible_and_seed_dependent():
     kw = dict(dg=1.0, t_max=500.0, t_step=0.005, D=8.0)
     ball = _ball(31, 12)
-    a = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
-    b = dif.simulate_dye_diffusion(ball, random_seed=5, **kw)
+    a = dif.simulate_probe_diffusion(ball, random_seed=5, **kw)
+    b = dif.simulate_probe_diffusion(ball, random_seed=5, **kw)
     np.testing.assert_array_equal(_xyz(a), _xyz(b))
     assert a.n_accepted == b.n_accepted
-    c = dif.simulate_dye_diffusion(ball, random_seed=6, **kw)
+    c = dif.simulate_probe_diffusion(ball, random_seed=6, **kw)
     assert not np.array_equal(_xyz(a), _xyz(c))
 
 
@@ -196,10 +196,10 @@ def test_mobility_field_and_scalar_mask_agree():
     outer = (((x - 15) ** 2 + (y - 15) ** 2 + (z - 15) ** 2) > 64)
     kw = dict(dg=1.0, t_max=2000.0, t_step=0.005, D=8.0, random_seed=2)
 
-    field = dif.simulate_dye_diffusion(ball, slow_fact=np.where(outer, 0.1, 1.0), **kw)
-    scalar = dif.simulate_dye_diffusion(ball, slow_density=outer.astype(np.uint8),
+    field = dif.simulate_probe_diffusion(ball, slow_fact=np.where(outer, 0.1, 1.0), **kw)
+    scalar = dif.simulate_probe_diffusion(ball, slow_density=outer.astype(np.uint8),
                                         slow_fact=[0.1], **kw)
-    free = dif.simulate_dye_diffusion(ball, **kw)
+    free = dif.simulate_probe_diffusion(ball, **kw)
 
     step = lambda t: np.linalg.norm(np.diff(_xyz(t), axis=0), axis=1).mean()
     assert step(field) == pytest.approx(step(scalar), rel=0.05)
@@ -207,7 +207,7 @@ def test_mobility_field_and_scalar_mask_agree():
 
 
 def test_no_accessible_voxel_gives_an_empty_trajectory():
-    t = dif.simulate_dye_diffusion(np.zeros((11, 11, 11), dtype=np.uint8),
+    t = dif.simulate_probe_diffusion(np.zeros((11, 11, 11), dtype=np.uint8),
                                    dg=1.0, t_max=10.0, t_step=0.01, D=8.0, random_seed=1)
     assert t.n_accepted == 0 and t.n_rejected == 0
     assert t.acceptance_ratio == 0.0
@@ -338,7 +338,7 @@ def test_the_accept_flag_rides_in_the_returned_array():
     This test pins the contract that made that possible: xyz and accepted come
     from one array and therefore always have the same length.
     """
-    t = dif.simulate_dye_diffusion(_ball(21, 6), dg=1.0, t_max=200.0,
+    t = dif.simulate_probe_diffusion(_ball(21, 6), dg=1.0, t_max=200.0,
                                    t_step=0.01, D=40.0, random_seed=3)
     xyz = _xyz(t)
     accepted = _accepted(t)
@@ -374,15 +374,15 @@ def test_the_grid_goes_through_without_being_copied():
     original = ball.copy()
     kw = dict(dg=1.0, t_max=500.0, t_step=0.005, D=8.0, random_seed=5)
 
-    first = dif.simulate_dye_diffusion(ball, **kw)
+    first = dif.simulate_probe_diffusion(ball, **kw)
     np.testing.assert_array_equal(ball, original)
 
-    second = dif.simulate_dye_diffusion(ball, **kw)
+    second = dif.simulate_probe_diffusion(ball, **kw)
     np.testing.assert_array_equal(_xyz(first), _xyz(second))
     assert first.n_accepted == second.n_accepted
 
     awkward = np.asfortranarray(ball).astype(np.float32)
-    third = dif.simulate_dye_diffusion(awkward, **kw)
+    third = dif.simulate_probe_diffusion(awkward, **kw)
     np.testing.assert_array_equal(_xyz(first), _xyz(third))
 
 
@@ -402,10 +402,10 @@ def test_a_short_walk_on_a_large_grid_is_no_longer_dominated_by_the_grid():
 
     box = np.ones((101, 101, 101), dtype=np.uint8)
     kw = dict(dg=1.0, t_max=0.3, t_step=0.005, D=8.0)
-    dif.simulate_dye_diffusion(box, random_seed=1, **kw)              # warm
+    dif.simulate_probe_diffusion(box, random_seed=1, **kw)              # warm
     t0 = time.perf_counter()
     for seed in range(5):
-        dif.simulate_dye_diffusion(box, random_seed=seed, **kw)
+        dif.simulate_probe_diffusion(box, random_seed=seed, **kw)
     per_call = (time.perf_counter() - t0) / 5
 
     assert per_call < 5e-3, (

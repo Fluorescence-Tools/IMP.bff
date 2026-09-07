@@ -105,6 +105,41 @@ inline unsigned char* new_uchar_view(std::size_t n, unsigned char** out_view,
     return buffer;
 }
 
+//! A malloc'ed out-view, freed when it goes out of scope.
+/*! The out-view protocol hands the caller ownership of the buffer. When that
+    caller is C++ rather than numpy -- one kernel calling another -- this is
+    who frees it. */
+class OwnedView {
+public:
+    double* data;
+    int size;
+    OwnedView() : data(NULL), size(0) {}
+    ~OwnedView() { std::free(data); }
+    std::vector<double> vector() const {
+        return std::vector<double>(data, data + size);
+    }
+
+private:
+    OwnedView(const OwnedView&);
+    OwnedView& operator=(const OwnedView&);
+};
+
+//! The same for an integer out-view.
+class OwnedIntView {
+public:
+    int* data;
+    int size;
+    OwnedIntView() : data(NULL), size(0) {}
+    ~OwnedIntView() { std::free(data); }
+    std::vector<int> vector() const {
+        return std::vector<int>(data, data + size);
+    }
+
+private:
+    OwnedIntView(const OwnedIntView&);
+    OwnedIntView& operator=(const OwnedIntView&);
+};
+
 //! Publish a copy of a vector the kernel had to build anyway.
 /*! For kernels whose algorithm needs its own buffer — a double-buffered sweep
     cannot know in advance which of the two holds the answer — copying once at

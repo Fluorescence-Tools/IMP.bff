@@ -2,7 +2,7 @@
 
 `imp_bff_traj2bcif`, `imp_bff_traj2drot` and `imp_bff_potentials2pto` are
 exercised by the tests of the formats they write. These two were not, and both
-were broken: `imp_bff_dye_pdb2cif` passed `--dye-id`'s `None` default into a
+were broken: `imp_bff_probe_pdb2cif` passed `--probe-id`'s `None` default into a
 `const std::string&`, so its documented default path raised a `TypeError`
 before it read anything, and `imp_bff_labelizer --show` handed a structure to a
 container reader, which complained about EBML headers.
@@ -34,11 +34,11 @@ def _program(name):
     return module
 
 
-def test_dye_pdb2cif_converts_with_its_default_id(tmp_path):
-    """`--dye-id` is empty by default, meaning "take it from the file". It was
+def test_probe_pdb2cif_converts_with_its_default_id(tmp_path):
+    """`--probe-id` is empty by default, meaning "take it from the file". It was
     `None`, which is not a string, so the default invocation never ran."""
     out = tmp_path / "dye.cif"
-    program = _program("imp_bff_dye_pdb2cif")
+    program = _program("imp_bff_probe_pdb2cif")
     assert program.main([str(IMP.bff.get_structure_dir("alexa488_r48.pdb")),
                          str(out)]) == 0
     assert out.is_file()
@@ -47,11 +47,11 @@ def test_dye_pdb2cif_converts_with_its_default_id(tmp_path):
     assert text.count("ATOM") + text.count("HETATM") > 10
 
 
-def test_dye_pdb2cif_takes_an_explicit_id(tmp_path):
+def test_probe_pdb2cif_takes_an_explicit_id(tmp_path):
     out = tmp_path / "dye.cif"
-    program = _program("imp_bff_dye_pdb2cif")
+    program = _program("imp_bff_probe_pdb2cif")
     assert program.main([str(IMP.bff.get_structure_dir("alexa488_r48.pdb")),
-                         str(out), "--dye-id", "A48"]) == 0
+                         str(out), "--probe-id", "A48"]) == 0
     assert "A48" in out.read_text()
 
 

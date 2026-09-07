@@ -4,7 +4,7 @@
 
 ## What
 
-`cgdye.topology.build_dye_protein_system` builds a combined dye+protein
+`cgprobe.topology.build_dye_protein_system` builds a combined dye+protein
 force-field system from two MOL2 files and two templates. It derives bonds,
 angles and dihedrals from the MOL2 connectivity, and then:
 
@@ -31,7 +31,7 @@ has nothing opposing pyramidalisation of the chromophore, which is the part of
 the dye whose geometry the transition dipole is defined by.
 
 The consuming machinery is complete and has always been: both
-`scoring.build_dye_restraints` and `cgdye.sim._build_restraints` turn impropers
+`scoring.build_dye_restraints` and `cgprobe.sim._build_restraints` turn impropers
 into `IMP.core.DihedralRestraint`s with a harmonic about the current dihedral.
 Only the production side is missing.
 
@@ -43,16 +43,16 @@ Because `impropers` is always empty:
   read `t["k"]` on an `FFTorsionType` — a `TypeError` waiting for its first
   iteration. Fixed and gated in 192a763.
 * The two exclusion derivations (`scoring.compute_exclusions`, which adds
-  improper pairs, and `cgdye.sim._derive_exclusions`, which does not) agree on
+  improper pairs, and `cgprobe.sim._derive_exclusions`, which does not) agree on
   every real system — but only because the term they differ on is empty. They
   are not equivalent; they are untested against each other.
-* `test/cgdye/test_dye_topology.py` exercises `build_dye_topology`'s improper
+* `test/cgprobe/test_dye_topology.py` exercises `build_dye_topology`'s improper
   path only with `"impropers": []`, so the expansion is unmeasured on both
   paths.
 
 ## What it turned out to be
 
-Not a missing capability. `cgdye/topology.py` held **three** builders of a
+Not a missing capability. `cgprobe/topology.py` held **three** builders of a
 `DyeForceFieldSystem`, and the largest — `build_system_from_specs`, the body of
 the `build-system` command — *did* expand the templates' impropers, producing
 exactly the 81 predicted above. It could not be used: it never returned a

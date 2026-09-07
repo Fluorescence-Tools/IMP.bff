@@ -26,18 +26,6 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 #: Long-running by nature -- a replica-exchange run over a dimer.
 SLOW = {"mGBP2_dimer_fp.py"}
-#: The TCSPC instrument layer was deleted from this package on purpose
-#: (`PRD-113 stage 0`), and these still document it: `IMP.bff.DecayCurve`,
-#: `DecayConvolution`, `DecayLifetimeHandler`, `DecayScale`, `DecayPattern`,
-#: `DecayLinearization`. They are not broken call sites but pages describing a
-#: layer that moved out; skipped until they are ported or dropped.
-DELETED_DECAY_LAYER = {
-    "decay_curves.ipynb",
-    "decay_forward_model.ipynb",
-    "decay_objective_function.ipynb",
-    "programming_imp_decorator.ipynb",
-}
-
 CELL_RUNNER = r'''
 import json, sys
 nb = json.load(open(sys.argv[1]))
@@ -57,12 +45,20 @@ def _examples():
 
 
 def _notebooks():
-    return sorted(p for p in (ROOT / "doc").glob("**/*.ipynb")
-                  if p.name not in DELETED_DECAY_LAYER)
+    # Every notebook under `doc/` runs. Nothing is skipped: a page this module
+    # ships is a page this module can execute, or it does not ship.
+    return sorted((ROOT / "doc").glob("**/*.ipynb"))
 
 
 def _run(args, cwd):
-    env = dict(os.environ, MPLBACKEND="Agg")
+    # MPLBACKEND: a figure window would block the run.
+    # FI_PROVIDER: anything that pulls in IMP.mpi calls MPI_Finalize at exit, and
+    # libfabric's default provider selection picks whichever NIC comes first --
+    # on a machine with a VPN up that is a `utun`, and finalize aborts flushing
+    # its send queue ("OFI poll failed"), killing an example that had already
+    # finished its work. tcp over loopback is what a single-rank run wants
+    # anyway.
+    env = dict(os.environ, MPLBACKEND="Agg", FI_PROVIDER="tcp")
     return subprocess.run(args, capture_output=True, text=True, timeout=600,
                           cwd=str(cwd), env=env)
 

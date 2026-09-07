@@ -75,9 +75,8 @@ void fret_pair_matrices(
                 out[block + k] = 2.0 / 3.0;
                 continue;
             }
-            // A zero separation has no direction; the Python divided with
-            // `where=r_norm > 0` and left the unit vector at zero, so the two
-            // projection terms vanish and kappa^2 falls back to (mu_D . mu_A)^2.
+            // A zero separation has no direction, so the unit vector stays zero: the
+            // two projection terms vanish and kappa^2 falls back to (mu_D . mu_A)^2.
             double ux = 0.0, uy = 0.0, uz = 0.0;
             if (d > 0.0) { ux = rx / d; uy = ry / d; uz = rz / d; }
             const double ax = a_hat[3 * j], ay = a_hat[3 * j + 1],

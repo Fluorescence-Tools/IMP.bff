@@ -214,8 +214,18 @@ def test_a_volume_overlaps_its_own_site_and_not_the_far_side(tmp_path):
     # dialect
     assert IMP.bff.av_overlap(av, h, "resid 130 to 134", 8.0) == \
         pytest.approx(near)
-    # and the clearance itself: nothing touches at a radius the dye cannot reach
-    assert IMP.bff.av_overlap(av, h, "", 5.0) == 0.0
+    # and the clearance itself: nothing touches at a radius the dye cannot
+    # reach. The threshold is exactly the smallest heavy-atom radius of the
+    # obstacle set plus the dye radius, because the carve inflates every
+    # obstacle by the dye radius and the closest a voxel can sit to an atom
+    # centre is that sum. Under the default radii -- IMP's, united-atom
+    # (AV::set_radii_source) -- that is oxygen 1.70 + 3.5 = **5.20 A**:
+    # measured 0.0 at 5.20 and 0.000366 at 5.21. Under Olga's, which were the
+    # default for part of 2026-09-01, it is 1.49 + 3.5 = 4.99. Pinned from
+    # both sides so a change of radii set shows up here as a moved edge
+    # rather than as an assertion that still passes for the wrong reason.
+    assert IMP.bff.av_overlap(av, h, "", 5.20) == 0.0
+    assert IMP.bff.av_overlap(av, h, "", 5.21) > 0.0
 
 
 # ---------------------------------------------------------------------------

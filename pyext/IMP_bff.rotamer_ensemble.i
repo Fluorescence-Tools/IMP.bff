@@ -2,30 +2,13 @@
  * RotamerEnsemble -- last in swig.i-in, because it derives from `States`
  * (avmodel.i) and returns `FRETPairGeometry` / `FRETPairEfficiencies`.
  *
- * This file was 340 lines of `%pythoncode` holding a Python class that
- * subclassed a C++ value. What that cost, and why it is C++ now:
- *
- *  - The class carried `atoms`, `energies`, `partition`, `library`, `chain`
- *    and `residue` as Python attributes on top of a C++ `States`, so an
- *    ensemble built in C++ could not be one, and every consumer that wanted
- *    the atoms had to be Python too.
- *  - `from_site` -- place the library in the residue's backbone frame, screen
- *    it, take the chromophore centre and the transition dipole -- was already
- *    four C++ kernel calls with numpy reshapes between them. The reshapes are
- *    what the kernels' own shapes say, so they belong on the C++ side of the
- *    boundary: `RotamerEnsemble::from_site` in `RotamerEnsemble.h`.
- *  - `pair_geometry`, `pair_distribution` and `fret_efficiencies` each rebuilt
- *    a *dict* out of a typed value that already carried every field
- *    (`FRETPairEfficiencies` holds `R`, `kappa2`, `weight`, `E`, `k_fret` and
- *    the three averages). They are methods returning those values now, and a
- *    caller reads `eff.static_efficiency` rather than `eff["static"]`.
- *  - `_pts4` and `_mu_of` asked what kind of states an object was. `States`
- *    answers that itself, so both are gone.
- *
- * Nothing in it is Python any more. A library is a `RotamerLibrary` and a
- * protein frame is a `ProteinFrame`; `from_site` takes either those values or
- * the two paths they are read from, because reading them is C++ as well
- * (`load_rotamer_library`, `load_protein_frames`).
+ * `atoms`, `energies`, `partition`, `library`, `chain` and `residue` are part
+ * of the C++ value, not attributes hung on it, so an ensemble built in C++ is
+ * one and a consumer that wants the atoms need not be Python.
+ * `RotamerEnsemble::from_site` -- place the library in the residue's backbone
+ * frame, screen it, take the chromophore centre and the transition dipole --
+ * keeps its four kernel calls and their reshapes on the C++ side of the
+ * boundary, because the shapes are what the kernels themselves say.
  */
 
 IMP_SWIG_VALUE(IMP::bff, RotamerSiteOptions, RotamerSiteOptionsList);
@@ -54,7 +37,7 @@ IMP_SWIG_VALUE(IMP::bff, RotamerEnsemble, RotamerEnsembles);
               get_energies);
 
 // The name lists come back as the wrapped `std::vector<std::string>`, which
-// indexes and iterates like the tuple the Python attribute held.
+// indexes and iterates like a tuple.
 %attribute_py(IMP::bff::RotamerEnsemble, std::vector<std::string>, atom_names,
               get_atom_names);
 %attribute_py(IMP::bff::RotamerEnsemble, std::vector<std::string>, resnames,

@@ -8,7 +8,7 @@
 #include <IMP/bff/OrientationFactor.h>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <cmath>
 

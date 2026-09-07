@@ -1,4 +1,4 @@
-"""Per-frame wall time of ``AVNetworkRestraint`` on the T4L docking trajectory.
+"""Per-frame wall time of ``ProbeNetworkRestraint`` on the T4L docking trajectory.
 
 This is the PRD-105 recording benchmark (acceptance criterion 8): it scores
 the ``chi2_C1_33p`` distance set of ``examples/structure/T4L`` against the
@@ -40,8 +40,8 @@ def build(mode, hier, fps_json_path, score_set, n_samples, quad_k):
         space_fixed, shared_map, distance = MODES[mode]
         kwargs = dict(space_fixed=space_fixed, shared_map=shared_map,
                       distance=distance, quad_k=quad_k)
-    return IMP.bff.AVNetworkRestraint(
-        hier, fps_json_path, "AVNetworkRestraint",
+    return IMP.bff.ProbeNetworkRestraint(
+        hier, fps_json_path, "ProbeNetworkRestraint",
         score_set, n_samples, **kwargs)
 
 

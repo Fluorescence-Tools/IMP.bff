@@ -17,6 +17,8 @@
 #include <IMP/core/XYZR.h>
 #include <IMP/algebra/Vector3D.h>
 
+#include <IMP/bff/VdwRadii.h>
+
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -65,8 +67,12 @@ class IMPBFFEXPORT AVOccupancyMap : public IMP::Object {
         return xyzr_[i].get_coordinates();
     }
     double radius(size_t i) const {
+        if (!obstacle_radii_.empty()) return obstacle_radii_[i];
         return snapshot_ ? (*snapshot_)[i][3] : xyzr_[i].get_radius();
     }
+
+    //! Per-particle radii used instead of the model's; 0 = transparent.
+    std::vector<double> obstacle_radii_;
 
     // (x, y, z, radius) of every particle as last rasterised; empty until the
     // first full raster.
@@ -129,6 +135,14 @@ public:
 
     double get_spacing() const { return spacing_; }
     double get_extra_radius() const { return extra_radius_; }
+
+    //! Radii to use instead of the particles' own; empty = the particles'.
+    /*! A **zero radius is transparent**: not inflated, and blocking nothing.
+        A volume strips an atom by giving it no size, not by leaving it out,
+        so every volume rasterises the same particles in the same order. */
+    void set_obstacle_radii(const std::vector<double>& radii) {
+        obstacle_radii_ = radii;
+    }
 
     //! Ask the map to cover the window [k0, k0 + n) before the next update
     void request_window(int kx, int ky, int kz, int nx, int ny, int nz);
@@ -231,13 +245,16 @@ IMP_OBJECTS(AVOccupancyMap, AVOccupancyMaps);
 
 
 //! One AVOccupancyMap per (spacing, extra-radius) class, created on demand.
-/** Shared by all AVs of an AVNetworkRestraint under `shared_map=True`.
+/** Shared by all AVs of an ProbeNetworkRestraint under `shared_map=True`.
     Occupancy is a function of (atoms, lattice, extra radius) only -- the
     linker length merely masks -- so AVs with the same spacing and the same
     inflation radius read the same raster.
  */
 class IMPBFFEXPORT AVOccupancyRegistry : public IMP::Object {
     IMP::ParticlesTemp ps_;
+    std::vector<double> obstacle_radii_;
+    bool adopted_ = false;
+    AVRadiiSource adopted_source_ = AV_RADII_IMP;
     std::map<std::pair<double, double>, IMP::Pointer<AVOccupancyMap> > maps_;
     std::shared_ptr<std::vector<IMP::algebra::Vector4D> > snapshot_ =
         std::make_shared<std::vector<IMP::algebra::Vector4D> >();
@@ -248,6 +265,33 @@ public:
 
     //! The map of the (spacing, extra_radius) class, created on first use
     AVOccupancyMap *get_map(double spacing, double extra_radius);
+
+    //! Adopt one per-particle obstacle-radii vector for every map here.
+    /*! A shared raster **is** one obstacle set, so the radii set is a property
+        of the registry, not of the volume reading it. The first volume to ask
+        fixes it; a second volume asking for a different #IMP::bff::AVRadiiSource
+        is a modelling error, not a preference, and throws rather than silently
+        getting the first one's answer. (A strip mask already takes its volume
+        out of the registry entirely, for the same reason.) The source is
+        carried beside the vector so the check on the hot path is one integer
+        comparison rather than a walk of every atom.
+
+        Applying it to maps that already exist is safe: `AVOccupancyMap`
+        remembers the radius it last rasterised each atom with, so a changed
+        radius is picked up as an ordinary subtract-old / add-new delta.
+
+        An empty vector means "the particles' own radii", which is what
+        `AV_RADII_IMP` -- the default -- with no mask hands over. */
+    void adopt_obstacle_radii(AVRadiiSource source,
+                              const std::vector<double> &radii);
+
+    //! The radii adopted by adopt_obstacle_radii(); empty = the model's own.
+    const std::vector<double> &get_obstacle_radii() const {
+        return obstacle_radii_;
+    }
+
+    //! The radii set this registry was built with; `imp` until one is adopted.
+    AVRadiiSource get_radii_source() const { return adopted_source_; }
 
     //! All maps created so far
     AVOccupancyMaps get_maps() const;

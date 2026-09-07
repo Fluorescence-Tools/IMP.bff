@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/FPSReaderWriter.h
+ *  \file FPSReaderWriter.cpp
  *  \brief Simple class to read and (write) FPS.json files
  *
  * \authors Thomas-Otavio Peulen
@@ -7,6 +7,7 @@
  *
  */
 #include <IMP/bff/internal/FPSReaderWriter.h>
+#include <IMP/bff/FPSSchema.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -57,9 +58,11 @@ void FPSReaderWriter::update_distances(){
         d.distance = distance.value("distance", -1.0);
         d.error_neg = distance.value("error_neg", -1.0);
         d.error_pos = distance.value("error_pos", -1.0);
-        d.distance_type = DyePairMeasure_name_to_type[
-                distance.value("distance_type", "RDAMeanE")
-        ];
+        // An unknown name keeps the format's own default rather than
+        // silently scoring as whatever `-1` would index to.
+        const int named = probe_pair_distance_type(
+                distance.value("distance_type", "RDAMeanE"));
+        d.distance_type = named < 0 ? PROBE_PAIR_DISTANCE_E : named;
         distance_map[key] = d;
     }
 
@@ -76,9 +79,27 @@ nlohmann::json FPSReaderWriter::get_used_positions(){
         used_positions_names.emplace(it->second.position_1);
         used_positions_names.emplace(it->second.position_2);
     }
+    // The document's own `strip_mask` -- what the *structure* carries that no
+    // volume should be blocked by -- is folded into each position here, so a
+    // position handed on is self-contained and every consumer honours both
+    // without knowing there were two.
+    const std::string document_mask =
+            fps_json_.contains("strip_mask") && fps_json_["strip_mask"].is_string()
+                    ? fps_json_["strip_mask"].get<std::string>()
+                    : std::string();
+
     nlohmann::json used_positions;
     for(auto &position_name: used_positions_names){
-        used_positions[position_name] = fps_json_["Positions"][position_name];
+        nlohmann::json position = fps_json_["Positions"][position_name];
+        if (!document_mask.empty()) {
+            const std::string own =
+                    position.contains("strip_mask") &&
+                                    position["strip_mask"].is_string()
+                            ? position["strip_mask"].get<std::string>()
+                            : std::string();
+            position["strip_mask"] = combined_strip_mask(document_mask, own);
+        }
+        used_positions[position_name] = position;
     }
     return used_positions;
 }

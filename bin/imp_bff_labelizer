@@ -36,6 +36,8 @@ Usage
     imp_bff_labelizer structure.pdb --conservation grades.txt
     imp_bff_labelizer structure.pdb --pairs --forster-radius 52
     imp_bff_labelizer structure.pdb --pairs --refine 300 --r0 52
+    imp_bff_labelizer closed.pdb --second-structure open.pdb \
+        --donor-chain A --acceptor-chain B --donor Alexa555 --acceptor Alexa647
     imp_bff_labelizer scored.mmfdb.pto --show
     imp_bff_labelizer scored.mmfdb.pto --extract-structure recovered.pdb
 
@@ -156,6 +158,20 @@ def main(argv: list[str] | None = None) -> int:
                          "keeps all of them")
     ap.add_argument("--show", action="store_true",
                     help="print what a container holds and exit")
+    ap.add_argument("--second-structure", type=Path, default=None,
+                    metavar="PDB",
+                    help="a second conformation. The pair score then becomes "
+                         "the CHANGE in transfer efficiency between the two, "
+                         "which is what says whether a pair would report on "
+                         "the conformational change. Implies --pairs")
+    ap.add_argument("--donor-chain", default="", metavar="CHAIN",
+                    help="restrict pairs to a donor in this chain. With "
+                         "--acceptor-chain this is what makes a homodimer "
+                         "screen: a single-cysteine mutation puts the same "
+                         "residue on both protomers, so the only measurable "
+                         "distance is i(A)-i(B)")
+    ap.add_argument("--acceptor-chain", default="", metavar="CHAIN",
+                    help="restrict pairs to an acceptor in this chain")
     ap.add_argument("--extract-structure", type=Path, default=None,
                     metavar="PDB",
                     help="recover the embedded structure from a container, "
@@ -209,13 +225,13 @@ def main(argv: list[str] | None = None) -> int:
         # used to multiply by ten because `forster_radius` returned
         # nanometres; it converts inside itself since 2026-08-25.
         if args.dyes:
-            fret.forster_radius = bff.dye_pto_forster_radius(
+            fret.forster_radius = bff.probe_pto_forster_radius(
                 str(args.dyes), args.donor, args.acceptor,
                 args.kappa2, args.refractive_index)
             whence = str(args.dyes)
         else:
             fret.forster_radius = bff.forster_radius(
-                bff.find_dye(args.donor), bff.find_dye(args.acceptor),
+                bff.find_probe(args.donor), bff.find_probe(args.acceptor),
                 args.kappa2, args.refractive_index)
             whence = "the bundled dye library"
         print("R0(%s -> %s) = %.1f A  [kappa2=%.3f, n=%.2f, from %s]"
@@ -223,12 +239,39 @@ def main(argv: list[str] | None = None) -> int:
                  args.kappa2, args.refractive_index, whence))
     fret.label_score_threshold = args.threshold
     fret.n_refine = args.refine
+    fret.donor_chain = args.donor_chain
+    fret.acceptor_chain = args.acceptor_chain
+    if bool(args.donor_chain) != bool(args.acceptor_chain):
+        print("imp_bff_labelizer: --donor-chain and --acceptor-chain go "
+              "together", file=sys.stderr)
+        return 1
+
     pairs = []
-    if args.pairs:
+    if args.pairs or args.second_structure:
         label_scores = bff.ll_combined_by_key(scores)
         if not label_scores:
             print("imp_bff_labelizer: no position has a combined score, so "
                   "there is nothing to pair", file=sys.stderr)
+        elif args.second_structure is not None:
+            if not args.second_structure.exists():
+                print(f"imp_bff_labelizer: {args.second_structure} does not "
+                      f"exist", file=sys.stderr)
+                return 1
+            # The second conformation is scored with the same model, so the
+            # four label scores of a two-state pair are comparable.
+            scores_2 = bff.ll_score_structure(str(args.second_structure), model,
+                                              options, conservation)
+            label_scores_2 = bff.ll_combined_by_key(scores_2)
+            if not label_scores_2:
+                print("imp_bff_labelizer: no position of "
+                      f"{args.second_structure} has a combined score",
+                      file=sys.stderr)
+                return 1
+            pairs = list(bff.ll_pair_scores_two_states(
+                str(args.src), str(args.second_structure),
+                label_scores, label_scores_2, fret))
+            if args.max_pairs > 0:
+                pairs = pairs[:args.max_pairs]
         else:
             pairs = list(bff.ll_pair_scores(str(args.src), label_scores, fret))
             if args.max_pairs > 0:

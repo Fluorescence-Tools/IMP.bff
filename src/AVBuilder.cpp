@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
+#include <IMP/bff/internal/Text.h>
 #include <IMP/bff/AVBuilder.h>
 
 #include <IMP/bff/AV.h>
@@ -20,7 +21,7 @@
 #include <IMP/atom/Selection.h>
 #include <IMP/atom/pdb.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cctype>
@@ -34,26 +35,15 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+
 const double DEFAULT_ALLOWED_SPHERE_RADIUS = 2.1;
 
 namespace avb {
 
+using internal::upper;
+
 const double DEFAULT_VDW = 1.70;
 
-std::string upper(const std::string& s) {
-    std::string out(s);
-    for (std::size_t i = 0; i < out.size(); ++i) {
-        out[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[i])));
-    }
-    return out;
-}
-
-std::string trim(const std::string& s) {
-    const std::string space = " \t\n\r\f\v";
-    const std::size_t a = s.find_first_not_of(space);
-    if (a == std::string::npos) return std::string();
-    return s.substr(a, s.find_last_not_of(space) - a + 1);
-}
 
 const std::map<std::string, int>& element_numbers() {
     static std::map<std::string, int> table;
@@ -113,23 +103,23 @@ std::vector<PDBAtomRecord> parse_pdb(const std::string& path) {
         }
         if (line.size() < 54) continue;
         PDBAtomRecord row;
-        const std::string res = trim(line.substr(22, 4));
+        const std::string res = internal::trimmed(line.substr(22, 4));
         char* end = 0;
         row.resseq = static_cast<int>(std::strtol(res.c_str(), &end, 10));
         if (end == res.c_str() || *end != '\0') continue;
-        const std::string xs = trim(line.substr(30, 8));
-        const std::string ys = trim(line.substr(38, 8));
-        const std::string zs = trim(line.substr(46, 8));
+        const std::string xs = internal::trimmed(line.substr(30, 8));
+        const std::string ys = internal::trimmed(line.substr(38, 8));
+        const std::string zs = internal::trimmed(line.substr(46, 8));
         row.x = std::strtod(xs.c_str(), &end); if (*end != '\0') continue;
         row.y = std::strtod(ys.c_str(), &end); if (*end != '\0') continue;
         row.z = std::strtod(zs.c_str(), &end); if (*end != '\0') continue;
-        row.chain = trim(line.substr(21, 1));
-        row.atom_name = trim(line.substr(12, 4));
-        row.res_name = trim(line.substr(17, 3));
+        row.chain = internal::trimmed(line.substr(21, 1));
+        row.atom_name = internal::trimmed(line.substr(12, 4));
+        row.res_name = internal::trimmed(line.substr(17, 3));
         // The serial is what CONECT records refer to. A record whose serial
         // does not parse keeps 0 rather than being dropped: the coordinates are
         // what most callers want, and only the bond reader needs the serial.
-        const std::string serial = trim(line.substr(6, 5));
+        const std::string serial = internal::trimmed(line.substr(6, 5));
         char* serial_end = 0;
         const long value = std::strtol(serial.c_str(), &serial_end, 10);
         if (serial_end != serial.c_str() && *serial_end == '\0') {
@@ -162,9 +152,19 @@ std::map<int, double> vdw_radii() {
     return out;
 }
 
+double vdw_radius(const std::string& element) {
+    const std::map<std::string, int>& numbers = avb::element_numbers();
+    const std::string symbol = avb::upper(internal::trimmed(element));
+    std::map<std::string, int>::const_iterator n = numbers.find(symbol);
+    if (n == numbers.end()) return 1.7;
+    const std::map<int, double> radii = vdw_radii();
+    std::map<int, double>::const_iterator r = radii.find(n->second);
+    return r == radii.end() ? 1.7 : r->second;
+}
+
 std::string element_symbol_from_pdb_line(const std::string& line) {
     if (line.size() >= 78) {
-        const std::string symbol = avb::upper(avb::trim(line.substr(76, 2)));
+        const std::string symbol = avb::upper(internal::trimmed(line.substr(76, 2)));
         if (!symbol.empty()) return symbol;
     }
     if (line.size() < 16) return std::string();
@@ -173,7 +173,7 @@ std::string element_symbol_from_pdb_line(const std::string& line) {
     while (name_field.size() < 4) name_field += ' ';
 
     const std::map<std::string, int>& numbers = avb::element_numbers();
-    const std::string candidate = avb::trim(name_field.substr(0, 2));
+    const std::string candidate = internal::trimmed(name_field.substr(0, 2));
     bool tail_has_digit = false;
     for (std::size_t i = 2; i < name_field.size(); ++i) {
         if (std::isdigit(static_cast<unsigned char>(name_field[i]))) {
@@ -264,7 +264,7 @@ AccessibleVolume resample_av(IMP::Model* model, IMP::Particle* source_particle,
     av.resample();
 
     PathMap* path_map = av.get_map();
-    const IMP::em::DensityHeader* header = path_map->get_header();
+    const GridHeader* header = path_map->get_header();
     const int nx = header->get_nx(), ny = header->get_ny(), nz = header->get_nz();
 
     // IMP orders the flat tile values `i = x + nx*y + nx*ny*z` -- *x* fastest --
@@ -432,10 +432,10 @@ AccessibleVolume compute_av_from_structure(
     // the volume comes back empty. The strip above already removes the
     // attachment residue's side chain, which is what lets FPS-calibrated small
     // clearances (`allowed_sphere_radius: 1`) compute a real cloud.
-    const double clearance =
-            allowed_sphere_radius >= 0.0
-                    ? allowed_sphere_radius
-                    : std::max(1.5, 0.5 * linker_width + 0.5 * disc_step);
+    // Negative is passed straight through: AV derives it, and the rule lives
+    // there alone now. It used to be duplicated here, which is how the two
+    // doors onto one volume came to disagree.
+    const double clearance = allowed_sphere_radius;
 
     AccessibleVolume av = resample_av(
             model, particles[0], linker_length, linker_width, r1, r2, r3,
@@ -444,13 +444,25 @@ AccessibleVolume compute_av_from_structure(
 
     // This door's convention: the point weights are forced to one. The array
     // door keeps whatever IMP reported.
-    double* points = NULL;
-    int n_points = 0;
-    av.get_points(&points, &n_points);
-    std::vector<double> uniform(points, points + n_points);
-    for (int i = 3; i < n_points; i += 4) uniform[i] = 1.0;
-    std::free(points);
-    av.set_points(uniform);
+    //
+    // Except when the weights are the answer. An accessible *contact* volume
+    // is nothing but a weighting -- its cloud is the plain one, voxel for
+    // voxel -- so flattening it here would hand back a volume that had
+    // silently ignored `contact_volume_thickness`, which is the defect this
+    // was fixed for (PRD-121 G9). Same for chain weighting, if this door ever
+    // gains it.
+    const bool weighted = contact_volume_thickness > 0.0 &&
+                          contact_volume_trapped_fraction >= 0.0 &&
+                          contact_volume_trapped_fraction < 1.0;
+    if (!weighted) {
+        double* points = NULL;
+        int n_points = 0;
+        av.get_points(&points, &n_points);
+        std::vector<double> uniform(points, points + n_points);
+        for (int i = 3; i < n_points; i += 4) uniform[i] = 1.0;
+        std::free(points);
+        av.set_points(uniform);
+    }
     return av;
 }
 

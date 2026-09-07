@@ -14,8 +14,8 @@
  * Everything here speaks JSON **text**, not typed records. A position carries an
  * open set of keys whose types differ per key and whose unknown members are
  * preserved on the way through; that is what a JSON object is, and turning it
- * into a struct here would either drop the unknown keys or reinvent the object.
- * The Python surface parses the text into a dict, which is one call.
+ * into a struct here would either drop the unknown keys or reinvent the
+ * object.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -26,8 +26,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <vector>
@@ -80,6 +79,24 @@ IMPBFFEXPORT FPSDocument read_old_lps_txt(
     else is the first distance and the file is re-read from the top. */
 IMPBFFEXPORT std::string read_old_distances_txt(const std::string& path);
 
+//! The distance names of a legacy C# FPS distances `.txt`, **in file order**.
+/*!
+    The order matters and is otherwise lost. FPS's project file stores its
+    distance selection as a `Boolean[]` parallel to its `DistanceList`, i.e.
+    to this file's line order (`ProjectData.SelectedDistances`), while
+    #read_old_distances_txt hands back a JSON *object* whose keys come out
+    sorted -- so resolving a positional selection through that reader silently
+    pairs each flag with the wrong distance. This is the order to index with.
+
+    Names are built exactly as #read_old_distances_txt builds its keys,
+    `position1_position2`, and the same lines are skipped, so the two readings
+    of one file cannot disagree about what a distance is called.
+
+    \throw IOException when the file cannot be read
+*/
+IMPBFFEXPORT std::vector<std::string> read_old_distances_order(
+        const std::string& path);
+
 //! Load an fps.json file, or a legacy C# `.txt` pair.
 /*!
     A path that does not end in `.json` is read as a legacy positions file, and
@@ -110,7 +127,7 @@ IMPBFFEXPORT void write_fps_json(const std::string& path,
 //! Keep only the positions the C++ AV scorer understands, and their distances.
 /*!
     Rotamer-ensemble positions (`simulation_type == "R1"`) are Python-only:
-    #IMP::bff::AVNetworkRestraint never reads `simulation_type` and would score
+    #IMP::bff::ProbeNetworkRestraint never reads `simulation_type` and would score
     one as an AV1 with its AV parameters. A distance survives only if **both**
     its ends do.
 */

@@ -8,7 +8,8 @@
 #include <IMP/bff/PETQuenching.h>
 
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/internal/Text.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cctype>
@@ -18,11 +19,12 @@
 IMPBFF_BEGIN_NAMESPACE
 
 const char* const REFERENCE_DYE = "AlexaFluor488";
-const double DEFAULT_DYE_RADIUS = 3.5;
+const double DEFAULT_PROBE_RADIUS = 3.5;
 
 namespace pet {
+using IMP::bff::internal::nan_value;
 
-double nan_value() { return std::numeric_limits<double>::quiet_NaN(); }
+
 
 //! Upper-cased and trimmed, which is how every residue name is compared here.
 std::string residue_key(const std::string& name) {
@@ -250,8 +252,8 @@ std::map<std::string, ResidueQuenching> normalize_amino_acid_quenching(
 }
 
 std::map<std::string, ResidueQuenching> amino_acid_quenching_defaults(
-        double kQ_scale, double slow_factor, double dye_radius) {
-    const double radius = std::max(0.0, dye_radius);
+        double kQ_scale, double slow_factor, double probe_radius) {
+    const double radius = std::max(0.0, probe_radius);
     std::map<std::string, ResidueQuenching> table =
             normalize_amino_acid_quenching();
     const std::map<std::string, PETReference> reference =

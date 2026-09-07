@@ -2,6 +2,12 @@
 
 Code that is **out of the package** but kept in the repository for reference.
 
+`FASPR/` and `DEERpredict/` are the two things here that were never in `IMP.bff`: third-party clones
+(Huang's side-chain packer, `dun2010bbdep.bin` Dunbrack rotamer library) kept
+as external reference. See `okf/log.md` 2026-08-21 for why it is here and the
+two ways it could feed cgdye (rotamer library source; real-side-chain sampling
+for dye–quencher accuracy).
+
 Nothing here is importable, built, installed or tested. It is not a staging
 area and not a deprecation shelf — it is the record of what something used to
 look like, kept because reading the old version is occasionally the fastest way

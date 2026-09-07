@@ -23,10 +23,9 @@
  * - **N-body** — homo-FRET and multi-chromophore transfer, where the rate is
  *   not a sum over pairs. Not implemented; the interface is shaped to take it.
  *
- * Every term takes the same two participants, and reports through `arity`
- * whether it reads the second. The alternative — a signature per arity — is
- * what Python's duck typing made free and C++ does not, and it would put the
- * sum in #IMP::bff::total_rate back where each observable had to write it.
+ * Every term takes the same two participants and reports through `arity`
+ * whether it reads the second, so #IMP::bff::total_rate sums them without
+ * knowing which kind each one is.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -37,11 +36,11 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
-#include <IMP/bff/DyeLibrary.h>
+#include <IMP/bff/ProbeLibrary.h>
 #include <IMP/bff/PETQuenching.h>
 
 #include <IMP/Object.h>
-#include <IMP/object_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <limits>
 #include <map>
@@ -111,22 +110,22 @@ class IMPBFFEXPORT PETTerm : public InteractionTerm {
     std::vector<double> coords_;    //!< flat, three per quenching atom
     std::vector<double> kQ_;        //!< 1/ns, per atom; zero where inactive
     std::vector<double> rC_;        //!< Angstrom, per atom
-    double dye_radius_;
+    double probe_radius_;
 
 public:
     //! \param[in] parameters `{comp_id: PETParameters}` for **one** dye
     /*! \param[in] res_names,atom_names one per atom, naming it
         \param[in] coords,n_atoms,n_dim the atoms, `(N, 3)`
-        \param[in] dye_radius subtracted from the centre-to-centre distance,
+        \param[in] probe_radius subtracted from the centre-to-centre distance,
                    because the tabulated contact distances are measured from the
                    dye *surface* */
     PETTerm(const std::map<std::string, PETParameters>& parameters,
             const std::vector<std::string>& res_names,
             const std::vector<std::string>& atom_names,
             double* coords, int n_atoms, int n_dim,
-            double dye_radius = 3.5);
+            double probe_radius = 3.5);
 
-    double get_dye_radius() const { return dye_radius_; }
+    double get_probe_radius() const { return probe_radius_; }
     //! How many atoms carry a non-zero rate.
     unsigned int get_n_active() const;
     //! Per-atom \f$k_Q\f$, as a numpy view.
@@ -149,7 +148,7 @@ public:
     in was how `forster_radius=52.0` came to be a default in a dozen signatures.
 */
 class IMPBFFEXPORT FRETTerm : public InteractionTerm {
-    Dye donor_, acceptor_;
+    Probe donor_, acceptor_;
     double refractive_index_;
     double kappa2_;             //!< NaN resolves it from the participants
     double r_min_;
@@ -160,7 +159,7 @@ public:
         \param[in] kappa2 orientation factor; NaN falls back to the isotropic
                    2/3, reported through `get_used_isotropic_kappa2`
         \param[in] r_min closest approach of the two dye centres, Angstrom */
-    FRETTerm(const Dye& donor, const Dye& acceptor,
+    FRETTerm(const Probe& donor, const Probe& acceptor,
              double refractive_index = 1.4,
              double kappa2 = std::numeric_limits<double>::quiet_NaN(),
              double r_min = 7.0);

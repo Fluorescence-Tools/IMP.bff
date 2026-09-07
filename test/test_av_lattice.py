@@ -54,7 +54,28 @@ SPACE_FIXED_MODES = [m for m, (sf, _, _) in MODES.items() if sf]
 QUAD_MODES = [m for m, (_, _, d) in MODES.items() if d == "quad"]
 MC_MODES = [m for m, (_, _, d) in MODES.items() if d == "mc"]
 
-FPS_JSON = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
+#: The shipped positions carry a `strip_mask` each, and each strips a
+#: *different* residue -- so with masks honoured the four volumes have four
+#: different obstacle sets and no raster can be shared between them. This
+#: suite is about the lattice, the rolling window and the shared registry, so
+#: it works from a mask-free copy: one obstacle set, sharing possible, and the
+#: pre-PRD-105 pins still measuring what they were recorded to measure.
+#: What the masks themselves do is `test/label/test_strip_acceptance.py`.
+def _mask_free_fps_json():
+    import json
+    import tempfile
+    source = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
+    doc = json.loads(open(source).read())
+    for position in doc.get("Positions", {}).values():
+        position.pop("strip_mask", None)
+    out = os.path.join(tempfile.mkdtemp(), "fret_no_strip.fps.json")
+    with open(out, "w") as f:
+        json.dump(doc, f)
+    return out
+
+
+FPS_JSON = _mask_free_fps_json()
+MASKED_FPS_JSON = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
 PDB = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
 RMF_FN = IMP.bff.get_example_path("structure/T4L/t4l_docking.rmf3")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -322,6 +343,20 @@ class TestLegacyByteIdentity(unittest.TestCase):
                     d2 = np.array(av.get_map().get_xyz_density())
                     self.assertEqual(len(d2), pin["n2"], key)
                     self.assertEqual(sha(d2), pin["sha256_d2"], key)
+                    # Four of these twelve cases (asr=1.0) are *empty* volumes,
+                    # and their pinned mean used to be exactly half the source
+                    # coordinate -- the artefact of a phantom unit of weight in
+                    # get_mean_position(), pinned as though it were a centre.
+                    # An empty volume now reports its anchor, and the pin says
+                    # which cases those are rather than hiding it in a number.
+                    if pin["n2"] == 0:
+                        self.assertTrue(pin.get("empty", False), key)
+                        np.testing.assert_allclose(
+                            av.get_mean_position(),
+                            av.get_source_coordinates(), atol=1e-6,
+                            err_msg=key)
+                    else:
+                        self.assertFalse(pin.get("empty", False), key)
                     self.assertEqual(list(av.get_mean_position()), pin["mean"], key)
 
     def test_pinned_reference_values(self):
@@ -347,7 +382,7 @@ class TestLegacyByteIdentity(unittest.TestCase):
         r.unprotected_evaluate(None)
         for k, dd in r.get_used_distances().items():
             v = r.get_model_distance(dd.position_1, dd.position_2, 52.0,
-                                     IMP.bff.DYE_PAIR_DISTANCE_MP)
+                                     IMP.bff.PROBE_PAIR_DISTANCE_MP)
             self.assertEqual(v, self.pins["restraint_mp"][k], k)
 
     @unittest.skipUnless(HAVE_RMF, "needs RMF")
@@ -359,7 +394,7 @@ class TestLegacyByteIdentity(unittest.TestCase):
             r.unprotected_evaluate(None)
             for k, dd in r.get_used_distances().items():
                 v = r.get_model_distance(dd.position_1, dd.position_2, 52.0,
-                                         IMP.bff.DYE_PAIR_DISTANCE_MP)
+                                         IMP.bff.PROBE_PAIR_DISTANCE_MP)
                 self.assertEqual(v, self.pins["traj_mp"][i][k], (i, k))
 
 
@@ -513,17 +548,17 @@ class TestQuadratureAccuracy(unittest.TestCase):
         # error is ~1e-4 A here and <= 0.005 A on T4L @ 2.0 A; assert an
         # order of magnitude inside the budget.
         q = IMP.bff.av_distance_quadrature(self.av1, self.av2, 52.0,
-                                           IMP.bff.DYE_PAIR_DISTANCE_MEAN, 100)
+                                           IMP.bff.PROBE_PAIR_DISTANCE_MEAN, 100)
         err = abs(q - self.exact_mean)
         print("\nquad K=100 mean-distance error vs exact: %.5f A" % err)
         self.assertLess(err, 0.016)
         e = IMP.bff.av_distance_quadrature(self.av1, self.av2, 52.0,
-                                           IMP.bff.DYE_PAIR_EFFICIENCY, 100)
+                                           IMP.bff.PROBE_PAIR_EFFICIENCY, 100)
         print("quad K=100 efficiency error vs exact: %.6f" % abs(e - self.exact_eff))
         self.assertLess(abs(e - self.exact_eff), 0.0005)
         # R_E is the FRET-averaged distance of the same efficiency
         re = IMP.bff.av_distance_quadrature(self.av1, self.av2, 52.0,
-                                            IMP.bff.DYE_PAIR_DISTANCE_E, 100)
+                                            IMP.bff.PROBE_PAIR_DISTANCE_E, 100)
         self.assertAlmostEqual(re, 52.0 * (1.0 / e - 1.0) ** (1.0 / 6.0), places=9)
 
     def test_k_curve_converges(self):
@@ -531,7 +566,7 @@ class TestQuadratureAccuracy(unittest.TestCase):
         ks = (10, 30, 100, 300, 1000)
         for k in ks:
             q = IMP.bff.av_distance_quadrature(self.av1, self.av2, 52.0,
-                                               IMP.bff.DYE_PAIR_DISTANCE_MEAN, k)
+                                               IMP.bff.PROBE_PAIR_DISTANCE_MEAN, k)
             errs.append(abs(q - self.exact_mean))
         print("\nquad K-curve (K: err/A):",
               ", ".join("%d: %.4f" % (k, e) for k, e in zip(ks, errs)))
@@ -539,15 +574,15 @@ class TestQuadratureAccuracy(unittest.TestCase):
         self.assertLess(errs[-1], errs[0])
         # exact structural quantities are exact
         mp = IMP.bff.av_distance_quadrature(self.av1, self.av2, 52.0,
-                                            IMP.bff.DYE_PAIR_DISTANCE_MP, 100)
+                                            IMP.bff.PROBE_PAIR_DISTANCE_MP, 100)
         self.assertEqual(mp, IMP.bff.av_distance(self.av1, self.av2, 52.0,
-                                                 IMP.bff.DYE_PAIR_DISTANCE_MP, 1))
+                                                 IMP.bff.PROBE_PAIR_DISTANCE_MP, 1))
 
     def test_empty_av_gives_nan(self):
-        # An empty AV is made here by a linker too short to reach anywhere, which
-        # is **stencil-independent**. It used to be made by sealing the source
-        # with allowed_sphere_radius=1.0, and that stopped being empty when the
-        # default search stencil became 74: the reference metric's longest jump
+        # An empty AV is made here by a linker too short to reach anywhere,
+        # which is **stencil-independent**. Sealing the source with
+        # allowed_sphere_radius=1.0 is not: that stops being empty once the
+        # search stencil is 74, because the reference metric's longest jump
         # is sqrt(6) ~ 2.45 voxels against sqrt(3) ~ 1.73, so it crosses gaps the
         # 26 stencil cannot and reaches 27 voxels 16-20 A from the source.
         # LabelLib has the same property -- it is what the reference metric is --
@@ -559,7 +594,7 @@ class TestQuadratureAccuracy(unittest.TestCase):
         av3 = make_av(self.mdl, self.hier, 99, par)
         self.assertEqual(len(av3.get_map().get_xyz_density()), 0)
         v = IMP.bff.av_distance_quadrature(self.av1, av3, 52.0,
-                                           IMP.bff.DYE_PAIR_DISTANCE_MEAN, 100)
+                                           IMP.bff.PROBE_PAIR_DISTANCE_MEAN, 100)
         self.assertTrue(np.isnan(v))
 
     def test_quad_error_estimate(self):
@@ -838,12 +873,25 @@ class TestAVHandle(unittest.TestCase):
                                          quad_k=100, search_stencil=30)
         self.assertEqual(r30.get_search_stencil(), 30)
         # 13.0798 before the chi2 error bars were unswapped (2026-08-24).
-        self.assertAlmostEqual(r30.unprotected_evaluate(None), 22.132214560661566, places=6)
+        # 22.1322 before the attachment atom was dropped from the obstacle
+        # set (2026-08-31), as FPS does (`av_routines.cpp:50`).
+        # 22.1203 before the accessible contact volume this file asks for at
+        # every site stopped being ignored (2026-09-01, PRD-121 G9). The fitted
+        # trapped fractions weight the cloud towards the surface, the 33
+        # <R_DA> shorten by 3.04 A, and the chi-square halves.
+        # Olga's radii were the default for part of 2026-09-01 and gave
+        # 11.010342418210929; IMP's own are the default again
+        # (AV::set_radii_source), so the pre-Olga 10.9834 returns exactly.
+        self.assertAlmostEqual(r30.unprotected_evaluate(None), 10.983394087144049, places=6)
         r26 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                          quad_k=100)
         self.assertEqual(r26.get_search_stencil(), 26)
         # 13.5082 before the chi2 error bars were unswapped (2026-08-24).
-        self.assertAlmostEqual(r26.unprotected_evaluate(None), 22.705514543532768, places=6)
+        # 22.6933 before the contact volume was honoured (2026-09-01, above).
+        # Olga's radii gave 11.062890324406322 for the hours they were the
+        # default (2026-09-01); IMP's own are the default again, so 11.3959
+        # returns exactly.
+        self.assertAlmostEqual(r26.unprotected_evaluate(None), 11.395949223491733, places=6)
         # the 30-stencil AVs leak through one-voxel walls: slightly larger
         n30 = sum(len(r30.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r30))
         n26 = sum(len(r26.get_used_av(n).get_map().get_xyz_density()) for n in av_names(r26))
@@ -917,3 +965,41 @@ class TestAVHandle(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestStripMaskAndSharing(unittest.TestCase):
+    """A `strip_mask` gives a volume its own obstacle set, so it cannot be in
+    a shared raster -- and must still agree with the private path."""
+
+    def setUp(self):
+        self.m, self.f, self.hier = open_trajectory()
+
+    def test_a_masked_position_does_not_share_a_raster(self):
+        shared = IMP.bff.ProbeNetworkRestraint(
+            self.hier, MASKED_FPS_JSON, "masked", "chi2_C1_33p", N_SAMPLES,
+            space_fixed=True, shared_map=True, distance="quad", quad_k=QUAD_K)
+        shared.unprotected_evaluate(None)
+        d = json.loads(shared.get_diagnostics_json())
+        self.assertEqual(d["shared_map_classes"], 0,
+                         "four different masks cannot share one raster")
+
+    def test_masked_shared_equals_masked_private(self):
+        r1 = IMP.bff.ProbeNetworkRestraint(
+            self.hier, MASKED_FPS_JSON, "a", "chi2_C1_33p", N_SAMPLES,
+            space_fixed=True, shared_map=True, distance="quad", quad_k=QUAD_K)
+        r2 = IMP.bff.ProbeNetworkRestraint(
+            self.hier, MASKED_FPS_JSON, "b", "chi2_C1_33p", N_SAMPLES,
+            space_fixed=True, shared_map=False, distance="quad", quad_k=QUAD_K)
+        self.assertEqual(r1.unprotected_evaluate(None),
+                         r2.unprotected_evaluate(None))
+
+    def test_the_mask_changes_the_volume(self):
+        """Otherwise the two fixtures would be testing the same thing."""
+        masked = IMP.bff.ProbeNetworkRestraint(
+            self.hier, MASKED_FPS_JSON, "m", "chi2_C1_33p", N_SAMPLES,
+            space_fixed=True, shared_map=False, distance="quad", quad_k=QUAD_K)
+        bare = IMP.bff.ProbeNetworkRestraint(
+            self.hier, FPS_JSON, "u", "chi2_C1_33p", N_SAMPLES,
+            space_fixed=True, shared_map=False, distance="quad", quad_k=QUAD_K)
+        self.assertNotEqual(masked.unprotected_evaluate(None),
+                            bare.unprotected_evaluate(None))

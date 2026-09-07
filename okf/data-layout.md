@@ -45,10 +45,10 @@ Two things follow that are easy to miss:
 | tree | size | reads it | belongs |
 |---|---|---|---|
 | `data/rotamer_library/` | 45 MB | the package, by dye name | `data/` — it *is* runtime reference data |
-| `data/cgdye/templates/` | 8.2 MB | the package, via `get_template_dir()` | `data/` — dye templates are parameters |
-| `data/cgdye/inputs/structures/` | 1.0 MB | the **CLI**, as default inputs | `examples/` |
-| `data/cgdye/inputs/dyes`, `test_systems` | 32 KB | nothing, by path | fixtures |
-| `data/cgdye/inputs/restraints/` | 32 KB | **nothing** — orphaned when the NMR restraints were retired | moved to `junk/nmr_restraints/data/` |
+| `data/cgprobe/templates/` | 8.2 MB | the package, via `get_template_dir()` | `data/` — dye templates are parameters |
+| `data/cgprobe/inputs/structures/` | 1.0 MB | the **CLI**, as default inputs | `examples/` |
+| `data/cgprobe/inputs/dyes`, `test_systems` | 32 KB | nothing, by path | fixtures |
+| `data/cgprobe/inputs/restraints/` | 32 KB | **nothing** — orphaned when the NMR restraints were retired | moved to `junk/nmr_restraints/data/` |
 | `examples/structure/GBP/mGBP2_AF_dimer.result.zip` | **17.3 MB** | **nothing** | it is a *result*, not an example input |
 
 That last row is 72 % of `examples/`, is installed, and no file in the
@@ -69,7 +69,7 @@ Reorganising is the smaller half of the problem. Re-encoding is the larger one.
 
 * **The 17.3 MB archive.** Unreferenced and installed. It may be a deliberate
   reference dataset for a publication, which is why it has not been touched.
-* **`data/cgdye/inputs/structures/`.** The CLI defaults to reading `1DG3.pdb`
+* **`data/cgprobe/inputs/structures/`.** The CLI defaults to reading `1DG3.pdb`
   and `alexa488_r48.mol2` from there through `IMP.bff.get_structure_dir`.
   Under IMP's convention those are example inputs, but moving them changes what
   `get_structure_dir()` means and touches both CLIs, so it is a code change

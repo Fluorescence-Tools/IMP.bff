@@ -9,7 +9,7 @@
 #include <IMP/bff/AVDistance.h>
 #include <IMP/bff/internal/GridShape.h>
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <cmath>
 #include <cstring>

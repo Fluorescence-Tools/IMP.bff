@@ -22,10 +22,21 @@ User manual
    structure/index
    _intensity/index
    fcs/index
-   decays/index
    single-molecule/index
    _imaging/index
-   _programming/index
+
+|
+
+.. note:: **Time-resolved decays are not here.**
+
+   ``IMP.bff`` emits experiment-neutral quantities -- lifetime spectra, rate
+   constants, :math:`\kappa^2` distributions, distances. Everything that turns
+   one into a measured histogram -- convolution with an IRF, pile-up,
+   linearisation, counting statistics and decay fitting -- lives in
+   ``tttrlib`` (``modules/spectroscopy/decay``: the ``fconv`` family,
+   ``BlindIRF``, ``DecayFit23``--``26``, ``MaxEntTcspc``, ``DecayStatistics``).
+   A forward model built here is handed to ``tttrlib`` to be compared with
+   photons.
 
 |
 

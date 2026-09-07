@@ -20,8 +20,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <vector>
 
@@ -34,10 +33,9 @@ IMPBFF_BEGIN_NAMESPACE
     Without them it is the isotropic 2/3 everywhere, which is what an accessible
     volume can say: a point cloud carries no orientation.
 
-    The separation vectors are formed one at a time and discarded. The Python
-    this replaces built the whole \f$(N_1, N_2, 3)\f$ array and returned it in
-    its result dictionary, where **nothing ever read it** — it was the largest
-    allocation in the call and it existed for no consumer.
+    The separation vectors are formed one at a time and discarded, rather than
+    materialised as an \f$(N_1, N_2, 3)\f$ array: that array is the largest
+    allocation in the call and no consumer of the result reads it.
 
     \param[in] points1,n_points1 donor state centres, flat `n1 * 3`
     \param[in] points2,n_points2 acceptor state centres, flat `n2 * 3`
@@ -72,8 +70,8 @@ IMPBFFEXPORT void fret_pair_matrices(
     \f$E = 1/(1 + \tfrac{2}{3}(R/R_0)^6/\kappa^2)\f$ and
     \f$k_{FRET}/k_{rad} = \tfrac{3}{2}\kappa^2 (R_0/R)^6\f$.
 
-    The degenerate cases are kept exactly as the Python had them, because they
-    are reachable: coincident states make \f$(R/R_0)^6\f$ zero, and an
+    The degenerate cases are handled explicitly, because they are reachable:
+    coincident states make \f$(R/R_0)^6\f$ zero, and an
     orthogonal dipole pair makes \f$\kappa^2\f$ zero, so the efficiency can come
     out `nan` or `+inf`. Both mean complete transfer and both become 1.
 

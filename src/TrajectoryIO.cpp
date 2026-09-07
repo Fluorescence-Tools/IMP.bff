@@ -6,7 +6,8 @@
  */
 #include <IMP/bff/TrajectoryIO.h>
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/internal/Text.h>
+#include <IMP/bff/Base.h>
 
 // The C implementation of ihm, vendored by IMP at
 // modules/core/dependency/python-ihm/src/. Only the header is included: the
@@ -114,6 +115,8 @@ void read_bcif_trajectory(const std::string& path, int n_atoms,
 
 // Named, not anonymous: IMP compiles this module as one translation unit.
 namespace dcd {
+using IMP::bff::internal::ends_with;
+
 
 //! The leading Fortran record of a DCD header, in bytes.
 const int HEADER_RECORD = 84;
@@ -209,13 +212,6 @@ DCDHeader parse_header(const std::vector<unsigned char>& raw,
     return head;
 }
 
-bool ends_with(const std::string& s, const std::string& tail) {
-    if (s.size() < tail.size()) return false;
-    for (std::size_t i = 0; i < tail.size(); ++i) {
-        if (std::tolower(s[s.size() - tail.size() + i]) != tail[i]) return false;
-    }
-    return true;
-}
 
 }  // namespace dcd
 

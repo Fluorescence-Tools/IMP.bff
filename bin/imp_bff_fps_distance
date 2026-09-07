@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""The distances between two dye clouds -- FPS's distance calculator.
+
+A port of the `DistanceCalculator` dialog of FPS, the FRET Positioning and
+Screening toolkit (Kalinin *et al.*, *Nat. Methods* **9**, 1218, 2012). Give it
+two accessible volumes and it reports the four numbers that a FRET measurement
+can be compared against, plus the efficiency they come from:
+
+    Rmp        the distance between the clouds' mean positions
+    <RDA>      the mean donor-acceptor distance
+    sigma_DA   the width of that distribution
+    <E>        the mean transfer efficiency
+    <RDA>_E    the distance a measured <E> would be read as
+
+The three distances are **not** interchangeable and an experiment measures one
+of them. `<RDA>_E` is always the shortest: efficiency weights close pairs as
+`1/r^6`, so averaging E and converting back is not averaging r. Reporting one
+where the data mean another is a several-Angstrom error, and it is the most
+common one in this field.
+
+Reads the `.xyz` clouds FPS's AV interface writes, and the `.xyz` this module
+writes (`imp_bff_fps_av`, `imp_bff av-export`). One trap, handled here: **an
+FPS `.xyz` is duplicate-expanded.** Its AV3 export writes a voxel once per dye
+radius that fits, so the file's line count is the sum of densities and not the
+volume -- 5473 lines over 3187 voxels in the shipped example. That is a
+*weighting*, so the duplicates are kept and counted, and the unique voxel count
+is reported separately so the two are never confused.
+
+\b
+Author: Thomas-Otavio Peulen
+"""
+import math
+import os
+
+import click
+
+import IMP
+import IMP.bff
+
+
+CONTEXT = {"help_option_names": ["-h", "--help"]}
+
+
+def read_xyz(path):
+    """A dye cloud from an `.xyz`, as a flat `[x, y, z, w, ...]` list.
+
+    Accepts both dialects. FPS writes `D x y z` with a trailing `Dmp` mean-
+    position line; this module writes `He x y z w` with the weight in the fifth
+    column. A missing weight is 1.0, which is what an unweighted cloud means.
+    """
+    points, declared_mean, unique = [], None, set()
+    with open(path) as handle:
+        lines = handle.read().splitlines()
+    if not lines:
+        raise click.ClickException("%s is empty" % path)
+    for line in lines[2:]:
+        token = line.split()
+        if not token:
+            continue
+        # FPS marks its mean position with a trailing "mp" on the label
+        if token[0].endswith("mp"):
+            declared_mean = tuple(float(v) for v in token[1:4])
+            continue
+        if len(token) < 4:
+            continue
+        x, y, z = (float(v) for v in token[1:4])
+        weight = float(token[4]) if len(token) > 4 else 1.0
+        points.extend((x, y, z, weight))
+        unique.add((round(x, 3), round(y, 3), round(z, 3)))
+    if not points:
+        raise click.ClickException("%s holds no points" % path)
+    return points, declared_mean, len(unique)
+
+
+@click.command(context_settings=CONTEXT)
+@click.argument("av1", type=click.Path(exists=True, dir_okay=False))
+@click.argument("av2", type=click.Path(exists=True, dir_okay=False))
+@click.option("-r", "--forster-radius", default=52.0, show_default=True,
+              help="R0 in Angstrom; only <E> and <RDA>_E depend on it.")
+@click.option("-n", "--n-samples", default=200000, show_default=True,
+              help="Monte-Carlo pairs drawn from the two clouds.")
+@click.option("--json", "as_json", is_flag=True,
+              help="Emit one JSON object instead of a report.")
+def main(av1, av2, forster_radius, n_samples, as_json):
+    """Report Rmp, <RDA>, sigma_DA, <E> and <RDA>_E for two dye clouds.
+
+    \b
+    Examples
+    --------
+    Two volumes written by this module:
+
+    \b
+      imp_bff_fps_av -p 3GUN.pdb -r 132 -o d.xyz
+      imp_bff_fps_av -p 3GUN.pdb -r 55  -o a.xyz
+      imp_bff_fps_distance d.xyz a.xyz
+
+    \b
+    A cloud FPS itself exported, at a different Forster radius:
+
+    \b
+      imp_bff_fps_distance "p66(D).xyz" "p_1bp(D).xyz" -r 60
+
+    \b
+    The three distances answer different questions. Compare a TCSPC species
+    fraction against <RDA>, a measured efficiency against <RDA>_E, and only a
+    model's own geometry against Rmp.
+    """
+    IMP.set_log_level(IMP.SILENT)
+    p1, mean1, unique1 = read_xyz(av1)
+    p2, mean2, unique2 = read_xyz(av2)
+
+    s1 = IMP.bff.States(p1)
+    s2 = IMP.bff.States(p2)
+    rmp, rda, rda_e, sigma = IMP.bff.av_pair_statistics(
+        s1, s2, float(forster_radius), int(n_samples))
+    efficiency = (1.0 / (1.0 + (rda_e / forster_radius) ** 6)
+                  if rda_e and math.isfinite(rda_e) else float("nan"))
+
+    if as_json:
+        import json
+        click.echo(json.dumps({
+            "av1": av1, "av2": av2,
+            "points": [len(p1) // 4, len(p2) // 4],
+            "unique_voxels": [unique1, unique2],
+            "forster_radius": forster_radius, "n_samples": n_samples,
+            "Rmp": rmp, "RDA_mean": rda, "sigma_DA": sigma,
+            "E_mean": efficiency, "RDA_E": rda_e}, indent=2))
+        return
+
+    for path, points, unique, mean in ((av1, p1, unique1, mean1),
+                                       (av2, p2, unique2, mean2)):
+        note = ""
+        if unique < len(points) // 4:
+            note = ("   (%d unique voxels -- the file is duplicate-expanded, "
+                    "which is a weighting)" % unique)
+        click.echo("%-28s %7d points%s" % (os.path.basename(path),
+                                           len(points) // 4, note))
+        if mean is not None:
+            click.echo("%-28s declared mean (%.3f, %.3f, %.3f)"
+                       % ("", mean[0], mean[1], mean[2]))
+    click.echo("")
+    click.echo("Rmp       = %8.2f A     distance between the mean positions"
+               % rmp)
+    click.echo("<RDA>     = %8.2f A     mean donor-acceptor distance" % rda)
+    click.echo("sigma_DA  = %8.2f A     width of that distribution" % sigma)
+    click.echo("<E>       = %8.3f       mean transfer efficiency (R0 = %g A)"
+               % (efficiency, forster_radius))
+    click.echo("<RDA>_E   = %8.2f A     what a measured <E> reads as" % rda_e)
+
+
+if __name__ == "__main__":
+    main()

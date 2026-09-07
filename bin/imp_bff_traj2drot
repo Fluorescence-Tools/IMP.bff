@@ -1,0 +1,305 @@
+#!/usr/bin/env python3
+"""Convert a trajectory to a `.drot` rotamer library.
+
+`.drot` is the internal-coordinate library store of PRD-118: the template, the
+Z-matrix and, per conformer, its base-atom coordinates and its own bond length,
+bond angle and dihedral per row. Two things follow. The file is
+**self-contained** -- atom names, residue names and elements travel inside it,
+so unlike `.bcif` it needs no `.pdb` beside it -- and a conformer *is* a
+dihedral vector, which is what continuous side-chain sampling needs.
+
+Since v10 the members ride the **PTO** container (`IMP/bff/Pto.h`), the EBML
+envelope this stack shares -- `.mmfbd.pto` for photons, `.chm.pto` for
+structures, `.drot.pto` here -- so a written library is named
+`<stem>.drot.pto`. Each member is compressed on its own, which over the 95
+shipped libraries costs nothing (19.60 MB against the single-stream 19.64 MB:
+tar's headers go away and pay for the joint context). Older single-stream
+files still read.
+
+**Lossless is the default**, for the same reason `imp_bff_traj2bcif` does not
+quantise by default: kappa^2 comes from transition-dipole directions, which
+are differences between atoms ~1.7 A apart and do not average their errors
+away. The float32 rung reproduces the input to ~1e-6 A and the FRETpredict
+parity pins hold; it is ~0.66x the BinaryCIF of the same ensemble. `--grid`
+switches to int16 grids -- ~0.30x, ~3e-3 A, and the pins move in the third
+decimal. Use it for a viewer, not for a fit.
+
+The **torsion-only** store that v8 used (bond lengths from the template) is
+gone from the writer: it looked cheap at 0.19x, but real MD flexes bonds by
+~0.004 A RMS and rebuilding on template lengths inherits that as 0.02 A of
+coordinate error -- 1.3e-3 in E against a 2e-5 tolerance. The bond lengths now
+ride along per conformer, which is what makes the format lossless at all.
+
+Usage
+-----
+::
+
+    imp_bff_traj2drot lib.bcif lib.drot.pto --top lib.pdb
+    imp_bff_traj2drot lib.dcd lib.drot.pto --top lib.pdb --weights lib_weights.txt
+    imp_bff_traj2drot raw.dcd lib.drot.pto --top lib.pdb --cluster 1.0
+    imp_bff_traj2drot --all data/rotamer_library
+    imp_bff_traj2drot --bundle dyes.drot.pto A48_C1R_cutoff10.drot.pto ...
+    imp_bff_traj2drot lib.bcif small.drot.pto --top lib.pdb --grid 0.001
+
+Raw versus clustered follows PRD-118's input contract: with `--cluster A` the
+frames are leader-clustered by `cluster_frames_leader` -- the algorithm the
+shipped libraries were built with -- the leaders become the rotamers and the
+cluster populations become the weights. Without it the frames are taken as
+they are, and the weights come from `--weights` (or are all 1).
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+
+import IMP.bff
+
+#: Round-trip tolerance of the lossless rung, Angstrom. float32 grids put the
+#: floor at ~1e-5 A for a 30 A molecule; anything above this means the
+#: reconstruction, not the storage, is wrong.
+LOSSLESS_TOL_A = 1e-4
+
+#: Round-trip tolerance of the compact rung, in multiples of the grid step.
+#: A dihedral error travels down the tree, so the bound is not the step
+#: itself; 40x is what the shipped corpus needs with headroom.
+COMPACT_TOL_STEPS = 40.0
+
+
+def parse_pdb(path: Path) -> tuple[list[str], list[str], list[str]]:
+    """Atom names, elements and residue names of a template PDB, in file order.
+
+    The element column (77-78) is authoritative when present -- bond
+    perception depends on it, and guessing from a name calls CL chlorine or
+    carbon depending on the day.
+    """
+    names: list[str] = []
+    elements: list[str] = []
+    resnames: list[str] = []
+    for line in path.read_text().splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        name = line[12:16].strip()
+        names.append(name)
+        resnames.append(line[17:20].strip())
+        elements.append(line[76:78].strip() or (name[:1] if name else "C"))
+    if not names:
+        sys.exit(f"{path}: no ATOM/HETATM records")
+    return names, elements, resnames
+
+
+def read_frames(src: Path, n_atoms: int, top: Path | None) -> np.ndarray:
+    """`(n_frames, n_atoms, 3)` from whatever trajectory format `src` is.
+
+    `.bcif` and `.dcd` go through IMP.bff's own readers; `.xtc` needs mdtraj,
+    which `bin/imp_bff` already imports, so it is not a new dependency.
+    """
+    suffix = src.suffix.lower()
+    if suffix == ".xtc":
+        try:
+            import mdtraj
+        except ImportError:                                  # pragma: no cover
+            sys.exit("reading an .xtc needs mdtraj")
+        if top is None:
+            sys.exit("--top is required for an .xtc")
+        traj = mdtraj.load(str(src), top=str(top))
+        return np.asarray(traj.xyz, dtype=np.float64) * 10.0   # nm -> A
+    if suffix == ".drot" or src.name.lower().endswith(".drot.pto"):
+        lib = IMP.bff.read_drot(str(src))
+        return np.asarray(lib.get_coords(), dtype=np.float64).reshape(
+            lib.n_rotamers, lib.n_atoms, 3)
+    flat = IMP.bff.read_trajectory(str(src), n_atoms, -1)
+    xyz = np.asarray(flat, dtype=np.float64)
+    if xyz.size % (3 * n_atoms):
+        sys.exit(f"{src.name}: {xyz.size} coordinates is not a whole number "
+                 f"of frames of {n_atoms} atoms")
+    return xyz.reshape(-1, n_atoms, 3)
+
+
+def cluster(xyz: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray]:
+    """Leader-cluster raw frames; return the leaders and their populations."""
+    leaders = np.asarray(IMP.bff.cluster_frames_leader(xyz, threshold),
+                         dtype=int)
+    labels = np.asarray(IMP.bff.assign_frames_to_clusters(xyz, list(leaders)),
+                        dtype=int)
+    counts = np.bincount(labels, minlength=leaders.size).astype(float)
+    return xyz[leaders], counts
+
+
+def convert(src: Path, dst: Path, top: Path | None, weights_path: Path | None,
+            cluster_a: float | None, grid_a: float | None,
+            grid_deg: float, verify: bool) -> None:
+    """One trajectory to one `.drot.pto`, round-trip checked by default."""
+    if top is None:
+        top = _template_for(src)
+        if top is None:
+            sys.exit(f"{src.name}: no --top given and no template PDB beside it")
+    names, elements, resnames = parse_pdb(top)
+    xyz = read_frames(src, len(names), top)
+    if xyz.shape[1] != len(names):
+        sys.exit(f"{src.name}: {xyz.shape[1]} atoms per frame, but {top.name} "
+                 f"has {len(names)}")
+
+    weights = None
+    if weights_path is not None:
+        weights = np.loadtxt(weights_path, dtype=np.float64).reshape(-1)
+    if cluster_a is not None:
+        xyz, weights = cluster(xyz, cluster_a)
+    if weights is None:
+        weights = np.ones(len(xyz), dtype=np.float64)
+    if len(weights) != len(xyz):
+        sys.exit(f"{src.name}: {len(weights)} weights for {len(xyz)} frames "
+                 f"-- pass --cluster to build weights from populations")
+
+    encoding = IMP.bff.DrotEncoding()
+    if grid_a is not None:
+        encoding.lossless = False
+        encoding.grid_a = grid_a
+        encoding.grid_deg = grid_deg
+    IMP.bff.write_drot(str(dst), np.ascontiguousarray(xyz).ravel(),
+                       names, elements, resnames,
+                       np.ascontiguousarray(weights), encoding)
+
+    line = (f"{dst.name}: {len(xyz)} rotamers, {len(names)} atoms, "
+            f"{dst.stat().st_size} bytes "
+            f"({'lossless' if grid_a is None else f'{grid_a} A grid'})")
+    if verify:
+        lib = IMP.bff.read_drot(str(dst))
+        back = np.asarray(lib.get_coords(), dtype=np.float64).reshape(
+            lib.n_rotamers, lib.n_atoms, 3)
+        if back.shape != xyz.shape:
+            sys.exit(f"{dst.name}: read back {back.shape}, wrote {xyz.shape}")
+        err = float(np.abs(back - xyz).max())
+        tol = LOSSLESS_TOL_A if grid_a is None else COMPACT_TOL_STEPS * grid_a
+        if err > tol:
+            sys.exit(f"{dst.name}: round trip differs by {err:.3e} A "
+                     f"(tolerance {tol:.3e})")
+        if list(lib.atom_names) != names:
+            sys.exit(f"{dst.name}: atom names did not survive the round trip")
+        line += f"  verified to {err:.2e} A"
+    print(line)
+
+
+def _template_for(src: Path) -> Path | None:
+    """`<stem>.pdb` beside a `<stem>_cutoff<N>.<ext>` library, if there is one."""
+    stem = src.stem.split("_cutoff")[0]
+    candidate = src.with_name(f"{stem}.pdb")
+    return candidate if candidate.exists() else None
+
+
+def _weights_for(src: Path) -> Path | None:
+    candidate = src.with_name(f"{src.stem}_weights.txt")
+    return candidate if candidate.exists() else None
+
+
+def convert_all(directory: Path, grid_a: float | None, grid_deg: float,
+                verify: bool) -> int:
+    """Re-encode a whole library directory: every `.bcif` beside its template.
+
+    Writes `<stem>.drot.pto` -- the PTO profile suffix, so a shell and a human
+    can both see which profile the container carries.
+
+    This is how `data/rotamer_library` is regenerated. `.bcif` is the source
+    because it is what the package ships and what the parity pins were
+    recorded against -- re-encoding from it is a format change, not a data
+    change.
+    """
+    sources = sorted(directory.glob("*_cutoff*.bcif"))
+    if not sources:
+        sys.exit(f"{directory}: no *_cutoff*.bcif libraries")
+    failed = 0
+    for src in sources:
+        try:
+            convert(src, src.with_suffix(".drot.pto"), _template_for(src),
+                    _weights_for(src), None, grid_a, grid_deg, verify)
+        except SystemExit as exc:                            # keep going
+            print(f"{src.name}: FAILED -- {exc}", file=sys.stderr)
+            failed += 1
+        except Exception as exc:                             # noqa: BLE001
+            print(f"{src.name}: FAILED -- {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+            failed += 1
+    print(f"{len(sources) - failed}/{len(sources)} written")
+    return 1 if failed else 0
+
+
+def library_name(path: Path) -> str:
+    """`A48_C1R_cutoff10.drot.pto` -> `A48_C1R_cutoff10`, the catalog name."""
+    return path.name.split(".drot")[0]
+
+
+def bundle(sources: list[Path], out: Path) -> int:
+    """Several one-library containers into one family container.
+
+    A container operation only: the payloads cross verbatim under names
+    prefixed `<library>/`, and a `drot.catalog` object lists what is inside.
+    Nothing is re-encoded, so bundling is a copy and the result holds exactly
+    the bytes its parts did.
+    """
+    if not sources:
+        sys.exit("--bundle needs at least one source container")
+    names = [library_name(s) for s in sources]
+    seen = {n for n in names}
+    if len(seen) != len(names):
+        sys.exit("two sources would take the same library name")
+    IMP.bff.write_drot_bundle([str(s) for s in sources], names, str(out))
+
+    total = sum(s.stat().st_size for s in sources)
+    listed = list(IMP.bff.drot_catalog(str(out)))
+    if sorted(listed) != sorted(names):
+        sys.exit(f"{out}: the catalog does not list what went in")
+    print(f"{out.name}: {len(names)} libraries, {out.stat().st_size} bytes "
+          f"({out.stat().st_size / total:.3f}x the {total} bytes of the "
+          f"separate files)")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("src", type=Path, nargs="?",
+                    help="a .bcif, .dcd, .xtc or .drot trajectory")
+    ap.add_argument("dst", type=Path, nargs="?",
+                    help="the library to write, conventionally <stem>.drot.pto")
+    ap.add_argument("more", type=Path, nargs="*",
+                    help="further sources, when --bundle is given")
+    ap.add_argument("--top", type=Path, default=None,
+                    help="template PDB: atom names, elements, residue names. "
+                         "Defaults to <stem>.pdb beside the source.")
+    ap.add_argument("--weights", type=Path, default=None,
+                    help="one weight per frame, as the shipped "
+                         "<stem>_cutoff<N>_weights.txt")
+    ap.add_argument("--cluster", type=float, default=None, metavar="A",
+                    help="leader-cluster the frames at this RMSD first; the "
+                         "leaders become the rotamers and the cluster "
+                         "populations the weights (PRD-118's raw-input path)")
+    ap.add_argument("--grid", type=float, default=None, metavar="A",
+                    help="compact rung: int16 grids at this step for base "
+                         "coordinates and bond lengths. Omit for the lossless "
+                         "float32 default -- the pins depend on it.")
+    ap.add_argument("--grid-deg", type=float, default=0.01, metavar="DEG",
+                    help="angle step of the compact rung (default 0.01)")
+    ap.add_argument("--all", type=Path, default=None, metavar="DIR",
+                    help="re-encode every *_cutoff*.bcif in DIR to .drot.pto")
+    ap.add_argument("--bundle", type=Path, default=None, metavar="OUT",
+                    help="bundle the given .drot.pto containers into one "
+                         "family container OUT, each filed under its stem")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="skip the round-trip check")
+    a = ap.parse_args(argv)
+
+    if a.bundle:
+        sources = [p for p in [a.src, a.dst] + list(a.more) if p is not None]
+        return bundle(sources, a.bundle)
+    if a.all:
+        return convert_all(a.all, a.grid, a.grid_deg, not a.no_verify)
+    if not a.src or not a.dst:
+        ap.error("give src and dst, --all DIR, or --bundle OUT sources...")
+    convert(a.src, a.dst, a.top, a.weights, a.cluster, a.grid, a.grid_deg,
+            not a.no_verify)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

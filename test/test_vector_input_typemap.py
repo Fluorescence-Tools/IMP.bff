@@ -124,7 +124,7 @@ def test_an_empty_array_is_accepted():
 
 def test_a_contiguous_two_dimensional_array_is_flattened():
     """A contiguous float64 array of any shape is copied row-major -- which is
-    exactly the ``.ravel()`` the Python grid adapters used to do before calling
+    exactly the ``.ravel()`` a caller would otherwise write before calling
     a kernel. A 2-D axis is therefore accepted and flattens to the 1-D answer.
     """
     t = np.linspace(0.0, 20.0, 512).reshape(2, 256)

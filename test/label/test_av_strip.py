@@ -73,16 +73,42 @@ def test_the_attachment_atom_survives_any_mask(pdb):
 @pytest.mark.parametrize(
     "mask",
     [
-        "name CA CB C N O",  # space-separated lists: a parse error in PyMOL
-        "chain A or resid 3",
-        "within 5 of name CB",
+        "name CA CB C N O",         # a space-separated list
+        "name CA+CB+C+N+O",         # the same list, the other spelling
+        "chain A or resid 3",       # a connective the old dialect refused
+        "(resid 3) and not name CA",
+        "within 5 of name CB",      # a distance
+        "byres name CB",
+        "resname VAL",
         "chain A and resid 3 and not name N+CA+C+O+CB and name X",
-        "chain A and chain B",
     ],
 )
-def test_a_mask_outside_the_dialect_is_refused_loudly(pdb, mask):
-    with pytest.raises(ValueError, match="strip_mask"):
+def test_a_mask_in_either_spelling_is_accepted(pdb, mask):
+    """The language is #IMP::bff::SelectionExpression, whole.
+
+    These eight were refused while the reader was a four-term dialect. Each is
+    a selection a user writes, and each has to reach the strip.
+    """
+    stripped = av.stripped_pdb_for(pdb, "A", 3, "CB", mask)
+    assert stripped  # a path, and a file that parsed
+
+
+@pytest.mark.parametrize(
+    "mask,fragment",
+    [
+        ("chain A and", "right-hand side"),
+        ("(chain A", "unbalanced"),
+        ("wobble 3", "not a selection keyword"),
+        ("color red", "cannot answer"),
+        ("within 5 pbc of resid 3", "no cell"),
+    ],
+)
+def test_a_mask_that_cannot_be_read_is_refused_loudly(pdb, mask, fragment):
+    """What is refused now is what cannot be answered, not what the reader
+    was too small to parse."""
+    with pytest.raises(ValueError) as caught:
         av.stripped_pdb_for(pdb, "A", 3, "CB", mask)
+    assert fragment in str(caught.value)
 
 
 def test_a_mask_never_silently_selects_nothing(pdb):

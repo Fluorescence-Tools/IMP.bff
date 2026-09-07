@@ -11,7 +11,7 @@ minimum-energy assignment (DEE elimination + tree decomposition) under
 FASPR's energy model -- CHARMM19 vdW, hydrogen bonds, disulfides and the
 rotamer prior.
 
-Why a modelling package wants this: an explicit dye (``cgdye``) is attached
+Why a modelling package wants this: an explicit dye (``cgprobe``) is attached
 where a side chain used to be, and the *neighbouring* side chains shape the
 steric and quenching environment the dye feels. Packing them properly --
 instead of trusting crystal coordinates that mutation or modelling may have

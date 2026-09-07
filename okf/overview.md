@@ -1,9 +1,9 @@
 ---
 type: Codebase
 title: IMP.bff
-description: Out-of-tree IMP module for coordinate-level fluorescence modelling — accessible volumes (AV), path maps, kappa-squared, and coarse-grained dye (cgdye) sampling.
+description: Out-of-tree IMP module for coordinate-level fluorescence modelling — accessible volumes (AV), path maps, kappa-squared, and coarse-grained dye (cgprobe) sampling.
 resource: https://github.com/fluorescence-tools/imp.bff
-tags: [imp, fluorescence, fret, accessible-volume, kappa2, cgdye, cpp, swig]
+tags: [imp, fluorescence, fret, accessible-volume, kappa2, cgprobe, cpp, swig]
 timestamp: '2026-08-11T00:00:00Z'
 ---
 

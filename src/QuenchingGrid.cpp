@@ -46,8 +46,7 @@ std::vector<double> stamp_spheres_impl(
     center_grid_indices(rs, r0, dg, ng, radius, ix0, iy0, iz0, r_idx);
     const std::size_t n_centre = ix0.size();
     if (n_centre == 0) {
-        // Nothing stamped: every accessible voxel keeps the identity, and the
-        // inaccessible ones do too, which is what the Python returns.
+        // Nothing stamped: every voxel keeps the identity, accessible or not.
         return factors;
     }
 

@@ -208,7 +208,7 @@ class Site:
             quencher_table(kQ_scale, rC))
         rate = maps.quenching_rate_map(
             self.density, self.x0, self.dg, self.xyz, kQ, rC_atoms,
-            tau0=TAU0, dye_radius=3.5,
+            tau0=TAU0, probe_radius=3.5,
         )
 
         # Closed form, `p ∝ 1/D`. Iterating for it is not merely slower: on

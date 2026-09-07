@@ -9,11 +9,9 @@
  * and two structures are superposed by aligning one site's frame onto
  * another's.
  *
- * \note That frame existed **twice**: as `backbone_rotation` in
- * `RotamerSite.h`, which the rotamer libraries are placed with, and again in
- * the Python labelling layer, which the explicit dyes were placed with. The
- * same three lines of cross products, in two languages, for the two halves of
- * the same package. There is one now, and `backbone_rotation` is a view of it.
+ * \note One frame serves both halves of the package: `backbone_rotation` in
+ * `RotamerSite.h`, which places rotamer libraries, is a view of this one,
+ * which places explicit probes.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -23,7 +21,7 @@
 #define IMPBFF_PROBEATTACHMENT_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/DyeLibrary.h>
+#include <IMP/bff/ProbeLibrary.h>
 #include <IMP/bff/StripMask.h>
 
 #include <IMP/algebra/Transformation3D.h>
@@ -90,10 +88,9 @@ IMPBFFEXPORT std::vector<int> strip_keep_mask(
 
 //! Remove the atoms a mask selects, in place; returns how many went.
 /*! The atoms are detached from their residue and destroyed. A caller that
-    wants to keep the original clones it first (`IMP::atom::create_clone`),
-    which is what the Python did behind an `inplace=False` default -- and a
-    default that silently copies a whole structure is a default that hides
-    what a call costs. */
+    wants to keep the original clones it first (`IMP::atom::create_clone`).
+    There is no `inplace=False` default: a default that silently copies a whole
+    structure hides what a call costs. */
 IMPBFFEXPORT int strip_hierarchy(IMP::atom::Hierarchy hierarchy,
                                  const std::string& mask);
 
@@ -191,7 +188,7 @@ struct IMPBFFEXPORT ProbePosition {
     //! R0 or a correlation time without going back to the library for what it
     //! already had. Empty `name` means "not a fluorophore, or not known", and
     //! a site with an unknown probe is still a usable site.
-    Dye dye;
+    Probe dye;
     //! The FRET role: `donor`, `acceptor` or `unspecified`. A probe that is
     //! not a fluorophore has none, and asking for one is an error rather than
     //! a value nobody reads.
@@ -216,7 +213,7 @@ struct IMPBFFEXPORT ProbePosition {
     //! Give the label the photophysics of a fluorophore.
     /*! Sets `dye` and `probe` together, so the two cannot disagree about what
         is attached. */
-    void set_dye(const Dye& dye);
+    void set_probe(const Probe& dye);
 
     //! Two labels are the same when they name the same position of the same
     //! probe: what a round trip through a file has to preserve.
@@ -238,7 +235,7 @@ IMP_VALUES(ProbePosition, ProbePositions);
 /*! Reads the *position* fields and ignores the AV parameters in the same
     dict, which is the split #IMP::bff::ProbePosition exists to make. */
 IMPBFFEXPORT ProbePosition probe_position_from_source_info(const std::string& source_info_json,
-                                          const Dye& dye = Dye());
+                                          const Probe& dye = Probe());
 
 //! One probe and the site it goes on.
 /*! \note The hierarchy and the transformation are held privately and handed
@@ -299,9 +296,6 @@ IMPBFFEXPORT std::vector<ProbeAttachment> attach_probes(
     crystallographic structure the difference from the deposited C-beta is
     small; for an NMR or modelled one, where C-beta may be absent or badly
     placed, it is a physically consistent anchor rather than a coordinate.
-
-    This was a `%pythoncode` def behind a lazy door, because `IMP.rotamer` was
-    not one of this module's modules. It is one now.
 
     \param[in] hierarchy the structure
     \param[in] chain_id,resnum which residue

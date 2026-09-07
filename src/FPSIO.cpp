@@ -5,12 +5,13 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
+#include <IMP/bff/internal/Text.h>
 #include <IMP/bff/FPSIO.h>
 
 #include <IMP/bff/FPSSchema.h>
 #include <IMP/bff/internal/json.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <dirent.h>
@@ -22,11 +23,11 @@ IMPBFF_BEGIN_NAMESPACE
 
 // Named, not anonymous: IMP compiles this module as one translation unit.
 namespace fps_io {
+using IMP::bff::internal::ends_with;
+using IMP::bff::internal::file_exists;
+using IMP::bff::internal::trimmed;
 
-bool file_exists(const std::string& path) {
-    struct stat info;
-    return stat(path.c_str(), &info) == 0;
-}
+
 
 std::string directory_of(const std::string& path) {
     const std::size_t at = path.find_last_of('/');
@@ -48,10 +49,6 @@ std::string stem_lowered(const std::string& path) {
     return base;
 }
 
-bool ends_with(const std::string& s, const std::string& tail) {
-    return s.size() >= tail.size() &&
-           s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
-}
 
 std::vector<std::string> pdbs_in(const std::string& dir) {
     std::vector<std::string> out;
@@ -77,12 +74,6 @@ std::vector<std::string> split_ws(const std::string& line) {
     return parts;
 }
 
-std::string trimmed(const std::string& s) {
-    const std::size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return std::string();
-    const std::size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
 
 //! Chain, residue number and atom name of one atom serial in a PDB.
 bool atom_by_serial(const std::string& pdb_path, int serial, std::string& chain,
@@ -169,6 +160,7 @@ FPSDocument read_old_lps_txt(const std::string& path,
         double linker_length = 0.0, linker_width = 0.0;
         double r1 = 0.0, r2 = 0.0, r3 = 0.0;
         int atom_serial = -1;
+        bool av_is_atom = false;
         if (av_type == "AV1" && parts.size() >= 8) {
             linker_length = std::atof(parts[4].c_str());
             linker_width = std::atof(parts[5].c_str());
@@ -181,6 +173,15 @@ FPSDocument read_old_lps_txt(const std::string& path,
             r2 = std::atof(parts[7].c_str());
             r3 = std::atof(parts[8].c_str());
             atom_serial = std::atoi(parts[9].c_str());
+        } else if (av_type == "ATOM" && parts.size() >= 5) {
+            // FPS's fifth position type (`LabelingPositions.cs:203`): a plain
+            // atom, `AVType = None` with `AtomID > 0`. No volume, no
+            // coordinate of its own -- and a distance between two of them is
+            // what FPS calls a *bond*. It was falling into the "line from a
+            // dialect this does not know" branch below and being dropped, so a
+            // legacy file's crosslinks silently disappeared.
+            atom_serial = std::atoi(parts[4].c_str());
+            av_is_atom = true;
         } else if (av_type == "XYZ" && parts.size() >= 7) {
             nlohmann::json fixed;
             fixed["simulation_type"] = "XYZ";
@@ -219,14 +220,20 @@ FPSDocument read_old_lps_txt(const std::string& path,
         position["chain_identifier"] = chain;
         position["residue_seq_number"] = res_seq;
         position["atom_name"] = atom_name;
+        position["simulation_type"] = av_type;
+        position["body_id"] = body_id;
+        if (av_is_atom) {
+            // An ATOM position has no volume, so it carries no AV parameters:
+            // writing zeroed ones would validate as an AV1 of radius 0.
+            positions[name] = position;
+            continue;
+        }
         position["linker_length"] = linker_length;
         position["linker_width"] = linker_width;
         position["radius1"] = r1;
         position["radius2"] = r2;
         position["radius3"] = r3;
         position["simulation_grid_resolution"] = 1.5;
-        position["simulation_type"] = av_type;
-        position["body_id"] = body_id;
         positions[name] = position;
     }
     out.positions = positions.dump();
@@ -273,6 +280,32 @@ std::string read_old_distances_txt(const std::string& path) {
     return distances.dump();
 }
 
+std::vector<std::string> read_old_distances_order(const std::string& path) {
+    std::ifstream in(path.c_str());
+    if (!in) IMP_THROW("Cannot read " << path, IOException);
+
+    std::vector<std::string> out;
+    std::string first;
+    std::getline(in, first);
+    first = fps_io::trimmed(first);
+    const std::vector<std::string> head = fps_io::split_ws(first);
+    if (head.size() != 1 && !head.empty()) {
+        // Not a lone type token: the first line is already a distance.
+        in.clear();
+        in.seekg(0);
+    }
+
+    std::string line;
+    while (std::getline(in, line)) {
+        line = fps_io::trimmed(line);
+        if (line.empty() || line[0] == '#') continue;
+        const std::vector<std::string> parts = fps_io::split_ws(line);
+        if (parts.size() < 5) continue;
+        out.push_back(parts[0] + "_" + parts[1]);
+    }
+    return out;
+}
+
 FPSDocument read_fps_json(const std::string& path,
                           const std::vector<std::string>& pdb_paths,
                           bool validate) {
@@ -301,7 +334,26 @@ FPSDocument read_fps_json(const std::string& path,
 
     FPSDocument out;
     if (payload.contains("Positions")) {
-        out.positions = payload["Positions"].dump();
+        // A document-level `strip_mask` is folded into every position, so a
+        // position taken from this document stands on its own. The document's
+        // own key stays in `extra`, unchanged, for a writer to round-trip.
+        const std::string document_mask =
+                payload.contains("strip_mask") && payload["strip_mask"].is_string()
+                        ? payload["strip_mask"].get<std::string>()
+                        : std::string();
+        nlohmann::json positions = payload["Positions"];
+        if (!document_mask.empty()) {
+            for (auto it = positions.begin(); it != positions.end(); ++it) {
+                const std::string own =
+                        it.value().contains("strip_mask") &&
+                                        it.value()["strip_mask"].is_string()
+                                ? it.value()["strip_mask"].get<std::string>()
+                                : std::string();
+                it.value()["strip_mask"] =
+                        combined_strip_mask(document_mask, own);
+            }
+        }
+        out.positions = positions.dump();
         payload.erase("Positions");
     }
     if (payload.contains("Distances")) {

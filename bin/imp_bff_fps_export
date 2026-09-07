@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""FPS's exports, and the error estimation that fills them.
+
+The door onto `SaveForm`, the dialog FPS writes every result file from, plus
+`ErrorEstimation`, the mode that produces a table with more than one row in it.
+
+\b
+    errors   perturb the docked model's own distances, re-fit, and report
+             the spread -- FPS's parametric bootstrap
+    table    write the five export files from a results table
+    screen   rank a library and write FPS's two Filter-mode tables
+
+\b
+Five files come out of `errors` and `table`:
+
+    <prefix><N>.pml         one PyMOL script per row
+    <prefix>Overlay.pml     every row as its own object
+    <prefix>OverlayStates.pml   one object, one state per row
+    <prefix>Rtable_<T>.txt  model distances, one row per result
+    <prefix>chi2table.txt   the results grid
+
+The sixth thing FPS writes, `SimulationResults.bin`, is a .NET
+`BinaryFormatter` dump that cannot be read outside a legacy .NET target and is
+meaningless without the project it sat beside. `results.json` replaces it, and
+carries the molecule manifest the binary's "re-attach by position" reload
+needed and never had.
+
+\b
+Three FPS defects are not reproduced. Each is a flag, so an FPS number can
+still be reproduced on demand:
+
+  * the best fit is computed against the stated reference, not read from a
+    stale GUI field (`--best-fit`);
+  * `_tmp.pdb` is written into the export directory and removed;
+  * `rotate`/`translate` carry `camera=0` (`--fps-camera` turns that off).
+
+\b
+Author: Thomas-Otavio Peulen
+"""
+import json
+import os
+import sys
+
+import click
+
+import IMP
+import IMP.bff
+
+
+CONTEXT = {"help_option_names": ["-h", "--help"]}
+
+#: The two perturbation densities, as `--perturbation` spells them.
+PERTURBATIONS = {
+    "split-normal": IMP.bff.BFF_SPLIT_NORMAL,
+    "fps-sign-split": IMP.bff.FPS_SIGN_SPLIT_NORMAL,
+}
+
+
+def _labelling_file(fps_json, positions):
+    """The labelling file to read, from either spelling."""
+    if fps_json and positions:
+        raise click.UsageError(
+            "give either --fps-json or --positions, not both")
+    if not (fps_json or positions):
+        raise click.UsageError(
+            "no labelling file: pass --fps-json, or --positions for the "
+            "legacy C# FPS format")
+    return fps_json or positions
+
+
+def _options(prefix, best_fit, save_pdb, fps_camera, labels):
+    options = IMP.bff.FPSExportOptions()
+    options.prefix = prefix
+    options.best_fit = bool(best_fit)
+    options.save_pdb = bool(save_pdb)
+    options.camera_zero = not fps_camera
+    if labels is not None:
+        options.labels = labels
+    return options
+
+
+def _write_all(directory, table, molecules, options, fps_json=None):
+    written = IMP.bff.write_fps_exports(directory, table, molecules, options)
+    results = os.path.join(directory, "results.json")
+    payload = json.loads(table.get_json())
+    # The manifest FPS's `SimulationResults.bin` needed and never had: it
+    # re-attached the currently-open molecules **by position** with no check
+    # that they were the same ones. Recorded here so the check is possible.
+    if fps_json:
+        payload["fps_json"] = os.path.abspath(fps_json)
+    payload["molecules"] = [
+        {"path": m.path, "name": m.name, "n_atoms": m.n_atoms,
+         "center": [m.center[0], m.center[1], m.center[2]]}
+        for m in molecules
+    ]
+    with open(results, "w") as handle:
+        json.dump(payload, handle, indent=1)
+    written = list(written) + [results]
+    for path in written:
+        click.echo("wrote %s" % path)
+    return written
+
+
+@click.group(context_settings=CONTEXT, help=__doc__)
+def cli():
+    pass
+
+
+# --------------------------------------------------------------------------
+# errors
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", multiple=True, required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file.")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt instead.")
+@click.option("-c", "--score-set", default="", help="A named score set.")
+@click.option("-o", "--output-dir", required=True, type=click.Path(file_okay=False),
+              help="Where the parent, the replicas and the exports go.")
+@click.option("-n", "--replicas", default=10, show_default=True,
+              help="Synthetic datasets to draw and re-fit.")
+@click.option("--seed", default=1, show_default=True, help="RNG seed.")
+@click.option("--perturbation",
+              type=click.Choice(sorted(PERTURBATIONS)),
+              default="split-normal", show_default=True,
+              help="split-normal: the two-piece normal, continuous, half "
+                   "masses s+/(s+ + s-). fps-sign-split: FPS's, each half "
+                   "mass 1/2 and the density discontinuous at the target.")
+@click.option("--fps-d2", is_flag=True,
+              help="Reproduce FPS's D2: leave deselected distances unperturbed "
+                   "so they pin the replica to the parent pose. Biases the "
+                   "reported error downward.")
+@click.option("--steps", default=200, show_default=True,
+              help="Minimisation steps per replica.")
+@click.option("--ev-weight", default=None, type=float,
+              help="Excluded-volume weight. FPS's parameters give it a large "
+                   "share of the score at a docked pose, which pins the "
+                   "replicas; lower it to see what the data alone constrain.")
+@click.option("--clash-tolerance", default=None, type=float,
+              help="Overlap in A that costs one chi-square unit. FPS ships "
+                   "0.5 for this mode, four times harder than docking.")
+@click.option("--parent-poses", type=click.Path(exists=True, dir_okay=False),
+              help="JSON poses to bootstrap around; without it a docking run "
+                   "produces the parent first.")
+@click.option("--keep-replicas", is_flag=True,
+              help="Keep each replica's own output directory.")
+@click.option("--fps-rmsd-sign", is_flag=True,
+              help="Report RMSD with FPS's sign error (|Ur - t| rather than "
+                   "|Ur + t|), for comparing against an FPS number.")
+@click.option("--prefix", default="structure", show_default=True)
+@click.option("--best-fit", is_flag=True,
+              help="Superpose every row onto the parent in the PyMOL scripts.")
+@click.option("--save-pdb", is_flag=True,
+              help="Have each script save its assembled complex as a PDB.")
+@click.option("--labels", is_flag=True,
+              help="Add the labelling positions as PyMOL pseudoatoms.")
+@click.option("--fps-camera", is_flag=True,
+              help="Omit camera=0, as FPS does. The script then only works in "
+                   "a session whose camera has not been rotated.")
+def errors(pdb, fps_json, positions, score_set, output_dir, replicas, seed,
+           perturbation, fps_d2, steps, ev_weight, clash_tolerance,
+           parent_poses, keep_replicas, fps_rmsd_sign, prefix, best_fit,
+           save_pdb, labels, fps_camera):
+    """FPS's error estimation: a parametric bootstrap around a docked pose.
+
+    The docked model's own distances become the truth -- residuals zeroed --
+    each is perturbed once by its own asymmetric error bars, and the structure
+    is re-minimised **from the parent pose**. The spread of the replicas'
+    RMSD against the parent is the reported uncertainty.
+
+    \b
+    It is not `imp_bff dock-errors`. That command re-docks from independent
+    random starts and measures how reproducible the *optimiser* is; this one
+    holds the optimiser still and resamples the *data*.
+
+    \b
+    The perturbation is a decision, not a detail. For error bars of 10 and
+    3 A:
+
+    \b
+        model            P(R' > R)   mean shift   density at the target
+        split-normal        0.769      +5.585 A   continuous
+        fps-sign-split      0.500      +2.792 A   jumps by a factor 0.3
+
+    \b
+    Neither is unbiased -- an asymmetric density has its mean away from its
+    mode -- but only the first is a density with the quantiles its two error
+    bars claim. FPS's is the second.
+
+    \b
+    Examples
+    --------
+    \b
+      imp_bff_fps_export errors -p protein_1R0A.pdb -p dna.pdb \\
+          -j hiv_rt.fps.json -c resolved -o errors/ -n 10
+    \b
+      imp_bff_fps_export errors -p a.pdb -p b.pdb -j labels.fps.json \\
+          -o fps_compat/ --perturbation fps-sign-split --fps-d2 \\
+          --fps-rmsd-sign
+    """
+    labelling = _labelling_file(fps_json, positions)
+    pdbs = [str(p) for p in pdb]
+
+    params = IMP.bff.fps_error_estimation_parameters()
+    params.score_set = score_set
+    params.n_frames = int(steps)
+    if ev_weight is not None:
+        params.ev_weight = float(ev_weight)
+    if clash_tolerance is not None:
+        params.clash_tolerance = float(clash_tolerance)
+    boot = IMP.bff.BootstrapParameters()
+    boot.n_replicas = int(replicas)
+    boot.seed = int(seed)
+    boot.perturbation = PERTURBATIONS[perturbation]
+    boot.perturb_deselected = not fps_d2
+    boot.keep_replica_dirs = bool(keep_replicas)
+
+    poses = ""
+    if parent_poses:
+        with open(parent_poses) as handle:
+            poses = handle.read().strip()
+
+    result = IMP.bff.fps_bootstrap(pdbs, labelling, output_dir, poses, params,
+                                   boot)
+
+    click.echo("parent score      %.4f  (excluded volume %.4f)"
+               % (result.parent_score, result.parent_e_clash))
+    click.echo("replicas          %d" % len(result.replicas))
+    click.echo("perturbed / pinned %d / %d"
+               % (result.n_perturbed, result.n_pinned))
+    if result.n_pinned:
+        click.echo("  %d deselected distance(s) carry no noise and pin the "
+                   "replicas to the parent: the spread below is a lower "
+                   "bound (FPS's D2)." % result.n_pinned, err=True)
+    click.echo("RMSD vs parent    %.3f +- %.3f A (max %.3f)"
+               % (result.rmsd_mean, result.rmsd_sd, result.rmsd_max))
+    # A spread of zero is a statement about the *restraint set*, not about the
+    # precision of the FRET network, whenever the excluded volume carries most
+    # of the score: the pose is then held by geometry and the data cannot move
+    # it. Measured on HIV-RT: clash 103 of 135 gives 0.000 A, clash 0 of 15
+    # gives 1.935 +- 1.133 A.
+    if (result.parent_score > 0
+            and result.parent_e_clash > 0.5 * result.parent_score
+            and result.rmsd_mean < 0.05):
+        click.echo(
+            "  the excluded volume is %.0f %% of the parent score and the "
+            "spread is ~0: the pose is held by the clash term, not by the "
+            "data. Lower --ev-weight or --clash-tolerance to see what the "
+            "FRET network alone constrains."
+            % (100.0 * result.parent_e_clash / result.parent_score), err=True)
+
+    assembly = IMP.bff.build_docking_assembly(pdbs, labelling)
+    table = IMP.bff.fps_bootstrap_table(result, len(pdbs))
+    table = IMP.bff.add_rmsd_columns(table, assembly, bool(fps_rmsd_sign))
+    if best_fit:
+        table = IMP.bff.add_best_fit(table, assembly)
+    label_positions = IMP.bff.fps_label_positions(assembly) if labels else None
+    options = _options(prefix, best_fit, save_pdb, fps_camera, label_positions)
+    _write_all(output_dir, table, IMP.bff.fps_molecules(pdbs), options,
+               labelling)
+
+
+# --------------------------------------------------------------------------
+# table
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", multiple=True, required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order.")
+@click.option("-r", "--results", required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="A results.json written by a previous run.")
+@click.option("-o", "--output-dir", required=True,
+              type=click.Path(file_okay=False), help="Where the files go.")
+@click.option("--prefix", default="structure", show_default=True)
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="The labelling file, when --best-fit needs an assembly to "
+                   "superpose with. Defaults to the one recorded in the "
+                   "results file.")
+@click.option("--best-fit", is_flag=True)
+@click.option("--save-pdb", is_flag=True)
+@click.option("--fps-camera", is_flag=True)
+def table(pdb, results, output_dir, fps_json, prefix, best_fit, save_pdb,
+          fps_camera):
+    """Re-write the five export files from a results table.
+
+    Everything except `Converged`, `Method` and `Parent` can be recomputed
+    from the poses; those three cannot, which is why they are in the file and
+    not derived. See `okf/references/fps-export-formats.md` §9.
+    """
+    pdbs = [str(p) for p in pdb]
+    with open(results) as handle:
+        payload = json.load(handle)
+
+    parsed = IMP.bff.FPSResultTable()
+    parsed.n_molecules = int(payload.get("n_molecules", len(pdbs)))
+    parsed.reference_number = int(payload.get("reference_number", 0))
+    parsed.distance_type = payload.get("distance_type", "Rmp")
+    rows = IMP.bff.FPSResultRowList()
+    for entry in payload.get("rows", []):
+        row = IMP.bff.FPSResultRow()
+        row.number = int(entry["number"])
+        row.chi2 = float(entry["chi2"])
+        row.chi2_bond = float(entry.get("chi2_bond", 0.0))
+        row.chi2_clash = float(entry.get("chi2_clash", 0.0))
+        row.converged = bool(entry.get("converged", False))
+        row.parent = int(entry.get("parent", 0))
+        row.method = entry.get("method", "Unknown")
+        row.rmsd_previous = float(entry.get("rmsd_previous", -1.0))
+        row.rmsd_reference = float(entry.get("rmsd_reference", 0.0))
+        row.poses = json.dumps(entry.get("poses", []))
+        pairs = IMP.bff.PairDistanceList()
+        for item in entry.get("pairs", []):
+            pair = IMP.bff.PairDistance()
+            pair.name = item["name"]
+            pair.position1 = item["position1"]
+            pair.position2 = item["position2"]
+            pair.distance_exp = float(item["distance_exp"])
+            pair.distance_model = float(item["distance_model"])
+            pair.distance_type = item.get("distance_type", "Rmp")
+            pair.error_neg = float(item.get("error_neg", 0.0))
+            pair.error_pos = float(item.get("error_pos", 0.0))
+            pairs.append(pair)
+        row.pairs = pairs
+        rows.append(row)
+    parsed.rows = rows
+
+    labelling = fps_json or payload.get("fps_json")
+    if best_fit:
+        if not labelling:
+            raise click.UsageError(
+                "--best-fit needs an assembly to superpose with, and this "
+                "results file records no labelling file: pass --fps-json")
+        parsed = IMP.bff.add_best_fit(
+            parsed, IMP.bff.build_docking_assembly(pdbs, labelling))
+    options = _options(prefix, best_fit, save_pdb, fps_camera, None)
+    _write_all(output_dir, parsed, IMP.bff.fps_molecules(pdbs), options,
+               labelling)
+
+
+# --------------------------------------------------------------------------
+# screen
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-s", "--structures", multiple=True, required=True,
+              type=click.Path(exists=True),
+              help="A structure or a directory of them; repeat.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file.")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt instead.")
+@click.option("-c", "--score-set", default="")
+@click.option("-o", "--output-dir", required=True,
+              type=click.Path(file_okay=False))
+@click.option("--prefix", default="screening_", show_default=True)
+@click.option("--fps-filter-number", is_flag=True,
+              help="Number the R table's rows FPS's way -- the 0-based array "
+                   "index, one less than every other Number column in FPS. "
+                   "Join on File either way.")
+def screen(structures, fps_json, positions, score_set, output_dir, prefix,
+           fps_filter_number):
+    """Rank a library and write FPS's two Filter-mode tables.
+
+    \b
+    Read `NaNs` beside `Chi2r`: a distance with no model value is left out of
+    the reduced chi-square and counted there instead, so a structure whose
+    volumes came out empty scores flatteringly well on very few restraints.
+    """
+    labelling = _labelling_file(fps_json, positions)
+    ranked = IMP.bff.screen_structures(
+        [str(s) for s in structures], labelling, score_set)
+    options = IMP.bff.FPSExportOptions()
+    options.prefix = prefix
+    options.fps_filter_number = bool(fps_filter_number)
+    written = [
+        IMP.bff.write_fps_screening_chi2_table(output_dir, ranked, options),
+        IMP.bff.write_fps_screening_r_table(output_dir, ranked, options),
+    ]
+    click.echo("structures: %d" % len(ranked))
+    for path in written:
+        click.echo("wrote %s" % path)
+
+
+def main():
+    IMP.set_log_level(IMP.SILENT)
+    cli()
+
+
+if __name__ == "__main__":
+    main()

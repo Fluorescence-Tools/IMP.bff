@@ -5,7 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/OrientationFactor.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 #include <IMP/bff/internal/OutputView.h>
 
 // The RNG. A byte-identical copy of tttrlib's

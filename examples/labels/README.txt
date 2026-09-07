@@ -1,5 +1,5 @@
 .. _labels_examples:
 
-Label simulations
------------------
+Labelling simulations
+---------------------
 

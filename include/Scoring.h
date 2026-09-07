@@ -19,9 +19,9 @@
 #define IMPBFF_SCORING_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/DyeForceField.h>
+#include <IMP/bff/ProbeForceField.h>
 
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <IMP/Model.h>
 #include <IMP/Restraint.h>
@@ -47,8 +47,7 @@ IMPBFFEXPORT std::string atom_type(const std::string& atom_name);
 /*!
     \param[out] out_view,n_out_view two values: rmin_half (A), then epsilon
                (kcal/mol). A view rather than a pair: it marshals as a numpy
-               array, which unpacks and indexes like the tuple the Python
-               returned.
+               array, which unpacks and indexes like a tuple.
     Unknown elements fall back to carbon, as \ref atom_type arranges for.
 */
 IMPBFFEXPORT void charmm36_lj(const std::string& element,
@@ -316,7 +315,7 @@ typedef std::vector<RotamerScoreResult> RotamerScoreResults;
     parameters, calls the all-pairs steric/electrostatic kernel, and returns
     normalised Boltzmann weights multiplied by the library's own.
 
-    \param[in] rotamer_coords flat, `n_rotamers * n_dye_atoms * 3`
+    \param[in] rotamer_coords flat, `n_rotamers * n_probe_atoms * 3`
     \param[in] protein_coords flat, `n_protein_atoms * 3`
     \param[in] protein_atom_names,protein_resnames one per protein atom
     \param[in] rotamer_atom_names one per dye atom
@@ -366,7 +365,7 @@ IMPBFFEXPORT std::vector<double> rotamer_mean_field_weights(
         const std::vector<double>& rotamer_coords,
         const std::vector<double>& initial_weights,
         const std::vector<double>& protein_coords,
-        const std::vector<std::string>& dye_elements,
+        const std::vector<std::string>& probe_elements,
         const std::vector<std::string>& protein_elements,
         double K = 1.0, int n_iter = 10, double aabb_pad = 3.5,
         double r_cutoff = 12.0);
@@ -383,7 +382,7 @@ IMPBFFEXPORT std::vector<double> rotamer_mean_field_weights(
     \param[in] rotamer_coords_list one flat `n_conf * n_atoms * 3` per dye
     \param[in] initial_weights_list one weight vector per dye, same order
     \param[in] protein_coords flat `n_atoms * 3`
-    \param[in] dye_elements_list one element per atom, per dye
+    \param[in] probe_elements_list one element per atom, per dye
     \param[in] protein_elements one per protein atom
     \param[in] K inverse temperature of the update
     \param[in] n_iter fixed-point iterations
@@ -392,11 +391,11 @@ IMPBFFEXPORT std::vector<double> rotamer_mean_field_weights(
     \throw ValueException when the per-dye lists disagree in length
 */
 IMPBFFEXPORT std::vector<std::vector<double> >
-rotamer_mean_field_weights_multi_dye(
+rotamer_mean_field_weights_multi_probe(
         const std::vector<std::vector<double> >& rotamer_coords_list,
         const std::vector<std::vector<double> >& initial_weights_list,
         const std::vector<double>& protein_coords,
-        const std::vector<std::vector<std::string> >& dye_elements_list,
+        const std::vector<std::vector<std::string> >& probe_elements_list,
         const std::vector<std::string>& protein_elements,
         double K = 1.0, int n_iter = 10, double aabb_pad = 3.5,
         double r_cutoff = 12.0);
@@ -407,7 +406,7 @@ rotamer_mean_field_weights_multi_dye(
 
 //! `{site_id: element}` from a system's sites.
 IMPBFFEXPORT std::map<std::string, std::string> site_element_map(
-        const DyeForceFieldSystem& system);
+        const ProbeForceFieldSystem& system);
 
 //! One non-excluded site pair with its Lorentz-Berthelot parameters.
 struct LJSitePair {
@@ -421,11 +420,11 @@ struct LJSitePair {
 //! Every non-excluded site pair of a system, with LJ cross parameters.
 /*! The exclusions are the system's own (bonds, angle and dihedral end pairs). */
 IMPBFFEXPORT std::vector<LJSitePair> compute_lj_pair_sites(
-        const DyeForceFieldSystem& system);
+        const ProbeForceFieldSystem& system);
 
 //! The \c IMP::core::Cosine a torsion type spells, converted from CHARMM.
 /*!
-    cgdye stores torsions in the CHARMM convention
+    cgprobe stores torsions in the CHARMM convention
     \f$V = k(1 + \cos(n\phi - \delta))\f$, and \c IMP::core::Cosine scores
     \f$k(1 - \cos(n\phi - \delta'))\f$ -- so the phase needs
     \f$\delta' = \delta + \pi\f$. Getting that wrong put every conjugated
@@ -456,8 +455,8 @@ IMPBFFEXPORT IMP::core::Cosine* torsion_cosine(const FFTorsionType& type);
     That is what a system built without a template carries, and refusing it
     would refuse the systems this module builds itself.
 */
-IMPBFFEXPORT IMP::Restraints build_dye_restraints(
-        IMP::Model* model, const DyeForceFieldSystem& system,
+IMPBFFEXPORT IMP::Restraints build_probe_restraints(
+        IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles, bool nonbonded = true);
 
@@ -472,27 +471,28 @@ IMPBFFEXPORT IMP::Restraints build_dye_restraints(
     and it depends only on where the spheres are, so a rigid move can be
     scored against it and nothing else -- a rigid move cannot change a bond,
     an angle or a torsion, and scoring those during one is work whose answer
-    never changes. There used to be two repulsions, these soft spheres for the
-    Monte-Carlo step and per-pair Lennard-Jones lower bounds everywhere else,
-    which is two implementations of one piece of physics.
+    never changes. One repulsion serves both: soft spheres for the Monte-Carlo
+    step *and* for dynamics, rather than these plus per-pair Lennard-Jones
+    lower bounds elsewhere, which would be two implementations of one piece of
+    physics.
 
     The Lennard-Jones parameters remain what
     #IMP::bff::IntramolecularEnergy *evaluates*: an energy of a
     conformation is a different question from keeping two atoms apart, and a
     sphere overlap answers the second.
 
-    The exclusions are the system's own (#DyeForceFieldSystem::get_exclusions),
+    The exclusions are the system's own (#ProbeForceFieldSystem::get_exclusions),
     so this and the bonded terms cannot disagree about which pairs are 1-2,
     1-3 or 1-4.
 
-    \param[in] model,system,site_ids,particles as for #build_dye_restraints
+    \param[in] model,system,site_ids,particles as for #build_probe_restraints
     \param[in] k the soft-sphere force constant; negative takes the system's
                own `nonbonded.k`
     \return the restraint; null when the system's non-bonded term is off or
             it has no non-excluded pair
 */
 IMPBFFEXPORT IMP::Restraint* build_steric_restraint(
-        IMP::Model* model, const DyeForceFieldSystem& system,
+        IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles, double k = -1.0);
 
@@ -550,7 +550,7 @@ IMPBFFEXPORT double place_guest_by_score(
     is a singularity a minimiser walks straight into.
 */
 IMPBFFEXPORT IMP::Restraints build_go_restraints(
-        IMP::Model* model, const DyeForceFieldSystem& system,
+        IMP::Model* model, const ProbeForceFieldSystem& system,
         const std::vector<std::string>& site_ids,
         const IMP::ParticleIndexes& particles,
         const std::map<std::string, std::string>& site_atom_names,
@@ -576,7 +576,7 @@ class IMPBFFEXPORT IntramolecularEnergy {
     std::vector<double> rmin_, eps_;
 
 public:
-    IntramolecularEnergy(const DyeForceFieldSystem& system);
+    IntramolecularEnergy(const ProbeForceFieldSystem& system);
 
     std::vector<LJSitePair> get_pairs() const { return pairs_; }
 

@@ -59,9 +59,9 @@ void normal_distribution(const std::vector<double>& x, double loc,
     internal::copy_to_view(y, out_view, n_out_view);
 }
 
-void generalized_normal_distribution(const std::vector<double>& x, double loc,
-                                     double scale, double shape, bool norm,
-                                     double** out_view, int* n_out_view) {
+std::vector<double> generalized_normal_density_impl(
+        const std::vector<double>& x, double loc, double scale, double shape,
+        bool norm) {
     std::vector<double> z(x.size(), 0.0);
     if (shape == 0.0) {
         if (scale != 0.0) {
@@ -69,9 +69,8 @@ void generalized_normal_distribution(const std::vector<double>& x, double loc,
         }
     } else {
         if (scale != 0.0) {
-            // `np.spacing(1)` is the step to the next double above 1.0, which is
-            // what the Python clamps a non-positive transform argument to. Using
-            // zero instead would send the logarithm to -inf.
+            // A non-positive transform argument clamps to the step above 1.0; zero
+            // instead would send the logarithm to -inf.
             const double tiny = std::nextafter(1.0, 2.0) - 1.0;
             for (std::size_t i = 0; i < x.size(); ++i) {
                 double t = 1.0 - shape * (x[i] - loc) / scale;
@@ -80,8 +79,8 @@ void generalized_normal_distribution(const std::vector<double>& x, double loc,
             }
         }
     }
-    // The Python evaluates the *standard* normal at z -- loc and scale have
-    // already been folded into the transform above.
+    // The *standard* normal at z: loc and scale are already folded into the
+    // transform above.
     std::vector<double> n;
     if (scale != 0.0) {
         n = normal_density(z, 0.0, 1.0);
@@ -89,16 +88,27 @@ void generalized_normal_distribution(const std::vector<double>& x, double loc,
     } else {
         n.assign(x.size(), 0.0);
     }
-    internal::copy_to_view(n, out_view, n_out_view);
+    return n;
 }
 
-void distance_between_gaussian(const std::vector<double>& distances,
-                               double separation_distance, double sigma,
-                               bool normalize,
-                               double** out_view, int* n_out_view) {
+void generalized_normal_distribution(const std::vector<double>& x, double loc,
+                                     double scale, double shape, bool norm,
+                                     double** out_view, int* n_out_view) {
+    internal::copy_to_view(
+            generalized_normal_density_impl(x, loc, scale, shape, norm),
+            out_view, n_out_view);
+}
+
+std::vector<double> distance_between_gaussian_impl(
+        const std::vector<double>& distances, double separation_distance,
+        double sigma) {
     std::vector<double> pr(distances.size(), 0.0);
     if (sigma != 0.0) {
-        if (separation_distance != 0.0) {
+        // `> 0` rather than `!= 0`: the reference selects the coincident branch
+        // for every non-positive separation, and the separated branch divides
+        // by it. A negative separation is not physical, but the two forms are
+        // not the same function and this one is the reference's.
+        if (separation_distance > 0.0) {
             const std::vector<double> a =
                     normal_density(distances, separation_distance, sigma);
             const std::vector<double> b =
@@ -114,9 +124,63 @@ void distance_between_gaussian(const std::vector<double>& distances,
                 pr[i] = 2.0 * distances[i] * distances[i] * inv_s2 * n[i];
             }
         }
-        if (normalize) internal::normalize_sum(pr);
     }
+    return pr;
+}
+
+void distance_between_gaussian(const std::vector<double>& distances,
+                               double separation_distance, double sigma,
+                               bool normalize,
+                               double** out_view, int* n_out_view) {
+    std::vector<double> pr =
+            distance_between_gaussian_impl(distances, separation_distance, sigma);
+    if (sigma != 0.0 && normalize) internal::normalize_sum(pr);
     internal::copy_to_view(pr, out_view, n_out_view);
+}
+
+
+std::vector<double> gaussian_distance_mixture_impl(
+        const std::vector<double>& axis, const std::vector<double>& means,
+        const std::vector<double>& sigmas, const std::vector<double>& shapes,
+        const std::vector<double>& amplitudes, int kernel,
+        bool normalize_components, bool normalize) {
+    std::vector<double> density(axis.size(), 0.0);
+    for (std::size_t c = 0; c < means.size(); ++c) {
+        const double sigma = c < sigmas.size() ? sigmas[c] : 0.0;
+        const double amplitude = c < amplitudes.size() ? amplitudes[c] : 0.0;
+        std::vector<double> component;
+        if (kernel == GAUSSIAN_MIXTURE_DISTANCE_BETWEEN_GAUSSIANS) {
+            component = distance_between_gaussian_impl(axis, means[c], sigma);
+            if (normalize_components) internal::normalize_sum(component);
+        } else if (kernel == GAUSSIAN_MIXTURE_NORMAL) {
+            component = sigma > 0.0 ? normal_density(axis, means[c], sigma)
+                                    : std::vector<double>(axis.size(), 0.0);
+            if (normalize_components) internal::normalize_sum(component);
+        } else {
+            const double shape = c < shapes.size() ? shapes[c] : 0.0;
+            component = generalized_normal_density_impl(axis, means[c], sigma,
+                                                        shape,
+                                                        normalize_components);
+        }
+        for (std::size_t j = 0; j < axis.size(); ++j) {
+            density[j] += amplitude * component[j];
+        }
+    }
+    if (normalize) internal::normalize_sum(density);
+    return density;
+}
+
+void gaussian_distance_mixture(
+        const std::vector<double>& axis, const std::vector<double>& means,
+        const std::vector<double>& sigmas, const std::vector<double>& shapes,
+        const std::vector<double>& amplitudes, int kernel,
+        bool normalize_components, bool normalize,
+        double** out_view, int* n_out_view) {
+    internal::copy_to_view(
+            gaussian_distance_mixture_impl(axis, means, sigmas, shapes,
+                                           amplitudes, kernel,
+                                           normalize_components, normalize),
+            out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

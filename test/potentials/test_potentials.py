@@ -1,13 +1,13 @@
-"""The coarse-grained potentials, against the Python they were ported from.
+"""The coarse-grained potentials, pinned against their reference kernels.
 
-The kernels were `numba.njit` functions in `IMP.cgmol.{statpot,sterics,
-solvation}` (imp-tricks) and the classes around them lived in chisurf's
-`structure/potential/potentials.py`. The numbers below were produced by running
-**those** kernels, unmodified, on the deterministic structure `_structure()`
-builds -- a loose helix of twelve residues with seeded jitter, six atoms each.
+The pins below were produced by the `numba` kernels in
+`IMP.cgmol.{statpot,sterics,solvation}` (imp-tricks) and the classes around
+them in chisurf's `structure/potential/potentials.py`, run unmodified on the
+deterministic structure `_structure()` builds -- a loose helix of twelve
+residues with seeded jitter, six atoms each.
 
-Two of them differ from the Python on purpose, and say so where they are
-asserted.
+Two of them differ from those references on purpose, and say so where they
+are asserted.
 """
 
 import math

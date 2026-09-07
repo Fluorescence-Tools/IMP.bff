@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/PathMapHeader.h
+ *  \file PathMapHeader.cpp
  *  \brief Header class for path search class PathMap
  *
  * \authors Thomas-Otavio Peulen
@@ -23,8 +23,8 @@ PathMapHeader::PathMapHeader(
         obstacle_threshold_(obstacle_threshold)
 {
 
-    density_header_ = IMP::em::DensityHeader();
-    density_header_.Objectpixelsize_ = grid_spacing;
+    density_header_ = GridHeader();
+    density_header_.set_spacing(grid_spacing);
     update_map_dimensions();
 }
 

@@ -15,7 +15,7 @@ The accessors cannot simply return by value: `Scoring.cpp` calls
 `system.get_bonds()` in the condition of a loop over the bonds, and a copy per
 iteration is quadratic. The copy is made at the language boundary instead --
 `%owned_container_out` in `IMP_bff.types.i` -- so it costs one copy per Python
-access and the lifetime becomes Python's.
+access, and the lifetime becomes Python's.
 """
 
 import tempfile
@@ -37,7 +37,7 @@ def system_cif():
     system = IMP.bff.build_forcefield_system(
         [IMP.bff.FFComponentSpec("dye", mol2, "", "mobile")], *DEFAULTS, "")
     path = f"{tmp}/system.cif"
-    IMP.bff.write_dye_forcefield_cif(path, system)
+    IMP.bff.write_probe_forcefield_cif(path, system)
     return path, mol2
 
 

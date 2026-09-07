@@ -12,11 +12,30 @@
     (double** out_pairs, int* n_out_pairs)
 };
 
+%include "IMP/bff/SpecialFunctions.h"
 %include "IMP/bff/Distributions.h"
 %include "IMP/bff/PolymerChain.h"
+// C++-only: output-by-reference vectors do not wrap usefully, and Python
+// callers have numpy's own hermgauss (which this agrees with to machine
+// precision -- the parity test says so).
+%ignore IMP::bff::hermgauss;
+// The two halves fcs_mdf_g_diff was split into so `FcsMdfCurve` can cache
+// them across evaluations. C++-only for the same reason: one writes through
+// output-by-reference vectors, and the other takes six of them. A Python
+// caller wants the whole curve, which is fcs_mdf_g_diff or the node.
+%ignore IMP::bff::fcs_mdf_axial_profiles;
+%ignore IMP::bff::fcs_mdf_g_raw;
+// The MDF diffusion shape as a graph node, so the `"mdf"` FCS mode joins the
+// closed-form ones on the graph instead of returning to Python per iteration.
+// A `Node` subclass, so it needs the same shared_ptr holder its base has.
+%apply(double* IN_ARRAY1, int DIM1) {(double* in_axis, int n_axis)};
+%shared_ptr(IMP::bff::FcsMdfCurve);
+%include "IMP/bff/FcsMdf.h"
+%include "IMP/bff/FcsSaturation.h"
+%shared_ptr(IMP::bff::FcsSaturationCurve);
+%include "IMP/bff/FcsSaturationCurve.h"
 
 // The transfer-polynomial vector evaluator also publishes a 1-D view. It is
 // defined here (after the apply above and before statesdistance.i, which
 // includes this file and exposes the scalar dispatch functions from
-// DistanceCalibration.h / StatesDistance.h).
-%include "IMP/bff/DistanceCalibration.h"
+// StatesDistance.h).

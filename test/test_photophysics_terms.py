@@ -14,14 +14,14 @@ import IMP
 import IMP.atom
 import IMP.bff
 import IMP.core
-from IMP.bff import find_dye
+from IMP.bff import find_probe
 from IMP.bff import reference_pet_parameters
 from IMP.bff import (
     FRETTerm, PETTerm, RadiativeTerm, total_rate,
 )
 
 
-def _pet(atoms, parameters, dye_radius=3.5):
+def _pet(atoms, parameters, probe_radius=3.5):
     """A PET term over ``atoms``.
 
     The quenching atoms are the term's, not a per-call argument: which of a
@@ -30,7 +30,7 @@ def _pet(atoms, parameters, dye_radius=3.5):
     next.
     """
     return PETTerm(parameters, list(atoms["res_name"]), list(atoms["atom_name"]),
-                   np.ascontiguousarray(atoms["coord"]), dye_radius=dye_radius)
+                   np.ascontiguousarray(atoms["coord"]), probe_radius=probe_radius)
 import IMP.bff as maps
 from IMP.bff import States
 
@@ -127,7 +127,7 @@ class TestPET:
 class TestFRET:
 
     def test_r0_is_derived_from_the_pair_and_the_medium(self):
-        d, a = find_dye("AlexaFluor 488"), find_dye("AlexaFluor 594")
+        d, a = find_probe("AlexaFluor 488"), find_probe("AlexaFluor 594")
         term = FRETTerm(d, a, refractive_index=1.4)
         water = FRETTerm(d, a, refractive_index=1.33)
         assert 40.0 < term.forster_radius < 70.0            # Angstrom
@@ -135,14 +135,14 @@ class TestFRET:
         assert term.used_isotropic_kappa2
 
     def test_it_reproduces_the_trace_kernel(self):
-        # `find_dye` returns a copy out of the cached library, so setting a
+        # `find_probe` returns a copy out of the cached library, so setting a
         # lifetime on it is local to this test. It was `dataclasses.replace`
         # over a frozen dataclass for the same reason, and before that an
         # `object.__setattr__` that leaked a lifetime into
         # `test_a_dye_without_a_lifetime_is_refused`.
-        d = find_dye("AlexaFluor 488")
+        d = find_probe("AlexaFluor 488")
         d.lifetime = 4.0
-        a = find_dye("AlexaFluor 594")
+        a = find_probe("AlexaFluor 594")
         term = FRETTerm(d, a)
         donor, acceptor = _states(32, 1), _states(48, 2)
         got = np.asarray(term.rate_constants(donor, acceptor))
@@ -155,7 +155,7 @@ class TestFRET:
         np.testing.assert_allclose(got, want, rtol=1e-12)
 
     def test_a_dye_without_a_lifetime_is_refused(self):
-        d, a = find_dye("AlexaFluor 488"), find_dye("AlexaFluor 594")
+        d, a = find_probe("AlexaFluor 488"), find_probe("AlexaFluor 594")
         with pytest.raises(ValueError, match="lifetime"):
             FRETTerm(d, a).rate_constants(_states(4), _states(4))
 

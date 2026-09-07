@@ -2,10 +2,9 @@
 
 ``imp_bff_program`` loads ``bin/imp_bff`` as a module. The command tree lives
 there rather than in the package because a click command is a decorated
-function: a library module carrying one cannot be imported without click, and
-two of the three trees used to be reachable only through ``python -m``. Tests
-that exercise commands therefore load the program, and need an explicit loader
--- IMP's installed programs have no file extension, and
+function, and a library module carrying one cannot be imported without click.
+Tests that exercise commands therefore load the program, and need an explicit
+loader -- IMP's installed programs have no file extension, and
 ``spec_from_file_location`` cannot infer a loader without one.
 """
 

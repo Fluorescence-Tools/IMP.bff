@@ -3,10 +3,10 @@
  *  \brief Walk, read the quenching rate along the walk, and race photons —
  *         without the trajectory ever leaving C++.
  *
- * The three steps of a PET-quenching prediction used to be three calls with a
- * Python array between each: the walk returns a trajectory, Python reads the
- * rate map along it, the photon simulator races against that trace. The
- * trajectory is the largest object in the chain and **nobody wants it** — a
+ * A PET-quenching prediction is three steps -- walk, read the rate map along
+ * the walk, race photons against that trace -- and driving them as three calls
+ * puts an array between each. The trajectory is the largest object in the
+ * chain and **nobody wants it**: a
  * 5 000 000-step walk is 20 million doubles crossing the boundary twice to
  * produce a few thousand photons.
  *
@@ -41,9 +41,9 @@ IMPBFF_BEGIN_NAMESPACE
     frame — a longer record is exactly what that wants.
 
     The rate is read at the voxel the walk is standing on, with no coordinate
-    round trip. That is the same voxel the Python path reaches by
-    `floor((xyz - x0)/dg + (ng-1)//2)`: the attachment point cancels, and the
-    walk's own occupancy test already resolved the index.
+    round trip. It is the same voxel that
+    `floor((xyz - x0)/dg + (ng-1)//2)` names: the attachment point cancels, and
+    the walk's own occupancy test has already resolved the index.
 
     \param[in] occupancy,n_occupancy flat ng^3, nonzero where the dye may be
     \param[in] mobility,n_mobility flat ng^3 step-variance scaling, or length 0

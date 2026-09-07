@@ -6,6 +6,9 @@
  */
 
 #include <IMP/bff/AVMeanDistanceRestraint.h>
+#include <IMP/bff/AVDistance.h>
+#include <cmath>
+#include <limits>
 #include <fstream>
 #include <IMP/atom/Chain.h>
 #include <IMP/bff/internal/json.h>
@@ -31,7 +34,7 @@ AVMeanDistanceRestraint::AVMeanDistanceRestraint(
         IMP::Model* m, IMP::ParticleIndexAdaptor p1,
         IMP::ParticleIndexAdaptor p2,
         const AVPairDistanceMeasurement& measurement, double sigma,
-        double weight)
+        double weight, double max_force)
     : IMP::Restraint(m, "AVMeanDistanceRestraint %1%"), p1_(p1), p2_(p2),
       measurement_(measurement),
       // The lookup runs to 2.5 R0. Past that the efficiency is 2e-4 and the
@@ -39,11 +42,23 @@ AVMeanDistanceRestraint::AVMeanDistanceRestraint(
       // resolution in a region no measurement constrains.
       converter_(measurement.forster_radius, sigma, 1.0,
                  2.5 * measurement.forster_radius),
-      weight_(weight) {}
+      weight_(weight), max_force_(max_force) {}
 
 double AVMeanDistanceRestraint::score_at(double d_mp) const {
-    return measurement_.score_model(
-            converter_.get_effective_distance(d_mp, measurement_.distance_type));
+    const double model =
+            converter_.get_effective_distance(d_mp, measurement_.distance_type);
+    if (max_force_ > 0.0) {
+        // FPS's capped form, halved to stay in this module's units: a Gaussian
+        // restraint is -log L = chi2/2, which is what score_model returns and
+        // what every other term here is weighted against. The *knee* is at
+        // MaxForce*err^2/2 either way -- the factor scales the slope, not the
+        // place the parabola stops (see IMP::bff::chi2_score_capped).
+        if (std::isnan(model)) return std::numeric_limits<double>::infinity();
+        return 0.5 * chi2_score_capped(model, measurement_.distance,
+                                       measurement_.error_neg,
+                                       measurement_.error_pos, max_force_);
+    }
+    return measurement_.score_model(model);
 }
 
 double AVMeanDistanceRestraint::unprotected_evaluate(

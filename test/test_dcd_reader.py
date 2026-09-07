@@ -1,9 +1,9 @@
 """The in-tree DCD reader must agree with MDAnalysis, frame for frame.
 
-The rotamer libraries ship as PDB + DCD pairs and used to be read through
-MDAnalysis. IMP.bff carries no dependency beyond what IMP itself brings, so the
-format is parsed in-tree instead -- and a hand-written binary parser is only
-trustworthy if it is checked against the implementation it replaced.
+The rotamer libraries ship as PDB + DCD pairs, and IMP.bff carries no
+dependency beyond what IMP itself brings, so the format is parsed in-tree. A
+hand-written binary parser is only trustworthy if it is checked against an
+independent implementation, which is what MDAnalysis is here.
 
 The parity test skips when MDAnalysis is absent, which is the normal case for a
 user: the point is that whoever *has* it can prove the replacement, not that
@@ -79,9 +79,8 @@ class Tests(IMP.test.TestCase):
             bogus = os.path.join(tmp, "not.dcd")
             with open(bogus, "wb") as fh:
                 fh.write(b"\x00" * 512)
-            # `IMP::ValueException` is itself a `ValueError`, and the Python's
-            # own `DCDFormatError` was a `ValueError` subclass that nothing but
-            # this test ever named.
+            # `IMP::ValueException` is itself a `ValueError`, so there is no
+            # format-specific exception type for a caller to name.
             self.assertRaises(ValueError, read_dcd, bogus)
 
 if __name__ == '__main__':

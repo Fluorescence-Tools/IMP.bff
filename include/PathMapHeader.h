@@ -11,8 +11,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <cmath> /* ceil */
 
@@ -23,7 +22,7 @@
 #include <IMP/atom/Selection.h>
 
 #include <cereal/access.hpp>
-#include <IMP/em/DensityHeader.h>
+#include <IMP/bff/DensityGrid.h>
 
 #include <IMP/bff/internal/json.h>
 #include <IMP/bff/AV.h>
@@ -54,7 +53,11 @@ private:
     double neighbor_radius_;
     double obstacle_threshold_;
 
-    IMP::em::DensityHeader density_header_;
+    //! The grid this header describes.
+    /*! Was an `IMP::em::DensityHeader`. The half-dozen fields that were ever
+        read of it -- extent, spacing, origin -- are what `GridHeader` holds,
+        and none of them is about electron microscopy. */
+    GridHeader density_header_;
 
 protected:
 
@@ -161,11 +164,11 @@ public:
     int get_neighbor_box_size() const;
 
     //! Returns a read-only pointer to the header of the map
-    const IMP::em::DensityHeader *get_density_header() const {
+    const IMP::bff::GridHeader *get_density_header() const {
         return &density_header_; }
 
     //! Returns a pointer to the header of the map in a writable version
-    IMP::em::DensityHeader *get_density_header_writable() {
+    IMP::bff::GridHeader *get_density_header_writable() {
         return &density_header_; }
 
     //! Get origin on the PathMap (the corner of the grid)

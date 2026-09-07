@@ -21,6 +21,7 @@ move of each.
 
 | PRD | what | status | next |
 |---|---|---|---|
+| [136](prd-136.md) | dye-timewarp — a site-conditioned, time-coarsened generative model of dye+linker dynamics learned from MD | active (2026-09-07): stage 1 passed on 65 runs / 12.9 µs; `free_v1` training on heinzehub | G1–G3 on the first checkpoints, PRD-116 parity, then the arm B site builder. |
 | [135](prd-135.md) | av.pinn — a forward PINN replacing the quenching solver, usable in reverse | active (2026-09-06): forward + reverse acceptance met on `pinn_300k.pt` | More measured sites (~45 with both observables for the chemistry); steady-state anisotropy as a third functional. |
 | [121](prd-121.md) | FPS (the C# toolkit), natively | phase 0 done (2026-08-31) | Phase 1 (G3). The apparent +2 Å was the Zenodo file, not this module — it agrees with FPS to −0.31 Å. |
 | [120](prd-120.md) | the Labelizer, natively | done (2026-08-24) | Nothing -- closed. |

@@ -10,7 +10,7 @@ This repo is one checkout in a multi-repository stack. All of these live as
 | Checkout | Also called | Role |
 |---|---|---|
 | `../tttrlib` | — | Photon-level data (TTTR streams, histograms, correlation). Bottom of the stack. |
-| `../imp.bff` | **bff** (this repo) | Coordinate-level fluorescence modelling as an IMP module (AVs, path maps, κ², cgdye). |
+| `../imp.bff` | **bff** (this repo) | Coordinate-level fluorescence modelling as an IMP module (AVs, path maps, κ², cgprobe). |
 | `../imp` | — | The IMP checkout imp.bff builds against. **Never commit there.** |
 | `../imp-tricks` | — | Downstream IMP experiments; shadows `IMP/bff/` — see PRD-93. |
 | `../chisurf` | — | Fitting-model glue, GUI, data-IO. Top of the stack. Hosts the shared OKF knowledge bundle. |
@@ -21,6 +21,28 @@ This repo is one checkout in a multi-repository stack. All of these live as
 The layering is **tttrlib → imp.bff → imp-tricks → chisurf**; the placement
 test is *what is the input* (photons/curves → tttrlib, coordinates → imp.bff,
 neither → chisurf). See `../chisurf/okf/prds/prd-93.md`.
+
+## The compute/display line — the rule above the language rule
+
+> **Keep it all in bff and tttrlib. Only the things that get displayed move
+> into chisurf/Python — so that the data stay local.** (owner, 2026-09-01)
+
+Two halves, and the second is the one that gets forgotten. Computation is
+C++; **and the data stay where the computation is.** It is not enough for the
+arithmetic to be in C++ if the arrays are marshalled back and forth to drive
+it. The test is *who consumes the value*: a human looking at it (a plot, a
+table, a fitted number) crosses; another computation does not.
+
+A value crossing once per `run()` is fine. The same value crossing once per
+*iteration* is what the rule exists to prevent, and the reason is measured
+rather than assumed — replacing an optimiser but keeping the callback bought
+1.02x, and wrapping the callback in a C++ loop was a *regression*
+(`okf/log.md` 2026-09-01 (9)).
+
+The full statement — the decision procedure, what legitimately stays in
+chisurf, where it is enforced, and the measured gaps still open against it —
+is cross-stack and lives in the shared bundle:
+[`../chisurf/okf/architecture/compute-display-line.md`](../chisurf/okf/architecture/compute-display-line.md).
 
 ## What language a thing is written in
 

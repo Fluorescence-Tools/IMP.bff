@@ -1,10 +1,4 @@
-"""Guards that outlived the source tree they audited.
-
-This file's substance was an audit of ``pyext/src`` -- the subpackage import
-graph, its cycles, its private reaching. That tree is gone: the shims are
-deleted and every public name is an attribute of ``IMP.bff`` itself. Two tests
-here never were about it, so they stayed; the rest went with the tree.
-"""
+"""Import discipline: what ``import IMP.bff`` is allowed to pull in."""
 
 import sys
 from collections import defaultdict
@@ -19,7 +13,7 @@ import IMP.bff
 def test_test_module_basenames_are_unique():
     """pytest imports test modules by basename, so a collision silently drops one.
 
-    ``test/io/test_io.py`` collided with ``test/cgdye/test_io.py`` and was
+    ``test/io/test_io.py`` collided with ``test/cgprobe/test_io.py`` and was
     reported as a collection ERROR at the very bottom of a 780-test run -- easy
     to read past, and the file's assertions simply did not run.
     """

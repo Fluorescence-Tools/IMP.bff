@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <set>
+#include <deque>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -183,8 +184,8 @@ std::vector<std::vector<int> > MolecularGraph::expand_impropers(
     ordered.erase(std::unique(ordered.begin(), ordered.end()), ordered.end());
 
     // `seen` dedups on (centre, {n1,n2,n3}) for the two kinds that can produce
-    // the same quadruple twice; `flat` and `orient` cannot, and the Python did
-    // not dedup them either.
+    // the same quadruple twice; `flat` and `orient` cannot, so they are not
+    // deduped.
     std::set<std::pair<int, std::vector<int> > > seen;
     std::vector<std::vector<int> > out;
 
@@ -255,6 +256,165 @@ std::vector<std::vector<int> > MolecularGraph::expand_impropers(
         }
         out.push_back(quad);
     }
+    return out;
+}
+
+std::vector<int> MolecularGraph::get_component_without_edge(int start, int u,
+                                                            int v) const {
+    std::set<int> seen;
+    std::deque<int> queue;
+    seen.insert(start);
+    queue.push_back(start);
+    while (!queue.empty()) {
+        const int node = queue.front();
+        queue.pop_front();
+        const std::vector<int> nbrs = get_neighbors(node);
+        for (std::size_t i = 0; i < nbrs.size(); ++i) {
+            const int nb = nbrs[i];
+            if ((node == u && nb == v) || (node == v && nb == u)) continue;
+            if (seen.insert(nb).second) queue.push_back(nb);
+        }
+    }
+    return std::vector<int>(seen.begin(), seen.end());
+}
+
+namespace {
+//! `true` when `node` is in the ascending vector `nodes`.
+bool holds(const std::vector<int>& nodes, int node) {
+    return std::binary_search(nodes.begin(), nodes.end(), node);
+}
+}  // namespace
+
+GraphRotor MolecularGraph::get_bond_rotor(int a, int b, int anchor) const {
+    GraphRotor out;
+    const std::vector<int> side_b = get_component_without_edge(b, a, b);
+    if (!holds(side_b, anchor)) {
+        out.fixed = a;
+        out.moving = b;
+        out.moving_nodes = side_b;
+        out.is_rotatable = true;
+        return out;
+    }
+    const std::vector<int> side_a = get_component_without_edge(a, a, b);
+    if (!holds(side_a, anchor)) {
+        out.fixed = b;
+        out.moving = a;
+        out.moving_nodes = side_a;
+        out.is_rotatable = true;
+    }
+    return out;   // both sides reach the anchor: a ring bond, not rotatable
+}
+
+GraphRotor MolecularGraph::get_angle_rotor(int a, int b, int c,
+                                           int anchor) const {
+    // The axis sits at b; either c's side or a's side turns about it.
+    GraphRotor out;
+    const std::vector<int> side_c = get_component_without_edge(c, b, c);
+    if (!holds(side_c, anchor)) {
+        out.fixed = b;
+        out.moving = c;
+        out.moving_nodes = side_c;
+        out.is_rotatable = true;
+        return out;
+    }
+    const std::vector<int> side_a = get_component_without_edge(a, a, b);
+    if (!holds(side_a, anchor)) {
+        out.fixed = b;
+        out.moving = a;
+        out.moving_nodes = side_a;
+        out.is_rotatable = true;
+    }
+    return out;
+}
+
+std::vector<int> MolecularGraph::get_ring_atoms(
+        const std::vector<int>& nodes, const std::vector<std::string>& elements,
+        const std::vector<int>& ring_sizes) const {
+    if (ring_sizes.empty()) return std::vector<int>();
+    std::map<int, std::string> element_of;
+    for (std::size_t i = 0; i < nodes.size() && i < elements.size(); ++i) {
+        element_of[nodes[i]] = elements[i];
+    }
+    const int longest = *std::max_element(ring_sizes.begin(), ring_sizes.end());
+    const std::vector<std::vector<int> > rings = get_rings(longest);
+    std::set<int> out;
+    for (std::size_t i = 0; i < rings.size(); ++i) {
+        const int size = static_cast<int>(rings[i].size());
+        if (std::find(ring_sizes.begin(), ring_sizes.end(), size) ==
+            ring_sizes.end()) {
+            continue;
+        }
+        for (std::size_t j = 0; j < rings[i].size(); ++j) {
+            std::map<int, std::string>::const_iterator it =
+                    element_of.find(rings[i][j]);
+            // No element known is treated as heavy (carbon).
+            if (it == element_of.end() || it->second != "H") {
+                out.insert(rings[i][j]);
+            }
+        }
+    }
+    return std::vector<int>(out.begin(), out.end());
+}
+
+LabelledGraph::LabelledGraph(
+        const std::vector<std::pair<std::string, std::string> >& bonds) {
+    std::set<std::string> seen;
+    for (std::size_t i = 0; i < bonds.size(); ++i) {
+        seen.insert(bonds[i].first);
+        seen.insert(bonds[i].second);
+    }
+    labels_.assign(seen.begin(), seen.end());          // sorted by label
+    for (std::size_t i = 0; i < labels_.size(); ++i) {
+        index_[labels_[i]] = static_cast<int>(i);
+    }
+    std::vector<std::pair<int, int> > edges;
+    edges.reserve(bonds.size());
+    for (std::size_t i = 0; i < bonds.size(); ++i) {
+        edges.push_back(std::make_pair(index_[bonds[i].first],
+                                       index_[bonds[i].second]));
+    }
+    graph_ = MolecularGraph(edges);
+}
+
+std::vector<std::string> LabelledGraph::labelled(
+        const std::vector<int>& nodes) const {
+    std::vector<std::string> out;
+    out.reserve(nodes.size());
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        out.push_back(labels_[static_cast<std::size_t>(nodes[i])]);
+    }
+    return out;
+}
+
+std::vector<std::string> LabelledGraph::get_neighbors(
+        const std::string& node) const {
+    std::map<std::string, int>::const_iterator it = index_.find(node);
+    if (it == index_.end()) return std::vector<std::string>();
+    return labelled(graph_.get_neighbors(it->second));
+}
+
+std::vector<std::vector<std::string> > LabelledGraph::get_angles() const {
+    const std::vector<std::vector<int> > raw = graph_.get_angles();
+    std::vector<std::vector<std::string> > out;
+    out.reserve(raw.size());
+    for (std::size_t i = 0; i < raw.size(); ++i) out.push_back(labelled(raw[i]));
+    return out;
+}
+
+std::vector<std::vector<std::string> > LabelledGraph::get_dihedrals() const {
+    const std::vector<std::vector<int> > raw = graph_.get_dihedrals();
+    std::vector<std::vector<std::string> > out;
+    out.reserve(raw.size());
+    for (std::size_t i = 0; i < raw.size(); ++i) out.push_back(labelled(raw[i]));
+    return out;
+}
+
+std::vector<std::vector<std::string> > LabelledGraph::get_rings(
+        int max_len) const {
+    const std::vector<std::vector<int> > raw = graph_.get_rings(max_len);
+    std::vector<std::vector<std::string> > out;
+    out.reserve(raw.size());
+    for (std::size_t i = 0; i < raw.size(); ++i) out.push_back(labelled(raw[i]));
     return out;
 }
 

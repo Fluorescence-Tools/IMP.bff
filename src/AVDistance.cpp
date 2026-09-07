@@ -6,7 +6,7 @@
  */
 #include <IMP/bff/AVDistance.h>
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <cmath>
 #include <limits>
@@ -544,6 +544,28 @@ double chi2_score(double model_distance, double experimental_distance,
     if (err <= 0.0) return 0.0;
     const double z = residual / err;
     return z * z;
+}
+
+double chi2_score_capped(double model_distance, double experimental_distance,
+                         double error_neg, double error_pos,
+                         double max_force) {
+    if (!(max_force > 0.0)) {
+        return chi2_score(model_distance, experimental_distance, error_neg,
+                          error_pos);
+    }
+    const double residual = model_distance - experimental_distance;
+    const double err = residual < 0.0 ? error_neg : error_pos;
+    if (err <= 0.0) return 0.0;
+    // FPS's own spelling, kept so the two can be compared line by line:
+    // k = 2/err^2 (SpringEngine.cs:137), drmax = MaxForce/k (:141).
+    const double k = 2.0 / (err * err);
+    const double drmax = max_force / k;
+    const double a = std::fabs(residual);
+    // Inside the knee 0.5*k*a^2 is exactly (a/err)^2, i.e. chi2_score; outside,
+    // the two pieces meet at 0.5*max_force*drmax with slope max_force, so the
+    // join is C^1 and the tail is straight.
+    if (a <= drmax) return 0.5 * k * a * a;
+    return max_force * (a - 0.5 * drmax);
 }
 
 double fret_efficiency(double distance, double forster_radius) {

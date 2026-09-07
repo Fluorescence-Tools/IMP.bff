@@ -17,19 +17,19 @@ std::vector<double> rotamer_interaction_energies(
         double* protein_coords, int n_protein_coords,
         double* rmin_ij, int n_rmin_ij,
         double* eps_ij, int n_eps_ij,
-        const std::vector<double>& q_dye,
+        const std::vector<double>& q_probe,
         const std::vector<double>& q_protein,
-        int n_rotamers, int n_dye_atoms, int n_protein_atoms,
+        int n_rotamers, int n_probe_atoms, int n_protein_atoms,
         int potential,
         double steric_cutoff, double coulomb_cutoff,
         double debye_length, double coulomb_prefactor) {
     std::vector<double> out(static_cast<std::size_t>(std::max(0, n_rotamers)) * 2, 0.0);
-    if (n_rotamers <= 0 || n_dye_atoms <= 0 || n_protein_atoms <= 0) return out;
+    if (n_rotamers <= 0 || n_probe_atoms <= 0 || n_protein_atoms <= 0) return out;
     (void)n_rotamer_coords; (void)n_protein_coords;
     (void)n_rmin_ij; (void)n_eps_ij;
 
     const bool electrostatic =
-            static_cast<int>(q_dye.size()) == n_dye_atoms &&
+            static_cast<int>(q_probe.size()) == n_probe_atoms &&
             static_cast<int>(q_protein.size()) == n_protein_atoms;
     const double steric_cut2 = steric_cutoff * steric_cutoff;
     const double coulomb_cut2 = coulomb_cutoff * coulomb_cutoff;
@@ -38,12 +38,12 @@ std::vector<double> rotamer_interaction_energies(
     for (int r = 0; r < n_rotamers; ++r) {
         double steric = 0.0, coulomb = 0.0;
         const double* conf =
-                rotamer_coords + static_cast<std::size_t>(r) * n_dye_atoms * 3;
-        for (int a = 0; a < n_dye_atoms; ++a) {
+                rotamer_coords + static_cast<std::size_t>(r) * n_probe_atoms * 3;
+        for (int a = 0; a < n_probe_atoms; ++a) {
             const double ax = conf[3 * a + 0];
             const double ay = conf[3 * a + 1];
             const double az = conf[3 * a + 2];
-            const double qa = electrostatic ? q_dye[a] : 0.0;
+            const double qa = electrostatic ? q_probe[a] : 0.0;
             const double* rmin_row =
                     rmin_ij + static_cast<std::size_t>(a) * n_protein_atoms;
             const double* eps_row =
@@ -114,7 +114,7 @@ std::vector<double> rotamer_pair_energy_matrix_impl(
     if (n_a_conf <= 0 || n_b_conf <= 0 || n_a_atoms <= 0 || n_b_atoms <= 0) return out;
     if (rmin.size() != static_cast<std::size_t>(n_a_atoms) * n_b_atoms ||
         eps.size() != rmin.size()) {
-        return out;   // no parameters means no interaction, as in the Python
+        return out;   // no parameters means no interaction
     }
 
     std::vector<double> box_a(static_cast<std::size_t>(n_a_conf) * 6);
@@ -146,7 +146,7 @@ std::vector<double> rotamer_pair_energy_matrix_impl(
                     const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
                     const double rm = rmin[row + b];
                     // Repulsive-only, and inside the cutoff. Both tests are on
-                    // the unclamped distance, as the Python has them.
+                    // the unclamped distance.
                     if (!(d < rm) || !(d < r_cutoff)) continue;
                     const double safe = d > r_floor ? d : r_floor;
                     const double ratio = rm / safe;
@@ -162,7 +162,7 @@ std::vector<double> rotamer_pair_energy_matrix_impl(
 }
 }  // namespace
 
-void rotamer_pair_energy_matrix(const std::vector<double>& coords_a, const std::vector<double>& coords_b,
+void pair_energy_matrix_kernel(const std::vector<double>& coords_a, const std::vector<double>& coords_b,
         const std::vector<double>& rmin, const std::vector<double>& eps,
         int n_a_conf, int n_a_atoms, int n_b_conf, int n_b_atoms,
         double** out_view, int* n_out_view,
@@ -191,8 +191,8 @@ std::vector<double> lj_pair_energies(
             const double dy = xyz[3 * ia + 1] - xyz[3 * ib + 1];
             const double dz = xyz[3 * ia + 2] - xyz[3 * ib + 2];
             const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
-            // Both tests on the unclamped distance, as the Python has them;
-            // only the ratio uses the floor.
+            // Both tests on the unclamped distance; only the ratio uses
+            // the floor.
             if (repulsive_only && !(d < rmin[p])) continue;
             const double safe = d > r_floor ? d : r_floor;
             const double ratio = rmin[p] / safe;

@@ -9,9 +9,9 @@
 #define IMPBFF_MOL2IO_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/DyeForceField.h>
+#include <IMP/bff/ProbeForceField.h>
 
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <map>
 #include <string>
@@ -54,9 +54,9 @@ IMPBFFEXPORT std::map<int, std::string> read_mol2_atom_names(const std::string& 
 
 //! The element implied by a MOL2 atom name.
 /** The **first letter** of the leading alphabetic run, uppercased -- so `C12`
-    and `CL3` are both carbon. That is what the Python did and it is wrong for
-    two-letter elements; it is reproduced rather than corrected because every
-    site's LJ type is keyed on it and changing it would move the force field.
+    and `CL3` are both carbon. That is wrong for two-letter elements and is
+    kept deliberately: every site's LJ type is keyed on it, so correcting it
+    would move the force field.
     `C` when the name starts with no letter. */
 IMPBFFEXPORT std::string element_from_atom_name(const std::string& atom_name);
 

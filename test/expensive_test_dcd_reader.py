@@ -1,6 +1,6 @@
 """Full DCD parity sweep: every bundled trajectory, against MDAnalysis.
 
-The rotamer libraries ship as PDB + DCD pairs and used to be read through
+The rotamer libraries ship as PDB + DCD pairs and are read through
 MDAnalysis. IMP.bff carries no dependency beyond what IMP itself brings, so the
 format is parsed in-tree instead -- and a hand-written binary parser is only
 trustworthy if it is checked against the implementation it replaced.
@@ -25,9 +25,22 @@ def _library_dir():
     return IMP.bff.get_data_path("rotamer_library")
 
 
+def _test_input_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "input")
+
+
 def _dcd_files():
-    d = _library_dir()
-    return sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".dcd"))
+    """Every DCD the tree still has: the libraries became BinaryCIF on
+    2026-08-19 and `.drot` on 2026-08-24, so `data/rotamer_library` holds
+    none -- `test/input/A56_C1R_cutoff30.dcd` is kept for this parity sweep,
+    which is the only reason the reader is still exercised against the
+    library it replaced."""
+    out = []
+    for d in (_library_dir(), _test_input_dir()):
+        if os.path.isdir(d):
+            out.extend(os.path.join(d, f) for f in os.listdir(d)
+                       if f.endswith(".dcd"))
+    return sorted(out)
 
 
 class Tests(IMP.test.TestCase):
@@ -47,6 +60,8 @@ class Tests(IMP.test.TestCase):
         for path in _dcd_files():
             base = os.path.basename(path).split("_cutoff")[0]
             pdb = os.path.join(lib, base + ".pdb")
+            if not os.path.exists(pdb):
+                pdb = os.path.join(os.path.dirname(path), base + ".pdb")
             if not os.path.exists(pdb):
                 continue
             mine = np.asarray(read_dcd(path)).reshape(

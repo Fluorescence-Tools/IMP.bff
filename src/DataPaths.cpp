@@ -1,13 +1,13 @@
 /**
  * \file DataPaths.cpp
- * \brief Where the shipped cgdye data lives, and how to reach it.
+ * \brief Where the shipped cgprobe data lives, and how to reach it.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
 #include <IMP/bff/DataPaths.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <cerrno>
 #include <cstring>
@@ -32,16 +32,16 @@ std::string join(const std::string& base, const std::string& subpath) {
 
 }  // namespace data_paths
 
-std::string get_cgdye_data_dir() { return IMP::bff::get_data_path("cgdye"); }
+std::string get_cgprobe_data_dir() { return IMP::bff::get_data_path("cgprobe"); }
 
 std::string get_template_dir(std::string subpath) {
-    return data_paths::join(data_paths::join(get_cgdye_data_dir(), "templates"),
+    return data_paths::join(data_paths::join(get_cgprobe_data_dir(), "templates"),
                             subpath);
 }
 
 std::string get_structure_dir(std::string subpath) {
     return data_paths::join(
-        data_paths::join(get_cgdye_data_dir(), "inputs/structures"), subpath);
+        data_paths::join(get_cgprobe_data_dir(), "inputs/structures"), subpath);
 }
 
 std::string get_output_dir(std::string subpath) {

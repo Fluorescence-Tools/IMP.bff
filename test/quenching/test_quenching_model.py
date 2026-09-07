@@ -1,6 +1,6 @@
 """PRD-109 stage 3: the particle model's objects, moved here from QuEst.
 
-``DyeDiffusionSimulation`` and ``QuenchedDonorDecay`` -- what QuEst called
+``ProbeDiffusionSimulation`` and ``QuenchedDonorDecay`` -- what QuEst called
 ``SimulateDiffusion`` and ``DonorDecay``, less the application layer.
 """
 
@@ -13,7 +13,7 @@ import IMP.bff as sites
 from IMP.bff import grid_center_index, quenching_rate_grid
 from IMP.bff import (
     AccessibleVolume,
-    DyeDiffusionSimulation,
+    ProbeDiffusionSimulation,
     ObstacleAtoms,
     QuenchedDonorDecay,
     resolve_trajectory_count,
@@ -157,7 +157,7 @@ class TrajectorySeedTests(IMP.test.TestCase):
         self.assertEqual(resolve_trajectory_count(0), 1)
 
 
-class DyeDiffusionSimulationTests(IMP.test.TestCase):
+class ProbeDiffusionSimulationTests(IMP.test.TestCase):
 
     def setUp(self):
         super().setUp()
@@ -166,7 +166,7 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
         self.x0 = np.array([10.0, -5.0, 2.0])
 
     def simulation(self, rate_map=None):
-        return DyeDiffusionSimulation(
+        return ProbeDiffusionSimulation(
             self.density, self.dg, self.x0, quenching_rate_map=rate_map
         )
 
@@ -194,7 +194,7 @@ class DyeDiffusionSimulationTests(IMP.test.TestCase):
             np.array_equal(first.get_trajectory(), second.get_trajectory()))
 
     def test_an_empty_volume_yields_no_trajectory(self):
-        simulation = DyeDiffusionSimulation(
+        simulation = ProbeDiffusionSimulation(
             np.zeros_like(self.density), self.dg, self.x0
         )
         self.assertEqual(simulation.run(t_max=10.0, random_seed=1), 0)

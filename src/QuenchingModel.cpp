@@ -8,7 +8,7 @@
 #include <IMP/bff/QuenchingModel.h>
 
 #include <IMP/bff/DiffusionSolver.h>
-#include <IMP/bff/DyeSampling.h>
+#include <IMP/bff/ProbeSampling.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/PhotonSimulation.h>
 #include <IMP/bff/QuenchedDecay.h>
@@ -17,7 +17,7 @@
 #include <IMP/bff/FRETRateTrace.h>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cmath>
@@ -67,9 +67,9 @@ void ObstacleAtoms::get_coords(double** out_view, int* n_out_view) const {
 
 DynamicAccessibleVolume::DynamicAccessibleVolume(
         const AccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
-        double dye_radius, double free_diffusion, double contact_distance,
+        double probe_radius, double free_diffusion, double contact_distance,
         double slow_factor, const std::string& flux_form)
-    : av_(av), atoms_(atoms), tau0_(tau0), dye_radius_(dye_radius),
+    : av_(av), atoms_(atoms), tau0_(tau0), probe_radius_(probe_radius),
       free_diffusion_(free_diffusion), contact_distance_(contact_distance),
       slow_factor_(slow_factor), flux_form_(flux_form) {
     if (flux_form != "smoluchowski" && flux_form != "ito") {
@@ -151,7 +151,7 @@ void DynamicAccessibleVolume::update_quenching_map(
     int n_out = 0;
     quenching_rate_map(density, qmodel::anchor(av_),
                        av_.get_grid_step(), atoms_.coords, kQ_v, rC_v, tau0_,
-                       dye_radius_, &out, &n_out);
+                       probe_radius_, &out, &n_out);
     quenching_rate_map_ = qmodel::drained(out, n_out);
 }
 
@@ -280,12 +280,12 @@ GridDiffusionResult DynamicAccessibleVolume::donor_decay(
 QuenchedDonorDecay::QuenchedDonorDecay(
         const AccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
         const std::map<std::string, ResidueQuenching>& quenching_table,
-        double critical_distance, double slow_radius, double dye_radius,
+        double critical_distance, double slow_radius, double probe_radius,
         double diffusion_coefficient, double slow_fact, double t_step,
         double t_max, int n_photons, int n_trajectories, int random_seed)
     : av_(av), atoms_(atoms), tau0_(tau0),
       critical_distance_(critical_distance), slow_radius_(slow_radius),
-      dye_radius_(dye_radius), diffusion_coefficient_(diffusion_coefficient),
+      probe_radius_(probe_radius), diffusion_coefficient_(diffusion_coefficient),
       slow_fact_(std::min(1.0, std::max(0.0, slow_fact))), t_step_(t_step),
       t_max_(t_max), n_photons_(n_photons), n_trajectories_(n_trajectories),
       random_seed_(random_seed),
@@ -394,7 +394,7 @@ void QuenchedDonorDecay::set_slow_factor_map(
 
 bool QuenchedDonorDecay::simulate_diffusion() {
     ensure_grids();
-    walk_ = DyeDiffusionSimulation(density(), av_.get_grid_step(), x0(),
+    walk_ = ProbeDiffusionSimulation(density(), av_.get_grid_step(), x0(),
                                    std::vector<int>(), slow_factor_map_,
                                    quenching_rate_map_);
     walk_.run(diffusion_coefficient_, slow_fact_, t_step_, t_max_,
@@ -420,7 +420,7 @@ void QuenchedDonorDecay::ensure_walk() const {
     if (!has_walk_) const_cast<QuenchedDonorDecay*>(this)->simulate_diffusion();
 }
 
-const DyeDiffusionSimulation& QuenchedDonorDecay::get_diffusion() const {
+const ProbeDiffusionSimulation& QuenchedDonorDecay::get_diffusion() const {
     ensure_walk();
     return walk_;
 }
@@ -468,7 +468,7 @@ void QuenchedDonorDecay::photons_fused() {
     // whole simulation twice and make the fused path the slower one. Measured:
     // 4.9 s against 1.3 s at a million steps.
     if (!has_walk_) {
-        walk_ = DyeDiffusionSimulation(density(), av_.get_grid_step(), x0(),
+        walk_ = ProbeDiffusionSimulation(density(), av_.get_grid_step(), x0(),
                                        std::vector<int>(), slow_factor_map_,
                                        quenching_rate_map_);
     }

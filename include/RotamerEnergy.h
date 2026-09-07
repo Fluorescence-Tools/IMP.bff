@@ -30,15 +30,15 @@ enum RotamerPotential {
 //! Steric and electrostatic energy of every conformer against the structure.
 /*!
     \param[in] rotamer_coords,n_rotamer_coords flat,
-               `n_rotamers * n_dye_atoms * 3`. A raw buffer, so numpy's array
+               `n_rotamers * n_probe_atoms * 3`. A raw buffer, so numpy's array
                passes straight through -- see #brownian_walk_in_volume on why.
     \param[in] protein_coords,n_protein_coords flat, `n_protein_atoms * 3`
     \param[in] rmin_ij combined \f$R_{min}\f$ per (dye atom, protein atom),
-               flat `n_dye_atoms * n_protein_atoms`
+               flat `n_probe_atoms * n_protein_atoms`
     \param[in] eps_ij combined well depth, same shape
-    \param[in] q_dye per dye atom, or **empty** to skip electrostatics
+    \param[in] q_probe per dye atom, or **empty** to skip electrostatics
     \param[in] q_protein per protein atom, or empty
-    \param[in] n_rotamers,n_dye_atoms,n_protein_atoms shapes
+    \param[in] n_rotamers,n_probe_atoms,n_protein_atoms shapes
     \param[in] potential a #RotamerPotential
     \param[in] steric_cutoff pairs beyond this contribute nothing, Angstrom
     \param[in] coulomb_cutoff the same for the screened Coulomb term
@@ -54,9 +54,9 @@ IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
         double* protein_coords, int n_protein_coords,
         double* rmin_ij, int n_rmin_ij,
         double* eps_ij, int n_eps_ij,
-        const std::vector<double>& q_dye,
+        const std::vector<double>& q_probe,
         const std::vector<double>& q_protein,
-        int n_rotamers, int n_dye_atoms, int n_protein_atoms,
+        int n_rotamers, int n_probe_atoms, int n_protein_atoms,
         int potential,
         double steric_cutoff = 10.0,
         double coulomb_cutoff = 20.0,
@@ -69,8 +69,8 @@ IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
     of one dye against conformer *j* of another (or against a protein, which is
     one "conformer"). Those energies **do not depend on the weights**, so they
     are computed once here and the iteration becomes a matrix-vector product.
-    The Python this replaces recomputed the whole matrix inside the iteration
-    loop, doing ten times the work for the same answer.
+    Recomputing the matrix inside the iteration loop instead is ten times the
+    work for the same answer.
 
     Repulsive-only: the attractive tail (\f$r \ge R_{min}\f$) is dropped, which
     is what the mean-field treatment wants -- it is asking what is *blocked*,
@@ -91,7 +91,7 @@ IMPBFFEXPORT std::vector<double> rotamer_interaction_energies(
                 default may not follow one that has it, and numpy's typemap
                 binds on the pair's *names*, not its position.
 */
-IMPBFFEXPORT void rotamer_pair_energy_matrix(
+IMPBFFEXPORT void pair_energy_matrix_kernel(
         const std::vector<double>& coords_a,
         const std::vector<double>& coords_b,
         const std::vector<double>& rmin,

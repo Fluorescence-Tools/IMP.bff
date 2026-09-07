@@ -9,10 +9,9 @@
 
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/AVDistance.h>
-#include <IMP/bff/DistanceCalibration.h>
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cmath>
@@ -419,8 +418,7 @@ LabelDistributionAV::LabelDistributionAV(
         atoms_xyzr_[4 * i + 2] = atoms_xyz[3 * i + 2];
         atoms_xyzr_[4 * i + 3] = atoms_vdw[i];
     }
-    // No explicit source means the first obstacle (the Python this replaced
-    // took a residue number / atom name and ignored both).
+    // No explicit source means the first obstacle.
     if (source_xyz_.empty() && !atoms_xyzr_.empty()) {
         source_xyz_.assign(atoms_xyzr_.begin(), atoms_xyzr_.begin() + 3);
         origin_.assign(source_xyz_.begin(), source_xyz_.end());
@@ -436,7 +434,7 @@ void LabelDistributionAV::do_compute() const {
     av_.set_position_name(position_name_);
 }
 
-DyeDistributionNormal::DyeDistributionNormal(const std::vector<double>& origin,
+ProbeDistributionNormal::ProbeDistributionNormal(const std::vector<double>& origin,
                                              double width, int n_points,
                                              int seed,
                                              const std::string& position_name)
@@ -448,10 +446,9 @@ DyeDistributionNormal::DyeDistributionNormal(const std::vector<double>& origin,
     }
 }
 
-void DyeDistributionNormal::do_compute() const {
-    // Box-Muller off a seeded engine. The Python drew from the *global*
-    // `numpy.random` state, so two labels built in one process were not
-    // reproducible and neither was a single one across runs.
+void ProbeDistributionNormal::do_compute() const {
+    // Box-Muller off a seeded engine, so two labels built in one process are
+    // reproducible and so is one across runs.
     std::mt19937 engine(static_cast<unsigned int>(seed_));
     std::normal_distribution<double> normal(0.0, 1.0);
 
@@ -581,10 +578,10 @@ double FRETDistanceConverter::get_fret_efficiency_mean(double dcc) const {
 
 double FRETDistanceConverter::get_effective_distance(double value,
                                                      int distance_type) const {
-    if (distance_type == DYE_PAIR_DISTANCE_MEAN) return get_distance_mean(value);
-    if (distance_type == DYE_PAIR_DISTANCE_E) return get_distance_mean_fret(value);
-    if (distance_type == DYE_PAIR_DISTANCE_MP) return value;
-    IMP_THROW("unknown dye-pair distance type " << distance_type,
+    if (distance_type == PROBE_PAIR_DISTANCE_MEAN) return get_distance_mean(value);
+    if (distance_type == PROBE_PAIR_DISTANCE_E) return get_distance_mean_fret(value);
+    if (distance_type == PROBE_PAIR_DISTANCE_MP) return value;
+    IMP_THROW("unknown probe-pair distance type " << distance_type,
               ValueException);
 }
 
@@ -603,6 +600,28 @@ double effective_distance(double rmp,
         return sigma_rda > 0.0 ? gaussian_rmp_to_rda_mean(rmp, sigma_rda) : rmp;
     }
     return rmp;
+}
+
+// --------------------------------------------------------------------------
+// Empirical corrections from a computed distance to a measured one
+// --------------------------------------------------------------------------
+
+double polynomial_transfer(double x, const std::vector<double>& coefficients) {
+    double y = 0.0;
+    for (std::size_t i = 0; i < coefficients.size(); ++i) {
+        y = y * x + coefficients[i];
+    }
+    return y;
+}
+
+void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view) {
+    std::vector<double> y(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        y[i] = polynomial_transfer(x[i], coefficients);
+    }
+    internal::copy_to_view(y, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

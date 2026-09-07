@@ -1,0 +1,1430 @@
+#!/usr/bin/env python3
+"""FRET-restrained rigid-body docking and screening -- the FPS run modes.
+
+A port of the run modes of FPS, the FRET Positioning and Screening toolkit
+(Kalinin *et al.*, *Nat. Methods* **9**, 1218, 2012), onto IMP. FPS is a
+Windows C# application; the physics it needs -- accessible volumes, the
+asymmetric chi-square, rigid bodies and excluded volume -- is native here, and
+this program is the door onto it.
+
+Four modes, all reading the same two things: one PDB per rigid body, and one
+labelling-and-distance file.
+
+    score    what a structure scores against the data, pair by pair
+    dock     move the bodies until they fit the data (minimisation)
+    refine   polish a pose that is already roughly right
+    screen   rank a library of structures, best first
+
+A **project** file holds all of that in one place -- the structures in body
+order, the labelling source, the selected distances, the five per-mode
+parameter blocks and the pose a run reached -- so a run is one flag,
+`--project`, rather than a twelve-flag command line. See `imp_bff_fps project
+--help`. Both project doors are read: the readable `.txt` twin FPS writes
+beside every `.bin` it saves, and this module's extended `.fps.json`.
+
+The labelling file is either an `fps.json` or the legacy **pair** of C# FPS
+text files -- a labelling-positions file and a distances file -- which are read
+directly, no conversion step. See `--positions/--distances`.
+
+Worked examples on the shipped data: `imp_bff_fps score --help`, and the
+"Examples" section of each mode. The example data is HIV-1 reverse
+transcriptase with its DNA primer/template (1R0A), which is FPS's own docking
+test case: 11 labelling positions, 20 measured distances.
+
+\b
+Author: Thomas-Otavio Peulen
+"""
+import json
+import math
+import os
+import sys
+
+import click
+
+import IMP
+import IMP.bff
+
+
+CONTEXT = {"help_option_names": ["-h", "--help"]}
+
+EXAMPLE_DIR = "$IMP/examples/bff/structure/HIV_RT"
+
+
+def _example(name):
+    """Path to a shipped example file, or the bare name when not installed."""
+    try:
+        return IMP.bff.get_example_path("structure/HIV_RT/" + name)
+    except Exception:
+        return os.path.join(EXAMPLE_DIR, name)
+
+
+def _labelling_file(fps_json, positions, distances):
+    """The labelling file to read, from either spelling.
+
+    fps.json is one file; the legacy C# FPS format is two, and
+    `IMP.bff.read_fps_json` takes the positions file and finds the distances
+    beside it. Passing the distances file explicitly is the honest spelling,
+    so it is accepted and checked rather than guessed at.
+    """
+    if fps_json and positions:
+        raise click.UsageError(
+            "give either --fps-json or --positions/--distances, not both")
+    if fps_json:
+        return fps_json
+    if not positions:
+        raise click.UsageError(
+            "no labelling file: pass --fps-json, or --positions with "
+            "--distances for the legacy C# FPS format")
+    if distances:
+        beside = os.path.join(os.path.dirname(os.path.abspath(positions)),
+                              "Distances.txt")
+        if os.path.abspath(distances) != beside:
+            raise click.UsageError(
+                "the legacy reader looks for the distances file beside the "
+                "positions file and named Distances.txt; %s is neither. Copy "
+                "it there, or convert once with `imp_bff_fps convert`."
+                % distances)
+    return positions
+
+
+def _load_project(path):
+    """Read a project and print what is wrong with it, if anything.
+
+    The problems are printed rather than raised: a run may deliberately point
+    a project at other structures with `-p`, so a stale path in the file is
+    not by itself a reason to refuse.
+    """
+    project = IMP.bff.read_fps_project(str(path))
+    for problem in project.get_problems():
+        click.echo("project: %s" % problem, err=True)
+    return project
+
+
+def _run_inputs(project, pdb, fps_json, positions, distances, score_set):
+    """The structures, the labelling file and the score set a run will use.
+
+    **An explicit flag always beats the project.** A project is a saved set of
+    defaults, not a lock: `-p` replaces the whole body list, `-j`/`--positions`
+    replaces the labelling source, and a non-empty `-c` replaces the score set.
+    """
+    if project is None:
+        return ([str(p) for p in pdb],
+                _labelling_file(fps_json, positions, distances),
+                score_set)
+    pdbs = [str(p) for p in pdb] or list(project.get_structure_paths())
+    if not pdbs:
+        raise click.UsageError(
+            "the project lists no structures; pass -p once per rigid body")
+    if fps_json or positions:
+        labelling = _labelling_file(fps_json, positions, distances)
+    else:
+        labelling = project.get_labelling_path()
+    return pdbs, labelling, (score_set or project.score_set)
+
+
+def _pick(explicit, fallback):
+    """An explicit flag, or the project's value when the flag was not given.
+
+    Every overridable flag defaults to `None` rather than to its documented
+    value, because click cannot otherwise tell "the user typed the default"
+    from "the user typed nothing" -- and the difference decides whether a
+    project's setting survives.
+    """
+    return fallback if explicit is None else explicit
+
+
+def _num(value, digits):
+    """A number for a table cell; `nan` and `inf` are printed, not hidden."""
+    if value is None:
+        return "nan"
+    if math.isnan(value):
+        return "nan"
+    if math.isinf(value):
+        return "inf" if value > 0 else "-inf"
+    return "%.*f" % (digits, value)
+
+
+def _report(result, score_set, show_pairs):
+    """Print a score and, optionally, the experiment-against-model table."""
+    if math.isinf(result.score):
+        click.echo(
+            "score: inf -- at least one distance has no model value. The "
+            "table below marks them; a position whose accessible volume came "
+            "out empty is the usual cause, and the volume says so when it is "
+            "computed.", err=True)
+    else:
+        click.echo("score (chi2): %.4f" % result.score)
+    click.echo("volumes: %d   distances: %d%s"
+               % (result.n_avs, result.n_distances,
+                  ("   score set: " + score_set) if score_set else ""))
+    if result.n_bonds:
+        # FPS's Ebond. It is a *subset* of the score, so it is printed as one
+        # -- "of which", never a second line to add up.
+        click.echo("bonds: %d   E_bond: %.4f (of the score above, not added "
+                   "to it)" % (result.n_bonds, result.e_bond))
+    if not show_pairs:
+        return
+    click.echo("")
+    click.echo("%-26s %8s %8s %8s %10s %6s" %
+               ("pair", "exp", "model", "dev", "chi2", "kind"))
+    for p in result.pairs:
+        # `Rmp` here rather than the file's own type means an end of the pair
+        # is a point (an XYZ or ATOM position) and there was no cloud to
+        # average over; `bond` means both ends are.
+        kind = "bond" if p.is_bond else p.distance_type
+        if math.isfinite(p.distance_model):
+            click.echo("%-26s %8.2f %8.2f %8.2f %10.3f %6s"
+                       % (p.name, p.distance_exp, p.distance_model,
+                          p.get_residual(), p.get_chi2(), kind))
+        else:
+            click.echo("%-26s %8.2f %8s %8s %10s %6s"
+                       % (p.name, p.distance_exp, "-", "-", "no volume", kind))
+
+
+@click.group(context_settings=CONTEXT)
+@click.version_option(message="IMP.bff FPS modes")
+def cli():
+    """FRET-restrained docking and screening (the FPS run modes).
+
+    \b
+    Quick start, on the shipped HIV-RT example:
+      imp_bff_fps score -p protein_1R0A.pdb -p dna.pdb -j hiv_rt.fps.json -c resolved
+      imp_bff_fps dock  -p protein_1R0A.pdb -p dna.pdb -j hiv_rt.fps.json -c resolved -o out
+
+    \b
+    Order matters: `-p` is repeated once per rigid body, and the order given is
+    the body order. `--fixed-body 0` (the default) holds the first still and
+    moves the rest, so the first structure is the frame everything else is
+    reported in.
+    """
+
+
+# --------------------------------------------------------------------------
+# score
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order. "
+                   "Required unless --project supplies them.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file (fps.json).")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt (instead of -j).")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS distances .txt, beside the positions file.")
+@click.option("-P", "--project", "project_path",
+              type=click.Path(exists=True, dir_okay=False),
+              help="A project file (.fps.json, or FPS's legacy project .txt) "
+                   "supplying the structures, the labelling source, the score "
+                   "set and the mode's parameters. Any flag given explicitly "
+                   "wins over it.")
+@click.option("-c", "--score-set", default="", show_default="every distance",
+              help="Named score set from the file's chi2 section.")
+@click.option("-o", "--output-csv", type=click.Path(dir_okay=False),
+              help="Write the per-pair table here as CSV.")
+@click.option("--full-av/--mean-position", default=True, show_default=True,
+              help="Rebuild both volumes per evaluation, or score the "
+                   "separation of their mean positions (faster, approximate).")
+@click.option("--pairs/--no-pairs", default=True, show_default=True,
+              help="Print the experiment-against-model table.")
+@click.option("--clash-radii-source",
+              type=click.Choice(["imp", "olga"], case_sensitive=False),
+              default=None, show_default="imp, or the project's",
+              help="Which van der Waals radii the EXCLUDED-VOLUME part of the "
+                   "score measures overlap by. 'imp' is each particle's own "
+                   "united-atom radius; 'olga' is the Bondi-scale table "
+                   "(C 1.70) FPS uses -- FPS's hard sphere. The clash term "
+                   "here is all-atom, so no --no-coarse-clash is needed.")
+@click.option("--clash-radii-scale", default=None, type=float,
+              show_default="1.0, or the project's",
+              help="Multiply the clash radii by this; composes with "
+                   "--clash-radii-source.")
+def score(pdb, fps_json, positions, distances, project_path, score_set,
+          output_csv, full_av, pairs, clash_radii_source, clash_radii_scale):
+    """What a structure scores against the data, pair by pair.
+
+    The first thing to run: it says whether the labelling file resolves against
+    the structures at all, how many volumes were built, and which measured
+    distance the model misses and by how much.
+
+    \b
+    Examples
+    --------
+    Score the shipped HIV-RT complex against its 18 usable distances:
+
+    \b
+      imp_bff_fps score \\
+          -p $IMP/examples/bff/structure/HIV_RT/protein_1R0A.pdb \\
+          -p $IMP/examples/bff/structure/HIV_RT/dna.pdb \\
+          -j $IMP/examples/bff/structure/HIV_RT/hiv_rt.fps.json \\
+          -c resolved
+
+    \b
+    The same, straight from the legacy C# FPS files, no conversion step:
+
+    \b
+      imp_bff_fps score -p protein_1R0A.pdb -p dna.pdb \\
+          --positions LabelingPositions.txt --distances Distances.txt
+
+    \b
+    Score set `all` includes the two distances of `p66_K287C`, whose volume is
+    empty in the assembled complex -- the site is buried at the protein-DNA
+    interface. Those pairs report "no volume" and the total is `inf`, which is
+    the honest answer rather than a total over whatever happened to work.
+
+    \b
+    How big is an atom
+    ------------------
+    The score has two halves: the FRET restraints and an excluded-volume term.
+    The second one measures overlap with the radii `read_pdb` gave the atoms --
+    IMP's CHARMM-derived **united-atom** set, which carries implicit hydrogens
+    (carbon 1.85-2.275 A). FPS uses element-keyed **Bondi** radii (carbon
+    1.70). `--clash-radii-source olga` selects the Bondi-scale table; the
+    restraint half does not move, only the clash half:
+
+    \b
+      imp_bff_fps score -p $E/protein_1R0A.pdb -p $E/dna.pdb \\
+          -j $E/hiv_rt.fps.json -c resolved --clash-radii-source olga
+
+    \b
+    On that command (measured):
+
+    \b
+      clash radii     score    of which clash   score - clash
+      imp (default)  59.0404          24.8005         34.2399
+      imp x0.90      38.8090           4.5691         34.2399
+      olga           35.6291           1.3893         34.2399
+
+    \b
+    Two thirds of the shipped example's score is the protein-DNA interface read
+    through radii the clash constant was not calibrated for. `score - clash` is
+    identical in every row, which is the check that the flag reaches the clash
+    term and nothing else -- the accessible volumes keep their own
+    `radii_source`.
+
+    \b
+    Positions that are a point, not a volume
+    ----------------------------------------
+    Two `simulation_type` values carry no accessible volume:
+
+    \b
+      XYZ    a mean dye position measured once, in some other structure's
+             frame. Give it `reference_atoms` -- the atoms that define that
+             frame -- and it is Kabsch-fitted onto whatever structure is being
+             scored and the coordinate is carried through the fit. Without
+             them the coordinate is used exactly as written, which is only
+             right if the file was made against this structure.
+      ATOM   an atom of the structure itself: a crosslink end, an anchor.
+
+    \b
+    **A distance with either kind of end is scored as R_mp**, whatever its
+    `distance_type` says -- there is no cloud at that end for <R_DA> to average
+    over. The table's `kind` column shows `Rmp` for those rows, so what was
+    scored is visible rather than assumed.
+    """
+    project = _load_project(project_path) if project_path else None
+    pdbs, labelling, score_set = _run_inputs(project, pdb, fps_json, positions,
+                                            distances, score_set)
+    sigma_da = 6.0 if project is None else project.sigma_da
+    source = str(_pick(clash_radii_source,
+                       "imp" if project is None
+                       else project.clash_radii_source)).lower()
+    scale = float(_pick(clash_radii_scale,
+                        1.0 if project is None
+                        else project.clash_radii_scale))
+    result = IMP.bff.score_structures(
+        pdbs, labelling, score_set, not full_av, sigma_da, output_csv or "",
+        source, scale)
+    _report(result, score_set, pairs)
+    if source != "imp" or scale != 1.0:
+        # The clash term is part of `score`, so a reader comparing two runs
+        # has to be told the spheres were not the same size.
+        click.echo("clash radii: %s x %g" % (source, scale))
+    if output_csv:
+        click.echo("wrote %s" % output_csv)
+
+
+# --------------------------------------------------------------------------
+# dock
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order. "
+                   "Required unless --project supplies them.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file (fps.json).")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt (instead of -j).")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS distances .txt, beside the positions file.")
+@click.option("-P", "--project", "project_path",
+              type=click.Path(exists=True, dir_okay=False),
+              help="A project file (.fps.json, or FPS's legacy project .txt) "
+                   "supplying the structures, the labelling source, the score "
+                   "set and this mode's parameter block. Any flag given "
+                   "explicitly wins over it.")
+@click.option("-o", "--output-dir", required=True,
+              type=click.Path(file_okay=False),
+              help="Where docked.pdb, scores.csv and convergence.csv go.")
+@click.option("--save-project", type=click.Path(dir_okay=False),
+              help="Write the project back here with the docked pose in it, "
+                   "so the run can be continued (`dock --project` resumes "
+                   "from a project's stored pose).")
+@click.option("-c", "--score-set", default="", show_default="every distance",
+              help="Named score set from the file's chi2 section.")
+@click.option("-n", "--iterations", default=None, type=int,
+              show_default="500, or the project's Dock block",
+              help="Minimiser iteration budget.")
+@click.option("--shuffle", default=None, type=float,
+              show_default="10.0, or the project's",
+              help="Initial random displacement of the mobile bodies, A; "
+                   "0 starts from the input pose.")
+@click.option("--fixed-body", default=None, type=int,
+              show_default="0, or the project's",
+              help="body_id held still; the others move.")
+@click.option("--ev-weight", default=None, type=float,
+              show_default="1.0, or the project's",
+              help="Weight of the excluded-volume (clash) term.")
+@click.option("--sigma-da", default=None, type=float,
+              show_default="6.0, or the project's",
+              help="Width of the mean-position transfer function, A.")
+@click.option("--refine-cycles", default=None, type=int,
+              show_default="0, or the project's",
+              help="FPS-style refinement cycles after docking: re-sample the "
+                   "volumes in the docked context and minimise again.")
+@click.option("--seed", default=None, type=int,
+              help="Seed for the random shuffle; makes a run reproducible.")
+@click.option("--optimize-selected",
+              type=click.Choice(["selected", "all", "selected-then-all"],
+                                case_sensitive=False),
+              default=None,
+              show_default="selected, or the project's Dock block",
+              help="Which DISTANCES contribute: the score set, every distance "
+                   "in the file, or the score set then everything (two phases "
+                   "of half the budget each). Clashes are never gated.")
+@click.option("--max-force", default=None, type=float,
+              show_default="400.0, or the project's Dock block",
+              help="FPS MaxForce: past MaxForce*err^2/2 a restraint goes "
+                   "linear instead of parabolic. 0 is a pure harmonic.")
+@click.option("--clash-tolerance", default=None, type=float,
+              show_default="1.0, or the project's Dock block",
+              help="FPS ClashTolerance, A: the overlap costing one chi2 unit "
+                   "(k = 2/tolerance^2). 0 keeps IMP's own k = 1.")
+@click.option("--coarse-clash/--no-coarse-clash", "coarse_clash",
+              default=None,
+              show_default="coarse, or the project's",
+              help="Detect clashes on one 2.5 A bead per residue instead of "
+                   "every atom (about 3x cheaper per step). Must be OFF for "
+                   "--clash-radii-source / --clash-radii-scale: a bead is not "
+                   "an atom.")
+@click.option("--clash-radii-source",
+              type=click.Choice(["imp", "olga"], case_sensitive=False),
+              default=None, show_default="imp, or the project's",
+              help="Which van der Waals radii the EXCLUDED-VOLUME term "
+                   "measures overlap by. 'imp' is each particle's own "
+                   "united-atom radius (implicit hydrogens, C 1.85-2.275 A); "
+                   "'olga' is the Bondi-scale table (C 1.70) FPS's "
+                   "ClashTolerance was calibrated against -- FPS's hard "
+                   "sphere. Needs --no-coarse-clash.")
+@click.option("--clash-radii-scale", default=None, type=float,
+              show_default="1.0, or the project's",
+              help="Multiply the clash radii by this. Composes with "
+                   "--clash-radii-source: the source picks the table, the "
+                   "scale multiplies it. Needs --no-coarse-clash.")
+@click.option("--resume/--no-resume", default=True, show_default=True,
+              help="Start from the pose stored in --project, when it has one.")
+def dock(pdb, fps_json, positions, distances, project_path, output_dir,
+         save_project, score_set, iterations, shuffle, fixed_body, ev_weight,
+         sigma_da, refine_cycles, seed, optimize_selected, max_force,
+         clash_tolerance, coarse_clash, clash_radii_source, clash_radii_scale,
+         resume):
+    """Move the bodies until they fit the data (minimisation).
+
+    Each PDB becomes one rigid body. The bodies are shuffled, then driven by
+    conjugate gradients under the measured distances and an excluded-volume
+    term until the score stops falling. This is FPS's approach; what differs is
+    the optimiser underneath, so **scores are comparable with FPS and
+    coordinates are not**.
+
+    Writes `docked.pdb`, `scores.csv` (the per-pair table) and
+    `convergence.csv` (score against iteration, written as the run goes, so a
+    plot can watch it).
+
+    \b
+    Examples
+    --------
+    Dock the DNA against the protein on the shipped example:
+
+    \b
+      imp_bff_fps dock \\
+          -p $IMP/examples/bff/structure/HIV_RT/protein_1R0A.pdb \\
+          -p $IMP/examples/bff/structure/HIV_RT/dna.pdb \\
+          -j $IMP/examples/bff/structure/HIV_RT/hiv_rt.fps.json \\
+          -c resolved -o dock_out --seed 1
+
+    \b
+    Start from the deposited pose instead of a random one, which is what to do
+    when the complex is roughly right already and only needs settling:
+
+    \b
+      imp_bff_fps dock ... --shuffle 0 -o dock_out
+
+    \b
+    A docking run is not deterministic unless `--seed` is given, and a single
+    run is one local minimum. Repeat it with different seeds and compare the
+    scores before believing any one pose.
+
+    \b
+    Store the run and continue it
+    -----------------------------
+    `--project` supplies the structures, the labelling file, the score set and
+    the Dock parameter block; `--save-project` writes them back with the
+    docked pose, and a second `dock --project` on that file **resumes from
+    that pose** (there is no shuffle on a resume). What is saved is what the
+    run did, not what the project said, so a flag typed on the first run is
+    still in force on the second:
+
+    \b
+      imp_bff_fps dock --project hiv_rt.project.fps.json -o out1 \
+          --shuffle 0 --seed 1 --save-project after1.fps.json
+      imp_bff_fps dock --project after1.fps.json -o out2 \
+          --save-project after2.fps.json
+
+    \b
+    `--no-resume` ignores a stored pose and starts over from the input
+    structures.
+
+    \b
+    **A resumed run does not start at the score the last one ended on, and
+    that is not a bug.** During a dock the volumes are frozen: each one is
+    computed once, at the input pose, and its mean position rides on the rigid
+    body as a proxy. Resuming re-samples every volume **in the pose it is
+    resuming from**, which is the first honest look at what the docked complex
+    does to the linkers. On the shipped HIV-RT example, `-c resolved
+    --shuffle 0 --seed 1 -n 30` (measured, 2026-09-01):
+
+    \b
+      first run, at the input pose (frozen volumes)   41.8586
+      first run, at the end                           30.6265
+      resumed at that same pose, volumes recomputed   39.0207
+
+    \b
+    The gap is the size of the frozen-volume approximation at that pose, and
+    it is the number to look at before believing a docked score. `score` on
+    the docked structure gives a third number again -- it computes the full
+    <R_DA>_E over both clouds rather than a transfer function of the mean
+    positions.
+
+    \b
+    The FPS protocol knobs
+    ----------------------
+    Three settings that change the answer rather than decorating it. The
+    defaults are FPS's own docking defaults (`ProjectData.cs:67-81`).
+
+    \b
+      --optimize-selected  which DISTANCES contribute. In FPS "selected" is a
+                           per-distance checkbox; here it is the score set, so
+                           `all` scores every distance in the file and
+                           `selected-then-all` runs the score set for half the
+                           budget and then everything. **Clashes are always
+                           global** -- FPS never gates them, and neither does
+                           this.
+      --max-force          the restraint is a parabola only out to
+                           MaxForce*err^2/2 and is straight beyond it, so one
+                           grossly violated distance cannot dominate. At 400
+                           and an error of 3 A the knee is at 1800 A and the
+                           cap is inert; at an error of 0.1 A it is at 2 A and
+                           it bites. `--max-force 0` is a pure harmonic.
+      --clash-tolerance    the overlap in angstrom that costs one chi2 unit.
+                           1.0 is FPS's docking value, 0.5 its refinement one
+                           -- four times harder per angstrom.
+
+    \b
+    On the shipped HIV-RT example, `-c resolved --shuffle 0 -n 200`
+    (measured, 2026-08-31):
+
+    \b
+      --optimize-selected selected           score 30.5079   10 volumes, 18 distances
+      --optimize-selected all                score 33.1715   11 volumes, 20 distances
+      --optimize-selected selected-then-all  score 33.4733   11 volumes, 20 distances
+
+    \b
+    The two extra distances are `p66_K287C_p_1bp` and `p66_K287C_p_19bp`, the
+    ones the `resolved` set leaves out -- so `all` and `selected` are not two
+    attempts at the same number, they are scores over different data. Compare
+    modes only through the same score set, or through `scores.csv` row by row.
+
+    \b
+    The hard sphere: which radii the clash term measures by
+    -------------------------------------------------------
+    `--clash-tolerance` says what an angstrom of overlap costs. It does not say
+    **how big an atom is**, and FPS and IMP do not agree about that:
+
+    \b
+      FPS   element-keyed Bondi radii (vdW.txt): carbon 1.70 A.
+      IMP   united-atom radii assigned by read_pdb from the CHARMM type,
+            carrying implicit hydrogens: carbon 1.85-2.275 A.
+
+    \b
+    `k_clash = 2/ClashTolerance^2` was calibrated against the first and is
+    applied here to the second, so the same interface reads as a far worse
+    clash. Measured statically at the input pose over HIV-RT's protein-DNA
+    interface at k = 8 (ClashTolerance 0.5, the error-estimation value):
+
+    \b
+      radii              overlapping pairs   total overlap   energy
+      imp (default)                    268         90.49 A   198.40
+      olga (Bondi scale)                30          7.59 A    11.11
+
+    \b
+    A factor of **17.9**. `--clash-radii-source olga` is FPS's hard sphere;
+    `--clash-radii-scale` shrinks whatever the source gives. Both need
+    `--no-coarse-clash`, because with the coarse term the clash spheres are
+    one 2.5 A bead per residue and a per-atom radii table has nothing to say
+    about a residue -- the program refuses the combination rather than
+    approximating it.
+
+    \b
+    **The scale is not a substitute for the source.** Bisected over that same
+    interface, the IMP-radii scale that reproduces Olga's pair count is
+    0.8206, its total overlap 0.8386, and its energy 0.8476 -- three answers,
+    and at the first the energy is 5.45 against Olga's 11.11. IMP's ratio to
+    Bondi is per-element (C 0.808, N 0.838, P 0.841, O 0.889, S 0.900 here)
+    and IMP's carbon alone spans 1.70-2.275 A where Bondi's is a single 1.70,
+    so one factor cannot match the contact distribution, only one number of
+    it. Use the scale to loosen a clash term, and the source to reproduce
+    FPS.
+
+    \b
+    Nothing is written on the structure's own radii: a substituted set is
+    carried by shadow spheres. The accessible volumes still inflate their
+    obstacles by the radii the particles carry, which is what keeps this flag
+    a statement about the clash term alone.
+
+    \b
+    A worked pair, on the shipped example (measured):
+
+    \b
+      imp_bff_fps dock -p $E/protein_1R0A.pdb -p $E/dna.pdb \\
+          -j $E/hiv_rt.fps.json -c resolved -o out -n 20 --shuffle 0 --seed 1 \\
+          --no-coarse-clash --clash-tolerance 0.5 [--clash-radii-source olga]
+
+    \b
+      default (imp radii)   score 144.0617
+      --clash-radii-source olga   score  34.7498
+
+    \b
+    The per-pair table is nearly the same in both -- `p51_E194C_p_10bp` reads
+    60.14 against 59.91 A -- so the 109 units of difference are the excluded
+    volume, not the fit.
+
+    \b
+    What it is worth, measured. On HIV-RT `resolved` with FPS's error-estimation
+    settings (ClashTolerance 0.5, --no-coarse-clash, 60 iterations) the parent
+    score and the bootstrap spread `imp_bff_fps_export errors` reports:
+
+    \b
+      clash radii        parent   of which clash   RMSD spread (A)
+      imp x1.00 (default) 150.69          110.98   0.0000 +- 0.0000
+      olga x1.00           35.88            1.93   0.0689 +- 0.0155
+      imp x0.85            43.29            2.71   0.0983 +- 0.0365
+      imp x0.80            39.96            0.86   0.4040 +- 0.0953
+      ev_weight 0          24.34            0.00   2.1297 +- 1.4584
+
+    \b
+    The default puts 74 % of the score into the clash term and the bootstrap
+    then reports 0.000 A, correctly -- the pose is held by geometry, not by the
+    data. FPS's hard sphere takes that to 5 % and the spread stops being
+    identically zero. **It does not make the run data-driven**: 0.069 A is
+    still thirty times below what the same run gives with no clash term at all.
+    Read `parent_e_clash` before believing any spread.
+
+    \b
+    Bond restraints
+    ---------------
+    A distance whose two ends are both `ATOM` positions -- plain atoms of the
+    structure, no dye and no volume -- is a **bond**: a crosslink, or a
+    covalent tie holding two subunits together. Its two anchor atoms are
+    excluded from clash detection (their radii drop to 0.4 A) and its energy is
+    reported separately as `E_bond`, which is **part of the score, not an
+    addition to it**. The per-pair table marks such rows `bond`.
+    """
+    project = _load_project(project_path) if project_path else None
+    pdbs, labelling, score_set = _run_inputs(project, pdb, fps_json, positions,
+                                             distances, score_set)
+    if seed is not None:
+        IMP.random_number_generator.seed(seed)
+    # The project's Dock block is the starting point; every flag that was
+    # actually typed overrides it. Without a project this is exactly
+    # `DockingParameters()`, i.e. the documented defaults, unchanged.
+    params = (project.get_docking_parameters("Dock") if project
+              else IMP.bff.DockingParameters())
+    params.n_frames = int(_pick(iterations, params.n_frames))
+    params.score_set = score_set
+    params.shuffle_max_translation = float(
+        _pick(shuffle, params.shuffle_max_translation))
+    params.fixed_body = int(_pick(fixed_body, params.fixed_body))
+    params.ev_weight = float(_pick(ev_weight, params.ev_weight))
+    params.sigma_da = float(_pick(sigma_da, params.sigma_da))
+    params.refine_av_cycles = int(
+        _pick(refine_cycles, params.refine_av_cycles))
+    params.optimize_selected = _pick(optimize_selected,
+                                     params.optimize_selected)
+    params.max_force = float(_pick(max_force, params.max_force))
+    params.clash_tolerance = float(
+        _pick(clash_tolerance, params.clash_tolerance))
+    params.coarse_clash = bool(_pick(coarse_clash, params.coarse_clash))
+    params.clash_radii_source = str(
+        _pick(clash_radii_source, params.clash_radii_source)).lower()
+    params.clash_radii_scale = float(
+        _pick(clash_radii_scale, params.clash_radii_scale))
+    # `dock_minimize` refuses the combination too, but it does so after the
+    # output directory exists; saying it here keeps a typo from leaving a
+    # half-made run behind.
+    if params.coarse_clash and (params.clash_radii_source != "imp"
+                                or params.clash_radii_scale != 1.0):
+        raise click.UsageError(
+            "--clash-radii-source/--clash-radii-scale describe atoms and the "
+            "coarse clash term is one bead per residue. Add --no-coarse-clash.")
+    initial_poses = ""
+    if project is not None and resume and project.poses not in ("", "[]"):
+        initial_poses = project.poses
+        click.echo("resuming from the pose stored in %s" % project_path)
+    os.makedirs(output_dir, exist_ok=True)
+    result = IMP.bff.dock_minimize(pdbs, labelling, output_dir, params,
+                                   None, initial_poses)
+    _report(result, score_set, True)
+    click.echo("")
+    click.echo("wrote %s" % os.path.join(output_dir, "docked.pdb"))
+    click.echo("      %s" % os.path.join(output_dir, "scores.csv"))
+    click.echo("      %s" % os.path.join(output_dir, "convergence.csv"))
+    if save_project:
+        # What is saved is what the run *did*, not what the project said: the
+        # flags that were typed have already been folded into `params`, and a
+        # continued run has to start from the same settings or it is a
+        # different experiment wearing the same file name.
+        updated = project if project is not None else IMP.bff.FPSProject()
+        updated.mode = "Dock"
+        updated.score_set = score_set
+        updated.poses = result.poses
+        updated.fixed_body = params.fixed_body
+        updated.ev_weight = params.ev_weight
+        updated.sigma_da = params.sigma_da
+        updated.shuffle = params.shuffle_max_translation
+        updated.refine_av_cycles = params.refine_av_cycles
+        updated.coarse_clash = params.coarse_clash
+        updated.clash_radii_source = params.clash_radii_source
+        updated.clash_radii_scale = params.clash_radii_scale
+        block = updated.get_parameters("Dock")
+        block.max_force = params.max_force
+        block.clash_tolerance = params.clash_tolerance
+        block.optimize_selected = params.optimize_selected
+        block.iterations = params.n_frames
+        updated.set_parameters("Dock", block)
+        _write_project(updated, save_project, pdbs, labelling)
+        click.echo("      %s (the docked pose, ready to continue)"
+                   % save_project)
+
+
+# --------------------------------------------------------------------------
+# refine
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order. "
+                   "Required unless --project supplies them.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file (fps.json).")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt (instead of -j).")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS distances .txt, beside the positions file.")
+@click.option("-P", "--project", "project_path",
+              type=click.Path(exists=True, dir_okay=False),
+              help="A project file (.fps.json, or FPS's legacy project .txt) "
+                   "supplying the structures, the labelling source, the score "
+                   "set and this mode's parameter block. Any flag given "
+                   "explicitly wins over it.")
+@click.option("-o", "--output-dir", required=True,
+              type=click.Path(file_okay=False), help="Where refined.pdb goes.")
+@click.option("-c", "--score-set", default="", show_default="every distance",
+              help="Named score set from the file's chi2 section.")
+@click.option("-n", "--steps", default=None, type=int,
+              show_default="500, or the project's Refine block",
+              help="Minimiser iteration budget.")
+@click.option("--ev-weight", default=None, type=float,
+              show_default="1.0, or the project's",
+              help="Weight of the excluded-volume (clash) term.")
+def refine(pdb, fps_json, positions, distances, project_path, output_dir,
+           score_set, steps, ev_weight):
+    """Polish a pose that is already roughly right.
+
+    No shuffle, and the volumes' own mean positions are scored rather than
+    proxies riding on the rigid bodies -- the local settle after `dock`, or
+    after a pose has come from somewhere else entirely (a crystal structure, a
+    prediction, a previous run's `docked.pdb`).
+
+    \b
+    Examples
+    --------
+    Settle the deposited HIV-RT complex against the data:
+
+    \b
+      imp_bff_fps refine \\
+          -p $IMP/examples/bff/structure/HIV_RT/protein_1R0A.pdb \\
+          -p $IMP/examples/bff/structure/HIV_RT/dna.pdb \\
+          -j $IMP/examples/bff/structure/HIV_RT/hiv_rt.fps.json \\
+          -c resolved -o refine_out
+    """
+    project = _load_project(project_path) if project_path else None
+    pdbs, labelling, score_set = _run_inputs(project, pdb, fps_json, positions,
+                                             distances, score_set)
+    # FPS's Refine block, not its Dock block: 25x the MaxForce and half the
+    # ClashTolerance. `refine_docking` takes only two of those knobs, so what
+    # crosses over here is the iteration budget and the clash weight.
+    steps = int(_pick(steps, project.refine.iterations if project else 500))
+    ev_weight = float(_pick(ev_weight, project.ev_weight if project else 1.0))
+    os.makedirs(output_dir, exist_ok=True)
+    result = IMP.bff.refine_docking(pdbs, labelling, output_dir, score_set,
+                                    steps, ev_weight)
+    _report(result, score_set, True)
+    click.echo("")
+    click.echo("wrote %s" % os.path.join(output_dir, "refined.pdb"))
+
+
+# --------------------------------------------------------------------------
+# screen
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("-s", "--structure", "structures", multiple=True, required=True,
+              type=click.Path(exists=True),
+              help="A structure, or a directory of *.pdb; repeat.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file (fps.json).")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt (instead of -j).")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS distances .txt, beside the positions file.")
+@click.option("-P", "--project", "project_path",
+              type=click.Path(exists=True, dir_okay=False),
+              help="A project file (.fps.json, or FPS's legacy project .txt) "
+                   "supplying the structures, the labelling source, the score "
+                   "set and this mode's parameter block. Any flag given "
+                   "explicitly wins over it.")
+@click.option("-c", "--score-set", default="", show_default="every distance",
+              help="Named score set from the file's chi2 section.")
+@click.option("-o", "--output-csv", type=click.Path(dir_okay=False),
+              help="Write the ranked table with its diagnostic columns here, "
+                   "best first.")
+@click.option("-n", "--top", default=10, show_default=True,
+              help="How many of the best to print; 0 prints all.")
+@click.option("--pairs-csv", type=click.Path(dir_okay=False),
+              help="Write every structure's experiment-against-model rows "
+                   "here: one row per structure and distance.")
+def screen(structures, fps_json, positions, distances, project_path,
+           score_set, output_csv, top, pairs_csv):
+    """Rank a library of structures against the data, best first.
+
+    FRET screening: the complementary question to docking. Rather than moving
+    anything, every candidate structure is scored as it stands and the library
+    is ordered.
+
+    Each structure carries FPS's screening diagnostics beside its score:
+
+    \b
+      chi2_r     chi-square per scored distance (FPS's E) -- no clash term,
+                 so it is the column to compare between structures
+      1s 2s 3s   distances off by more than 1, 2, 3 times the error on the
+                 side they are off to (too long: error_pos; too short:
+                 error_neg). The counts nest.
+      inv        distances with no model value at all: an accessible volume
+                 that came out empty at one end
+      refRMSD    Kabsch fit of the labelling positions' `reference_atoms`
+                 onto this structure, A -- how far a fixed (XYZ) position had
+                 to be carried to land here. 0 when the file declares none.
+
+    \b
+    A fixed (`XYZ`) position is not just reported on, it is **scored**: the
+    frame is fitted onto each library structure, the coordinate is transported
+    through the fit, and every distance touching it enters chi2 as R_mp. Read
+    `refRMSD` beside the score for those runs -- a fixed position carried onto
+    a structure its frame does not fit is worth exactly as much as that fit.
+
+    A structure that cannot be scored is kept in the table with a NaN rather
+    than dropped -- a table with a row missing looks like a smaller experiment.
+    **Read the NaNs**: a table that is entirely NaN is not a library of bad
+    models, it is a broken run.
+
+    \b
+    Examples
+    --------
+    Rank two models of T4 lysozyme against the 33-pair C2 state:
+
+    \b
+      imp_bff_fps screen \\
+          -s $IMP/examples/bff/structure/T4L/3GUN.pdb \\
+          -s $IMP/examples/bff/structure/T4L/3GUN_faspr_port.pdb \\
+          -j $IMP/examples/bff/structure/T4L/fret.fps.json \\
+          -c chi2_C2_33p -o ranked.csv
+
+    \b
+    which prints (measured, 2026-08-31):
+
+    \b
+             score     chi2_r   1s  2s  3s   inv   refRMSD  structure
+           22.3165     1.3525   12   3   0     0     0.000  3GUN_faspr_port.pdb
+           22.5277     1.3653   10   3   0     0     0.000  3GUN.pdb
+
+    \b
+    -- the two are a hair apart in chi2_r and disagree on which pairs they
+    miss, which is exactly what the sigma columns are for.
+
+    \b
+    Rank every PDB in a directory and keep the per-pair rows, which is what
+    says *which* restraint the runners-up miss:
+
+    \b
+      imp_bff_fps screen -s ./library -j fret.fps.json -c chi2_C2_33p \\
+          -o ranked.csv --pairs-csv pairs.csv
+
+    \b
+    Screening scores each structure **on its own**, so a labelling file whose
+    positions span two rigid bodies (the HIV-RT example) has nothing to screen
+    -- score or dock that one instead.
+    """
+    # A screen brings its own library with `-s`, so a project supplies only
+    # the labelling source and the score set here -- its `structures` are the
+    # rigid bodies of a docking, which is a different list.
+    project = _load_project(project_path) if project_path else None
+    if project is not None:
+        if not (fps_json or positions):
+            labelling = project.get_labelling_path()
+        else:
+            labelling = _labelling_file(fps_json, positions, distances)
+        score_set = score_set or project.score_set
+    else:
+        labelling = _labelling_file(fps_json, positions, distances)
+    ranked = list(IMP.bff.screen_structures(
+        [str(s) for s in structures], labelling, score_set,
+        output_csv or "", False))
+    n_nan = sum(1 for e in ranked if not math.isfinite(e.score))
+    click.echo("%d structures scored%s" %
+               (len(ranked),
+                (", %d without a score" % n_nan) if n_nan else ""))
+    if n_nan == len(ranked) and ranked:
+        click.echo("every structure scored NaN -- that is a broken run, not a "
+                   "bad library. Check that the labelling file resolves "
+                   "against these structures (`imp_bff_fps score` on one).",
+                   err=True)
+    click.echo("")
+    click.echo("%12s %10s %4s %3s %3s %5s %9s  %s" %
+               ("score", "chi2_r", "1s", "2s", "3s", "inv", "refRMSD",
+                "structure"))
+    for entry in (ranked if top == 0 else ranked[:top]):
+        click.echo("%12s %10s %4d %3d %3d %5d %9s  %s" %
+                   (_num(entry.score, 4), _num(entry.chi2_r, 4),
+                    entry.sigma1, entry.sigma2, entry.sigma3, entry.invalid_r,
+                    _num(entry.ref_rmsd, 3), entry.path))
+    if pairs_csv:
+        IMP.bff.write_screening_pairs_csv(pairs_csv, ranked)
+    if output_csv:
+        click.echo("")
+        click.echo("wrote %s" % output_csv)
+    if pairs_csv:
+        click.echo("wrote %s" % pairs_csv)
+
+
+# --------------------------------------------------------------------------
+# convert
+# --------------------------------------------------------------------------
+@cli.command(context_settings=CONTEXT)
+@click.option("--positions", required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt.")
+@click.option("-p", "--pdb", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Structures the atom serials are resolved against; "
+                   "repeat. Without any, the positions file's own directory "
+                   "is scanned for *.pdb.")
+@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False),
+              help="Where the fps.json goes.")
+def convert(positions, pdb, output):
+    """Read the legacy C# FPS files and write one fps.json.
+
+    Every mode reads the legacy pair directly, so this is not a required step
+    -- it is for when the file should be kept, edited or shared. The legacy
+    formats are **read only** here, deliberately: a decade of measurements live
+    in them and they stay readable, but nothing should produce another one.
+
+    A legacy position names its site by **atom serial number**, which means
+    nothing without the structure it was numbered in; the serial is resolved
+    to chain, residue and atom name against the PDBs given.
+
+    \b
+    All five of FPS's position types that mean something are read: `AV1`,
+    `AV3`, `XYZ` and `ATOM` (`AVS` and `EDF` are spellings FPS parses and never
+    computes). `ATOM` lines -- `Name Molecule D/A ATOM <serial>`, the ends of a
+    crosslink -- were being dropped as an unrecognised dialect until
+    2026-08-31, so a converted file had fewer restraints than the original and
+    said nothing about it.
+
+    \b
+    Examples
+    --------
+    \b
+      imp_bff_fps convert --positions LabelingPositions.txt \\
+          -p protein_1R0A.pdb -p dna.pdb -o hiv_rt.fps.json
+    """
+    doc = IMP.bff.read_old_lps_txt(positions, [str(p) for p in pdb])
+    beside = os.path.join(os.path.dirname(os.path.abspath(positions)),
+                          "Distances.txt")
+    distances = (IMP.bff.read_old_distances_txt(beside)
+                 if os.path.exists(beside) else "{}")
+    IMP.bff.write_fps_json(output, doc.positions, distances,
+                           doc.score_sets, doc.extra, True)
+    click.echo("molecules: %s" % ", ".join(doc.molecules))
+    click.echo("positions: %d   distances: %d"
+               % (len(json.loads(doc.positions)), len(json.loads(distances))))
+    click.echo("wrote %s" % output)
+    if not os.path.exists(beside):
+        click.echo("no Distances.txt beside %s; wrote positions only"
+                   % positions, err=True)
+
+
+# --------------------------------------------------------------------------
+# project
+# --------------------------------------------------------------------------
+def _portable(path, out_dir):
+    """A path as a project should store it: relative when it stays inside.
+
+    Relative when the file sits under the project's own directory, absolute
+    otherwise. A relative path that climbs out with `..` is portable only
+    while the two directories keep their relationship, and a project is
+    exactly the thing people copy somewhere else.
+    """
+    if not path:
+        return ""
+    relative = os.path.relpath(os.path.abspath(path),
+                               os.path.abspath(out_dir or "."))
+    if not relative.startswith(".."):
+        return relative
+    return os.path.abspath(path)
+
+
+def _write_project(project, out_path, structures, labelling,
+                   self_contained=True):
+    """Write a project file, with its paths stored the way it will be read.
+
+    `self_contained` copies the labelling into the project itself, so the file
+    is one path for a whole run; otherwise the project points at the labelling
+    source it was given. A legacy positions/distances pair is stored as the
+    pair -- converting it would be writing a format this program deliberately
+    only reads.
+    """
+    out_dir = os.path.dirname(os.path.abspath(out_path))
+    project.structures = [_portable(s, out_dir) for s in structures]
+    positions_json = distances_json = score_sets_json = "{}"
+    if self_contained:
+        document = IMP.bff.read_fps_json(labelling)
+        positions_json = document.positions
+        distances_json = document.distances
+        score_sets_json = document.score_sets
+        project.labelling_json = ""
+        project.positions_path = ""
+        project.distances_path = ""
+    elif labelling.lower().endswith(".json"):
+        project.labelling_json = _portable(labelling, out_dir)
+        project.positions_path = ""
+        project.distances_path = ""
+    else:
+        project.labelling_json = ""
+        project.positions_path = _portable(labelling, out_dir)
+        beside = os.path.join(os.path.dirname(os.path.abspath(labelling)),
+                              "Distances.txt")
+        project.distances_path = (_portable(beside, out_dir)
+                                  if os.path.exists(beside) else "")
+    IMP.bff.write_fps_project(out_path, project, positions_json,
+                              distances_json, score_sets_json, "{}", True)
+    return project
+
+
+@cli.group(context_settings=CONTEXT)
+def project():
+    """The file that binds a run together: init, show, convert.
+
+    A project holds the structures in body order, the labelling source, the
+    selected distances, the five per-mode parameter blocks (FPS's own shipped
+    values), the AV globals and the pose a run reached. Every run mode takes
+    `--project` in place of the pile of flags, and `dock --save-project` writes
+    the docked pose back, so a run can be stored and continued.
+
+    \b
+    Two formats are read and one is written:
+
+    \b
+      *.fps.json   this module's own -- an fps.json with a `Project` section
+                   beside `Positions`, `Distances` and the chi2 sets. Read and
+                   written. Schema 1.4.
+      *.txt        FPS's legacy project export: the readable twin `om.Export`
+                   writes beside every `.bin` a project is saved as. **Read
+                   only.** The `.bin` itself is a gzipped .NET BinaryFormatter
+                   dump and is not read at all -- the twin is always there.
+
+    \b
+    Nothing writes a legacy format, deliberately: those files are a decade of
+    measurements and they stay readable, but nothing should produce another.
+
+    \b
+    Quick start, on the shipped HIV-RT example:
+      imp_bff_fps project show $IMP/examples/bff/structure/HIV_RT/hiv_rt.project.fps.json
+      imp_bff_fps score --project $IMP/examples/bff/structure/HIV_RT/hiv_rt.project.fps.json
+    """
+
+
+@project.command("init", context_settings=CONTEXT)
+@click.option("-p", "--pdb", "pdb", multiple=True, required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="One structure per rigid body; repeat, in body order.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling and distance file (fps.json).")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS labelling-positions .txt (instead of -j).")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy C# FPS distances .txt, beside the positions file.")
+@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False),
+              help="Where the project goes (.fps.json).")
+@click.option("-c", "--score-set", default="", show_default="every distance",
+              help="Named score set from the file's chi2 section.")
+@click.option("-m", "--mode", type=click.Choice(["None", "Dock", "Filter"]),
+              default="Dock", show_default=True,
+              help="FPS's ProjectFPSMode: Dock moves bodies, Filter screens.")
+@click.option("--self-contained/--reference", default=True, show_default=True,
+              help="Copy the labelling into the project (one file for a whole "
+                   "run), or point at the file it came from.")
+@click.option("--fixed-body", default=0, show_default=True,
+              help="body_id held still; the others move.")
+@click.option("--ev-weight", default=1.0, show_default=True,
+              help="Weight of the excluded-volume (clash) term.")
+@click.option("--sigma-da", default=6.0, show_default=True,
+              help="Width of the mean-position transfer function, A.")
+@click.option("--shuffle", default=10.0, show_default=True,
+              help="Initial random displacement of the mobile bodies, A.")
+def project_init(pdb, fps_json, positions, distances, output, score_set, mode,
+                 self_contained, fixed_body, ev_weight, sigma_da, shuffle):
+    """Write a new project from the structures and the labelling file.
+
+    The five parameter blocks start at **FPS's own shipped values**
+    (`ProjectData.cs:61-149`) -- Dock and Refine really do differ, and by a
+    lot: MaxForce 400 against 10000, ClashTolerance 1.0 against 0.5. Edit the
+    file to change them; it is JSON.
+
+    \b
+    Examples
+    --------
+    One self-contained file for the shipped HIV-RT run:
+
+    \b
+      imp_bff_fps project init \\
+          -p $IMP/examples/bff/structure/HIV_RT/protein_1R0A.pdb \\
+          -p $IMP/examples/bff/structure/HIV_RT/dna.pdb \\
+          -j $IMP/examples/bff/structure/HIV_RT/hiv_rt.fps.json \\
+          -c resolved -o hiv_rt.project.fps.json
+
+    \b
+    which prints (measured, 2026-09-01):
+
+    \b
+      structures: 2   positions: 11   distances: 20   score sets: 2
+      score set: resolved (18 distances)
+      wrote hiv_rt.project.fps.json
+      run it with: imp_bff_fps score --project hiv_rt.project.fps.json
+
+    \b
+    Straight from the legacy C# FPS pair, which converts them on the way in:
+
+    \b
+      imp_bff_fps project init -p protein_1R0A.pdb -p dna.pdb \\
+          --positions LabelingPositions.txt --distances Distances.txt \\
+          -o run.fps.json
+
+    \b
+    `--reference` instead keeps the labelling where it is and stores a path to
+    it, which is what to use when several projects share one labelling file.
+    """
+    labelling = _labelling_file(fps_json, positions, distances)
+    p = IMP.bff.FPSProject()
+    p.mode = mode
+    p.score_set = score_set
+    p.fixed_body = int(fixed_body)
+    p.ev_weight = float(ev_weight)
+    p.sigma_da = float(sigma_da)
+    p.shuffle = float(shuffle)
+    p = _write_project(p, output, [str(x) for x in pdb], labelling,
+                       self_contained)
+    document = IMP.bff.read_fps_json(labelling)
+    sets = json.loads(document.score_sets)
+    click.echo("structures: %d   positions: %d   distances: %d   "
+               "score sets: %d"
+               % (len(pdb), len(json.loads(document.positions)),
+                  len(json.loads(document.distances)), len(sets)))
+    if score_set:
+        if score_set not in sets:
+            click.echo("score set %r is not in the labelling file; it has %s"
+                       % (score_set, ", ".join(sorted(sets)) or "none"),
+                       err=True)
+        else:
+            click.echo("score set: %s (%d distances)"
+                       % (score_set, len(sets[score_set]["distances"])))
+    click.echo("wrote %s" % output)
+    click.echo("run it with: imp_bff_fps score --project %s" % output)
+
+
+@project.command("show", context_settings=CONTEXT)
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--parameters/--no-parameters", default=True, show_default=True,
+              help="Print the five per-mode parameter blocks.")
+def project_show(path, parameters):
+    """Print what a project says, and what is wrong with it.
+
+    Reads either door -- a `.fps.json` project or FPS's legacy project text
+    export -- so it is also how to look inside a file that came off a Windows
+    machine without opening FPS.
+
+    \b
+    Examples
+    --------
+    \b
+      imp_bff_fps project show \\
+          $IMP/examples/bff/structure/HIV_RT/hiv_rt.project.fps.json
+
+    \b
+    which prints (measured, 2026-09-01; the paths are absolute in a real run):
+
+    \b
+      mode: Dock
+      structures (2, in body order):
+        [0] .../HIV_RT/protein_1R0A.pdb                                 ok
+        [1] .../HIV_RT/dna.pdb                                          ok
+      labelling: .../HIV_RT/hiv_rt.project.fps.json (this file)
+      score set: resolved
+      poses: none stored (runs start from the input structures)
+      fixed_body 0   ev_weight 1   sigma_da 6   shuffle 10
+      AV globals: grid 0.2 (min 0.4)  linker sphere 0.5  nodes 3  E samples 200000
+      conversion: R0 52 A, polynomial order 3
+
+    \b
+      mode                visc     dt   max_iter   max_force  clash  optimize            n
+      Dock                1.00   1.00     200000       400.0   1.00  Selected          500
+      Refine              0.70   0.50     500000     10000.0   0.50  All               500
+      Error estimation    0.70   1.00     100000     10000.0   0.50  All               500
+      Sample              1.00   1.00       8000       400.0   1.00  Selected          500
+      Screening           1.00   1.00     200000       400.0   1.00  Selected            0
+
+    \b
+      no problems
+
+    \b
+    `max_iter` is FPS's own budget and is **not** what this port runs: FPS
+    counts damped-Verlet integrator steps, this counts conjugate-gradient
+    iterations, and `n` is that. FPS's value is carried so the settings behind
+    a published number survive the conversion.
+    """
+    p = IMP.bff.read_fps_project(str(path))
+    if p.source:
+        click.echo("source: %s" % p.source)
+    click.echo("mode: %s" % p.mode)
+    structures = list(p.get_structure_paths())
+    click.echo("structures (%d, in body order):" % len(structures))
+    for i, s in enumerate(structures):
+        click.echo("  [%d] %-58s %s"
+                   % (i, s, "ok" if os.path.exists(s) else "MISSING"))
+    labelling = p.get_labelling_path()
+    same = (os.path.abspath(labelling) == os.path.abspath(str(path)))
+    click.echo("labelling: %s%s" % (labelling, " (this file)" if same else ""))
+    if p.distances_path:
+        click.echo("distances: %s" % p.get_distances_path())
+    click.echo("score set: %s" % (p.score_set or "(every distance)"))
+    selected = list(p.selected_distances)
+    flags = list(p.selected_flags)
+    if selected:
+        click.echo("selected distances (%d): %s"
+                   % (len(selected), ", ".join(selected)))
+    elif flags:
+        # FPS's own spelling: a Boolean[] parallel to the distances file, so
+        # it means nothing without that file's order.
+        click.echo("selected distances: %d of %d, by position (FPS's "
+                   "Boolean[]); run `project convert` with the distances file "
+                   "to name them" % (sum(flags), len(flags)))
+    poses = json.loads(p.poses or "[]")
+    click.echo("poses: %s"
+               % ("%d bodies stored (a run can be continued from here)"
+                  % len(poses) if poses
+                  else "none stored (runs start from the input structures)"))
+    click.echo("fixed_body %d   ev_weight %g   sigma_da %g   shuffle %g"
+               % (p.fixed_body, p.ev_weight, p.sigma_da, p.shuffle))
+    click.echo("clash: %s radii x %g, %s"
+               % (p.clash_radii_source, p.clash_radii_scale,
+                  "one bead per residue" if p.coarse_clash else "all atoms"))
+    click.echo("AV globals: grid %g (min %g)  linker sphere %g  nodes %d  "
+               "E samples %d"
+               % (p.av.grid_size, p.av.min_grid_size,
+                  p.av.linker_initial_sphere, p.av.link_search_nodes,
+                  p.av.e_samples))
+    click.echo("conversion: R0 %g A, polynomial order %d"
+               % (p.conversion.forster_radius, p.conversion.polynomial_order))
+    if parameters:
+        click.echo("")
+        click.echo("%-17s %6s %6s %10s %11s %6s  %-15s %5s"
+                   % ("mode", "visc", "dt", "max_iter", "max_force", "clash",
+                      "optimize", "n"))
+        for name in IMP.bff.fps_mode_names():
+            b = p.get_parameters(name)
+            click.echo("%-17s %6.2f %6.2f %10d %11.1f %6.2f  %-15s %5d"
+                       % (name, b.viscosity_factor, b.time_step_factor,
+                          b.max_iterations, b.max_force, b.clash_tolerance,
+                          b.optimize_selected, b.iterations))
+    click.echo("")
+    problems = list(p.get_problems())
+    if not problems:
+        click.echo("no problems")
+    for problem in problems:
+        click.echo("problem: %s" % problem, err=True)
+
+
+@project.command("convert", context_settings=CONTEXT)
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False),
+              help="Where the converted project goes (.fps.json).")
+@click.option("-p", "--pdb", "pdb", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Structures to use instead of the ones the project names; "
+                   "repeat, in body order. A legacy project carries Windows "
+                   "paths, which do not exist here.")
+@click.option("-j", "--fps-json", type=click.Path(exists=True, dir_okay=False),
+              help="Labelling file to use instead of the one it names.")
+@click.option("--positions", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy positions .txt to use instead of the one it names.")
+@click.option("--distances", type=click.Path(exists=True, dir_okay=False),
+              help="Legacy distances .txt, beside the positions file.")
+@click.option("--self-contained/--reference", default=True, show_default=True,
+              help="Copy the labelling into the project, or point at it.")
+def project_convert(path, output, pdb, fps_json, positions, distances,
+                    self_contained):
+    """Read FPS's legacy project export and write one .fps.json.
+
+    FPS saves a project as a `.bin` and writes a readable `.txt` twin beside it
+    every single time (`MainForm.cs:559-560`). **That twin is what this reads**
+    -- the `.bin` is a gzipped .NET BinaryFormatter dump carrying
+    assembly-qualified type names, and it is not read at all.
+
+    \b
+    One thing the twin loses, and FPS loses it too: the structure paths are
+    written space-separated and unquoted on one line, so a path containing a
+    space cannot be recovered. Pass `-p` once per body to re-point the project
+    when that happens -- or, more usually, because the file names `C:\\Users\\...`
+    and this is not Windows.
+
+    \b
+    Examples
+    --------
+    Convert the shipped fixture, whose paths are relative and therefore
+    resolve:
+
+    \b
+      imp_bff_fps project convert \\
+          $IMP/examples/bff/structure/HIV_RT/hiv_rt.project.txt \\
+          -o converted.fps.json
+
+    \b
+    which prints (measured, 2026-09-01):
+
+    \b
+      read hiv_rt.project.txt (IMP.bff fixture in FPS project-export layout)
+      mode Dock, 2 structures, 18 selected of 20 distances
+      wrote converted.fps.json
+
+    \b
+    -- 18 of 20, because the fixture's selection is FPS's `Boolean[]` with the
+    two `p66_K287C` distances off, which is exactly the `resolved` score set.
+    **The flags are positional**, parallel to the line order of the legacy
+    `Distances.txt`, so they are named against that file's order and not
+    against the fps.json (whose distances come back keyed and sorted). Without
+    the distances file they survive as `selected_flags` and stay unnamed.
+
+    \b
+    A project off a Windows machine, re-pointed at local copies:
+
+    \b
+      imp_bff_fps project convert MyProject.bin.txt -o run.fps.json \\
+          -p protein.pdb -p dna.pdb --positions LabelingPositions.txt
+    """
+    p = IMP.bff.read_fps_project_txt(str(path))
+    click.echo("read %s%s" % (os.path.basename(str(path)),
+                              (" (%s)" % p.source) if p.source else ""))
+    if fps_json or positions:
+        labelling = _labelling_file(fps_json, positions, distances)
+    else:
+        labelling = p.get_labelling_path()
+    if not os.path.exists(labelling):
+        raise click.UsageError(
+            "the labelling file the project names does not exist here (%s); "
+            "pass -j, or --positions with --distances" % labelling)
+    structures = [str(x) for x in pdb] or list(p.get_structure_paths())
+    missing = [s for s in structures if not os.path.exists(s)]
+    if missing:
+        raise click.UsageError(
+            "these structures do not exist here: %s. Pass -p once per rigid "
+            "body, in body order." % ", ".join(missing))
+    # FPS's selection is positional -- a Boolean[] parallel to its DistanceList,
+    # i.e. to the LINE ORDER of the legacy distances file. Name it now, while
+    # that file is at hand: a position in a list stops meaning anything the
+    # moment the list is edited, and an fps.json has no order at all (its
+    # distances come back as an object, keyed and sorted). That is why the
+    # names come from `read_old_distances_order` and not from the document.
+    flags = list(p.selected_flags)
+    legacy_distances = ""
+    if p.distances_path and os.path.exists(p.get_distances_path()):
+        legacy_distances = p.get_distances_path()
+    elif distances:
+        legacy_distances = str(distances)
+    elif not labelling.lower().endswith(".json"):
+        beside = os.path.join(os.path.dirname(os.path.abspath(labelling)),
+                              "Distances.txt")
+        if os.path.exists(beside):
+            legacy_distances = beside
+    if flags and legacy_distances:
+        names = list(IMP.bff.read_old_distances_order(legacy_distances))
+        p.selected_distances = p.resolve_selected_distances(names)
+        click.echo("mode %s, %d structures, %d selected of %d distances"
+                   % (p.mode, len(structures), sum(flags), len(flags)))
+        if len(flags) != len(names):
+            click.echo("the selection has %d flags but %s has %d distances; "
+                       "only the overlap could be named"
+                       % (len(flags), os.path.basename(legacy_distances),
+                          len(names)), err=True)
+    elif flags:
+        # The flags survive into the file (`selected_flags`), but nothing here
+        # can say what they point at.
+        click.echo("mode %s, %d structures, %d selected of %d distances "
+                   "(by position only)"
+                   % (p.mode, len(structures), sum(flags), len(flags)))
+        click.echo("the selection is positional and its distances file is not "
+                   "here, so the flags could not be turned into names; pass "
+                   "--distances to name them", err=True)
+    else:
+        click.echo("mode %s, %d structures, no explicit selection"
+                   % (p.mode, len(structures)))
+    _write_project(p, output, structures, labelling, self_contained)
+    click.echo("wrote %s" % output)
+
+
+def main():
+    IMP.set_log_level(IMP.SILENT)
+    cli()
+
+
+if __name__ == "__main__":
+    main()

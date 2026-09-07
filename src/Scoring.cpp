@@ -8,10 +8,30 @@
  */
 
 #include <IMP/bff/Scoring.h>
+#include <IMP/bff/Mol2IO.h>
 #include <IMP/bff/RotamerEnergy.h>
+#include <IMP/bff/ZMatrix.h>
+
+#include <IMP/algebra/vector_generators.h>
+#include <IMP/constants.h>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_real.hpp>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/internal/Text.h>
+
+#include <IMP/bff/Base.h>
+#include <IMP/core/AngleRestraint.h>
+#include <IMP/core/DihedralRestraint.h>
+#include <IMP/core/DistanceRestraint.h>
+#include <IMP/core/Harmonic.h>
+#include <IMP/core/HarmonicLowerBound.h>
+#include <IMP/container/ListPairContainer.h>
+#include <IMP/container/PairsRestraint.h>
+#include <IMP/core/SphereDistancePairScore.h>
+#include <IMP/core/XYZ.h>
+#include <IMP/core/XYZR.h>
+#include <IMP/core/internal/dihedral_helpers.h>
 
 #include <algorithm>
 #include <cctype>
@@ -27,12 +47,9 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-namespace {
+using internal::upper;
 
-std::string upper(std::string s) {
-    for (auto& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    return s;
-}
+namespace {
 
 std::string strip(const std::string& s) {
     const std::size_t a = s.find_first_not_of(" \t");
@@ -170,7 +187,7 @@ void pair_energy_matrix(const std::vector<double>& coords_a,
     const int n_a_atoms = static_cast<int>(elements_a.size());
     const int n_b_atoms = static_cast<int>(elements_b.size());
     std::vector<double> ca = coords_a, cb = coords_b;
-    rotamer_pair_energy_matrix(ca, cb, cross.rmin_half, cross.epsilon,
+    pair_energy_matrix_kernel(ca, cb, cross.rmin_half, cross.epsilon,
                                n_a_conf, n_a_atoms, n_b_conf, n_b_atoms,
                                out_view, n_out_view, r_cutoff, aabb_pad);
 }
@@ -211,7 +228,7 @@ std::vector<double> boltzmann_weights(const std::vector<double>& energies,
     return w;
 }
 
-std::vector<double> rotamer_cluster_weights(
+std::vector<double> cluster_weights(
         const std::vector<int>& assignments,
         const std::vector<double>& frame_weights,
         int n_clusters) {
@@ -686,17 +703,17 @@ std::vector<double> rotamer_mean_field_weights(
         const std::vector<double>& rotamer_coords,
         const std::vector<double>& initial_weights,
         const std::vector<double>& protein_coords,
-        const std::vector<std::string>& dye_elements,
+        const std::vector<std::string>& probe_elements,
         const std::vector<std::string>& protein_elements,
         double K, int n_iter, double aabb_pad, double r_cutoff) {
     const int n_clusters = static_cast<int>(initial_weights.size());
-    const int n_dye_atoms = static_cast<int>(dye_elements.size());
+    const int n_probe_atoms = static_cast<int>(probe_elements.size());
     std::vector<double> q = initial_weights;
 
     // (n_clusters, 1): the protein is one "conformer"
     double* e_bb = NULL;
     int n_e_bb = 0;
-    pair_energy_matrix(rotamer_coords, protein_coords, dye_elements,
+    pair_energy_matrix(rotamer_coords, protein_coords, probe_elements,
                        protein_elements, n_clusters, 1, &e_bb, &n_e_bb,
                        r_cutoff, aabb_pad);
     const std::vector<double> E_bb(e_bb, e_bb + (n_e_bb > 0 ? n_e_bb : 0));
@@ -729,24 +746,24 @@ std::vector<double> rotamer_mean_field_weights(
 // --------------------------------------------------------------------------
 
 std::map<std::string, std::string> site_element_map(
-        const DyeForceFieldSystem& system) {
+        const ProbeForceFieldSystem& system) {
     std::map<std::string, std::string> out;
     for (const auto& s : system.get_sites()) {
-        std::string elem = "C";
-        for (char ch : s.atom_name) {
-            if (std::isalpha(static_cast<unsigned char>(ch))) {
-                elem = std::string(1, static_cast<char>(
-                        std::toupper(static_cast<unsigned char>(ch))));
-                break;
-            }
-        }
-        out[s.id] = elem;
+        // The site's own element when it has one -- a producer that read a
+        // real element column knows better than any name rule -- and the name
+        // rule otherwise, from `element_from_atom_name` rather than from a
+        // fourth copy of it inline here. On every structure in the tree the
+        // two agree, because the MOL2 reader derives the element with exactly
+        // this rule; they part company on a halogen, where the name rule
+        // calls CL3 carbon and a `_atom_site.type_symbol` does not.
+        out[s.id] = s.element.empty() ? element_from_atom_name(s.atom_name)
+                                      : s.element;
     }
     return out;
 }
 
 std::vector<LJSitePair> compute_lj_pair_sites(
-        const DyeForceFieldSystem& system) {
+        const ProbeForceFieldSystem& system) {
     const std::set<std::pair<std::string, std::string>> excluded =
             system.get_exclusions();
     const std::map<std::string, std::string> elem = site_element_map(system);
@@ -787,8 +804,8 @@ std::map<std::string, FFLJType> build_lj_type_table(
     return out;
 }
 
-DyeInternalEnergyEvaluator::DyeInternalEnergyEvaluator(
-        const DyeForceFieldSystem& system) {
+IntramolecularEnergy::IntramolecularEnergy(
+        const ProbeForceFieldSystem& system) {
     pairs_ = compute_lj_pair_sites(system);
     std::map<std::string, int> id_to_idx;
     const std::vector<FFSite>& sites = system.get_sites();
@@ -805,7 +822,7 @@ DyeInternalEnergyEvaluator::DyeInternalEnergyEvaluator(
     }
 }
 
-double DyeInternalEnergyEvaluator::evaluate(
+double IntramolecularEnergy::evaluate(
         const std::vector<double>& coords, int n_atoms) const {
     if (pairs_.empty()) return 0.0;
     std::vector<double> c = coords;
@@ -814,7 +831,7 @@ double DyeInternalEnergyEvaluator::evaluate(
                             static_cast<int>(pairs_.size()), true)[0];
 }
 
-std::vector<double> DyeInternalEnergyEvaluator::evaluate_batch(
+std::vector<double> IntramolecularEnergy::evaluate_batch(
         const std::vector<double>& coords, int n_frames, int n_atoms) const {
     if (pairs_.empty()) return std::vector<double>(n_frames, 0.0);
     std::vector<double> c = coords;
@@ -823,7 +840,7 @@ std::vector<double> DyeInternalEnergyEvaluator::evaluate_batch(
                             static_cast<int>(pairs_.size()), true);
 }
 
-EnergyMaskResult DyeInternalEnergyEvaluator::evaluate_batch_filtered(
+EnergyMaskResult IntramolecularEnergy::evaluate_batch_filtered(
         const std::vector<double>& coords, int n_frames, int n_atoms,
         const std::vector<double>& reference_coords, int n_ref_atoms,
         double pad) const {
@@ -844,6 +861,429 @@ EnergyMaskResult DyeInternalEnergyEvaluator::evaluate_batch_filtered(
         }
     }
     return out;
+}
+
+namespace {
+//! `pair_energy_matrix` into a vector, so the caller is not handed a buffer.
+std::vector<double> pair_energies(const std::vector<double>& a,
+                                  const std::vector<double>& b,
+                                  const std::vector<std::string>& ea,
+                                  const std::vector<std::string>& eb,
+                                  int n_a, int n_b, double r_cutoff,
+                                  double aabb_pad) {
+    double* buffer = NULL;
+    int n = 0;
+    pair_energy_matrix(a, b, ea, eb, n_a, n_b, &buffer, &n, r_cutoff,
+                       aabb_pad);
+    std::vector<double> out(buffer, buffer + n);
+    std::free(buffer);
+    return out;
+}
+}  // namespace
+
+std::vector<std::vector<double> > rotamer_mean_field_weights_multi_probe(
+        const std::vector<std::vector<double> >& rotamer_coords_list,
+        const std::vector<std::vector<double> >& initial_weights_list,
+        const std::vector<double>& protein_coords,
+        const std::vector<std::vector<std::string> >& probe_elements_list,
+        const std::vector<std::string>& protein_elements,
+        double K, int n_iter, double aabb_pad, double r_cutoff) {
+    const std::size_t n_dyes = rotamer_coords_list.size();
+    if (initial_weights_list.size() != n_dyes ||
+        probe_elements_list.size() != n_dyes) {
+        IMP_THROW("rotamer_mean_field_weights_multi_probe: " << n_dyes
+                  << " coordinate sets, " << initial_weights_list.size()
+                  << " weight sets and " << probe_elements_list.size()
+                  << " element sets", IMP::ValueException);
+    }
+    std::vector<std::vector<double> > q = initial_weights_list;
+
+    // Each dye against the protein: one column per conformer.
+    std::vector<std::vector<double> > e_bb(n_dyes);
+    for (std::size_t d = 0; d < n_dyes; ++d) {
+        e_bb[d] = pair_energies(rotamer_coords_list[d], protein_coords,
+                                probe_elements_list[d], protein_elements,
+                                static_cast<int>(q[d].size()), 1, r_cutoff,
+                                aabb_pad);
+    }
+    // And each dye against every other: a matrix per ordered pair, the
+    // transpose shared rather than recomputed.
+    std::vector<std::vector<double> > e_sc(n_dyes * n_dyes);
+    for (std::size_t d1 = 0; d1 < n_dyes; ++d1) {
+        for (std::size_t d2 = d1 + 1; d2 < n_dyes; ++d2) {
+            const std::vector<double> m = pair_energies(
+                    rotamer_coords_list[d1], rotamer_coords_list[d2],
+                    probe_elements_list[d1], probe_elements_list[d2],
+                    static_cast<int>(q[d1].size()),
+                    static_cast<int>(q[d2].size()), r_cutoff, aabb_pad);
+            e_sc[d1 * n_dyes + d2] = m;
+            std::vector<double> t(m.size());
+            for (std::size_t i = 0; i < q[d1].size(); ++i) {
+                for (std::size_t j = 0; j < q[d2].size(); ++j) {
+                    t[j * q[d1].size() + i] = m[i * q[d2].size() + j];
+                }
+            }
+            e_sc[d2 * n_dyes + d1] = t;
+        }
+    }
+
+    for (int iteration = 0; iteration < n_iter; ++iteration) {
+        std::vector<std::vector<double> > e_p = e_bb;
+        for (std::size_t d1 = 0; d1 < n_dyes; ++d1) {
+            for (std::size_t d2 = 0; d2 < n_dyes; ++d2) {
+                if (d1 == d2) continue;
+                const std::vector<double>& m = e_sc[d1 * n_dyes + d2];
+                for (std::size_t i = 0; i < q[d1].size(); ++i) {
+                    double acc = 0.0;
+                    for (std::size_t j = 0; j < q[d2].size(); ++j) {
+                        acc += m[i * q[d2].size() + j] * q[d2][j];
+                    }
+                    e_p[d1][i] += acc;
+                }
+            }
+        }
+        for (std::size_t d = 0; d < n_dyes; ++d) {
+            std::vector<double> log_q(q[d].size());
+            double top = -std::numeric_limits<double>::infinity();
+            for (std::size_t i = 0; i < q[d].size(); ++i) {
+                log_q[i] = std::log(std::max(q[d][i], 1e-300)) - K * e_p[d][i];
+                top = std::max(top, log_q[i]);
+            }
+            double denom = 0.0;
+            for (std::size_t i = 0; i < q[d].size(); ++i) {
+                log_q[i] = std::exp(log_q[i] - top);
+                denom += log_q[i];
+            }
+            for (std::size_t i = 0; i < q[d].size(); ++i) {
+                q[d][i] = denom > 0.0 ? log_q[i] / denom
+                                      : 1.0 / static_cast<double>(q[d].size());
+            }
+        }
+    }
+    return q;
+}
+
+IMP::core::Cosine* torsion_cosine(const FFTorsionType& type) {
+    // CHARMM's k(1 + cos(n phi - delta)) against Cosine's k(1 - cos(...)):
+    // the same curve with the phase shifted by pi.
+    return new IMP::core::Cosine(type.k, type.periodicity,
+                                 type.phase + IMP::algebra::PI);
+}
+
+IMP::Restraints build_probe_restraints(
+        IMP::Model* model, const ProbeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles, bool nonbonded) {
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("build_probe_restraints: " << site_ids.size() << " site ids "
+                  << "against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    const bool has_all = true;
+    IMP::Restraints out;
+
+    // -- bonds ------------------------------------------------------------
+    const std::map<std::string, double>& bt = system.get_bond_types();
+    for (std::size_t i = 0; i < system.get_bonds().size(); ++i) {
+        const FFBond& b = system.get_bonds()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator a =
+                site.find(b.site_a), c = site.find(b.site_b);
+        if (a == site.end() || c == site.end()) continue;
+        std::map<std::string, double>::const_iterator k = bt.find(b.type_id);
+        if (k == bt.end()) continue;
+        // A length of zero is a length nobody set: restrain about the
+        // geometry as it stands rather than pulling the sites together.
+        const double length =
+                b.length > 0.0
+                        ? b.length
+                        : IMP::core::get_distance(
+                                  IMP::core::XYZ(model, a->second),
+                                  IMP::core::XYZ(model, c->second));
+        out.push_back(new IMP::core::DistanceRestraint(
+                model, new IMP::core::Harmonic(length, k->second),
+                model->get_particle(a->second),
+                model->get_particle(c->second)));
+    }
+
+    // -- angles -----------------------------------------------------------
+    const std::map<std::string, double>& at = system.get_angle_types();
+    for (std::size_t i = 0; i < system.get_angles().size(); ++i) {
+        const FFAngle& an = system.get_angles()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator a =
+                site.find(an.site_a), b = site.find(an.site_b),
+                c = site.find(an.site_c);
+        if (a == site.end() || b == site.end() || c == site.end()) continue;
+        std::map<std::string, double>::const_iterator k = at.find(an.type_id);
+        if (k == at.end()) continue;
+        const double theta =
+                an.theta > 0.0
+                        ? an.theta
+                        : bond_angle_rad(
+                                  IMP::core::XYZ(model, a->second)
+                                          .get_coordinates(),
+                                  IMP::core::XYZ(model, b->second)
+                                          .get_coordinates(),
+                                  IMP::core::XYZ(model, c->second)
+                                          .get_coordinates());
+        out.push_back(new IMP::core::AngleRestraint(
+                model, new IMP::core::Harmonic(theta, k->second),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second)));
+    }
+
+    // -- torsions ---------------------------------------------------------
+    const std::map<std::string, FFTorsionType>& tt = system.get_torsion_types();
+    for (std::size_t i = 0; i < system.get_dihedrals().size(); ++i) {
+        const FFTorsion& t = system.get_dihedrals()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator
+                a = site.find(t.site_a), b = site.find(t.site_b),
+                c = site.find(t.site_c), d = site.find(t.site_d);
+        if (a == site.end() || b == site.end() || c == site.end() ||
+            d == site.end()) continue;
+        std::map<std::string, FFTorsionType>::const_iterator ty =
+                tt.find(t.type_id);
+        if (ty == tt.end()) continue;
+        out.push_back(new IMP::core::DihedralRestraint(
+                model, torsion_cosine(ty->second),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second),
+                model->get_particle(d->second)));
+    }
+
+    // -- impropers: harmonic about the geometry as it stands now ----------
+    const std::map<std::string, FFTorsionType>& it =
+            system.get_improper_types();
+    for (std::size_t i = 0; i < system.get_impropers().size(); ++i) {
+        const FFTorsion& t = system.get_impropers()[i];
+        std::map<std::string, IMP::ParticleIndex>::const_iterator
+                a = site.find(t.site_a), b = site.find(t.site_b),
+                c = site.find(t.site_c), d = site.find(t.site_d);
+        if (a == site.end() || b == site.end() || c == site.end() ||
+            d == site.end()) continue;
+        std::map<std::string, FFTorsionType>::const_iterator ty =
+                it.find(t.type_id);
+        if (ty == it.end()) continue;
+        const IMP::core::XYZ xa(model, a->second), xb(model, b->second),
+                xc(model, c->second), xd(model, d->second);
+        const double theta0 = IMP::core::get_dihedral(xa, xb, xc, xd);
+        out.push_back(new IMP::core::DihedralRestraint(
+                model, new IMP::core::Harmonic(theta0, ty->second.k),
+                model->get_particle(a->second),
+                model->get_particle(b->second),
+                model->get_particle(c->second),
+                model->get_particle(d->second)));
+    }
+
+    // -- repulsion --------------------------------------------------------
+    // One soft-sphere restraint over every non-excluded pair: the same term a
+    // Monte-Carlo step is scored against, and differentiable, so a dynamics
+    // run uses it too. It was per-pair Lennard-Jones lower bounds here and
+    // soft spheres there -- two implementations of one piece of physics, and
+    // thousands of restraints where one does.
+    if (nonbonded) {
+        IMP::Restraint* steric =
+                build_steric_restraint(model, system, site_ids, particles);
+        if (steric != NULL) out.push_back(steric);
+    }
+    (void)has_all;
+    return out;
+}
+
+namespace {
+
+//! The mean position of a set of particles.
+IMP::algebra::Vector3D centre_of(IMP::Model* model,
+                                 const IMP::ParticleIndexes& ps) {
+    IMP::algebra::Vector3D c(0.0, 0.0, 0.0);
+    for (std::size_t i = 0; i < ps.size(); ++i) {
+        c += IMP::core::XYZ(model, ps[i]).get_coordinates();
+    }
+    return ps.empty() ? c : c / static_cast<double>(ps.size());
+}
+
+}  // namespace
+
+double place_guest_by_score(IMP::ScoringFunction* scoring_function,
+                            IMP::Model* model,
+                            const IMP::ParticleIndexes& host,
+                            const IMP::ParticleIndexes& guest, double distance,
+                            int n_trials, int seed) {
+    if (guest.empty() || scoring_function == NULL) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const IMP::algebra::Vector3D host_centre = centre_of(model, host);
+    const IMP::algebra::Vector3D guest_centre = centre_of(model, guest);
+    IMP::algebra::Vector3Ds shape;
+    for (std::size_t i = 0; i < guest.size(); ++i) {
+        shape.push_back(IMP::core::XYZ(model, guest[i]).get_coordinates() -
+                        guest_centre);
+    }
+
+    boost::mt19937 rng(static_cast<boost::uint32_t>(seed));
+    boost::uniform_real<double> unit(0.0, 1.0);
+
+    IMP::algebra::Vector3Ds best = shape;
+    IMP::algebra::Vector3D best_offset = host_centre;
+    double best_score = std::numeric_limits<double>::infinity();
+    for (int trial = 0; trial < std::max(1, n_trials); ++trial) {
+        const IMP::algebra::Rotation3D rotation =
+                IMP::algebra::get_random_rotation_3d();
+        // A direction drawn uniformly on the sphere: z uniform in [-1, 1] and
+        // the azimuth uniform, which is the one construction that does not
+        // crowd the poles.
+        const double z = 2.0 * unit(rng) - 1.0;
+        const double azimuth = 2.0 * IMP::PI * unit(rng);
+        const double r = std::sqrt(std::max(0.0, 1.0 - z * z));
+        const IMP::algebra::Vector3D direction(r * std::cos(azimuth),
+                                               r * std::sin(azimuth), z);
+        const IMP::algebra::Vector3D offset = host_centre + direction * distance;
+
+        IMP::algebra::Vector3Ds pose;
+        for (std::size_t i = 0; i < shape.size(); ++i) {
+            pose.push_back(offset + rotation.get_rotated(shape[i]));
+        }
+        for (std::size_t i = 0; i < guest.size(); ++i) {
+            IMP::core::XYZ(model, guest[i]).set_coordinates(pose[i]);
+        }
+        const double score = scoring_function->evaluate(false);
+        if (score < best_score) {
+            best_score = score;
+            best = pose;
+        }
+    }
+    for (std::size_t i = 0; i < guest.size(); ++i) {
+        IMP::core::XYZ(model, guest[i]).set_coordinates(best[i]);
+    }
+    (void)best_offset;
+    return best_score;
+}
+
+IMP::Restraints build_go_restraints(
+        IMP::Model* model, const ProbeForceFieldSystem& system,
+        const std::vector<std::string>& site_ids,
+        const IMP::ParticleIndexes& particles,
+        const std::map<std::string, std::string>& site_atom_names,
+        const std::string& component,
+        const std::vector<std::string>& only_sites, double k, double cutoff) {
+    IMP::Restraints out;
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("build_go_restraints: " << site_ids.size() << " site ids "
+                  << "against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    const std::set<std::string> released(only_sites.begin(), only_sites.end());
+
+    // The component's heavy sites, sorted, so the restraints come out in the
+    // site ids' order and a repeated run builds the same set.
+    std::vector<std::string> heavy;
+    for (std::size_t i = 0; i < system.get_sites().size(); ++i) {
+        const FFSite& s = system.get_sites()[i];
+        if (s.component != component) continue;
+        if (site.find(s.id) == site.end()) continue;
+        std::map<std::string, std::string>::const_iterator name =
+                site_atom_names.find(s.id);
+        if (name != site_atom_names.end() && !name->second.empty() &&
+            (name->second[0] == 'H' || name->second[0] == 'h')) {
+            continue;
+        }
+        heavy.push_back(s.id);
+    }
+    std::sort(heavy.begin(), heavy.end());
+
+    for (std::size_t i = 0; i < heavy.size(); ++i) {
+        for (std::size_t j = i + 1; j < heavy.size(); ++j) {
+            if (!released.empty() && released.count(heavy[i]) == 0 &&
+                released.count(heavy[j]) == 0) {
+                continue;
+            }
+            // Within two bonds the bonded terms already say what the distance
+            // is; a contact there would be a second opinion.
+            if (system.is_within_bonds(heavy[i], heavy[j], 2)) continue;
+            const IMP::core::XYZ a(model, site[heavy[i]]),
+                    b(model, site[heavy[j]]);
+            const double d = IMP::core::get_distance(a, b);
+            if (d > cutoff) continue;
+            IMP::Restraint* r = new IMP::core::DistanceRestraint(
+                    model, new IMP::core::Harmonic(std::max(d, 1.0), k),
+                    model->get_particle(site[heavy[i]]),
+                    model->get_particle(site[heavy[j]]));
+            r->set_name("go_" + component + "_" + heavy[i] + "_" + heavy[j]);
+            out.push_back(r);
+        }
+    }
+    return out;
+}
+
+IMP::Restraint* build_steric_restraint(IMP::Model* model,
+                                       const ProbeForceFieldSystem& system,
+                                       const std::vector<std::string>& site_ids,
+                                       const IMP::ParticleIndexes& particles,
+                                       double k) {
+    if (site_ids.size() != particles.size()) {
+        IMP_THROW("build_steric_restraint: " << site_ids.size()
+                  << " site ids against " << particles.size() << " particles",
+                  IMP::ValueException);
+    }
+    std::map<std::string, IMP::ParticleIndex> site;
+    for (std::size_t i = 0; i < site_ids.size(); ++i) {
+        site[site_ids[i]] = particles[i];
+    }
+    // A system that says its non-bonded term is off has no steric restraint,
+    // rather than one nobody asked for.
+    if (!system.get_nonbonded().enabled) return NULL;
+    const std::set<std::pair<std::string, std::string> > excluded =
+            system.get_exclusions();
+
+    // Sorted, so the pair order is the site ids' and not a hash's: a run that
+    // is repeated has to build the same container.
+    std::vector<std::string> ids;
+    for (std::map<std::string, IMP::ParticleIndex>::const_iterator it =
+                 site.begin();
+         it != site.end(); ++it) {
+        ids.push_back(it->first);
+    }
+
+    // A soft sphere is a sphere: a site the caller decorated without a radius
+    // would contribute nothing at all, silently. The system says what radius
+    // each site has, so give it that rather than score an empty term.
+    for (std::map<std::string, IMP::ParticleIndex>::const_iterator it =
+                 site.begin();
+         it != site.end(); ++it) {
+        IMP::Particle* p = model->get_particle(it->second);
+        if (IMP::core::XYZR::get_is_setup(p)) continue;
+        double radius = 1.7;
+        for (std::size_t i = 0; i < system.get_sites().size(); ++i) {
+            if (system.get_sites()[i].id != it->first) continue;
+            radius = system.get_sites()[i].radius;
+            break;
+        }
+        IMP::core::XYZR::setup_particle(p, radius);
+    }
+
+    IMP::ParticleIndexPairs pairs;
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+        for (std::size_t j = i + 1; j < ids.size(); ++j) {
+            if (excluded.count(std::make_pair(ids[i], ids[j])) > 0) continue;
+            pairs.push_back(IMP::ParticleIndexPair(site[ids[i]], site[ids[j]]));
+        }
+    }
+    if (pairs.empty()) return NULL;
+
+    IMP_NEW(IMP::container::ListPairContainer, container, (model, pairs));
+    const double strength = k >= 0.0 ? k : system.get_nonbonded().k;
+    return new IMP::container::PairsRestraint(
+            new IMP::core::SoftSpherePairScore(strength), container,
+            "steric");
 }
 
 IMPBFF_END_NAMESPACE

@@ -26,16 +26,14 @@
 #include <IMP/Object.h>
 #include <IMP/Particle.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/em/SampledDensityMap.h>
+#include <IMP/bff/DensityGrid.h>
 
-#include <IMP/em/MRCReaderWriter.h>
-#include <IMP/em/XplorReaderWriter.h>
-#include <IMP/em/EMReaderWriter.h>
-#include <IMP/em/SpiderReaderWriter.h>
 
 #include <IMP/bff/PathMapHeader.h>
 #include <IMP/bff/PathMapTile.h>
 #include <IMP/bff/PathMapTileEdge.h>
+
+namespace IMP { namespace em { class DensityMap; } }
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -121,7 +119,7 @@ IMPBFFEXPORT LinkerWeighting read_linker_weighting(const std::string& path,
 /*! `data/linker/chain_weighting.csv`, read once and cached. */
 IMPBFFEXPORT LinkerWeighting linker_weighting(double linker_length);
 
-class IMPBFFEXPORT PathMap : public IMP::em::SampledDensityMap {
+class IMPBFFEXPORT PathMap : public DensityGrid {
 
 friend class PathMapTile;
 friend class AV;
@@ -274,7 +272,7 @@ public:
      *
      * @param nvox The number of voxels to resize the PathMap to.
      */
-    void resize(unsigned int nvox);
+    void resize(long nvox);
 
     /**
 
@@ -310,7 +308,7 @@ public:
         const int nn = ceil(neighbor_radius);
         const double nr2 = neighbor_radius * neighbor_radius;
 
-        const IMP::em::DensityHeader* header = get_header();
+        const GridHeader* header = get_header();
         int nx = header->get_nx();
         int ny = header->get_ny();
         int nx_ny = nx * ny;
@@ -625,6 +623,67 @@ public:
      */
     void carve_lattice_fractional(const int32_t *const *occupancy, int n);
 
+    /**
+     * @brief Re-weight the carved cloud towards the surface: the accessible
+     *        **contact** volume (ACV).
+     *
+     * A voxel of the cloud is a *contact* voxel when some voxel within
+     * \p thickness of it is excluded for the dye, i.e. when the dye sitting
+     * there is within `thickness` of the molecular surface it cannot enter.
+     * The contact voxels are then scaled so that they carry
+     * \p trapped_fraction of the cloud's total weight and the rest carry the
+     * remainder -- a dye that touches the protein stays there longer than free
+     * diffusion would put it.
+     *
+     * This is Olga's rule, taken from its source rather than inferred:
+     * `path2points()` (`Olga/src/AV/fretAV.cpp:236`) collects the accessible
+     * points, marks a point trapped when any neighbour within
+     * `contactR / gridStep` voxels is occupied in `occupancyVdWDye` -- the
+     * obstacle raster inflated by the *dye* radius, which is exactly
+     * \p occupancy here -- and then sets every trapped point's weight to
+     * `contactRho = volFree * trappedFrac / (volTrapped * (1 - trappedFrac))`
+     * with the free points left at 1.
+     *
+     * Two deliberate differences from that source, both stated because they
+     * are choices and not accidents:
+     *
+     * - Olga fixes the *ratio* of the two weights; this fixes the two
+     *   *shares*. They are the same thing whenever the free points all have
+     *   weight one, which is Olga's case (its AV1 without chain weighting, and
+     *   its AV3 always), so the reweighted cloud differs only by a global
+     *   factor that cancels in every distance. Where they differ -- AV3, where
+     *   a voxel's weight is the fraction of dye radii that fit, and chain
+     *   weighting, where it is the linker statistics -- shares are the
+     *   statement the parameter actually makes: *the dye spends
+     *   `trapped_fraction` of its time in contact*. Olga instead overwrites
+     *   the chain weight of every trapped point, which drops the weighting it
+     *   was asked for.
+     * - The contact neighbourhood is a true sphere of radius \p thickness
+     *   (`|d| * step <= thickness`), where Olga rounds the radius down to
+     *   whole voxels first (`deltaIlist(contactR / step)` truncates) and
+     *   guards its 1-D offsets by range alone, so its shell wraps around the
+     *   grid faces. The difference is sub-voxel except at the faces, where
+     *   Olga's is wrong.
+     *
+     * Must be called **after** carve_lattice()/carve_lattice_fractional() and
+     * after the search: the normalisation is over the voxels that actually
+     * reach the cloud, so it needs both the density and the costs.
+     *
+     * A no-op unless `thickness > 0` and `0 <= trapped_fraction < 1`, and a
+     * no-op when either side of the split is empty -- there is no ratio to set
+     * then, and Olga does nothing in that case either.
+     *
+     * \param[in] occupancy per-voxel covering counts at the dye radius, in
+     *            window order; a count above TILE_OBSTACLE_THRESHOLD is
+     *            excluded volume. The same array carve_lattice() was given.
+     * \param[in] thickness the contact layer, in Angstrom (fps.json
+     *            `contact_volume_thickness`)
+     * \param[in] trapped_fraction the share of the cloud's weight the contact
+     *            layer carries (fps.json `contact_volume_trapped_fraction`)
+     */
+    void apply_contact_weighting(const int32_t *occupancy, double thickness,
+                                 double trapped_fraction);
+
     //! get_xyz_density() as four arrays (x, y, z, density), appended to the
     //! given vectors after clearing them; same tiles, same order, same values.
     void get_xyz_density_soa(std::vector<float> &x, std::vector<float> &y,
@@ -632,7 +691,6 @@ public:
 
     //! set_origin() without reallocating the location arrays (same values)
     void set_origin_fast(const IMP::algebra::Vector3D &origin);
-    long loc_size_ = -1;   //!< voxels the location arrays were computed for
 
     /**
      * @brief Set the tile density from the current data: 0 where the data
@@ -712,10 +770,34 @@ public:
     @param kt The kernel type.
     @param resolution The resolution of the PathMap.
     */
+    //! A copy of this grid as an `IMP::em::DensityMap`.
+    /*! `PathMap` used to *be* one, and callers passed it straight to
+        `IMP.em.write_map` and friends. It is its own lattice now
+        (`DensityGrid`), so that door is explicit: a new map with the same
+        extent, spacing, origin and voxel values, owned by the caller. This is
+        IMP integration and moves to the connection layer with
+        #write_map_feature; the type is forward-declared so that this header
+        still pulls in nothing from `IMP.em`. */
+    IMP::em::DensityMap* create_density_map() const;
+
+    //! Take the obstacles from IMP particles.
+    /*! The grid underneath stores spheres, not particles -- this is the
+        adapter, and it lives here rather than in `DensityGrid` so that the
+        lattice itself owes nothing to `IMP.core`. `ps_` is kept because
+        callers read the particle list back off the map. */
+    void set_particles(const IMP::ParticlesTemp &ps);
+
+    //! Re-read the obstacle spheres from the particles they came from.
+    /*! Called by #sample_obstacles, so a map samples the particles where they
+        are now, not where they were when #set_particles ran. */
+    void refresh_spheres_from_particles();
+
+    //! The particles the obstacles came from, in the order they were given.
+    IMP::ParticlesTemp ps_;
+
     explicit PathMap(
             const PathMapHeader &header,
             std::string name = "PathMap%1%",
-            IMP::em::KernelType kt = IMP::em::BINARIZED_SPHERE,
             float resolution = -1.0
     );
 
@@ -745,7 +827,7 @@ public:
  * @param bounds The bounds of the path map.
  * @param feature_name The name of the feature.
  */
-IMPEMEXPORT
+IMPBFFEXPORT
 void write_map_feature(
         PathMap *m,
         std::string filename,

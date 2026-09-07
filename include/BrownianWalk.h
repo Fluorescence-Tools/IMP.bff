@@ -48,9 +48,8 @@ IMPBFF_BEGIN_NAMESPACE
                which on a 101^3 grid is 34 ms of marshalling per call.
     \param[in] mobility,n_mobility flat ng^3 scaling of the step variance, or
                length 0 for a
-               uniform medium. Applied unconditionally -- a value above 1 speeds
-               the particle up rather than being ignored, which the two Python
-               kernels this replaces disagreed about.
+               uniform medium. Applied unconditionally -- a value above 1
+               speeds the particle up rather than being ignored.
     \param[in] ng voxels per axis
     \param[in] dg voxel edge, Angstrom
     \param[in] t_max total simulated time, ns

@@ -3,19 +3,18 @@
  *  \brief The fps `strip_mask` dialect: which atoms a selection removes.
  *
  * fps.json positions are calibrated for a structure whose attachment residue
- * does not wall in its own dye, so the side chain goes — minus the attachment
- * atom, and the backbone stays — before anything is measured. That convention
- * is what every `allowed_sphere_radius` in a shipped fps.json is calibrated
- * against, and it is spelled as a PyMOL-style selection so a declared mask and
- * a consumer's default round-trip through one parser.
+ * does not wall in its own probe, so the side chain goes -- minus the
+ * attachment atom, and the backbone stays -- before anything is measured. That
+ * convention is what every `allowed_sphere_radius` in a shipped fps.json is
+ * calibrated against, and it is spelled as a selection so that a declared mask
+ * and a consumer's default go through one parser.
  *
- * The grammar is the dialect fps documents actually carry, and nothing more:
- * an `and`-chain of `chain <id>`, `resid <n>` (`resi` accepted), and one name
- * term, `name A+B+...` or `not name A+B+...`. `+` is the list separator —
- * PyMOL's own; a space-separated list is a parse error there and here.
- * Anything else (`or`, parentheses, other keywords) is **refused loudly**: a
- * mask this cannot read must not be silently ignored or approximated, because
- * the alternative is computing against obstacles the document said to remove.
+ * The grammar is #IMP::bff::SelectionExpression, whole: `chain A and resid 132
+ * and not name CA+CB+C+N+O`, `chain A and resid 115 and not name CA CB C N O`,
+ * `(resid 132 and not name CA+CB+C+N+O) or resname HOH SOL WAT`, and anything
+ * else the language accepts. A mask this cannot read is **refused loudly**,
+ * because the alternative is computing against obstacles the document said to
+ * remove.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -25,9 +24,11 @@
 #define IMPBFF_STRIPMASK_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/SelectionExpression.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/atom/Hierarchy.h>
+
+#include <IMP/bff/Base.h>
 
 #include <set>
 #include <string>
@@ -38,38 +39,62 @@ IMPBFF_BEGIN_NAMESPACE
 //! The backbone a labelling site keeps when its side chain is stripped.
 IMPBFFEXPORT std::vector<std::string> backbone_atom_names();
 
-//! A parsed `strip_mask`: which (chain, resseq, atom name) it selects.
-class IMPBFFEXPORT StripSelection {
-    std::string chain_;               //!< empty = any chain
-    std::vector<int> resids_;         //!< empty = any residue
-    std::set<std::string> names_;     //!< empty and !has_names_ = no name term
-    bool has_names_;
-    bool negate_;                     //!< the name term was `not name ...`
 
-public:
-    StripSelection() : has_names_(false), negate_(false) {}
-    StripSelection(const std::string& chain, const std::vector<int>& resids,
-                   const std::vector<std::string>& names, bool has_names,
-                   bool negate);
+//! The obstacles a volume sees: `(x, y, z, r)` per atom, flat.
+/*! The array form of a strip, for the kernels that take obstacles as numbers
+    rather than as a hierarchy -- #IMP::bff::compute_av and everything built on
+    it. Four doubles per atom, in hierarchy order, **every** atom present: the
+    ones \p mask names carry a **radius of zero**, which is what a strip is
+    everywhere in this module. A rasteriser asks `distance < radius`, so an
+    atom of no size blocks nothing, and the array keeps row-for-atom
+    correspondence with the structure it came from.
 
-    std::string get_chain() const { return chain_; }
-    std::vector<int> get_resids() const { return resids_; }
-    std::vector<std::string> get_names() const;
-    bool get_has_names() const { return has_names_; }
-    bool get_negate() const { return negate_; }
+    \param[in] hierarchy the structure
+    \param[in] mask a selection expression; empty keeps every atom
+    \param[in] keep an atom to keep even when the mask names it, as
+               `chain/resi/name` -- the attachment atom, whose removal would
+               let a volume grow through its own anchor. Empty keeps nothing
+               extra.
+    \throw ValueException when the mask cannot be read */
+IMPBFFEXPORT std::vector<double> strip_obstacles(
+        IMP::atom::Hierarchy hierarchy, const std::string& mask,
+        const std::string& keep = "");
 
-    //! True when an atom is selected by the mask.
-    bool matches(const std::string& chain, int resseq,
-                 const std::string& name) const;
+//! What a mask removes from a structure, atom by atom.
+/*! The diagnostic a caller needs to answer "did my mask do what I meant":
+    how many atoms it names, which residues they belong to, and -- the case
+    worth catching -- whether it names none at all. */
+struct IMPBFFEXPORT StripReport {
+    //! The mask, as given.
+    std::string mask;
+    //! How many atoms it selects.
+    int n_selected;
+    //! How many atoms the structure has.
+    int n_atoms;
+    //! `chain/resi/name` of each selected atom, in structure order.
+    std::vector<std::string> atoms;
+    //! `chain/resi` of each residue it touches, without repeats.
+    std::vector<std::string> residues;
 
-    IMP_SHOWABLE_INLINE(StripSelection,
-                        out << "StripSelection(chain=" << chain_ << ")");
+    StripReport() : n_selected(0), n_atoms(0) {}
+
+    IMP_SHOWABLE_INLINE(StripReport,
+                        out << "StripReport(" << n_selected << "/" << n_atoms
+                            << " atoms, " << residues.size() << " residues)");
 };
-IMP_VALUES(StripSelection, StripSelections);
+IMP_VALUES(StripReport, StripReports);
+
+//! What \p mask removes from \p hierarchy.
+/*! \throw ValueException when the mask cannot be read. A mask that reads and
+           selects nothing is **not** an error -- it is reported as
+           `n_selected == 0`, which is the answer the caller asked for. */
+IMPBFFEXPORT StripReport strip_report(IMP::atom::Hierarchy hierarchy,
+                                      const std::string& mask);
 
 //! Parse an fps `strip_mask`.
-/*! \throw ValueException for anything outside the dialect */
-IMPBFFEXPORT StripSelection parse_strip_mask(const std::string& mask);
+/*! \throw ValueException on a syntax error or an unanswerable keyword; see
+           #IMP::bff::SelectionExpression. */
+IMPBFFEXPORT SelectionExpression parse_strip_mask(const std::string& mask);
 
 //! Mask that strips residue `(chain, resseq)` except \p keep_atom_names.
 /*! An empty \p chain matches any chain. Spelled in the fps dialect so a

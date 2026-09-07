@@ -1,7 +1,7 @@
 ## \example structure/hgbp1_label_and_sample.py
 # Label hGBP1 with a coarse-grained dye and sample the dye's conformations.
 #
-# This is the end-to-end cgdye workflow on a real system: take a structure,
+# This is the end-to-end cgprobe workflow on a real system: take a structure,
 # attach a dye at a named site, and explore where the dye can actually go. The
 # same three steps underlie every accessible-volume or FRET-efficiency number
 # IMP.bff produces, so it is worth seeing them separately before they disappear
@@ -9,14 +9,14 @@
 #
 # The system is hGBP1 (PDB 1DG3) labelled at chain A residue 481 with
 # Alexa488 C5-maleimide (the `alexa488_r48` template) -- a site used throughout
-# the cgdye tests, so the numbers here can be compared against them.
+# the cgprobe tests, so the numbers here can be compared against them.
 #
 # Three things this example is careful about, each of which has caused a real
 # bug:
 #
 # - **The structure and dye templates are module data**, reached through
 #   `get_structure_dir()` rather than by walking up from `__file__`. Deriving
-#   data paths from the source layout broke the moment cgdye moved between
+#   data paths from the source layout broke the moment cgprobe moved between
 #   repositories.
 # - **Attachment mutates the dye in place.** `attach_probes` transforms the dye's
 #   coordinates onto the site frame; it does not return a new molecule. The
@@ -48,8 +48,8 @@ protein = IMP.atom.read_pdb(
 dye = IMP.atom.read_mol2(str(get_structure_dir("alexa488_r48.mol2")), model)
 
 n_protein_atoms = len(IMP.atom.get_by_type(protein, IMP.atom.ATOM_TYPE))
-n_dye_atoms = len(IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE))
-print("hGBP1 atoms:", n_protein_atoms, " dye atoms:", n_dye_atoms)
+n_probe_atoms = len(IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE))
+print("hGBP1 atoms:", n_protein_atoms, " dye atoms:", n_probe_atoms)
 
 # --- 2. resolve the labelling site ------------------------------------------
 # resolve_probe_site returns the backbone frame the dye is attached against. If the
@@ -91,9 +91,9 @@ assert not (set(site_residue_atoms) - backbone), "sidechain was not stripped"
 # --- 4. where can the dye go? -----------------------------------------------
 # The dye's reachable volume is what an AV or a FRET efficiency is computed
 # from. Here we simply report the labelled system; the sampling scripts under
-# junk/cgdye-scripts (dof_walk_hgbp1_site481, rrt_hgbp1_site481) walk the
+# junk/cgprobe-scripts (dof_walk_hgbp1_site481, rrt_hgbp1_site481) walk the
 # dye's internal degrees of freedom and write a trajectory, and
-# IMP.bff.cgdye.sampling holds the samplers they drive.
+# IMP.bff.cgprobe.sampling holds the samplers they drive.
 dye_atoms = IMP.atom.get_by_type(dye, IMP.atom.ATOM_TYPE)
 centroid = IMP.algebra.get_centroid(
     [IMP.core.XYZ(a).get_coordinates() for a in dye_atoms])

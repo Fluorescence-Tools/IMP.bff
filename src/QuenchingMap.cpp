@@ -7,7 +7,7 @@
 #include <IMP/bff/QuenchingMap.h>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <cmath>
 
@@ -60,7 +60,7 @@ void quenching_map(
         const std::vector<double>& density, const std::vector<double>& axis,
         const std::vector<double>& r0, const std::vector<double>& atoms_xyz,
         const std::vector<double>& kQ, const std::vector<double>& rC,
-        double dye_radius, double inv_tau0,
+        double probe_radius, double inv_tau0,
         double** out_view, int* n_out_view) {
     const std::size_t ng = axis.size();
     const std::size_t n_atoms = atoms_xyz.size() / 3;
@@ -81,7 +81,7 @@ void quenching_map(
                     const double dx = atoms_xyz[3 * a + 0] - x;
                     const double dy = atoms_xyz[3 * a + 1] - y;
                     const double dz = atoms_xyz[3 * a + 2] - z;
-                    const double d = std::sqrt(dx * dx + dy * dy + dz * dz) - dye_radius;
+                    const double d = std::sqrt(dx * dx + dy * dy + dz * dz) - probe_radius;
                     v += kQ[a] * std::exp(-d / rC[a]);
                 }
                 out[k] = v;
@@ -172,10 +172,10 @@ void quenching_rate_map(const std::vector<double>& density,
                         const std::vector<double>& atoms_xyz,
                         const std::vector<double>& kQ,
                         const std::vector<double>& rC, double tau0,
-                        double dye_radius, double** out_view,
+                        double probe_radius, double** out_view,
                         int* n_out_view) {
     const int ng = qmap::grid_side(density.size());
-    quenching_map(density, grid_axis(ng, dg), r0, atoms_xyz, kQ, rC, dye_radius,
+    quenching_map(density, grid_axis(ng, dg), r0, atoms_xyz, kQ, rC, probe_radius,
                   tau0 > 0.0 ? 1.0 / tau0 : 0.0, out_view, n_out_view);
 }
 

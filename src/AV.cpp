@@ -361,6 +361,39 @@ void AV::set_compensate_stencil(bool tf){
     }
 }
 
+IntKey AV::get_radii_source_key(){
+    static const IntKey k("av_radii_source");
+    return k;
+}
+
+std::string AV::get_radii_source() const{
+    // Absent attribute = the default, which is the radii the particles carry
+    // (IMP's own) -- so that the volume and `clash_container` size an atom the
+    // same way. Stored as an int for the same reason `av_search_mode` is: a
+    // Model IntKey is cheap and the string is the API.
+    if(get_model()->get_has_attribute(get_radii_source_key(), get_particle_index())){
+        return av_radii_source_to_string((AVRadiiSource)
+            get_model()->get_attribute(get_radii_source_key(), get_particle_index()));
+    }
+    return av_radii_source_to_string(AV_RADII_IMP);
+}
+
+void AV::set_radii_source(std::string source){
+    const int v = (int) av_radii_source_from_string(source);  // validates
+    if(get_model()->get_has_attribute(get_radii_source_key(), get_particle_index())){
+        if(get_model()->get_attribute(get_radii_source_key(), get_particle_index()) == v){
+            return;
+        }
+        get_model()->set_attribute(get_radii_source_key(), get_particle_index(), v);
+    } else {
+        if(v == (int) AV_RADII_IMP) return;  // already the default
+        get_model()->add_attribute(get_radii_source_key(), get_particle_index(), v);
+    }
+    // The obstacle set is built from it, exactly as it is from the strip mask,
+    // so a new source invalidates the map.
+    av_map_ = nullptr;
+}
+
 IntKey AV::get_search_mode_key(){
     static const IntKey k("av_search_mode");
     return k;
@@ -458,26 +491,56 @@ namespace {
     returns an empty override, which means "use the particles' own radii". A
     mask that cannot be read raises rather than being ignored: computing
     against obstacles the position said to remove is the failure this
-    guards. */
+    guards.
+
+    The **radii set** enters here too, and for the same reason: the vector this
+    returns is what the raster inflates by, so "which van der Waals radii" and
+    "which atoms are transparent" are one answer, computed once. Under
+    `AV_RADII_IMP` (the default) each atom keeps whatever the particle carries
+    -- IMP's united-atom set after `read_pdb`, and the same radius
+    `clash_container` measures overlap with; under `AV_RADII_OLGA` it takes
+    Olga's name-keyed radius (#IMP::bff::olga_vdw_radius). An empty override --
+    "use the particles' own radii" -- is therefore returned only for
+    `AV_RADII_IMP` with no mask, and that is the point of the default: no
+    override, so no second opinion anywhere about how big an atom is. */
 std::vector<double> obstacle_radii(IMP::atom::Hierarchy root,
                                    IMP::Particle* source,
                                    const IMP::ParticlesTemp& all,
-                                   const std::string& mask) {
-    if (mask.empty()) return std::vector<double>();
+                                   const std::string& mask,
+                                   AVRadiiSource radii_source) {
+    if (mask.empty() && radii_source == AV_RADII_IMP) {
+        return std::vector<double>();
+    }
 
-    const IMP::atom::Selection selection =
-            selection_from_expression(root, mask);
-    const IMP::ParticleIndexes stripped =
-            selection.get_selected_particle_indexes();
-    std::set<IMP::ParticleIndex> transparent(stripped.begin(), stripped.end());
-    transparent.erase(source->get_index());
+    std::set<IMP::ParticleIndex> transparent;
+    if (!mask.empty()) {
+        const IMP::atom::Selection selection =
+                selection_from_expression(root, mask);
+        const IMP::ParticleIndexes stripped =
+                selection.get_selected_particle_indexes();
+        transparent.insert(stripped.begin(), stripped.end());
+        transparent.erase(source->get_index());
+    }
 
     std::vector<double> radii(all.size(), 0.0);
     for (std::size_t i = 0; i < all.size(); ++i) {
         if (transparent.count(all[i]->get_index())) continue;  // no size
-        radii[i] = IMP::core::XYZR::get_is_setup(all[i])
-                           ? IMP::core::XYZR(all[i]).get_radius()
-                           : 0.0;
+        /* Olga's table is keyed by *atom name*, so it has an opinion only
+           about particles that are atoms. A particle that is not one -- a
+           coarse-grained bead, a synthetic obstacle built by a test, anything
+           a caller put in the hierarchy -- is outside the table's domain, and
+           giving it the 1.50 A unknown-name fallback would silently shrink an
+           obstacle set the caller sized deliberately. It keeps its own radius.
+           An atom whose *name* the table misses does take the fallback: that
+           case is inside Olga's domain and is exactly what Olga does. */
+        if (radii_source == AV_RADII_OLGA &&
+            IMP::atom::Atom::get_is_setup(all[i])) {
+            radii[i] = olga_vdw_particle_radius(all[i]);
+        } else {
+            radii[i] = IMP::core::XYZR::get_is_setup(all[i])
+                               ? IMP::core::XYZR(all[i]).get_radius()
+                               : 0.0;
+        }
     }
     return radii;
 }
@@ -564,8 +627,34 @@ void AV::init_path_map(){
     auto root = IMP::atom::get_root(h);
     const IMP::ParticlesTemp leaves = get_leaves(root);
     av_map_->set_particles(leaves);
-    av_map_->set_obstacle_radii(
-            obstacle_radii(root, parent, leaves, get_strip_mask()));
+    /* The legacy anchoring keeps the legacy radii, and refuses Olga's the way
+       it refuses the accessible contact volume (see resample_legacy step 5b).
+       `space_fixed=False` exists for exactly one thing -- reproducing the
+       pre-PRD-105 numbers byte for byte, which
+       `references/prd105_legacy_pins.json` is there to prove -- and those
+       numbers were computed against the radii the particles carry. Said out
+       loud once per handle rather than left to be discovered. Since the
+       default is those radii again, this now fires only for a volume that
+       explicitly asked for Olga's. */
+    AVRadiiSource radii_source =
+            av_radii_source_from_string(get_radii_source());
+    if(!get_space_fixed() && radii_source != AV_RADII_IMP){
+        if(!get_state().warned_radii_source){
+            get_state().warned_radii_source = true;
+            IMP_WARN("AV " << get_particle()->get_name() << ": radii_source=\""
+                     << av_radii_source_to_string(radii_source)
+                     << "\" is ignored under space_fixed=False. The legacy"
+                        " anchoring is frozen on the pre-PRD-105 numbers, which"
+                        " were computed with the radii the particles carry; use"
+                        " the default anchoring to get Olga's table."
+                     << std::endl);
+        }
+        radii_source = AV_RADII_IMP;
+    }
+    const std::vector<double> orad =
+            obstacle_radii(root, parent, leaves, get_strip_mask(),
+                           radii_source);
+    av_map_->set_obstacle_radii(orad);
     if(get_chain_weighting()){
         av_map_->set_linker_weighting(linker_weighting(get_linker_length()));
     }
@@ -575,6 +664,15 @@ void AV::init_path_map(){
     st.have_window = false;
     st.private1 = nullptr;
     st.private2 = nullptr;
+    /* The attachment atom's radius *as this map's raster uses it*, found once
+       here rather than scanned for on every frame. Only an override answers
+       it; with none, the raster reads the particle and so does prepare(). */
+    st.source_obstacle_radius = -1.0;
+    if(!orad.empty()){
+        for(std::size_t i = 0; i < leaves.size(); ++i){
+            if(leaves[i] == parent){ st.source_obstacle_radius = orad[i]; break; }
+        }
+    }
 }
 
 void AV::resample(bool shift_xyz, bool force_full){
@@ -662,6 +760,29 @@ void AV::resample_legacy(bool shift_xyz){
         // AV frame after frame.)
         map->tiles[i].density = (obstacle[i] > TILE_OBSTACLE_THRESHOLD)
             ? 0.0f : 1.0f;
+    }
+
+    /* 5b. The accessible contact volume is **not** applied here, and this is
+       the one place in the module where an ACV request is honoured by being
+       refused. `space_fixed=False` exists for exactly one thing -- reproducing
+       the pre-PRD-105 numbers byte for byte, which
+       `references/prd105_legacy_pins.json` is there to prove -- and those
+       numbers were computed with the weighting inert. Adding it here would
+       change them and remove the only reason the path exists -- and it would
+       need a second copy of the rule, against the tiles rather than the SoA
+       raster, which is one more place for the two to drift apart. Said out
+       loud once per handle rather than left to be discovered. */
+    if(get_contact_volume_thickness() > 0.0 &&
+       get_contact_volume_trapped_fraction() >= 0.0 &&
+       !get_state().warned_contact_volume){
+        get_state().warned_contact_volume = true;
+        IMP_WARN("AV " << get_particle()->get_name()
+                 << ": contact_volume_thickness="
+                 << get_contact_volume_thickness()
+                 << " is ignored under space_fixed=False. The legacy anchoring"
+                    " is frozen on the pre-PRD-105 numbers, which were computed"
+                    " without it; use the default anchoring to get the"
+                    " accessible contact volume." << std::endl);
     }
 
     // Shift XYZ to mean AV position
@@ -767,6 +888,17 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     AVOccupancyMap *occ1; AVOccupancyMap *occ2;
     st.pending_occ_dye.clear();
     if(st.registry){
+        /* The radii set is a property of the shared raster, not of this
+           volume: hand it over before the first map is created, so the maps
+           are built with it rather than re-rastered afterwards. O(1) after the
+           first volume -- the registry compares the *source*, not the vector.
+           A strip mask never reaches here (set_occupancy_registry drops a
+           masked volume to a private raster), so this vector is the pure
+           radii-set answer. */
+        st.registry->adopt_obstacle_radii(
+                av_radii_source_from_string(get_radii_source()),
+                map->get_obstacle_radii());
+        // (a registry requires space_fixed, so no legacy override here)
         occ1 = st.registry->get_map(h, extra1);
         occ2 = st.registry->get_map(h, extra2);
         occ1->request_window(k0[0], k0[1], k0[2], n, n, n);
@@ -891,12 +1023,22 @@ void AV::resample_lattice_prepare(bool shift_xyz, bool force_full){
     st.pending_ll = ll;
     st.pending_allowed = get_effective_allowed_sphere_radius();
     /* Unconditional, shared raster or private: the same subtraction on both,
-       so the two cannot compute different volumes for the same position. */
+       so the two cannot compute different volumes for the same position.
+       It must be the radius the *raster* used for this atom, not the one the
+       Model carries -- under `radii_source = "olga"` those differ, and
+       subtracting a sphere of the wrong size would leave a ring of blocked
+       voxels around the anchor (too small) or open voxels no rule opened
+       (too large). obstacle_radii() is the one place that decides; this reads
+       the answer back out of it. */
     st.pending_source_radius =
-            IMP::core::XYZR::get_is_setup(get_model(), get_particle_index(0))
-                    ? IMP::core::XYZR(get_model(),
-                                      get_particle_index(0)).get_radius()
-                    : 0.0;
+            st.source_obstacle_radius >= 0.0
+                    ? st.source_obstacle_radius
+                    : (IMP::core::XYZR::get_is_setup(get_model(),
+                                                     get_particle_index(0))
+                               ? IMP::core::XYZR(get_model(),
+                                                 get_particle_index(0))
+                                         .get_radius()
+                               : 0.0);
     st.pending_source = source;
     st.pending_set_origin = set_origin_needed;
     st.pending_grid_origin = grid_origin;
@@ -1076,6 +1218,19 @@ void AV::resample_lattice_compute_carve(){
         }
         map->carve_lattice_fractional(src.data(), (int) n_dye);
     }
+    /* The accessible *contact* volume (PRD-121 G9). Applied here, between the
+       carve and the cloud, because the trapped share is a share of the points
+       that reach the cloud: the search has run, the densities are final, and
+       nothing has read them yet. `counts` is the dye-radius occupancy the
+       carve just used -- Olga's `occupancyVdWDye` -- so the surface the layer
+       is measured from is the one the dye actually cannot enter.
+       For AV3 the classification uses the first radius's raster, the one
+       carve_lattice_fractional() already treats as canonical; Olga instead
+       classifies each radius against its own and concatenates three clouds,
+       which its per-radius normalisation makes depend on the *free* volumes
+       alone. One surface and one share is the statement the parameter makes. */
+    map->apply_contact_weighting(counts, get_contact_volume_thickness(),
+                                 get_contact_volume_trapped_fraction());
     (void) data;
 
     st.have_result = true;
@@ -1145,7 +1300,12 @@ void AV::set_av_parameter(const std::string &json_text){
     // standard linker width of 4.5 A.
     set_allowed_sphere_radius(j.value("allowed_sphere_radius", -1.0));
     set_contact_volume_thickness(j.value("contact_volume_thickness", 0.0));
-    set_contact_volume_trapped_fraction(j.value("contact_volume_trapped_fraction", -1));
+    /* `-1.0`, not `-1`. nlohmann deduces the value type from the default, so
+       an `int` default read `"contact_volume_trapped_fraction": 0.328` back as
+       **0** -- every fps.json fraction truncated to zero or one. Invisible
+       while the ACV was inert (PRD-121 G9); the first thing the wiring found. */
+    set_contact_volume_trapped_fraction(
+            j.value("contact_volume_trapped_fraction", -1.0));
     set_simulation_grid_resolution(j.value("simulation_grid_resolution", 1.5));
     // The position's parameters are calibrated against a structure whose
     // labelling site has been stripped, so the mask is part of the position,
@@ -1154,6 +1314,18 @@ void AV::set_av_parameter(const std::string &json_text){
     // Off unless the file asks for it: turning it on changes every number the
     // volume reports, so it is opt-in and not a default.
     set_chain_weighting(j.value("chain_weighting", false));
+    /* Which van der Waals radii the obstacles are inflated by. Absent means
+       the module default, `"imp"`: the radii the particles carry, which is
+       what `clash_container` reads, so a volume and the clash term beside it
+       cannot disagree about how big an atom is. A file reproducing Olga-era
+       numbers -- the fitted `contact_volume_trapped_fraction` above was fitted
+       against Olga's obstacle set, as were the published <R_DA> this module is
+       measured against -- says `"radii_source": "olga"`. It is a property of
+       the position and not a run flag for the same reason the strip mask is:
+       the rest of the position's parameters were calibrated against one radii
+       set, and a file that names it says which. */
+    set_radii_source(j.value("radii_source",
+                             av_radii_source_to_string(AV_RADII_IMP)));
 }
 
 IMP::bff::PathMapHeader AV::create_path_map_header(){

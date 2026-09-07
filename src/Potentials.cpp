@@ -26,7 +26,7 @@
 #include <IMP/core/Harmonic.h>
 #include <IMP/core/SphereDistancePairScore.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cmath>

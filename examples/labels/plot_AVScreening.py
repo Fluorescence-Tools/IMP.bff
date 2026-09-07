@@ -1,7 +1,7 @@
 """
 Scoring of structures
 =====================
-This examples illustrates how to use  ``IMP.bff.AVNetworkRestraint`` for
+This examples illustrates how to use  ``IMP.bff.ProbeNetworkRestraint`` for
 scoring structures in a trajectory.
 """
 import json
@@ -33,7 +33,7 @@ fps_json_path = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
 with open(fps_json_path) as fp:
     fps_json = json.load(fp)
 score_set_c1 = "chi2_C1_33p"
-fret_restraint = IMP.bff.AVNetworkRestraint(
+fret_restraint = IMP.bff.ProbeNetworkRestraint(
     hier, fps_json_path,
     score_set=score_set_c1
 )

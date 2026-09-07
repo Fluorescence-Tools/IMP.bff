@@ -38,13 +38,12 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
-#include <IMP/bff/DyeDiffusion.h>
+#include <IMP/bff/ProbeDiffusion.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/LifetimeSpectrum.h>
 #include <IMP/bff/PETQuenching.h>
 
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <limits>
 #include <map>
@@ -82,7 +81,7 @@ IMP_VALUES(ObstacleAtoms, ObstacleAtomsList);
 class IMPBFFEXPORT DynamicAccessibleVolume {
     AccessibleVolume av_;
     ObstacleAtoms atoms_;
-    double tau0_, dye_radius_, free_diffusion_, contact_distance_, slow_factor_;
+    double tau0_, probe_radius_, free_diffusion_, contact_distance_, slow_factor_;
     std::string flux_form_;
 
     mutable std::vector<double> diffusion_map_, quenching_rate_map_;
@@ -97,7 +96,7 @@ public:
     //! \param[in] av the volume to decorate
     /*! \param[in] atoms the obstacles
         \param[in] tau0 unquenched donor lifetime, ns
-        \param[in] dye_radius A
+        \param[in] probe_radius A
         \param[in] free_diffusion unhindered diffusion coefficient, A^2/ns
         \param[in] contact_distance dye-to-atom distance counted as contact, for
                    the mobility field
@@ -107,7 +106,7 @@ public:
         \throw ValueException for any other \p flux_form */
     DynamicAccessibleVolume(const AccessibleVolume& av = AccessibleVolume(),
                             const ObstacleAtoms& atoms = ObstacleAtoms(),
-                            double tau0 = 4.0, double dye_radius = 3.5,
+                            double tau0 = 4.0, double probe_radius = 3.5,
                             double free_diffusion = 8.0,
                             double contact_distance = 6.5,
                             double slow_factor = 0.985,
@@ -199,14 +198,14 @@ IMP_VALUES(DynamicAccessibleVolume, DynamicAccessibleVolumes);
 class IMPBFFEXPORT QuenchedDonorDecay {
     AccessibleVolume av_;
     ObstacleAtoms atoms_;
-    double tau0_, critical_distance_, slow_radius_, dye_radius_;
+    double tau0_, critical_distance_, slow_radius_, probe_radius_;
     double diffusion_coefficient_, slow_fact_, t_step_, t_max_;
     int n_photons_, n_trajectories_, random_seed_;
     std::map<std::string, ResidueQuenching> table_;
 
     mutable ResidueSites sites_;
     mutable std::vector<double> quenching_rate_map_, slow_factor_map_;
-    mutable DyeDiffusionSimulation walk_;
+    mutable ProbeDiffusionSimulation walk_;
     mutable std::vector<double> delays_;
     mutable std::vector<int> emitted_;
     mutable bool has_sites_, has_grids_, has_walk_, has_photons_;
@@ -238,7 +237,7 @@ public:
             const std::map<std::string, ResidueQuenching>& quenching_table =
                     std::map<std::string, ResidueQuenching>(),
             double critical_distance = 7.0, double slow_radius = 10.0,
-            double dye_radius = DEFAULT_DYE_RADIUS,
+            double probe_radius = DEFAULT_PROBE_RADIUS,
             double diffusion_coefficient = 40.0, double slow_fact = 0.05,
             double t_step = 0.004, double t_max = 10000.0,
             int n_photons = 100000, int n_trajectories = -1,
@@ -276,7 +275,7 @@ public:
     //! Run the Brownian walk. \return whether a trajectory was produced
     bool simulate_diffusion();
     //! The walk, run on first use.
-    const DyeDiffusionSimulation& get_diffusion() const;
+    const ProbeDiffusionSimulation& get_diffusion() const;
     //! The quenching rate the dye sees, frame by frame, 1/ns.
     void get_k_quench(double** out_view, int* n_out_view) const;
 

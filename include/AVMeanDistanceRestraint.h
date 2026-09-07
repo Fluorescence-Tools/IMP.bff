@@ -45,6 +45,7 @@ class IMPBFFEXPORT AVMeanDistanceRestraint : public IMP::Restraint {
     AVPairDistanceMeasurement measurement_;
     FRETDistanceConverter converter_;
     double weight_;
+    double max_force_;
 
     //! The chi-squared at a given mean-position separation.
     double score_at(double d_mp) const;
@@ -57,18 +58,36 @@ public:
                its Förster radius and which distance convention it is in
         \param[in] sigma the per-component width of the separation vector, for
                the \f$R_{mp} \to \langle R_{DA}\rangle\f$ conversion
-        \param[in] weight multiplies the score */
+        \param[in] weight multiplies the score
+        \param[in] max_force FPS's `MaxForce`: past
+               \f$\Delta r_{max} = F_{max}\sigma_{exp}^2/2\f$ the restraint
+               becomes **linear** rather than growing as a parabola
+               (#IMP::bff::chi2_score_capped). **0, the default, is no cap**
+               and is the plain asymmetric \f$\chi^2\f$ this restraint has
+               always scored; FPS's docking default is 400. */
     /*! \note The two particles are \c ParticleIndexAdaptor, which is how
         `IMP::core`'s own restraints take theirs: a `Particle`, an `AV`
         decorator or a bare index all convert. */
     AVMeanDistanceRestraint(IMP::Model* m, IMP::ParticleIndexAdaptor p1,
                             IMP::ParticleIndexAdaptor p2,
                             const AVPairDistanceMeasurement& measurement,
-                            double sigma = 6.0, double weight = 1.0);
+                            double sigma = 6.0, double weight = 1.0,
+                            double max_force = 0.0);
 
     double get_weight_factor() const { return weight_; }
     void set_weight_factor(double w) { weight_ = w; }
+    //! FPS's `MaxForce`; 0 is uncapped.
+    double get_max_force() const { return max_force_; }
+    void set_max_force(double f) { max_force_ = f; }
     const FRETDistanceConverter& get_converter() const { return converter_; }
+    //! The measurement this restraint scores against.
+    const AVPairDistanceMeasurement& get_measurement() const {
+        return measurement_;
+    }
+    //! The score at a given mean-position separation, without moving anything.
+    /*! What proves the linear tail is linear: evaluate at two separations past
+        the knee and divide. */
+    double get_score_at(double d_mp) const { return weight_ * score_at(d_mp); }
 
     virtual double unprotected_evaluate(
             IMP::DerivativeAccumulator* accum) const override;

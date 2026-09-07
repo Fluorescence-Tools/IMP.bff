@@ -1,54 +1,20 @@
 /*
- * The output contract as a C++ value, with the Python surface it had as a
- * dataclass.
+ * The output contract as a C++ value.
  *
- * `LifetimeSpectrum` was 112 lines of Python holding two numpy arrays. Moving
- * it to C++ is not about the arithmetic -- the two averages are a dozen
- * multiply-adds. It is about what the object *is*: in `atom` and `core` the
- * Python is a shim because the domain objects are C++ and SWIG exposes them,
- * and no amount of kernel porting produces that shape while the objects
- * themselves are Python holding numpy arrays.
- *
- * What has to survive is the surface, because it is what the tests and every
- * caller use: attribute access rather than getters, `len()`, `repr()`, and a
- * `decay()` that returns the caller's shape.
+ * `LifetimeSpectrum` is a domain object, not a pair of numpy arrays behind an
+ * interface: it is C++ for the same reason `atom` and `core` values are, and
+ * SWIG gives it attribute access, `len()`, `repr()` and a `decay()` that
+ * returns the caller's shape.
  */
 
 IMP_SWIG_VALUE(IMP::bff, LifetimeSpectrum, LifetimeSpectrums);
 
-// The class has two constructors -- the real one and a default one, which the
-// value-vector template needs -- and SWIG will not generate keyword arguments
-// for an overloaded function. Callers say `LifetimeSpectrum(a, k, exact=False)`,
-// so the shadow restores them. Same reason and same shape as the one on
-// AVNetworkRestraint.
-%feature("shadow") IMP::bff::LifetimeSpectrum::LifetimeSpectrum %{
-def __init__(self, *args, **kwargs):
-    if not args and not kwargs:
-        _IMP_bff.LifetimeSpectrum_swiginit(self, _IMP_bff.new_LifetimeSpectrum())
-        return
-    names = ("amplitudes", "rate_constants", "exact")
-    defaults = {"exact": True}
-    if len(args) > len(names):
-        raise TypeError("LifetimeSpectrum() takes at most %d positional "
-                        "arguments (%d given)" % (len(names), len(args)))
-    values = dict(zip(names, args))
-    for k, v in kwargs.items():
-        if k not in names:
-            raise TypeError("LifetimeSpectrum() got an unexpected keyword "
-                            "argument %r" % k)
-        if k in values:
-            raise TypeError("LifetimeSpectrum() got multiple values for "
-                            "argument %r" % k)
-        values[k] = v
-    for k in names:
-        if k not in values:
-            if k not in defaults:
-                raise TypeError("LifetimeSpectrum() missing required "
-                                "argument %r" % k)
-            values[k] = defaults[k]
-    _IMP_bff.LifetimeSpectrum_swiginit(
-        self, _IMP_bff.new_LifetimeSpectrum(*[values[k] for k in names]))
-%}
+// Keyword arguments come from SWIG, not from a hand-written shadow: the
+// constructor is a single declaration with default arguments now (an
+// overloaded one cannot carry them), so %feature("kwargs") generates
+// LifetimeSpectrum(amplitudes, rate_constants, exact=True) and the 28 lines
+// of Python that re-derived names, defaults and error messages are gone.
+%feature("kwargs") IMP::bff::LifetimeSpectrum::LifetimeSpectrum;
 
 // Read-only properties. `%attribute_np` wraps the getter in `np.array`, which
 // would copy; these getters already publish a managed numpy view over the

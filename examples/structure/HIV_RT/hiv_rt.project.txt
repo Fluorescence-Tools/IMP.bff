@@ -1,0 +1,105 @@
+# IMP.bff fixture in FPS project-export layout
+# 2026-09-01
+# Not FPS output. Hand-written in the exact shape
+# GPFileTools/OptionsManager.cs::Export writes -- '# Category' headers,
+# 'Key = value', an indented field block for a struct, and an array's
+# elements on the line AFTER its key -- so the reader is exercised against
+# the format rather than against itself. The five parameter blocks are
+# FPS's shipped defaults (ProjectData.cs:61-149). The selection below is
+# the 'resolved' score set of hiv_rt.fps.json: every distance except the
+# two on p66_K287C, whose volume is empty in the assembled complex.
+
+# Data
+ProjectFPSMode = Dock
+MoleculesPaths = System.String[]
+ protein_1R0A.pdb dna.pdb
+LabelingPositionsPath = LabelingPositions.txt
+DistancesPath = Distances.txt
+
+# Search parameters
+DockParameters = Fps.FPSParameters
+ ViscosityFactor = 1
+ TimeStepFactor = 1
+ MaxIterations = 200000
+ MaxForce = 400
+ ClashTolerance = 1
+ rkT = 10
+ ETolerance = 100
+ KTolerance = 0.001
+ FTolerance = 0.001
+ TTolerance = 0.02
+ OptimizeSelected = Selected
+
+# Refine parameters
+RefineParameters = Fps.FPSParameters
+ ViscosityFactor = 0.7
+ TimeStepFactor = 0.5
+ MaxIterations = 500000
+ MaxForce = 10000
+ ClashTolerance = 0.5
+ rkT = 10
+ ETolerance = 100
+ KTolerance = 0.0005
+ FTolerance = 0.0005
+ TTolerance = 0.01
+ OptimizeSelected = All
+
+# Error parameters
+ErrorEstimationParameters = Fps.FPSParameters
+ ViscosityFactor = 0.7
+ TimeStepFactor = 1
+ MaxIterations = 100000
+ MaxForce = 10000
+ ClashTolerance = 0.5
+ rkT = 10
+ ETolerance = 100
+ KTolerance = 0.001
+ FTolerance = 0.001
+ TTolerance = 0.02
+ OptimizeSelected = All
+
+# Sample parameters
+SampleParameters = Fps.FPSParameters
+ ViscosityFactor = 1
+ TimeStepFactor = 1
+ MaxIterations = 8000
+ MaxForce = 400
+ ClashTolerance = 1
+ rkT = 10
+ ETolerance = 100
+ KTolerance = 0.001
+ FTolerance = 0.001
+ TTolerance = 0.02
+ OptimizeSelected = Selected
+
+# Screening parameters
+ScreeningParameters = Fps.FPSParameters
+ ViscosityFactor = 1
+ TimeStepFactor = 1
+ MaxIterations = 200000
+ MaxForce = 400
+ ClashTolerance = 1
+ rkT = 10
+ ETolerance = 100
+ KTolerance = 0.001
+ FTolerance = 0.001
+ TTolerance = 0.02
+ OptimizeSelected = Selected
+
+# Conversion function
+ConversionParameters = Fps.ConversionParameters
+ R0 = 52
+ PolynomOrder = 3
+
+# AV parameters
+AVGlobalParameters = Fps.AVGlobalParameters
+ GridSize = 0.2
+ MinGridSize = 0.4
+ LinkerInitialSphere = 0.5
+ LinkSearchNodes = 3
+ ESamples = 200000
+
+# Selected distances
+SelectedDistances = System.Boolean[]
+ True True True True True True True True False False True True True True True True True True True True
+

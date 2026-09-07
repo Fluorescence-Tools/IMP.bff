@@ -30,8 +30,7 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <limits>
 #include <map>
@@ -44,8 +43,8 @@ IMPBFF_BEGIN_NAMESPACE
 /*! Peulen et al., J. Phys. Chem. B 2017, 121, 8211. */
 IMPBFFEXPORT extern const char* const REFERENCE_DYE;
 
-//! Radius of the dye sphere, Angstrom, when a caller does not say.
-IMPBFFEXPORT extern const double DEFAULT_DYE_RADIUS;
+//! Radius of the probe sphere, Angstrom, when a caller does not say.
+IMPBFFEXPORT extern const double DEFAULT_PROBE_RADIUS;
 
 //! A quenching moiety: which residue, which atoms. **No rate.**
 /*!
@@ -188,15 +187,15 @@ normalize_amino_acid_quenching(
 //! A full interaction table built from #IMP::bff::pet_quenching_reference.
 /*!
     \param[in] kQ_scale dye-specific multiplier on every reference \f$k_Q\f$.
-               Dyes that are harder to reduce or oxidise use a value below one.
+               Probes that are harder to reduce or oxidise use a value below one.
     \param[in] slow_factor diffusion scaling applied near every residue
-    \param[in] dye_radius Angstrom. The trajectory tracks the dye *centre*, so
+    \param[in] probe_radius Angstrom. The trajectory tracks the dye *centre*, so
                the reference surface contact distances are offset by this radius
                to give centre-to-centre quench radii.
 */
 IMPBFFEXPORT std::map<std::string, ResidueQuenching>
 amino_acid_quenching_defaults(double kQ_scale = 1.0, double slow_factor = 1.0,
-                              double dye_radius = 3.5);
+                              double probe_radius = 3.5);
 
 //! The stickiness factor of each residue, in \p residue_names order.
 IMPBFFEXPORT std::vector<double> slow_factors_for_residues(

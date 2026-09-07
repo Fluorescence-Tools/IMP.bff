@@ -33,6 +33,25 @@ their content here.
   evaluation on the semi space-fixed lattice — implemented 2026-08-17),
   [PRD-106](../prds/prd-106.md) (strip mech).
 
+# The FPS toolkit (`../../../chisurf/junk/fps`), specified
+
+Two pages that let the C# FPS toolkit be ported without opening the C# again.
+Both cite `File.cs:line` for every non-obvious claim and both carry a defect
+index — reading them is cheaper than rediscovering what they found. See
+[PRD-121](../prds/prd-121.md).
+
+* [FPS export formats](fps-export-formats.md) — the six things FPS writes
+  after a run (per-result PyMOL script, Overlay, OverlayStates, R table, chi2
+  table, `SimulationResults.bin`), byte by byte, with the arithmetic behind
+  each number and what is lossy to regenerate. **`SimulationResult.RMSD` has a
+  sign error**, and `BestFitRotation` is never computed by any `Save*` method.
+* [FPS sampling and protocol](fps-sampling-and-protocol.md) — error estimation
+  (a parametric bootstrap on a **sign-split** normal), Metropolis sampling
+  (`rkT` is `1/kT`, so larger is colder), and every protocol knob that changes
+  a docked answer, with all five modes' shipped defaults. **Refinement
+  recomputes the accessible volumes in the docked complex**, which is how FPS
+  reconciles per-subunit AVs with inter-subunit occlusion.
+
 # The tttrlib bundle (`../../tttrlib/okf/`)
 
 * [tttrlib bundle root](../../../tttrlib/okf/index.md) - photon-level

@@ -9,7 +9,7 @@
 
 #include <IMP/bff/FRETRateTrace.h>
 #include <IMP/bff/internal/OutputView.h>
-#include <IMP/exception.h>
+#include <IMP/bff/Base.h>
 
 #include <algorithm>
 #include <cmath>
@@ -40,8 +40,8 @@ std::vector<double> RadiativeTerm::rate_constants(const States& first,
 PETTerm::PETTerm(const std::map<std::string, PETParameters>& parameters,
                  const std::vector<std::string>& res_names,
                  const std::vector<std::string>& atom_names, double* coords,
-                 int n_atoms, int n_dim, double dye_radius)
-    : InteractionTerm("PETTerm%1%"), dye_radius_(dye_radius) {
+                 int n_atoms, int n_dim, double probe_radius)
+    : InteractionTerm("PETTerm%1%"), probe_radius_(probe_radius) {
     if (n_dim != 3) {
         IMP_THROW("quencher atoms must be (N, 3), not (" << n_atoms << ", "
                                                          << n_dim << ")",
@@ -125,7 +125,7 @@ std::vector<double> PETTerm::rate_constants(const States& first,
             const double dx = coords_[a * 3 + 0] - x;
             const double dy = coords_[a * 3 + 1] - y;
             const double dz = coords_[a * 3 + 2] - z;
-            const double d = std::sqrt(dx * dx + dy * dy + dz * dz) - dye_radius_;
+            const double d = std::sqrt(dx * dx + dy * dy + dz * dz) - probe_radius_;
             total += kQ_[a] * std::exp(-d / rC_[a]);
         }
         out[i] = total;
@@ -138,7 +138,7 @@ std::vector<double> PETTerm::rate_constants(const States& first,
 // FRET
 // --------------------------------------------------------------------------
 
-FRETTerm::FRETTerm(const Dye& donor, const Dye& acceptor,
+FRETTerm::FRETTerm(const Probe& donor, const Probe& acceptor,
                    double refractive_index, double kappa2, double r_min)
     : InteractionTerm("FRETTerm%1%"), donor_(donor), acceptor_(acceptor),
       refractive_index_(refractive_index), kappa2_(kappa2), r_min_(r_min) {}
@@ -147,7 +147,7 @@ double FRETTerm::get_forster_radius() const {
     // The isotropic value when none was given, so R0 is a number even where
     // kappa^2 is not resolved; `get_used_isotropic_kappa2` reports which.
     const double k2 = (kappa2_ == kappa2_) ? kappa2_ : 2.0 / 3.0;
-    return 10.0 * forster_radius(donor_, acceptor_, k2, refractive_index_);
+    return forster_radius(donor_, acceptor_, k2, refractive_index_);  // Angstrom
 }
 
 std::vector<double> FRETTerm::rate_constants(const States& first,

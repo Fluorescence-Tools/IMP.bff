@@ -6,9 +6,10 @@
  * of *different* terms, which needs one polymorphic handle rather than a
  * value per type.
  *
- * Python's duck typing let each term take the participants it needed
- * (`rate_constants(states)`, `(states, atoms)`, `(donor, acceptor)`); C++ takes
- * the same two and reports through `arity` which it reads. `PETTerm`'s
+ * Every term takes the same two participants and reports through `arity`
+ * which of them it reads, rather than each taking the ones it needs
+ * (`rate_constants(states)`, `(states, atoms)`, `(donor, acceptor)`).
+ * `PETTerm`'s
  * quenching atoms move into the term, because resolving which of a structure's
  * atoms quench and how hard is a function of names and parameters and does not
  * change from one set of dye states to the next.
@@ -31,7 +32,7 @@ IMP_SWIG_OBJECT(IMP::bff, FRETTerm, FRETTerms);
 %attribute_py(IMP::bff::InteractionTerm, bool, needs_orientations,
               get_needs_orientations);
 %attribute_py(IMP::bff::RadiativeTerm, double, lifetime, get_lifetime);
-%attribute_py(IMP::bff::PETTerm, double, dye_radius, get_dye_radius);
+%attribute_py(IMP::bff::PETTerm, double, probe_radius, get_probe_radius);
 %attribute_py(IMP::bff::FRETTerm, double, forster_radius, get_forster_radius);
 %attribute_py(IMP::bff::FRETTerm, bool, used_isotropic_kappa2,
               get_used_isotropic_kappa2);

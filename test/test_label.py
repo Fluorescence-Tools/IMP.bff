@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from IMP.bff import LabelDistribution, LabelDistributionAV, DyeDistributionNormal
+from IMP.bff import LabelDistribution, LabelDistributionAV, ProbeDistributionNormal
 
 
 class TestLabelDistribution:
@@ -21,7 +21,7 @@ class TestDyeDistributionNormal:
     """Gaussian label distribution."""
 
     def test_create(self):
-        dd = DyeDistributionNormal(
+        dd = ProbeDistributionNormal(
             origin=np.array([0.0, 0.0, 10.0]),
             width=6.0,
             position_name="donor",
@@ -30,7 +30,7 @@ class TestDyeDistributionNormal:
         assert dd.n_points > 0
 
     def test_mean_position(self):
-        dd = DyeDistributionNormal(
+        dd = ProbeDistributionNormal(
             origin=np.array([5.0, 0.0, 0.0]),
             width=1.0,
         )
@@ -38,20 +38,20 @@ class TestDyeDistributionNormal:
         np.testing.assert_allclose(mp, [5.0, 0.0, 0.0], atol=1.0)
 
     def test_dRmp(self):
-        dd1 = DyeDistributionNormal(
+        dd1 = ProbeDistributionNormal(
             origin=np.array([0.0, 0.0, 0.0]), width=2.0,
         )
-        dd2 = DyeDistributionNormal(
+        dd2 = ProbeDistributionNormal(
             origin=np.array([3.0, 4.0, 0.0]), width=2.0,
         )
         d = dd1.dRmp(dd2)
         assert d == pytest.approx(5.0, abs=2.0)
 
     def test_dRDA_positive(self):
-        dd1 = DyeDistributionNormal(
+        dd1 = ProbeDistributionNormal(
             origin=np.array([0.0, 0.0, 0.0]), width=4.0,
         )
-        dd2 = DyeDistributionNormal(
+        dd2 = ProbeDistributionNormal(
             origin=np.array([10.0, 0.0, 0.0]), width=4.0,
         )
         d = dd1.dRDA(dd2, n_samples=10000)
@@ -69,9 +69,7 @@ class TestLabelDistributionAV:
         dd = LabelDistributionAV(atoms_xyz=xyz, atoms_vdw=vdw,
                                  linker_length=10.0)
         assert dd.get_position_name() == ""
-        # No `source_xyz` means the first obstacle. The Python this replaces
-        # took a residue number and an atom name and then ignored both,
-        # returning index 0 from a loop whose body was a comment saying so.
+        # No `source_xyz` means the first obstacle.
         np.testing.assert_allclose(dd.get_origin(), [0.0, 0.0, 0.0], atol=1e-6)
 
 
@@ -106,33 +104,25 @@ if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
 
 
-def test_find_atom_matches_the_full_scan_it_replaced():
-    """`label._find_atom` against the exhaustive scan, on a real structure.
+def test_select_atoms_matches_the_full_scan_it_replaced():
+    """`select_atoms` against an exhaustive scan, on a real structure.
 
-    The reference is the old implementation kept verbatim, because the risk is
-    not "does it find an atom" but *which* atom: the match qualifies an atom by
-    `AtomType` **or** by name -- a dye's atoms carry types IMP does not
-    recognise and are found by name only -- and the scan returned the first in
-    hierarchy order. A selection that reordered or over-selected would still
-    find something.
+    The atom lookup is C++ now (`ProbeAttachment.h`), reached through a strip mask
+    rather than a private helper. What this pins is unchanged and is the part
+    that is easy to get wrong: not *whether* an atom is found but **which** --
+    the first in hierarchy order, in the right chain and residue, matched on
+    the name as the structure spells it (a dye's atoms carry types IMP does
+    not recognise, so a type-based match would miss them).
 
-    Includes a name that is in no residue ("ZZZ"), so the not-found path is
-    covered too.
+    "ZZZ" is in no residue, so the not-found path is covered too.
     """
     import IMP
     import IMP.atom
-    from IMP.bff import get_structure_dir
-    from IMP.bff import _find_atom, _atom_name, _atom_type_from_name
+    from IMP.bff import atom_name, get_structure_dir, select_atoms
 
-    def exhaustive(hierarchy, chain_id, resnum, atom_name):
-        target = _atom_type_from_name(atom_name)
+    def exhaustive(hierarchy, chain_id, resnum, wanted):
         for a in IMP.atom.get_by_type(hierarchy, IMP.atom.ATOM_TYPE):
-            at = IMP.atom.Atom(a)
-            if target != IMP.atom.AtomType("UNK") and at.get_atom_type() == target:
-                pass
-            elif _atom_name(a).upper() == atom_name.upper():
-                pass
-            else:
+            if atom_name(IMP.atom.Atom(a)).upper() != wanted.upper():
                 continue
             res_p = a.get_parent()
             if not IMP.atom.Residue.get_is_setup(res_p):
@@ -160,12 +150,13 @@ def test_find_atom_matches_the_full_scan_it_replaced():
     for residue in residues:
         for name in ("CA", "N", "C", "CB", "O", "ZZZ"):
             want = exhaustive(hierarchy, chain, residue.get_index(), name)
-            got = _find_atom(hierarchy, chain, residue.get_index(), name)
+            got = select_atoms(
+                hierarchy,
+                f"chain {chain} and resid {residue.get_index()} and name {name}")
             if want is None:
-                assert got is None, (residue.get_index(), name)
+                assert not got, (residue.get_index(), name)
                 continue
-            assert got is not None, (residue.get_index(), name)
-            assert (IMP.atom.Hierarchy(got).get_particle()
-                    == IMP.atom.Hierarchy(want).get_particle())
+            assert got, (residue.get_index(), name)
+            assert got[0] == IMP.atom.Hierarchy(want).get_particle()
             found += 1
     assert found > 100, found

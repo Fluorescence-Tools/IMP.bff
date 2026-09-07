@@ -1,6 +1,7 @@
 from __future__ import division
 import unittest
 
+import os
 import tempfile
 
 import math
@@ -78,7 +79,14 @@ class Tests(unittest.TestCase):
         # for an obstacle-free 20 A linker, where 74 gives 30682. The AV is
         # therefore both larger and differently shaped, and every quantity
         # derived from it moves. See AV::get_search_stencil.
-        np.testing.assert_almost_equal(av.get_mean_position(), (-15.0462, 19.6699, 20.228), decimal=3)
+        # Moved 2026-08-31 by dropping the attachment atom from the
+        # obstacle set, as FPS does (`av_routines.cpp:50`): an atom
+        # cannot block the linker tied to it. Volumes grew ~1 %.
+        # Olga's radii were the default for part of 2026-09-01 and this read
+        # (-14.682480, 19.565946, 20.214719); the default is IMP's own again
+        # (AV::set_radii_source), so this is the pre-Olga number -- to 0.002 A,
+        # the rest being the 2026-08-31 move above, which is not reverted.
+        np.testing.assert_almost_equal(av.get_mean_position(), (-15.048157, 19.668150, 20.226974), decimal=3)
         np.testing.assert_almost_equal(av.get_radii(), (3.5, 0, 0), decimal=3)
         self.assertEqual(av.get_parameters_are_optimized(), False)
         self.assertEqual(str(av.get_source()), '"Atom CB of residue 55"')
@@ -303,7 +311,13 @@ class Tests(unittest.TestCase):
                 
         av1.resample()  # Updates the AV
         # lattice-anchored (PRD-105), 74-stencil default since 2026-08-19
-        ref = (-0.323894, -25.204008, -3.823595)
+        # Moved 2026-08-31 by dropping the attachment atom from the
+        # obstacle set, as FPS does (`av_routines.cpp:50`): an atom
+        # cannot block the linker tied to it. Volumes grew ~1 %.
+        # Olga's radii were the default for part of 2026-09-01 and this read
+        # (-0.333604, -24.499506, -4.603655); IMP's own are the default again
+        # (AV::set_radii_source), so this is the pre-Olga number, to 0.002 A.
+        ref = (-0.322252, -25.204348, -3.821867)
         np.testing.assert_allclose(av_mp.get_coordinates(), ref, atol=1e-3)
 
     def test_access_av_feature(self):
@@ -311,10 +325,11 @@ class Tests(unittest.TestCase):
         av1_map = av1.get_map()
         bounds = 0.0, 20
 
-        # PathMaps derive from IMP.em.DensityMap
+        # A PathMap is its own lattice (IMP.bff.DensityGrid), not an
+        # IMP.em.DensityMap any more; the IMP.em door is an explicit copy.
         # write OBSTACLES to map
         with tempfile.NamedTemporaryFile(suffix=".mrc") as temp_file:
-            IMP.em.write_map(av1_map, temp_file.name)
+            IMP.em.write_map(av1_map.create_density_map(), temp_file.name)
 
         pm_features = [
             IMP.bff.PM_TILE_PENALTY,             # Penality of visiting a tile
@@ -332,10 +347,16 @@ class Tests(unittest.TestCase):
         for feature in pm_features:
             with tempfile.NamedTemporaryFile(suffix=".mrc") as temp_file:
                 fn = temp_file.name
-                fn_ref =  "./references/av_reference_%s.mrc" % feature
+                # Relative to this file, not the working directory: the
+                # suite is run from the repository root as often as from
+                # here, and a reference that resolves only in one of them
+                # reads as a data failure.
+                fn_ref = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "references", "av_reference_%s.mrc" % feature)
                 if create_references:
                     fn = fn_ref
-                IMP.bff.write_path_map(av1_map, fn, feature, bounds)
+                IMP.bff.write_map_feature(av1_map, fn, feature, bounds)
                 
                 em_map_ref = IMP.em.DensityMap()
                 em_map_ref = IMP.em.read_map(fn_ref, erw)
@@ -345,11 +366,18 @@ class Tests(unittest.TestCase):
 
     def test_av_random_points(self):
         n_samples = 10
-        # create an AV in an inaccessible region
+        # create an AV in an inaccessible region.
+        # The linker width is FPS's 4.5 A, not 0.5: at 0.5 residue 99 became
+        # *reachable* (437 voxels) once the attachment atom stopped blocking
+        # the linker tied to it (2026-08-31), so the old fixture no longer
+        # tested an empty volume. It is still empty at a realistic width --
+        # and at 4.5 it stays empty under Olga's radii too, where at 0.5 it
+        # would be 29 586 voxels, so the fixture no longer depends on which
+        # radii set is the default.
         av_parameter = {
             "linker_length": 20.0,
             "radii": (3.5, 0.0, 0.0),
-            "linker_width": 0.5,
+            "linker_width": 4.5,
             "allowed_sphere_radius": 1.0,
             "contact_volume_thickness": 0.0,
             "contact_volume_trapped_fraction": -1,
@@ -366,8 +394,11 @@ class Tests(unittest.TestCase):
         p1 = IMP.bff.av_random_points(av1,  n_samples)
         self.assertEqual(len(p1), 0)
 
-        # Increase the allowed sphere radius
-        av_parameter['allowed_sphere_radius'] = 2.0
+        # Open the same site up. It is the linker *width* that does it here,
+        # not the clearance: residue 99 is inaccessible to a 4.5 A-wide linker
+        # at every clearance tried (1-6 A), which is what makes it a good
+        # empty-volume fixture. A 0.5 A linker reaches it.
+        av_parameter['linker_width'] = 0.5
         av2 = get_av(hier, 99, av_parameter=av_parameter)
         m2 = IMP.bff.av_random_points(av2,  n_samples)
         self.assertEqual(len(m2), n_samples * 4)
@@ -376,6 +407,8 @@ class Tests(unittest.TestCase):
         av1 = get_av(hier)
         av2 = get_av(hier, residue_index=55)
         distances = IMP.bff.av_random_distances(av1, av2, 500000)
+        # Olga's radii shorten this to 55.6252; the default is IMP's own again
+        # (AV::set_radii_source), so the pre-Olga 55.8469 is restored.
         self.assertAlmostEqual(np.mean(distances), 55.8469, delta=0.15)
 
     def test_av_av_distance(self):
@@ -384,14 +417,18 @@ class Tests(unittest.TestCase):
         forster_radius = 52.0
         n_samples = 500000
         distance_types = [
-            IMP.bff.DYE_PAIR_DISTANCE_E,             # Mean FRET averaged distance R_E
-            IMP.bff.DYE_PAIR_DISTANCE_MEAN,          # Mean distance <R_DA>
-            IMP.bff.DYE_PAIR_DISTANCE_MP,            # Distance between AV mean positions
-            IMP.bff.DYE_PAIR_EFFICIENCY,             # Mean FRET efficiency
-            # IMP.bff.DYE_PAIR_DISTANCE_DISTRIBUTION,  # (reserved for Distance distributions)
-            # IMP.bff.DYE_PAIR_XYZ_DISTANCE            # Distance between XYZ of dye particles
+            IMP.bff.PROBE_PAIR_DISTANCE_E,             # Mean FRET averaged distance R_E
+            IMP.bff.PROBE_PAIR_DISTANCE_MEAN,          # Mean distance <R_DA>
+            IMP.bff.PROBE_PAIR_DISTANCE_MP,            # Distance between AV mean positions
+            IMP.bff.PROBE_PAIR_EFFICIENCY,             # Mean FRET efficiency
+            # IMP.bff.PROBE_PAIR_DISTANCE_DISTRIBUTION,  # (reserved for Distance distributions)
+            # IMP.bff.PROBE_PAIR_XYZ_DISTANCE            # Distance between XYZ of dye particles
         ]
         # lattice-anchored (PRD-105); MC with 500k samples
+        # Olga's radii moved these to [54.6152, 55.6260, 52.5700, 0.4267];
+        # IMP's own are the default again (AV::set_radii_source), so the
+        # pre-Olga four are restored -- measured back to within 0.03 A, well
+        # inside the MC delta below.
         refs_distances = [54.8151, 55.8598, 52.9990, 0.4211]
         for t, ref in zip(distance_types, refs_distances):
             v = IMP.bff.av_distance(
@@ -403,11 +440,15 @@ class Tests(unittest.TestCase):
             self.assertAlmostEqual(v, ref, delta=0.12)   # MC with 500k samples: ~3.5 sd
         
         # Test distance between AV and empty AV
-        # create an AV in an inaccessible region
+        # create an AV in an inaccessible region.
+        # The linker width is FPS's 4.5 A, not 0.5: at 0.5 residue 99 became
+        # *reachable* (437 voxels) once the attachment atom stopped blocking
+        # the linker tied to it (2026-08-31), so the old fixture no longer
+        # tested an empty volume. It is still buried at a realistic width.
         av_parameter = {
             "linker_length": 20.0,
             "radii": (3.5, 0.0, 0.0),
-            "linker_width": 0.5,
+            "linker_width": 4.5,
             "allowed_sphere_radius": 1.0,
             "contact_volume_thickness": 0.0,
             "contact_volume_trapped_fraction": -1,

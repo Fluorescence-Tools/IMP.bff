@@ -76,11 +76,118 @@
       ],
       "type": "object"
     },
+    "mode_parameters": {
+      "additionalProperties": true,
+      "properties": {
+        "clash_tolerance": {
+          "default": 1.0,
+          "description": "The overlap in angstrom that costs one chi2 unit; k_clash = 2/tolerance^2. Honoured.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "e_tolerance": {
+          "default": 100.0,
+          "description": "FPS's ETolerance, which is dead in all five of its own modes. Stored for provenance.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "f_tolerance": {
+          "default": 0.001,
+          "description": "FPS force tolerance. Stored, not obeyed.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "iterations": {
+          "default": 500,
+          "description": "This port's own iteration budget for the mode.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "k_tolerance": {
+          "default": 0.001,
+          "description": "FPS convergence tolerance. Stored, not obeyed.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "max_force": {
+          "default": 400.0,
+          "description": "Past MaxForce*err^2/2 a restraint goes linear instead of parabolic. Honoured. FPS ships 400 for Dock/Sample/Screening and 10000 for Refine/Error estimation.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "max_iterations": {
+          "default": 200000,
+          "description": "FPS's integrator step budget. NOT this port's budget -- 200000 damped Verlet steps and 500 conjugate-gradient iterations are different quantities; see 'iterations'.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "optimize_selected": {
+          "default": "Selected",
+          "description": "Which DISTANCES contribute: the score set, every distance in the file, or the score set then everything. Clashes are never gated.",
+          "enum": [
+            "Selected",
+            "All",
+            "SelectedThenAll"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "rkt": {
+          "default": 10.0,
+          "description": "FPS's rkT, i.e. 1/kT. Sample mode is the only reader.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "t_tolerance": {
+          "default": 0.02,
+          "description": "FPS torque tolerance. Stored, not obeyed.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "time_step_factor": {
+          "default": 1.0,
+          "description": "FPS integrator timestep scale. Stored, not obeyed.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "viscosity_factor": {
+          "default": 1.0,
+          "description": "FPS integrator damping. Stored, not obeyed: this port uses IMP's optimisers, not FPS's damped Verlet integrator (PRD-121 D1).",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "position": {
       "additionalProperties": true,
       "properties": {
         "allowed_sphere_radius": {
-          "default": 1.5,
+          "default": -1.0,
           "type": "number",
           "x-dialects": [
             "flat"
@@ -132,7 +239,7 @@
         },
         "contact_volume_thickness": {
           "default": 0.0,
-          "description": "Thickness of the contact layer above the molecular surface for accessible-contact-volume (ACV) weighting; 0 disables.",
+          "description": "Depth of the contact layer above the dye-excluded surface, A: a cloud voxel is in contact when excluded volume lies within it. Quantised to whole grid steps, so a thickness below simulation_grid_resolution is no layer at all; 0 disables.",
           "type": "number",
           "x-dialects": [
             "flat"
@@ -140,7 +247,7 @@
         },
         "contact_volume_trapped_fraction": {
           "default": -1.0,
-          "description": "Fraction of dye density trapped in the contact volume; negative disables ACV re-weighting.",
+          "description": "Share of the cloud's total weight carried by the contact layer; must be below 1, and negative disables the re-weighting. Fitted per site -- it does not come from the structure.",
           "type": "number",
           "x-dialects": [
             "flat"
@@ -200,6 +307,18 @@
             "flat"
           ]
         },
+        "radii_source": {
+          "default": "imp",
+          "description": "Van der Waals radii the accessible volume inflates obstacles by. 'imp' (the default) is the radius each particle carries, which after IMP's read_pdb is the CHARMM-derived united-atom set with implicit hydrogens (carbon 1.85-2.275 A) -- the same radii the clash term of a docking score reads. 'olga' is Olga's name-keyed table -- C 1.70, N 1.625, O 1.49, S 1.782, P 1.86, H 1.00 A, and 1.50 A for an atom name it does not carry -- and is what reproduces Olga-era numbers.",
+          "enum": [
+            "imp",
+            "olga"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "flat"
+          ]
+        },
         "radius1": {
           "default": 3.5,
           "type": "number",
@@ -226,6 +345,15 @@
             "flat"
           ],
           "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_3"
+        },
+        "reference_atoms": {
+          "default": [],
+          "description": "Atoms defining the frame the fixed (XYZ) coordinate was measured in, as objects: {chain_identifier, residue_seq_number, atom_name, x, y, z} and optionally atom_serial, where x/y/z are the atom's coordinates in that frame. Screening Kabsch-fits them onto each structure, transports x/y/z of the position through the fit and reports the fit RMSD (FPS: RefRMSD). Three atoms are the minimum that fixes a rotation.",
+          "type": "array",
+          "x-dialects": [
+            "flat",
+            "csfps"
+          ]
         },
         "residue_name": {
           "default": "",
@@ -263,12 +391,13 @@
         },
         "simulation_type": {
           "default": "AV1",
-          "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), or R1 (rotamer ensemble: screened rotamer library, Python-only).",
+          "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), ATOM (a plain atom of the structure, no volume -- a crosslink or anchor endpoint; a distance between two of them is a bond), or R1 (rotamer ensemble: screened rotamer library, Python-only). A distance with an XYZ or ATOM end is scored as R_mp whatever its distance_type says, because that end is a point and has no cloud to average over (FPS: FilterEngine.cs:305-307).",
           "enum": [
             "AV1",
             "AV3",
             "XYZ",
-            "R1"
+            "R1",
+            "ATOM"
           ],
           "type": "string",
           "x-dialects": [
@@ -279,7 +408,7 @@
         },
         "strip_mask": {
           "default": "",
-          "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
+          "description": "Atoms removed as obstacles before this position's volume is computed, as a selection expression: 'chain A and resid 132 and not name CA+CB+C+N+O', or the same in the other spelling, 'chain A and resid 132 and not name CA CB C N O'. The document's own strip_mask, if it has one, is removed as well -- the two are a union, not an override. Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
           "type": "string",
           "x-dialects": [
             "flat"
@@ -313,6 +442,351 @@
             "csfps"
           ],
           "x-flrcif-item": "_flr_FPS_mean_probe_position.mpp_zcoord"
+        }
+      },
+      "type": "object"
+    },
+    "project": {
+      "additionalProperties": true,
+      "properties": {
+        "av": {
+          "additionalProperties": true,
+          "properties": {
+            "e_samples": {
+              "default": 200000,
+              "description": "Samples FPS draws for <R_DA>_E.",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "grid_size": {
+              "default": 0.2,
+              "description": "Relative grid spacing: dg = max(min(0.2L, 0.2W, 0.4R1, 0.4R2, 0.4R3), min_grid_size).",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "link_search_nodes": {
+              "default": 3,
+              "description": "How many voxels FPS's link search hops at a time.",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "linker_initial_sphere": {
+              "default": 0.5,
+              "description": "FPS's LinkerInitialSphere. NOT this module's derived clearance -- the two are different quantities, which is the trap that made a 4.5 A linker width return a silently empty volume (PRD-121 G8). Stored for provenance.",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "min_grid_size": {
+              "default": 0.4,
+              "description": "Floor of the derived grid spacing, A.",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "clash_radii_scale": {
+          "default": 1.0,
+          "description": "Multiplies whatever clash_radii_source gives. 1.0 changes nothing. It cannot stand in for the source: on HIV-RT the scale reproducing Olga's pair count is 0.82, its total overlap 0.83 and its energy 0.85.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "clash_radii_source": {
+          "default": "imp",
+          "description": "Which van der Waals radii the EXCLUDED-VOLUME term measures overlap by: 'imp' the particles' own united-atom radii, 'olga' the Bondi-scale table FPS's ClashTolerance was calibrated against. The position-level radii_source is the volume's answer to the same question; this is the clash term's.",
+          "enum": [
+            "imp",
+            "olga"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "coarse_clash": {
+          "default": true,
+          "description": "Clash detection on one coarse bead per residue rather than all atoms. Minimisation only, about three times cheaper per step. Must be false for clash_radii_source or clash_radii_scale to be honoured.",
+          "type": "boolean",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "conversion": {
+          "additionalProperties": true,
+          "properties": {
+            "forster_radius": {
+              "default": 52.0,
+              "description": "R0 the distance-conversion polynomial is fitted at, A (FPS ConversionParameters.R0).",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "polynomial_order": {
+              "default": 3,
+              "description": "Order of the conversion polynomial (FPS ConversionParameters.PolynomOrder).",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "distances_path": {
+          "default": "",
+          "description": "The legacy distances .txt beside it (FPS's DistancesPath).",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "ev_weight": {
+          "default": 1.0,
+          "description": "Weight of the excluded-volume (clash) term.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "fixed_body": {
+          "default": 0,
+          "description": "The body_id held still while the others move.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "labelling_json": {
+          "default": "",
+          "description": "The labelling source as an fps.json path. Empty, with positions_path also empty, means this file carries its own Positions and Distances.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "mode": {
+          "default": "None",
+          "description": "FPS's ProjectFPSMode: everything that moves bodies is Dock, screening is Filter.",
+          "enum": [
+            "None",
+            "Dock",
+            "Filter"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "parameters": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "properties": {
+              "clash_tolerance": {
+                "default": 1.0,
+                "description": "The overlap in angstrom that costs one chi2 unit; k_clash = 2/tolerance^2. Honoured.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "e_tolerance": {
+                "default": 100.0,
+                "description": "FPS's ETolerance, which is dead in all five of its own modes. Stored for provenance.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "f_tolerance": {
+                "default": 0.001,
+                "description": "FPS force tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "iterations": {
+                "default": 500,
+                "description": "This port's own iteration budget for the mode.",
+                "type": "integer",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "k_tolerance": {
+                "default": 0.001,
+                "description": "FPS convergence tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "max_force": {
+                "default": 400.0,
+                "description": "Past MaxForce*err^2/2 a restraint goes linear instead of parabolic. Honoured. FPS ships 400 for Dock/Sample/Screening and 10000 for Refine/Error estimation.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "max_iterations": {
+                "default": 200000,
+                "description": "FPS's integrator step budget. NOT this port's budget -- 200000 damped Verlet steps and 500 conjugate-gradient iterations are different quantities; see 'iterations'.",
+                "type": "integer",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "optimize_selected": {
+                "default": "Selected",
+                "description": "Which DISTANCES contribute: the score set, every distance in the file, or the score set then everything. Clashes are never gated.",
+                "enum": [
+                  "Selected",
+                  "All",
+                  "SelectedThenAll"
+                ],
+                "type": "string",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "rkt": {
+                "default": 10.0,
+                "description": "FPS's rkT, i.e. 1/kT. Sample mode is the only reader.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "t_tolerance": {
+                "default": 0.02,
+                "description": "FPS torque tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "time_step_factor": {
+                "default": 1.0,
+                "description": "FPS integrator timestep scale. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "viscosity_factor": {
+                "default": 1.0,
+                "description": "FPS integrator damping. Stored, not obeyed: this port uses IMP's optimisers, not FPS's damped Verlet integrator (PRD-121 D1).",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "poses": {
+          "default": [],
+          "description": "The current rigid-body poses, as capture_poses writes them: one {body_id, t, q} per body. [] means the input structures as they stand; anything else is a state a run reached, so storing the project stores the run.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "positions_path": {
+          "default": "",
+          "description": "The labelling source as a legacy C# FPS positions .txt (FPS's LabelingPositionsPath).",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "refine_av_cycles": {
+          "default": 0,
+          "description": "FPS-style refinement cycles after a dock: re-sample the volumes in the docked context and minimise again.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "schema_version": {
+          "default": "",
+          "description": "The schema this project was written against.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "score_set": {
+          "default": "",
+          "description": "The named chi2 score set this run scores; empty is every distance.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "selected_distances": {
+          "default": [],
+          "description": "Selected distances BY NAME. Empty defers to score_set.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "selected_flags": {
+          "default": [],
+          "description": "FPS's SelectedDistances: a Boolean[] parallel to the distances file, so positional rather than named. Only the legacy reader fills it; kept so a converted project is not silently re-interpreted.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "shuffle": {
+          "default": 10.0,
+          "description": "Initial random displacement of the mobile bodies, A; 0 starts from the input pose.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "sigma_da": {
+          "default": 6.0,
+          "description": "Width of the mean-position transfer function, A.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "source": {
+          "default": "",
+          "description": "Provenance: the banner line of the legacy text export this project was converted from, when it was.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "structures": {
+          "default": [],
+          "description": "One structure path per rigid body, IN BODY ORDER. A relative path is resolved against the project file.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
         }
       },
       "type": "object"
@@ -441,7 +915,7 @@
         "additionalProperties": true,
         "properties": {
           "allowed_sphere_radius": {
-            "default": 1.5,
+            "default": -1.0,
             "type": "number",
             "x-dialects": [
               "flat"
@@ -493,7 +967,7 @@
           },
           "contact_volume_thickness": {
             "default": 0.0,
-            "description": "Thickness of the contact layer above the molecular surface for accessible-contact-volume (ACV) weighting; 0 disables.",
+            "description": "Depth of the contact layer above the dye-excluded surface, A: a cloud voxel is in contact when excluded volume lies within it. Quantised to whole grid steps, so a thickness below simulation_grid_resolution is no layer at all; 0 disables.",
             "type": "number",
             "x-dialects": [
               "flat"
@@ -501,7 +975,7 @@
           },
           "contact_volume_trapped_fraction": {
             "default": -1.0,
-            "description": "Fraction of dye density trapped in the contact volume; negative disables ACV re-weighting.",
+            "description": "Share of the cloud's total weight carried by the contact layer; must be below 1, and negative disables the re-weighting. Fitted per site -- it does not come from the structure.",
             "type": "number",
             "x-dialects": [
               "flat"
@@ -561,6 +1035,18 @@
               "flat"
             ]
           },
+          "radii_source": {
+            "default": "imp",
+            "description": "Van der Waals radii the accessible volume inflates obstacles by. 'imp' (the default) is the radius each particle carries, which after IMP's read_pdb is the CHARMM-derived united-atom set with implicit hydrogens (carbon 1.85-2.275 A) -- the same radii the clash term of a docking score reads. 'olga' is Olga's name-keyed table -- C 1.70, N 1.625, O 1.49, S 1.782, P 1.86, H 1.00 A, and 1.50 A for an atom name it does not carry -- and is what reproduces Olga-era numbers.",
+            "enum": [
+              "imp",
+              "olga"
+            ],
+            "type": "string",
+            "x-dialects": [
+              "flat"
+            ]
+          },
           "radius1": {
             "default": 3.5,
             "type": "number",
@@ -587,6 +1073,15 @@
               "flat"
             ],
             "x-flrcif-item": "_flr_FPS_AV_parameter.probe_radius_3"
+          },
+          "reference_atoms": {
+            "default": [],
+            "description": "Atoms defining the frame the fixed (XYZ) coordinate was measured in, as objects: {chain_identifier, residue_seq_number, atom_name, x, y, z} and optionally atom_serial, where x/y/z are the atom's coordinates in that frame. Screening Kabsch-fits them onto each structure, transports x/y/z of the position through the fit and reports the fit RMSD (FPS: RefRMSD). Three atoms are the minimum that fixes a rotation.",
+            "type": "array",
+            "x-dialects": [
+              "flat",
+              "csfps"
+            ]
           },
           "residue_name": {
             "default": "",
@@ -624,12 +1119,13 @@
           },
           "simulation_type": {
             "default": "AV1",
-            "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), or R1 (rotamer ensemble: screened rotamer library, Python-only).",
+            "description": "Label model: AV1 (one radius), AV3 (three radii), XYZ (fixed mean position, no simulation), ATOM (a plain atom of the structure, no volume -- a crosslink or anchor endpoint; a distance between two of them is a bond), or R1 (rotamer ensemble: screened rotamer library, Python-only). A distance with an XYZ or ATOM end is scored as R_mp whatever its distance_type says, because that end is a point and has no cloud to average over (FPS: FilterEngine.cs:305-307).",
             "enum": [
               "AV1",
               "AV3",
               "XYZ",
-              "R1"
+              "R1",
+              "ATOM"
             ],
             "type": "string",
             "x-dialects": [
@@ -640,7 +1136,7 @@
           },
           "strip_mask": {
             "default": "",
-            "description": "Selection mask of atoms removed as obstacles before the AV simulation, in the PyMOL dialect 'chain <id> and resid <n> and [not] name A+B+...' ('+'-separated lists, as in PyMOL itself). Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
+            "description": "Atoms removed as obstacles before this position's volume is computed, as a selection expression: 'chain A and resid 132 and not name CA+CB+C+N+O', or the same in the other spelling, 'chain A and resid 132 and not name CA CB C N O'. The document's own strip_mask, if it has one, is removed as well -- the two are a union, not an override. Empty means the default strip: the attachment residue's side chain minus the attachment atom.",
             "type": "string",
             "x-dialects": [
               "flat"
@@ -680,7 +1176,368 @@
       },
       "type": "object"
     },
-    "\u03c7\u00b2": {
+    "Project": {
+      "additionalProperties": true,
+      "properties": {
+        "av": {
+          "additionalProperties": true,
+          "properties": {
+            "e_samples": {
+              "default": 200000,
+              "description": "Samples FPS draws for <R_DA>_E.",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "grid_size": {
+              "default": 0.2,
+              "description": "Relative grid spacing: dg = max(min(0.2L, 0.2W, 0.4R1, 0.4R2, 0.4R3), min_grid_size).",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "link_search_nodes": {
+              "default": 3,
+              "description": "How many voxels FPS's link search hops at a time.",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "linker_initial_sphere": {
+              "default": 0.5,
+              "description": "FPS's LinkerInitialSphere. NOT this module's derived clearance -- the two are different quantities, which is the trap that made a 4.5 A linker width return a silently empty volume (PRD-121 G8). Stored for provenance.",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "min_grid_size": {
+              "default": 0.4,
+              "description": "Floor of the derived grid spacing, A.",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "clash_radii_scale": {
+          "default": 1.0,
+          "description": "Multiplies whatever clash_radii_source gives. 1.0 changes nothing. It cannot stand in for the source: on HIV-RT the scale reproducing Olga's pair count is 0.82, its total overlap 0.83 and its energy 0.85.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "clash_radii_source": {
+          "default": "imp",
+          "description": "Which van der Waals radii the EXCLUDED-VOLUME term measures overlap by: 'imp' the particles' own united-atom radii, 'olga' the Bondi-scale table FPS's ClashTolerance was calibrated against. The position-level radii_source is the volume's answer to the same question; this is the clash term's.",
+          "enum": [
+            "imp",
+            "olga"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "coarse_clash": {
+          "default": true,
+          "description": "Clash detection on one coarse bead per residue rather than all atoms. Minimisation only, about three times cheaper per step. Must be false for clash_radii_source or clash_radii_scale to be honoured.",
+          "type": "boolean",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "conversion": {
+          "additionalProperties": true,
+          "properties": {
+            "forster_radius": {
+              "default": 52.0,
+              "description": "R0 the distance-conversion polynomial is fitted at, A (FPS ConversionParameters.R0).",
+              "type": "number",
+              "x-dialects": [
+                "project"
+              ]
+            },
+            "polynomial_order": {
+              "default": 3,
+              "description": "Order of the conversion polynomial (FPS ConversionParameters.PolynomOrder).",
+              "type": "integer",
+              "x-dialects": [
+                "project"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "distances_path": {
+          "default": "",
+          "description": "The legacy distances .txt beside it (FPS's DistancesPath).",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "ev_weight": {
+          "default": 1.0,
+          "description": "Weight of the excluded-volume (clash) term.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "fixed_body": {
+          "default": 0,
+          "description": "The body_id held still while the others move.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "labelling_json": {
+          "default": "",
+          "description": "The labelling source as an fps.json path. Empty, with positions_path also empty, means this file carries its own Positions and Distances.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "mode": {
+          "default": "None",
+          "description": "FPS's ProjectFPSMode: everything that moves bodies is Dock, screening is Filter.",
+          "enum": [
+            "None",
+            "Dock",
+            "Filter"
+          ],
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "parameters": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "properties": {
+              "clash_tolerance": {
+                "default": 1.0,
+                "description": "The overlap in angstrom that costs one chi2 unit; k_clash = 2/tolerance^2. Honoured.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "e_tolerance": {
+                "default": 100.0,
+                "description": "FPS's ETolerance, which is dead in all five of its own modes. Stored for provenance.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "f_tolerance": {
+                "default": 0.001,
+                "description": "FPS force tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "iterations": {
+                "default": 500,
+                "description": "This port's own iteration budget for the mode.",
+                "type": "integer",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "k_tolerance": {
+                "default": 0.001,
+                "description": "FPS convergence tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "max_force": {
+                "default": 400.0,
+                "description": "Past MaxForce*err^2/2 a restraint goes linear instead of parabolic. Honoured. FPS ships 400 for Dock/Sample/Screening and 10000 for Refine/Error estimation.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "max_iterations": {
+                "default": 200000,
+                "description": "FPS's integrator step budget. NOT this port's budget -- 200000 damped Verlet steps and 500 conjugate-gradient iterations are different quantities; see 'iterations'.",
+                "type": "integer",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "optimize_selected": {
+                "default": "Selected",
+                "description": "Which DISTANCES contribute: the score set, every distance in the file, or the score set then everything. Clashes are never gated.",
+                "enum": [
+                  "Selected",
+                  "All",
+                  "SelectedThenAll"
+                ],
+                "type": "string",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "rkt": {
+                "default": 10.0,
+                "description": "FPS's rkT, i.e. 1/kT. Sample mode is the only reader.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "t_tolerance": {
+                "default": 0.02,
+                "description": "FPS torque tolerance. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "time_step_factor": {
+                "default": 1.0,
+                "description": "FPS integrator timestep scale. Stored, not obeyed.",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              },
+              "viscosity_factor": {
+                "default": 1.0,
+                "description": "FPS integrator damping. Stored, not obeyed: this port uses IMP's optimisers, not FPS's damped Verlet integrator (PRD-121 D1).",
+                "type": "number",
+                "x-dialects": [
+                  "project"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "poses": {
+          "default": [],
+          "description": "The current rigid-body poses, as capture_poses writes them: one {body_id, t, q} per body. [] means the input structures as they stand; anything else is a state a run reached, so storing the project stores the run.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "positions_path": {
+          "default": "",
+          "description": "The labelling source as a legacy C# FPS positions .txt (FPS's LabelingPositionsPath).",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "refine_av_cycles": {
+          "default": 0,
+          "description": "FPS-style refinement cycles after a dock: re-sample the volumes in the docked context and minimise again.",
+          "type": "integer",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "schema_version": {
+          "default": "",
+          "description": "The schema this project was written against.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "score_set": {
+          "default": "",
+          "description": "The named chi2 score set this run scores; empty is every distance.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "selected_distances": {
+          "default": [],
+          "description": "Selected distances BY NAME. Empty defers to score_set.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "selected_flags": {
+          "default": [],
+          "description": "FPS's SelectedDistances: a Boolean[] parallel to the distances file, so positional rather than named. Only the legacy reader fills it; kept so a converted project is not silently re-interpreted.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "shuffle": {
+          "default": 10.0,
+          "description": "Initial random displacement of the mobile bodies, A; 0 starts from the input pose.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "sigma_da": {
+          "default": 6.0,
+          "description": "Width of the mean-position transfer function, A.",
+          "type": "number",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "source": {
+          "default": "",
+          "description": "Provenance: the banner line of the legacy text export this project was converted from, when it was.",
+          "type": "string",
+          "x-dialects": [
+            "project"
+          ]
+        },
+        "structures": {
+          "default": [],
+          "description": "One structure path per rigid body, IN BODY ORDER. A relative path is resolved against the project file.",
+          "type": "array",
+          "x-dialects": [
+            "project"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "default": "",
+      "description": "The fps.json schema this file was written against. Absent means a file written before the schema was versioned.",
+      "type": "string",
+      "x-dialects": [
+        "flat"
+      ]
+    },
+    "strip_mask": {
+      "default": "",
+      "description": "Atoms removed as obstacles for **every** position in the file, as a selection expression -- what the structure carries that no volume should be blocked by: 'resname HOH SOL WAT NA CL', 'not polymer', a crystallisation additive. A position's own strip_mask adds to this rather than replacing it, because the two answer different questions: this one is about the structure, that one about the labelling site.",
+      "type": "string",
+      "x-dialects": [
+        "flat"
+      ]
+    },
+    "χ²": {
       "additionalProperties": {
         "additionalProperties": true,
         "properties": {
@@ -713,7 +1570,7 @@
       "type": "object"
     }
   },
-  "title": "fps.json \u2014 FRET labelling positions and distances",
+  "title": "fps.json — FRET labelling positions and distances",
   "type": "object",
-  "x-schema-version": "1.0"
+  "x-schema-version": "1.7"
 }

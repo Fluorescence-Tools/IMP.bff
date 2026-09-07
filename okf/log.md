@@ -1,5 +1,53 @@
 # Update Log
 
+## 2026-09-07 (1) — the pair layer could not see a homodimer
+
+Two defects, found while screening labelling sites on BmrA (a homodimeric ABC
+transporter) for a two-colour FRET experiment. The screen wanted the only pairs
+such an experiment can produce — residue *i* on one protomer to residue *i* on
+the other — and the module could not express them.
+
+* **`ll_pair_scores_two_states` matched sites on the residue number alone**
+  (`src/LabelizerFret.cpp`, `std::map<int, std::size_t> by_seq`), which is the
+  reference's convention (`fret_score.py:512`). On a multimer residue 100 of
+  chains A, B and C is one key, the last one inserted wins, and an inter-chain
+  pair therefore got the **same site on both sides of the second state**:
+  `distance_2` came back 0, `E(0)` is 1, and the score was `jls·|E(d₁) − 1|`.
+  Silently, for every such pair, with no status saying so. The map is keyed on
+  `ll_residue_key(chain, seq_id)` now, with `LlFretOptions::chain_map` for the
+  case the old comment was reaching for — two files that name a chain
+  differently.
+* **There was no way to say "donor in this chain, acceptor in that one."**
+  `LlFretOptions::donor_chain` / `::acceptor_chain` (empty = today's behaviour)
+  restore the reference's `chains_apo`/`chains_holo` argument
+  (`fret_score.py:479`, filter at `:728`), which
+  [`okf/labelizer-correspondence.md`](labelizer-correspondence.md) did not list
+  as either ported or dropped. Without it a homodimer screen drowns in
+  intra-protomer pairs, and on a file holding two copies of the assembly — 6R72
+  has four chains, two dimers — it mixes in lattice contacts that produce
+  "distances" of 43–121 Å.
+
+`ll_cbeta_difference_map` has the same collision by construction: it is indexed
+by residue number, so it describes one chain. It takes a `chain` argument now
+(default empty, i.e. unchanged) and the header says why.
+
+`bin/imp_bff_labelizer` grew `--second-structure`, `--donor-chain` and
+`--acceptor-chain`; there was no two-state mode on the command line at all
+before.
+
+`test/label/test_labelizer_multimer.py`, seven tests on 3j0e (chains F/G/H).
+Three of them fail against the old matching — the collision test reports
+`distance_2 == 0.0` for the inter-chain pairs — which is what makes them
+regression tests rather than decoration. The whole label suite is 323 green.
+
+The study that found this is `prototypes/bmra/`: a notebook that vendors the
+reference Python labelizer, patched, and runs it on cordeshub. Its
+`vendor/labelizer/PATCHES.md` records 20 defects in the reference, of which the
+one that matters most is `fret_score.py:220` — the joined label score is
+`prod**0.5`, correct only for two scores, while the two-conformation case has
+four. The port here has that one right already (`ll_joined_label_score` under
+`LL_MODEL_CORRECTED`; `LL_MODEL_PUBLISHED` reproduces it on purpose).
+
 ## 2026-09-04 (28) — the excitation and emission crosstalk matrices moved here from chisurf
 
 Owner: *"excitation and emission crosstalk matrix definition must be in bff
@@ -10749,3 +10797,56 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
 - The evidence bundle was synced to cordeshub and `pinn_table.csv` recompiled from the
   current `measurements.csv` (14,889 rows, 370 proteins; 36 conflicts and 697 disagreeing
   overlaps flagged for review, previous table kept as `pinn_table_2026-08-27.csv.bak`).
+
+## 2026-09-07 — PRD-136, dye-timewarp
+
+- [PRD-136](prds/prd-136.md): a site-conditioned, time-coarsened generative model of dye+linker
+  dynamics learned from MD (Timewarp line; TITO design). Prior-art survey: no published learned
+  dye-dynamics surrogate; the machinery (Timewarp, ITO/TITO, UniSim, FBM) exists and TITO's code is
+  MIT (`junk/tito`, with pretrained checkpoints). Decisions by interview: Cartesian equivariant state,
+  hybrid MD campaign on heinzehub, gates from PRD-119/135 + PRD-99 + PRD-116, Alexa488-C1R + Alexa647-C2R.
+- `prototypes/dye_timewarp/s00_inventory.py`: the 19 free-dye runs on SD1TB are byte-identical to
+  `MANIFEST.tsv` (2660 ns, 532,000 frames at 5 ps); the lag ladder 5 ps … 5 ns is supported; the
+  AF4_C2R and C3B_C2R replica sets are the noise floor for every later gate.
+- Stage 0/1 the same day: TITO (`junk/tito`, MIT) is reused as the model core; the free-dye corpus grew from 19 to
+  **65 runs / 12.9 µs** by pulling the 53 finished heinzehub runs (SHA-256 verified, 7 duplicates dropped). `s02` on the
+  full corpus: dipole rotation converged and replica-tight (C(t) spread ≤ 0.026), but the slowest torsion processes run
+  5–190 ns, so a single 140 ns run is not converged in its marginals -- the FRETpredict-protocol libraries inherit that,
+  and every marginal gate here is scored against pooled replicas. Stage-1 gate PASS. Full connectivity OOMs a 20 GB GPU
+  at ~100 atoms; a 0.6 nm radius graph trains at batch 32. `free_v1` launched on heinzehub GPU 1.
+- Arm B started the same day: `s06_build_site.py` builds and runs a labelled site (graft + fragment + tleap + OpenMM);
+  `s07_campaign.sh gold` queued on heinzehub GPU 0 behind the open-linker MD. Gold set = the 13 cysteine-maleimide
+  Alexa488 sites (5 T4L, 8 hGBP1); the ten T4L pAcF sites are a different linker chemistry and are parked.
+- Start conformers for arm B now come from the shipped rotamer-ensemble placement (`s06a`, user's suggestion), which
+  also yields each site's effective sample size — the gold sites span ESS 5.7 (T4L 127) to 115 (T4L 86).
+- Owner decision: parameterise the Alexa488–pAcF ketoxime label (`P1R`) so the ten T4L anisotropy sites become
+  simulable; filed as `T-20260907-05` for the rotamer-library builder (PRD-116), consumer PRD-136.
+- `T-20260907-05` resolved without work: AMBER-DYES `B1R` is the Alexa488–pAcF ketoxime label (found by
+  rotamer-simulation, confirmed by substructure match); the ten T4L anisotropy sites enter the campaign as `B1R`.
+
+## 2026-09-07 — an independent core, steps 1–3 (PRD-137, cross-stack; owner decisions in the chisurf bundle)
+
+- **Why**: IMP is hard to install and slow to release; chisurf needs bff to fit fluorescence data and needs no IMP.
+  Measured: chisurf uses 38 `IMP.bff` symbols and 36 need no IMP. Architecture chosen: an IMP-free core plus a
+  *connection layer* (`src/imp/`, later) so bff keeps working inside IMP. Not a replacement for IMP.
+- **Step 1, `include/Base.h`**: one door for `IMP_THROW` / `IMP_SHOWABLE_INLINE` / `IMP_VALUES` / `IMP_OBJECTS`.
+  95 files rewired, 0 of ~600 call sites touched. `libimp_bff` exports 2182 symbols before and after. The
+  `IMPBFF_STANDALONE` branch compiles and runs with no IMP on the include path (`test/test_base_header.py`).
+- **Step 3, `src/RmfIO.cpp`**: written against RMF's own API, no `IMP.rmf`. 33/34 shipped `.rmf3` bit-identical; the
+  T4L docking trajectory matches IMP to 3.5e-6 Å (float32 storage). Two bugs the oracle caught: reference frames are
+  *frame* data (compose per frame, not once — 43 Å otherwise), and `ReferenceFrameFactory::get_is` answers from the
+  current frame (position on frame 0 before the structural walk). Dropping `rmf` from `dependencies.py` is deferred:
+  it works out-of-tree but silently disables IMP.bff in-tree (configure ordering writes `build_info/RMF` after bff).
+- **Step 2, `include/DensityGrid.h`**: `PathMap` no longer derives from `IMP::em::SampledDensityMap`; `IMP::em` is
+  confined to `write_map_feature` and the new explicit `PathMap::create_density_map()`. AV output bit-identical
+  (`test/test_density_grid.py`, 9 golden records). Five regressions found and fixed, none visible to the golden
+  records: `set_origin` must rebuild the coordinate caches; SWIG must *see* the new base or `PathMap` silently loses
+  every inherited method; the header is `float`-backed like IMP's (double moved mean positions in the 8th figure);
+  index arithmetic promotes to double after float inputs, as IMP's does; and obstacles are re-read from the *live*
+  particles at every sample — IMP held decorators, a value copy sampled frame 0 forever (15 Å on trajectory tests).
+  `PathMapHeader`'s serialized form changed (11 fields, was ~40). Suite: 1780 passed, 0 failed.
+- **Benchmarks**: `benchmark/benchmark_av.py` (the AV solver timing gate, with `--noise`) and `benchmark/paired_ab.py`
+  (A/B two self-contained builds alternately, median of per-round ratios; judge on median *and* minimum; 11 rounds —
+  seven flipped verdict at load 13–18). Provisional baseline in `okf/validation/av_solver_baseline.md`.
+- **Fork**: `tpeulen/IMP.bff` created (public, parent `Fluorescence-Tools/IMP.bff`), remote `fork` added. Owner
+  decision: commit locally on `independent-core`, **do not push yet**. Layout stays flat (IMP-compatible); merges only.

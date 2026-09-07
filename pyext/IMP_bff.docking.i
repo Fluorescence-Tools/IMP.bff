@@ -1,40 +1,57 @@
 /*
  * FRET-restrained rigid-body docking.
  *
- * This file was 1,427 lines of `%pythoncode` -- an engine, as the maintainer
- * put it -- and holds no Python at all now. Where it went, and why:
- *
  *  - The **values** a run is told and reports (`DockingParameters`,
  *    `PairDistance`, `DockingResult`) and the **assembly** it starts from are
- *    `Docking.h`. `build_docking_assembly` does what the IMP.pmi wrapper did
- *    -- resample each volume, attach it to the rigid body of the atom it
- *    hangs off, give it a radius and a mass, add the mean-distance and
- *    excluded-volume terms -- in plain IMP, so the scoring path no longer
- *    pulls a sampler's dependency.
- *  - `score`, `dock_minimize`, `refine` and `screen` are C++ under
- *    self-describing names (`score_structures`, `dock_minimize`,
- *    `refine_docking`, `screen_structures`): an application drives them with
- *    a cancellation callback and reads the result back, so they are an API
- *    and not a program. The callback is #IMP::bff::DockingStop, a director
- *    class a Python caller subclasses.
+ *    `Docking.h`. `build_docking_assembly` resamples each volume, attaches it
+ *    to the rigid body of the atom it hangs off, gives it a radius and a mass
+ *    and adds the mean-distance and excluded-volume terms -- in plain IMP, so
+ *    the scoring path pulls no sampler dependency.
+ *  - `score_structures`, `dock_minimize`, `refine_docking` and
+ *    `screen_structures` are an API, not a program: an application drives
+ *    them with a cancellation callback (#IMP::bff::DockingStop, a director
+ *    class a Python caller subclasses) and reads the result back.
  *  - The **Monte-Carlo sampler** and the **repeated-trial driver** are
  *    `imp_bff dock` and `imp_bff dock-errors`. Both write directories of
  *    results, the first drives IMP.pmi (Python-only, and not a dependency of
  *    this module) and the second forks workers. Those are programs.
- *  - A *third* copy of the derivative-enabled mean-distance restraint was
- *    defined here; `AVMeanDistanceRestraint` has had the gradient in C++
- *    since the AV batch and is what the minimiser uses.
+ *  - The derivative-enabled mean-distance restraint the minimiser uses is
+ *    `AVMeanDistanceRestraint`, which has the gradient in C++. There is one.
+ */
+
+/* A trap worth knowing about, measured 2026-08-31 and **not** fixed here.
  *
- * Every entry point in this file raised `NameError` on its first line before
- * this move -- four separate dead names, one per path -- because nothing
- * called it and nothing tested it. `test/test_docking_values.py` is the
- * coverage that would have caught them.
+ * `pairs` is a `std::vector` *member*, and SWIG returns a member of class type
+ * as a pointer into the owning object -- `& ((arg1)->pairs)`. Reading one off a
+ * **temporary** therefore reads freed memory, and a freed `std::vector` reports
+ * size 0 rather than crashing:
+ *
+ *     IMP.bff.score_structures(...).pairs[0]   -> IndexError: index out of range
+ *     r = IMP.bff.score_structures(...); r.pairs[0]   -> the pair
+ *
+ * which reads as "this structure has no distances" -- the most misleading shape
+ * a bug can take in a diagnostics table. **Bind the result first.**
+ *
+ * `%naturalvar` is the documented cure and does not work here: IMP already
+ * passes `-naturalvar` globally (`tools/build/make_swig_wrapper.py:38`) and
+ * `IMP_bff.types.i` says `%naturalvar;` again, and the generated getter is
+ * still the pointer form. The reason is ordering -- SWIG needs
+ * `std::vector<PairDistance>` to be a *known, copyable* class when it parses
+ * `DockingResult::pairs`, and the `%template` below necessarily comes after
+ * `%include "IMP/bff/Docking.h"`, which is where `PairDistance` is declared in
+ * the first place. Fixing it means splitting the header or forward-declaring
+ * into a `%template`, neither of which belongs in a change about FPS scoring.
  */
 
 IMP_SWIG_VALUE(IMP::bff, PairDistance, PairDistances);
+IMP_SWIG_VALUE(IMP::bff, ReferenceAtom, ReferenceAtoms);
+IMP_SWIG_VALUE(IMP::bff, ReferenceFit, ReferenceFits);
 IMP_SWIG_VALUE(IMP::bff, DockingParameters, DockingParametersList);
 IMP_SWIG_VALUE(IMP::bff, DockingResult, DockingResults);
 IMP_SWIG_VALUE(IMP::bff, ScreenedStructure, ScreenedStructures);
+IMP_SWIG_VALUE(IMP::bff, BootstrapParameters, BootstrapParametersList);
+IMP_SWIG_VALUE(IMP::bff, BootstrapReplica, BootstrapReplicas);
+IMP_SWIG_VALUE(IMP::bff, BootstrapResult, BootstrapResults);
 IMP_SWIG_OBJECT(IMP::bff, DockingStop, DockingStops);
 IMP_SWIG_OBJECT(IMP::bff, ScoreTrace, ScoreTraces);
 
@@ -51,11 +68,22 @@ IMP_SWIG_OBJECT(IMP::bff, ScoreTrace, ScoreTraces);
 %feature("kwargs") IMP::bff::screen_structures;
 %feature("kwargs") IMP::bff::collect_pair_distances;
 %feature("kwargs") IMP::bff::pair_distances_at_positions;
+%feature("kwargs") IMP::bff::fit_reference_atoms;
+%feature("kwargs") IMP::bff::fit_reference_positions;
+%feature("kwargs") IMP::bff::fps_bootstrap;
+%feature("kwargs") IMP::bff::sample_distance_perturbations;
+%feature("kwargs") IMP::bff::pose_rmsd;
+%feature("kwargs") IMP::bff::pose_superposition;
 
 %include "IMP/bff/Docking.h"
 
 %template(PairDistanceList) std::vector<IMP::bff::PairDistance>;
 %template(ScreenedStructureList) std::vector<IMP::bff::ScreenedStructure>;
+// `std::vector<double>` is **not** templated here: `IMP.saxs` already wraps it
+// as `DistBase` and SWIG wraps a type once across a module and its imports
+// (`IMP_bff.types.i`). `sample_distance_perturbations` therefore hands back an
+// `IMP.saxs.DistBase`, which indexes and iterates like a list.
+%template(BootstrapReplicaList) std::vector<IMP::bff::BootstrapReplica>;
 
 // The derived numbers as attributes: a residual is not a field a caller may
 // set, it is what the two distances say.
@@ -64,6 +92,7 @@ IMP_SWIG_OBJECT(IMP::bff, ScoreTrace, ScoreTraces);
 %attribute(IMP::bff::PairDistance, double, efficiency_model,
            get_efficiency_model);
 %attribute(IMP::bff::PairDistance, double, efficiency_exp, get_efficiency_exp);
+%attribute_py(IMP::bff::ReferenceAtom, Vector3D, coordinates, get_coordinates);
 
 // The assembly's parts, as attributes: a caller reads them, a run sets them.
 %attribute_py(IMP::bff::DockingAssembly, Model, model, get_model);

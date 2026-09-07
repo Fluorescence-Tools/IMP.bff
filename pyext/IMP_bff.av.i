@@ -14,6 +14,12 @@ IMP_SWIG_OBJECT_SERIALIZE(IMP::bff, ProbeNetworkRestraint, ProbeNetworkRestraint
 %ignore IMP::bff::ProbeNetworkRestraint::ProbeNetworkRestraint();
 %feature("kwargs") IMP::bff::ProbeNetworkRestraint::ProbeNetworkRestraint;
 
+// A `std::map<std::string, ParticleIndex>` has no template here and would
+// arrive in Python as an opaque handle. The two accessors that answer the same
+// questions -- `get_point_position_names()` and
+// `get_position_particle_index()` -- are wrapped instead; the map is for C++.
+%ignore IMP::bff::ProbeNetworkRestraint::get_point_positions;
+
 %template(MapStringAVPairDistanceMeasurement) std::map<std::string, IMP::bff::AVPairDistanceMeasurement>;
 %attribute_py(IMP::bff::AV, IMP::bff::PathMap, map, get_map);
 

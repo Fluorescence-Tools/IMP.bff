@@ -2,9 +2,6 @@
  *  \file IMP/bff/Distributions.h
  *  \brief Probability distributions used by the dye and linker models.
  *
- * Ported from Python by PRD-113: numba is a prototyping tool in this package,
- * not a runtime dependency, so every numerical kernel is C++.
- *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
@@ -100,6 +97,90 @@ IMPBFFEXPORT void distance_between_gaussian(
     `np.asarray`, and this helper keeps that to C++. */
 IMPBFFEXPORT std::vector<double> normal_density(
         const std::vector<double>& x, double loc, double scale);
+
+//! distance_between_gaussian() as a bare buffer, for kernels that convolve.
+/*! The worm-like-chain linker builds one of these per distance and reduces it
+    immediately; publishing a managed view for each would allocate an ndarray
+    per row of a convolution. */
+IMPBFFEXPORT std::vector<double> distance_between_gaussian_impl(
+        const std::vector<double>& distances, double separation_distance,
+        double sigma);
+
+//! The generalised normal as a bare buffer, for kernels that mix components.
+IMPBFFEXPORT std::vector<double> generalized_normal_density_impl(
+        const std::vector<double>& x, double loc, double scale,
+        double shape, bool norm);
+
+//! Which per-component density gaussian_distance_mixture() evaluates.
+/*! Three, not two, and the third is easy to miss: with `norm = false` a
+    generalised normal is **not** a normal. It evaluates the *standard* normal
+    at `z = (x - loc)/scale`, so it omits the `1/scale` factor that
+    normal_density() carries. Normalising each component hides the difference
+    (the constant divides out); leaving them unnormalised does not, and then
+    components of unequal width are weighted wrongly against each other. That
+    is a 2e-2 error on a three-component mixture, found by measuring rather
+    than by reading. */
+enum GaussianMixtureKernel {
+  //! `generalized_normal_distribution`: skewed, standard normal at z.
+  GAUSSIAN_MIXTURE_GENERALIZED_NORMAL = 0,
+  //! `distance_between_gaussian`: the distance between two Gaussian clouds.
+  GAUSSIAN_MIXTURE_DISTANCE_BETWEEN_GAUSSIANS = 1,
+  //! `normal_distribution`: the plain Gaussian density, `1/scale` included.
+  GAUSSIAN_MIXTURE_NORMAL = 2
+};
+
+//! A weighted mixture of per-component distance distributions, in ONE call.
+/*!
+    The whole of a `Gaussians` distance distribution, so that a model with `k`
+    components crosses the language boundary **once** rather than `k` times.
+    The Python loop this replaces called back per component and summed the
+    results in numpy, which is the half of the standing rule -- *the data stay
+    where the computation is* -- that "it is already a C++ kernel" misses.
+
+    The two booleans exist because the reference is **asymmetric between its
+    own branches**, and hiding that in the kernel would be a silent behaviour
+    change for one of the two callers:
+
+    * the generalised-normal branch calls `generalized_normal_distribution`,
+      whose `norm` defaults to **true**, so each component is normalised to
+      unit sum before it is weighted;
+    * the two-Gaussian branch calls `distance_between_gaussian`, whose
+      `normalize` defaults to **false**, so each component is not.
+
+    So the caller states which it wants rather than the kernel assuming.
+    Normalising per component matters when a wide component falls partly off
+    the axis: without it that component contributes less than its weight says.
+
+    \param[in] axis the distance axis, shared by every component
+    \param[in] means per-component centre; pass them already positive, as
+        ChiSurf's getter does
+    \param[in] sigmas per-component width
+    \param[in] shapes per-component skew; empty or short is read as zero
+    \param[in] amplitudes per-component weight
+    \param[in] kernel which per-component density to evaluate, a
+        GaussianMixtureKernel
+    \param[in] normalize_components normalise each component before weighting
+    \param[in] normalize normalise the combined density
+    \param[out] out_view,n_out_view the mixture as a managed view
+*/
+IMPBFFEXPORT void gaussian_distance_mixture(
+        const std::vector<double>& axis,
+        const std::vector<double>& means,
+        const std::vector<double>& sigmas,
+        const std::vector<double>& shapes,
+        const std::vector<double>& amplitudes,
+        int kernel = GAUSSIAN_MIXTURE_GENERALIZED_NORMAL,
+        bool normalize_components = true,
+        bool normalize = true,
+        double** out_view = 0, int* n_out_view = 0
+);
+
+//! gaussian_distance_mixture() as a bare buffer, for the node that owns one.
+IMPBFFEXPORT std::vector<double> gaussian_distance_mixture_impl(
+        const std::vector<double>& axis, const std::vector<double>& means,
+        const std::vector<double>& sigmas, const std::vector<double>& shapes,
+        const std::vector<double>& amplitudes, int kernel,
+        bool normalize_components, bool normalize);
 
 IMPBFF_END_NAMESPACE
 

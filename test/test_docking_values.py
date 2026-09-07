@@ -75,11 +75,11 @@ def test_the_fps_distance_vocabulary_reads_both_ways():
     defaulted to `RDAMeanE`.
     """
     for name in ("RDAMean", "RDAMeanE", "Rmp", "Efficiency", "pRDA"):
-        code = IMP.bff.dye_pair_distance_type(name)
+        code = IMP.bff.probe_pair_distance_type(name)
         assert code >= 0, name
-        assert IMP.bff.dye_pair_distance_type_name(code) == name
-    assert IMP.bff.dye_pair_distance_type("not a distance") == -1
-    assert IMP.bff.dye_pair_distance_type_name(999) == ""
+        assert IMP.bff.probe_pair_distance_type_name(code) == name
+    assert IMP.bff.probe_pair_distance_type("not a distance") == -1
+    assert IMP.bff.probe_pair_distance_type_name(999) == ""
 
 
 def test_score_csv_has_a_row_per_pair_and_round_trips(tmp_path):
@@ -142,7 +142,7 @@ def test_pair_distances_at_positions_reads_the_particles_it_is_given(tmp_path):
     e.position_1, e.position_2 = "d1", "a1"
     e.distance, e.error_neg, e.error_pos = 42.0, 2.0, 2.0
     e.forster_radius = 52.0
-    e.distance_type = IMP.bff.DYE_PAIR_DISTANCE_MP
+    e.distance_type = IMP.bff.PROBE_PAIR_DISTANCE_MP
     distances = IMP.bff.MapStringAVPairDistanceMeasurement()
     distances["d1_a1"] = e
 
@@ -163,17 +163,17 @@ def test_pair_distances_at_positions_reads_the_particles_it_is_given(tmp_path):
 def test_scoring_an_assembly_agrees_with_the_restraint_it_is_built_on(tmp_path):
     """`score()` on the bundled T4L fixture, end to end.
 
-    The engine had **no test at all** and could not have passed one: since the
-    PMI wrapper went lazy, `build_assembly` looked `AVNetworkRestraintWrapper`
-    up as a bare global, and a module `__getattr__` answers attribute lookups
-    only -- so every entry point (`score`, `dock`, `dock_minimize`, `screen`)
-    raised `NameError` on its first line. Nothing noticed, which is what an
-    untested 1,100-line engine buys.
-
-    The number is not arbitrary: it is the same 22.69935116408601 that
+    The number is not arbitrary: it is the same 11.326777201821047 that
     `test_ProbeNetworkRestraint.py` pins for the quadrature score of this
     fixture, so this asserts that assembling a model and scoring it through
-    the docking path gives what the restraint gives on its own.
+    the docking path gives what the restraint gives on its own. It was
+    22.69935116408601 until the positions' `strip_mask` began to be honoured
+    (PRD-106) and 22.527697710399956 until the accessible contact volume they
+    all ask for stopped being ignored (2026-09-01, PRD-121 G9). Olga's
+    name-keyed radii were briefly the default the same day and gave
+    11.286617190950983; IMP's own are the default again (AV::set_radii_source)
+    -- and that both paths moved together each time, and back together, is the
+    point of pinning them against each other.
     """
     pdb = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
     fps = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
@@ -181,7 +181,7 @@ def test_scoring_an_assembly_agrees_with_the_restraint_it_is_built_on(tmp_path):
     result = IMP.bff.score_structures([pdb], fps, score_set="chi2_C2_33p",
                                       output_csv=str(out))
 
-    assert result.score == pytest.approx(22.69935116408601, abs=1e-9)
+    assert result.score == pytest.approx(11.326777201821047, abs=1e-9)
     assert result.n_avs == 17
     assert result.n_distances == 33
     assert result.score_csv == str(out)
@@ -262,9 +262,12 @@ def test_screening_ranks_a_library_and_never_reports_a_silent_nan(tmp_path):
 
     assert len(ranked) == 2
     assert all(math.isfinite(entry.score) for entry in ranked)
-    assert ranked[0].score == pytest.approx(22.69935116408601, abs=1e-9)
+    assert ranked[0].score == pytest.approx(11.326777201821047, abs=1e-9)
     rows = list(csv.reader(out.open()))
-    assert rows[0] == ["pdb", "score"]
+    # The score is followed by FPS's screening diagnostics (PRD-121 G3);
+    # test/representation/test_screening_diagnostics.py checks what they say.
+    assert rows[0] == ["pdb", "score", "chi2_r", "sigma1", "sigma2", "sigma3",
+                       "invalid_r", "ref_rmsd"]
     assert len(rows) == 3
 
 
@@ -272,3 +275,65 @@ def test_screening_ranks_a_library_and_never_reports_a_silent_nan(tmp_path):
 # would import cleanly and exit 0 -- reporting success without running.
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_a_structure_missing_a_labelling_site_scores_nan_and_does_not_crash():
+    """Screening a library is exactly where sites go missing.
+
+    `search_labeling_site` read `p_residue[0]` and *then* asked whether
+    `p_residue` held one element, and `IMP_USAGE_CHECK` compiles out of a
+    release build -- so a structure without the chain a position names indexed
+    element zero of an empty vector and the process died. That is the ordinary
+    case for a screen: candidate structures differ, and some do not carry every
+    site. It must be a NaN row, not a segmentation fault.
+    """
+    import math
+
+    protein = IMP.bff.get_example_path("structure/HIV_RT/protein_1R0A.pdb")
+    dna = IMP.bff.get_example_path("structure/HIV_RT/dna.pdb")
+    fps = IMP.bff.get_example_path("structure/HIV_RT/hiv_rt.fps.json")
+
+    # Each path is one candidate, and neither carries all eleven positions:
+    # the protein has no chain P, the DNA no chains A or B.
+    ranked = list(IMP.bff.screen_structures([protein, dna], fps, "resolved"))
+    assert len(ranked) == 2
+    assert all(math.isnan(entry.score) for entry in ranked)
+
+    # and the reason is available rather than silent
+    with pytest.raises(Exception) as excinfo:
+        IMP.bff.build_docking_assembly([dna], fps, "resolved")
+    assert "labelling site" in str(excinfo.value)
+
+
+def test_the_two_bodies_together_do_carry_every_site():
+    """The other half of the pair above: assembled, the sites resolve."""
+    protein = IMP.bff.get_example_path("structure/HIV_RT/protein_1R0A.pdb")
+    dna = IMP.bff.get_example_path("structure/HIV_RT/dna.pdb")
+    fps = IMP.bff.get_example_path("structure/HIV_RT/hiv_rt.fps.json")
+    result = IMP.bff.score_structures([protein, dna], fps, "resolved")
+    assert result.n_avs == 10
+    assert result.n_distances == 18
+    # Olga's radii gave 59.2547 for the hours they were the default on
+    # 2026-09-01: this fixture's DNA uses the old `C1*`/`O1P` spellings, which
+    # that name-keyed table does not carry, so those atoms took its 1.50 A
+    # unknown-name fallback. IMP's own radii are the default again
+    # (AV::set_radii_source) and 59.0404 returns exactly.
+    assert result.score == pytest.approx(59.040389, abs=1e-3)
+
+
+def test_pairs_survive_a_temporary_result():
+    """`score_structures(...).pairs[0]` used to raise IndexError.
+
+    SWIG returned a bare `std::vector` **member** of a temporary as a pointer
+    into freed memory, and a freed vector reports size 0 -- so the expression
+    read as "this structure has no distances", which is the worst possible
+    shape for a diagnostics bug: a wrong answer, not an error. Binding the
+    result to a name first happened to work, so it looked intermittent.
+    Typing the member as `PairDistances` (the IMP_VALUES vector) fixes it.
+    """
+    pdb = IMP.bff.get_example_path("structure/T4L/3GUN.pdb")
+    fps = IMP.bff.get_example_path("structure/T4L/fret.fps.json")
+    # the temporary is the point: no intermediate name
+    assert len(IMP.bff.score_structures([pdb], fps, "chi2_C2_33p").pairs) == 33
+    assert IMP.bff.score_structures([pdb], fps,
+                                    "chi2_C2_33p").pairs[0].name == "19-119_C2"

@@ -197,7 +197,7 @@ def test_repulsive_only_drops_the_attractive_tail():
 
 def test_the_scalar_and_batch_evaluators_agree():
     """``evaluate`` is one frame through the batch path, and must stay so."""
-    from IMP.bff import DyeInternalEnergyEvaluator
+    from IMP.bff import IntramolecularEnergy
     rng = np.random.default_rng(2)
     n = 12
     system = {
@@ -205,7 +205,7 @@ def test_the_scalar_and_batch_evaluators_agree():
         "bonds": [(i, i + 1, 1.5, 0) for i in range(n - 1)],
     }
     import json
-    ev = DyeInternalEnergyEvaluator(
+    ev = IntramolecularEnergy(
         forcefield_system_from_json(json.dumps(system)))
     frames = rng.normal(0, 3, (5, n, 3))
     batch = ev.evaluate_batch(frames.ravel(), 5, n)
@@ -214,8 +214,8 @@ def test_the_scalar_and_batch_evaluators_agree():
 
 
 def test_no_pairs_means_no_energy():
-    from IMP.bff import DyeInternalEnergyEvaluator
+    from IMP.bff import IntramolecularEnergy
     import json
-    ev = DyeInternalEnergyEvaluator(forcefield_system_from_json(json.dumps(
+    ev = IntramolecularEnergy(forcefield_system_from_json(json.dumps(
         {"sites": [{"id": 0, "element": "C"}], "bonds": []})))
     assert list(ev.evaluate_batch(np.zeros((3, 1, 3)).ravel(), 3, 1)) == [0.0, 0.0, 0.0]

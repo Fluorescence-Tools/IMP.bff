@@ -34,8 +34,7 @@
 #include <IMP/bff/AVModel.h>
 
 
-#include <IMP/value_macros.h>
-#include <IMP/showable_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <IMP/Model.h>
 #include <IMP/Particle.h>
@@ -58,6 +57,16 @@ IMPBFFEXPORT extern const double DEFAULT_ALLOWED_SPHERE_RADIUS;
 
 //! Van der Waals radius per atomic number, Angstrom; 1.70 for anything else.
 IMPBFFEXPORT std::map<int, double> vdw_radii();
+
+//! The van der Waals radius of an element symbol, A.
+/*! The same table #vdw_radii holds, addressed the way a caller with an atom
+    name has it. Bondi's values; an unknown symbol gets carbon's 1.7, which is
+    what every reader in this module already falls back to.
+
+    There were two of these -- this one by atomic number and a second by
+    symbol in the dye sampler -- and they disagreed about hydrogen (1.20
+    against 1.10, Bondi against Rowland & Taylor). One table now. */
+IMPBFFEXPORT double vdw_radius(const std::string& element);
 
 //! The element symbol of a PDB ATOM/HETATM record.
 /*!
@@ -142,7 +151,8 @@ IMPBFFEXPORT void find_attachment_point(const std::string& pdb_path,
                attachment atom's own neighbourhood and returns an empty volume,
                reporting nothing
     \param[in] contact_volume_thickness,contact_volume_trapped_fraction the ACV
-               split, when one is wanted
+               split, when one is wanted; see
+               #IMP::bff::PathMap::apply_contact_weighting for the rule
     \param[in] search_stencil Dijkstra neighbour stencil. `0` leaves the
                decorator's own default, which is **74** — the LabelLib reference
                metric. `26` is the speed option: ~1.9x faster for ~20 % less
@@ -199,7 +209,12 @@ IMPBFFEXPORT AccessibleVolume compute_av(
     \param[in] strip_mask an fps `strip_mask`; empty means the default strip
     \param[in] allowed_sphere_radius negative derives it from the linker width
     \param[in] contact_volume_thickness,contact_volume_trapped_fraction the ACV
-               split, when one is wanted
+               split, when one is wanted; see
+               #IMP::bff::PathMap::apply_contact_weighting for the rule. **This
+               door's uniform-weight convention is suspended when one is
+               asked for** -- an accessible contact volume *is* the weighting,
+               and flattening it would return a volume that ignored the
+               request.
     \throw ValueException when the attachment site is not in the structure
 */
 IMPBFFEXPORT AccessibleVolume compute_av_from_structure(

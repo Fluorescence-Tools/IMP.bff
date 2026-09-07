@@ -22,7 +22,10 @@
 
 #include <IMP/bff/bff_config.h>
 
+#include <IMP/atom/Atom.h>
 #include <IMP/atom/Hierarchy.h>
+
+#include <IMP/bff/Base.h>
 
 #include <string>
 #include <vector>
@@ -39,18 +42,72 @@ IMPBFFEXPORT void hierarchy_atom_coordinates(
         IMP::atom::Hierarchy hierarchy,
         double** out_view, int* n_out_view);
 
+//! An atom's name as its structure spells it, without a `HET:` prefix.
+/*! IMP names a heteroatom `HET: C3 `; every reader in this module wants `C3`.
+    It was written out three times in three files before it was written down
+    once here. */
+IMPBFFEXPORT std::string atom_name(IMP::atom::Atom atom);
+
 //! Names of every XYZ leaf, in the same order as #hierarchy_atom_coordinates.
 /*!
     \param[in] hierarchy the frame to read
     \return four strings per atom: atom name, atom type, residue name, chain id.
             Empty strings where the leaf carries no such information.
 
-    The atom name is the last whitespace-separated field of IMP's particle name,
-    matching what the Python did: IMP names an atom `"Atom CB"`, and the caller
-    wants `CB`.
+    The atom name is the last whitespace-separated field of IMP's particle
+    name: IMP names an atom `"Atom CB"`, and the caller wants `CB`.
 */
 IMPBFFEXPORT std::vector<std::string> hierarchy_atom_metadata(
         IMP::atom::Hierarchy hierarchy);
+
+// --------------------------------------------------------------------------
+// A frame as parallel arrays
+// --------------------------------------------------------------------------
+
+//! One frame of a structure: coordinates and the labels that identify atoms.
+/*! What the rotamer scorer needs of a protein and no more, as six parallel
+    arrays. A frame is one model of a multi-MODEL PDB, or one frame of a
+    trajectory. */
+struct IMPBFFEXPORT ProteinFrame {
+    //! Flat, three per atom.
+    std::vector<double> coords;
+    std::vector<std::string> atom_names, atom_types, resnames, chain_ids;
+    //! One per atom, -1 where the atom has no residue.
+    std::vector<int> residue_indices;
+
+    ProteinFrame() {}
+
+    int get_n_atoms() const { return static_cast<int>(coords.size() / 3); }
+    void get_coords(double** out_view, int* n_out_view) const;
+    void set_coords(const std::vector<double>& v) { coords = v; }
+
+    IMP_SHOWABLE_INLINE(ProteinFrame,
+                        out << "ProteinFrame(" << get_n_atoms() << " atoms)");
+};
+IMP_VALUES(ProteinFrame, ProteinFrames);
+
+//! Every XYZ leaf of a hierarchy, as a frame.
+/*! The bridge for the formats this module does not read itself: a caller that
+    has a hierarchy -- from RMF, from a CHARMM build, from its own sampling --
+    gets a frame without going through a file. */
+IMPBFFEXPORT ProteinFrame protein_frame_from_hierarchy(
+        IMP::atom::Hierarchy hierarchy);
+
+//! Every model of a PDB, as frames.
+/*!
+    A multi-MODEL PDB (a trajectory written as models) gives one frame per
+    model and a plain PDB gives one. Waters are not read: they are not
+    obstacles a dye is screened against in this model, and reading them costs
+    the pair sum for nothing.
+
+    \param[in] path a `.pdb` or `.ent` file
+    \param[in] max_frames stop after this many; negative reads all
+    \throw ValueException for any other extension. RMF is not read here --
+           this module does not depend on `IMP.rmf` -- so an RMF caller loads
+           its hierarchies and calls #protein_frame_from_hierarchy.
+*/
+IMPBFFEXPORT std::vector<ProteinFrame> load_protein_frames(
+        const std::string& path, int max_frames = -1);
 
 IMPBFF_END_NAMESPACE
 

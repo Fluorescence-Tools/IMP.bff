@@ -9,6 +9,14 @@ timestamp: '2026-08-19T00:00:00Z'
 
 # BinaryCIF for the rotamer libraries
 
+> **Update (2026-08-24).** The shipped *rotamer libraries* moved on again, to
+> `.drot` (PRD-118) -- an internal-coordinate store that carries its own
+> template, at 0.65x the BinaryCIF. BinaryCIF remains this package's
+> **trajectory** format and the `.bcif` libraries still ship and still read.
+> The lesson below is what decided `.drot`'s default too: the lossless rung is
+> the default there for exactly the dipole-direction reason recorded here, and
+> the torsion-only draft of `.drot` failed the same pins in the same way.
+
 **BinaryCIF is the trajectory format as of 2026-08-19.** The 95 DCD libraries
 in `data/rotamer_library/` are now `.bcif`, read by
 `IMP::bff::read_bcif_trajectory` through the C parser IMP already vendors.

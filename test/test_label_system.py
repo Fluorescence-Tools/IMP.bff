@@ -11,35 +11,58 @@ Names follow the FLR dictionaries where an item exists (checked against
 ``../mmfdb/src/mmfdb/data/*.dic``); quenching has no item anywhere in the stack.
 """
 
+import json
+
 import pytest
 
-from IMP.bff import find_dye
+from IMP.bff import Probe, find_probe
 from IMP.bff import (
-    Label, Quencher, PETParameters, pet_quenching_reference,
+    ProbePosition, Quencher, PETParameters, pet_quenching_reference,
     reference_quenchers, reference_pet_parameters, REFERENCE_DYE,
-    FLUOROPHORE_TYPES,
+    fluorophore_types, probe_position_flrcif_items, quencher_flrcif_items,
+    probe_position_from_source_info,
 )
-from IMP.bff import LABEL_FLRCIF_ITEMS as SITE_ITEMS
-from IMP.bff import QUENCHER_FLRCIF_ITEMS as QUENCHER_ITEMS
+
+# The vocabularies come back as JSON text, which is how every table in this
+# module crosses the boundary.
+FLUOROPHORE_TYPES = tuple(fluorophore_types())
+SITE_ITEMS = json.loads(probe_position_flrcif_items())
+QUENCHER_ITEMS = json.loads(quencher_flrcif_items())
 
 
-class TestLabel:
+class TestProbePosition:
 
-    def test_a_label_is_a_position_plus_a_dye(self):
-        label = Label(asym_id="A", seq_id=132, atom_id="CB",
-                      dye=find_dye("AlexaFluor 488"), fluorophore_type="donor")
-        assert label.key == ("A", 132, "CB")
+    def test_a_position_is_a_site_plus_a_probe(self):
+        # positional: an IMP value needs a default constructor too, and SWIG
+        # turns keyword arguments off for anything overloaded. The probe is a
+        # *name*; `set_probe` attaches the photophysics and the name together.
+        label = ProbePosition("A", 132, "CB", "AlexaFluor488", "donor")
+        label.set_probe(find_probe("AlexaFluor 488"))
+        assert label.key == "A:132:CB"
         assert label.dye.name == "AlexaFluor488"
+
+    def test_a_probe_need_not_be_a_dye(self):
+        """A spin label is a probe position: same site, same frame, same libraries.
+
+        Structurally there is no difference -- a residue, an attachment atom
+        and a linker -- so nothing here asks what kind of probe it is. What
+        differs is what is measured from it, and a probe with no spectra
+        simply has no `dye`.
+        """
+        spin = ProbePosition("A", 41, "SG", "MTSSL")
+        assert spin.probe == "MTSSL"
+        assert spin.dye.name == ""          # no photophysics, still a site
+        assert spin.key == "A:41:SG"
 
     def test_the_fluorophore_type_enum_is_the_dictionary_s(self):
         """``_flr_sample_probe_details.fluorophore_type``, verbatim."""
         assert FLUOROPHORE_TYPES == ("donor", "acceptor", "unspecified")
         with pytest.raises(ValueError, match="fluorophore_type"):
-            Label(asym_id="A", seq_id=1, fluorophore_type="quencher")
+            ProbePosition("A", 1, "CB", "MTSSL", "quencher")
 
     def test_it_round_trips_the_fps_dialect(self):
-        label = Label(asym_id="E", seq_id=96, atom_id="CB")
-        assert Label.from_source_info(label.to_source_info()) == label
+        label = ProbePosition("E", 96, "CB")
+        assert probe_position_from_source_info(label.source_info) == label
 
     def test_it_carries_only_the_position_half(self):
         """The AV parameters in a source_info dict are *not* a site property.
@@ -53,8 +76,8 @@ class TestLabel:
             "linker_length": 20.0, "linker_width": 0.5, "radius1": 3.5,
             "allowed_sphere_radius": 2.1, "simulation_grid_resolution": 1.5,
         }
-        label = Label.from_source_info(source_info)
-        carried = set(label.to_source_info())
+        label = probe_position_from_source_info(json.dumps(source_info))
+        carried = set(json.loads(label.source_info))
         assert carried == {"chain_identifier", "residue_seq_number", "atom_name"}
         for representation_parameter in (
                 "linker_length", "radius1", "allowed_sphere_radius",

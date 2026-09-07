@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Compute one accessible volume -- FPS's AV interface.
+
+A port of the standalone AV dialog of FPS, the FRET Positioning and Screening
+toolkit (Kalinin *et al.*, *Nat. Methods* **9**, 1218, 2012), which FPS itself
+reaches as `FpsGui -av`. One site, one dye, one volume, written where a viewer
+can open it.
+
+The dye presets are FPS's own, from its `Fps/data/linker.txt`: linker length,
+linker width and the dye radii for the four linker chemistries of each dye.
+`--dye` selects one; anything it sets can still be overridden individually.
+
+\b
+Author: Thomas-Otavio Peulen
+"""
+import json
+import os
+
+import click
+
+import IMP
+import IMP.atom
+import IMP.bff
+import IMP.core
+
+
+CONTEXT = {"help_option_names": ["-h", "--help"]}
+
+#: FPS's `Fps/data/linker.txt`, verbatim: name -> (role, L, W, R1, R2, R3).
+#: The file gives an AV1 radius *and* three AV3 radii per row; both are kept
+#: here because they are not interchangeable -- an AV3 admits a voxel where the
+#: *smallest* radius fits and weights it by how many fit, so it is the larger
+#: and softer volume. `--av1` selects the single-radius column.
+LINKERS = {
+    "alexa488-long":  ("D", 20.0, 4.5, 3.5, (5.0, 4.5, 1.5)),
+    "alexa488-inter": ("D", 15.0, 4.5, 3.5, (5.0, 4.5, 1.5)),
+    "alexa488-short": ("D", 11.0, 4.5, 3.5, (5.0, 4.5, 1.5)),
+    "cy5-long":       ("A", 22.0, 4.5, 3.5, (11.0, 3.0, 1.5)),
+    "cy5-inter":      ("A", 17.0, 4.5, 3.5, (11.0, 3.0, 1.5)),
+    "cy5-short":      ("A", 14.0, 4.5, 3.5, (11.0, 3.0, 1.5)),
+}
+
+
+@click.command(context_settings=CONTEXT)
+@click.option("-p", "--pdb", required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="The structure the dye is attached to.")
+@click.option("-c", "--chain", default="", show_default="any",
+              help="Chain of the attachment site.")
+@click.option("-r", "--residue", required=True, type=int,
+              help="Residue number of the attachment site.")
+@click.option("-a", "--atom", default="CB", show_default=True,
+              help="Attachment atom.")
+@click.option("-d", "--dye", type=click.Choice(sorted(LINKERS)),
+              help="An FPS linker preset; sets length, width and radii.")
+@click.option("--av1", is_flag=True,
+              help="Use the preset's single AV1 radius instead of its three.")
+@click.option("-l", "--linker-length", type=float, default=None,
+              help="Override the linker length, A.")
+@click.option("-w", "--linker-width", type=float, default=None,
+              help="Override the linker width (diameter), A.")
+@click.option("--radii", default=None,
+              help="Override the dye radii, e.g. '3.5' or '5,4.5,1.5'.")
+@click.option("-g", "--grid", "grid", type=float, default=None,
+              help="Grid spacing, A. Default follows FPS: "
+                   "max(min(0.2L, 0.2W, 0.4R_i), 0.4).")
+@click.option("--clearance", type=float, default=None,
+              help="Source clearance, A. Derived when not given, which is "
+                   "almost always right -- see the note in --help.")
+@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False),
+              help="Where to write it: .xyz, .pqr, .dx or .mrc.")
+@click.option("--json", "as_json", is_flag=True, help="Report as JSON.")
+def main(pdb, chain, residue, atom, dye, av1, linker_length, linker_width,
+         radii, grid, clearance, output, as_json):
+    """Compute one accessible volume and write it where a viewer can open it.
+
+    `.xyz` and `.pqr` write the point cloud with its weights, `.dx` and `.mrc`
+    the density grid. PyMOL and VMD open all four.
+
+    \b
+    Examples
+    --------
+    Alexa 488 on a long linker at T4L residue 132, FPS's own parameters:
+
+    \b
+      imp_bff_fps_av -p $IMP/examples/bff/structure/T4L/3GUN.pdb \\
+          -c A -r 132 -d alexa488-long -o d132.xyz
+
+    \b
+    The same site as a single-radius AV1, which is the smaller, harder volume:
+
+    \b
+      imp_bff_fps_av -p 3GUN.pdb -c A -r 132 -d alexa488-long --av1 -o d132.xyz
+
+    \b
+    Hand-set geometry, no preset:
+
+    \b
+      imp_bff_fps_av -p 3GUN.pdb -r 132 -l 20 -w 4.5 --radii 3.5 -o d132.xyz
+
+    \b
+    On the clearance
+    ----------------
+    The path search inflates every obstacle by half the linker width, so the
+    free sphere around the attachment atom has to clear that inflation or the
+    source is walled in and **the volume comes back empty**. Leaving
+    `--clearance` unset derives a value that does; setting it small is a good
+    way to get an empty volume and not be told why. FPS's own
+    `LinkerInitialSphere x width` is a different quantity -- its seed is
+    unconditional -- so an FPS number does not transfer here.
+
+    An empty volume is a legitimate answer: a buried site has no room for a
+    dye. This program says so rather than writing a file that looks computed.
+    """
+    IMP.set_log_level(IMP.SILENT)
+
+    length, width, r = 20.0, 4.5, (3.5, 0.0, 0.0)
+    if dye:
+        _, length, width, r1_av1, r_av3 = LINKERS[dye]
+        r = (r1_av1, 0.0, 0.0) if av1 else r_av3
+    elif av1:
+        raise click.UsageError("--av1 selects a column of a --dye preset")
+    if linker_length is not None:
+        length = float(linker_length)
+    if linker_width is not None:
+        width = float(linker_width)
+    if radii is not None:
+        values = [float(v) for v in radii.replace(",", " ").split()]
+        if len(values) not in (1, 3):
+            raise click.UsageError("--radii takes one or three values")
+        r = tuple(values) + (0.0, 0.0) if len(values) == 1 else tuple(values)
+
+    if grid is None:
+        # FPS's own rule (AVEngine.cs:568), so a preset reproduces its grid
+        active = [v for v in r if v > 0]
+        grid = max(min([0.2 * length, 0.2 * width]
+                       + [0.4 * v for v in active]), 0.4)
+
+    model = IMP.Model()
+    hier = IMP.atom.read_pdb(str(pdb), model,
+                             IMP.atom.NonWaterNonHydrogenPDBSelector())
+    selection = IMP.atom.Selection(hier, residue_index=int(residue),
+                                   atom_type=IMP.atom.AtomType(atom))
+    if chain:
+        selection.set_chain_id(chain)
+    chosen = selection.get_selected_particles()
+    if not chosen:
+        raise click.ClickException(
+            "%s has no atom %s in residue %s%s"
+            % (pdb, atom, chain or "*", residue))
+
+    particle = IMP.Particle(model)
+    IMP.bff.AV.do_setup_particle(
+        model, particle, chosen[0], linker_length=length, radii=tuple(r),
+        linker_width=width, simulation_grid_resolution=float(grid),
+        allowed_sphere_radius=(-1.0 if clearance is None else float(clearance)))
+    av = IMP.bff.AV(model, particle)
+    av.resample()
+
+    # a numpy view: test its length, never its truth value
+    points = av.get_map().get_xyz_density()
+    used_clearance = av.get_effective_allowed_sphere_radius()
+    if len(points) == 0:
+        click.echo(
+            "no accessible voxel: the site is buried, or the clearance "
+            "(%.2f A) does not clear the obstacle inflation of half the "
+            "linker width (%.2f A). Nothing written."
+            % (used_clearance, 0.5 * width), err=True)
+        raise SystemExit(1)
+
+    IMP.bff.write_av(av, str(output))
+    mean = av.get_mean_position(False)
+    if as_json:
+        click.echo(json.dumps({
+            "pdb": pdb, "chain": chain, "residue": residue, "atom": atom,
+            "linker_length": length, "linker_width": width,
+            "radii": list(r), "grid": grid, "clearance": used_clearance,
+            "n_voxels": len(points),
+            "mean_position": [mean[0], mean[1], mean[2]],
+            "output": output}, indent=2))
+        return
+    click.echo("site      %s%s %s" % (chain or "*", residue, atom))
+    click.echo("dye       L = %g A, W = %g A, radii = %s"
+               % (length, width, ", ".join("%g" % v for v in r if v > 0)))
+    click.echo("grid      %g A   clearance %.2f A" % (grid, used_clearance))
+    click.echo("volume    %d voxels" % len(points))
+    click.echo("mean      (%.3f, %.3f, %.3f)" % (mean[0], mean[1], mean[2]))
+    click.echo("wrote     %s" % output)
+
+
+if __name__ == "__main__":
+    main()

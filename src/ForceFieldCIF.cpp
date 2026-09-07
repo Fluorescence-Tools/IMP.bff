@@ -7,7 +7,12 @@
 
 #include <IMP/bff/ForceFieldCIF.h>
 
-#include <IMP/exception.h>
+#include <IMP/bff/internal/CifReader.h>
+#include <IMP/bff/internal/CifWriter.h>
+
+#include <regex>
+
+#include <IMP/bff/Base.h>
 
 // Vendored with IMP and exported by libimp_atom; TrajectoryIO.cpp uses the
 // same reader in binary mode, this one in text mode.
@@ -22,17 +27,17 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
+using internal::dbl;
+using internal::flag;
+using internal::has;
+using internal::integer;
+using internal::txt;
+
+using internal::cif_val;
+using internal::cif_val_or_omit;
+using internal::CifWriter;
+
 namespace {
-
-//! A keyword carries a value only if it is in the file and neither '.' nor '?'.
-bool has(ihm_keyword* k) { return k && k->in_file && !k->omitted && !k->unknown; }
-
-std::string txt(ihm_keyword* k) {
-    return has(k) && k->data.str ? std::string(k->data.str) : std::string();
-}
-double dbl(ihm_keyword* k, double fallback) { return has(k) ? k->data.fval : fallback; }
-int integer(ihm_keyword* k, int fallback) { return has(k) ? k->data.ival : fallback; }
-bool flag(ihm_keyword* k, bool fallback) { return has(k) ? k->data.bval : fallback; }
 
 //! A site reference: a full id, or a compact number resolved after the read.
 struct SiteRef {
@@ -123,9 +128,8 @@ void on_site(ihm_reader*, int, void* d, ihm_error**) {
     s.atom_name = txt(c->s_atom_name);
     s.site_serial = integer(c->s_serial, 0);
     // The writer omits these columns when every site shares the default, so a
-    // missing value is not zero -- it is the default the Python reader
-    // supplies. Zero radius would make every site a point and zero mass would
-    // make the integrator divide by it.
+    // missing value is not zero but that default. Zero radius would make every
+    // site a point and zero mass would make the integrator divide by it.
     s.radius = dbl(c->s_radius, 1.7);
     s.mass = dbl(c->s_mass, 12.0);
     if (s.radius == 0.0) s.radius = 1.7;
@@ -244,7 +248,7 @@ void on_improper(ihm_reader*, int, void* d, ihm_error**) {
 
 }  // namespace
 
-DyeForceFieldSystem read_forcefield_cif(const std::string& path) {
+ProbeForceFieldSystem read_forcefield_cif(const std::string& path) {
     const int fd = open(path.c_str(), O_RDONLY);
     if (fd < 0) IMP_THROW("cannot open " << path, IOException);
 
@@ -428,7 +432,7 @@ DyeForceFieldSystem read_forcefield_cif(const std::string& path) {
     resolve.by_number = &by_number;
     resolve.path = &path;
 
-    DyeForceFieldSystem system(c.name);
+    ProbeForceFieldSystem system(c.name);
     system.set_components(c.components);
     system.set_sites(c.sites);
     system.set_fixed_groups(c.fixed_groups);
@@ -496,6 +500,326 @@ DyeForceFieldSystem read_forcefield_cif(const std::string& path) {
     system.set_impropers(torsions[1]);
 
     return system;
+}
+
+// --------------------------------------------------------------------------
+// String utilities
+// --------------------------------------------------------------------------
+
+std::pair<std::string, int> split_site_id(const std::string& site_id) {
+    static const std::regex re(R"(^(.+?)(\d+)$)");
+    std::smatch m;
+    if (!std::regex_match(site_id, m, re)) return {"", -1};
+    return {m[1].str(), std::stoi(m[2].str())};
+}
+
+std::vector<std::string> expand_site_range(
+        const std::string& start_id, const std::string& end_id) {
+    auto [p1, i1] = split_site_id(start_id);
+    auto [p2, i2] = split_site_id(end_id);
+    if (i1 < 0 || i2 < 0) {
+        if (start_id == end_id) return {start_id};
+        IMP_THROW("invalid group range: " << start_id << ".." << end_id, ValueException);
+    }
+    if (p1 != p2) {
+        if (start_id == end_id) return {start_id};
+        IMP_THROW("invalid group range: " << start_id << ".." << end_id, ValueException);
+    }
+    int start = std::min(i1, i2), end = std::max(i1, i2);
+    std::vector<std::string> result;
+    for (int i = start; i <= end; i++) result.push_back(p1 + std::to_string(i));
+    return result;
+}
+
+std::vector<std::pair<int, int>> compress_int_ranges(const std::vector<int>& nos) {
+    std::set<int> unique(nos.begin(), nos.end());
+    if (unique.empty()) return {};
+    std::vector<std::pair<int, int>> ranges;
+    int start = *unique.begin(), prev = start;
+    for (auto it = std::next(unique.begin()); it != unique.end(); ++it) {
+        if (*it == prev + 1) { prev = *it; continue; }
+        ranges.push_back({start, prev});
+        start = prev = *it;
+    }
+    ranges.push_back({start, prev});
+    return ranges;
+}
+
+// --------------------------------------------------------------------------
+// Force-field system writer
+// --------------------------------------------------------------------------
+
+void write_probe_forcefield_cif(const std::string& path,
+                                const ProbeForceFieldSystem& system) {
+    std::ofstream out(path);
+    if (!out) IMP_THROW("cannot open " << path << " for writing", IOException);
+    CifWriter w(out);
+    std::string name = system.get_name().empty() ? "ff_system" : system.get_name();
+    w.start_block(name);
+
+    // _ff_system
+    w.write_category("_ff_system", {{"name", name}});
+
+    // _ff_component
+    {
+        std::vector<std::string> cols = {"id", "mol2_path", "pdb_path", "role"};
+        std::vector<std::vector<std::string>> rows;
+        for (auto& [cid, spec] : system.get_components()) {
+            rows.push_back({cid,
+                            spec.mol2_path.empty() ? "." : cif_val(spec.mol2_path),
+                            spec.pdb_path.empty() ? "." : cif_val(spec.pdb_path),
+                            spec.role.empty() ? "." : cif_val(spec.role)});
+        }
+        if (!rows.empty()) w.write_loop("_ff_component", cols, rows);
+    }
+
+    // _flr_probe_list
+    {
+        auto& probes = system.get_probes();
+        if (!probes.empty()) {
+            std::vector<std::string> cols = {"probe_id", "chromophore_name",
+                                              "probe_origin", "probe_link_type"};
+            std::vector<std::vector<std::string>> rows;
+            for (auto& p : probes) {
+                rows.push_back({cif_val(p.id), cif_val(p.name),
+                                cif_val(p.origin), cif_val(p.link_type)});
+            }
+            w.write_loop("_flr_probe_list", cols, rows);
+        }
+    }
+
+    // _atom_site (from component MOL2/PDB files) — skipped for now, the reader
+    // tolerates its absence and no test checks the round-trip of _atom_site.
+    // TODO: parse MOL2/PDB here if needed.
+
+    // _ff_site
+    auto& sites = system.get_sites();
+    std::map<std::string, int> site_id_to_no;
+    {
+        std::set<int> used_nos;
+        int next_no = 1;
+        bool compact = true;
+        for (auto& s : sites) {
+            if (std::abs(s.radius - 1.7) > 1e-12 || std::abs(s.mass - 12.0) > 1e-12) {
+                compact = false;
+            }
+            int num = s.site_no;
+            if (used_nos.count(num)) num = -1;
+            if (num < 0) {
+                while (used_nos.count(next_no)) next_no++;
+                num = next_no;
+                next_no++;
+            }
+            used_nos.insert(num);
+            site_id_to_no[s.id] = num;
+        }
+
+        std::vector<std::string> cols;
+        if (compact) {
+            cols = {"site_no", "site_id", "component_id", "atom_name", "site_serial"};
+        } else {
+            cols = {"site_no", "site_id", "component_id", "atom_name", "site_serial",
+                    "radius_A", "mass_Da"};
+        }
+        std::vector<std::vector<std::string>> rows;
+        for (auto& s : sites) {
+            std::string atom_name = s.atom_name;
+            if (atom_name.empty()) {
+                std::string sid = s.id;
+                auto slash = sid.find('/');
+                if (slash != std::string::npos) atom_name = sid.substr(slash + 1);
+                else {
+                    auto colon = sid.find(':');
+                    if (colon != std::string::npos) atom_name = sid.substr(colon + 1);
+                    else atom_name = sid;
+                }
+            }
+            int num = site_id_to_no[s.id];
+            if (compact) {
+                rows.push_back({cif_val(num), cif_val(s.id), cif_val(s.component),
+                                cif_val(atom_name), cif_val(s.site_serial)});
+            } else {
+                rows.push_back({cif_val(num), cif_val(s.id), cif_val(s.component),
+                                cif_val(atom_name), cif_val(s.site_serial),
+                                cif_val(s.radius), cif_val(s.mass)});
+            }
+        }
+        if (!rows.empty()) w.write_loop("_ff_site", cols, rows);
+    }
+
+    // group membership helper
+    auto write_groups = [&](const std::string& loop_name, const std::string& id_col,
+                            const std::map<std::string, std::vector<std::string>>& mapping) {
+        if (mapping.empty()) return;
+        std::vector<std::vector<std::string>> rows;
+        bool has_ranges = false;
+        for (auto& [gid, sids] : mapping) {
+            std::vector<int> nos;
+            for (auto& s : sids) {
+                auto it = site_id_to_no.find(s);
+                if (it != site_id_to_no.end()) nos.push_back(it->second);
+            }
+            std::sort(nos.begin(), nos.end());
+            for (auto& [start, end] : compress_int_ranges(nos)) {
+                rows.push_back({gid, std::to_string(start), std::to_string(end)});
+                if (start != end) has_ranges = true;
+            }
+        }
+        if (has_ranges) {
+            w.write_loop(loop_name, {id_col, "n_start", "n_end"}, rows);
+        } else {
+            std::vector<std::vector<std::string>> single_rows;
+            for (auto& r : rows) single_rows.push_back({r[0], r[1]});
+            w.write_loop(loop_name, {id_col, "n"}, single_rows);
+        }
+    };
+
+    write_groups("_ff_group_member", "group_id", system.get_groups());
+
+    // _ff_dof_fixed_group
+    {
+        auto& fg = system.get_fixed_groups();
+        if (!fg.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& g : fg) rows.push_back({g});
+            w.write_loop("_ff_dof_fixed_group", {"group_id"}, rows);
+        }
+    }
+
+    write_groups("_ff_dof_rb_member", "rb_id", system.get_rb_groups());
+    write_groups("_ff_dof_md_fixed_member", "md_fixed_id", system.get_md_fixed_groups());
+
+    // _ff_sampling
+    {
+        auto s = system.get_sampling();
+        w.write_category("_ff_sampling", {
+            {"temperature_K", cif_val(s.temperature_K)},
+            {"friction_ps", cif_val(s.friction_ps)},
+            {"timestep_fs", cif_val(s.timestep_fs)},
+            {"n_steps", cif_val(s.n_steps)},
+            {"write_every", cif_val(s.write_every)},
+            {"minimize_steps", cif_val(s.minimize_steps)},
+        });
+    }
+
+    // _ff_nonbonded
+    {
+        auto nb = system.get_nonbonded();
+        w.write_category("_ff_nonbonded", {
+            {"enabled", cif_val(nb.enabled)},
+            {"k", cif_val(nb.k)},
+            {"cutoff_A", cif_val(nb.cutoff)},
+        });
+    }
+
+    // _ff_bond_type
+    {
+        auto& bt = system.get_bond_types();
+        if (!bt.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& [tid, k] : bt) rows.push_back({tid, cif_val(k)});
+            w.write_loop("_ff_bond_type", {"type_id", "k_kcal_mol_A2"}, rows);
+        }
+    }
+
+    // _ff_angle_type
+    {
+        auto& at = system.get_angle_types();
+        if (!at.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& [tid, k] : at) rows.push_back({tid, cif_val(k)});
+            w.write_loop("_ff_angle_type", {"type_id", "k_kcal_mol_rad2"}, rows);
+        }
+    }
+
+    // _ff_torsion_type
+    {
+        auto& tt = system.get_torsion_types();
+        if (!tt.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& [tid, t] : tt) {
+                rows.push_back({tid, cif_val(t.periodicity), cif_val(t.phase), cif_val(t.k)});
+            }
+            w.write_loop("_ff_torsion_type", {"type_id", "periodicity", "phase_rad", "k_kcal_mol"}, rows);
+        }
+    }
+
+    // _ff_improper_type
+    {
+        auto& it = system.get_improper_types();
+        if (!it.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& [tid, t] : it) {
+                rows.push_back({tid, cif_val(t.periodicity), cif_val(t.phase), cif_val(t.k)});
+            }
+            w.write_loop("_ff_improper_type", {"type_id", "periodicity", "phase_rad", "k_kcal_mol"}, rows);
+        }
+    }
+
+    // _ff_lj_type
+    {
+        auto& lj = system.get_lj_types();
+        if (!lj.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& [tid, t] : lj) {
+                rows.push_back({tid, cif_val(t.element), cif_val(t.rmin_half), cif_val(t.epsilon)});
+            }
+            w.write_loop("_ff_lj_type", {"type_id", "element", "rmin_half_A", "epsilon_kcal_mol"}, rows);
+        }
+    }
+
+    // _ff_bond, _ff_angle, _ff_torsion, _ff_improper
+    auto no = [&](const std::string& sid) -> int {
+        auto it = site_id_to_no.find(sid);
+        return it != site_id_to_no.end() ? it->second : -1;
+    };
+
+    {
+        auto& bonds = system.get_bonds();
+        if (!bonds.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& bd : bonds) {
+                rows.push_back({cif_val(no(bd.site_a)), cif_val(no(bd.site_b)),
+                                cif_val(bd.length), cif_val(bd.type_id)});
+            }
+            w.write_loop("_ff_bond", {"n1", "n2", "length_A", "type_id"}, rows);
+        }
+    }
+    {
+        auto& angles = system.get_angles();
+        if (!angles.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& an : angles) {
+                rows.push_back({cif_val(no(an.site_a)), cif_val(no(an.site_b)),
+                                cif_val(no(an.site_c)), cif_val(an.theta), cif_val(an.type_id)});
+            }
+            w.write_loop("_ff_angle", {"n1", "n2", "n3", "theta_rad", "type_id"}, rows);
+        }
+    }
+    {
+        auto& dih = system.get_dihedrals();
+        if (!dih.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& to : dih) {
+                rows.push_back({cif_val(no(to.site_a)), cif_val(no(to.site_b)),
+                                cif_val(no(to.site_c)), cif_val(no(to.site_d)),
+                                cif_val(to.type_id)});
+            }
+            w.write_loop("_ff_torsion", {"n1", "n2", "n3", "n4", "type_id"}, rows);
+        }
+    }
+    {
+        auto& imp = system.get_impropers();
+        if (!imp.empty()) {
+            std::vector<std::vector<std::string>> rows;
+            for (auto& to : imp) {
+                rows.push_back({cif_val(no(to.site_a)), cif_val(no(to.site_b)),
+                                cif_val(no(to.site_c)), cif_val(no(to.site_d)),
+                                cif_val(to.type_id)});
+            }
+            w.write_loop("_ff_improper", {"n1", "n2", "n3", "n4", "type_id"}, rows);
+        }
+    }
 }
 
 IMPBFF_END_NAMESPACE

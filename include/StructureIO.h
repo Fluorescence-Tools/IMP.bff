@@ -27,8 +27,7 @@
 
 #include <IMP/Model.h>
 #include <IMP/atom/Hierarchy.h>
-#include <IMP/showable_macros.h>
-#include <IMP/value_macros.h>
+#include <IMP/bff/Base.h>
 
 #include <map>
 #include <string>

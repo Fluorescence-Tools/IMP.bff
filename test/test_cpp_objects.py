@@ -1,18 +1,12 @@
-"""The model objects that moved to C++, and the things that moved with them.
-
-Four objects left Python for C++ over 2026-08-19: ``LifetimeSpectrum``,
-``AccessibleVolume``/``ACV``, ``DyeDiffusionSimulation`` and ``GridDiffusionSolver``,
-along with the kappa^2 sampler. Each was gated against the Python it replaced
-*before* that Python was deleted -- but a gate against code that no longer
-exists cannot be re-run, so what it established has to be written down as
-invariants instead.
+"""Invariants of the model objects: ``LifetimeSpectrum``,
+``AccessibleVolume``/``ACV``, ``ProbeDiffusionSimulation``,
+``GridDiffusionSolver`` and the kappa^2 sampler.
 
 Everything here is either a property that must hold on its own terms, or a
-thing that was **actually wrong at some point** during the move and would be
-silent if it came back. The per-surface behaviour is already covered by the
+failure mode that is **silent** when it comes back -- an axis order, a shared
+buffer, a seed that does not seed. The per-surface behaviour is covered by the
 suites those objects came with (``test_lifetime_spectrum.py``,
-``medium_test_av.py``, ``test_quenching_field.py``, ``test_integrators.py``),
-which were not modified by the port and are the real regression net.
+``medium_test_av.py``, ``test_quenching_field.py``, ``test_integrators.py``).
 """
 
 import numpy as np
@@ -88,12 +82,12 @@ def test_a_domain_touching_the_outer_shell_raises():
 
 
 # --------------------------------------------------------------------------
-# DyeDiffusionSimulation
+# ProbeDiffusionSimulation
 # --------------------------------------------------------------------------
 def _walk(ng=15):
     r = _grid(ng)
     occ = (r < ng / 3.0).astype(np.uint8)
-    return IMP.bff.DyeDiffusionSimulation(
+    return IMP.bff.ProbeDiffusionSimulation(
         density=occ, dg=1.0, x0=np.zeros(3),
         quenching_rate_map=np.where(r < ng / 6.0, 0.3, 0.0))
 
@@ -124,7 +118,7 @@ def test_concatenated_walks_do_not_repeat_one_trajectory():
 
 def test_replacing_the_volume_discards_the_trajectory():
     """It was a walk in the *old* volume; keeping it would let a caller read
-    positions the new occupancy forbids. The Python allowed exactly that."""
+    positions the new occupancy forbids."""
     w = _walk()
     w.run(t_max=40.0, n_trajectories=1, random_seed=5)
     assert w.n_frames > 0
@@ -270,33 +264,36 @@ def test_the_molecular_graph_is_the_systems_own():
 
     All four read only the bonds, angles and torsions the system already holds,
     so they are methods on it rather than Python functions taking it apart.
-    Before, three modules had their own copies -- `cgdye.sim`, `cgdye.topology`
+    Before, three modules had their own copies -- `cgprobe.sim`, `cgprobe.topology`
     and `scoring` -- which agreed on the shipped system and had drifted into
     three container shapes for one answer (a set of tuples, a set of frozensets,
     a defaultdict of sets).
 
-    The numbers here are the Python's, recorded when it was replaced.
+    The numbers here are the reference implementation's.
     """
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_dye_protein_system, build_graph, find_cycles
+    import IMP.bff
+    from IMP.bff import build_probe_protein_system
 
-    system = build_dye_protein_system(
+    system = build_probe_protein_system(
         str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
         "CX4", "atto655",
         protein_template=str(get_template_dir("cx4.template.cif")),
-        dye_template=str(get_template_dir("atto655.template.cif")),
+        probe_template=str(get_template_dir("atto655.template.cif")),
     )
 
-    # the graph, against the builder that still serves raw bond lists
-    from_bonds = {k: set(v) for k, v in
-                  build_graph([(b.site_a, b.site_b) for b in system.bonds]).items()}
+    # the graph, against `LabelledGraph` over the same bonds
+    labelled = IMP.bff.LabelledGraph(
+        [(b.site_a, b.site_b) for b in system.bonds])
+    from_bonds = {n: set(labelled.get_neighbors(n))
+                  for n in labelled.get_nodes()}
     from_system = {k: set(v) for k, v in system.get_bonded_neighbors().items()}
     assert from_system == from_bonds
 
-    # rings, against the Python cycle finder over that graph
+    # rings, against the same graph's cycle finder
     assert ({tuple(sorted(c)) for c in system.find_rings(8)}
-            == {tuple(sorted(c)) for c in find_cycles(from_bonds, max_len=8)})
+            == {tuple(sorted(c)) for c in labelled.get_rings(8)})
     assert len(system.find_rings(8)) == 9
 
     # exclusions: 1-2 from bonds, 1-3 from angle ends, 1-4 from dihedral ends
@@ -334,20 +331,18 @@ def test_the_molecular_graph_is_the_systems_own():
 
 
 def test_the_molecular_graph_matches_the_python_it_replaced():
-    """`MolecularGraph` against the Python derivations, on three real dyes.
+    """`MolecularGraph` against the reference derivations, on three real dyes.
 
     Adjacency, angles, torsions and rings were Python in three modules. The
     numbers below were produced by that Python and are what the C++ has to
     reproduce; the shipped MOL2 files are the fixture because a hand-built
     graph would not have found the two things that did go wrong -- key order
-    (the Python's `defaultdict` is in bond-insertion order, and a seeded
+    (the reference `defaultdict` is in bond-insertion order, and a seeded
     sampler walks it) and node type (`scoring` builds graphs over site-id
     strings, not MOL2 serials).
     """
     import IMP.bff
-    from IMP.bff import get_structure_dir
-    from IMP.bff import (
-        build_angles, build_dihedrals, build_graph, find_cycles, parse_dye_mol2)
+    from IMP.bff import get_structure_dir, read_mol2_component
 
     expected = {                      # atoms, angles, dihedrals, rings
         "atto655.mol2": (70, 138, 207, 5),
@@ -355,25 +350,26 @@ def test_the_molecular_graph_matches_the_python_it_replaced():
         "alexa488_r48.mol2": (83, 151, 218, 5),
     }
     for mol2, (n_atoms, n_ang, n_dih, n_ring) in expected.items():
-        atoms, bonds = parse_dye_mol2(str(get_structure_dir(mol2)), "X")
-        assert len(atoms) == n_atoms
-        graph = build_graph(bonds)
-        assert len(build_angles(graph)) == n_ang
-        assert len(build_dihedrals(graph)) == n_dih
-        assert len(find_cycles(graph, max_len=8)) == n_ring
+        component = read_mol2_component(str(get_structure_dir(mol2)), "X")
+        assert len(component.atoms) == n_atoms
+        graph = IMP.bff.MolecularGraph([tuple(b) for b in component.bonds])
+        assert len(graph.get_angles()) == n_ang
+        assert len(graph.get_dihedrals()) == n_dih
+        assert len(graph.get_rings(8)) == n_ring
 
-        # and the same through the C++ type directly
-        cpp = IMP.bff.MolecularGraph(sorted(bonds))
-        assert {tuple(a) for a in cpp.get_angles()} == set(build_angles(graph))
-        assert {tuple(d) for d in cpp.get_dihedrals()} == set(build_dihedrals(graph))
+    # A MOL2 serial is an int and the graph keys by it -- no renumbering, and
+    # `get_nodes` is ascending, which is what a std::map gives.
+    graph = IMP.bff.MolecularGraph([(9, 4), (4, 7), (7, 1)])
+    assert list(graph.get_nodes()) == [1, 4, 7, 9]
+    assert list(graph.get_neighbors(4)) == [7, 9]
 
-    # key order is first-appearance, not ascending
-    bonds = [(9, 4), (4, 7), (7, 1)]
-    assert list(build_graph(bonds)) == [9, 4, 7, 1]
-
-    # nodes need not be integers: scoring builds graphs over site ids
-    named = [("dye:C1", "dye:C2"), ("dye:C2", "dye:C3")]
-    assert build_angles(build_graph(named)) == [("dye:C1", "dye:C2", "dye:C3")]
+    # Nodes need not be integers: site ids are strings, and `LabelledGraph`
+    # is where that lives, rather than callers numbering labels around an
+    # integer graph.
+    named = IMP.bff.LabelledGraph([("dye:C1", "dye:C2"), ("dye:C2", "dye:C3")])
+    assert [tuple(a) for a in named.get_angles()] == [
+        ("dye:C1", "dye:C2", "dye:C3")]
+    assert list(named.get_nodes()) == ["dye:C1", "dye:C2", "dye:C3"]
 
 
 def test_leader_clustering_matches_the_python_it_replaced():
@@ -428,7 +424,7 @@ def test_leader_clustering_matches_the_python_it_replaced():
 def test_smith_waterman_matches_the_python_it_replaced():
     """Local alignment with affine gaps, against a reference implementation.
 
-    The reference here is the Python that was replaced, kept verbatim, because
+    The reference implementation is kept verbatim here, because
     the thing that can go wrong is not the score but the *precedence* when two
     paths tie -- stop, then diagonal, then a gap in the template, then a gap in
     the query. A tie broken the other way gives the same score and different
@@ -505,14 +501,14 @@ def test_smith_waterman_matches_the_python_it_replaced():
 def test_improper_expansion_matches_the_python_it_replaced():
     """`MolecularGraph.expand_impropers` for all four template kinds.
 
-    The counts are the Python's, on the three shipped dyes. `flat` and `orient`
+    The counts are the reference's, on the three shipped dyes. `flat` and `orient`
     key off the *atom name* starting with S rather than the element -- what the
     Python did, kept because a MOL2's types are less reliable than its names,
     and the difference is invisible unless a sulfur is mistyped.
     """
     import IMP.bff
     from IMP.bff import get_structure_dir
-    from IMP.bff import parse_dye_mol2
+    from IMP.bff import read_mol2_component
 
     expected = {
         "atto655.mol2": {"ring": 20, "pi": 15, "flat": 1, "orient": 1},
@@ -520,11 +516,12 @@ def test_improper_expansion_matches_the_python_it_replaced():
         "alexa488_r48.mol2": {"ring": 24, "pi": 27, "flat": 2, "orient": 2},
     }
     for mol2, counts in expected.items():
-        atoms, bonds = parse_dye_mol2(str(get_structure_dir(mol2)), "X")
+        component = read_mol2_component(str(get_structure_dir(mol2)), "X")
+        atoms = {a.serial: a for a in component.atoms}
         nodes = sorted(atoms)
-        graph = IMP.bff.MolecularGraph(sorted(bonds))
-        elements = [atoms[n]["element"] for n in nodes]
-        names = [atoms[n]["atom_name"] for n in nodes]
+        graph = IMP.bff.MolecularGraph(sorted(tuple(b) for b in component.bonds))
+        elements = [atoms[n].element for n in nodes]
+        names = [atoms[n].atom_name for n in nodes]
         for kind, n_expected in counts.items():
             quads = graph.expand_impropers(kind, nodes, nodes, elements, names, 8)
             assert len(quads) == n_expected, (mol2, kind, len(quads))
@@ -553,27 +550,22 @@ def test_the_mol2_reader_matches_the_python_it_replaced():
     """
     import IMP.bff
     from IMP.bff import get_structure_dir
-    from IMP.bff import parse_dye_mol2
-
+    # This compared `parse_dye_mol2`'s dicts with the typed value the C++
+    # reader returns. The dict view is gone -- it was a copy of the same
+    # fields under different keys -- so what is left to check is that the
+    # reader gets the shapes right on real files, including a 4,698-atom
+    # protein.
     for mol2, n_atoms, n_bonds in (("atto655.mol2", 70, 74),
                                    ("cx4.mol2", 68, 72),
                                    ("alexa488_r48.mol2", 83, 87),
                                    ("1DG3.mol2", 4698, 4428)):
         path = str(get_structure_dir(mol2))
-        atoms, bonds = parse_dye_mol2(path, "X")
-        assert len(atoms) == n_atoms
-        assert len(bonds) == n_bonds
-
         component = IMP.bff.read_mol2_component(path, "X")
-        assert {tuple(b) for b in component.bonds} == {tuple(b) for b in bonds}
+        assert len(component.atoms) == n_atoms
+        assert len(component.bonds) == n_bonds
         for a in component.atoms:
-            expected = atoms[a.serial]
-            assert a.atom_name == expected["atom_name"]
-            assert a.element == expected["element"]
-            assert a.resname == expected["resname"]
-            assert abs(a.x - expected["x"]) < 1e-9
-            assert abs(a.y - expected["y"]) < 1e-9
-            assert abs(a.z - expected["z"]) < 1e-9
+            assert a.atom_name and a.element
+            assert a.element == IMP.bff.element_from_atom_name(a.atom_name)
 
     # the element rule is the first letter of the leading alphabetic run,
     # uppercased -- wrong for two-letter elements, and reproduced deliberately
@@ -586,25 +578,25 @@ def test_the_mol2_reader_matches_the_python_it_replaced():
 
 
 def test_system_self_consistency_is_the_systems_own_check():
-    """`DyeForceFieldSystem.get_inconsistency`, which `cgdye.sim` used to do.
+    """`ProbeForceFieldSystem.get_inconsistency`, which `cgprobe.sim` used to do.
 
     It reports rather than raises: what is wrong with a system is a property of
     the system, and whether that stops the caller is the caller's decision.
-    `cgdye.sim._validate_system` raises; a reader could report instead.
+    `cgprobe.sim._validate_system` raises; a reader could report instead.
     """
     import IMP.bff
     from IMP.bff import get_template_dir, get_structure_dir
-    from IMP.bff import build_dye_protein_system
+    from IMP.bff import build_probe_protein_system
 
     def fresh():
-        return build_dye_protein_system(
+        return build_probe_protein_system(
             str(get_structure_dir("cx4.mol2")), str(get_structure_dir("atto655.mol2")),
             "CX4", "atto655",
             protein_template=str(get_template_dir("cx4.template.cif")),
-            dye_template=str(get_template_dir("atto655.template.cif")))
+            probe_template=str(get_template_dir("atto655.template.cif")))
 
     assert fresh().get_inconsistency() == ""
-    assert IMP.bff.DyeForceFieldSystem("x").get_inconsistency() == "system requires components"
+    assert IMP.bff.ProbeForceFieldSystem("x").get_inconsistency() == "system requires components"
 
     dangling = fresh()
     bond = dangling.bonds[0]
@@ -636,59 +628,56 @@ def test_linker_geometry_matches_the_python_it_replaced():
     same number of degrees of freedom, so a test on shapes would not notice.
     """
     import numpy as np
-    import IMP
     import IMP.algebra
-    import IMP.core
-    from IMP.bff import get_structure_dir
-    from IMP.bff import LinkerSampler
+    from IMP.bff import get_structure_dir, linker_geometry_from_mol2
 
-    sampler = LinkerSampler(str(get_structure_dir("alexa488_r48.mol2")))
-    n_dof = len(sampler.rot_bonds) + len(sampler.rot_angles)
+    geometry = linker_geometry_from_mol2(
+        str(get_structure_dir("alexa488_r48.mol2")))
+    n_tor = int(geometry.get_number_of_torsions())
+    n_ang = int(geometry.get_number_of_angles())
+    n_dof = n_tor + n_ang
     assert n_dof > 20, n_dof
 
-    def reference(cfg):
-        for i, p in sampler.idx_to_particle.items():
-            IMP.core.XYZ(p).set_coordinates(sampler.serial_to_pos0[i])
-        n_dih = len(sampler.rot_bonds)
-        for angle, (fixed_idx, moving_idx, moving_ids) in zip(cfg[:n_dih], sampler.rot_bonds):
-            cf = IMP.core.XYZ(sampler.idx_to_particle[fixed_idx]).get_coordinates()
-            cm = IMP.core.XYZ(sampler.idx_to_particle[moving_idx]).get_coordinates()
-            axis = cm - cf
-            if axis.get_magnitude() < 1e-8:
-                continue
-            tf = IMP.algebra.get_rotation_about_point(
-                cf, IMP.algebra.get_rotation_about_axis(axis, angle))
-            for mid in moving_ids:
-                p = sampler.idx_to_particle[mid]
-                IMP.core.XYZ(p).set_coordinates(
-                    tf.get_transformed(IMP.core.XYZ(p).get_coordinates()))
-        for angle, (b_idx, c_idx, a_idx, moving_ids) in zip(cfg[n_dih:], sampler.rot_angles):
-            cb = IMP.core.XYZ(sampler.idx_to_particle[b_idx]).get_coordinates()
-            cc = IMP.core.XYZ(sampler.idx_to_particle[c_idx]).get_coordinates()
-            ca = IMP.core.XYZ(sampler.idx_to_particle[a_idx]).get_coordinates()
-            axis = IMP.algebra.get_vector_product(ca - cb, cc - cb)
-            if axis.get_magnitude() < 1e-8:
-                continue
-            tf = IMP.algebra.get_rotation_about_point(
-                cb, IMP.algebra.get_rotation_about_axis(axis, angle))
-            for mid in moving_ids:
-                p = sampler.idx_to_particle[mid]
-                IMP.core.XYZ(p).set_coordinates(
-                    tf.get_transformed(IMP.core.XYZ(p).get_coordinates()))
+    base = np.asarray(list(geometry.get_coordinates())).reshape(-1, 3)
+    torsion_fixed = list(geometry.get_torsion_fixed())
+    torsion_moving = list(geometry.get_torsion_moving())
+    torsion_sets = [list(geometry.get_torsion_set(i)) for i in range(n_tor)]
+    angle_b = list(geometry.get_angle_b())
+    angle_c = list(geometry.get_angle_c())
+    angle_a = list(geometry.get_angle_a())
+    angle_sets = [list(geometry.get_angle_set(i)) for i in range(n_ang)]
 
-    def snapshot():
-        return np.array([list(IMP.core.XYZ(sampler.idx_to_particle[k]).get_coordinates())
-                         for k in sorted(sampler.idx_to_particle)])
+    def _rotate(xyz, centre, axis, angle, rows):
+        """One rotation, through IMP.algebra rather than the class under test."""
+        if np.linalg.norm(axis) < 1e-8:
+            return
+        transform = IMP.algebra.get_rotation_about_point(
+            IMP.algebra.Vector3D(*centre),
+            IMP.algebra.get_rotation_about_axis(
+                IMP.algebra.Vector3D(*axis), float(angle)))
+        for row in rows:
+            xyz[row] = list(transform.get_transformed(
+                IMP.algebra.Vector3D(*xyz[row])))
+
+    def reference(cfg):
+        """The rotations applied one after another, on the moving geometry."""
+        xyz = base.copy()
+        for k in range(n_tor):
+            f, m = torsion_fixed[k], torsion_moving[k]
+            _rotate(xyz, xyz[f], xyz[m] - xyz[f], cfg[k], torsion_sets[k])
+        for k in range(n_ang):
+            b_row, c_row, a_row = angle_b[k], angle_c[k], angle_a[k]
+            axis = np.cross(xyz[a_row] - xyz[b_row], xyz[c_row] - xyz[b_row])
+            _rotate(xyz, xyz[b_row], axis, cfg[n_tor + k], angle_sets[k])
+        return xyz
+
+    def applied(cfg):
+        return np.asarray(list(geometry.apply([float(x) for x in cfg]))).reshape(-1, 3)
 
     rng = np.random.default_rng(21)
     for _ in range(10):
         cfg = list(rng.normal(scale=0.8, size=n_dof))
-        reference(cfg)
-        want = snapshot()
-        sampler.apply_config(cfg)
-        assert np.max(np.abs(want - snapshot())) < 1e-9
+        assert np.max(np.abs(reference(cfg) - applied(cfg))) < 1e-9
 
     # the all-zero configuration is the reference geometry itself
-    sampler.apply_config([0.0] * n_dof)
-    base = np.array([list(sampler.serial_to_pos0[k]) for k in sorted(sampler.idx_to_particle)])
-    assert np.max(np.abs(snapshot() - base)) < 1e-12
+    assert np.max(np.abs(applied([0.0] * n_dof) - base)) < 1e-12

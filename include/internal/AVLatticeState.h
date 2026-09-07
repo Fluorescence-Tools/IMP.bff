@@ -40,6 +40,12 @@ struct AVLatticeState {
     unsigned long generation2 = 0;      // occupancy generation, pass 2
     IMP::algebra::Vector3D last_mean;
 
+    // One warning per handle, not one per frame: the legacy anchoring cannot
+    // honour an accessible-contact-volume request (AV::resample_legacy) and a
+    // trajectory would otherwise say so thousands of times.
+    bool warned_contact_volume = false;
+    bool warned_radii_source = false;
+
     // Bumped whenever the tiles change; consumers cache against it
     unsigned long result_generation = 0;
 
@@ -84,6 +90,21 @@ struct AVLatticeState {
     std::chrono::steady_clock::time_point compute_t0;
     bool pending_shift_xyz = true;
     double pending_ll = 0, pending_allowed = 0;
+    //! The attachment atom's own radius, read in prepare().
+    /*! The compute phase must not touch the Model, and dropping the
+        attachment atom from the obstacle set needs its radius. */
+    double pending_source_radius = 0;
+    //! The attachment atom's radius **as the raster used it**, cached when the
+    //! path map is built. Under `radii_source = "olga"` that is not the radius
+    //! the Model carries, and subtracting the wrong sphere would leave a ring
+    //! of blocked voxels round the anchor or open ones no rule opened.
+    //! Negative = not cached yet (no map, or the map was just rebuilt).
+    double source_obstacle_radius = -1.0;
+    //! The extra radius each occupancy source was rasterised with, so the
+    //! same sphere can be subtracted again: half the linker width for the
+    //! linker pass, and one per dye radius for the carve.
+    double pending_extra1 = 0, pending_extra2 = 0;
+    std::vector<double> pending_extra_dye;
     IMP::algebra::Vector3D pending_source;
     bool pending_set_origin = false;     // window moved: recompute voxel locations
     IMP::algebra::Vector3D pending_grid_origin;

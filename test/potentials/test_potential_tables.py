@@ -194,7 +194,7 @@ def test_the_residue_type_space_stays_closed(structure):
 
 
 def test_the_unres_table_is_one_value_per_unordered_pair(manifest):
-    """The source is filled in its upper triangle only, and the Python indexed
+    """The source is filled in its upper triangle only, and the reference indexed
     it by the residues' order in the chain -- so about one contact in two read
     the empty half and scored zero. A pair potential has one value per
     unordered pair, and that is what the file holds.
