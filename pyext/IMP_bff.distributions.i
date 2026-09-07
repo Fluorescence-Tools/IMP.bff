@@ -35,6 +35,6 @@
 %include "IMP/bff/Fcs.h"
 
 // The transfer-polynomial vector evaluator also publishes a 1-D view. It is
-// defined here (after the apply above and before statesdistance.i, which
-// includes this file and exposes the scalar dispatch functions from
-// StatesDistance.h).
+// defined here, after the apply above. (This file was once included from
+// statesdistance.i; since PRD-138 the distances live in avmodel.i and this
+// file is included from swig.i-in directly, at the same position.)

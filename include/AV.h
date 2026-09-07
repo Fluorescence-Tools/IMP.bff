@@ -24,7 +24,7 @@
 #include <IMP/log.h>
 
 
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/AVModel.h>
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/AVOccupancyMap.h>
 #include <IMP/bff/VdwRadii.h>

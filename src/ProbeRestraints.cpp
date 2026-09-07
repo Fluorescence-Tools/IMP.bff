@@ -7,7 +7,7 @@
 
 #include <IMP/bff/ProbeRestraints.h>
 
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/AVModel.h>
 #include <IMP/bff/Base.h>
 
 #include <cmath>

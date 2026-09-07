@@ -1,6 +1,17 @@
+#ifndef IMPBFF_AVMODEL_H
+#define IMPBFF_AVMODEL_H
+
 /**
  *  \file IMP/bff/AVModel.h
- *  \brief What a label's configuration space is, whatever enumerates it.
+ *  \brief The accessible volume as a representation of a label's states,
+ *         and the label distributions built on it.
+ *
+ *  One representation of #IMP::bff::States (which lives in States.h with
+ *  everything representation-neutral): #IMP::bff::AccessibleVolume enumerates
+ *  the states on a grid, #IMP::bff::ACV adds the contact volume, and
+ *  #IMP::bff::LabelDistribution (formerly in `StatesDistance.h`) is a label
+ *  that produces such a volume on demand. The other representation is the
+ *  rotamer ensemble, in Rotamer.h.
  *
  * #IMP::bff::States is the shared answer: **positions, weights and
  * orientations**. An accessible volume, a rotamer library, a coarse-grained
@@ -27,115 +38,14 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_AVMODEL_H
-#define IMPBFF_AVMODEL_H
 
-#include <IMP/bff/bff_config.h>
-
+#include <IMP/bff/States.h>
 #include <IMP/bff/Base.h>
 
-#include <map>
 #include <string>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
-
-//! A weighted set of states of one label.
-/*!
-    The states are `(x, y, z, weight)` per point, flat. Everything a
-    representation has to supply is here and nothing else is: the grid an
-    accessible volume was enumerated on belongs to
-    #IMP::bff::AccessibleVolume, and the conformers a rotamer library carries
-    belong to the rotamer ensemble. Neither is part of what a distance or a
-    rate needs.
-
-    The three distances live here rather than one level down for the same
-    reason: they are functions of the cloud, so a rotamer ensemble and an
-    accessible volume answer them identically.
-*/
-class IMPBFFEXPORT States {
-protected:
-    std::vector<double> points_;             //!< flat, four per state
-    std::vector<double> attachment_point_;   //!< three, or empty when unknown
-    std::vector<double> orientations_;       //!< flat, three per state; empty
-                                             //!< when the representation has none
-    std::string position_name_;
-    //! How these states were produced — representation parameters, not dye or
-    //! site properties. Provenance: written by whatever built the states, and
-    //! stringified because it is read back as a record rather than as numbers.
-    std::map<std::string, std::string> params_;
-
-public:
-    //! \param[in] points flat (x, y, z, w) per state; may be empty
-    /*! \param[in] attachment_point where the label is tied to the structure
-        \param[in] orientations flat transition dipoles, three per state
-        \param[in] position_name a human-readable label, e.g. "donor_72"
-        \param[in] params how these states were produced */
-    States(const std::vector<double>& points = std::vector<double>(),
-           const std::vector<double>& attachment_point = std::vector<double>(),
-           const std::vector<double>& orientations = std::vector<double>(),
-           const std::string& position_name = "",
-           const std::map<std::string, std::string>& params =
-                   std::map<std::string, std::string>());
-
-    //! The cloud, as a numpy view over this object's own buffer.
-    void get_points(double** out_view, int* n_out_view) const;
-    //! Where the label is tied; a zero-length view when it is not known.
-    void get_attachment_point(double** out_view, int* n_out_view) const;
-    //! The transition dipoles; a zero-length view when there are none.
-    void get_orientations(double** out_view, int* n_out_view) const;
-    //! Weight-averaged position, three values.
-    /*! Falls back to the attachment point when the cloud is empty or its
-        weights sum to zero, because that is the one position a label always
-        has. With no attachment point either, the origin. */
-    void get_mean_position(double** out_view, int* n_out_view) const;
-
-    //! The cloud itself, for a C++ caller. Python gets the numpy view above.
-    const std::vector<double>& get_points_vector() const { return points_; }
-
-    int get_n_points() const { return static_cast<int>(points_.size() / 4); }
-    bool get_has_volume() const { return !points_.empty(); }
-    bool get_has_orientations() const { return !orientations_.empty(); }
-    std::string get_position_name() const { return position_name_; }
-    void set_position_name(const std::string& n) { position_name_ = n; }
-    std::map<std::string, std::string> get_params() const { return params_; }
-    void set_params(const std::map<std::string, std::string>& p) { params_ = p; }
-
-    //! Replace the cloud.
-    void set_points(const std::vector<double>& points);
-    //! Replace the transition dipoles; one per state, or empty for none.
-    void set_orientations(const std::vector<double>& orientations);
-    void set_attachment_point(const std::vector<double>& xyz);
-
-    //! Distance between the two mean positions, A.
-    /*! The cheapest of the three and the least meaningful: it is the distance
-        between two *averages*, which is not the average of the distance and can
-        sit several Angstrom from either of the others. */
-    double dRmp(const States& other) const;
-
-    //! \f$\langle R_{DA}\rangle\f$ -- the mean over sampled point pairs, A.
-    double dRDA(const States& other, int n_samples = 50000) const;
-
-    //! \f$R_E\f$ -- the FRET-averaged distance, A.
-    /*! The *efficiency* is averaged and then inverted, not the distance:
-        \f$1/R^6\f$ weights close pairs far more heavily, so this is always the
-        shorter of the two averages and it is the one a measured efficiency
-        corresponds to. */
-    double dRDAE(const States& other, double forster_radius,
-                 int n_samples = 50000) const;
-
-    //! \f$p(R_{DA})\f$ on \p axis (bin edges), normalised to sum 1.
-    void pRDA(const States& other, const std::vector<double>& axis,
-              int n_samples, double** out_view, int* n_out_view) const;
-
-    IMP_SHOWABLE_INLINE(States,
-                        out << "States(" << get_n_points() << " states"
-                            << (position_name_.empty()
-                                        ? std::string()
-                                        : ", \"" + position_name_ + "\"")
-                            << ")");
-};
-IMP_VALUES(States, StatesList);
 
 //! States enumerated as a voxel grid, plus the grid itself.
 /*!
@@ -270,6 +180,110 @@ public:
 };
 IMP_VALUES(ACV, ACVs);
 
+// -------- from StatesDistance.h (the label distributions) --------
+//! Where a dye is, as something that produces states on demand.
+/*!
+    Two of them: an accessible volume computed from a structure's obstacles, and
+    an isotropic Gaussian that needs no structure at all. They exist so a caller
+    can hold *a label* and ask it for states, without deciding which model
+    produced them.
+
+    The volume is computed **lazily**, on the first call to
+    #IMP::bff::LabelDistribution::get_accessible_volume, because building one is
+    the expensive thing a label does and a caller often holds several before
+    asking any of them anything.
+*/
+class IMPBFFEXPORT LabelDistribution {
+protected:
+    std::string simulation_type_;
+    std::vector<double> origin_;
+    double simulation_grid_resolution_;
+    std::string position_name_;
+    mutable AccessibleVolume av_;
+    mutable bool computed_;
+
+    virtual void do_compute() const = 0;
+
+public:
+    LabelDistribution(const std::string& simulation_type = "AV1",
+                      const std::vector<double>& origin = std::vector<double>(),
+                      double simulation_grid_resolution = 0.5,
+                      const std::string& position_name = "");
+    virtual ~LabelDistribution() {}
+
+    //! The states, computing them on first use.
+    const AccessibleVolume& get_accessible_volume() const;
+
+    std::string get_simulation_type() const { return simulation_type_; }
+    std::string get_position_name() const { return position_name_; }
+    double get_simulation_grid_resolution() const {
+        return simulation_grid_resolution_;
+    }
+    void get_origin(double** out_view, int* n_out_view) const;
+    //! The cloud as a numpy view, via the underlying states (which may compute
+    //! on first access).
+    void get_points(double** out_view, int* n_out_view) const;
+    //! Weight-averaged position, three values (via the underlying states).
+    void get_mean_position(double** out_view, int* n_out_view) const;
+    //! Distance between the two labels' mean positions, A (via the states).
+    double dRmp(const LabelDistribution& other) const;
+    //! Mean over sampled point pairs, A (via the states).
+    double dRDA(const LabelDistribution& other, int n_samples = 50000) const;
+    //! FRET-averaged distance, A (via the states).
+    double dRDAE(const LabelDistribution& other, double forster_radius,
+                 int n_samples = 50000) const;
+    int get_n_points() const { return get_accessible_volume().get_n_points(); }
+};
+
+//! A label whose states come from an accessible-volume search.
+class IMPBFFEXPORT LabelDistributionAV : public LabelDistribution {
+    std::vector<double> atoms_xyzr_;   //!< flat, four per obstacle
+    std::vector<double> source_xyz_;
+    double linker_length_, linker_width_, r1_, r2_, r3_;
+
+    void do_compute() const override;
+
+public:
+    //! \param[in] atoms_xyz flat `(N, 3)` obstacle coordinates
+    /*! \param[in] atoms_vdw flat `(N,)` obstacle van der Waals radii, A
+        \param[in] source_xyz where the linker is tied
+        \param[in] linker_length,linker_width the linker
+        \param[in] r1,r2,r3 dye radii; a zero `r2` means the AV1 model
+        \param[in] simulation_grid_resolution voxel spacing, A
+        \param[in] position_name a human-readable label */
+    LabelDistributionAV(const std::vector<double>& atoms_xyz,
+                        const std::vector<double>& atoms_vdw,
+                        const std::vector<double>& source_xyz =
+                                std::vector<double>(),
+                        double linker_length = 20.0, double linker_width = 0.5,
+                        double r1 = 3.5, double r2 = 0.0, double r3 = 0.0,
+                        double simulation_grid_resolution = 1.5,
+                        const std::string& position_name = "");
+};
+
+//! A label modelled as an isotropic 3-D Gaussian. No structure needed.
+class IMPBFFEXPORT ProbeDistributionNormal : public LabelDistribution {
+    double width_;
+    int n_points_;
+    int seed_;
+
+    void do_compute() const override;
+
+public:
+    //! \param[in] origin the mean position
+    /*! \param[in] width the per-axis standard deviation, A
+        \param[in] n_points states to draw
+        \param[in] seed for reproducibility. A generator seeded here, rather
+                   than a process-global one, is what makes two labels built in
+                   one process reproducible
+        \param[in] position_name a human-readable label */
+    ProbeDistributionNormal(const std::vector<double>& origin, double width = 6.0,
+                          int n_points = 50000, int seed = 0,
+                          const std::string& position_name = "");
+
+    double get_width() const { return width_; }
+};
+
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_AVMODEL_H
+#endif  // IMPBFF_AVMODEL_H

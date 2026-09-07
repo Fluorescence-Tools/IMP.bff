@@ -6,10 +6,9 @@
  */
 #include <IMP/bff/Docking.h>
 
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/States.h>
 #include <IMP/bff/AVMeanDistanceRestraint.h>
 #include <IMP/bff/FPS.h>
-#include <IMP/bff/StatesDistance.h>
 #include <IMP/bff/internal/json.h>
 
 #include <IMP/algebra/geometric_alignment.h>

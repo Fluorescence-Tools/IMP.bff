@@ -1,5 +1,31 @@
+#ifndef IMPBFF_STATES_H
+#define IMPBFF_STATES_H
+
 /**
- *  \file IMP/bff/AVDistance.h
+ *  \file IMP/bff/States.h
+ *  \brief A label's states, whatever represents them: the cloud, the kernels
+ *         over it, and the distances between two.
+ *
+ * Representation-neutral. A label's configuration space is a weighted point
+ * cloud (#IMP::bff::States); an accessible volume (AVModel.h) and a rotamer
+ * ensemble (Rotamer.h) are two ways of enumerating one, and everything here
+ * treats them identically. Three sections:
+ *
+ * 1. **Kernels** (formerly `AVDistance.h`) -- distances and reductions over
+ *    point clouds, and the fps.json distance vocabulary.
+ * 2. **States** (formerly the base class in `AVModel.h`) -- the cloud as a
+ *    C++ value, with the three distances that are functions of it alone.
+ * 3. **Distances between two labels** (formerly `StatesDistance.h`, less the
+ *    accessible-volume-backed #IMP::bff::LabelDistribution, which is in
+ *    AVModel.h with the representation it wraps) -- the pair statistics,
+ *    the FRET distance converter, the transfer polynomials.
+ *
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+// -------- from AVDistance.h --------
+/**
+ *  (formerly IMP/bff/AVDistance.h, now a section of this file)
  *  \brief Distances and reductions over accessible-volume point clouds.
  *
  * These take **point arrays** rather than the ``AV`` decorators the
@@ -11,9 +37,6 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_AVDISTANCE_H
-#define IMPBFF_AVDISTANCE_H
-
 #include <IMP/bff/bff_config.h>
 
 #include <vector>
@@ -400,4 +423,348 @@ IMPBFFEXPORT void split_contact_volume_masks(
 
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_AVDISTANCE_H
+// -------- from AVModel.h (the States base class) --------
+
+#include <IMP/bff/Base.h>
+
+#include <map>
+#include <string>
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! A weighted set of states of one label.
+/*!
+    The states are `(x, y, z, weight)` per point, flat. Everything a
+    representation has to supply is here and nothing else is: the grid an
+    accessible volume was enumerated on belongs to
+    #IMP::bff::AccessibleVolume, and the conformers a rotamer library carries
+    belong to the rotamer ensemble. Neither is part of what a distance or a
+    rate needs.
+
+    The three distances live here rather than one level down for the same
+    reason: they are functions of the cloud, so a rotamer ensemble and an
+    accessible volume answer them identically.
+*/
+class IMPBFFEXPORT States {
+protected:
+    std::vector<double> points_;             //!< flat, four per state
+    std::vector<double> attachment_point_;   //!< three, or empty when unknown
+    std::vector<double> orientations_;       //!< flat, three per state; empty
+                                             //!< when the representation has none
+    std::string position_name_;
+    //! How these states were produced — representation parameters, not dye or
+    //! site properties. Provenance: written by whatever built the states, and
+    //! stringified because it is read back as a record rather than as numbers.
+    std::map<std::string, std::string> params_;
+
+public:
+    //! \param[in] points flat (x, y, z, w) per state; may be empty
+    /*! \param[in] attachment_point where the label is tied to the structure
+        \param[in] orientations flat transition dipoles, three per state
+        \param[in] position_name a human-readable label, e.g. "donor_72"
+        \param[in] params how these states were produced */
+    States(const std::vector<double>& points = std::vector<double>(),
+           const std::vector<double>& attachment_point = std::vector<double>(),
+           const std::vector<double>& orientations = std::vector<double>(),
+           const std::string& position_name = "",
+           const std::map<std::string, std::string>& params =
+                   std::map<std::string, std::string>());
+
+    //! The cloud, as a numpy view over this object's own buffer.
+    void get_points(double** out_view, int* n_out_view) const;
+    //! Where the label is tied; a zero-length view when it is not known.
+    void get_attachment_point(double** out_view, int* n_out_view) const;
+    //! The transition dipoles; a zero-length view when there are none.
+    void get_orientations(double** out_view, int* n_out_view) const;
+    //! Weight-averaged position, three values.
+    /*! Falls back to the attachment point when the cloud is empty or its
+        weights sum to zero, because that is the one position a label always
+        has. With no attachment point either, the origin. */
+    void get_mean_position(double** out_view, int* n_out_view) const;
+
+    //! The cloud itself, for a C++ caller. Python gets the numpy view above.
+    const std::vector<double>& get_points_vector() const { return points_; }
+
+    int get_n_points() const { return static_cast<int>(points_.size() / 4); }
+    bool get_has_volume() const { return !points_.empty(); }
+    bool get_has_orientations() const { return !orientations_.empty(); }
+    std::string get_position_name() const { return position_name_; }
+    void set_position_name(const std::string& n) { position_name_ = n; }
+    std::map<std::string, std::string> get_params() const { return params_; }
+    void set_params(const std::map<std::string, std::string>& p) { params_ = p; }
+
+    //! Replace the cloud.
+    void set_points(const std::vector<double>& points);
+    //! Replace the transition dipoles; one per state, or empty for none.
+    void set_orientations(const std::vector<double>& orientations);
+    void set_attachment_point(const std::vector<double>& xyz);
+
+    //! Distance between the two mean positions, A.
+    /*! The cheapest of the three and the least meaningful: it is the distance
+        between two *averages*, which is not the average of the distance and can
+        sit several Angstrom from either of the others. */
+    double dRmp(const States& other) const;
+
+    //! \f$\langle R_{DA}\rangle\f$ -- the mean over sampled point pairs, A.
+    double dRDA(const States& other, int n_samples = 50000) const;
+
+    //! \f$R_E\f$ -- the FRET-averaged distance, A.
+    /*! The *efficiency* is averaged and then inverted, not the distance:
+        \f$1/R^6\f$ weights close pairs far more heavily, so this is always the
+        shorter of the two averages and it is the one a measured efficiency
+        corresponds to. */
+    double dRDAE(const States& other, double forster_radius,
+                 int n_samples = 50000) const;
+
+    //! \f$p(R_{DA})\f$ on \p axis (bin edges), normalised to sum 1.
+    void pRDA(const States& other, const std::vector<double>& axis,
+              int n_samples, double** out_view, int* n_out_view) const;
+
+    IMP_SHOWABLE_INLINE(States,
+                        out << "States(" << get_n_points() << " states"
+                            << (position_name_.empty()
+                                        ? std::string()
+                                        : ", \"" + position_name_ + "\"")
+                            << ")");
+};
+IMP_VALUES(States, StatesList);
+
+IMPBFF_END_NAMESPACE
+
+// -------- from StatesDistance.h --------
+/**
+ *  (formerly IMP/bff/StatesDistance.h, now a section of this file)
+ *  \brief Distances between two labels, whatever represents them.
+ *
+ * Everything here takes #IMP::bff::States, so one implementation serves an
+ * accessible volume, a rotamer library, a Gaussian, a coarse-grained ensemble
+ * and an MD trajectory. That is the point: this was the third of **six**
+ * implementations of probe-pair distances in the package, and they were checked
+ * against each other before being merged — on T4L A132 x A65, 2180 x 3087
+ * points, 2e5 samples, \f$\langle R_{DA}\rangle\f$ came out 51.945 against
+ * 51.940 A and \f$\langle R_{DA}\rangle_E\f$ 51.696 against 51.692 A, with
+ * \f$R_{mp}\f$ identical. The spread is Monte-Carlo sampling noise.
+ *
+ * There is **one sampler**, #IMP::bff::random_distances, so two callers
+ * asking for the same quantity compute the same number rather than two
+ * estimates of one integral agreeing to \f$1/\sqrt{n}\f$.
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2026 IMP Inventors. All rights reserved.
+ *
+ */
+
+
+
+IMPBFF_BEGIN_NAMESPACE
+
+//! Monte-Carlo samples a pair distance is estimated from, unless stated.
+/*! In the header rather than the source so SWIG emits it as a module constant:
+    it is a default the Python surface states too. */
+const int N_DISTANCE_SAMPLES = 50000;
+
+//! \f$\langle R_{DA}\rangle\f$ -- the weighted mean inter-state distance, A.
+IMPBFFEXPORT double states_average_distance(const States& s1, const States& s2,
+                                            int n_samples = 50000);
+
+//! \f$R_E\f$ -- the FRET-averaged distance, A.
+/*! The *efficiency* is averaged and then inverted, not the distance. */
+IMPBFFEXPORT double states_mean_fret_distance(const States& s1,
+                                              const States& s2,
+                                              double forster_radius = 52.0,
+                                              int n_samples = 50000);
+
+//! \f$R_{mp}\f$ -- the distance between the two mean positions, A.
+IMPBFFEXPORT double distance_between_mean_positions(const States& s1,
+                                                    const States& s2);
+
+//! The width of the pair-distance distribution, A.
+IMPBFFEXPORT double standard_deviation_of_distances(const States& s1,
+                                                    const States& s2,
+                                                    int n_samples = 50000);
+
+//! \f$(R_{mp}, \langle R_{DA}\rangle, R_E, \sigma_R)\f$ in one pass.
+/*! An empty cloud on either side gives \f$R_{mp}\f$ for all three distances and
+    zero width -- the mean position is the one thing a label without a volume
+    still has. */
+IMPBFFEXPORT std::vector<double> av_pair_statistics(
+        const States& s1, const States& s2, double forster_radius = 52.0,
+        int n_samples = 50000);
+
+//! The model distance of a named type: `"Rmp"`, `"RDAMean"` or `"RDAMeanE"`.
+/*! \throw ValueException for any other name */
+IMPBFFEXPORT double model_distance(const States& s1, const States& s2,
+                                   const std::string& distance_type,
+                                   double forster_radius = 52.0,
+                                   int n_samples = 50000);
+
+//! \f$p(R_{DA})\f$ over \p axis (bin edges), weighted by the pair weights.
+/*! An empty \p axis (the default) spans the sample: bin edges on
+    \f$[0, R_{max}]\f$ of \p n_samples pairs, \p n_samples + 1 edges (one more
+    than the default sample count) -- the shape a caller wanting "just a
+    histogram" gets. \p normalize scales the counts to sum to 1. */
+IMPBFFEXPORT void histogram_rda(const States& s1, const States& s2,
+                                const std::vector<double>& axis =
+                                        std::vector<double>(),
+                                int n_samples = 50000, bool normalize = true,
+                                double** out_view = NULL,
+                                int* n_out_view = NULL);
+
+//! Fit \f$R_{mp} \to \langle R_{DA}\rangle\f$ (or \f$R_E\f$) by translation.
+/*!
+    The two clouds are rigidly separated along the line joining their mean
+    positions and the target distance is recomputed at seven offsets, then a
+    polynomial of \p degree is fitted through them. That is what a docking run
+    needs: a cheap \f$R_{mp}\f$ during sampling, corrected afterwards.
+
+    An empty cloud, a zero total weight, or coincident mean positions give the
+    identity polynomial — there is nothing to correct.
+
+    \return coefficients, highest power first, as `numpy.polyfit` returns them
+*/
+IMPBFFEXPORT std::vector<double> fit_transfer_polynomial(
+        const States& s1, const States& s2, const std::string& distance_type,
+        double forster_radius = 52.0, int degree = 3, int n_samples = 10000);
+
+//! \f$R_{mp} + \sigma^2 / R_{mp}\f$ -- the Gaussian mean-position correction.
+/*!
+    **\p sigma is the per-component width of the separation vector**, not of one
+    cloud and not of the distance distribution. Writing the separation as
+    \f$d = \Delta + \varepsilon\f$ with
+    \f$\varepsilon \sim N(0, \sigma^2 I_3)\f$, the first-order term averages
+    away and the **two** transverse components give
+    \f$\langle|\varepsilon_\perp|^2\rangle = 2\sigma^2\f$, so the correction is
+    \f$\sigma^2/R_{mp}\f$ — not half of it, which is what this returned under
+    one of its two former names until 2026-08-18.
+
+    **Zero where \p rmp is zero or negative**: the expansion is in
+    \f$\sigma/R_{mp}\f$ and says nothing at coincident mean positions. Clamping
+    the denominator instead returns 3.6e11 A there, a number that then
+    propagates as if it meant something.
+*/
+IMPBFFEXPORT double gaussian_rmp_to_rda_mean(double rmp, double sigma);
+
+//! Evaluate a transfer polynomial whose coefficients run **lowest power first**.
+/*!
+    \f$c_0 + c_1 x + c_2 x^2 + \dots\f$, the order a human writes by hand.
+    #IMP::bff::polynomial_transfer takes the opposite order -- highest power
+    first, which is what `numpy.polyfit` returns and therefore what a *fitted*
+    calibration carries.
+
+    The two are not interchangeable and the difference is silent: at
+    `rmp = 45` with `[0, 1, 0.02]` this gives **85.5** and the other gives
+    **45.02**. Both were called `polynomial_transfer`, in two modules, for as
+    long as both existed.
+*/
+IMPBFFEXPORT double polynomial_transfer_ascending(
+        double rmp, const std::vector<double>& coeffs);
+
+//! Apply a named transfer function to a mean-position distance.
+/*!
+    The dispatch an fps.json calibration names, in one place. `"None"` and the
+    `Rmp` convention return \p rmp untouched; `"Gaussian"` applies
+    gaussian_rmp_to_rda_mean(); `"Polynomial"` evaluates \p coeffs through
+    polynomial_transfer_ascending() and **falls back to the Gaussian** when no
+    coefficients were given -- a calibration that names a polynomial and carries
+    none is a calibration that has not been fitted yet, and \p sigma_rda is the
+    parametric stand-in for it.
+
+    \param[in] rmp distance between the two mean positions, A
+    \param[in] transfer_function_type `"None"`, `"Gaussian"` or `"Polynomial"`;
+               an unrecognised name returns \p rmp, because a transfer function
+               nobody implements is no transfer function
+    \param[in] sigma_rda per-component width of the separation vector; a
+               non-positive value disables the Gaussian correction
+    \param[in] coeffs polynomial coefficients, **lowest power first**
+*/
+IMPBFFEXPORT double effective_distance(
+        double rmp, const std::string& transfer_function_type,
+        double sigma_rda = 0.0,
+        const std::vector<double>& coeffs = std::vector<double>());
+
+//! \f$R_{mp}\f$ between two **point clouds**, rather than two `States`.
+/*!
+    Written over arrays so a rotamer library, a coarse-grained ensemble or an MD
+    frame reaches it without building a `States` first.
+
+    \param[in] points_a,points_b flat `(n, 3)` clouds, A
+    \param[in] weights_a,weights_b per-point weights; uniform when empty
+    \throw ValueException when either cloud is empty
+*/
+IMPBFFEXPORT double mean_position_distance(
+        const std::vector<double>& points_a, const std::vector<double>& points_b,
+        const std::vector<double>& weights_a = std::vector<double>(),
+        const std::vector<double>& weights_b = std::vector<double>());
+
+//! \f$R_{mp} \to \langle R_{DA}\rangle\f$ under a Gaussian pair model.
+/*!
+    A lookup table over centre-to-centre distance: at each one the pair distance
+    is distributed as the sum of two mirrored normals of width \p sigma, and the
+    three conventions -- mean distance, FRET-averaged distance, mean efficiency
+    -- are integrated over it once and interpolated afterwards.
+
+    This is what a docking run needs when it has an \f$R_{mp}\f$ and an
+    experiment that measured something else.
+*/
+class IMPBFFEXPORT FRETDistanceConverter {
+    double forster_radius_, sigma_;
+    std::vector<double> distances_, efficiencies_;
+    std::vector<double> d_mean_, d_mean_fret_, e_mean_;
+
+    void update_efficiencies();
+    void update_lookup();
+
+public:
+    FRETDistanceConverter(double forster_radius = 52.0, double sigma = 6.0,
+                          double distance_min = 1.0, double distance_max = 100.0,
+                          int n_distances = 128);
+
+    double get_forster_radius() const { return forster_radius_; }
+    void set_forster_radius(double v);
+    double get_sigma() const { return sigma_; }
+    void set_sigma(double v);
+
+    //! \f$\langle R_{DA}\rangle\f$ at a centre-to-centre distance.
+    double get_distance_mean(double dist_center_center) const;
+    //! \f$R_E\f$ at a centre-to-centre distance.
+    double get_distance_mean_fret(double dist_center_center) const;
+    //! \f$\langle E\rangle\f$ at a centre-to-centre distance.
+    double get_fret_efficiency_mean(double dist_center_center) const;
+
+    //! The distance of a named convention, by the `PROBE_PAIR_DISTANCE_*` codes.
+    double get_effective_distance(double value, int distance_type) const;
+
+    IMP_SHOWABLE_INLINE(FRETDistanceConverter,
+                        out << "FRETDistanceConverter(R0=" << forster_radius_
+                            << ", sigma=" << sigma_ << ")");
+};
+IMP_VALUES(FRETDistanceConverter, FRETDistanceConverters);
+
+// --------------------------------------------------------------------------
+// Empirical corrections from a computed distance to a measured one
+// --------------------------------------------------------------------------
+
+//! Evaluate a polynomial by Horner's method.
+/*!
+    \param[in] x abscissa
+    \param[in] coefficients **highest power first** -- what `np.polyfit`
+               returns, and therefore what a fitted calibration carries. The
+               opposite order was in use elsewhere and evaluated the same
+               calibration to a different number (85.5 against 45.02 at
+               `x = 45`, `c = [0, 1, 0.02]`); a caller holding ascending
+               coefficients must reverse them.
+    \return the polynomial's value; 0 for no coefficients
+*/
+IMPBFFEXPORT double polynomial_transfer(
+        double x, const std::vector<double>& coefficients);
+
+//! Evaluate a polynomial at many abscissae, as a managed view.
+/*! The direct vector form; a caller with many abscissae uses this rather than
+    dispatching a scalar across them. */
+IMPBFFEXPORT void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view);
+
+IMPBFF_END_NAMESPACE
+
+#endif  // IMPBFF_STATES_H

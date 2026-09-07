@@ -488,7 +488,7 @@ IMPBFF_END_NAMESPACE
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/States.h>
 
 #include <cstdlib>
 

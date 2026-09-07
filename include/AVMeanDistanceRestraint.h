@@ -29,7 +29,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AV.h>
 #include <IMP/bff/ProbeNetworkRestraint.h>
-#include <IMP/bff/StatesDistance.h>
+#include <IMP/bff/States.h>
 
 #include <IMP/OptimizerState.h>
 #include <IMP/core/Harmonic.h>

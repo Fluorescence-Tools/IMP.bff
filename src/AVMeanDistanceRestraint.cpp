@@ -6,7 +6,7 @@
  */
 
 #include <IMP/bff/AVMeanDistanceRestraint.h>
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/States.h>
 #include <cmath>
 #include <limits>
 #include <fstream>

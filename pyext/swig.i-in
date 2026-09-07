@@ -859,10 +859,6 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
 %include "IMP/bff/DensityGrid.h"
 
 %include "IMP_bff.pathmap.i"
-/* The point-cloud distance kernels and the fps.json distance vocabulary.
-   Wrapped before av.i: AV.h's defaults name this header's enum. */
-%include "IMP_bff.avdistance.i"
-
 /* Olga's name-keyed van der Waals radii and the AV's choice of radii set.
    Wrapped before av.i for the same reason: AV.h names AVRadiiSource. The
    `std::map` accessor and the per-particle vector stay C++-only (`#ifndef
@@ -1036,7 +1032,13 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
  */
 %include "IMP_bff.fpsproject.i"
 
-/* The accessible volume as an object, not just a solver. */
+/* A label's states, whatever represents them: the cloud, the kernels it is
+   measured with, the distances between two. Every representation and every
+   consumer of a `States` comes after this. */
+%include "IMP_bff.states.i"
+
+/* The accessible volume: one representation of `States`, and the label
+   distributions that produce one on demand. */
 %include "IMP_bff.avmodel.i"
 
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
@@ -1067,8 +1069,10 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    dye's trajectory. The pair values consume `States`. */
 %include "IMP_bff.fret.i"
 
-/* The distances a pair of labels is asked for. Consumes `States`. */
-%include "IMP_bff.statesdistance.i"
+/* The closed-form distance distributions and the FCS shapes. The distances
+   between two labels that used to sit here are in states.i, with the
+   States they consume (PRD-138); this header is wrapped where it always was. */
+%include "IMP_bff.distributions.i"
 
 /* Chi-squared scoring of labelling data, with and without volumes. */
 %include "IMP_bff.proberestraints.i"

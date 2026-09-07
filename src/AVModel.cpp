@@ -1,173 +1,21 @@
 /**
  * \file AVModel.cpp
- * \brief What a label's configuration space is, whatever enumerates it.
+ * \brief The accessible volume: the grid-enumerated cloud, the contact volume,
+ *        and the label distributions that produce one on demand.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
+
 #include <IMP/bff/AVModel.h>
+#include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/StructureIO.h>
-#include <IMP/bff/AVDistance.h>
 #include <IMP/bff/internal/GridShape.h>
-#include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/Base.h>
 
-#include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 IMPBFF_BEGIN_NAMESPACE
-
-// --------------------------------------------------------------------------
-// States
-// --------------------------------------------------------------------------
-
-namespace {
-
-void check_cloud(const std::vector<double>& points) {
-    if (!points.empty() && points.size() % 4 != 0) {
-        IMP_THROW("a point cloud is four values per point (x, y, z, weight); "
-                          << points.size() << " is not a multiple of four",
-                  IMP::ValueException);
-    }
-}
-
-}  // namespace
-
-States::States(const std::vector<double>& points,
-               const std::vector<double>& attachment_point,
-               const std::vector<double>& orientations,
-               const std::string& position_name,
-               const std::map<std::string, std::string>& params)
-        : points_(points), attachment_point_(attachment_point),
-          orientations_(orientations), position_name_(position_name),
-          params_(params) {
-    check_cloud(points_);
-    if (!attachment_point_.empty() && attachment_point_.size() != 3) {
-        IMP_THROW("an attachment point is three coordinates, not "
-                          << attachment_point_.size(),
-                  IMP::ValueException);
-    }
-    if (!orientations_.empty() &&
-        orientations_.size() != static_cast<std::size_t>(get_n_points()) * 3) {
-        IMP_THROW("one transition dipole per state: " << orientations_.size() / 3
-                          << " against " << get_n_points() << " states",
-                  IMP::ValueException);
-    }
-}
-
-void States::get_points(double** out_view, int* n_out_view) const {
-    internal::copy_to_view(points_, out_view, n_out_view);
-}
-
-void States::get_attachment_point(double** out_view, int* n_out_view) const {
-    internal::copy_to_view(attachment_point_, out_view, n_out_view);
-}
-
-void States::get_orientations(double** out_view, int* n_out_view) const {
-    internal::copy_to_view(orientations_, out_view, n_out_view);
-}
-
-void States::get_mean_position(double** out_view, int* n_out_view) const {
-    // `points_weighted_mean` returns the origin for an empty or zero-weight
-    // cloud. A label that has an attachment point has a better answer than the
-    // origin, and every caller of this wants that one -- a buried site whose
-    // volume came back empty is *at its attachment atom*, not at (0, 0, 0).
-    double total_weight = 0.0;
-    for (std::size_t i = 3; i < points_.size(); i += 4) total_weight += points_[i];
-    if ((points_.empty() || total_weight == 0.0) &&
-        attachment_point_.size() == 3) {
-        internal::copy_to_view(attachment_point_, out_view, n_out_view);
-        return;
-    }
-    internal::copy_to_view(points_weighted_mean(points_), out_view, n_out_view);
-}
-
-void States::set_points(const std::vector<double>& points) {
-    check_cloud(points);
-    points_ = points;
-    // The dipoles were one per state; a new cloud invalidates that pairing, and
-    // a stale one would silently misalign every kappa^2 read afterwards.
-    if (!orientations_.empty() &&
-        orientations_.size() != points_.size() / 4 * 3) {
-        orientations_.clear();
-    }
-}
-
-void States::set_orientations(const std::vector<double>& orientations) {
-    if (!orientations.empty() &&
-        orientations.size() != static_cast<std::size_t>(get_n_points()) * 3) {
-        IMP_THROW("one transition dipole per state: " << orientations.size() / 3
-                          << " against " << get_n_points() << " states",
-                  IMP::ValueException);
-    }
-    orientations_ = orientations;
-}
-
-void States::set_attachment_point(const std::vector<double>& xyz) {
-    if (!xyz.empty() && xyz.size() != 3) {
-        IMP_THROW("an attachment point is three coordinates, not " << xyz.size(),
-                  IMP::ValueException);
-    }
-    attachment_point_ = xyz;
-}
-
-double States::dRmp(const States& other) const {
-    double *a = nullptr, *b = nullptr;
-    int na = 0, nb = 0;
-    get_mean_position(&a, &na);
-    other.get_mean_position(&b, &nb);
-    double d = 0.0;
-    if (na == 3 && nb == 3) {
-        const double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-        d = std::sqrt(dx * dx + dy * dy + dz * dz);
-    }
-    std::free(a);
-    std::free(b);
-    return d;
-}
-
-double States::dRDA(const States& other, int n_samples) const {
-    return average_distance(points_, other.points_, n_samples, 0);
-}
-
-double States::dRDAE(const States& other, double forster_radius,
-                     int n_samples) const {
-    return mean_fret_distance(points_, other.points_, forster_radius,
-                              n_samples, 0);
-}
-
-void States::pRDA(const States& other, const std::vector<double>& axis,
-                  int n_samples, double** out_view, int* n_out_view) const {
-    // `axis` is bin *edges*, so the histogram has one fewer bin than it has
-    // edges, the way a histogram reads a bin-edge array.
-    const std::size_t n_bins = axis.size() > 1 ? axis.size() - 1 : 0;
-    double* out = internal::new_double_view(n_bins, out_view, n_out_view);
-    if (out == nullptr || n_bins == 0) return;
-
-    double* d = nullptr;
-    int n = 0, nc = 0;
-    random_distances(const_cast<double*>(points_.data()),
-                     static_cast<int>(points_.size()) / 4, 4,
-                     const_cast<double*>(other.points_.data()),
-                     static_cast<int>(other.points_.size()) / 4, 4,
-                     n_samples, 0, &d, &n, &nc);
-    if (d == nullptr) return;
-
-    double total = 0.0;
-    for (int i = 0; i < n; ++i) {
-        const double r = d[2 * i + 0], w = d[2 * i + 1];
-        if (r < axis.front() || r > axis.back()) continue;
-        // Upper edge closed, as numpy's histogram has it: a sample exactly at
-        // the top lands in the last bin rather than nowhere.
-        std::size_t b = 0;
-        while (b + 1 < n_bins && r >= axis[b + 1]) ++b;
-        out[b] += w;
-        total += w;
-    }
-    std::free(d);
-    if (total > 0.0) {
-        for (std::size_t b = 0; b < n_bins; ++b) out[b] /= total;
-    }
-}
 
 // --------------------------------------------------------------------------
 // AccessibleVolume
@@ -353,6 +201,139 @@ void write_av(const AccessibleVolume& av, const std::string& path) {
     }
     IMP_THROW("cannot write " << path << ": the extension must be one of "
                               << "xyz, pqr, dx", ValueException);
+}
+
+// -------- from StatesDistance.cpp (the label distributions) --------
+// --------------------------------------------------------------------------
+// label distributions
+// --------------------------------------------------------------------------
+
+LabelDistribution::LabelDistribution(const std::string& simulation_type,
+                                     const std::vector<double>& origin,
+                                     double simulation_grid_resolution,
+                                     const std::string& position_name)
+    : simulation_type_(simulation_type), origin_(origin),
+      simulation_grid_resolution_(simulation_grid_resolution),
+      position_name_(position_name), computed_(false) {}
+
+const AccessibleVolume& LabelDistribution::get_accessible_volume() const {
+    if (!computed_) {
+        do_compute();
+        computed_ = true;
+    }
+    return av_;
+}
+
+void LabelDistribution::get_origin(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(origin_, out_view, n_out_view);
+}
+
+void LabelDistribution::get_points(double** out_view,
+                                   int* n_out_view) const {
+    get_accessible_volume().get_points(out_view, n_out_view);
+}
+
+void LabelDistribution::get_mean_position(double** out_view,
+                                          int* n_out_view) const {
+    get_accessible_volume().get_mean_position(out_view, n_out_view);
+}
+
+double LabelDistribution::dRmp(const LabelDistribution& other) const {
+    return get_accessible_volume().dRmp(other.get_accessible_volume());
+}
+
+double LabelDistribution::dRDA(const LabelDistribution& other,
+                               int n_samples) const {
+    return get_accessible_volume().dRDA(other.get_accessible_volume(),
+                                        n_samples);
+}
+
+double LabelDistribution::dRDAE(const LabelDistribution& other,
+                                double forster_radius, int n_samples) const {
+    return get_accessible_volume().dRDAE(other.get_accessible_volume(),
+                                         forster_radius, n_samples);
+}
+
+LabelDistributionAV::LabelDistributionAV(
+        const std::vector<double>& atoms_xyz,
+        const std::vector<double>& atoms_vdw,
+        const std::vector<double>& source_xyz, double linker_length,
+        double linker_width, double r1, double r2, double r3,
+        double simulation_grid_resolution, const std::string& position_name)
+    : LabelDistribution(r2 == 0.0 ? "AV1" : "AV3", source_xyz,
+                        simulation_grid_resolution, position_name),
+      source_xyz_(source_xyz), linker_length_(linker_length),
+      linker_width_(linker_width), r1_(r1), r2_(r2), r3_(r3) {
+    const std::size_t n = atoms_xyz.size() / 3;
+    if (atoms_xyz.size() % 3 != 0 || atoms_vdw.size() != n) {
+        IMP_THROW("obstacle coords must be (N, 3) and vdw (N,), got "
+                          << atoms_xyz.size() << " coords and "
+                          << atoms_vdw.size() << " radii",
+                  IMP::ValueException);
+    }
+    // Interleave (x, y, z, ball-radius) so compute_av sees its (N, 4) layout.
+    atoms_xyzr_.resize(4 * n);
+    for (std::size_t i = 0; i < n; ++i) {
+        atoms_xyzr_[4 * i + 0] = atoms_xyz[3 * i + 0];
+        atoms_xyzr_[4 * i + 1] = atoms_xyz[3 * i + 1];
+        atoms_xyzr_[4 * i + 2] = atoms_xyz[3 * i + 2];
+        atoms_xyzr_[4 * i + 3] = atoms_vdw[i];
+    }
+    // No explicit source means the first obstacle.
+    if (source_xyz_.empty() && !atoms_xyzr_.empty()) {
+        source_xyz_.assign(atoms_xyzr_.begin(), atoms_xyzr_.begin() + 3);
+        origin_.assign(source_xyz_.begin(), source_xyz_.end());
+    }
+}
+
+void LabelDistributionAV::do_compute() const {
+    av_ = compute_av(const_cast<double*>(atoms_xyzr_.data()),
+                     static_cast<int>(atoms_xyzr_.size() / 4), 4, source_xyz_,
+                     linker_length_, linker_width_, r1_, r2_, r3_,
+                     simulation_grid_resolution_, DEFAULT_ALLOWED_SPHERE_RADIUS,
+                     0);
+    av_.set_position_name(position_name_);
+}
+
+ProbeDistributionNormal::ProbeDistributionNormal(const std::vector<double>& origin,
+                                             double width, int n_points,
+                                             int seed,
+                                             const std::string& position_name)
+    : LabelDistribution("Normal", origin, 1.0, position_name), width_(width),
+      n_points_(n_points), seed_(seed) {
+    if (origin.size() != 3) {
+        IMP_THROW("the origin is three coordinates, not " << origin.size(),
+                  ValueException);
+    }
+}
+
+void ProbeDistributionNormal::do_compute() const {
+    // Box-Muller off a seeded engine, so two labels built in one process are
+    // reproducible and so is one across runs.
+    std::mt19937 engine(static_cast<unsigned int>(seed_));
+    std::normal_distribution<double> normal(0.0, 1.0);
+
+    std::vector<double> points(static_cast<std::size_t>(n_points_) * 4);
+    double total = 0.0;
+    for (int i = 0; i < n_points_; ++i) {
+        double r2 = 0.0;
+        for (int c = 0; c < 3; ++c) {
+            const double d = normal(engine) * width_;
+            points[i * 4 + c] = origin_[c] + d;
+            r2 += d * d;
+        }
+        // The weight is the Gaussian height at the drawn point, which makes the
+        // cloud an importance-weighted sample of the same distribution it was
+        // drawn from rather than a uniform one.
+        const double w = std::exp(-0.5 * r2 / (width_ * width_));
+        points[i * 4 + 3] = w;
+        total += w;
+    }
+    if (total > 0.0) {
+        for (int i = 0; i < n_points_; ++i) points[i * 4 + 3] /= total;
+    }
+    av_ = AccessibleVolume(points, std::vector<double>(), std::vector<double>(),
+                           1.0, position_name_, origin_);
 }
 
 IMPBFF_END_NAMESPACE

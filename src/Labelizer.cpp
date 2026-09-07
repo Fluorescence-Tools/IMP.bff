@@ -1469,7 +1469,6 @@ IMPBFF_END_NAMESPACE
 
 #include <IMP/bff/AV.h>
 #include <IMP/bff/AVModel.h>
-#include <IMP/bff/StatesDistance.h>
 
 
 #include <limits>

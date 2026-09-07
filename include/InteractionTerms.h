@@ -35,7 +35,7 @@
 #define IMPBFF_INTERACTIONTERMS_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/AVModel.h>
+#include <IMP/bff/States.h>
 #include <IMP/bff/ProbeLibrary.h>
 #include <IMP/bff/Quenching.h>
 

@@ -1,10 +1,21 @@
 /**
- * \file AVDistance.cpp
+ * \file States.cpp
+ * \brief A label's states: the kernels, the cloud, the distances between two.
+ *
+ * Sections in the order of IMP/bff/States.h; each is marked with the file it
+ * came from.
+ *
+ * Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+// -------- from AVDistance.cpp --------
+/**
+ * (formerly AVDistance.cpp, now a section of this file)
  * \brief Distances and reductions over accessible-volume point clouds.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/States.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/Base.h>
 
@@ -576,6 +587,657 @@ double fret_efficiency(double distance, double forster_radius) {
 
 double distance_from_fret_efficiency(double efficiency, double forster_radius) {
     return forster_radius * std::pow(1.0 / efficiency - 1.0, 1.0 / 6.0);
+}
+
+IMPBFF_END_NAMESPACE
+
+// -------- from AVModel.cpp (the States base class) --------
+#include <IMP/bff/StructureIO.h>
+#include <IMP/bff/internal/GridShape.h>
+
+#include <cstring>
+
+IMPBFF_BEGIN_NAMESPACE
+
+// --------------------------------------------------------------------------
+// States
+// --------------------------------------------------------------------------
+
+namespace {
+
+void check_cloud(const std::vector<double>& points) {
+    if (!points.empty() && points.size() % 4 != 0) {
+        IMP_THROW("a point cloud is four values per point (x, y, z, weight); "
+                          << points.size() << " is not a multiple of four",
+                  IMP::ValueException);
+    }
+}
+
+}  // namespace
+
+States::States(const std::vector<double>& points,
+               const std::vector<double>& attachment_point,
+               const std::vector<double>& orientations,
+               const std::string& position_name,
+               const std::map<std::string, std::string>& params)
+        : points_(points), attachment_point_(attachment_point),
+          orientations_(orientations), position_name_(position_name),
+          params_(params) {
+    check_cloud(points_);
+    if (!attachment_point_.empty() && attachment_point_.size() != 3) {
+        IMP_THROW("an attachment point is three coordinates, not "
+                          << attachment_point_.size(),
+                  IMP::ValueException);
+    }
+    if (!orientations_.empty() &&
+        orientations_.size() != static_cast<std::size_t>(get_n_points()) * 3) {
+        IMP_THROW("one transition dipole per state: " << orientations_.size() / 3
+                          << " against " << get_n_points() << " states",
+                  IMP::ValueException);
+    }
+}
+
+void States::get_points(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(points_, out_view, n_out_view);
+}
+
+void States::get_attachment_point(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(attachment_point_, out_view, n_out_view);
+}
+
+void States::get_orientations(double** out_view, int* n_out_view) const {
+    internal::copy_to_view(orientations_, out_view, n_out_view);
+}
+
+void States::get_mean_position(double** out_view, int* n_out_view) const {
+    // `points_weighted_mean` returns the origin for an empty or zero-weight
+    // cloud. A label that has an attachment point has a better answer than the
+    // origin, and every caller of this wants that one -- a buried site whose
+    // volume came back empty is *at its attachment atom*, not at (0, 0, 0).
+    double total_weight = 0.0;
+    for (std::size_t i = 3; i < points_.size(); i += 4) total_weight += points_[i];
+    if ((points_.empty() || total_weight == 0.0) &&
+        attachment_point_.size() == 3) {
+        internal::copy_to_view(attachment_point_, out_view, n_out_view);
+        return;
+    }
+    internal::copy_to_view(points_weighted_mean(points_), out_view, n_out_view);
+}
+
+void States::set_points(const std::vector<double>& points) {
+    check_cloud(points);
+    points_ = points;
+    // The dipoles were one per state; a new cloud invalidates that pairing, and
+    // a stale one would silently misalign every kappa^2 read afterwards.
+    if (!orientations_.empty() &&
+        orientations_.size() != points_.size() / 4 * 3) {
+        orientations_.clear();
+    }
+}
+
+void States::set_orientations(const std::vector<double>& orientations) {
+    if (!orientations.empty() &&
+        orientations.size() != static_cast<std::size_t>(get_n_points()) * 3) {
+        IMP_THROW("one transition dipole per state: " << orientations.size() / 3
+                          << " against " << get_n_points() << " states",
+                  IMP::ValueException);
+    }
+    orientations_ = orientations;
+}
+
+void States::set_attachment_point(const std::vector<double>& xyz) {
+    if (!xyz.empty() && xyz.size() != 3) {
+        IMP_THROW("an attachment point is three coordinates, not " << xyz.size(),
+                  IMP::ValueException);
+    }
+    attachment_point_ = xyz;
+}
+
+double States::dRmp(const States& other) const {
+    double *a = nullptr, *b = nullptr;
+    int na = 0, nb = 0;
+    get_mean_position(&a, &na);
+    other.get_mean_position(&b, &nb);
+    double d = 0.0;
+    if (na == 3 && nb == 3) {
+        const double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+        d = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    std::free(a);
+    std::free(b);
+    return d;
+}
+
+double States::dRDA(const States& other, int n_samples) const {
+    return average_distance(points_, other.points_, n_samples, 0);
+}
+
+double States::dRDAE(const States& other, double forster_radius,
+                     int n_samples) const {
+    return mean_fret_distance(points_, other.points_, forster_radius,
+                              n_samples, 0);
+}
+
+void States::pRDA(const States& other, const std::vector<double>& axis,
+                  int n_samples, double** out_view, int* n_out_view) const {
+    // `axis` is bin *edges*, so the histogram has one fewer bin than it has
+    // edges, the way a histogram reads a bin-edge array.
+    const std::size_t n_bins = axis.size() > 1 ? axis.size() - 1 : 0;
+    double* out = internal::new_double_view(n_bins, out_view, n_out_view);
+    if (out == nullptr || n_bins == 0) return;
+
+    double* d = nullptr;
+    int n = 0, nc = 0;
+    random_distances(const_cast<double*>(points_.data()),
+                     static_cast<int>(points_.size()) / 4, 4,
+                     const_cast<double*>(other.points_.data()),
+                     static_cast<int>(other.points_.size()) / 4, 4,
+                     n_samples, 0, &d, &n, &nc);
+    if (d == nullptr) return;
+
+    double total = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double r = d[2 * i + 0], w = d[2 * i + 1];
+        if (r < axis.front() || r > axis.back()) continue;
+        // Upper edge closed, as numpy's histogram has it: a sample exactly at
+        // the top lands in the last bin rather than nowhere.
+        std::size_t b = 0;
+        while (b + 1 < n_bins && r >= axis[b + 1]) ++b;
+        out[b] += w;
+        total += w;
+    }
+    std::free(d);
+    if (total > 0.0) {
+        for (std::size_t b = 0; b < n_bins; ++b) out[b] /= total;
+    }
+}
+
+IMPBFF_END_NAMESPACE
+
+// -------- from StatesDistance.cpp --------
+/**
+ * (formerly StatesDistance.cpp, now a section of this file)
+ * \brief Distances between two labels, whatever represents them.
+ *
+ * Copyright 2007-2026 IMP Inventors. All rights reserved.
+ */
+
+
+
+#include <cstdlib>
+
+IMPBFF_BEGIN_NAMESPACE
+
+namespace sd {
+
+//! A cloud as a flat (x, y, z, w) buffer this side owns.
+std::vector<double> cloud(const States& s) {
+    double* points = NULL;
+    int n = 0;
+    s.get_points(&points, &n);
+    std::vector<double> out(points, points + n);
+    std::free(points);
+    return out;
+}
+
+std::vector<double> mean_position(const States& s) {
+    double* p = NULL;
+    int n = 0;
+    s.get_mean_position(&p, &n);
+    std::vector<double> out(p, p + n);
+    std::free(p);
+    out.resize(3, 0.0);
+    return out;
+}
+
+//! `(distance, weight)` pairs, from the one sampler.
+std::vector<double> sample(const States& s1, const States& s2, int n_samples) {
+    if (s1.get_n_points() == 0 || s2.get_n_points() == 0) {
+        IMP_THROW("cannot sample a distance: one or both labels have no states",
+                  ValueException);
+    }
+    const std::vector<double> c1 = cloud(s1);
+    const std::vector<double> c2 = cloud(s2);
+    double* out = NULL;
+    int n = 0, nc = 0;
+    random_distances(const_cast<double*>(c1.data()),
+                     static_cast<int>(c1.size()) / 4, 4,
+                     const_cast<double*>(c2.data()),
+                     static_cast<int>(c2.size()) / 4, 4,
+                     n_samples, 0, &out, &n, &nc);
+    std::vector<double> pairs(out, out + static_cast<std::size_t>(n) * nc);
+    std::free(out);
+    return pairs;
+}
+
+void split(const std::vector<double>& pairs, std::vector<double>* d,
+           std::vector<double>* w) {
+    d->reserve(pairs.size() / 2);
+    w->reserve(pairs.size() / 2);
+    for (std::size_t i = 0; i + 1 < pairs.size(); i += 2) {
+        d->push_back(pairs[i]);
+        w->push_back(pairs[i + 1]);
+    }
+}
+
+}  // namespace sd
+
+double states_average_distance(const States& s1, const States& s2,
+                               int n_samples) {
+    std::vector<double> d, w;
+    sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+    double num = 0.0, den = 0.0;
+    for (std::size_t i = 0; i < d.size(); ++i) {
+        num += d[i] * w[i];
+        den += w[i];
+    }
+    return den > 0.0 ? num / den : 0.0;
+}
+
+double states_mean_fret_distance(const States& s1, const States& s2,
+                                 double forster_radius, int n_samples) {
+    std::vector<double> d, w;
+    sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+    return distance_sample_statistics(d, w, forster_radius)[1];
+}
+
+double distance_between_mean_positions(const States& s1, const States& s2) {
+    const std::vector<double> a = sd::mean_position(s1);
+    const std::vector<double> b = sd::mean_position(s2);
+    const double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double standard_deviation_of_distances(const States& s1, const States& s2,
+                                       int n_samples) {
+    std::vector<double> d, w;
+    sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+    return distance_sample_statistics(d, w)[3];
+}
+
+std::vector<double> av_pair_statistics(const States& s1, const States& s2,
+                                       double forster_radius, int n_samples) {
+    const double rmp = distance_between_mean_positions(s1, s2);
+    std::vector<double> out(4, 0.0);
+    out[0] = out[1] = out[2] = rmp;
+    if (s1.get_n_points() == 0 || s2.get_n_points() == 0) return out;
+
+    std::vector<double> d, w;
+    sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+    double total = 0.0;
+    for (std::size_t i = 0; i < w.size(); ++i) total += w[i];
+    // A zero total weight is a cloud that exists but carries no occupancy; the
+    // mean position is still the one thing it has.
+    if (total <= 0.0) return out;
+
+    const std::vector<double> stats =
+            distance_sample_statistics(d, w, forster_radius);
+    out[1] = stats[0];
+    out[2] = stats[1];
+    out[3] = stats[3];
+    return out;
+}
+
+double model_distance(const States& s1, const States& s2,
+                      const std::string& distance_type, double forster_radius,
+                      int n_samples) {
+    if (distance_type == "Rmp") return distance_between_mean_positions(s1, s2);
+    if (distance_type == "RDAMean") {
+        return states_average_distance(s1, s2, n_samples);
+    }
+    if (distance_type == "RDAMeanE") {
+        return states_mean_fret_distance(s1, s2, forster_radius, n_samples);
+    }
+    IMP_THROW("Unknown distance type: " << distance_type, ValueException);
+}
+
+void histogram_rda(const States& s1, const States& s2,
+                   const std::vector<double>& axis, int n_samples,
+                   bool normalize, double** out_view, int* n_out_view) {
+    std::vector<double> d, w;
+    sd::split(sd::sample(s1, s2, n_samples), &d, &w);
+
+    std::vector<double> used_axis = axis;
+    if (used_axis.size() < 2) {
+        // No axis given: span the sample. One edge per sample distance, closed
+        // at the upper end -- `n_samples + 1` edges, `n_samples` bins.
+        const int n_b = n_samples > 0 ? n_samples : 1;
+        used_axis.resize(static_cast<std::size_t>(n_b) + 1);
+        for (int b = 0; b <= n_b; ++b)
+            used_axis[static_cast<std::size_t>(b)] =
+                    static_cast<double>(b) / n_b;
+        double r_max = 0.0;
+        for (std::size_t i = 0; i < d.size(); ++i) r_max = std::max(r_max, d[i]);
+        if (r_max <= 0.0) r_max = 1.0;
+        for (std::size_t b = 0; b < used_axis.size(); ++b)
+            used_axis[b] *= r_max;
+    }
+
+    const std::size_t n_bins = used_axis.size() > 1 ? used_axis.size() - 1 : 0;
+    double* out = internal::new_double_view(n_bins, out_view, n_out_view);
+    if (out == NULL || n_bins == 0) return;
+
+    double total = 0.0;
+    for (std::size_t i = 0; i < d.size(); ++i) {
+        const double r = d[i];
+        if (r < used_axis.front() || r > used_axis.back()) continue;
+        // Upper edge closed, as numpy's histogram has it.
+        std::size_t b = 0;
+        while (b + 1 < n_bins && r >= used_axis[b + 1]) ++b;
+        out[b] += w[i];
+        total += w[i];
+    }
+    if (normalize && total > 0.0) {
+        for (std::size_t b = 0; b < n_bins; ++b) out[b] /= total;
+    }
+}
+
+std::vector<double> fit_transfer_polynomial(const States& s1, const States& s2,
+                                            const std::string& distance_type,
+                                            double forster_radius, int degree,
+                                            int n_samples) {
+    // y = x: there is nothing to correct.
+    std::vector<double> identity(degree + 1, 0.0);
+    if (degree >= 1) identity[degree - 1] = 1.0;
+
+    const double rmp = distance_between_mean_positions(s1, s2);
+    if (s1.get_n_points() == 0 || s2.get_n_points() == 0 || rmp <= 1e-6) {
+        return identity;
+    }
+
+    // Separation vectors rather than distances: the fit translates one cloud
+    // along the join, and `|v + t u|` needs the vector.
+    const std::vector<double> c1 = sd::cloud(s1), c2 = sd::cloud(s2);
+    const std::size_t n1 = c1.size() / 4, n2 = c2.size() / 4;
+    std::vector<double> v_dot_u(n_samples), v_sq(n_samples), w(n_samples);
+
+    const std::vector<double> m1 = sd::mean_position(s1);
+    const std::vector<double> m2 = sd::mean_position(s2);
+    const double ux = (m2[0] - m1[0]) / rmp;
+    const double uy = (m2[1] - m1[1]) / rmp;
+    const double uz = (m2[2] - m1[2]) / rmp;
+
+    // The same linear congruential draw the sampler uses, so a fit and a
+    // distance drawn at the same seed see the same pairs.
+    unsigned int state = 1u;
+    double w_sum = 0.0;
+    for (int i = 0; i < n_samples; ++i) {
+        state = state * 1103515245u + 12345u;
+        const std::size_t i1 = (state >> 16) % n1;
+        state = state * 1103515245u + 12345u;
+        const std::size_t i2 = (state >> 16) % n2;
+        const double vx = c2[i2 * 4 + 0] - c1[i1 * 4 + 0];
+        const double vy = c2[i2 * 4 + 1] - c1[i1 * 4 + 1];
+        const double vz = c2[i2 * 4 + 2] - c1[i1 * 4 + 2];
+        v_dot_u[i] = vx * ux + vy * uy + vz * uz;
+        v_sq[i] = vx * vx + vy * vy + vz * vz;
+        w[i] = c1[i1 * 4 + 3] * c2[i2 * 4 + 3];
+        w_sum += w[i];
+    }
+    if (w_sum <= 0.0) return identity;
+
+    const int n_points = 7;
+    const double t_min = -std::min(rmp - 5.0, 15.0);
+    const double t_max = 20.0;
+    std::vector<double> xs(n_points), ys(n_points);
+    for (int k = 0; k < n_points; ++k) {
+        const double t = t_min + (t_max - t_min) * k / (n_points - 1);
+        xs[k] = rmp + t;
+        double num = 0.0, e_sum = 0.0;
+        for (int i = 0; i < n_samples; ++i) {
+            const double d = std::sqrt(std::max(
+                    v_sq[i] + 2.0 * t * v_dot_u[i] + t * t, 1e-10));
+            num += d * w[i];
+            if (distance_type == "RDAMeanE") {
+                const double x = d / forster_radius;
+                const double x3 = x * x * x;
+                e_sum += w[i] / (1.0 + x3 * x3);
+            }
+        }
+        if (distance_type == "RDAMeanE") {
+            const double mean_e = e_sum / w_sum;
+            if (mean_e <= 0.0) ys[k] = num / w_sum;
+            else if (mean_e >= 1.0) ys[k] = 0.0;
+            else ys[k] = forster_radius * std::pow(1.0 / mean_e - 1.0, 1.0 / 6.0);
+        } else {
+            ys[k] = num / w_sum;
+        }
+    }
+
+    // Least squares on the Vandermonde normal equations, highest power first --
+    // the order `numpy.polyfit` returns and `polynomial_transfer` expects.
+    const int m = degree + 1;
+    std::vector<double> ata(m * m, 0.0), atb(m, 0.0);
+    for (int k = 0; k < n_points; ++k) {
+        std::vector<double> row(m);
+        double p = 1.0;
+        for (int j = m - 1; j >= 0; --j) { row[j] = p; p *= xs[k]; }
+        for (int a = 0; a < m; ++a) {
+            atb[a] += row[a] * ys[k];
+            for (int b = 0; b < m; ++b) ata[a * m + b] += row[a] * row[b];
+        }
+    }
+    // Gaussian elimination with partial pivoting; m is 4 in every caller.
+    for (int col = 0; col < m; ++col) {
+        int pivot = col;
+        for (int r = col + 1; r < m; ++r) {
+            if (std::fabs(ata[r * m + col]) > std::fabs(ata[pivot * m + col])) {
+                pivot = r;
+            }
+        }
+        if (std::fabs(ata[pivot * m + col]) < 1e-12) return identity;
+        if (pivot != col) {
+            for (int c = 0; c < m; ++c) {
+                std::swap(ata[col * m + c], ata[pivot * m + c]);
+            }
+            std::swap(atb[col], atb[pivot]);
+        }
+        for (int r = col + 1; r < m; ++r) {
+            const double f = ata[r * m + col] / ata[col * m + col];
+            for (int c = col; c < m; ++c) ata[r * m + c] -= f * ata[col * m + c];
+            atb[r] -= f * atb[col];
+        }
+    }
+    std::vector<double> coeffs(m, 0.0);
+    for (int r = m - 1; r >= 0; --r) {
+        double acc = atb[r];
+        for (int c = r + 1; c < m; ++c) acc -= ata[r * m + c] * coeffs[c];
+        coeffs[r] = acc / ata[r * m + r];
+    }
+    return coeffs;
+}
+
+double gaussian_rmp_to_rda_mean(double rmp, double sigma) {
+    if (!(rmp > 0.0)) return 0.0;
+    return rmp + sigma * sigma / rmp;
+}
+
+double polynomial_transfer_ascending(double rmp,
+                                     const std::vector<double>& coeffs) {
+    // One evaluator underneath: reverse and delegate.
+    std::vector<double> descending(coeffs.rbegin(), coeffs.rend());
+    return polynomial_transfer(rmp, descending);
+}
+
+double mean_position_distance(const std::vector<double>& points_a,
+                              const std::vector<double>& points_b,
+                              const std::vector<double>& weights_a,
+                              const std::vector<double>& weights_b) {
+    const std::size_t na = points_a.size() / 3, nb = points_b.size() / 3;
+    if (na == 0 || nb == 0) {
+        IMP_THROW("both point clouds must be non-empty to define R_mp",
+                  ValueException);
+    }
+    double ma[3] = {0, 0, 0}, mb[3] = {0, 0, 0}, wa = 0.0, wb = 0.0;
+    for (std::size_t i = 0; i < na; ++i) {
+        const double w = weights_a.empty() ? 1.0 : weights_a[i];
+        for (int c = 0; c < 3; ++c) ma[c] += w * points_a[i * 3 + c];
+        wa += w;
+    }
+    for (std::size_t i = 0; i < nb; ++i) {
+        const double w = weights_b.empty() ? 1.0 : weights_b[i];
+        for (int c = 0; c < 3; ++c) mb[c] += w * points_b[i * 3 + c];
+        wb += w;
+    }
+    if (wa == 0.0 || wb == 0.0) {
+        IMP_THROW("a cloud with zero total weight has no mean position",
+                  ValueException);
+    }
+    double d2 = 0.0;
+    for (int c = 0; c < 3; ++c) {
+        const double d = ma[c] / wa - mb[c] / wb;
+        d2 += d * d;
+    }
+    return std::sqrt(d2);
+}
+
+// --------------------------------------------------------------------------
+// the Gaussian pair converter
+// --------------------------------------------------------------------------
+
+FRETDistanceConverter::FRETDistanceConverter(double forster_radius,
+                                             double sigma, double distance_min,
+                                             double distance_max,
+                                             int n_distances)
+    : forster_radius_(forster_radius), sigma_(sigma) {
+    distances_.resize(n_distances);
+    for (int i = 0; i < n_distances; ++i) {
+        distances_[i] = distance_min + (distance_max - distance_min) * i /
+                                               std::max(1, n_distances - 1);
+    }
+    update_efficiencies();
+    update_lookup();
+}
+
+void FRETDistanceConverter::update_efficiencies() {
+    efficiencies_.resize(distances_.size());
+    for (std::size_t i = 0; i < distances_.size(); ++i) {
+        const double x = distances_[i] / forster_radius_;
+        const double x3 = x * x * x;
+        efficiencies_[i] = 1.0 / (1.0 + x3 * x3);
+    }
+}
+
+void FRETDistanceConverter::update_lookup() {
+    const std::size_t n = distances_.size();
+    d_mean_.assign(n, 0.0);
+    d_mean_fret_.assign(n, 0.0);
+    e_mean_.assign(n, 0.0);
+
+    const double norm = 1.0 / (sigma_ * std::sqrt(2.0 * M_PI));
+    for (std::size_t k = 0; k < n; ++k) {
+        const double dcc = distances_[k];
+        // Two mirrored normals: the separation of two isotropic clouds is
+        // symmetric about zero, and only its magnitude is observable.
+        std::vector<double> p(n);
+        double total = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+            const double a = (distances_[i] + dcc) / sigma_;
+            const double b = (distances_[i] - dcc) / sigma_;
+            p[i] = norm * (std::exp(-0.5 * a * a) + std::exp(-0.5 * b * b));
+            total += p[i];
+        }
+        if (total > 0.0) {
+            for (std::size_t i = 0; i < n; ++i) p[i] /= total;
+        }
+        double dm = 0.0, em = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+            dm += p[i] * distances_[i];
+            em += p[i] * efficiencies_[i];
+        }
+        d_mean_[k] = dm;
+        e_mean_[k] = em;
+        d_mean_fret_[k] =
+                em > 0.0 ? forster_radius_ * std::pow(1.0 / em - 1.0, 1.0 / 6.0)
+                         : dm;
+    }
+}
+
+void FRETDistanceConverter::set_forster_radius(double v) {
+    forster_radius_ = v;
+    update_efficiencies();
+    update_lookup();
+}
+
+void FRETDistanceConverter::set_sigma(double v) {
+    sigma_ = v;
+    update_lookup();
+}
+
+namespace sd {
+
+//! Linear interpolation on an ascending axis, clamped at both ends.
+double interp(double x, const std::vector<double>& xs,
+              const std::vector<double>& ys) {
+    if (xs.empty()) return 0.0;
+    if (x <= xs.front()) return ys.front();
+    if (x >= xs.back()) return ys.back();
+    std::size_t i = 0;
+    while (i + 1 < xs.size() && xs[i + 1] < x) ++i;
+    const double t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+    return ys[i] + t * (ys[i + 1] - ys[i]);
+}
+
+}  // namespace sd
+
+double FRETDistanceConverter::get_distance_mean(double dcc) const {
+    return sd::interp(dcc, distances_, d_mean_);
+}
+
+double FRETDistanceConverter::get_distance_mean_fret(double dcc) const {
+    return sd::interp(dcc, distances_, d_mean_fret_);
+}
+
+double FRETDistanceConverter::get_fret_efficiency_mean(double dcc) const {
+    return sd::interp(dcc, distances_, e_mean_);
+}
+
+double FRETDistanceConverter::get_effective_distance(double value,
+                                                     int distance_type) const {
+    if (distance_type == PROBE_PAIR_DISTANCE_MEAN) return get_distance_mean(value);
+    if (distance_type == PROBE_PAIR_DISTANCE_E) return get_distance_mean_fret(value);
+    if (distance_type == PROBE_PAIR_DISTANCE_MP) return value;
+    IMP_THROW("unknown probe-pair distance type " << distance_type,
+              ValueException);
+}
+
+double effective_distance(double rmp,
+                          const std::string& transfer_function_type,
+                          double sigma_rda,
+                          const std::vector<double>& coeffs) {
+    if (transfer_function_type == "None") return rmp;
+    if (transfer_function_type == "Gaussian") {
+        return sigma_rda > 0.0 ? gaussian_rmp_to_rda_mean(rmp, sigma_rda) : rmp;
+    }
+    if (transfer_function_type == "Polynomial") {
+        if (!coeffs.empty()) return polynomial_transfer_ascending(rmp, coeffs);
+        // A calibration that names a polynomial and carries no coefficients has
+        // not been fitted; sigma is the parametric stand-in.
+        return sigma_rda > 0.0 ? gaussian_rmp_to_rda_mean(rmp, sigma_rda) : rmp;
+    }
+    return rmp;
+}
+
+// --------------------------------------------------------------------------
+// Empirical corrections from a computed distance to a measured one
+// --------------------------------------------------------------------------
+
+double polynomial_transfer(double x, const std::vector<double>& coefficients) {
+    double y = 0.0;
+    for (std::size_t i = 0; i < coefficients.size(); ++i) {
+        y = y * x + coefficients[i];
+    }
+    return y;
+}
+
+void polynomial_transfer_vector(
+        const std::vector<double>& x, const std::vector<double>& coefficients,
+        double** out_view, int* n_out_view) {
+    std::vector<double> y(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        y[i] = polynomial_transfer(x[i], coefficients);
+    }
+    internal::copy_to_view(y, out_view, n_out_view);
 }
 
 IMPBFF_END_NAMESPACE

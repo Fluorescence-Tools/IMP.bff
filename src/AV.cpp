@@ -8,7 +8,7 @@
  */
 #include <IMP/bff/AV.h>
 #include <IMP/bff/SelectionExpression.h>
-#include <IMP/bff/AVDistance.h>
+#include <IMP/bff/AVModel.h>
 #include <IMP/bff/StructureIO.h>
 #include <IMP/bff/internal/OutputView.h>
 
