@@ -1581,3 +1581,284 @@ std::vector<PathMapTile>& PathMap::get_tiles(){
 
 
 IMPBFF_END_NAMESPACE
+
+// -------- from PathMapHeader.cpp --------
+/**
+ *  \file PathMapHeader.cpp
+ *  \brief Header class for path search class PathMap
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *
+ */
+
+IMPBFF_BEGIN_NAMESPACE
+
+
+PathMapHeader::PathMapHeader(
+        double max_path_length,
+        double grid_spacing,
+        double neighbor_radius,
+        double obstacle_threshold
+) :
+        grid_spacing_(grid_spacing),
+        max_path_length_(max_path_length),
+        neighbor_radius_(neighbor_radius),
+        obstacle_threshold_(obstacle_threshold)
+{
+
+    density_header_ = GridHeader();
+    density_header_.set_spacing(grid_spacing);
+    update_map_dimensions();
+}
+
+double PathMapHeader::get_simulation_grid_resolution() const {
+    grid_spacing_ = (double) density_header_.get_spacing();
+    return grid_spacing_;
+}
+
+void PathMapHeader::set_obstacle_threshold(
+        double obstacle_threshold){
+    obstacle_threshold_ = obstacle_threshold;
+}
+
+int PathMapHeader::get_neighbor_box_size() const{
+    return ceil(neighbor_radius_);
+}
+
+void PathMapHeader::set_neighbor_radius(double neighbor_radius){
+    neighbor_radius_ = neighbor_radius;
+}
+
+void PathMapHeader::set_origin(float x, float y, float z){
+    density_header_.set_xorigin(x);
+    density_header_.set_yorigin(y);
+    density_header_.set_zorigin(z);
+}
+
+void PathMapHeader::set_path_origin(const IMP::algebra::Vector3D &v){
+    path_origin_ = v;
+    double lr = get_grid_edge_length() / 2;
+    density_header_.set_xorigin(v[0] - lr);
+    density_header_.set_yorigin(v[1] - lr);
+    density_header_.set_zorigin(v[2] - lr);
+}
+
+void PathMapHeader::set_path_origin(const IMP::algebra::Vector3D &v,
+                                    const IMP::algebra::Vector3D &grid_origin){
+    path_origin_ = v;
+    density_header_.set_xorigin(grid_origin[0]);
+    density_header_.set_yorigin(grid_origin[1]);
+    density_header_.set_zorigin(grid_origin[2]);
+}
+
+IMP::algebra::Vector3D PathMapHeader::get_origin() const {
+    return algebra::Vector3D(
+            (double) density_header_.get_xorigin(),
+            (double) density_header_.get_yorigin(),
+            (double) density_header_.get_zorigin()
+    );
+}
+
+double PathMapHeader::get_grid_edge_length(){
+    double ll = get_max_path_length();
+    return 2. * ll;
+}
+
+void PathMapHeader::update_map_dimensions(int nx, int ny, int nz){
+    if(nx < 0 || ny <0 || nz < 0){
+        double grid_edge_length = get_grid_edge_length();
+        double spacing = get_simulation_grid_resolution();
+        int extent = std::ceil(grid_edge_length / spacing);
+        nx = ny = nz = extent;
+    }
+    density_header_.update_map_dimensions(nx, ny, nz);
+    density_header_.compute_xyz_top(true);
+}
+
+
+IMPBFF_END_NAMESPACE
+
+// -------- from PathMapTile.cpp --------
+/**
+ *  \file PathMapTile.cpp
+ *  \brief Tile used in path search by PathMap
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *
+ */
+
+IMPBFF_BEGIN_NAMESPACE
+
+
+void PathMapTile::update_edges(
+        PathMap* av,
+        std::vector<PathMapTile> &tiles,
+        const double nr,
+        const float tile_penalty_threshold
+){
+    const GridHeader* header = av->get_header();
+    const int nn = ceil(nr);
+    const double nr2 = nr * nr;
+
+    int nx = header->get_nx();
+    int ny = header->get_ny();
+    int nz = header->get_nz();
+
+    int x0 = av->get_dim_index_by_voxel(idx, 0);
+    int y0 = av->get_dim_index_by_voxel(idx, 1);
+    int z0 = av->get_dim_index_by_voxel(idx, 2);
+
+    int za = std::max(0,  z0 - nn);
+    int ze = std::min(nz, z0 + nn);
+    int ya = std::max(0,  y0 - nn);
+    int ye = std::min(ny, y0 + nn);
+    int xa = std::max(0,  x0 - nn);
+    int xe = std::min(nx, x0 + nn);
+    int nx_ny = nx * ny;
+
+    edges.clear();
+    for(int z = za; z < ze; z++) {  // z slowest
+        int oz = z * nx_ny;
+        int dz = (z - z0);
+        double dz2 = dz * dz;
+        for(int y = ya; y < ye; y++) {
+            int oy = y * nx;
+            int dy = (y - y0);
+            double dz2_dy2 = dz2 + dy * dy;
+            for(int x = xa; x < xe; x++) {
+                int ox = x;
+                int dx = (x - x0);
+                double dz2_dy2_dx2 = dz2_dy2 + dx * dx;
+                if(dz2_dy2_dx2 <= nr2){
+                    int tile_idx = oz + oy + ox;
+                    std::cout << idx << ":"<< tile_idx << ":" << idx - tile_idx << std::endl;
+                    PathMapTile* tile = &tiles[tile_idx];
+                    if(tile->penalty < tile_penalty_threshold){
+                        float edge_cost = std::sqrt(dz2_dy2_dx2);
+                        edges.emplace_back(
+                                PathMapTileEdge(tile_idx, edge_cost)
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+void PathMapTile::update_edges_2(
+    int nx, int ny, int nz,
+    std::vector<PathMapTile> &tiles,
+    const std::vector<int> &neighbor_idxs,
+    float tile_penalty_threshold
+){
+
+    int x0 = idx % nx;
+    int y0 = idx / nx % ny;
+    int z0 = idx / (nx * ny);    
+
+    edges.clear();
+    for(size_t i = 0; i < neighbor_idxs.size(); i += 5){
+        int iz = z0 + neighbor_idxs[i + 0];
+        int iy = y0 + neighbor_idxs[i + 1];
+        int ix = x0 + neighbor_idxs[i + 2];
+
+        if(iz >= nz || iz < 0) continue;
+        if(iy >= nz || iy < 0) continue;
+        if(ix >= nz || ix < 0) continue;
+
+        int tile_idx = idx + neighbor_idxs[i + 3];
+        PathMapTile* tile = &tiles[tile_idx];
+        if(tile->penalty < tile_penalty_threshold){
+            // edge_cost is a float stored in an 32bit int
+            float edge_cost = *(float*)&neighbor_idxs[i + 4];
+            edges.emplace_back(PathMapTileEdge(tile_idx, edge_cost));
+        }
+
+    }
+}
+
+std::vector<long> PathMapTile::backtrack_to_path(){
+    PathMapTile* current = this;
+    std::vector<long> path;
+    while(current != nullptr){
+        path.emplace_back(current->idx);
+        current = current->previous;
+    }
+    std::reverse(path.begin(), path.end());
+    return path;
+}
+
+float PathMapTile::get_value(
+        const int value_type,
+        std::pair<float, float> bounds,
+        const std::string &name,
+        float grid_spacing
+){
+    float value, c;
+    auto clamp = [](float v, std::pair<float, float>b)
+        {return std::min(std::max(v, b.first), b.second);};
+    switch (value_type) {
+        case PM_TILE_PENALTY:
+            value = clamp(penalty, bounds);
+            break;
+        case PM_TILE_DENSITY:
+            value = clamp(density, bounds);
+            break;
+        case PM_TILE_COST_DENSITY:
+            c = (cost >= bounds.first && cost < bounds.second) ? cost : 0.0f;
+            value = c * density;
+            value = clamp(value, bounds);
+            break;
+        case PM_TILE_PATH_LENGTH:
+            c = cost * grid_spacing;
+            value = (c >= bounds.first && c < bounds.second) ? c : 0.0f;
+            break;
+        case PM_TILE_PATH_LENGTH_DENSITY:
+            c = cost * grid_spacing;
+            value = (c >= bounds.first && c < bounds.second) ? c : 0.0f;
+            value *= density;
+            break;
+        case PM_TILE_ACCESSIBLE_DENSITY:
+            c = cost * grid_spacing;
+            value = (c >= bounds.first && c < bounds.second) ? 1.0 : 0.0f;
+            value *= density;
+            break;
+        case PM_TILE_FEATURE:
+            value = clamp(features[name], bounds);
+            break;
+        case PM_TILE_ACCESSIBLE_FEATURE:
+            c = cost * grid_spacing;
+            value = (c >= bounds.first && c < bounds.second) ? 1.0 : 0.0f;
+            value *= clamp(features[name], bounds);
+            break;
+        default: // case PM_TILE_COST:
+            value = clamp(cost, bounds);
+            break;
+    }
+    return value;
+}
+
+
+void PathMapTile::set_value(int value_type, float value, const std::string &name){
+    IMP_USAGE_CHECK(value_type != PM_TILE_COST_DENSITY, "Cannot set combined features.");
+    switch (value_type) {
+        case PM_TILE_PENALTY:
+            penalty = value;
+            break;
+        case PM_TILE_COST:
+            cost = value;
+            break;
+        case PM_TILE_FEATURE:
+            features.insert({name, value});
+            break;
+        default:
+            cost = value;
+            break;
+    }
+}
+
+
+IMPBFF_END_NAMESPACE

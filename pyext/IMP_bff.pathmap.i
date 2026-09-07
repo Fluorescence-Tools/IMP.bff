@@ -24,10 +24,7 @@ IMP_SWIG_VALUE(IMP::bff, PathMapTile, PathMapTiles)
 IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapTile)
 IMP_SWIG_VALUE(IMP::bff, PathMapTileEdge, PathMapTileEdges)
 IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, PathMapTileEdge)
-%include "IMP/bff/PathMapHeader.h"
 %include "IMP/bff/PathMap.h"
-%include "IMP/bff/PathMapTile.h"
-%include "IMP/bff/PathMapTileEdge.h"
 
 %template(VectorPathMapTile) std::vector<IMP::bff::PathMapTile>;
 %template(VectorPathMapTileEdge) std::vector<IMP::bff::PathMapTileEdge>;

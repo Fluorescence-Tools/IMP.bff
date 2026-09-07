@@ -10,7 +10,6 @@
 
 #include <IMP/bff/AV.h>
 #include <IMP/bff/PathMap.h>
-#include <IMP/bff/PathMapHeader.h>
 #include <IMP/bff/StripMask.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/json.h>

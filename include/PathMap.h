@@ -1,3 +1,6 @@
+#ifndef IMPBFF_PATHMAP_H
+#define IMPBFF_PATHMAP_H
+
 /**
  *  \file IMP/bff/PathMap.h
  *  \brief Class to search path on grids
@@ -6,32 +9,503 @@
  *  Copyright 2007-2023 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_PATHMAP_H
-#define IMPBFF_PATHMAP_H
 
+// -------- from PathMapHeader.h --------
+/**
+ *  (formerly IMP/bff/PathMapHeader.h, now a section of this file)
+ *  \brief Header class for path search class PathMap
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *
+ */
 #include <IMP/bff/bff_config.h>
+
+#include <IMP/bff/Base.h>
+
+#include <cmath> /* ceil */
+
+#include <IMP/Particle.h>
+#include <IMP/algebra/Vector3D.h>
+#include <IMP/atom/Atom.h>
+#include <IMP/atom/Hierarchy.h>
+#include <IMP/atom/Selection.h>
+
+#include <cereal/access.hpp>
+#include <IMP/bff/DensityGrid.h>
+
+#include <IMP/bff/internal/json.h>
+#include <IMP/bff/AV.h>
+
+#include <algorithm>
+
+IMPBFF_BEGIN_NAMESPACE
+
+
+class PathMap;
+
+class IMPBFFEXPORT PathMapHeader {
+
+friend class IMP::bff::PathMap;
+friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(grid_spacing_, max_path_length_, neighbor_radius_,
+           obstacle_threshold_, density_header_, path_origin_);
+    }
+
+private:
+
+    // mutable: get_simulation_grid_resolution() is a const getter that
+    // refreshes this cache from density_header_ before returning it.
+    mutable double grid_spacing_;
+    double max_path_length_;
+    double neighbor_radius_;
+    double obstacle_threshold_;
+
+    //! The grid this header describes.
+    /*! Was an `IMP::em::DensityHeader`. The half-dozen fields that were ever
+        read of it -- extent, spacing, origin -- are what `GridHeader` holds,
+        and none of them is about electron microscopy. */
+    GridHeader density_header_;
+
+protected:
+
+    IMP::algebra::Vector3D path_origin_;
+
+public:
+
+    ~PathMapHeader() = default;
+
+    /*!
+     *
+     * @param max_path_length maximum length of path (defines also size of grid)
+     * @param grid_spacing spacing between grid tiles
+     * @param neighbor_radius defines size of box around tile where other
+     * voxels are considered a neighbor
+     * @param obstacle_threshold voxels with density larger than this
+     * threshold value are considered an obstacle.
+     */
+    PathMapHeader(
+            double max_path_length = 10.0,
+            double grid_spacing = 1.0,
+            double neighbor_radius = 2,
+            double obstacle_threshold = std::numeric_limits<double>::epsilon()
+    );
+
+    //! Update the dimensions of the AV to be (nnx,nny,nnz)
+    //! The origin of the map does not change. If not values
+    //! are provided used linker length & radius to update.
+    /**
+        \param[in] nnx the new number of voxels on the X axis
+        \param[in] nny the new number of voxels on the Y axis
+        \param[in] nnz the new number of voxels on the Z axis
+     */
+    void update_map_dimensions(int nx=-1, int ny=-1, int nz=-1);
+
+    /**
+     * @brief Sets the origin of the path.
+     * @param v The origin vector.
+     */
+    void set_path_origin(const IMP::algebra::Vector3D &v);
+
+    /**
+     * @brief Sets the labeling-site position and the grid origin separately.
+     *
+     * The lattice (space-fixed) path of the AV anchors the grid corner on
+     * the global lattice rather than at `v - edge/2`.
+     * @param v The labeling site
+     * @param grid_origin The location of voxel (0, 0, 0)
+     */
+    void set_path_origin(const IMP::algebra::Vector3D &v,
+                         const IMP::algebra::Vector3D &grid_origin);
+
+    //! Returns position of the labeling site
+    IMP::algebra::Vector3D get_path_origin() const {
+        return path_origin_;
+    }
+
+    /**
+     * @brief Get the maximum linker/path length from origin.
+     * @return The maximum linker/path length.
+     */
+    double get_max_path_length() const {
+        return max_path_length_;
+    }
+
+    /**
+     * @brief Get the simulation grid resolution.
+     * @return The simulation grid resolution as a double.
+     */
+    double get_simulation_grid_resolution() const;
+
+    /**
+     * @brief Set the obstacle threshold.
+     * @param obstacle_threshold The obstacle threshold value
+     */
+    void set_obstacle_threshold(double obstacle_threshold);
+
+    /**
+     * @brief Get the obstacle threshold.
+     * @return The obstacle threshold value
+     */
+    double get_obstacle_threshold() const{
+        return obstacle_threshold_;
+    }
+
+    /**
+     * @brief Set the neighbor radius.
+     * @param neighbor_radius The neighbor radius value
+     */
+    void set_neighbor_radius(double neighbor_radius);
+
+    /**
+     * @brief Get the neighbor radius.
+     * @return The neighbor radius as a double.
+     */
+    double get_neighbor_radius() const{
+        return neighbor_radius_;
+    }
+
+    /**
+     * @brief Get the size of the neighbor box.
+     * @return The size of the neighbor box
+     */
+    int get_neighbor_box_size() const;
+
+    //! Returns a read-only pointer to the header of the map
+    const IMP::bff::GridHeader *get_density_header() const {
+        return &density_header_; }
+
+    //! Returns a pointer to the header of the map in a writable version
+    IMP::bff::GridHeader *get_density_header_writable() {
+        return &density_header_; }
+
+    //! Get origin on the PathMap (the corner of the grid)
+    IMP::algebra::Vector3D get_origin() const ;
+
+    /**
+     * @brief Get the edge length of the grid.
+     * @return The edge length of the grid as a double.
+     */
+    double get_grid_edge_length();
+
+    //! Set origin on the PathMap (the corner of the grid)
+    void set_origin(float x, float y, float z);
+
+
+    IMP_SHOWABLE_INLINE(PathMapHeader,
+                        out << "PathMapHeader(grid_spacing=" << grid_spacing_
+                            << ", max_path_length=" << max_path_length_ << ")");
+};
+
+IMP_VALUES(PathMapHeader, PathMapHeaders);
+
+// PathMapHeader is a value, not an IMP::Object -- it derives from nothing and
+// is copied by value everywhere. IMP_OBJECTS declared its plural as a vector
+// of ref-counted pointers, which was never right and collided the moment the
+// class was declared to SWIG as the value it is.
+
+IMPBFF_END_NAMESPACE
+
+
+ //IMPBFF_PATHMAPHEADER_H
+
+// -------- from PathMapTileEdge.h --------
+/**
+ *  (formerly IMP/bff/PathMapTileEdge.h, now a section of this file)
+ *  \brief Tile edges used in path search by PathMap
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *
+ */
+
+
+#include <vector>
+
+
+
+IMPBFF_BEGIN_NAMESPACE
+
+class PathMap;
+class PathMapTile;
+
+
+class PathMapTileEdge{
+
+friend class PathMapTile;
+friend class PathMap;
+friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(tile_idx, length);
+    }
+
+
+protected:
+
+    int tile_idx; /// The tile the edge is pointing to
+    float length; /// the path length / cost of going to the tile
+
+public:
+
+    /// Length of an edge (usually cartesian distance between tiles)
+    float get_length() const{
+        return length;
+    }
+
+    /*!
+     *
+     * @param edge_target
+     * @param edge_cost
+     */
+    PathMapTileEdge(
+            int edge_target = -1,
+            float edge_cost = std::numeric_limits<float>::max()
+    ) :
+            tile_idx(edge_target), length(edge_cost){}
+
+    IMP_SHOWABLE_INLINE(PathMapTileEdge,
+                        out << "PathMapTileEdge(tile=" << tile_idx
+                            << ", length=" << length << ")");
+};
+
+IMP_VALUES(PathMapTileEdge, PathMapTileEdges);
+
+
+IMPBFF_END_NAMESPACE
+
+ //IMPBFF_PATHMAPTILEEDGE_H
+
+// -------- from PathMapTile.h --------
+/**
+ *  (formerly IMP/bff/PathMapTile.h, now a section of this file)
+ *  \brief Tile used in path search by PathMap
+ *
+ * \authors Thomas-Otavio Peulen
+ *  Copyright 2007-2022 IMP Inventors. All rights reserved.
+ *
+ */
+
+
+#include <cmath>  /* std::sqrt */
+#include <utility> /* std::pair */
+
+
+#include <cereal/types/map.hpp>
+#include <cereal/types/string.hpp>
+#include <cereal/types/vector.hpp>
+
+IMPBFF_BEGIN_NAMESPACE
+
+const bool  TILE_VISITED_DEFAULT    = false;
+const float TILE_PENALTY_DEFAULT    = 100000.0f;
+const float TILE_COST_DEFAULT       = 100000.0f;
+const float TILE_EDGE_COST_DEFAULT  = 100000.0f;
+
+const float TILE_PENALTY_THRESHOLD  = 100000.0f;
+const float TILE_OBSTACLE_THRESHOLD = 0.000001f;
+const float TILE_OBSTACLE_PENALTY   = 100000.0f;
+
+
+/// Value types that can be read from a PathMapTile
+typedef enum{
+    PM_TILE_PENALTY,             /// Write path penalty
+    PM_TILE_COST,                /// Write cost
+    PM_TILE_DENSITY,             /// Density of tile
+    PM_TILE_COST_DENSITY,        /// Threshold path length and write tile weights
+    PM_TILE_PATH_LENGTH,         /// Write path length
+    PM_TILE_PATH_LENGTH_DENSITY, /// Threshold path length and write tile weights
+    PM_TILE_FEATURE,             /// Threshold path length and write tile weights
+    PM_TILE_ACCESSIBLE_DENSITY,  /// Density that is accessible (Path length in bounds)
+    PM_TILE_ACCESSIBLE_FEATURE   /// Feature that is accessible (Path length in bounds)
+} PathMapTileOutputs;
+
+
+class PathMap;
+
+class IMPBFFEXPORT PathMapTile{
+
+friend class PathMap;
+friend class cereal::access;
+
+    /* `previous` is deliberately not archived: it points at another tile
+       inside the same map and is transient path-search state, rebuilt by
+       find_path_dijkstra()/find_path_astar(). Archiving a bare intra-container
+       pointer would deep-copy the chain and hand each tile its own duplicate. */
+    template<class Archive> void save(Archive &ar) const {
+        ar(idx, penalty, cost, features, edges, density);
+    }
+
+    template<class Archive> void load(Archive &ar) {
+        ar(idx, penalty, cost, features, edges, density);
+        previous = nullptr;
+    }
+
+private:
+
+    //! Compute edges of tiles.
+    /*! Fill the edges tiles that correspond to voxels
+     * in an AccessibleVolume.
+     *
+     * A edge is a neighboring tile. The neighborhood is
+     * defined by a 3D box around a Tile. A tile that has
+     * a visit penalty that exceeds a threshold value is
+     * not added to the neighbor / edge list.
+     *
+     * @param av AccessibleVolume
+     * @param tiles List of tiles with empty edges
+     * @param neighbor_radius neighboring tiles closer than neighbor_radius
+     * are connected by edges.
+     * @param tile_penalty_threshold Tiles with a visit penalty
+     * larger than this threshold are not added to the edge list
+     */
+    void update_edges(
+            IMP::bff::PathMap* av,
+            std::vector<PathMapTile> &tiles,
+            double neighbor_radius,
+            float tile_penalty_threshold = TILE_PENALTY_THRESHOLD
+    );
+
+    /**
+      * @brief Updates the edges of the tile.
+      * @param nx The x-coordinate of the tile.
+      * @param ny The y-coordinate of the tile.
+      * @param nz The z-coordinate of the tile.
+      * @param tiles The vector of PathMapTile objects.
+      * @param neighbor_idxs The vector of neighbor indices.
+      * @param tile_penalty_threshold The tile penalty threshold.
+      */
+    void update_edges_2(
+            int nx, int ny, int nz,
+            std::vector<PathMapTile>& tiles,
+            const std::vector<int> &neighbor_idxs,
+            float tile_penalty_threshold =TILE_PENALTY_THRESHOLD
+    );
+
+
+protected:
+
+    long idx;                  // tile index: corresponds to voxel index
+
+    // Variable for path search
+    float penalty;                  // penalty for visiting tile in a path search
+    float cost;                     // total cost for visiting tile in a path search (integrated cost)
+    PathMapTile* previous; // tile previously visited in path search
+
+    // Additional tile feature (e.g. av density)
+    std::map<std::string, float> features;
+
+    // Edges leaving tile and going to neighboring tiles
+    std::vector<PathMapTileEdge> edges;
+
+public:
+
+    /// AV density
+    float density;
+
+    //! Construct an accessible volume tile
+    /*!
+     * An accessible volume (AV) tile relates to a voxel in
+     * an AV. A set of interconnected tiles (neighboring tiles)
+     * is used to compute an optimal path from the labeling site
+     * to all other positions the the AV. A path is a sequence of
+     * tiles. The cost of a path the the sum of all costs (associated
+     * to tiles and edges connecting tiles). Visiting a tile in
+     * a path adds to the cost of a path. The visiting penalty is
+     * defined when constructing a tile.
+     *
+     * @param index Identifier of the tile (corresponds to index of voxel)
+     * @param visit_penalty Penalty for visiting (used for implementing
+     * obstacles)
+     * @param tile_density Additional information of tile (can be used to
+     * implement weighted AVs)
+     */
+    explicit PathMapTile(
+            long index=-1,
+            float visit_penalty = 0.0,
+            float tile_density = 1.0
+    ) :
+            idx(index),
+            penalty(visit_penalty),
+            cost(std::numeric_limits<float>::max()),
+            previous(nullptr),
+            density(tile_density)
+    {}
+
+
+    /**
+     * @brief Computes the path from a tile to the origin.
+     * @return A vector of long integers representing the path.
+     */
+    std::vector<long> backtrack_to_path();
+
+   /**
+    * @brief Get the value of a tile.
+    *
+    * A tile in an accessible volume contains information on the penalty for visiting a tile,
+    * the cost of a path from the origin of a path search to the tile, the density of the tile,
+    * and other user-defined information.
+    *
+    * When getting information from a tile, the returned values can be cropped to a range.
+    *
+    * @param value_type Specifies the type of the returned information (see: PathMapTileOutputs).
+    * Depending on the value type, the output can be the penalty for visiting the tile,
+    * the total cost of a path to the tile, or the density of the tile.
+    * Additionally, user-defined content can be accessed.
+    * @param bounds Bound for cropping the output values.
+    * @param feature_name Name of a feature (when accessing additional information).
+    * @param grid_spacing Spacing between the tiles (important to specify when accessing path length).
+    * @return Value of the tile for the specified parameters.
+    */
+    float get_value(
+            int value_type,
+            std::pair<float, float> bounds = std::pair<float, float>(
+                            {std::numeric_limits<float>::min(),
+                             std::numeric_limits<float>::max()}),
+            const std::string &feature_name="",
+            float grid_spacing = 1.0
+    );
+
+    //! Set the value of a tile
+    /*!
+     * Sets the value of a tile.
+     * @param value_type Type of the value
+     * @param value value that will be written
+     * @param name name of the value (only used for user-defined tile features)
+     */
+    void set_value(int value_type, float value, const std::string &name="");
+
+
+    IMP_SHOWABLE_INLINE(PathMapTile,
+                        out << "PathMapTile(idx=" << idx << ", penalty=" << penalty
+                            << ", cost=" << cost << ", density=" << density << ")");
+};
+
+IMP_VALUES(PathMapTile, PathMapTiles);
+
+
+IMPBFF_END_NAMESPACE
+
+ //IMPBFF_PATHMAPTILE_H
+
+// -------- from PathMap.h --------
 
 #include <stdlib.h>     /* malloc, free, rand */
 #include <limits>
 #include <cstdint>
 
 #include <cmath>
-#include <algorithm>
 #include <unordered_set>
 #include <queue>
-#include <vector>
 #include <utility>  /* std::pair */
 #include <Eigen/Dense>
 
 #include <IMP/Object.h>
-#include <IMP/Particle.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/bff/DensityGrid.h>
 
 
-#include <IMP/bff/PathMapHeader.h>
-#include <IMP/bff/PathMapTile.h>
-#include <IMP/bff/PathMapTileEdge.h>
 
 namespace IMP { namespace em { class DensityMap; } }
 
@@ -841,4 +1315,6 @@ void write_map_feature(
 
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_PATHMAP_H
+ //IMPBFF_PATHMAP_H
+
+#endif  // IMPBFF_PATHMAP_H

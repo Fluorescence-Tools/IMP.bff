@@ -179,6 +179,19 @@ def merge(target, sources, dry_run, explicit_order=False):
         b = _read(s)
         if is_header:
             b = _strip_guard(b)
+        if s == target:
+            # The target's own leading doc block describes the whole file now,
+            # so it goes to the top, ahead of every section.
+            m = re.match(r"\s*(/\*\*.*?\*/\n)", b, re.S)
+            if m:
+                parts.insert(1, "\n" + m.group(1))
+                b = b[m.end():]
+        else:
+            # A `\file X.h` tag in a merged section would name a file that no
+            # longer exists; say what it was instead, so Doxygen stays quiet
+            # and a reader still learns where the section came from.
+            b = re.sub(r"(\*\s+)\\file (IMP/bff/[\w/]+\.h)",
+                       r"\1(formerly \2, now a section of this file)", b)
         parts.append("\n// %s from %s %s\n%s" % ("-" * 8, os.path.basename(s), "-" * 8, b.rstrip() + "\n"))
     new = "".join(parts) + ("\n" + tail if tail else "")
     new = _dedupe_includes(new, merged_names | merged_mods | {tname})
@@ -201,7 +214,7 @@ def merge(target, sources, dry_run, explicit_order=False):
                     txt = re.sub(r'(%include\s+"IMP/bff/)' + re.escape(old) + r'(")', r'\g<1>' + tmod + r'\g<2>', txt)
                 if txt != orig:
                     txt = _dedupe_includes(txt, set())
-                    txt = _dedupe_swig_includes(txt)
+                    txt = _dedupe_swig_includes(txt, os.path.relpath(p, ROOT))
                     rewrites.append((p, txt))
 
     # Files.cmake
@@ -236,16 +249,32 @@ def merge(target, sources, dry_run, explicit_order=False):
     print("  done")
 
 
-def _dedupe_swig_includes(text):
-    seen = set()
+def _dedupe_swig_includes(text, where=""):
+    """Keep the first `%include` of a path; drop the rest -- and say so.
+
+    SWIG wraps in file order and a header can only be wrapped where every
+    type it names is already known. When a merge folds `%include`s that sat
+    at different positions into one, keeping the *first* is right only if
+    nothing between the old positions needed the later ones first. The tool
+    cannot know; it reports the collapsed positions so the merge commit
+    decides where the one survivor belongs.
+    """
+    seen = {}
     out = []
-    for line in text.split("\n"):
+    for n, line in enumerate(text.split("\n"), 1):
         m = _SWIG_INCLUDE.match(line)
         if m:
-            if m.group(2) in seen:
+            path = m.group(2)
+            if path in seen:
+                seen[path].append(n)
                 continue
-            seen.add(m.group(2))
+            seen[path] = [n]
         out.append(line)
+    for path, lines in seen.items():
+        if len(lines) > 1 and max(lines) - min(lines) > 1:
+            print("  NOTE %s: %%include \"%s\" collapsed from lines %s to line %d -- "
+                  "check nothing in between needed the later ones first"
+                  % (where, path, lines, lines[0]))
     return "\n".join(out)
 
 
