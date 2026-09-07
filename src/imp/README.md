@@ -28,6 +28,7 @@ tree, so a public subdirectory is not an option -- and are named in
 | `ProbeDynamics.h` | `ProbeDynamics.cpp` | `IMP::atom::Simulator` (Langevin / Brownian) for an attached probe |
 | `FPSProject.h`, `FPSExport.h` | `FPSProject.cpp`, `FPSExport.cpp` | the fps.json project and its exports, which drive `Docking.h` |
 | `ProbeAttachment.h` | `ProbeAttachment.cpp` | attaching a probe hierarchy to a protein hierarchy: site resolution, backbone frame, placement, alignment (all over `IMP::atom::Hierarchy`) |
+| `EmBridge.h` | `EmBridge.cpp` | the lattice copied into an `IMP::em::DensityMap` (`create_density_map`), the module's one remaining word of `IMP::em`; the core writes MRC itself |
 | `HierarchyBridge.h` | `HierarchyBridge.cpp` | the `IMP::atom::Hierarchy` / `IMP::Particle` overloads of core functions -- a `ProteinFrame` from a hierarchy, a PDB into a Model, a selection expression on a hierarchy, the strip mask, coordinates written back, Olga's radii per particle, a `PathMap`'s spheres from particles |
 
 The SWIG topic files that wrap these -- `IMP_bff.av.i`, `avmeandistance.i`,

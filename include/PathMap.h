@@ -497,7 +497,6 @@ IMPBFF_END_NAMESPACE
 
 
 
-namespace IMP { namespace em { class DensityMap; } }
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -1234,15 +1233,6 @@ public:
     @param kt The kernel type.
     @param resolution The resolution of the PathMap.
     */
-    //! A copy of this grid as an `IMP::em::DensityMap`.
-    /*! `PathMap` used to *be* one, and callers passed it straight to
-        `IMP.em.write_map` and friends. It is its own lattice now
-        (`DensityGrid`), so that door is explicit: a new map with the same
-        extent, spacing, origin and voxel values, owned by the caller. This is
-        IMP integration and moves to the connection layer with
-        #write_map_feature; the type is forward-declared so that this header
-        still pulls in nothing from `IMP.em`. */
-    IMP::em::DensityMap* create_density_map() const;
 
     //! Take the obstacles from IMP particles.
     /*! Where the obstacle spheres come from at every sample.

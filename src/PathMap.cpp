@@ -10,12 +10,6 @@
 
 // Only `write_map_feature` needs these, and only until it moves to the
 // connection layer; `PathMap` itself no longer knows what an EM map is.
-#include <IMP/em/DensityHeader.h>
-#include <IMP/em/DensityMap.h>
-#include <IMP/em/MRCReaderWriter.h>
-#include <IMP/em/XplorReaderWriter.h>
-#include <IMP/em/EMReaderWriter.h>
-#include <IMP/em/SpiderReaderWriter.h>
 #include <algorithm>
 #include <sstream>
 #include <fstream>
@@ -1422,36 +1416,6 @@ void PathMap::get_xyz_density(double** output, int* n_output1, int* n_output2){
     *output = t;
 }
 
-namespace {
-
-//! IMP's header for this grid: the seven fields the map writers read.
-IMP::em::DensityHeader em_header_of(const GridHeader &gh) {
-    IMP::em::DensityHeader eh;
-    eh.update_map_dimensions(gh.get_nx(), gh.get_ny(), gh.get_nz());
-    eh.Objectpixelsize_ = gh.get_spacing();
-    eh.set_xorigin(gh.get_xorigin());
-    eh.set_yorigin(gh.get_yorigin());
-    eh.set_zorigin(gh.get_zorigin());
-    eh.set_resolution(gh.get_resolution());
-    eh.compute_xyz_top(true);
-    return eh;
-}
-
-}  // namespace
-
-IMP::em::DensityMap* PathMap::create_density_map() const {
-    const GridHeader *gh = get_header();
-    IMP_NEW(IMP::em::DensityMap, dm, ());
-    // set_void_map allocates and zeroes; the spacing and origin go on after,
-    // in the order IMP's own readers use, so the tops come out consistent.
-    dm->set_void_map(gh->get_nx(), gh->get_ny(), gh->get_nz());
-    dm->update_voxel_size(gh->get_spacing());
-    dm->set_origin(gh->get_xorigin(), gh->get_yorigin(), gh->get_zorigin());
-    dm->get_header_writable()->set_resolution(gh->get_resolution());
-    std::copy(data_.begin(), data_.end(), dm->get_data());
-    return dm.release();
-}
-
 void write_map_feature(
     PathMap *d,
     std::string name,
@@ -1460,33 +1424,18 @@ void write_map_feature(
     const std::string &feature_name
 ) {
     IMP_USAGE_CHECK(name.rfind('.') != std::string::npos, "No suffix in file name: " << name);
-    std::string suf = name.substr(name.rfind('.'));
-    Pointer<IMP::em::MapReaderWriter> rw;
-    if (suf == ".mrc" || suf == ".mrcs" || suf == ".map") {
-        rw = new IMP::em::MRCReaderWriter();
-    } else if (suf == ".em") {
-        rw = new IMP::em::EMReaderWriter();
-    } else if (suf == ".vol") {
-        rw = new IMP::em::SpiderMapReaderWriter();
-    } else if (suf == ".xplor") {
-        rw = new IMP::em::XplorReaderWriter();
-    } else {
-        IMP_THROW("Unable to determine type for file " << name << " with suffix " << suf, IOException);
+    const std::string suf = name.substr(name.rfind('.'));
+    if (suf != ".mrc" && suf != ".mrcs" && suf != ".map") {
+        // The lattice writes MRC itself (write_mrc). The other formats
+        // IMP::em knows -- .em, .vol (Spider), .xplor -- are reached from an
+        // IMP build through create_density_map() and IMP::em::write_map.
+        IMP_THROW("write_map_feature writes MRC (.mrc, .mrcs, .map); for '" << suf
+                  << "' use create_density_map() with IMP.em.write_map",
+                  ValueException);
     }
-    rw->set_was_used(true);
     d->set_was_used(true);
-    std::vector<float> f_data;
-    f_data = d->get_tile_values(value_type, bounds, feature_name);
-
-    // The lattice is this module's own (`GridHeader`); IMP's map writers want
-    // IMP's header, so one is filled in here. This is the last thing in the
-    // path-map family that still speaks `IMP.em`, and it is a leaf: it writes
-    // a file and returns. It moves to the connection layer with the rest of
-    // the IMP-facing surface -- the point of the change underneath it was to
-    // get `PathMap` itself off `SampledDensityMap`, not to reimplement four
-    // volume formats today.
-    const IMP::em::DensityHeader eh = em_header_of(*d->get_header());
-    rw->write(name.c_str(), f_data.data(), eh);
+    const std::vector<float> f_data = d->get_tile_values(value_type, bounds, feature_name);
+    write_mrc(name, *d->get_header(), f_data.data(), f_data.size());
 }
 
 std::vector<float> PathMap::get_tile_values(

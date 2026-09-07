@@ -355,6 +355,9 @@ class IMPBFFEXPORT DensityGrid : public IMP::Object {
         }
     }
 
+    //! This grid's data as an MRC map (write_mrc()).
+    void write_mrc(const std::string& path) const;
+
     IMP_OBJECT_METHODS(DensityGrid);
 
  private:
@@ -396,6 +399,24 @@ class IMPBFFEXPORT DensityGrid : public IMP::Object {
         *imaxz = upper_shift(c[2], kdist, oz, sp, nz);
     }
 };
+
+// -------- the MRC writer --------
+//! Write a lattice's values as an MRC2014 map.
+/*! A 1024-byte MRC2014 header and the values as 32-bit floats, x fastest
+    (columns = x, rows = y, sections = z, so `mapc/mapr/maps` = 1/2/3). The
+    header says what the map is: mode 2, the grid and cell sizes with the
+    cell lengths `n * spacing` and 90-degree angles, zero starts with the
+    origin in the ORIGIN fields (Angstrom), `ispg` 1 (a volume), NVERSION
+    20140, the density minimum, maximum, mean and RMS computed from the
+    values, the "MAP " tag, a machine stamp naming this machine's byte order
+    (the bytes are written in host order), and one label. `mrcfile`,
+    ChimeraX and IMP::em read it. The previous writer copied what IMP::em's
+    writer produced for this module's maps -- NaN statistics, `ispg` set to
+    the bit pattern of 1.0f, cell lengths that ignored the spacing -- and
+    that was IMP's, not correct; this one is correct (owner, 2026-09-07).
+    \param[in] values `n` values, `n` = nx * ny * nz, x fastest */
+IMPBFFEXPORT void write_mrc(const std::string& path, const GridHeader& header,
+                            const float* values, std::size_t n);
 
 IMPBFF_END_NAMESPACE
 

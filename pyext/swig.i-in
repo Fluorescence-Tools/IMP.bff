@@ -856,6 +856,9 @@ IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
 
 IMP_SWIG_VALUE(IMP::bff, GridSphere, GridSpheres);
 IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
+// The free write_mrc takes a float buffer; Python writes a grid with
+// DensityGrid.write_mrc(path) and a path map's feature with write_map_feature.
+%ignore IMP::bff::write_mrc;
 %include "IMP/bff/DensityGrid.h"
 
 %include "IMP_bff.pathmap.i"

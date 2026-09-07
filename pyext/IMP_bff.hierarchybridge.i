@@ -14,3 +14,12 @@
         IMP::bff::set_path_map_particles($self, ps);
     }
 }
+
+// The lattice as an IMP::em::DensityMap: the layer's door, and the old
+// PathMap method spelling kept for Python.
+%include "IMP/bff/EmBridge.h"
+%extend IMP::bff::PathMap {
+    IMP::em::DensityMap* create_density_map() const {
+        return IMP::bff::create_density_map($self);
+    }
+}
