@@ -364,6 +364,43 @@
     }
 }
 
+// A `std::vector<double>` returned by value comes back as a 1-D float64
+// ndarray that *owns the vector* -- the vector is moved onto the heap and a
+// capsule holding it is the array's base, so nothing is copied and nothing
+// is boxed. Without this IMP's kernel typemap turns it into a tuple of Python
+// floats: one allocation per element, and every consumer starts with
+// `np.asarray`. Ninety-one public functions return this type (PRD-138); one
+// typemap retires the copy for all of them without touching a signature.
+%{
+static void imp_bff_delete_vector_double(PyObject* capsule) {
+    delete static_cast<std::vector<double>*>(
+            PyCapsule_GetPointer(capsule, "imp_bff.vector<double>"));
+}
+static PyObject* imp_bff_adopt_vector_double(std::vector<double>* v) {
+    npy_intp n = (npy_intp) v->size();
+    PyObject* arr = PyArray_SimpleNewFromData(1, &n, NPY_DOUBLE,
+                                              n > 0 ? (void*) v->data() : NULL);
+    if (arr == NULL) { delete v; return NULL; }
+    PyObject* cap = PyCapsule_New(v, "imp_bff.vector<double>",
+                                  imp_bff_delete_vector_double);
+    if (cap == NULL) { Py_DECREF(arr); delete v; return NULL; }
+    if (PyArray_SetBaseObject((PyArrayObject*) arr, cap) < 0) {
+        Py_DECREF(arr); Py_DECREF(cap); return NULL;
+    }
+    return arr;
+}
+%}
+%typemap(out, fragment="NumPy_Macros") std::vector<double> {
+    $result = imp_bff_adopt_vector_double(new std::vector<double>(std::move($1)));
+    if ($result == NULL) SWIG_fail;
+}
+// Returned by const reference it is someone else's buffer, so this one copies
+// -- still into an ndarray, not a tuple.
+%typemap(out, fragment="NumPy_Macros") const std::vector<double>& {
+    $result = imp_bff_adopt_vector_double(new std::vector<double>(*$1));
+    if ($result == NULL) SWIG_fail;
+}
+
 // The int sibling: an occupancy/field grid `std::vector<int>`. Anything
 // array-like is converted through `PyArray_FromAny` to a flat C-contiguous
 // int32 copy, so a uint8 mask, a float grid, or an F-contiguous float32

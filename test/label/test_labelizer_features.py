@@ -255,7 +255,7 @@ def test_a_table_is_either_implemented_or_refused_never_guessed(table, helical):
         # (`{}`) and exists only so the reference's loader does not fail; the
         # exclusion score is hard-coded 0.001/0.999 -- see
         # `test_the_exclusion_term_uses_a_thousandfold_penalty_not_a_zero`.
-        assert not bff.ll_load_table(table).bins
+        assert len(bff.ll_load_table(table).bins) == 0  # an ndarray now, not a tuple
         assert {round(v, 6) for v in scored} <= {0.001, 0.999}
         return
 
