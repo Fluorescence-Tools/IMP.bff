@@ -190,7 +190,7 @@ def merge(target, sources, dry_run, explicit_order=False):
             # A `\file X.h` tag in a merged section would name a file that no
             # longer exists; say what it was instead, so Doxygen stays quiet
             # and a reader still learns where the section came from.
-            b = re.sub(r"(\*\s+)\\file (IMP/bff/[\w/]+\.h)",
+            b = re.sub(r"(\*\s+)\\file ((?:IMP/bff/)?[\w/]+\.(?:h|cpp))",
                        r"\1(formerly \2, now a section of this file)", b)
         parts.append("\n// %s from %s %s\n%s" % ("-" * 8, os.path.basename(s), "-" * 8, b.rstrip() + "\n"))
     new = "".join(parts) + ("\n" + tail if tail else "")

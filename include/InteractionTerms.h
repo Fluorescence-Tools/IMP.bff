@@ -37,7 +37,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/ProbeLibrary.h>
-#include <IMP/bff/PETQuenching.h>
+#include <IMP/bff/Quenching.h>
 
 #include <IMP/Object.h>
 #include <IMP/bff/Base.h>

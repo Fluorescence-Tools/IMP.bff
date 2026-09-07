@@ -41,7 +41,7 @@
 #include <IMP/bff/ProbeDiffusion.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/LifetimeSpectrum.h>
-#include <IMP/bff/PETQuenching.h>
+#include <IMP/bff/Quenching.h>
 
 #include <IMP/bff/Base.h>
 

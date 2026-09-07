@@ -14,7 +14,7 @@
  *
  * `SequenceAlignment.h` carries the fluorescent-protein detection and the
  * pLDDT segmentation, beside the Smith-Waterman they are built on;
- * `PETQuenching.h` has carried the quencher and its parameters since an
+ * `Quenching.h` has carried the quencher and its parameters since an
  * earlier batch.
  *
  * **One backbone frame** serves both halves of the package: `backbone_rotation`

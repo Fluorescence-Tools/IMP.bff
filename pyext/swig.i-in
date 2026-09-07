@@ -887,11 +887,10 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %attribute(IMP::bff::ProteinFrame, int, n_atoms, get_n_atoms);
 %template(ProteinFrameList) std::vector<IMP::bff::ProteinFrame>;
 
-/* PET: which moieties quench a dye, and how hard. */
-%include "IMP_bff.petquenching.i"
-
-/* The fields a quenched dye lives in: stickiness, PET rate, FRET rate, and the
-   solvent-accessible surface that says how buried a quencher is. */
+/* Collisional quenching, short of the model: which moieties quench a dye and
+   how hard, the fields a quenched dye lives in (stickiness, PET rate, FRET
+   rate), the photon race along a walk, and the solvent-accessible surface that
+   says how buried a quencher is. */
 %include "IMP_bff.quenching.i"
 
 /* fps.json: the definition, the reader, the writer. */
@@ -919,7 +918,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %apply(unsigned char** ARGOUTVIEWM_ARRAY1, int* DIM1) {(unsigned char** out_emitted, int* n_emitted)};
 %apply(double* INPLACE_ARRAY1, int DIM1) {(double* decay, int n_decay)};
 %include "IMP/bff/PhotonSimulation.h"
-%include "IMP/bff/QuenchedDecay.h"
 
 
 

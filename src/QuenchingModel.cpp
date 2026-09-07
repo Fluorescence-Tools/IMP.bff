@@ -11,9 +11,7 @@
 #include <IMP/bff/ProbeSampling.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/PhotonSimulation.h>
-#include <IMP/bff/QuenchedDecay.h>
-#include <IMP/bff/QuenchingGrid.h>
-#include <IMP/bff/QuenchingMap.h>
+#include <IMP/bff/Quenching.h>
 #include <IMP/bff/FRETRateTrace.h>
 #include <IMP/bff/internal/OutputView.h>
 
