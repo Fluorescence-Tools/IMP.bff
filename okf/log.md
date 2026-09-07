@@ -10882,3 +10882,8 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   tests against the IMP road on every shipped .pdb/.mol2, 240 selection records, AV oracle 18/18. Suite 1783/0.
   No core source names a particle/hierarchy/model. Left: PathMap's IMP::em interop (core MRC writer), and the
   IMP::Object/algebra/Pointer vocabulary in nine headers (Base.h shims, step 6).
+- **PRD-137 em cut** (imp-bff-ce): `DensityGrid::write_mrc` writes a correct MRC2014 map (real statistics,
+  n*spacing cells, NVERSION, machine stamp; validated by `mrcfile` and read back by IMP.em); `write_map_feature`
+  uses it; `create_density_map` is the layer's `EmBridge.h` (Python spelling kept). Owner ruling: correct MRC,
+  no byte-copy of IMP's (which wrote NaN statistics and, for features, cell lengths ignoring the spacing).
+  The core names IMP::em nowhere. Suite 1786/0 (one failure = another agent's in-progress ptolib test).
