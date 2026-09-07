@@ -10858,3 +10858,8 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   FPSExport/Project, ProbeDynamics, ProbeNetworkRestraint (IMP-side, PRD-137), and `AVModel` → `States` +
   `AVModel` after the owner objected that an AV is one representation ("there are also rotamers"). Pre-existing,
   uncollected failure noted on the board: `medium_test_av.py` / `States.pRDA()`. Build lock released.
+- **PRD-138 interface pass done** (imp-bff-ce): 19 `compute_/build_/find_` free functions → `get_`/`create_`
+  (hard rename, no aliases; 79 files; three genuine IMP.bff references in `../chisurf` patched, uncommitted);
+  raw-pointer audit: no change (IMP-object returns in layer code, one hidden buffer, one non-owning association);
+  one `%typemap(out) std::vector<double>` → ndarray owning the moved vector, 91 functions, zero copy. Suite 1780/0.
+  Downstream to expect: bff vector returns are ndarrays, not tuples (`assert not x` → `len(x) == 0`).
