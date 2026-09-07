@@ -19,8 +19,8 @@ tree, so a public subdirectory is not an option -- and are named in
 
 | header | source | is |
 |---|---|---|
-| `AV.h` | `AV.cpp` | the accessible-volume **decorator** on a labelled particle, and the sampler over `IMP::Model` |
-| `AVOccupancyMap.h` | `AVOccupancyMap.cpp` | an `IMP::Object` cache of AV occupancy keyed by particle |
+| `AV.h` | `AV.cpp` | the accessible-volume **decorator** on a labelled particle, the sampler over `IMP::Model`, and the doors that read a PDB with `IMP::atom` (`resample_av`, `get_av_from_structure`, `get_avs_for_structure`); the array door `get_av` is core |
+| `AVOccupancyMap.h` | `AVOccupancyMap.cpp` | the particle view of the core's `OccupancyGrid` raster, and the registry that shares one raster between volumes over the same particles |
 | `ProbeNetworkRestraint.h` | `ProbeNetworkRestraint.cpp` | an `IMP::Restraint` over a network of AVs |
 | `AVMeanDistanceRestraint.h` | `AVMeanDistanceRestraint.cpp` | an `IMP::Restraint` on the mean AV distance |
 | `Potentials.h` | `Potentials.cpp` | `IMP::Restraint` factories for coarse-grained potentials, and the restraint factories over a typed dye system (formerly the IMP half of `Scoring.h`) |
@@ -33,7 +33,6 @@ The SWIG topic files that wrap these -- `IMP_bff.av.i`, `avmeandistance.i`,
 part), `fpsexport.i`, `fpsproject.i` -- are the layer's Python surface and
 stay in `pyext/` at the positions SWIG's ordering needs.
 
-Core files that still include a layer header are the remaining cross-section,
-listed in PRD-137 step 5 (`include/PathMap.h`, `internal/AVLatticeState.h`,
-`internal/FPSReaderWriter.h`, `src/AVBuilder.cpp`, `src/Labelizer.cpp`,
-`src/Linker.cpp`). A core file must not gain a new one.
+No core file includes a layer header any more (PRD-137 step 5); a core file
+must not gain one. `include/PathMap.h` names the decorator as a friend by
+forward declaration only.

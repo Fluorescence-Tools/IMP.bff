@@ -50,6 +50,9 @@
 
 #include <IMP/bff/Base.h>
 
+#include <cereal/access.hpp>
+#include <cereal/types/string.hpp>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -332,6 +335,50 @@ IMPBFFEXPORT std::string read_evaluators_json(const std::string& path);
 //! Replace the `Evaluators` key of an fps.json file, keeping the rest.
 IMPBFFEXPORT void write_evaluators_json(const std::string& path,
                                         const std::string& evaluators_json);
+
+// -------- from AV.h (the pair-distance measurement record) --------
+// An fps.json distance entry as a C++ value: what a pair of positions was
+// measured to be, with its type and its error. It was declared beside the
+// AV decorator (the connection layer) but nothing in it is IMP's; the
+// fps.json reader in internal/FPSReaderWriter.h fills it, and the network
+// restraint reads it. Here since PRD-137 step 5.
+//! One fps.json distance measurement between two labelled positions.
+class IMPBFFEXPORT AVPairDistanceMeasurement{
+
+    friend class cereal::access;
+
+    template<class Archive> void serialize(Archive &ar) {
+        ar(distance, error_neg, error_pos, forster_radius,
+           distance_type, position_1, position_2);
+    }
+
+public:
+
+    double distance = -1;
+    double error_neg = -1;
+    double error_pos = -1;
+    double forster_radius = 52.0;
+    int distance_type = IMP::bff::PROBE_PAIR_DISTANCE_MEAN;
+    std::string position_1;
+    std::string position_2;
+
+    /// Get a JSON string
+    std::string get_json();
+
+    /**
+    @brief Score a model distance against the experimental distance.
+    @param model The model distance to be scored.
+    @return The score of the model distance.
+    */
+    double score_model(double model) const;
+
+
+    IMP_SHOWABLE_INLINE(AVPairDistanceMeasurement,
+                        out << "AVPairDistanceMeasurement(" << position_1 << "-" << position_2
+                            << ", distance=" << distance << ", R0=" << forster_radius << ")");
+};
+
+IMP_VALUES(AVPairDistanceMeasurement, AVPairDistanceMeasurements);
 
 IMPBFF_END_NAMESPACE
 

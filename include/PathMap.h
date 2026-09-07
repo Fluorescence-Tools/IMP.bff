@@ -1307,6 +1307,77 @@ void write_map_feature(
         const std::string &feature_name = ""
 );
 
+// -------- the lattice window and the attachment-atom subtraction --------
+// Both were statics of the AV decorator's source; the Model-free get_av in
+// AVBuilder.cpp needs them too, so they live with the lattice.
+
+//! The cubic window of the global lattice a search from `source` can reach.
+/*! `n` is odd and centred on the voxel nearest the source; `k0` is the
+    window's lattice origin in global voxel indices. */
+IMPBFFEXPORT void lattice_window(const IMP::algebra::Vector3D &source, double ll,
+                                 double h, int k0[3], int &n);
+
+/*!
+    FPS drops the attachment atom before it rasterises anything
+    (`av_routines.cpp:50`: `if (i == atom_i) continue;`), and it has to be
+    dropped: an atom cannot block the linker that is tied to it. `IMP.bff` kept
+    it, so the source sat inside its own inflated sphere and the volume came
+    back empty unless the clearance was raised past it -- a knob standing in
+    for a missing rule. Measured on FPS's own reference cloud, dropping it
+    takes `p_1bp` from 0.88 to **0.99** of FPS's volume (PRD-121).
+
+    It is done here rather than through the radii override because the
+    occupancy raster is **shared** between every volume of the same (spacing,
+    extra-radius) class (PRD-105), and each volume drops a *different* atom.
+    Giving each its own raster would cost that sharing. The raster stores a
+    per-voxel atom **count**, so one atom's contribution subtracts exactly: a
+    voxel only this atom covered falls to zero and opens, a voxel any other
+    atom covers stays blocked.
+
+    \param[in,out] counts the window, as read from the occupancy
+    \param[in] k0,n the window's lattice origin and edge
+    \param[in] spacing the lattice spacing
+    \param[in] c the attachment atom's position
+    \param[in] radius its own radius plus this occupancy's extra radius --
+               the same `r + extra_radius` the raster used, so the voxel set
+               subtracted is exactly the one that was added
+*/
+template <typename T>
+inline void drop_source_obstruction(T *counts, const IMP::algebra::Vector3D &origin,
+                             int n, double spacing,
+                             const IMP::algebra::Vector3D &c,
+                             double source_radius, double extra) {
+    /* Nothing to subtract when the attachment atom contributed nothing. A
+       radius of zero means it is not an obstacle -- the array door builds its
+       obstacles from a caller's list and the source is not in it -- and
+       subtracting a sphere that was never added would open voxels no rule
+       opened. */
+    if (source_radius <= 0.0) return;
+    const double radius = source_radius + extra;
+    if (radius <= 0.0) return;
+    const double r2 = radius * radius;
+    const long nxy = (long) n * n;
+    for (int iz = 0; iz < n; iz++) {
+        const double dz = origin[2] + iz * spacing - c[2];
+        const double dz2 = dz * dz;
+        if (dz2 >= r2) continue;
+        for (int iy = 0; iy < n; iy++) {
+            const double dy = origin[1] + iy * spacing - c[1];
+            const double dyz2 = dz2 + dy * dy;
+            if (dyz2 >= r2) continue;
+            const long row = (long) iz * nxy + (long) iy * n;
+            for (int ix = 0; ix < n; ix++) {
+                const double dx = origin[0] + ix * spacing - c[0];
+                // strict `<`, as AVOccupancyMap::add_sphere tests
+                if (dyz2 + dx * dx < r2) {
+                    T &v = counts[row + ix];
+                    if (v > 0) v -= 1;
+                }
+            }
+        }
+    }
+}
+
 IMPBFF_END_NAMESPACE
 
 

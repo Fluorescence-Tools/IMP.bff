@@ -34,3 +34,8 @@ IMP_SWIG_VALUE(IMP::bff, ACV, ACVs);
 %attribute(IMP::bff::AccessibleVolume, int, ng, get_ng);
 %attribute(IMP::bff::AccessibleVolume, double, grid_step, get_grid_step);
 %attribute(IMP::bff::ACV, double, trapped_fraction, get_trapped_fraction);
+
+// The keyed set of volumes the structure doors return (get_avs_for_structure,
+// the network restraint's used volumes); instantiated here, where the value
+// type is known, so every later consumer sees a typed map.
+%template(MapStringAccessibleVolume) std::map<std::string, IMP::bff::AccessibleVolume>;

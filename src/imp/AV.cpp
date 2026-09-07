@@ -7,6 +7,12 @@
  *
  */
 #include <IMP/bff/AV.h>
+#include <IMP/bff/AVBuilder.h>
+#include <IMP/bff/StripMask.h>
+#include <IMP/atom/Atom.h>
+#include <IMP/atom/Selection.h>
+#include <IMP/atom/pdb.h>
+#include <IMP/bff/internal/json.h>
 #include <IMP/bff/SelectionExpression.h>
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/StructureIO.h>
@@ -131,16 +137,6 @@ namespace {
 // The lattice window of an AV: cubic, centred on the lattice-quantised source,
 // large enough that every voxel centre within the linker length of the source
 // lies inside. With q = round(s/h) and |s/h - q| <= 1/2, |k - q| <= ll/h + 1/2.
-void lattice_window(const IMP::algebra::Vector3D &source, double ll, double h,
-                    int k0[3], int &n){
-    int half = (int) std::floor(ll / h + 0.5);
-    n = 2 * half + 1;
-    for(int d = 0; d < 3; d++){
-        int q = (int) std::floor(source[d] / h + 0.5);
-        k0[d] = q - half;
-    }
-}
-
 }
 
 IMP::bff::PathMap* AV::get_map() const{
@@ -550,67 +546,6 @@ std::vector<double> obstacle_radii(IMP::atom::Hierarchy root,
 namespace {
 
 //! Subtract the attachment atom's own obstruction from an occupancy window.
-/*!
-    FPS drops the attachment atom before it rasterises anything
-    (`av_routines.cpp:50`: `if (i == atom_i) continue;`), and it has to be
-    dropped: an atom cannot block the linker that is tied to it. `IMP.bff` kept
-    it, so the source sat inside its own inflated sphere and the volume came
-    back empty unless the clearance was raised past it -- a knob standing in
-    for a missing rule. Measured on FPS's own reference cloud, dropping it
-    takes `p_1bp` from 0.88 to **0.99** of FPS's volume (PRD-121).
-
-    It is done here rather than through the radii override because the
-    occupancy raster is **shared** between every volume of the same (spacing,
-    extra-radius) class (PRD-105), and each volume drops a *different* atom.
-    Giving each its own raster would cost that sharing. The raster stores a
-    per-voxel atom **count**, so one atom's contribution subtracts exactly: a
-    voxel only this atom covered falls to zero and opens, a voxel any other
-    atom covers stays blocked.
-
-    \param[in,out] counts the window, as read from the occupancy
-    \param[in] k0,n the window's lattice origin and edge
-    \param[in] spacing the lattice spacing
-    \param[in] c the attachment atom's position
-    \param[in] radius its own radius plus this occupancy's extra radius --
-               the same `r + extra_radius` the raster used, so the voxel set
-               subtracted is exactly the one that was added
-*/
-template <typename T>
-void drop_source_obstruction(T *counts, const IMP::algebra::Vector3D &origin,
-                             int n, double spacing,
-                             const IMP::algebra::Vector3D &c,
-                             double source_radius, double extra) {
-    /* Nothing to subtract when the attachment atom contributed nothing. A
-       radius of zero means it is not an obstacle -- the array door builds its
-       obstacles from a caller's list and the source is not in it -- and
-       subtracting a sphere that was never added would open voxels no rule
-       opened. */
-    if (source_radius <= 0.0) return;
-    const double radius = source_radius + extra;
-    if (radius <= 0.0) return;
-    const double r2 = radius * radius;
-    const long nxy = (long) n * n;
-    for (int iz = 0; iz < n; iz++) {
-        const double dz = origin[2] + iz * spacing - c[2];
-        const double dz2 = dz * dz;
-        if (dz2 >= r2) continue;
-        for (int iy = 0; iy < n; iy++) {
-            const double dy = origin[1] + iy * spacing - c[1];
-            const double dyz2 = dz2 + dy * dy;
-            if (dyz2 >= r2) continue;
-            const long row = (long) iz * nxy + (long) iy * n;
-            for (int ix = 0; ix < n; ix++) {
-                const double dx = origin[0] + ix * spacing - c[0];
-                // strict `<`, as AVOccupancyMap::add_sphere tests
-                if (dyz2 + dx * dx < r2) {
-                    T &v = counts[row + ix];
-                    if (v > 0) v -= 1;
-                }
-            }
-        }
-    }
-}
-
 }  // namespace
 
 void AV::init_path_map(){
@@ -1870,5 +1805,270 @@ std::vector<double> av_distance_distribution(
     return hist;
 }
 
+
+// -------- the doors over an IMP::Model (formerly AVBuilder.cpp) --------
+// resample_av decorates a fresh particle and reads the map; the two
+// get_av_from_structure overloads and get_avs_for_structure read a PDB with
+// IMP::atom::read_pdb and go through it. The array door, get_av, is core
+// (AVBuilder.cpp) and builds no Model.
+
+AccessibleVolume resample_av(IMP::Model* model, IMP::Particle* source_particle,
+                             double linker_length, double linker_width,
+                             double r1, double r2, double r3, double disc_step,
+                             double allowed_sphere_radius,
+                             double contact_volume_thickness,
+                             double contact_volume_trapped_fraction,
+                             int search_stencil) {
+    IMP::Particle* av_particle = new IMP::Particle(model);
+    AV::do_setup_particle(model, av_particle->get_index(),
+                          source_particle->get_index(), linker_length,
+                          IMP::algebra::Vector3D(r1, r2, r3), linker_width,
+                          allowed_sphere_radius, contact_volume_thickness,
+                          contact_volume_trapped_fraction, disc_step);
+    AV av(model, av_particle->get_index());
+    if (search_stencil) av.set_search_stencil(search_stencil);
+    av.resample();
+
+    PathMap* path_map = av.get_map();
+    const GridHeader* header = path_map->get_header();
+    const int nx = header->get_nx(), ny = header->get_ny(), nz = header->get_nz();
+
+    // IMP orders the flat tile values `i = x + nx*y + nx*ny*z` -- *x* fastest --
+    // so reading them into an (nx, ny, nz) array in the coordinate axis order
+    // means walking z slowest. A straight copy would transpose the volume, and
+    // a mirrored volume keeps the right voxel count, bounding box and total
+    // volume, so only a voxel-by-voxel comparison against the point cloud
+    // catches it.
+    const std::vector<float> values = path_map->get_tile_values(
+            PM_TILE_ACCESSIBLE_DENSITY,
+            std::pair<double, double>(
+                    0.0,
+                    path_map->get_path_map_header().get_max_path_length()));
+    std::vector<double> density(static_cast<std::size_t>(nx) * ny * nz, 0.0);
+    for (int iz = 0; iz < nz; ++iz) {
+        for (int iy = 0; iy < ny; ++iy) {
+            for (int ix = 0; ix < nx; ++ix) {
+                const std::size_t flat =
+                        static_cast<std::size_t>(iz) * ny * nx + iy * nx + ix;
+                const std::size_t out =
+                        (static_cast<std::size_t>(ix) * ny + iy) * nz + iz;
+                if (flat < values.size()) density[out] = values[flat];
+            }
+        }
+    }
+
+    // The point cloud comes from IMP directly rather than from the grid above.
+    // That is deliberate: it makes the cloud and the density **independent**
+    // readings of the same volume, so a test comparing them catches a
+    // mis-indexed grid. Deriving the points from the density would make any
+    // indexing error self-consistent, and invisible.
+    const std::vector<IMP::algebra::Vector4D> xyz_density =
+            path_map->get_xyz_density();
+    std::vector<double> points;
+    points.reserve(xyz_density.size() * 4);
+    for (std::size_t i = 0; i < xyz_density.size(); ++i) {
+        for (int c = 0; c < 4; ++c) points.push_back(xyz_density[i][c]);
+    }
+
+    std::vector<double> origin(3);
+    origin[0] = header->get_xorigin();
+    origin[1] = header->get_yorigin();
+    origin[2] = header->get_zorigin();
+
+    const IMP::algebra::Vector3D source = av.get_source_coordinates();
+    std::vector<double> attachment(3);
+    attachment[0] = source[0];
+    attachment[1] = source[1];
+    attachment[2] = source[2];
+
+    return AccessibleVolume(points, density, origin, header->get_spacing(), "",
+                            attachment);
+}
+
+AccessibleVolume get_av_from_structure(
+        const std::string& pdb_path, const std::string& chain, int resseq,
+        const std::string& atom_name, double linker_length, double linker_width,
+        double r1, double r2, double r3, double disc_step,
+        const std::string& strip_mask, double allowed_sphere_radius,
+        double contact_volume_thickness,
+        double contact_volume_trapped_fraction) {
+    const std::string stripped =
+            stripped_pdb_for(pdb_path, chain, resseq, atom_name, strip_mask);
+
+    IMP_NEW(IMP::Model, model, ());
+    IMP::atom::Hierarchy hierarchy = IMP::atom::read_pdb(
+            stripped, model, new IMP::atom::NonWaterPDBSelector());
+
+    IMP::atom::Selection sel(hierarchy);
+    if (!chain.empty()) sel.set_chain_id(chain);
+    sel.set_residue_index(resseq);
+    sel.set_atom_type(IMP::atom::AtomType(atom_name));
+    const IMP::ParticlesTemp particles = sel.get_selected_particles();
+    if (particles.empty()) {
+        IMP_THROW("Attachment site " << chain << ":" << resseq << ":"
+                                     << atom_name << " not found",
+                  ValueException);
+    }
+
+    // Source clearance. The path search inflates obstacles by half the linker
+    // width, so the free sphere around the attachment atom has to clear that
+    // inflation (plus a grid step of slack) or the source tile is walled in and
+    // the volume comes back empty. The strip above already removes the
+    // attachment residue's side chain, which is what lets FPS-calibrated small
+    // clearances (`allowed_sphere_radius: 1`) compute a real cloud.
+    // Negative is passed straight through: AV derives it, and the rule lives
+    // there alone now. It used to be duplicated here, which is how the two
+    // doors onto one volume came to disagree.
+    const double clearance = allowed_sphere_radius;
+
+    AccessibleVolume av = resample_av(
+            model, particles[0], linker_length, linker_width, r1, r2, r3,
+            disc_step, clearance, contact_volume_thickness,
+            contact_volume_trapped_fraction, 0);
+
+    // This door's convention: the point weights are forced to one. The array
+    // door keeps whatever IMP reported.
+    //
+    // Except when the weights are the answer. An accessible *contact* volume
+    // is nothing but a weighting -- its cloud is the plain one, voxel for
+    // voxel -- so flattening it here would hand back a volume that had
+    // silently ignored `contact_volume_thickness`, which is the defect this
+    // was fixed for (PRD-121 G9). Same for chain weighting, if this door ever
+    // gains it.
+    const bool weighted = contact_volume_thickness > 0.0 &&
+                          contact_volume_trapped_fraction >= 0.0 &&
+                          contact_volume_trapped_fraction < 1.0;
+    if (!weighted) {
+        double* points = NULL;
+        int n_points = 0;
+        av.get_points(&points, &n_points);
+        std::vector<double> uniform(points, points + n_points);
+        for (int i = 3; i < n_points; i += 4) uniform[i] = 1.0;
+        std::free(points);
+        av.set_points(uniform);
+    }
+    return av;
+}
+
+namespace {
+//! One fps.json `Positions` entry, as the typed call.
+/*! Reads the fields the fps dictionary states for a position. A declared
+    `simulation_grid_resolution` that disagrees with `disc_step` raises: that
+    field is *written into* the particle from `disc_step`, so a caller who
+    declares it and omits the step would silently build at the 1.5 A default. */
+AccessibleVolume av_from_position(const std::string& pdb_path,
+                                  const nlohmann::json& position,
+                                  double disc_step) {
+    const std::string chain = position.value("chain_identifier", "");
+    const int resseq = position.value("residue_seq_number", 0);
+    const std::string atom = position.value("atom_name", "CA");
+    const double linker_length = position.value("linker_length", 20.0);
+    const double linker_width = position.value("linker_width", 1.0);
+    const double r1 = position.value("radius1", 3.5);
+    const double r2 = position.value("radius2", 0.0);
+    const double r3 = position.value("radius3", 0.0);
+    const double declared =
+            position.contains("simulation_grid_resolution")
+                    ? position.at("simulation_grid_resolution").get<double>()
+                    : 0.0;
+    double step = 1.5;
+    if (disc_step > 0.0) {
+        step = disc_step;
+        if (position.contains("simulation_grid_resolution") &&
+            std::abs(declared - step) > 1e-9) {
+            IMP_THROW("simulation_grid_resolution=" << declared
+                              << " in the position disagrees with disc_step="
+                              << step,
+                      ValueException);
+        }
+    } else if (position.contains("simulation_grid_resolution")) {
+        IMP_THROW("the position declares simulation_grid_resolution="
+                          << declared
+                          << " but no disc_step was given, so the AV would be "
+                             "built at disc_step=1.5",
+                  ValueException);
+    }
+    return get_av_from_structure(
+            pdb_path, chain, resseq, atom, linker_length, linker_width, r1, r2,
+            r3, step, position.value("strip_mask", ""),
+            position.contains("allowed_sphere_radius")
+                    ? position.at("allowed_sphere_radius").get<double>()
+                    : -1.0,
+            position.value("contact_volume_thickness", 0.0),
+            position.value("contact_volume_trapped_fraction", -1.0));
+}
+}
+
+AccessibleVolume get_av_from_structure(
+        const std::string& pdb_path, const std::string& position_json,
+        double disc_step) {
+    return av_from_position(pdb_path, nlohmann::json::parse(position_json),
+                            disc_step);
+}
+
+std::map<std::string, AccessibleVolume> get_avs_for_structure(
+        const std::string& positions_json, const std::string& pdb_path_or_json,
+        double disc_step) {
+    const nlohmann::json positions = nlohmann::json::parse(positions_json);
+    std::vector<std::string> paths;
+    if (!pdb_path_or_json.empty() && pdb_path_or_json[0] == '[') {
+        const nlohmann::json arr = nlohmann::json::parse(pdb_path_or_json);
+        for (const auto& p : arr) paths.push_back(p.get<std::string>());
+    } else {
+        // One path, or a comma-separated list (the historical spelling).
+        std::string cur;
+        for (std::size_t i = 0; i <= pdb_path_or_json.size(); ++i) {
+            const char c = i < pdb_path_or_json.size() ? pdb_path_or_json[i] : ',';
+            if (c == ',') {
+                if (!cur.empty()) paths.push_back(cur);
+                cur.clear();
+            } else {
+                cur += c;
+            }
+        }
+    }
+
+    std::map<std::string, AccessibleVolume> out;
+    if (!positions.is_object()) {
+        IMP_THROW("positions must be a JSON object keyed by name",
+                  ValueException);
+    }
+    for (auto it = positions.begin(); it != positions.end(); ++it) {
+        const std::string& name = it.key();
+        const nlohmann::json& p = it.value();
+        const int body = p.value("body_id", 0);
+        const std::string path =
+                paths.empty() ? "" : paths[static_cast<std::size_t>(body) <
+                                                   paths.size()
+                                           ? body
+                                           : 0];
+        const double step = disc_step > 0.0
+                ? disc_step
+                : p.contains("simulation_grid_resolution")
+                          ? p.at("simulation_grid_resolution").get<double>()
+                          : 1.5;
+        double* found = NULL;
+        int n_found = 0;
+        get_attachment_point(path, p.value("chain_identifier", ""),
+                              static_cast<int>(p.value("residue_seq_number", 0)),
+                              p.value("atom_name", "CA"), &found, &n_found);
+        if (found == NULL || n_found == 0) {
+            out[name] = AccessibleVolume(std::vector<double>(),
+                                         std::vector<double>(),
+                                         std::vector<double>(), step, name);
+        } else {
+            std::free(found);
+            AccessibleVolume av = av_from_position(path, p, step);
+            av.set_position_name(name);
+            std::map<std::string, std::string> params;
+            for (auto it2 = p.begin(); it2 != p.end(); ++it2) {
+                params[it2.key()] = it2.value().dump();
+            }
+            av.set_params(params);
+            out[name] = av;
+        }
+    }
+    return out;
+}
 
 IMPBFF_END_NAMESPACE

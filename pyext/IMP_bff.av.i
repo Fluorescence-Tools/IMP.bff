@@ -1,5 +1,4 @@
-%ignore IMP::bff::AVOccupancyMap::read_window;
-%ignore IMP::bff::AVOccupancyMap::read_window_strided;
+// The particle view of OccupancyGrid (occupancy.i, wrapped just before).
 %ignore IMP::bff::AVOccupancyMap::set_coordinate_snapshot;
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyMap, AVOccupancyMaps);
 IMP_SWIG_OBJECT(IMP::bff, AVOccupancyRegistry, AVOccupancyRegistries);
@@ -20,11 +19,7 @@ IMP_SWIG_OBJECT_SERIALIZE(IMP::bff, ProbeNetworkRestraint, ProbeNetworkRestraint
 // `get_position_particle_index()` -- are wrapped instead; the map is for C++.
 %ignore IMP::bff::ProbeNetworkRestraint::get_point_positions;
 
-%template(MapStringAVPairDistanceMeasurement) std::map<std::string, IMP::bff::AVPairDistanceMeasurement>;
 %attribute_py(IMP::bff::AV, IMP::bff::PathMap, map, get_map);
-
-IMP_SWIG_VALUE(IMP::bff, AVPairDistanceMeasurement, AVPairDistanceMeasurements)
-IMP_SWIG_VALUE_SERIALIZE_IMPL(IMP::bff, AVPairDistanceMeasurement)
 
 %include "IMP/bff/AVOccupancyMap.h"
 %include "IMP/bff/AV.h"

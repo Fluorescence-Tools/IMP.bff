@@ -1861,4 +1861,17 @@ void PathMapTile::set_value(int value_type, float value, const std::string &name
 }
 
 
+// The lattice window of an AV: cubic, centred on the lattice-quantised source,
+// large enough that every voxel centre within the linker length of the source
+// lies inside. With q = round(s/h) and |s/h - q| <= 1/2, |k - q| <= ll/h + 1/2.
+void lattice_window(const IMP::algebra::Vector3D &source, double ll, double h,
+                    int k0[3], int &n){
+    int half = (int) std::floor(ll / h + 0.5);
+    n = 2 * half + 1;
+    for(int d = 0; d < 3; d++){
+        int q = (int) std::floor(source[d] / h + 0.5);
+        k0[d] = q - half;
+    }
+}
+
 IMPBFF_END_NAMESPACE

@@ -869,7 +869,25 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
    olga_vdw_radii_csv(). */
 %include "IMP/bff/VdwRadii.h"
 
+/* A label's states, whatever represents them: the cloud, the kernels it is
+   measured with, the distances between two. Every representation and every
+   consumer of a `States` comes after this -- including the decorator's
+   Model doors (av.i), which return an AccessibleVolume. */
+%include "IMP_bff.states.i"
+
+/* The accessible volume: one representation of `States`, and the label
+   distributions that produce one on demand. */
+%include "IMP_bff.avmodel.i"
+
+/* The inflated-sphere raster, core; the layer's particle view derives from it. */
+%include "IMP_bff.occupancy.i"
+
+/* fps.json: the definition, the reader, the writer -- and the distance
+   measurement record, which the network restraint below takes by the map. */
+%include "IMP_bff.fps.i"
+
 %include "IMP_bff.av.i"
+
 
 /* Reading a frame out of a hierarchy without a SWIG call per atom, and the
    `ProteinFrame` value that reading is for. */
@@ -888,9 +906,6 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    rate), the photon race along a walk, and the solvent-accessible surface that
    says how buried a quencher is. */
 %include "IMP_bff.quenching.i"
-
-/* fps.json: the definition, the reader, the writer. */
-%include "IMP_bff.fps.i"
 
 /* A probe as a species -- dye, fluorescent protein or spin label: what it is,
    its spectra where it has them, the Förster radius they give, its .pto
@@ -1031,15 +1046,6 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
  * a project hands back.
  */
 %include "IMP_bff.fpsproject.i"
-
-/* A label's states, whatever represents them: the cloud, the kernels it is
-   measured with, the distances between two. Every representation and every
-   consumer of a `States` comes after this. */
-%include "IMP_bff.states.i"
-
-/* The accessible volume: one representation of `States`, and the label
-   distributions that produce one on demand. */
-%include "IMP_bff.avmodel.i"
 
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
 %include "IMP_bff.avbuilder.i"

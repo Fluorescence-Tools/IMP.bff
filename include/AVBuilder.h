@@ -1,27 +1,26 @@
 /**
  *  \file IMP/bff/AVBuilder.h
- *  \brief Building an accessible volume: the two front doors, and the PDB read.
+ *  \brief Building an accessible volume without an IMP::Model: the array
+ *         door, the lattice search behind it, and the PDB read.
  *
- * #IMP::bff::AV is the solver and #IMP::bff::AccessibleVolume is the result;
- * this is what stands between them. There are two front doors and they differ
- * only in what identifies the label:
+ * #IMP::bff::AccessibleVolume is the result; this is the core's way to one.
+ * #IMP::bff::get_av takes **raw arrays** -- atoms with radii and an
+ * attachment coordinate; no file, no fps position, no Model -- and
+ * #IMP::bff::get_av_lattice is the search it runs: the decorator's lattice
+ * path (window, two occupancy rasters, attachment-atom subtraction, bounded
+ * search, dye-radius carve, contact weighting, read-out) as one call over
+ * spheres. The PDB reader, the van der Waals table and the attachment-point
+ * lookup are the way from a file to those arrays.
  *
- * - #IMP::bff::get_av takes **raw arrays** — atoms, radii and an attachment
- *   coordinate. No file, no fps position. It is what a restraint has.
- * - #IMP::bff::get_av_from_structure takes a **PDB and an fps position
- *   definition**, applies the FPS strip and resolves the attachment atom by
- *   `(chain, residue, atom name)`.
- *
- * Both drive the same `AV`/`PathMap` core through #IMP::bff::resample_av, which
- * is the one place the decorator is set up and the map read. Sharing it is what
- * stops the two doors from each learning the same lessons: the array door had
- * found that IMP numbers voxels with *x* fastest, so a C-order reshape into
- * `(nx, ny, nz)` returns the volume **transposed**; the structure door had not,
- * and shipped a mirrored density for as long as it existed — 71 % of its own
- * point cloud landing on an occupied voxel instead of 100 %, and the mean donor
- * lifetime on T4L A132 out by 4.9 % (PRD-113 stage 3a). The structure door had
- * found that the AV must be decorated onto its **own** particle with the source
- * passed separately, or the resampled map sits at the coordinate origin.
+ * The doors that go through an `IMP::Model` -- #IMP::bff::resample_av, which
+ * decorates a particle as an #IMP::bff::AV, and #IMP::bff::get_av_from_structure
+ * and #IMP::bff::get_avs_for_structure, which read a PDB with `IMP::atom` --
+ * are the connection layer's, in AV.h (PRD-137 step 5). Both roads compute
+ * the same volume, and test/test_density_grid.py pins that with records
+ * taken from each: the array door used to build a Model of its own to reach
+ * the decorator, and the lessons that road taught -- IMP numbers voxels with
+ * *x* fastest, so a C-order reshape into `(nx, ny, nz)` returns the volume
+ * **transposed** (PRD-113 stage 3a) -- are kept in the read-out here.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -32,12 +31,12 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
+#include <IMP/algebra/Vector3D.h>
+#include <IMP/algebra/VectorD.h>
 
 
 #include <IMP/bff/Base.h>
 
-#include <IMP/Model.h>
-#include <IMP/Particle.h>
 
 #include <map>
 #include <string>
@@ -136,37 +135,25 @@ IMPBFFEXPORT void get_attachment_point(const std::string& pdb_path,
                                         const std::string& atom_name,
                                         double** out_view, int* n_out_view);
 
-//! Decorate a fresh particle as an AV, resample it, and read the map.
-/*!
-    The AV is decorated onto its **own** particle with the source passed
-    separately. Setting it up on the source particle leaves the resampled map at
-    the coordinate origin — header origin (0, 0, 0), obstacles nowhere near the
-    search region, and most of the grid reported accessible.
 
-    \param[in] model holds the obstacle hierarchy and the attachment particle
-    \param[in] source_particle the attachment atom, a real `XYZR` in that model
-    \param[in] linker_length,linker_width,r1,r2,r3,disc_step the AV parameters
-    \param[in] allowed_sphere_radius obstacles inside this radius of the
-               attachment are ignored; without it the search starts inside the
-               attachment atom's own neighbourhood and returns an empty volume,
-               reporting nothing
-    \param[in] contact_volume_thickness,contact_volume_trapped_fraction the ACV
-               split, when one is wanted; see
-               #IMP::bff::PathMap::apply_contact_weighting for the rule
-    \param[in] search_stencil Dijkstra neighbour stencil. `0` leaves the
-               decorator's own default, which is **74** — the LabelLib reference
-               metric. `26` is the speed option: ~1.9x faster for ~20 % less
-               volume, because a {1,2,3} stencil's isopath surface is cubic
-               rather than spherical. `30` is the historical variant.
-    \return the volume, carrying its cloud, its grid and the source coordinate
-*/
-IMPBFFEXPORT AccessibleVolume resample_av(
-        IMP::Model* model, IMP::Particle* source_particle,
-        double linker_length, double linker_width, double r1, double r2,
-        double r3, double disc_step, double allowed_sphere_radius,
+//! The accessible-volume search over spheres, without an IMP::Model.
+/*! The decorator's lattice path (AV::resample_lattice_*) as one call over a
+    list of (x, y, z, radius) spheres: the window, the two occupancy rasters,
+    the attachment-atom subtraction, the bounded search, the dye-radius carve
+    and the contact weighting, then the read-out. `source_radius` is the
+    radius of the sphere at the attachment site (0 when none is there), the
+    one the raster subtracts around the source so the linker is not blocked
+    by the atom it is tied to. `search_stencil` is 74 (the reference metric)
+    or 26; `allowed_sphere_radius` < 0 derives the clearance as the decorator
+    does. get_av() is this over a caller's `(N, 4)` array. */
+IMPBFFEXPORT AccessibleVolume get_av_lattice(
+        const std::vector<IMP::algebra::Vector4D>& spheres,
+        const IMP::algebra::Vector3D& source, double source_radius,
+        double linker_length, double linker_width,
+        double r1, double r2, double r3, double grid_resolution,
+        double allowed_sphere_radius = -1.0, int search_stencil = 74,
         double contact_volume_thickness = 0.0,
-        double contact_volume_trapped_fraction = -1.0,
-        int search_stencil = 0);
+        double contact_volume_trapped_fraction = -1.0);
 
 //! An accessible volume from raw atomic coordinates.
 /*!
@@ -188,80 +175,8 @@ IMPBFFEXPORT AccessibleVolume get_av(
         double r3 = 0.0, double grid_resolution = 1.5,
         double allowed_sphere_radius = 2.1, int search_stencil = 0);
 
-//! An accessible volume from a structure and an fps position definition.
-/*!
-    The **structure** front door. It applies the FPS strip before measuring
-    anything: fps.json positions are calibrated for a structure whose attachment
-    residue does not wall in its own dye. A declared `strip_mask` outside the
-    fps dialect raises here — loudly, because the alternative is computing
-    against obstacles the document said to remove.
 
-    Source clearance scales with the linker: the path search inflates obstacles
-    by half the linker width, so the free sphere has to clear that inflation
-    plus a grid step of slack or the source tile is walled in and the volume
-    comes back empty. A position that declares `allowed_sphere_radius` keeps its
-    own value — honoured exactly, never escalated: an empty volume at the
-    declared parameters is the answer, not a signal to retry at invented ones.
 
-    \param[in] pdb_path the structure
-    \param[in] chain,resseq,atom_name the attachment site
-    \param[in] linker_length,linker_width,r1,r2,r3,disc_step the AV parameters
-    \param[in] strip_mask an fps `strip_mask`; empty means the default strip
-    \param[in] allowed_sphere_radius negative derives it from the linker width
-    \param[in] contact_volume_thickness,contact_volume_trapped_fraction the ACV
-               split, when one is wanted; see
-               #IMP::bff::PathMap::apply_contact_weighting for the rule. **This
-               door's uniform-weight convention is suspended when one is
-               asked for** -- an accessible contact volume *is* the weighting,
-               and flattening it would return a volume that ignored the
-               request.
-    \throw ValueException when the attachment site is not in the structure
-*/
-IMPBFFEXPORT AccessibleVolume get_av_from_structure(
-        const std::string& pdb_path, const std::string& chain, int resseq,
-        const std::string& atom_name, double linker_length, double linker_width,
-        double r1, double r2, double r3, double disc_step = 1.5,
-        const std::string& strip_mask = "",
-        double allowed_sphere_radius = -1.0,
-        double contact_volume_thickness = 0.0,
-        double contact_volume_trapped_fraction = -1.0);
-
-//! The same front door, from an fps.json `Positions` entry.
-/*!
-    A position is data, so this takes it as data (a nlohmann JSON value), not
-    as separate keywords. The entry's fields -- chain_identifier,
-    residue_seq_number, atom_name, linker_length, linker_width, radius1..
-    radius3, strip_mask, allowed_sphere_radius, contact_volume_*, and
-    simulation_grid_resolution -- are read the way the fps dictionary states
-    them, and a declared `simulation_grid_resolution` that disagrees with
-    \p disc_step raises: that field is *written into* the particle from
-    \p disc_step, so a caller who declares it and omits the step would silently
-    build at 1.5 A.
-
-    \param[in] position_json one entry of an fps.json `Positions` section,
-               serialised as JSON text
-    \param[in] disc_step the voxel spacing, A; `<= 0` derives it from the entry's
-               `simulation_grid_resolution` and then refuses a declared one that
-               disagrees
-    \throw ValueException on a disagreeing resolution or a missing attachment site
-*/
-IMPBFFEXPORT AccessibleVolume get_av_from_structure(
-        const std::string& pdb_path, const std::string& position_json,
-        double disc_step = -1.0);
-
-//! Every position of an fps.json `Positions` section, keyed by name.
-/*!
-    \p pdb_path may be one path or a JSON array of paths; a position's
-    `body_id` indexes into it, which is how a docking run gives each rigid body
-    its own structure. A position whose attachment atom is not in its structure
-    comes back as an **empty** volume rather than one computed at a guessed
-    coordinate. \p positions_json is the section serialised as JSON text.
-
-    \return `{name: AccessibleVolume}`, one per key of \p positions_json
-*/
-IMPBFFEXPORT std::map<std::string, AccessibleVolume> get_avs_for_structure(
-        const std::string& positions_json, const std::string& pdb_path,
-        double disc_step = -1.0);
 
 IMPBFF_END_NAMESPACE
 

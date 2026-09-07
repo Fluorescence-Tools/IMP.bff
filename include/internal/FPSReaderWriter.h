@@ -13,7 +13,8 @@
 
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/bff/AV.h>
+#include <IMP/bff/FPS.h>
+#include <IMP/bff/States.h>
 #include <IMP/bff/internal/json.h>
 
 #include <map>
@@ -27,7 +28,7 @@ class FPSReaderWriter{
 
 private:
 
-    // The name/type vocabulary is `probe_pair_distance_type()` in `AV.h`.
+    // The name/type vocabulary is `probe_pair_distance_type()` in `States.h`.
 
     std::string fn_json_;
     std::string score_set_;
