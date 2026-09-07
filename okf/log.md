@@ -10887,3 +10887,9 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   uses it; `create_density_map` is the layer's `EmBridge.h` (Python spelling kept). Owner ruling: correct MRC,
   no byte-copy of IMP's (which wrote NaN statistics and, for features, cell lengths ignoring the spacing).
   The core names IMP::em nowhere. Suite 1786/0 (one failure = another agent's in-progress ptolib test).
+- **PRD-137 step 6a** (imp-bff-ce): `standalone/include/` -- the IMP/ shim tree (config, Object, Pointer,
+  constants, algebra::VectorD) -- and the core compiles with no IMP on the path (expensive test). RRT's
+  Transformation3D conversions → `AlgebraBridge.h` (layer). The Labelizer has a replaceable AV door: core road
+  (own PDB reader + vdW table) vs IMP's road installed by the layer at load; radii table choice deferred to the
+  owner. Suite 1784/0. Next: 6b, the standalone CMake build of libimp_bff (Eigen, cereal, Boost headers, RMF,
+  vendored python-ihm C parser), then the standalone SWIG entry, then packaging.
