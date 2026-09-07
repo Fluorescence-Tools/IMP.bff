@@ -12,7 +12,7 @@
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/PhotonSimulation.h>
 #include <IMP/bff/Quenching.h>
-#include <IMP/bff/FRETRateTrace.h>
+#include <IMP/bff/FRET.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/bff/Base.h>

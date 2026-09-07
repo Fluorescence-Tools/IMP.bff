@@ -7,7 +7,7 @@
 
 #include <IMP/bff/InteractionTerms.h>
 
-#include <IMP/bff/FRETRateTrace.h>
+#include <IMP/bff/FRET.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/Base.h>
 

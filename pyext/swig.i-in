@@ -1063,8 +1063,11 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    reduction sums the terms, so it comes after them. */
 %include "IMP_bff.observables.i"
 
-/* FRET over every pair of two labelled ensembles, and the distances a pair of
-   labels is asked for. Both consume `States`. */
+/* FRET over every pair of two labelled ensembles, and the rate along one
+   dye's trajectory. The pair values consume `States`. */
+%include "IMP_bff.fret.i"
+
+/* The distances a pair of labels is asked for. Consumes `States`. */
 %include "IMP_bff.statesdistance.i"
 
 /* Chi-squared scoring of labelling data, with and without volumes. */

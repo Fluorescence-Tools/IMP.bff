@@ -24,8 +24,9 @@
  * through the typemaps in `IMP_bff.types.i`, which are global, so the header
  * can sit here rather than next to `PhotonSimulation.h` where it used to.
  *
- * The solvent-accessible surface (how buried a quencher is) and the FRET-rate
- * trace are wrapped alongside: both are read by the fields.
+ * The solvent-accessible surface (how buried a quencher is) is wrapped
+ * alongside: the fields read it. The FRET-rate trace, which they also read,
+ * is in IMP_bff.fret.i since PRD-138 put it in FRET.h with the pair values.
  */
 
 IMP_SWIG_VALUE(IMP::bff, Quencher, Quenchers);
@@ -54,7 +55,6 @@ IMP_SWIG_VALUE(IMP::bff, ResidueSites, ResidueSitesList);
 
 %include "IMP/bff/SolventAccessibleSurface.h"
 %include "IMP/bff/Quenching.h"
-%include "IMP/bff/FRETRateTrace.h"
 
 %template(QuencherMap) std::map<std::string, IMP::bff::Quencher>;
 %template(PETParametersMap) std::map<std::string, IMP::bff::PETParameters>;

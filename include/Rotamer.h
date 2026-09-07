@@ -377,7 +377,7 @@ IMPBFF_END_NAMESPACE
  *
  */
 #include <IMP/bff/AVModel.h>
-#include <IMP/bff/FRETPair.h>
+#include <IMP/bff/FRET.h>
 #include <IMP/bff/HierarchyFrame.h>
 
 #include <map>
