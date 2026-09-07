@@ -10863,3 +10863,12 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   raw-pointer audit: no change (IMP-object returns in layer code, one hidden buffer, one non-owning association);
   one `%typemap(out) std::vector<double>` → ndarray owning the moved vector, 91 functions, zero copy. Suite 1780/0.
   Downstream to expect: bff vector returns are ndarrays, not tuples (`assert not x` → `len(x) == 0`).
+- **PRD-137 steps 4+5 (main cut)** (imp-bff-ce): connection layer = `src/imp/` behind the flat bridge
+  `src/ImpLayer.cpp` (IMP's tooling: only `src/*.cpp`+`src/internal/*.cpp` compiled, only `include/*.h`+
+  `include/internal/*.h` linked -- a public `include/imp/` cannot exist); Scoring's five restraint factories →
+  Potentials.h; kb_kcal → Scoring.h; `get_av` Model-free via `OccupancyGrid` (core raster; `AVOccupancyMap` is
+  the layer's particle view) + `get_av_lattice` (the decorator's lattice path over spheres), 18/18 array-door
+  records byte-identical; `AVPairDistanceMeasurement` → FPS.h; the Model doors (`resample_av`,
+  `get_av_from_structure`, `get_avs_for_structure`) → AV.h. No core file includes a layer header. Suite 1780/0.
+  Shared-tree note: another agent's uncommitted ptolib vendoring does not link under the unity build
+  (PTOLIB_IMPLEMENTATION skipped by the header guard) -- built against HEAD's Pto files, restored after.
