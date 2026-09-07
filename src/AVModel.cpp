@@ -6,6 +6,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
+#include <random>
 #include <IMP/bff/AVModel.h>
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/StructureIO.h>

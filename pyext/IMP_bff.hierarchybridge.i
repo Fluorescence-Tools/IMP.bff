@@ -23,3 +23,7 @@
         return IMP::bff::create_density_map($self);
     }
 }
+
+// The rigid-body configuration <-> IMP::algebra::Transformation3D conversions
+// (formerly RRT.h); the core plans in plain numbers.
+%include "IMP/bff/AlgebraBridge.h"

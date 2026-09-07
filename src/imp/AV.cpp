@@ -7,6 +7,7 @@
  *
  */
 #include <IMP/bff/AV.h>
+#include <IMP/bff/Labelizer.h>
 #include <IMP/bff/HierarchyBridge.h>
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/StripMask.h>
@@ -2072,5 +2073,24 @@ std::map<std::string, AccessibleVolume> get_avs_for_structure(
     }
     return out;
 }
+
+// -------- the Labelizer's accessible-volume door: IMP's road, installed at load --------
+// The core builds a site's volume through its own PDB reader and radii; an
+// IMP build keeps scoring through get_av_from_structure (IMP::atom's reader,
+// IMP's radii), exactly as before the split. Installed here, once, when the
+// library is loaded.
+namespace {
+struct InstallLabelizerAvDoor {
+    InstallLabelizerAvDoor() {
+        ll_set_av_door([](const std::string& pdb_path, const std::string& chain, int resseq,
+                          const std::string& atom_name, double linker_length,
+                          double linker_width, double r1, double r2, double r3,
+                          double grid_resolution) {
+            return get_av_from_structure(pdb_path, chain, resseq, atom_name, linker_length,
+                                         linker_width, r1, r2, r3, grid_resolution);
+        });
+    }
+} install_labelizer_av_door;
+}  // namespace
 
 IMPBFF_END_NAMESPACE

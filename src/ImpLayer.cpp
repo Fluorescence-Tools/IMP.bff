@@ -18,6 +18,7 @@
  */
 
 #include "imp/AV.cpp"
+#include "imp/AlgebraBridge.cpp"
 #include "imp/AVMeanDistanceRestraint.cpp"
 #include "imp/AVOccupancyMap.cpp"
 #include "imp/Docking.cpp"

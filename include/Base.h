@@ -62,6 +62,7 @@ namespace IMP {
 class Exception : public std::runtime_error {
  public:
     explicit Exception(const char *message) : std::runtime_error(message) {}
+    explicit Exception(const std::string &message) : std::runtime_error(message) {}
 };
 
 //! A value was outside the domain the callee accepts.
@@ -123,15 +124,37 @@ class ModelException : public Exception {
     `RRTCollision`) derive from `IMP::Object` only so that Python can subclass
     them, and the standalone SWIG layer gets that from a director over
     `shared_ptr` instead. */
-#define IMP_OBJECTS(Name, PluralName)                     \
-    typedef std::vector<std::shared_ptr<Name> > PluralName; \
-    typedef std::vector<Name *> PluralName##Temp
+#include <IMP/Object.h>
+#include <IMP/Pointer.h>
 
-// IMP_DECORATORS is deliberately NOT defined here. A decorator is an IMP
-// concept -- data living on a particle in a model -- so a header that needs it
-// belongs in the connection layer, not the core. Leaving it undefined makes
-// that a compile error naming the file, rather than something that quietly
-// builds into a type nobody can use.
+//! IMP's plural typedefs for objects: owning, and non-owning (IMP's "Temp").
+#define IMP_OBJECTS(Name, PluralName)                  \
+    typedef std::vector<IMP::Pointer<Name> > PluralName; \
+    typedef std::vector<Name*> PluralName##Temp
+
+namespace IMP {
+//! A caller broke a documented precondition (IMP's UsageException).
+class UsageException : public Exception {
+ public:
+    explicit UsageException(const std::string& m) : Exception(m) {}
+};
+}
+
+//! IMP's IMP_USAGE_CHECK: a precondition, checked always here (IMP checks it at its usage level).
+#define IMP_USAGE_CHECK(expr, message)                                   \
+    do {                                                                  \
+        if (!(expr)) {                                                    \
+            std::ostringstream imp_bff_oss;                               \
+            imp_bff_oss << "Usage check failed: " << #expr << ": " << message; \
+            throw IMP::UsageException(imp_bff_oss.str());                 \
+        }                                                                 \
+    } while (false)
+
+//! IMP's IMP_WARN: to standard error, once per call.
+#define IMP_WARN(message)                                          \
+    do {                                                            \
+        std::cerr << "WARNING  " << message;                        \
+    } while (false)
 
 #endif  // IMPBFF_STANDALONE
 

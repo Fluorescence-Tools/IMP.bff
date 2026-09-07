@@ -32,6 +32,7 @@ import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _BASE_H = os.path.join(_ROOT, "include", "Base.h")
+_SHIMS = os.path.join(_ROOT, "standalone", "include")  # the standalone build's IMP/ tree
 
 _CONFIG_STUB = """\
 #ifndef IMPBFF_CONFIG_H
@@ -90,6 +91,17 @@ class TestBaseHeaderStandalone(unittest.TestCase):
         inc = os.path.join(self.tmp, "IMP", "bff")
         os.makedirs(inc)
         shutil.copy(_BASE_H, os.path.join(inc, "Base.h"))
+        # the shim tree the standalone build puts on the path: IMP/Object.h,
+        # IMP/Pointer.h, IMP/constants.h, IMP/algebra/ -- and nothing of IMP's
+        for name in os.listdir(os.path.join(_SHIMS, "IMP")):
+            if name == "bff":
+                continue  # the stub config above stands in for the shim tree's
+            src = os.path.join(_SHIMS, "IMP", name)
+            dst = os.path.join(self.tmp, "IMP", name)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            elif name.endswith(".h"):
+                shutil.copy(src, dst)
         with open(os.path.join(inc, "bff_config.h"), "w") as fh:
             fh.write(_CONFIG_STUB)
         self.src = os.path.join(self.tmp, "tu.cpp")
@@ -127,16 +139,20 @@ class TestBaseHeaderStandalone(unittest.TestCase):
         self.assertNotEqual(rc, 0)
         self.assertIn("IMP/exception.h", err)
 
-    def test_standalone_branch_includes_nothing_of_imps(self):
+    def test_standalone_branch_includes_only_the_shims(self):
         # Source-level, so it holds on a machine with no compiler too. The
-        # branch is everything from `#else` to the closing `#endif`.
+        # branch is everything from `#else` to the closing `#endif`. Every
+        # `<IMP/...>` it includes must be a file of the standalone shim tree
+        # (`standalone/include/`), never one of IMP's own headers.
         src = open(_BASE_H).read()
         m = re.search(r"#ifndef IMPBFF_STANDALONE(.*?)#else(.*?)#endif  // IMPBFF_STANDALONE",
                       src, re.S)
         self.assertIsNotNone(m, "Base.h no longer has the two-branch shape")
         imp_branch, standalone_branch = m.group(1), m.group(2)
         self.assertRegex(imp_branch, r"#include <IMP/exception\.h>")
-        self.assertNotRegex(standalone_branch, r"#include <IMP/")
+        for inc in re.findall(r"#include <(IMP/[^>]+)>", standalone_branch):
+            self.assertTrue(os.path.isfile(os.path.join(_SHIMS, inc)),
+                            "%s is not a standalone shim" % inc)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,6 @@
 #include <IMP/bff/bff_config.h>
 
 #include <IMP/Object.h>
-#include <IMP/algebra/Transformation3D.h>
 
 #include <string>
 #include <vector>
@@ -126,14 +125,6 @@ IMPBFFEXPORT RRTTree grow_rigid_body_rrt(
         const std::vector<double>& goal = std::vector<double>(),
         double goal_bias = 0.1, double goal_tolerance = 1.0,
         double rot_weight = 0.25, int seed = 0);
-
-//! A rigid-body configuration as a transformation, and back.
-/*! `(tx, ty, tz, rx, ry, rz)` with the angles in the fixed-xyz convention --
-    the six numbers #grow_rigid_body_rrt plans in. */
-IMPBFFEXPORT std::vector<double> transformation_to_configuration(
-        const IMP::algebra::Transformation3D& transformation);
-IMPBFFEXPORT IMP::algebra::Transformation3D configuration_to_transformation(
-        const std::vector<double>& configuration);
 
 IMPBFF_END_NAMESPACE
 

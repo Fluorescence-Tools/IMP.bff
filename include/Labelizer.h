@@ -54,6 +54,7 @@
 
 #include <map>
 #include <string>
+#include <functional>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -1084,6 +1085,25 @@ IMPBFFEXPORT std::string ll_read_pto_settings(const std::string& path);
 IMPBFFEXPORT std::string ll_settings_json(
         const std::vector<LlParameter>& model, const LlOptions& options,
         const LlFretOptions& fret_options, const std::string& conservation_path);
+
+// -------- the accessible-volume door the site scores use --------
+//! How a labelling site's accessible volume is built from a structure file.
+/*! The core's road reads the PDB itself (AVBuilder.h: the records, the van
+    der Waals table, the attachment atom) and runs the array door, get_av().
+    The connection layer installs IMP's road at load -- get_av_from_structure,
+    which reads through IMP::atom and uses the radii IMP assigns -- so an IMP
+    build scores exactly as it did. The two roads differ in the radii they
+    give the obstacles; which table the module should stand on is an open
+    decision (PRD-137, deferred), and until it is made the door says which
+    road is in force. */
+typedef std::function<AccessibleVolume(
+        const std::string& pdb_path, const std::string& chain, int resseq,
+        const std::string& atom_name, double linker_length, double linker_width,
+        double r1, double r2, double r3, double grid_resolution)> LlAvDoor;
+//! Replace the road (the layer does at load); an empty function restores the core's.
+IMPBFFEXPORT void ll_set_av_door(LlAvDoor door);
+//! The road in force: "core" or "imp".
+IMPBFFEXPORT std::string ll_get_av_door_name();
 
 IMPBFF_END_NAMESPACE
 

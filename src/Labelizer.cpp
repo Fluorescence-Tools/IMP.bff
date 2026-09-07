@@ -1626,6 +1626,48 @@ void ll_alpha_cone_mean_position(const LlStructure& s, int residue,
     }
 }
 
+
+// -------- the accessible-volume door --------
+namespace {
+
+AccessibleVolume core_av_door(const std::string& pdb_path, const std::string& chain,
+                              int resseq, const std::string& atom_name,
+                              double linker_length, double linker_width,
+                              double r1, double r2, double r3, double grid_resolution) {
+    double* atoms = 0; int n_atoms = 0;
+    load_structure_with_vdw(pdb_path, &atoms, &n_atoms);
+    double* src = 0; int n_src = 0;
+    get_attachment_point(pdb_path, chain, resseq, atom_name, &src, &n_src);
+    if (n_src != 3) {
+        std::free(atoms); std::free(src);
+        IMP_THROW("no attachment atom " << chain << ":" << resseq << ":" << atom_name
+                  << " in " << pdb_path, ValueException);
+    }
+    const std::vector<double> source(src, src + 3);
+    AccessibleVolume av = get_av(atoms, n_atoms / 4, 4, source, linker_length,
+                                 linker_width, r1, r2, r3, grid_resolution, -1.0, 0);
+    std::free(atoms); std::free(src);
+    return av;
+}
+
+LlAvDoor& av_door() {
+    static LlAvDoor door;
+    return door;
+}
+std::string& av_door_name() {
+    static std::string name = "core";
+    return name;
+}
+
+}  // namespace
+
+void ll_set_av_door(LlAvDoor door) {
+    av_door() = door;
+    av_door_name() = door ? "imp" : "core";
+}
+
+std::string ll_get_av_door_name() { return av_door_name(); }
+
 void ll_probe_mean_position(const LlStructure& s, const std::string& pdb_path,
                           int residue, const LlFretOptions& options,
                           double** out_view, int* n_out_view) {
@@ -1648,7 +1690,7 @@ void ll_probe_mean_position(const LlStructure& s, const std::string& pdb_path,
     // here an empty cloud says the same thing without a magic count.
     const LlResidue& r = s.residues[residue];
     const std::string atom = r.cb >= 0 ? "CB" : "CA";
-    AccessibleVolume av = get_av_from_structure(
+    AccessibleVolume av = (av_door() ? av_door() : LlAvDoor(core_av_door))(
             pdb_path, r.chain, r.seq_id, atom, options.linker_length,
             options.linker_width, options.r1, options.r2, options.r3,
             options.grid_resolution);
@@ -1696,7 +1738,7 @@ std::vector<LfSite> lf_place_sites(
             // Keep the cloud: the pair distance is a property of the two
             // distributions, not of their two mean positions.
             const std::string atom = r.cb >= 0 ? "CB" : "CA";
-            const AccessibleVolume built = get_av_from_structure(
+            const AccessibleVolume built = (av_door() ? av_door() : LlAvDoor(core_av_door))(
                     pdb_path, r.chain, r.seq_id, atom, options.linker_length,
                     options.linker_width, options.r1, options.r2, options.r3,
                     options.grid_resolution);
