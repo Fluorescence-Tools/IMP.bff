@@ -984,14 +984,21 @@ IMP_SWIG_VALUE(IMP::bff, RotamerLibrary, RotamerLibraries);
 %ignore IMP::bff::RotamerLibrary::weights;
 /* RotamerLibrary.h now carries the `.drot` reader and writer, and
    `write_drot_with_provenance` takes #MfdbTags, so the profile header has to be
-   wrapped before this one rather than where it used to sit (labelizer.i).
-   `%include` is idempotent, so the later one there is a no-op -- but the value
-   semantics must come with it. Without these, MfdbTags arrives as an opaque
+   wrapped before this one rather than in labelizer.i, where it used to sit.
+   The value semantics must come with it. Without these, MfdbTags arrives as an opaque
    SwigPyObject with no destructor and the wrapper rejects it by type. */
 IMP_SWIG_VALUE(IMP::bff, MfdbTag, MfdbTags);
 IMP_SWIG_VALUE(IMP::bff, MfdbColumn, MfdbColumns);
 IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
-%include "IMP/bff/PtoProfile.h"
+/* Pto.h is the container too, since PRD-138 folded PtoProfile.h into it. The
+   container classes are kept out of the binding for now: nothing in Python
+   reads or writes a .pto except through the typed doors (the rotamer library,
+   the probe container, the Labelizer store), and whether to publish a raw
+   reader/writer is the interface pass's decision, not a consolidation's. */
+%ignore IMP::bff::PtoObject;
+%ignore IMP::bff::PtoWriter;
+%ignore IMP::bff::PtoReader;
+%include "IMP/bff/Pto.h"
 %include "IMP/bff/RotamerLibrary.h"
 %attribute_np3(IMP::bff::RotamerLibrary, std::vector<double>, coords,
                get_coords, n_rotamers, 3, set_coords);

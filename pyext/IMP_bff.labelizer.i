@@ -25,7 +25,6 @@ IMP_SWIG_VALUE(IMP::bff, LlPairScore, LlPairScores);
 
 %include "IMP/bff/LabelizerFeatures.h"
 %include "IMP/bff/LabelizerScore.h"
-%include "IMP/bff/PtoProfile.h"
 %include "IMP/bff/LabelizerFret.h"
 %include "IMP/bff/LabelizerIO.h"
 %include "IMP/bff/ProbeContainer.h"

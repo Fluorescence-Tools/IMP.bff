@@ -31,7 +31,7 @@
 #define IMPBFF_ROTAMERLIBRARY_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/PtoProfile.h>
+#include <IMP/bff/Pto.h>
 
 #include <IMP/bff/Base.h>
 

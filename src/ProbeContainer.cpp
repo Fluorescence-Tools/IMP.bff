@@ -7,7 +7,6 @@
 #include <IMP/bff/ProbeContainer.h>
 
 #include <IMP/bff/Pto.h>
-#include <IMP/bff/PtoProfile.h>
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/internal/json.h>
 

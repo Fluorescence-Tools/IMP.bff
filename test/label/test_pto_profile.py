@@ -1,6 +1,6 @@
 """The compiled-in vocabulary against the dictionary it was copied from.
 
-`PtoProfile.h` carries the MMFDB controlled vocabularies as C++ constants
+`Pto.h` (its profile section) carries the MMFDB controlled vocabularies as C++ constants
 rather than parsing `mmfdb_flr_ext.dic` at run time, because that dictionary
 lives in a sibling repository which is not a dependency of this one and writing
 a file must not require a checkout to be present. That is the same choice
@@ -123,7 +123,7 @@ def test_the_recorded_dictionary_version_matches_the_file():
     match = re.search(r"_dictionary\.version\s+(\S+)", text)
     assert match, "the dictionary declares no version"
     assert bff.MFDB_DICTIONARY_VERSION == match.group(1), (
-        "PtoProfile.h says dictionary %s, mmfdb_flr_ext.dic says %s -- "
+        "Pto.h says dictionary %s, mmfdb_flr_ext.dic says %s -- "
         "re-check the vocabularies and bump the constant"
         % (bff.MFDB_DICTIONARY_VERSION, match.group(1))
     )
