@@ -15,13 +15,6 @@
 IMP_SWIG_VALUE_INSTANCE(IMP::bff, ResidueContactType, ResidueContactType,
                         ResidueContactTypes);
 
-// The parameter tables, before the scores that read them.
-IMP_SWIG_VALUE(IMP::bff, PotentialTable, PotentialTableList);
-%include "IMP/bff/PotentialTables.h"
-%attribute_np(IMP::bff::PotentialTable, std::vector<double>, table,
-              get_values);
-%template(PotentialTableVector) std::vector<IMP::bff::PotentialTable>;
-
 IMP_SWIG_OBJECT(IMP::bff, MiyazawaJerniganPairScore,
                 MiyazawaJerniganPairScores);
 IMP_SWIG_OBJECT(IMP::bff, UNRESCentroidPairScore, UNRESCentroidPairScores);

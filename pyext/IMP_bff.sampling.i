@@ -1,11 +1,8 @@
 /*
  * Sampling an explicit probe. What each piece is:
  *
- *  - **The dynamics** are `ProbeDynamics.h`: `make_langevin_simulator` builds
- *    the integrator (`md` gets a Langevin thermostat, `bd` gets Einstein's
- *    coefficient for each particle's own radius), `AttachedProbeDynamics` sets up
- *    the dye's force field, its held anchor and the wall of protein spheres
- *    around the site, and `LangevinTrajectory` is what a run returns.
+ *  - **The dynamics** (`ProbeDynamics.h`, over IMP particles) are the
+ *    connection layer's, in probedynamics.i.
  *  - **The linker sampler** is `Linker.h`, beside the torsion geometry it
  *    applies. It has no IMP model at
  *    all: routing each trial through `XYZ` decorators would use the
@@ -25,19 +22,11 @@
  * and writing it is `write_rmf`'s job, not the engine's.
  */
 
-IMP_SWIG_VALUE(IMP::bff, LangevinTrajectory, LangevinTrajectories);
+// A Python caller subclasses `RRTCollision` to say what clashes; the director
+// is what lets the C++ growth loop ask it.
 IMP_SWIG_VALUE(IMP::bff, LinkerSamplingResult, LinkerSamplingResults);
 IMP_SWIG_VALUE(IMP::bff, RRTTree, RRTTrees);
 IMP_SWIG_OBJECT(IMP::bff, RRTCollision, RRTCollisions);
-
-// A Python caller subclasses `RRTCollision` to say what clashes; the director
-// is what lets the C++ growth loop ask it.
-%feature("director") IMP::bff::RRTCollision;
-
-%feature("kwargs") IMP::bff::make_langevin_simulator;
-%feature("kwargs") IMP::bff::AttachedProbeDynamics::AttachedProbeDynamics;
-%feature("kwargs") IMP::bff::AttachedProbeDynamics::run;
-%feature("kwargs") IMP::bff::prepare_particles;
 %feature("kwargs") IMP::bff::sample_linker;
 %feature("kwargs") IMP::bff::generate_linker_rotamers;
 %feature("kwargs") IMP::bff::linker_geometry_from_mol2;
@@ -45,35 +34,12 @@ IMP_SWIG_OBJECT(IMP::bff, RRTCollision, RRTCollisions);
 %feature("kwargs") IMP::bff::grow_rigid_body_rrt;
 %feature("kwargs") IMP::bff::markov_state_trajectory;
 
-%include "IMP/bff/ProbeDynamics.h"
-/* Linker.h needs RotamerLibrary (wrapped above, in swig.i-in): the sampler
+%feature("director") IMP::bff::RRTCollision;
+
+/* Linker.h needs RotamerLibrary (wrapped above, in core.i): the sampler
    returns one. Its geometry half used to be wrapped earlier, on its own. */
 %include "IMP/bff/Linker.h"
 %include "IMP/bff/RRT.h"
-
-// The trajectory's shapes: `(n_frames, n_atoms, 3)` for the coordinates and
-// one value per frame for the rest.
-%attribute_np3(IMP::bff::LangevinTrajectory, std::vector<double>, coordinates,
-               get_coordinates, n_frames, 3);
-%attribute_np(IMP::bff::LangevinTrajectory, std::vector<double>, times_fs,
-              get_times_fs);
-%attribute_np(IMP::bff::LangevinTrajectory, std::vector<double>,
-              potential_energy, get_potential_energy);
-%attribute_np(IMP::bff::LangevinTrajectory, std::vector<double>,
-              kinetic_energy, get_kinetic_energy);
-%attribute(IMP::bff::LangevinTrajectory, int, n_frames, n_frames);
-%attribute(IMP::bff::LangevinTrajectory, int, n_atoms, n_atoms);
-
-%attribute_np2(IMP::bff::AttachedProbeDynamics, std::vector<double>, coordinates,
-               get_coordinates, 3);
-%attribute_py(IMP::bff::AttachedProbeDynamics, ParticlesTemp, probe_particles,
-              get_probe_particles);
-%attribute_py(IMP::bff::AttachedProbeDynamics, ParticlesTemp, mobile, get_mobile);
-%attribute_py(IMP::bff::AttachedProbeDynamics, ParticlesTemp, fixed, get_fixed);
-%attribute_py(IMP::bff::AttachedProbeDynamics, ParticlesTemp, obstacles,
-              get_obstacles);
-%attribute_py(IMP::bff::AttachedProbeDynamics, std::vector<std::string>, atom_names,
-              get_atom_names);
 
 %attribute_np3(IMP::bff::LinkerSamplingResult, std::vector<double>,
                coordinates, get_coordinates, n_frames, 3);

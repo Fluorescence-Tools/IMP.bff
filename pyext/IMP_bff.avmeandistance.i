@@ -1,6 +1,6 @@
 /*
- * The mean-position FRET restraint, the precision of a docked model, and the
- * set an fps.json network builds.
+ * The mean-position FRET restraint and the set an fps.json network builds
+ * (the precision of a docked model is modelprecision.i, core).
  *
  * `AVMeanDistanceRestraint` computes its gradient, so an fps.json-driven
  * docking can be minimised and not only sampled; the branch costs nothing when
@@ -17,7 +17,6 @@
  */
 
 IMP_SWIG_OBJECT(IMP::bff, AVMeanDistanceRestraint, AVMeanDistanceRestraints);
-IMP_SWIG_VALUE(IMP::bff, PositionUncertainty, PositionUncertainties);
 IMP_SWIG_OBJECT(IMP::bff, AVFlatBottomRestraint, AVFlatBottomRestraints);
 IMP_SWIG_OBJECT(IMP::bff, AVRebuildOptimizerState, AVRebuildOptimizerStates);
 
@@ -37,11 +36,3 @@ IMP_SWIG_OBJECT(IMP::bff, AVRebuildOptimizerState, AVRebuildOptimizerStates);
 %feature("kwargs") IMP::bff::AVMeanDistanceRestraint::AVMeanDistanceRestraint;
 
 %include "IMP/bff/AVMeanDistanceRestraint.h"
-%include "IMP/bff/ModelPrecision.h"
-
-// The scalar RMSF summaries as read-only attributes; the array fields stay
-// `get_rmsf()`/`get_mean_coords()` numpy views, reshaped by the caller.
-%attribute(IMP::bff::PositionUncertainty, double, rmsf_mean, get_rmsf_mean);
-%attribute(IMP::bff::PositionUncertainty, double, rmsf_max, get_rmsf_max);
-%attribute(IMP::bff::PositionUncertainty, double, mobile_rmsf_mean,
-           get_mobile_rmsf_mean);
