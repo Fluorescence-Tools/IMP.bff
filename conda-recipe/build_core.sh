@@ -3,6 +3,12 @@
 # headers under $PREFIX, the Python module into site-packages/IMP/bff, all of
 # data/ and examples/ under share/IMP/bff (the compiled-in data directory).
 set -euo pipefail
+
+# The large data (data/registry.json) is not in git: fetch it into the source
+# copy so the package ships all of data/. IMP_BFF_DATA_CACHE (CI: a directory
+# actions/cache keeps between runs) makes this a copy instead of a download.
+python "$SRC_DIR/utility/data_registry.py" --fetch "$SRC_DIR/data" --quiet \
+  ${IMP_BFF_DATA_CACHE:+--cache "$IMP_BFF_DATA_CACHE"}
 mkdir -p build-core
 cd build-core
 SCCACHE_ARGS=()

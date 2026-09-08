@@ -9,6 +9,7 @@
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/AVBuilder.h>
 
+#include <IMP/bff/DensityGrid.h>
 #include <IMP/bff/PathMap.h>
 #include <IMP/bff/OccupancyGrid.h>
 #include <IMP/bff/StripMask.h>
@@ -253,7 +254,14 @@ void get_attachment_point(const std::string& pdb_path, const std::string& chain,
    OccupancyGrid entry points the decorator calls, in the same order, so the
    two doors compute the same volume; the array-door records in
    test/test_density_grid.py pin that. */
-AccessibleVolume get_av_lattice(
+namespace {
+
+//! The lattice search itself: the map every read-out below is taken from.
+/*! Split out of get_av_lattice() so that the accessible volume and the
+    linker path lengths (#get_linker_path_lengths, LabelLib's
+    `minLinkerLength`) are two read-outs of one search rather than two
+    searches. */
+IMP::Pointer<PathMap> run_lattice_search(
         const std::vector<IMP::algebra::Vector4D>& spheres,
         const IMP::algebra::Vector3D& source, double source_radius,
         double linker_length, double linker_width,
@@ -342,6 +350,52 @@ AccessibleVolume get_av_lattice(
     map->apply_contact_weighting(counts.data(), contact_volume_thickness,
                                  contact_volume_trapped_fraction);
 
+    return map;
+}
+
+//! The caller's spheres, and where the linker is tied, for the array doors.
+/*! The attachment site takes part as one of the obstacles when it coincides
+    with an atom -- then its own radius is subtracted from the raster around
+    it, as the decorator does for the attachment atom; otherwise it is a
+    point with no size, which blocks nothing. This is exactly what the
+    IMP::Model these doors used to build expressed with particles. */
+IMP::algebra::Vector3D prepare_obstacles(
+        double* atoms_xyzr, int n_atoms, const std::vector<double>& source_xyz,
+        std::vector<IMP::algebra::Vector4D>* spheres, double* source_radius) {
+    spheres->reserve(static_cast<std::size_t>(n_atoms) + 1);
+    *source_radius = 0.0;
+    bool source_is_atom = false;
+    for (int i = 0; i < n_atoms; ++i) {
+        const double* a = atoms_xyzr + static_cast<std::size_t>(i) * 4;
+        spheres->push_back(IMP::algebra::Vector4D(a[0], a[1], a[2], a[3]));
+        if (!source_is_atom &&
+            std::fabs(a[0] - source_xyz[0]) < 1e-8 &&
+            std::fabs(a[1] - source_xyz[1]) < 1e-8 &&
+            std::fabs(a[2] - source_xyz[2]) < 1e-8) {
+            source_is_atom = true;
+            *source_radius = a[3];
+        }
+    }
+    const IMP::algebra::Vector3D source(source_xyz[0], source_xyz[1], source_xyz[2]);
+    if (!source_is_atom) {
+        spheres->push_back(IMP::algebra::Vector4D(source[0], source[1], source[2], 0.0));
+    }
+    return source;
+}
+
+}  // namespace
+
+AccessibleVolume get_av_lattice(
+        const std::vector<IMP::algebra::Vector4D>& spheres,
+        const IMP::algebra::Vector3D& source, double source_radius,
+        double linker_length, double linker_width,
+        double r1, double r2, double r3, double h,
+        double allowed_sphere_radius, int search_stencil,
+        double contact_volume_thickness,
+        double contact_volume_trapped_fraction) {
+    IMP::Pointer<PathMap> map = run_lattice_search(spheres, source, source_radius, linker_length, linker_width,
+                              r1, r2, r3, h, allowed_sphere_radius, search_stencil,
+                              contact_volume_thickness, contact_volume_trapped_fraction);
     // the read-out: the density cube in (x, y, z) order, the cloud, the frame
     const GridHeader* gh = map->get_header();
     const int nx = gh->get_nx(), ny = gh->get_ny(), nz = gh->get_nz();
@@ -375,6 +429,76 @@ AccessibleVolume get_av_lattice(
     return AccessibleVolume(points, density, origin, gh->get_spacing(), "", attachment);
 }
 
+DensityGrid* get_linker_path_lengths(
+        double* atoms_xyzr, int n_atoms, int n_cols,
+        const std::vector<double>& source_xyz,
+        double linker_length, double linker_width, double dye_radius,
+        double grid_resolution, double allowed_sphere_radius, int search_stencil) {
+    if (n_cols != 4) {
+        IMP_THROW("obstacles must be (N, 4) of x, y, z, radius, not (" << n_atoms
+                          << ", " << n_cols << ")",
+                  ValueException);
+    }
+    if (source_xyz.size() != 3) {
+        IMP_THROW("the attachment point is three coordinates, not "
+                          << source_xyz.size(),
+                  ValueException);
+    }
+    std::vector<IMP::algebra::Vector4D> spheres;
+    double source_radius = 0.0;
+    const IMP::algebra::Vector3D source =
+            prepare_obstacles(atoms_xyzr, n_atoms, source_xyz, &spheres, &source_radius);
+    return get_linker_path_lengths(spheres, source, source_radius, linker_length,
+                                   linker_width, dye_radius, grid_resolution,
+                                   allowed_sphere_radius,
+                                   search_stencil ? search_stencil : 74);
+}
+
+DensityGrid* get_linker_path_lengths(
+        const std::vector<IMP::algebra::Vector4D>& spheres,
+        const IMP::algebra::Vector3D& source, double source_radius,
+        double linker_length, double linker_width, double dye_radius, double h,
+        double allowed_sphere_radius, int search_stencil) {
+    IMP::Pointer<PathMap> map = run_lattice_search(
+            spheres, source, source_radius, linker_length, linker_width,
+            dye_radius, 0.0, 0.0, h, allowed_sphere_radius, search_stencil, 0.0, -1.0);
+    const GridHeader* gh = map->get_header();
+    const int nx = gh->get_nx(), ny = gh->get_ny(), nz = gh->get_nz();
+    const std::vector<float> values = map->get_tile_values(
+            PM_TILE_PATH_LENGTH,
+            std::pair<double, double>(0.0, map->get_path_map_header().get_max_path_length()));
+    IMP_NEW(DensityGrid, out, ("LinkerPathLengths%1%"));
+    GridHeader* oh = out->get_header_writable();
+    oh->set_spacing(gh->get_spacing());
+    oh->update_map_dimensions(nx, ny, nz);
+    out->resize(static_cast<long>(nx) * ny * nz);
+    out->set_origin(IMP::algebra::Vector3D(gh->get_xorigin(), gh->get_yorigin(),
+                                           gh->get_zorigin()));
+    // (x, y, z) order, as the volume's density cube is written. A voxel the
+    // linker cannot reach is negative, which is LabelLib's convention for the
+    // same grid (minLinkerLength); the attachment voxel itself is a reached
+    // voxel of length zero.
+    const long source_idx = map->get_voxel_by_location(source);
+    for (int iz = 0; iz < nz; ++iz) {
+        for (int iy = 0; iy < ny; ++iy) {
+            for (int ix = 0; ix < nx; ++ix) {
+                const std::size_t flat = static_cast<std::size_t>(iz) * ny * nx + iy * nx + ix;
+                const std::size_t o = (static_cast<std::size_t>(ix) * ny + iy) * nz + iz;
+                double v = -1.0;
+                if (flat < values.size()) {
+                    const double raw = values[flat];
+                    v = raw > 0.0 ? raw
+                        : (static_cast<long>(flat) == source_idx ? 0.0 : -1.0);
+                }
+                out->set_value(static_cast<long>(o), v);
+            }
+        }
+    }
+    out->set_was_used(true);
+    return out.release();
+}
+
+
 AccessibleVolume get_av(double* atoms_xyzr, int n_atoms, int n_cols,
                             const std::vector<double>& source_xyz,
                             double linker_length, double linker_width,
@@ -392,31 +516,10 @@ AccessibleVolume get_av(double* atoms_xyzr, int n_atoms, int n_cols,
                   ValueException);
     }
 
-    /* The obstacles are the caller's spheres. The attachment site takes part
-       as one of them when it coincides with an atom (then its own radius is
-       subtracted from the raster around it, as the decorator does for the
-       attachment atom); otherwise it is a point with no size, which blocks
-       nothing. This is exactly what the IMP::Model this door used to build
-       expressed with particles. */
     std::vector<IMP::algebra::Vector4D> spheres;
-    spheres.reserve(static_cast<std::size_t>(n_atoms) + 1);
     double source_radius = 0.0;
-    bool source_is_atom = false;
-    for (int i = 0; i < n_atoms; ++i) {
-        const double* a = atoms_xyzr + static_cast<std::size_t>(i) * 4;
-        spheres.push_back(IMP::algebra::Vector4D(a[0], a[1], a[2], a[3]));
-        if (!source_is_atom &&
-            std::fabs(a[0] - source_xyz[0]) < 1e-8 &&
-            std::fabs(a[1] - source_xyz[1]) < 1e-8 &&
-            std::fabs(a[2] - source_xyz[2]) < 1e-8) {
-            source_is_atom = true;
-            source_radius = a[3];
-        }
-    }
-    const IMP::algebra::Vector3D source(source_xyz[0], source_xyz[1], source_xyz[2]);
-    if (!source_is_atom) {
-        spheres.push_back(IMP::algebra::Vector4D(source[0], source[1], source[2], 0.0));
-    }
+    const IMP::algebra::Vector3D source =
+            prepare_obstacles(atoms_xyzr, n_atoms, source_xyz, &spheres, &source_radius);
 
     AccessibleVolume av = get_av_lattice(
             spheres, source, source_radius, linker_length, linker_width,
@@ -442,5 +545,31 @@ AccessibleVolume get_av(double* atoms_xyzr, int n_atoms, int n_cols,
     return av;
 }
 
+
+AccessibleVolume get_av_from_pdb(
+        const std::string& pdb_path, const std::string& chain, int resseq,
+        const std::string& atom_name, double linker_length, double linker_width,
+        double r1, double r2, double r3, double grid_resolution,
+        double allowed_sphere_radius, int search_stencil) {
+    double* atoms = 0;
+    int n_atoms = 0;
+    load_structure_with_vdw(pdb_path, &atoms, &n_atoms);
+    double* src = 0;
+    int n_src = 0;
+    get_attachment_point(pdb_path, chain, resseq, atom_name, &src, &n_src);
+    if (n_src != 3) {
+        std::free(atoms);
+        std::free(src);
+        IMP_THROW("no attachment atom " << chain << ":" << resseq << ":" << atom_name
+                  << " in " << pdb_path, ValueException);
+    }
+    const std::vector<double> source(src, src + 3);
+    AccessibleVolume av = get_av(atoms, n_atoms / 4, 4, source, linker_length, linker_width,
+                                 r1, r2, r3, grid_resolution, allowed_sphere_radius,
+                                 search_stencil);
+    std::free(atoms);
+    std::free(src);
+    return av;
+}
 
 IMPBFF_END_NAMESPACE

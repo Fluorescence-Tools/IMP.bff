@@ -14,10 +14,13 @@ package:
 
 source:
   path: ../
+  use_gitignore: true   # the root scratch (.gitignore) stays out of the source copy
 
 build:
   number: 0
-  script: build_core.sh
+  # no extension: build_core.sh on unix, build_core.bat on windows -- the
+  # `script:` field takes no if/then/else selector (see recipe.yaml)
+  script: build_core
   python:
     entry_points:
       - imp_bff_fetch_data = IMP.bff:_fetch_data_main
@@ -26,6 +29,7 @@ requirements:
   build:
     - ${{ compiler('c') }}
     - ${{ compiler('cxx') }}
+    - pooch   # the build fetches the large data (data/registry.json)
     - if: osx
       then: llvm-openmp
     - if: linux

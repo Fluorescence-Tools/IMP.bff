@@ -1093,3 +1093,9 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
  * one would do apart from PMI's bookkeeping is
  * `probe_network_restraint_set`.
  */
+
+/* where the large data lives, for both builds (PRD-137 6d) */
+%include "IMP_bff.data.i"
+
+/* LabelLib's API, name for name (PRD-137 6d) */
+%include "IMP_bff.labellib.i"

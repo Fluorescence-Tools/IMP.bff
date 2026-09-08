@@ -8,9 +8,15 @@ against this registry. Regenerate it after changing either directory:
     python utility/data_registry.py            # writes data/registry.json
     python utility/data_registry.py --verify   # checks the tree against it
 
-The files themselves are uploaded to the download host by hand (rsync the
-two directories, paths kept). test/test_data_registry.py keeps the registry
-and the tree in step.
+The two directories are not in git: they live on the download host
+(DATA_URL, https://www.peulen.xyz/downloads/imp.bff/, uploaded by hand with
+paths kept) and
+
+    python utility/data_registry.py --fetch            # restores data/
+    python utility/data_registry.py --fetch --cache D  # via a cache dir (CI)
+
+brings them into a checkout, checked against the sums. Needs pooch.
+test/test_data_registry.py keeps the registry and a fetched tree in step.
 """
 
 import argparse
@@ -23,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 FETCHED = ("rotamer_library", "cgprobe")
 REGISTRY = os.path.join(DATA, "registry.json")
+DATA_URL = os.environ.get("IMP_BFF_DATA_URL", "https://www.peulen.xyz/downloads/imp.bff/")
 
 
 def sha256(path):
@@ -45,10 +52,38 @@ def tree():
     return out
 
 
+def fetch(target, cache=None, quiet=False):
+    """Bring every registry file into `target` (a data/ directory), through
+    `cache` when given (pooch keeps its copy there; the file is then copied
+    into place), checked against the registry's sums."""
+    import shutil
+    import pooch
+    with open(REGISTRY) as fh:
+        registry = json.load(fh)
+    pup = pooch.create(path=cache or target, base_url=DATA_URL, registry=registry)
+    n = 0
+    for name in sorted(registry):
+        src = pup.fetch(name, progressbar=not quiet)
+        dst = os.path.join(target, name)
+        if os.path.abspath(src) != os.path.abspath(dst):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(src, dst)
+        n += 1
+    return n
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--verify", action="store_true", help="check the tree against the registry")
+    ap.add_argument("--fetch", nargs="?", const=DATA, metavar="DIR",
+                    help="fetch every registry file into DIR (default: data/)")
+    ap.add_argument("--cache", metavar="DIR", help="with --fetch: pooch's download directory")
+    ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args(argv)
+    if a.fetch:
+        n = fetch(a.fetch, a.cache, a.quiet)
+        print("%d files in %s" % (n, a.fetch))
+        return 0
     current = tree()
     if a.verify:
         with open(REGISTRY) as fh:

@@ -31,6 +31,7 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/AVModel.h>
+#include <IMP/bff/DensityGrid.h>
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/VectorD.h>
 
@@ -177,6 +178,68 @@ IMPBFFEXPORT AccessibleVolume get_av(
 
 
 
+
+//! An accessible volume from a PDB file and an attachment atom, with no IMP.
+/*!
+    The **file** front door of the core, one call the way labellib's
+    `dyeDensityAV3` is one call: the structure's atoms with bff's van der
+    Waals radii (#load_structure_with_vdw), the attachment atom's position
+    (#get_attachment_point), then #get_av. This is the road the Labelizer's
+    AV-mode sites take under the standalone build.
+
+    The IMP module build also has #get_av_from_structure (AV.h), which reads
+    the structure through IMP::atom and takes IMP's radii; the two roads can
+    differ in the radii they assign (a choice still open, see PRD-137), so
+    they carry different names rather than one name meaning two things.
+
+    \param[in] pdb_path the structure
+    \param[in] chain,resseq,atom_name the attachment atom
+    \param[in] linker_length,linker_width the linker
+    \param[in] r1,r2,r3 dye radii; `(3.5, 0, 0)` is the AV1 single-sphere model
+    \param[in] grid_resolution voxel spacing, A
+    \param[in] allowed_sphere_radius < 0 derives the clearance from the linker width
+    \param[in] search_stencil see #IMP::bff::resample_av
+    \throw ValueException when the attachment atom is not in the structure
+*/
+IMPBFFEXPORT AccessibleVolume get_av_from_pdb(
+        const std::string& pdb_path, const std::string& chain, int resseq,
+        const std::string& atom_name, double linker_length = 20.0,
+        double linker_width = 0.5, double r1 = 3.5, double r2 = 0.0,
+        double r3 = 0.0, double grid_resolution = 1.5,
+        double allowed_sphere_radius = -1.0, int search_stencil = 0);
+
+//! The shortest linker path to every voxel, LabelLib's `minLinkerLength`.
+/*!
+    The same lattice search #get_av_lattice runs, read out as path lengths
+    instead of as an accessible volume: each voxel carries the length of the
+    shortest obstacle-free linker path from the attachment atom to it, and a
+    voxel the linker cannot reach carries a negative value. The grid is the
+    volume's grid -- same origin, same spacing, same (x, y, z) order.
+
+    \param[in] spheres obstacles, (x, y, z, radius)
+    \param[in] source,source_radius the attachment atom and its own radius
+    \param[in] linker_length,linker_width the linker
+    \param[in] dye_radius the probe radius the path must clear
+    \param[in] h voxel spacing, A
+    \param[in] allowed_sphere_radius < 0 derives the clearance from the linker width
+    \param[in] search_stencil see #IMP::bff::resample_av
+    \return a new #DensityGrid the caller owns
+*/
+IMPBFFEXPORT DensityGrid* get_linker_path_lengths(
+        const std::vector<IMP::algebra::Vector4D>& spheres,
+        const IMP::algebra::Vector3D& source, double source_radius,
+        double linker_length, double linker_width, double dye_radius, double h,
+        double allowed_sphere_radius = -1.0, int search_stencil = 74);
+
+//! The same, over a caller's `(N, 4)` array -- the twin of #get_av.
+/*! Reads the obstacles and the attachment site exactly as #get_av does, so
+    the path lengths and the volume are the same search read out twice. */
+IMPBFFEXPORT DensityGrid* get_linker_path_lengths(
+        double* atoms_xyzr, int n_atoms, int n_cols,
+        const std::vector<double>& source_xyz, double linker_length = 20.0,
+        double linker_width = 0.5, double dye_radius = 3.5,
+        double grid_resolution = 1.5, double allowed_sphere_radius = 2.1,
+        int search_stencil = 0);
 
 IMPBFF_END_NAMESPACE
 

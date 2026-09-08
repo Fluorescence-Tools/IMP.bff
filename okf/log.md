@@ -10926,3 +10926,22 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   (SIGKILL) -- no strip, codesign after install; conda-forge's clang refused `static const int kAxisSlot`
   ODR-used in Expression.cpp (now constexpr). Owner's steps: upload the two data directories to the host,
   register `bff` on pypi.org with the workflow as trusted publisher. PRD-137 is implemented end to end.
+- **PRD-137 6d, the data leaves git** (imp-bff-ce): `data/rotamer_library/` + `data/cgprobe/` (62 MB) are no
+  longer tracked -- `data/registry.json` is, the files are on the download host (`/Volumes/Downloads/imp.bff`,
+  `https://www.peulen.xyz/downloads/imp.bff/`), `utility/data_registry.py --fetch` restores a checkout, CI caches
+  the download keyed by the registry and downloads only on a miss (tttrlib's pattern), conda builds fetch before
+  packaging (`pooch` in build requirements), and one shared `pyext/IMP_bff.data.i` gives both builds
+  `get_data_path()` that fetches a registry file on first use (it wraps the extension's function, which both
+  shadow modules call -- IMP's tooling defines the shadow's `get_data_path` after any module code). Root
+  scratch is gitignored and the recipes honour it (`use_gitignore`).
+- **PRD-137 6d, LabelLib's interface** (imp-bff-ce): `IMP.bff.labellib` is LabelLib's API name for name --
+  `dyeDensityAV1/AV3`, `minLinkerLength`, `addWeights`, `meanDistance`, `meanEfficiency`,
+  `sampleDistanceDistInv`, `Grid3D` and the `_arr` twins, same argument order, (4, N) or (N, 4) atoms, grids
+  flat with x fastest -- so a LabelLib script moves over by changing its import. New C++ behind it:
+  `get_av_from_pdb` (the core's file door, the road the Labelizer's AV mode already took) and
+  `get_linker_path_lengths` (the lattice search read out as path lengths, a `DensityGrid`; unreachable voxels
+  negative, as LabelLib marks them). The lattice search and the obstacle preparation are now shared helpers,
+  so a volume and its path lengths are two read-outs of one search. Gated by `test/test_labellib_interface.py`
+  (17 cases; the parity ones run against the real LabelLib where it is installed -- mean distance within 0.5 A,
+  mean efficiency within 0.02). Owner's ruling: the Langevin/attachment dye road stays IMP-only.
+  README gains install instructions for both packages, the LabelLib migration and a first-volume example.

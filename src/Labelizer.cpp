@@ -1634,20 +1634,9 @@ AccessibleVolume core_av_door(const std::string& pdb_path, const std::string& ch
                               int resseq, const std::string& atom_name,
                               double linker_length, double linker_width,
                               double r1, double r2, double r3, double grid_resolution) {
-    double* atoms = 0; int n_atoms = 0;
-    load_structure_with_vdw(pdb_path, &atoms, &n_atoms);
-    double* src = 0; int n_src = 0;
-    get_attachment_point(pdb_path, chain, resseq, atom_name, &src, &n_src);
-    if (n_src != 3) {
-        std::free(atoms); std::free(src);
-        IMP_THROW("no attachment atom " << chain << ":" << resseq << ":" << atom_name
-                  << " in " << pdb_path, ValueException);
-    }
-    const std::vector<double> source(src, src + 3);
-    AccessibleVolume av = get_av(atoms, n_atoms / 4, 4, source, linker_length,
-                                 linker_width, r1, r2, r3, grid_resolution, -1.0, 0);
-    std::free(atoms); std::free(src);
-    return av;
+    // the core's file door (AVBuilder.h), which is this road made public
+    return get_av_from_pdb(pdb_path, chain, resseq, atom_name, linker_length, linker_width,
+                           r1, r2, r3, grid_resolution, -1.0, 0);
 }
 
 LlAvDoor& av_door() {

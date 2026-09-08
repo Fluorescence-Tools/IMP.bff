@@ -43,3 +43,20 @@ dbtemp/
 
 # Reference-only: read it, mine it, never ship it.
 /junk/
+
+# root scratch: outputs agents and notebooks drop next to the checkout; never
+# part of a commit, an sdist or a recipe's source copy (rattler honours this)
+/*.mrc
+/*.prmtop
+/*.inpcrd
+/*.fps.json
+/*_scratch_*.txt
+/mGBP2_*
+/session-*.md
+/prototypes/
+/.claude/
+
+# the large data: served from DATA_URL, listed in data/registry.json,
+# restored with `python utility/data_registry.py --fetch` (PRD-137 6d)
+data/rotamer_library/
+data/cgprobe/

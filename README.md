@@ -20,6 +20,98 @@ name is reachable flat as `IMP.bff.<Name>`; the manual page
 `doc/manual/structure/structure_cgprobe.ipynb` walks the explicit route, and
 `okf/cgprobe.md` records how the code is organised.
 
+## Install
+
+Two packages, one import name. Both give you `import IMP.bff`; they own the
+same files, so install one or the other, not both.
+
+**`bff` — the core, no IMP.** Label distributions and accessible volumes,
+explicit dyes from a rotamer library (`RotamerFRET`), dye diffusion on a
+grid (`ProbeDiffusionSimulation`, `DynamicAccessibleVolume`), linker
+sampling (`RRTTree`), probe force fields (`create_forcefield_system`),
+side-chain packing (`faspr_pack`), the whole fitting stack (`Minimizer`,
+`TcspcDecay`, `ChiSquared`, FCS, κ²), the labelling-site score, and
+structure and trajectory IO.
+
+```bash
+pip install bff             # wheels for Linux and macOS
+conda install -c conda-forge bff
+```
+
+**`imp.bff` — the IMP module.** The same library built inside the Integrative
+Modeling Platform, with the connection layer: restraints IMP's optimizers
+score, decorators on IMP particles, `IMP.atom` hierarchies — and the two
+dye roads that run on them, attaching a dye onto a structure
+(`attach_probes`, `place_probe`) and driving it with Langevin dynamics
+(`make_langevin_simulator`, `AttachedProbeDynamics`), which use IMP's own
+integrators.
+
+```bash
+conda install -c conda-forge imp.bff
+```
+
+`IMP.bff.get_build()` says which one you have: `"core"` or `"imp"`.
+
+The large data (rotamer libraries, coarse-grained probe inputs — 62 MB) is
+downloaded on first use into a per-user cache. `imp_bff_fetch_data` takes it
+all at once, which is what you want before going offline or in a container
+image.
+
+## Coming from LabelLib
+
+`IMP.bff.labellib` is [LabelLib](https://github.com/Fluorescence-Tools/LabelLib)'s
+interface, name for name — the same functions, the same argument order, the
+same array conventions — so a script moves over by changing its import:
+
+```python
+# import LabelLib as ll
+from IMP.bff import labellib as ll
+
+av = ll.dyeDensityAV1(atoms_xyzr, source_xyz, 20.0, 2.0, 3.5, 0.9)
+d = ll.meanDistance(av1, av2)
+```
+
+`dyeDensityAV1`, `dyeDensityAV3`, `minLinkerLength`, `addWeights`,
+`meanDistance`, `meanEfficiency`, `sampleDistanceDistInv` and `Grid3D` are all
+there, with their `_arr` twins. The numbers are bff's own lattice search, so
+they agree with LabelLib to within the discretisation rather than bit for bit;
+`test/test_labellib_interface.py` measures that against LabelLib itself
+wherever it is installed. bff's own spelling of the same computation is
+`IMP.bff.get_av` (arrays) and `IMP.bff.get_av_from_pdb` (a structure file),
+which return an `AccessibleVolume` carrying the cloud, the density and the
+grid.
+
+## A first volume
+
+```python
+import IMP.bff
+
+av = IMP.bff.get_av_from_pdb("structure.pdb", chain="A", resseq=132,
+                             atom_name="CB", linker_length=20.0,
+                             linker_width=2.0, r1=3.5)
+print(av.get_mean_position(), av.get_n_points())
+```
+
+Two volumes give a distance distribution and a FRET observable:
+
+```python
+av2 = IMP.bff.get_av_from_pdb("structure.pdb", "A", 55, "CB", 20.0, 2.0, 3.5)
+print(IMP.bff.average_distance(av.get_points(), av2.get_points()))
+print(IMP.bff.mean_fret_distance(av.get_points(), av2.get_points(), 52.0))
+```
+
+Explicit dyes instead of volumes, with no IMP either:
+
+```python
+fret = IMP.bff.RotamerFRET()              # dye + linker from a rotamer library
+sim = IMP.bff.ProbeDiffusionSimulation()  # a dye diffusing on its linker
+```
+
+Attaching a dye onto a structure and running Langevin dynamics on it
+(`attach_probes`, `make_langevin_simulator`) is the one road that needs
+`imp.bff`: those use IMP's integrators and hierarchies rather than
+reimplementing them.
+
 
 ## Inter-label distance score usage:
 

@@ -59,15 +59,20 @@ Both install `site-packages/IMP/bff/` and are alternatives, not companions
 (the recipes constrain each other; `IMP.bff.get_build()` says which one is
 present, and the core warns once at import when an IMP kernel sits beside it).
 
-The wheel carries the small part of `data/` in `IMP/bff/data` and lists
-`rotamer_library/` and `cgprobe/` (62 MB) in `data/registry.json` with their
-sha256 sums (`utility/data_registry.py`, regenerate after touching either
-directory). Those are fetched on first use from `IMP.bff.DATA_URL`
-(`https://www.peulen.xyz/downloads/imp-bff-data/`, the two directories
-uploaded with their paths kept; `IMP_BFF_DATA_URL` overrides) into
-`pooch`'s cache (`IMP_BFF_CACHE` overrides), through `get_data_path()`,
-`fetch_data()` or the `imp_bff_fetch_data` script. Conda packages ship all
-of `data/` under `share/IMP/bff/data` and never fetch.
+`rotamer_library/` and `cgprobe/` (62 MB) are **not in git**: git tracks
+`data/registry.json` (path and sha256 of every file, `utility/data_registry.py`),
+the files sit on the download host at `IMP.bff.DATA_URL`
+(`https://www.peulen.xyz/downloads/imp.bff/`, the two directories uploaded
+with their paths kept; `IMP_BFF_DATA_URL` overrides), and
+
+    python utility/data_registry.py --fetch
+
+restores them into a checkout (`--cache DIR` keeps pooch's copy elsewhere;
+CI caches that directory keyed by the registry, tttrlib's pattern). Conda
+builds fetch before packaging and ship all of `data/`; the wheel ships the
+small set and both builds fetch a registry file the first time
+`get_data_path()` asks for it (`fetch_data()` takes them all, so does the
+`imp_bff_fetch_data` script; `IMP_BFF_CACHE` names the cache).
 
 The IMP-module build is the top-level `CMakeLists.txt` and is untouched by
 any of this. `test/expensive_test_standalone_core_compiles.py` is the gate

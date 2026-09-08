@@ -9,6 +9,7 @@ package:
 
 source:
   path: ../
+  use_gitignore: true   # the root scratch (.gitignore) stays out of the source copy
 
 build:
   number: 1
@@ -22,6 +23,7 @@ requirements:
   build:
     - ${{ compiler('c') }}
     - ${{ compiler('cxx') }}
+    - pooch   # the build fetches the large data (data/registry.json)
     - if: osx
       then: llvm-openmp
     - if: linux
