@@ -10945,3 +10945,10 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   (17 cases; the parity ones run against the real LabelLib where it is installed -- mean distance within 0.5 A,
   mean efficiency within 0.02). Owner's ruling: the Langevin/attachment dye road stays IMP-only.
   README gains install instructions for both packages, the LabelLib migration and a first-volume example.
+- **PRD-137, where dye simulation stops without IMP** (imp-bff-ce, owner ruling 2026-09-08): the core covers
+  rotamer-library dyes, grid diffusion, RRT linker sampling, probe force fields and FASPR packing; attaching a
+  dye onto a hierarchy and Langevin dynamics on it stay IMP-only. Linking IMP into the core was considered and
+  is not possible: the shim tree and IMP's headers redefine `IMP::Exception`, `IMP::Object`, `IMP::Pointer` and
+  `IMP::algebra::VectorD`, so no translation unit holds both (measured) -- anything linking IMP is the IMP-mode
+  build, which is `imp.bff`. The core conda package (`bff`) builds and passes its recipe tests on this machine
+  with the data fetched at build time; `build_core.bat` gives it Windows, so CI runs it on all three platforms.
