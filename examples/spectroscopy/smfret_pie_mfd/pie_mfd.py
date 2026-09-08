@@ -267,7 +267,7 @@ def _sample_bursts(model, st, tab, rng, n_bursts, p_true, sample):
     donor-only reference, green pulse only).  Returns the photon arrays and,
     for the labelled sample, which distance every burst had.
     """
-    macro, micro, chan, per_burst = [], [], [], []
+    macro, micro, chan, flag, per_burst = [], [], [], [], []
     period_s = model['period'] * 1e-9
     dur_pulses = int(st['burst_duration_ms'] * 1e-3 / period_s)
     ref = tab['w_d0'].sum()                       # an unquenched donor's detected photons
@@ -295,7 +295,7 @@ def _sample_bursts(model, st, tab, rng, n_bursts, p_true, sample):
                     micro.append(_draw_micro(cdf_[i], m, rng))
                     chan.append(np.full(m, (base + i) % 4, dtype=np.int8))
                     macro.append(t + rng.integers(0, max(dur_pulses, 1), m, dtype=np.int64))
-                    n_tot += m
+                    flag.append(np.zeros(m, dtype=bool)); n_tot += m
         #: scattered excitation light, at the response itself
         n_s = rng.poisson(st['scatter_fraction'] * max(n_tot, 1))
         if n_s > 0:
@@ -304,6 +304,7 @@ def _sample_bursts(model, st, tab, rng, n_bursts, p_true, sample):
             micro.append(_draw_micro(tab['scatter'][det], n_s, rng))
             chan.append(np.full(n_s, d, dtype=np.int8))
             macro.append(t + rng.integers(0, max(dur_pulses, 1), n_s, dtype=np.int64))
+            flag.append(np.zeros(n_s, dtype=bool))
         per_burst.append((t, n_tot, j))
         t += dur_pulses
     #: uncorrelated background over the whole record, flat in the micro time
@@ -313,10 +314,12 @@ def _sample_bursts(model, st, tab, rng, n_bursts, p_true, sample):
         macro.append(rng.integers(0, t_end, n_bg, dtype=np.int64))
         micro.append(rng.integers(0, model['n_fine'], n_bg).astype(np.uint16))
         chan.append(rng.integers(0, 4, n_bg).astype(np.int8))
+        flag.append(np.ones(n_bg, dtype=bool))
     macro = np.concatenate(macro); micro = np.concatenate(micro); chan = np.concatenate(chan)
+    flag = np.concatenate(flag)
     o = np.argsort(macro, kind='stable')
     return dict(macro=macro[o].astype(np.uint64), micro=micro[o], chan=chan[o],
-                bursts=per_burst, duration_s=t_end * period_s, n_background=n_bg)
+                background=flag[o], bursts=per_burst, duration_s=t_end * period_s, n_background=n_bg)
 
 
 def simulate_stream(model: dict, st: dict, p_true: np.ndarray, tab: dict, rng=None) -> dict:
@@ -386,10 +389,28 @@ def burst_search(model: dict, tttr, st: dict):
 
 
 def burst_observables(tttr, bursts, model):
-    """Per burst: the proximity ratio E* and the stoichiometry S -- the two
-    axes of the standard PIE scatter plot.  Green and red are the detector
-    pairs; the pulse a photon belongs to is read from its micro time, since
-    the red pulse sits half a period after the green one."""
+    """Per burst, the numbers a single-molecule experiment is read through.
+
+    Column 0, the **proximity ratio** E*: of the photons the green pulse
+    produced, the fraction that came out red.  It rises with transfer, so it
+    rises as the dyes come closer.
+
+    Column 1, the **stoichiometry** S: the green pulse's share of all the
+    photons.  A molecule with a working acceptor sits near one half; one that
+    stays dark under the red pulse goes to one.  This is what PIE buys.
+
+    Column 2, the burst size.
+
+    Column 3, the **mean arrival time of the donor photons** in nanoseconds:
+    the average micro time in the green detectors after the green pulse.  It
+    is the donor's fluorescence lifetime plus the instrument's offset, and it
+    falls as transfer quenches the donor.  It is an INDEPENDENT measure of the
+    same distance -- the intensity says one thing and the clock says another,
+    and for a static population the two agree.
+
+    The pulse a photon belongs to is read from its micro time, since the red
+    pulse sits half a period after the green one.
+    """
     mi = np.asarray(tttr.micro_times); ch = np.asarray(tttr.routing_channels)
     split = int(round(model['t_pie'] / model['dt']))
     green_pulse = mi < split
@@ -401,7 +422,9 @@ def burst_observables(tttr, bursts, model):
         tot = n_gg + n_gr + n_rr
         if tot < 1:
             continue
-        rows.append((n_gr / max(n_gg + n_gr, 1), (n_gg + n_gr) / tot, tot))
+        dm = mi[s][g & gp]
+        tau = float(dm.mean()) * model['dt'] if len(dm) else float('nan')
+        rows.append((n_gr / max(n_gg + n_gr, 1), (n_gg + n_gr) / tot, tot, tau))
     return np.array(rows)
 
 
@@ -749,3 +772,256 @@ def node_table(post):
                          dpd=nd['dev'] / nd['dof'], iterations=nd['n_iter']))
     rows.sort(key=lambda r: r['log10_lam'])
     return rows
+
+
+def background_fraction(stream, sel):
+    """What fraction of the SELECTED photons of each detector is uncorrelated
+    background.  The simulation knows which photons it drew as background; a
+    real measurement would estimate it, and the fit carries it as a free
+    parameter per histogram either way."""
+    bg = stream['background'][sel]; ch = stream['chan'][sel]
+    return {int(c): (float(bg[ch == c].mean()) if int((ch == c).sum()) else 0.0) for c in range(4)}
+
+
+# --------------------------------------------------------------------------
+# 9. two steps: classify the bursts, then analyse each group
+# --------------------------------------------------------------------------
+
+def _hdbscan_select(parents, children, lambdas, sizes, n_points, method='eom'):
+    """Which nodes of a condensed tree are the clusters.
+
+    tttrlib builds the mutual-reachability tree and condenses it, and it can
+    label the points once told which nodes to keep -- but nothing in it
+    computes that selection, which is the whole of HDBSCAN's cluster
+    extraction.  This is the excess-of-mass rule of Campello, Moulavi &
+    Sander, "Density-Based Clustering Based on Hierarchical Density
+    Estimates", PAKDD 2013, section 4, as implemented in `hdbscan` (McInnes,
+    Healy & Astels, J. Open Source Software 2, 205, 2017) and in
+    `sklearn.cluster.HDBSCAN`:
+
+        stability(C) = sum over the points p leaving C of (lambda_p - lambda_birth(C)),
+        lambda = 1 / distance,
+
+    and a cluster is kept only if its own stability exceeds the total
+    stability of the selected clusters below it; otherwise those descendants
+    are kept instead. `method='leaf'` keeps every leaf of the tree, which
+    separates populations that excess of mass merges.
+
+    `check_hdbscan_selection` compares what this produces against
+    scikit-learn's labels on data where the two can disagree. That check can
+    fail, and it did: the first version let the root compete with its
+    children, and since the root holds every point from lambda 0 its
+    stability beats any set of descendants -- one cluster containing the whole
+    sample. The reference implementation walks every node except the root.
+    """
+    parents = np.asarray(parents, np.int64); children = np.asarray(children, np.int64)
+    lam = np.asarray(lambdas, float); size = np.asarray(sizes, np.int64)
+    nodes = np.unique(parents)
+    root = int(nodes.min())
+    birth = {int(ch): float(lm) for ch, lm in zip(children, lam) if ch >= n_points}
+    birth[root] = 0.0
+    stab = {int(c): 0.0 for c in nodes}
+    for pa, lm, sz in zip(parents, lam, size):
+        stab[int(pa)] += float(sz) * (float(lm) - birth[int(pa)])
+    kids = {int(c): [] for c in nodes}
+    for pa, ch in zip(parents, children):
+        if ch >= n_points:
+            kids[int(pa)].append(int(ch))
+    if method == 'leaf':
+        sel = {int(c): (len(kids[int(c)]) == 0) for c in nodes}
+    else:
+        sel = {int(c): True for c in nodes}
+        for c in [int(x) for x in sorted(nodes, reverse=True) if int(x) != root]:
+            if not kids[c]:
+                continue
+            below, stack = 0.0, list(kids[c])       # the selected frontier under c
+            while stack:
+                k = stack.pop()
+                if sel[k]:
+                    below += stab[k]
+                else:
+                    stack.extend(kids[k])
+            if stab[c] < below:
+                sel[c] = False
+            else:
+                stack = list(kids[c])
+                while stack:
+                    k = stack.pop(); sel[k] = False; stack.extend(kids[k])
+    sel[root] = False
+    is_sel = np.zeros(int(max(int(nodes.max()), int(children.max()))) + 1, dtype=np.uint8)
+    for c, v in sel.items():
+        is_sel[c] = 1 if v else 0
+    return is_sel
+
+
+def hdbscan_labels(X, min_cluster_size, min_samples=None, method='eom', alpha=1.0):
+    """HDBSCAN through tttrlib: the mutual-reachability minimum spanning tree,
+    the condensed tree, the cluster selection above, and the labels.
+
+    tttrlib assigns every point to a cluster; scikit-learn calls points
+    outside the selected clusters noise. Labels are renumbered 0..k-1.
+    """
+    import tttrlib
+    X = np.ascontiguousarray(np.asarray(X, float))
+    ms = int(min_samples or min_cluster_size)
+    #: tttrlib gained a complete `hdbscan` -- selection, labels and membership
+    #: strengths -- after this example was written (reported from here, 2026-09-08).
+    #: Prefer it where it exists; the code below is the fallback, and is what
+    #: produced the outputs stored in the notebooks.
+    if hasattr(tttrlib, 'hdbscan'):
+        r = tttrlib.hdbscan(X, int(min_cluster_size), ms, float(alpha), method, False, 0.0, 0)
+        lab_new = np.asarray(r.labels)
+        out_new = np.full(len(X), -1, dtype=int)
+        for i, c in enumerate(sorted({int(v) for v in lab_new if v >= 0})):
+            out_new[lab_new == c] = i
+        return out_new
+    mst = np.asarray(tttrlib.mutual_reachability_mst(X, ms, float(alpha)))
+    #: linkage is order-dependent and tttrlib refuses unsorted edges
+    mst = mst[np.argsort(mst[:, 2], kind='stable')]
+    src = np.ascontiguousarray(mst[:, 0].astype(np.int64))
+    dst = np.ascontiguousarray(mst[:, 1].astype(np.int64))
+    w = np.ascontiguousarray(mst[:, 2].astype(float))
+    parents, children, lambdas, sizes = tttrlib.hdbscan_condensed_tree(src, dst, w, int(min_cluster_size))
+    is_sel = _hdbscan_select(parents, children, lambdas, sizes, len(X), method)
+    lab = np.asarray(tttrlib.hdbscan_label_points(np.ascontiguousarray(np.asarray(parents, np.int64)),
+                                                  np.ascontiguousarray(np.asarray(children, np.int64)),
+                                                  is_sel, len(X)))
+    out = np.full(len(X), -1, dtype=int)
+    for i, c in enumerate(sorted({int(v) for v in lab if v >= 0})):
+        out[lab == c] = i
+    return out
+
+
+def check_hdbscan_selection(seeds=(0, 1, 2, 3, 4), verbose=True):
+    """The check that could fail: tttrlib's HDBSCAN with the selection above,
+    against scikit-learn's, on data where the two could disagree.
+
+    Well-separated blobs agree trivially and prove nothing, so the cases here
+    include blobs that OVERLAP -- where excess of mass has a real choice
+    between a parent and its children, and a wrong stability shows up as a
+    different number of clusters -- and several minimum cluster sizes, which
+    move the condensed tree. Agreement is the adjusted Rand index, 1 only if
+    the partitions match up to relabelling. Because tttrlib has no noise
+    label, the comparison is also reported over the points scikit-learn does
+    cluster.
+    """
+    from sklearn.cluster import HDBSCAN
+    from sklearn.metrics import adjusted_rand_score
+    rows = []
+    for seed in seeds:
+        rng = np.random.default_rng(seed)
+        for sep, sd in ((3.0, 0.25), (1.5, 0.45), (1.0, 0.5)):
+            X = np.vstack([rng.normal([0, 0], sd, (200, 2)), rng.normal([sep, sep], sd, (200, 2)),
+                           rng.normal([0, sep], sd, (150, 2))])
+            for mcs in (15, 25, 60):
+                for method in ('eom', 'leaf'):
+                    a = hdbscan_labels(X, min_cluster_size=mcs, method=method)
+                    b = HDBSCAN(min_cluster_size=mcs, cluster_selection_method=method, copy=True).fit_predict(X)
+                    keep = b >= 0
+                    rows.append(dict(case=f'seed {seed}, blobs {sep}/{sd}, min size {mcs}', method=method,
+                                     ari=float(adjusted_rand_score(a, b)),
+                                     ari_core=float(adjusted_rand_score(a[keep], b[keep])) if keep.sum() > 1 else float('nan'),
+                                     n_tttrlib=len(set(a[a >= 0])), n_sklearn=len(set(b[b >= 0])),
+                                     noise_sklearn=int((b < 0).sum())))
+    if verbose:
+        print('  tttrlib labels every point; scikit-learn calls points outside the selected clusters noise,')
+        print('  so "core" compares only the points scikit-learn does cluster.')
+        for m in ('eom', 'leaf'):
+            r = [x for x in rows if x['method'] == m]
+            core = np.array([x['ari_core'] for x in r]); ari = np.array([x['ari'] for x in r])
+            same = sum(1 for x in r if x['n_tttrlib'] == x['n_sklearn'])
+            print(f'  {m}: {len(r)} cases; core Rand min {np.nanmin(core):.4f}, mean {np.nanmean(core):.4f}; '
+                  f'all points {ari.mean():.4f}; cluster count agrees in {same}/{len(r)}')
+            for x in sorted(r, key=lambda x: x['ari_core'])[:2]:
+                if x['ari_core'] < 0.999:
+                    print(f"     weakest: {x['case']} -- core Rand {x['ari_core']:.3f}, "
+                          f"{x['n_tttrlib']} vs {x['n_sklearn']} clusters, sklearn noise {x['noise_sklearn']}")
+    return rows
+
+
+def classify_bursts(feat, min_cluster_size=None, columns=(0, 1, 3), method='leaf'):
+    """Group the bursts by what each one looks like on its own.
+
+    A pooled decay of everything is a mixture, and the distance distribution
+    then has to carry every population at once. But each burst already says
+    roughly which population it belongs to: its proximity ratio, its
+    stoichiometry, and the mean arrival time of its donor photons. Cluster on
+    those three, pool each cluster, and each pooled decay is a much narrower
+    problem.
+
+    HDBSCAN through tttrlib. It is preferred to k-means because the number of
+    populations is what one wants to learn rather than declare.
+
+    `method`: 'leaf' keeps every leaf of the condensed tree, 'eom' the
+    excess-of-mass clusters. Excess of mass prefers the parent whenever a
+    split is not a deep valley in density, and two FRET populations whose
+    per-burst observables overlap by a few standard deviations are exactly
+    that case -- it returns them merged. 'leaf' is the default for that
+    reason, and the choice is visible in the figure: if the leaves split one
+    population in two, the plot shows it.
+
+    The features are standardised first, so that a nanosecond and a unit of
+    proximity ratio count the same; without that the clustering is a statement
+    about the units.
+    """
+    X = np.asarray(feat, float)[:, list(columns)]
+    ok = np.isfinite(X).all(1)
+    Z = (X - np.nanmean(X[ok], 0)) / np.nanstd(X[ok], 0)
+    mcs = int(min_cluster_size or max(25, int(ok.sum()) // 25))
+    lab = np.full(len(X), -1, dtype=int)
+    lab[ok] = hdbscan_labels(Z[ok], min_cluster_size=mcs, method=method)
+    return lab
+
+
+def group_indices(bursts, labels, group):
+    """The photon indices of every burst in one group."""
+    idx = [np.arange(a, b + 1) for (a, b), l in zip(bursts, labels) if l == group]
+    return np.concatenate(idx) if idx else np.zeros(0, dtype=int)
+
+
+def group_summary(feat, labels):
+    """What each group is, in the observables that made it."""
+    rows = []
+    for g in sorted({int(l) for l in labels}):
+        m = labels == g
+        rows.append(dict(group=g, n=int(m.sum()), photons=float(feat[m, 2].sum()),
+                         E=float(np.nanmean(feat[m, 0])), E_sd=float(np.nanstd(feat[m, 0])),
+                         S=float(np.nanmean(feat[m, 1])), tau=float(np.nanmean(feat[m, 3]))))
+    return rows
+
+
+def label_groups(rows, s_donor_only=0.85):
+    """Name the groups: a high stoichiometry means no working acceptor; the
+    rest are FRET populations, numbered by proximity ratio."""
+    names = {}
+    fret = [r for r in rows if r['group'] >= 0 and r['S'] < s_donor_only]
+    for r in rows:
+        if r['group'] < 0:
+            names[r['group']] = 'unclustered'
+        elif r['S'] >= s_donor_only:
+            names[r['group']] = 'donor only'
+    for i, r in enumerate(sorted(fret, key=lambda r: r['E'])):
+        names[r['group']] = f'FRET {i + 1}'
+    return names
+
+
+def plot_groups(feat, labels, names=None, title=''):
+    """The bursts in the plane that made the groups."""
+    _inline()
+    import matplotlib.pyplot as plt
+    names = names or {}
+    fig, ax = plt.subplots(1, 2, figsize=(10.5, 3.8))
+    for g in sorted({int(l) for l in labels}):
+        m = labels == g
+        c = '0.75' if g < 0 else f'C{g % 10}'
+        ax[0].plot(feat[m, 0], feat[m, 1], '.', ms=3, color=c, alpha=0.6,
+                   label=f"{names.get(g, g)} ({int(m.sum())})")
+        ax[1].plot(feat[m, 0], feat[m, 3], '.', ms=3, color=c, alpha=0.6)
+    ax[0].set_xlabel('proximity ratio E*'); ax[0].set_ylabel('stoichiometry S')
+    ax[0].set_xlim(-0.1, 1.1); ax[0].set_ylim(0, 1.05)
+    ax[0].legend(fontsize=6.5, frameon=False, markerscale=2.5, loc='lower left')
+    ax[1].set_xlabel('proximity ratio E*'); ax[1].set_ylabel('mean donor arrival time / ns')
+    ax[1].set_xlim(-0.1, 1.1)
+    fig.suptitle(title or 'step 1: the bursts classified by what each one looks like', fontsize=10)
+    fig.tight_layout()
+    return fig

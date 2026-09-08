@@ -1,0 +1,128 @@
+A/B: the burst experiment against the prototype's own ensemble simulation.
+
+Arm A is what `s88 --steps 9` does: the expected counts of the twelve PIE channels from one truth, the
+partner pulses summed into eight histograms, one Poisson draw -- the data are exactly a realisation of the
+model being fitted. Arm B is the bff example notebook: molecules drawn one at a time from the same p(R/R0),
+each with its own Poisson photon budget, uncorrelated background over the whole record, scattered light, and
+a tttrlib burst search deciding which photons are histogrammed. Everything else is identical, and each
+sample's reference-channel counts and background fractions in arm A are set to the ones arm B produced.
+
+5 seeds. (a) p(R/R0) of the first seed with the delta-method band, against the truth in the cuvette
+and the truth behind the selected bursts. (b) deviance per degree of freedom against the reference measured
+by Poisson draws at each fit's own means (grey). (c) runs tests of every histogram of every seed. (d) pulls
+per summary, bars the mean pull. (e) the ratio of posterior widths, B over A -- what the experiment costs.
+
+{
+ "x_d0_A": {
+  "truth": 0.2,
+  "mean": 0.16443499004219506,
+  "sd": 0.06742075681038541,
+  "pull": -0.49803190647995976,
+  "pmax": 0.8809459135435097,
+  "cover": 1.0
+ },
+ "x_d0_B": {
+  "truth": 0.1950515072460146,
+  "mean": 0.17468351139494476,
+  "sd": 0.06392970442557075,
+  "pull": -0.26736583283095305,
+  "pmax": 0.6510515798241582,
+  "cover": 1.0
+ },
+ "mean_A": {
+  "truth": 0.9999954191330437,
+  "mean": 1.02759254908164,
+  "sd": 0.054380908535292025,
+  "pull": 0.47653491742322396,
+  "pmax": 0.8871266137795474,
+  "cover": 1.0
+ },
+ "mean_B": {
+  "truth": 0.997118667419049,
+  "mean": 1.0185579600324108,
+  "sd": 0.05140716171247968,
+  "pull": 0.3782229622446978,
+  "pmax": 0.608278771952834,
+  "cover": 1.0
+ },
+ "sd_A": {
+  "truth": 0.20396493605138066,
+  "mean": 0.25581681474401397,
+  "sd": 0.06054042246704838,
+  "pull": 0.8479347810712252,
+  "pmax": 1.0820219733458905,
+  "cover": 1.0
+ },
+ "sd_B": {
+  "truth": 0.2028816475426889,
+  "mean": 0.24788801038221853,
+  "sd": 0.05941729346457738,
+  "pull": 0.7502022804465274,
+  "pmax": 1.0125954045844832,
+  "cover": 1.0
+ },
+ "tail_A": {
+  "truth": 0.045912219100250284,
+  "mean": 0.14207576275104494,
+  "sd": 0.11375857475406115,
+  "pull": 0.8114644245568277,
+  "pmax": 1.0848785763048348,
+  "cover": 1.0
+ },
+ "tail_B": {
+  "truth": 0.04700903439965788,
+  "mean": 0.12415103359796795,
+  "sd": 0.10727045941152588,
+  "pull": 0.6852954426767363,
+  "pmax": 0.8350950414555923,
+  "cover": 1.0
+ },
+ "r0_d_A": {
+  "truth": 0.36,
+  "mean": 0.35050070210158757,
+  "sd": 0.012595638422370636,
+  "pull": -0.7612794173495226,
+  "pmax": 1.4536270991011517,
+  "cover": 1.0
+ },
+ "r0_d_B": {
+  "truth": 0.36,
+  "mean": 0.35199067103393084,
+  "sd": 0.013138609175736398,
+  "pull": -0.6172357784915923,
+  "pmax": 1.3178394700018303,
+  "cover": 1.0
+ },
+ "r0_a_A": {
+  "truth": 0.18,
+  "mean": 0.16753245069984904,
+  "sd": 0.011798546004089461,
+  "pull": -1.0902807460367754,
+  "pmax": 1.9388218433752038,
+  "cover": 1.0
+ },
+ "r0_a_B": {
+  "truth": 0.18,
+  "mean": 0.1742111449654571,
+  "sd": 0.011584723557780625,
+  "pull": -0.6350035367855439,
+  "pmax": 2.1597438847349006,
+  "cover": 0.8
+ },
+ "g_A": {
+  "truth": 1.15,
+  "mean": 1.149894284372747,
+  "sd": 0.007549826783363979,
+  "pull": 0.0012968684684445454,
+  "pmax": 1.0314161415102154,
+  "cover": 1.0
+ },
+ "g_B": {
+  "truth": 1.15,
+  "mean": 1.1441281552608158,
+  "sd": 0.007566282564145136,
+  "pull": -0.7667740296827212,
+  "pmax": 1.949811931279677,
+  "cover": 1.0
+ }
+}
