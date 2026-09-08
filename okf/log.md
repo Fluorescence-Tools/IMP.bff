@@ -11060,3 +11060,12 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   `copy_buffer_to_buffer` between passes is the way around both, and costs nothing. Also measured on the way:
   OpenMP is worth 1.0x at ng=41, 1.8x at 61 and 2.3x at 81, which is the same small-slab story the OpenMP note
   tells. Prototyped through wgpu-py because it already carries wgpu-native; the C plugin is next.
+- **Drei Optimierungen am Stencil** (imp-bff-ce, 2026-09-08, PRD-140): dispatching only the active voxels
+  (a third to two fifths of the cube) is worth 1.3-1.5x; a workgroup of 256 another 4%; and precomputing the
+  stencil weights 1.6x. The last is the one worth remembering: `d`, `decay` and `bounds` are constant over a
+  propagation, so writing the step as `[decay*(1-sum a)]*p0 + sum [decay*a]*cur[m]` and computing the six `a`
+  once turns eighteen scattered reads per voxel into six, with the weights in a coalesced layout -- and it is
+  exact, deviation against the f64 CPU unchanged. Together 7.7-9.6x against the eight-threaded CPU where the
+  naive kernel managed 4.8-5.9x. Untried and listed in the note: f16 weights, tiling with workgroup memory,
+  renumbering the density into the compacted layout, hoisting the CPU parallel region out of the step loop, and
+  -- the real prize -- an integrator that does not need four thousand steps.

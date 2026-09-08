@@ -1,7 +1,7 @@
 ---
 type: validation
 title: "The diffusion stencil on the GPU: 5-12x, and the lead grows with the grid"
-description: The explicit Smoluchowski sweep written in WGSL and run through wgpu on an M1 Pro against the same solve on the CPU. Against the eight-threaded CPU it is 5.3-5.6x at every grid size measured; against the single thread that shipped until today it is 5.9x at ng=41 and 12.3x at ng=81. The fluorescence trace agrees to 1.2e-6 (ng=41) and 1.1e-5 (ng=81). Machine at load average 30, so minima over repetitions; the ratios are consistent across sizes, which the absolute times are not.
+description: The explicit Smoluchowski sweep written in WGSL and run through wgpu on an M1 Pro against the same solve on the CPU. The naive kernel is 5.3-5.6x the eight-threaded CPU; dispatching only the active voxels and precomputing the stencil weights take it to 7.7-9.6x, and against the single thread that shipped until today it is 12x and more. The fluorescence trace agrees to 1.2e-6 (ng=41) and 1.1e-5 (ng=81). Machine at load average 30, so minima over repetitions; the ratios are consistent across sizes, which the absolute times are not.
 resource: /Users/tpeulen/dev/imp.bff
 tags: [validation, imp.bff, performance, gpu, webgpu, diffusion, openmp]
 timestamp: '2026-09-08T00:00:00Z'
@@ -31,6 +31,57 @@ join four thousand times, and that is the same shape recorded in
 That growth is the point. The solver's cost goes as `dg⁻⁵`, so the resolutions
 that matter scientifically are exactly the ones where the CPU is worst and the
 GPU's lead is largest.
+
+## Three optimisations, measured one at a time
+
+The first kernel was the obvious one: a thread per voxel of the cube, a
+branch to skip what is outside. Three changes, each measured against the one
+before:
+
+| | worth | why |
+|---|---|---|
+| dispatch only the active voxels | 1.3–1.5× | a third to two fifths of the cube is inside the volume, and the rest was being dispatched and then discarded by a branch |
+| workgroup 256 instead of 64 | ~1.04× | — |
+| precompute the stencil weights | ~1.6× | `d`, `decay` and `bounds` do not change over a propagation, so neither do the coefficients |
+
+The last one is the interesting one. Writing the step as
+
+    nxt = [decay·(1 − Σ a_q)]·p0 + Σ [decay·a_q]·cur[m],   a_q = ½(d0+d_m)·b_m
+
+and computing the six `a_q` once turns **eighteen scattered reads per voxel
+into six** — the mobilities and the mask are gone from the inner loop — and
+the six weights that replace them are read in a coalesced layout. It is worth
+1.6× on its own, and it is exact: the deviation against the f64 CPU is
+unchanged, and against the naive f32 kernel it is 1e-7.
+
+With all three, against the eight-threaded CPU:
+
+| grid | naive | weights, wg 256 |
+|---|---|---|
+| 41³ | 5.9× | **9.6×** |
+| 61³ | 5.4× | **8.4×** |
+| 81³ | 4.8× | **7.7×** |
+
+## What has not been tried
+
+In rough order of what looks most promising:
+
+- **f16 for the weights.** Seven floats per voxel are now read every step and
+  the kernel is bandwidth-bound; halving them should show. Metal has the
+  `shader-f16` feature. It needs its own parity check — the weights are the
+  numbers the whole result is built from.
+- **Tiling with workgroup memory.** The six neighbour reads of `cur` are still
+  scattered over the full cube. A tile with a halo in workgroup storage is the
+  standard answer for a 3-D stencil and the largest remaining structural win.
+- **Renumbering the density into the compacted layout**, so that neighbours
+  are near each other in memory rather than a plane apart.
+- **On the CPU side**, hoisting the OpenMP parallel region out of the step
+  loop: that is what makes threading worth nothing at ng = 41 today.
+- **Algorithmically**, the explicit scheme's stability bound `dt ≤ dg²/(6D)`
+  is what forces four thousand steps. An exponential or implicit integrator
+  changes the *number* of steps rather than their cost, which is where orders
+  of magnitude live rather than factors — and it is a numerics project, not an
+  optimisation.
 
 ## What is trustworthy here and what is not
 
