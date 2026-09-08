@@ -1,7 +1,7 @@
 ---
 type: validation
-title: "Larger time steps for the diffusion solver: 2x from super-time-stepping, 31-62x from a Krylov exponential"
-description: The explicit solver's 4000 steps come from the forward-Euler stability bound, and the shipped scheme sits at 77% of it. Two families were measured against the exact matrix exponential. RKL2 super-time-stepping is a drop-in that buys 2.1x before it exceeds the shipped scheme's own error. A Krylov (Lanczos) exponential does the whole propagation in 64-128 operator applications instead of 4000, in f32, without reorthogonalisation, and holds for both flux forms, point and smooth starts, and strong localised quenching. The operator is constant in time and symmetrisable, which is what makes it possible.
+title: "The diffusion solver without time steps: a Krylov exponential, implemented, 14-24x on one thread"
+description: The explicit solver's 4000 steps come from the forward-Euler stability bound, and the shipped scheme sits at 77% of it. A Krylov (Lanczos) exponential does the whole propagation in 64-128 operator applications instead, because the operator is constant over a run and symmetrisable. Now implemented in C++ as diffusion_propagate_krylov / diffusion_trace_krylov and measured: 24x on one thread for the trace, 14x for the safe default basis, 8x with the density as well, and it agrees with the exact matrix exponential to 1e-13 while the stepping route it replaces is 2e-6 away from it. RKL2 super-time-stepping was the alternative and is worth only 2.1x.
 resource: /Users/tpeulen/dev/imp.bff
 tags: [validation, imp.bff, numerics, diffusion, quenching, performance, krylov]
 timestamp: '2026-09-08T00:00:00Z'
@@ -174,6 +174,51 @@ so it would have to beat RKL2's 2.1×, not the 4 000 steps. ADI would turn the
 3-D solve into tridiagonal sweeps along lines, which suits a GPU badly and
 suits the irregular domain worse. Neither is competitive with 31× once the
 exponential route is on the table.
+
+## It is implemented
+
+`src/KrylovDiffusion.cpp`, reached as `diffusion_propagate_krylov()` (trace and
+final density) and `diffusion_trace_krylov()` (trace only, half the work,
+which is what calibration wants). Wall clock on the same fixture, ng = 41/61/81,
+4 000 steps, reported every 100 -- one thread, which is what the library
+actually shipped until the OpenMP fix:
+
+| grid | stepping | trace, m=64 | trace, m=128 | trace + density, m=128 |
+|---|---|---|---|---|
+| 41³ | 410 ms | 17.8 ms (**23×**) | 30.9 ms (13×) | 50.9 ms (8.1×) |
+| 61³ | 1 595 ms | 64.9 ms (**25×**) | 112.5 ms (14×) | 189.0 ms (8.4×) |
+| 81³ | 4 139 ms | 170.7 ms (**24×**) | 292.5 ms (14×) | 490.1 ms (8.4×) |
+
+and on eight threads, where the stepping route has more to gain from the
+threads than this does:
+
+| grid | stepping | trace, m=64 | trace, m=128 |
+|---|---|---|---|
+| 41³ | 335 ms | 28.1 ms (12×) | 47.0 ms (7.1×) |
+| 61³ | 796 ms | 51.3 ms (16×) | 83.1 ms (9.6×) |
+| 81³ | 1 680 ms | 99.2 ms (17×) | 158.5 ms (11×) |
+
+Note the 41³ row on eight threads: the Krylov route is *slower* threaded than
+serial (28.1 against 17.8 ms), the same fork-and-join tax the stepping route
+pays at that size.
+
+The measured factor is below the 31-62× the operator count promises, and the
+reason is worth recording: **the vector operations, not the stencil.** Written
+the obvious way -- serial loops over the full cube for each dot product, axpy
+and norm -- they made eight threads worth nothing at all (4.3× at ng = 81
+where one thread got 12×), because the generator scaled with the threads and
+they did not. Walking a list of the active voxels instead, in parallel, and
+fusing the two reductions into one pass took ng = 81 from 12.0× to 15.5× on
+one thread and from 4.3× to 11.1× on eight. What is left of the gap is the
+same thing: three passes over the active voxels per Lanczos step against the
+generator's one pass with seven reads.
+
+**Correctness.** Against `expm_multiply` the C++ agrees to 1.2e-13 at m = 128,
+and against the stepping route it differs by exactly 2.04e-6 -- the number the
+numpy study predicted for the stepping route's own error, arrived at through
+entirely different code. `test/quenching/test_krylov_propagate.py` gates both
+flux forms, the density as well as the trace, convergence in `m`, and the
+refusal when Ito meets a zero mobility.
 
 ## What would change for callers
 
