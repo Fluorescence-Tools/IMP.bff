@@ -11036,3 +11036,16 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   compiler as one unknown option. Also measured, and against expectation: `diffusion_propagate` at ng=41 is
   *slower* with eight threads (0.138 vs 0.115 ms/step, machine at load 18.9 so not a verdict) -- the pragma sits
   inside the per-step loop over x-slabs, and a 41-voxel slab does not pay for four thousand forks and joins.
+- **Die Rechen-Tür, und das f32-Tor** (imp-bff-ce, 2026-09-08, PRD-140 Schritt 1): `include/Compute.h` is where a
+  kernel can be sent somewhere else -- a C-ABI plugin struct (`ImpBffComputeBackend`, versioned), a `dlopen`
+  loader that declines rather than crashes, and `get_compute_backend_name()` so nobody measures a CPU and
+  reports a GPU. `diffusion_propagate` consults it and hands over the *whole* propagation or none of it; a
+  backend may decline per call. Python does the finding, because that is where `import wgpu` is natural:
+  `enable_gpu()` honours `IMP_BFF_GPU=off` and `IMP_BFF_GPU_LIBRARY`, looks for the plugin beside the module and
+  for wgpu-native inside a wgpu-py installation, and warns once if it found a plugin but no library. No OS ships
+  WebGPU; wgpu-py does, for every platform this library targets, and it is already installed here.
+  **The gate that had to come first**: WGSL has no f64. Measured (benchmark/f32_diffusion_gate.py,
+  okf/validation/f32_holds_the_diffusion_stencil.md): the same sweep in f32 against f64 deviates 1.2e-6 relative
+  in the fluorescence trace and 1.5e-6 in the final density at ng=41 over 4000 steps -- the scheme is
+  contractive, so error is damped rather than accumulated, and longer runs come out *closer*. The adjoint is not
+  covered and needs its own measurement. Lane 732/0.

@@ -5,6 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/DiffusionSolver.h>
+#include <IMP/bff/Compute.h>
 #include <IMP/bff/internal/OutputView.h>
 // The solver and its adjoint are tttrlib's LatticeDiffusion.h, vendored
 // verbatim (test/test_vendored_headers.py keeps the copy identical). This file
@@ -34,6 +35,26 @@ void diffusion_propagate(
         int ng, int flux_form, int n_steps, int n_out,
         double** out_fluorescence, int* n_out_fluorescence,
         double** out_view, int* n_out_view) {
+    // An accelerator gets the whole propagation or none of it (Compute.h).
+    // It may decline per call -- too small to be worth the transfer, or a
+    // precision it cannot hold -- and then this falls through to the CPU
+    // below with nothing written.
+    const ImpBffComputeBackend* backend = get_compute_backend();
+    if (backend && backend->propagate && n_steps > 0 && n_out > 0) {
+        const std::size_t n_voxel = static_cast<std::size_t>(ng) * ng * ng;
+        const int n_reported = n_steps / n_out + 1;
+        std::vector<double> fl(static_cast<std::size_t>(n_reported), 0.0);
+        std::vector<double> density(n_voxel, 0.0);
+        const int rc = backend->propagate(
+                cur.data(), d.data(), decay.data(), bounds.data(), ng, flux_form,
+                n_steps, n_out, fl.data(), n_reported, density.data());
+        if (rc == 0) {
+            internal::copy_to_view(fl, out_fluorescence, n_out_fluorescence);
+            internal::copy_to_view(density, out_view, n_out_view);
+            return;
+        }
+    }
+
     std::vector<double> fluorescence;
     const std::vector<double> final_density = internal::lattice_propagate(
             cur, d, decay, bounds, ng,
