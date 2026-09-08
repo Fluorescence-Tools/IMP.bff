@@ -25,7 +25,7 @@ What has never moved is the **data**.
 | | DataCurve | Dataset |
 |---|---|---|
 | values | `y` | any rank |
-| axis | `x`, and `ex` for its uncertainty | **added 2026-09-08**; `ex` still absent |
+| axis | one `x` array, and `ex` for its uncertainty | **added 2026-09-08**: any number of coordinates, one value per point; `ex` still absent |
 | uncertainty | a stored `ey` array | a noise *family*, and propagation over sources |
 | mask | yes | yes |
 | N-D | flattened to 1-D plus `meta_data['grid']` = `{ndim, shape, order}` | a real shape |
@@ -36,6 +36,13 @@ Two of those rows are the whole answer.
 
 **Why not already: the axis, the provenance and the object model.** A dataset
 with no `x` cannot be a curve, which until today was disqualifying on its own.
+Note what the coordinate had to become, though, on the owner's correction:
+**every value carries its own coordinate**, because an axis can be any shape
+and samples need not lie on a lattice — and **how many coordinates a dataset
+has is independent of its rank**, because a list of bursts is rank 1 and
+carries an efficiency and a stoichiometry. `DataCurve`'s single `x` is the
+rank-1 separable case of that, which is the direction a migration would have
+to go rather than the reverse.
 The rest — where the file came from, how it is grouped, how a widget binds to
 it — is chisurf's business and should stay there. `DataCurve` is named in 61
 files.
@@ -78,7 +85,10 @@ processes data; it should not learn where a file came from.
 
 ## Still missing before step 2
 
-- `ex`, the axis's own uncertainty. `DataCurve` has it; `Dataset` does not.
+- `ex`, a coordinate's own uncertainty. `DataCurve` has it for its single `x`;
+  `Dataset` has coordinates but no uncertainty on them. It should probably be
+  the same propagation machinery the values use rather than a second stored
+  array, which is a design question and not a gap to fill blindly.
 - No consumer yet uses `Dataset`'s rank > 1 in anger — the rank-3 case is
   tested, not used, and a migration is the wrong time to discover what an
   image needs.

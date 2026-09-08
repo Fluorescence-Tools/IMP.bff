@@ -205,17 +205,63 @@ def test_the_stored_objective_is_the_one_the_library_already_computes():
     np.testing.assert_allclose(from_dataset, existing, rtol=1e-12, atol=1e-12)
 
 
-def test_a_dataset_carries_an_axis_per_dimension():
-    """A curve without its x is not a curve, and a 2-D dataset may need one
-    axis and not the other."""
+def test_every_value_has_a_coordinate():
+    """A coordinate is one per point, not one per index along an axis. An
+    axis can be any shape and the samples need not lie on a lattice."""
+    d = IMP.bff.Dataset()
+    d.set_values([1.0, 2.0, 3.0])
+    d.set_coordinate(0, "time", [0.0, 0.7, 2.9])   # unevenly spaced
+    assert d.get_number_of_coordinates() == 1
+    assert d.get_coordinate_name(0) == "time"
+    np.testing.assert_allclose(np.asarray(d.get_coordinate(0)), [0.0, 0.7, 2.9])
+    with pytest.raises(ValueError):
+        d.set_coordinate(1, "short", [0.0, 1.0])
+
+
+def test_how_many_coordinates_is_independent_of_the_rank():
+    """A list of bursts is rank 1 and carries an efficiency and a
+    stoichiometry. Tying coordinates to dimensions would rule that out, and it
+    is a real kind of data rather than a curiosity."""
+    n = 5
+    d = IMP.bff.Dataset()
+    d.set_values(list(np.arange(float(n))))
+    assert d.get_rank() == 1
+    d.set_coordinate(0, "E", list(np.linspace(0.1, 0.9, n)))
+    d.set_coordinate(1, "S", list(np.linspace(0.4, 0.6, n)))
+    assert d.get_number_of_coordinates() == 2
+    assert [d.get_coordinate_name(i) for i in range(2)] == ["E", "S"]
+
+
+def test_a_separable_grid_axis_is_expanded_to_one_per_value():
+    """The convenience for the easy case, giving exactly what writing the full
+    coordinate by hand would give."""
     d = IMP.bff.Dataset()
     d.set_values(list(np.arange(12.0)), [3, 4])
-    assert not d.get_has_axis(0)
-    d.set_axis(0, [10.0, 20.0, 30.0])
-    assert d.get_has_axis(0)
-    assert not d.get_has_axis(1)
-    np.testing.assert_allclose(np.asarray(d.get_axis(0)), [10.0, 20.0, 30.0])
+    d.set_grid_axis(0, "row", [10.0, 20.0, 30.0])
+    d.set_grid_axis(1, "col", [1.0, 2.0, 3.0, 4.0])
+    rows = np.asarray(d.get_coordinate(0)).reshape(3, 4)
+    cols = np.asarray(d.get_coordinate(1)).reshape(3, 4)
+    np.testing.assert_allclose(rows, np.tile([[10.0], [20.0], [30.0]], (1, 4)))
+    np.testing.assert_allclose(cols, np.tile([1.0, 2.0, 3.0, 4.0], (3, 1)))
     with pytest.raises(ValueError):
-        d.set_axis(1, [1.0, 2.0])          # extent is 4
+        d.set_grid_axis(1, "wrong", [1.0, 2.0])
     with pytest.raises(ValueError):
-        d.set_axis(2, [1.0])               # no such dimension
+        d.set_grid_axis(2, "no such dimension", [1.0])
+
+
+def test_a_grid_that_is_not_separable_is_still_expressible():
+    """The reason coordinates are per point: a warped or scattered sampling
+    has no per-axis vector to be built from."""
+    d = IMP.bff.Dataset()
+    d.set_values(list(np.arange(6.0)), [2, 3])
+    warped_x = [0.0, 1.0, 2.0, 0.5, 1.7, 2.4]     # rows sampled differently
+    d.set_coordinate(0, "x", warped_x)
+    np.testing.assert_allclose(np.asarray(d.get_coordinate(0)), warped_x)
+
+
+def test_coordinates_are_dropped_when_the_shape_moves():
+    d = IMP.bff.Dataset()
+    d.set_values([1.0, 2.0, 3.0])
+    d.set_coordinate(0, "t", [0.0, 1.0, 2.0])
+    d.set_values([1.0, 2.0])
+    assert d.get_number_of_coordinates() == 0

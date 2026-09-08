@@ -58,35 +58,69 @@ void Dataset::set_values(const std::vector<double>& values,
   values_ = values;
   shape_ = shape;
   mask_.clear();
-  axes_.clear();   // the shape may have moved under them
+  coordinates_.clear();   // the shape may have moved under them
+  coordinate_names_.clear();
 }
 
 void Dataset::set_values(const std::vector<double>& values) {
   set_values(values, std::vector<int>(1, static_cast<int>(values.size())));
 }
 
-void Dataset::set_axis(int dimension, const std::vector<double>& values) {
+void Dataset::set_coordinate(int index, const std::string& name,
+                             const std::vector<double>& values) {
+  if (index < 0) IMP_THROW("a coordinate index is not negative", IMP::ValueException);
+  if (values.size() != values_.size()) {
+    IMP_THROW("a coordinate has one value per point: " << values_.size()
+              << " expected, " << values.size() << " given. Every y has an x",
+              IMP::ValueException);
+  }
+  if (index >= static_cast<int>(coordinates_.size())) {
+    coordinates_.resize(static_cast<std::size_t>(index) + 1);
+    coordinate_names_.resize(static_cast<std::size_t>(index) + 1);
+  }
+  coordinates_[static_cast<std::size_t>(index)] = values;
+  coordinate_names_[static_cast<std::size_t>(index)] = name;
+}
+
+void Dataset::set_grid_axis(int dimension, const std::string& name,
+                            const std::vector<double>& values) {
   if (dimension < 0 || dimension >= get_rank()) {
     IMP_THROW("this dataset has " << get_rank() << " dimensions and no "
               << dimension, IMP::ValueException);
   }
   if (static_cast<int>(values.size()) != shape_[dimension]) {
-    IMP_THROW("axis " << dimension << " has extent " << shape_[dimension]
+    IMP_THROW("dimension " << dimension << " has extent " << shape_[dimension]
               << " and " << values.size() << " coordinates were given",
               IMP::ValueException);
   }
-  axes_.resize(shape_.size());
-  axes_[static_cast<std::size_t>(dimension)] = values;
+  // Expanded rather than stored compactly: the general form is one coordinate
+  // per value, and a second storage shape would be a second thing to get
+  // wrong for the sake of a few kilobytes.
+  std::size_t inner = 1;
+  for (std::size_t d = static_cast<std::size_t>(dimension) + 1;
+       d < shape_.size(); ++d) {
+    inner *= static_cast<std::size_t>(shape_[d]);
+  }
+  std::vector<double> full(values_.size(), 0.0);
+  for (std::size_t i = 0; i < values_.size(); ++i) {
+    const std::size_t along =
+        (i / inner) % static_cast<std::size_t>(shape_[dimension]);
+    full[i] = values[along];
+  }
+  set_coordinate(dimension, name, full);
 }
 
-const std::vector<double>& Dataset::get_axis(int dimension) const {
+const std::vector<double>& Dataset::get_coordinate(int index) const {
   static const std::vector<double> none;
-  if (dimension < 0 || dimension >= static_cast<int>(axes_.size())) return none;
-  return axes_[static_cast<std::size_t>(dimension)];
+  if (index < 0 || index >= static_cast<int>(coordinates_.size())) return none;
+  return coordinates_[static_cast<std::size_t>(index)];
 }
 
-bool Dataset::get_has_axis(int dimension) const {
-  return !get_axis(dimension).empty();
+std::string Dataset::get_coordinate_name(int index) const {
+  if (index < 0 || index >= static_cast<int>(coordinate_names_.size())) {
+    return std::string();
+  }
+  return coordinate_names_[static_cast<std::size_t>(index)];
 }
 
 void Dataset::set_mask(const std::vector<double>& mask) {

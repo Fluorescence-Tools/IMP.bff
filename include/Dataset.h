@@ -90,21 +90,46 @@ class IMPBFFEXPORT Dataset {
   //! How many values.
   int get_size() const { return static_cast<int>(values_.size()); }
 
-  //! The coordinate along one axis: the `x` of a curve, a pixel edge, a lag.
+  //! Give every value a coordinate.
   /*!
-      Optional, and per dimension, because a curve without its x is not a
-      curve and a 2-D dataset may need one axis and not the other.
+      **Every y has an x**, so a coordinate is `get_size()` long -- one per
+      value -- and not one per index along an axis. A grid whose axes are
+      products of per-axis coordinates is the easy case, not the general one:
+      an axis can be any shape, samples need not lie on a lattice, and the
+      same is true at rank 2 and above.
 
-      \param[in] dimension which axis, 0 for the slowest
-      \param[in] values as long as that dimension's extent
-      \throws IMP::ValueException if the dimension does not exist or the
-              length is wrong.
+      **How many coordinates is independent of the rank.** A list of N bursts
+      is rank 1 and may carry two coordinates, an efficiency and a
+      stoichiometry; an image is rank 2 and carries two; a curve carries one.
+      Tying coordinates to dimensions would rule out the first, which is a
+      real kind of data rather than a curiosity.
+
+      \param[in] index which coordinate, in the order the caller wants them
+      \param[in] name what it is called, for #describe
+      \param[in] values `get_size()` of them
+      \throws IMP::ValueException unless there is one value per point.
   */
-  void set_axis(int dimension, const std::vector<double>& values);
-  //! The coordinate along one axis, empty if none was given.
-  const std::vector<double>& get_axis(int dimension) const;
-  //! Whether an axis was given for this dimension.
-  bool get_has_axis(int dimension) const;
+  void set_coordinate(int index, const std::string& name,
+                      const std::vector<double>& values);
+
+  //! A coordinate from a **separable** grid axis, expanded to one per value.
+  /*!
+      The convenience for the common case: \p values is as long as dimension
+      \p dimension's extent, and it is repeated across the others. Equivalent
+      to building the full coordinate by hand, and refused on a dataset whose
+      shape does not have that dimension.
+  */
+  void set_grid_axis(int dimension, const std::string& name,
+                     const std::vector<double>& values);
+
+  //! How many coordinates each value has.
+  int get_number_of_coordinates() const {
+    return static_cast<int>(coordinates_.size());
+  }
+  //! One coordinate, `get_size()` long; empty if there is no such index.
+  const std::vector<double>& get_coordinate(int index) const;
+  //! Its name, empty if there is no such index.
+  std::string get_coordinate_name(int index) const;
 
   //! Which points count. Empty means all of them.
   /*! \throws IMP::ValueException if it is neither empty nor the data's size. */
@@ -242,7 +267,8 @@ class IMPBFFEXPORT Dataset {
   std::vector<double> values_, mask_, stored_variance_, propagated_variance_;
   std::string provenance_;
   //! The independent sources, their per-point variance, and d(value)/d(source).
-  std::vector<std::vector<double> > axes_;
+  std::vector<std::vector<double> > coordinates_;
+  std::vector<std::string> coordinate_names_;
   std::vector<std::string> source_names_;
   std::vector<std::vector<double> > source_variance_, derivative_;
 
