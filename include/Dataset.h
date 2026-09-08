@@ -48,7 +48,12 @@ enum NoiseFamily {
   //! A measurement with its own per-point variance, supplied with the data.
   NOISE_FAMILY_STORED = 1,
   //! Gaussian with one variance for every point.
-  NOISE_FAMILY_CONSTANT = 2
+  NOISE_FAMILY_CONSTANT = 2,
+  //! A variance carried here by propagation from other datasets.
+  /*! Set by #set_linear_combination, and stored rather than derived from the
+      model for the reason given there: the components' own predictions are
+      not recoverable from the combination. */
+  NOISE_FAMILY_PROPAGATED = 3
 };
 
 //! Which residual, named for how it is weighted rather than that it is.
@@ -99,6 +104,88 @@ class IMPBFFEXPORT Dataset {
   //! The single variance, for #NOISE_FAMILY_CONSTANT.
   void set_constant_variance(double variance);
 
+  //! Declare this dataset an independent source of uncertainty.
+  /*!
+      A measured channel. Its variance is its family's -- counts for Poisson,
+      the stored array otherwise -- and every dataset derived from it tracks
+      \f$\partial\,\mathrm{value}/\partial\,\mathrm{this}\f$, so that a
+      later combination knows what it was built from.
+
+      \param[in] name what it is called in #describe and in error messages
+  */
+  void set_as_source(const std::string& name);
+
+  //! `a + b`, `a - b`, `a * b`, `a / b`, elementwise, with the variance carried through.
+  /*!
+      First-order propagation over the **independent sources**, not over the
+      operands:
+      \f[ \mathrm{Var}(z) = \sum_s \left(\frac{\partial z}{\partial s}\right)^2
+          \mathrm{Var}(s) \f]
+      with the derivatives composed by the chain rule as the expression is
+      built. Propagating over the operands instead is the standard mistake and
+      it is wrong whenever they share a source.
+
+      **Anisotropy is exactly that case.**
+      \f$r = (VV - G\,VH)/(VV + 2G\,VH)\f$ has the same two channels above
+      and below the line, so numerator and denominator are strongly
+      correlated; treating them as independent gets the variance wrong in a
+      way no amount of care about each half will fix. Tracing back to
+      \f$VV\f$ and \f$VH\f$ gets it right without the caller thinking about
+      it.
+
+      \throws IMP::ValueException if the operands differ in size, or if an
+              operand carries no uncertainty at all -- an untracked operand
+              would silently contribute none.
+  */
+  static Dataset add(const Dataset& a, const Dataset& b);
+  static Dataset subtract(const Dataset& a, const Dataset& b);
+  static Dataset multiply(const Dataset& a, const Dataset& b);
+  static Dataset divide(const Dataset& a, const Dataset& b);
+  //! `scale * a + offset`; the offset is exact and the scale is a constant.
+  static Dataset affine(const Dataset& a, double scale, double offset = 0.0);
+  //! `f(a)` for a function whose derivative the caller supplies per point.
+  /*! The general case, so that a transform this class does not know about --
+      a logarithm, a power, an instrument linearisation -- still carries its
+      uncertainty. \p values and \p derivative are `f(a_i)` and
+      `f'(a_i)`. */
+  static Dataset transform(const Dataset& a, const std::vector<double>& values,
+                           const std::vector<double>& derivative);
+
+  //! Names of the independent sources this dataset was built from.
+  std::vector<std::string> get_source_names() const { return source_names_; }
+
+  //! Build this dataset as `sum_i coefficient_i * source_i`, propagating the variance.
+  /*!
+      The case that motivates it is the constructed magic-angle decay, which
+      is not measured at 54.7 degrees but assembled from a parallel and a
+      perpendicular channel:
+
+          I = I_VV + 2 G I_VH
+
+      **The result is not Poisson, and treating it as though it were is
+      wrong.** Each channel is counts, so \f$\mathrm{Var} = \sum_i c_i^2
+      \mathrm{Var}_i\f$ and the combination's variance is
+      \f$I_{VV} + 4G^2 I_{VH}\f$ -- while a Poisson reading of the result
+      would say \f$I_{VV} + 2G I_{VH}\f$. The perpendicular channel's
+      contribution is understated by a factor of \f$2G\f$, and the misfit is
+      pushed wherever the perpendicular counts are largest. The coefficient
+      squares; the Poisson assumption does not know that.
+
+      A Poisson source contributes its **measured** values as its variance,
+      because the combination does not let a model be decomposed back into
+      per-channel predictions. That is data weighting, with the bias described
+      on #NOISE_FAMILY_POISSON, and it is the price of constructing the
+      combination at all. **The unbiased alternative is not to construct it**:
+      keep the channels as two datasets, give each its Poisson family, and
+      let one objective hold both. That the abstraction supports the honest
+      route is the argument for preferring it.
+
+      \throws IMP::ValueException unless there is at least one source, the
+              counts match, and every source has the same size.
+  */
+  void set_linear_combination(const std::vector<Dataset>& sources,
+                              const std::vector<double>& coefficients);
+
   //! The variance at every point, given what the model predicts there.
   /*!
       Poisson takes it from \p model, which is why this is a function and not
@@ -136,7 +223,19 @@ class IMPBFFEXPORT Dataset {
   std::string describe() const;
 
  private:
-  std::vector<double> values_, mask_, stored_variance_;
+  std::vector<double> values_, mask_, stored_variance_, propagated_variance_;
+  std::string provenance_;
+  //! The independent sources, their per-point variance, and d(value)/d(source).
+  std::vector<std::string> source_names_;
+  std::vector<std::vector<double> > source_variance_, derivative_;
+
+  //! Own variance, whatever the family says, for use in propagation.
+  std::vector<double> own_variance() const;
+  //! Recompute values_/propagated_variance_ from the sources.
+  void finish_propagation(const std::vector<double>& values,
+                          const std::string& provenance);
+  static Dataset binary(const Dataset& a, const Dataset& b, int op,
+                        const char* symbol);
   std::vector<int> shape_;
   NoiseFamily family_ = NOISE_FAMILY_POISSON;
   double constant_variance_ = 1.0;
