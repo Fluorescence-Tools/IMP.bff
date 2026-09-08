@@ -550,6 +550,16 @@ $\sigma_{\langle t\rangle} \approx \tau/\sqrt{N}$, so a burst of a few hundred
 photons localises $E$ to a few percent — enough to *group* molecules even
 though it is far too coarse to place one.
 
+**Per-burst trust, and a quantity not to use for it.** A clustering can report
+a membership strength per point, and it is tempting to weight or threshold
+bursts by it. It is a rank *within* a cluster: the denominator is that
+cluster's own death density, so every cluster attains 1 somewhere however
+diffuse it is, and equal strengths in two different clusters mean different
+things. The comparable quantity is the density at which a point leaves its
+cluster — the condensed tree's $\lambda = 1/d$ on the row where that point is
+the child — which is in the units of the standardised observables and can be
+compared between a tight group and a diffuse one.
+
 Grouping the bursts and pooling each group factorises the problem:
 
 $$
