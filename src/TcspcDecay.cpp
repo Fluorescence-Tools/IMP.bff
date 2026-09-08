@@ -134,6 +134,8 @@ void TcspcDecay::set_response(const std::vector<double>& response) {
   }
   response_ = response;
   shifted_.assign(response_.size(), 0.0);
+  ++response_epoch_;
+  irf_valid_ = false;
   set_valid(false);
 }
 
@@ -338,6 +340,16 @@ void TcspcDecay::evaluate() {
   // shift zeroes what moves past either end and normalising first would
   // leave the model's area depending on the timeshift.
   const double timeshift = timeshift_port_->get_value();
+  // The shift and the renormalisation depend on the response and the
+  // timeshift and on nothing else, so an evaluation that moved neither --
+  // every Jacobian column on an amplitude or a lifetime, which is most of
+  // them -- can keep the copy it already has. A NaN timeshift compares
+  // unequal to itself and rebuilds, which is the safe direction.
+  const bool irf_is_current =
+      irf_valid_ && irf_epoch_ == response_epoch_ &&
+      irf_timeshift_ == timeshift &&
+      irf_.size() == static_cast<std::size_t>(n_points);
+  if (!irf_is_current) {
   const double* response = response_.data();
   if (timeshift != 0.0) {
     // Sign: ChiSurf's `shift_array(v, s)` is tttrlib's `shift_lamp(v, -s)`.
@@ -366,6 +378,10 @@ void TcspcDecay::evaluate() {
   } else {
     std::copy(response, response + n_points, irf_.begin());
   }
+  irf_epoch_ = response_epoch_;
+  irf_timeshift_ = timeshift;
+  irf_valid_ = true;
+  }
   const std::vector<double>& irf = irf_;
 
   curve_.assign(static_cast<std::size_t>(n_points), 0.0);
@@ -389,18 +405,36 @@ void TcspcDecay::evaluate() {
   // kept instead of accumulated.
   if (emit_basis_) {
     const std::size_t n_species = static_cast<std::size_t>(n_active_);
-    basis_.assign(static_cast<std::size_t>(n_points) * n_species, 0.0);
-    std::vector<double> column(static_cast<std::size_t>(n_points));
+    const std::size_t n_bins = static_cast<std::size_t>(n_points);
+    // Species-major first: the kernel writes each column into its own
+    // contiguous run, so there is no separate column buffer and no copy out
+    // of one. Writing the port's bins x species layout directly would put
+    // consecutive writes `n_species` doubles apart -- a different cache line
+    // every time, and at 33 species over 1563 channels that is 51k of them
+    // against a buffer far larger than L1.
+    basis_columns_.assign(n_bins * n_species, 0.0);
     double single[2];
     for (std::size_t s = 0; s < n_species; ++s) {
       single[0] = 1.0;
       single[1] = spectrum_[2 * s + 1];
-      std::fill(column.begin(), column.end(), 0.0);
-      fconv_per_cs_ad<double>(column.data(), single, irf.data(), 1, stop,
-                              n_points, period_, convolution_stop, dt_);
-      for (int b = 0; b < n_points; ++b) {
-        basis_[static_cast<std::size_t>(b) * n_species + s] =
-            column[static_cast<std::size_t>(b)];
+      fconv_per_cs_ad<double>(basis_columns_.data() + s * n_bins, single,
+                              irf.data(), 1, stop, n_points, period_,
+                              convolution_stop, dt_);
+    }
+    // Then one blocked transpose into the contract the port promises. Tiled
+    // because the naive loop is strided on whichever side it does not walk,
+    // which is the cost this is here to avoid.
+    basis_.assign(n_bins * n_species, 0.0);
+    const std::size_t tile = 32;
+    for (std::size_t b0 = 0; b0 < n_bins; b0 += tile) {
+      const std::size_t b1 = std::min(b0 + tile, n_bins);
+      for (std::size_t s0 = 0; s0 < n_species; s0 += tile) {
+        const std::size_t s1 = std::min(s0 + tile, n_species);
+        for (std::size_t b = b0; b < b1; ++b) {
+          for (std::size_t s = s0; s < s1; ++s) {
+            basis_[b * n_species + s] = basis_columns_[s * n_bins + b];
+          }
+        }
       }
     }
     const std::shared_ptr<Port> bp = get_output_port(basis_port_key());

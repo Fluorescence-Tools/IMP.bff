@@ -448,6 +448,35 @@ class SpectrumPortTests(unittest.TestCase):
         self.assertEqual(node.get_evaluation_count() - evaluations, 1)
         self.assertFalse(np.array_equal(curve_of(node), expected))
 
+    def test_the_cached_response_is_dropped_when_it_should_be(self):
+        """`evaluate` keeps the shifted, renormalised response between calls,
+        because it depends on the response and the timeshift and on nothing
+        else -- which is a cache, and a cache is only as good as what drops
+        it. Four things that must reach the curve."""
+        irf = response()
+        pairs = [(0.6, 0.4), (0.4, 3.9)]
+        node = build(2, irf)
+        set_spectrum(node, pairs)
+        base = curve_of(node).copy()
+
+        # a timeshift moves it, and shifting back reproduces it exactly
+        node.get_input_port("timeshift").value = 2.5
+        shifted = curve_of(node).copy()
+        self.assertFalse(np.array_equal(shifted, base))
+        node.get_input_port("timeshift").value = 0.0
+        np.testing.assert_allclose(curve_of(node), base, rtol=0, atol=0)
+
+        # a new response reaches the curve
+        node.set_response(list(response(centre=1.4)))
+        self.assertFalse(np.array_equal(curve_of(node), base))
+
+        # and a rescaled response does not, because it is normalised.
+        # Not bitwise: `(7x)/(7T)` and `x/T` are the same number in real
+        # arithmetic and differ in the last place in this one, so the claim
+        # is scale invariance, not reproducibility.
+        node.set_response(list(np.asarray(irf) * 7.0))
+        np.testing.assert_allclose(curve_of(node), base, rtol=1e-14, atol=0)
+
     def test_an_upstream_node_can_drive_it(self):
         """The arrangement, end to end: a node computes the spectrum.
 

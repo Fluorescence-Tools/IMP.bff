@@ -332,7 +332,19 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   std::vector<Port*> lifetime_ports_;
   Port* spectrum_port_ = nullptr;
   bool emit_basis_ = false;
+  //! Bumped by set_response, so the normalised copy below can tell.
+  unsigned long long response_epoch_ = 0;
+  //! What irf_ was built from: skip rebuilding it when neither has moved.
+  unsigned long long irf_epoch_ = 0;
+  double irf_timeshift_ = 0.0;
+  bool irf_valid_ = false;
   std::vector<double> basis_;
+  //! The basis species-major, which is how the kernel writes it.
+  /*! The port's contract is bins x species, and producing that directly
+      means every write of a species' column lands `n_species` doubles from
+      the last -- a different cache line each time. So the columns are filled
+      contiguously here and transposed once. */
+  std::vector<double> basis_columns_;
   Port* scatter_port_ = nullptr;
   Port* background_port_ = nullptr;
   Port* n0_port_ = nullptr;
