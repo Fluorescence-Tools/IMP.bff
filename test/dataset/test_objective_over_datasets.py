@@ -110,6 +110,50 @@ def test_a_dataset_and_an_index_window_together_are_refused():
         c.compute_weighted_residuals([6.0, 9.0, 25.0])
 
 
+def test_the_two_paths_disagree_about_the_sign_and_this_pins_it():
+    """The migration hazard, asserted rather than left in a docstring.
+
+    The same object, the same counts, the same Poisson family: told
+    `"poisson"` it returns residuals of one sign, given a `Dataset` it
+    returns the other. The magnitudes are equal and chi-square is identical
+    to the bit, so no fit moves and nothing fails -- a residual *plot* flips,
+    which is why it survived this long.
+
+    Which convention is right is not in doubt. `sign(y - mu)` is the standard
+    for a deviance residual and it is what the `"default"` path, all three
+    `Dataset` kinds, and chisurf's own Gaussian residuals already use; the
+    odd one out is `deviance_residual`'s `sign(mu - y)`, transcribed from
+    chisurf's `deviance_residuals`, which is non-standard in the same way.
+    Flipping it is an owner's call because chisurf plots it (PRD-140), so
+    this test pins today's behaviour: it fails the day either side moves,
+    which makes the change deliberate instead of a surprise.
+    """
+    y = np.array([5.0, 10.0, 20.0])
+    mu = np.array([6.0, 9.0, 25.0])
+
+    told = IMP.bff.ChiSquared("told")
+    told.set_data(list(y), list(np.sqrt(y)))
+    told.set_noise_model_name("poisson")
+    asked = _chi("asked", _poisson_dataset(y))
+
+    r_told = np.asarray(told.compute_weighted_residuals(list(mu)))
+    r_asked = np.asarray(asked.compute_weighted_residuals(list(mu)))
+
+    np.testing.assert_allclose(r_told, -r_asked, rtol=1e-12)
+    # the dataset path has the standard sign: positive where data exceeds model
+    np.testing.assert_array_equal(np.sign(r_asked), np.sign(y - mu))
+    # and the disagreement costs nothing but the sign
+    assert told.compute_chi2(list(mu)) == asked.compute_chi2(list(mu))
+
+    # the `"default"` path agrees with the dataset, not with `"poisson"`
+    plain = IMP.bff.ChiSquared("plain")
+    plain.set_data(list(y), list(np.sqrt(y)))
+    plain.set_noise_model_name("default")
+    np.testing.assert_array_equal(
+        np.sign(np.asarray(plain.compute_weighted_residuals(list(mu)))),
+        np.sign(y - mu))
+
+
 def test_the_told_path_is_untouched():
     """Existing callers must see exactly what they saw."""
     y = np.array([5.0, 10.0, 20.0])
