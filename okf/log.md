@@ -10971,3 +10971,12 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   `const std::vector<double>& xyz`), so they would move like `States.h` did. Missing everywhere in bff:
   **gradients**. IMP's restraints supply the derivatives its integrator steps on. So a bff-only Langevin is
   analytic gradients plus an integrator, not attachment plumbing. Stays IMP-only by the owner's ruling.
+- **A wheel can carry IMP** (imp-bff-ce, measured 2026-09-08, PRD-139): "IMP has no wheel" was the wrong
+  objection -- a wheel needs IMP's C++ libraries, not its Python package, and can vendor them exactly as this
+  wheel already vendors librmf, Boost and libicu. The closure bff needs is 13.9 MB of shared libs,
+  `libimp_kernel` links no Python, and IMP's CMake guards every pyext directory with `if(NOT IMP_STATIC)`, so
+  IMP's wrappers can be left out. One hard condition: the Python surface must stay IMP-free, or SWIG needs
+  IMP's .i files and the extension imports `_IMP_kernel` at init. If every shipped configuration links IMP,
+  the shim tree, Base.h's second branch and the two-lane test hook can all go -- one build, and dye Langevin
+  works from `pip install bff`. The price: every user carries IMP's code, CI builds IMP per platform, and
+  PRD-137's "links no IMP" premise is given up. Owner's decision, recorded as three options in PRD-139.
