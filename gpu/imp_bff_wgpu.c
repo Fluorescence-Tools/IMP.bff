@@ -29,6 +29,7 @@
 
 #include "webgpu.h"
 #include "diffusion_wgsl.h"
+#include "mlp_wgsl.h"
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -43,16 +44,21 @@
 #endif
 
 /* ---- the contract, mirroring IMP/bff/Compute.h -------------------------- */
-#define IMPBFF_COMPUTE_BACKEND_ABI 1
+#define IMPBFF_COMPUTE_BACKEND_ABI 2
 typedef int (*ImpBffPropagateFn)(const double* cur, const double* d,
                                  const double* decay, const double* bounds,
                                  int ng, int flux_form, int n_steps, int n_out,
                                  double* out_fluorescence, int n_fluorescence,
                                  double* out_density);
+typedef int (*ImpBffMlpForwardFn)(int n_layers, const int* n_in, const int* n_out,
+                                  const int* activation, const double* weights,
+                                  const double* biases, const double* x,
+                                  int n_rows, double* y);
 struct ImpBffComputeBackend {
     int abi;
     const char* name;
     ImpBffPropagateFn propagate;
+    ImpBffMlpForwardFn mlp_forward;
 };
 
 /* FLUX_SMOLUCHOWSKI = 0, FLUX_ITO = 1, as DiffusionSolver.h defines them. */
@@ -68,11 +74,21 @@ struct ImpBffComputeBackend {
    let the CPU have it. */
 #define MIN_NG 12
 #define MIN_STEPS 32
+/* For a network, the same question in multiply-accumulates. Measured on an
+   M1 Pro: 4.5M is 0.66x (the CPU wins), 33M is 2.3x, 334M is 7.2x, 13G is
+   12.4x. Sixteen million is below every case that wins and above the one
+   that does not. */
+#define MIN_MLP_MACS 16000000
+/* A dispatch may not exceed this many workgroups in one dimension. Going over
+   is a validation error that aborts the process rather than returning one, so
+   both kernels stay under it -- the network with a grid-stride loop, the
+   stencil by declining a grid that large. */
+#define MAX_GROUPS 65535u
 
 /* ---- the wgpu entry points we use --------------------------------------- */
 #define WGPU_FUNCTIONS(X) X(CreateInstance) X(InstanceRequestAdapter)      \
     X(InstanceProcessEvents) X(AdapterRequestDevice) X(AdapterGetInfo)     \
-    X(AdapterInfoFreeMembers) X(AdapterHasFeature) X(DeviceGetQueue)       \
+    X(AdapterInfoFreeMembers) X(AdapterHasFeature) X(DeviceGetQueue) X(DeviceGetLimits)       \
     X(DeviceCreateShaderModule) X(DeviceCreateBuffer)                      \
     X(DeviceCreateBindGroupLayout) X(DeviceCreateBindGroup)                \
     X(DeviceCreatePipelineLayout) X(DeviceCreateComputePipeline)           \
@@ -106,6 +122,7 @@ struct Wgpu {
     WGPUDevice device;
     WGPUQueue queue;
     int f16;
+    uint64_t max_binding;
     char name[192];
 };
 static struct Wgpu G;
@@ -248,6 +265,18 @@ static int open_device(char* err, size_t nerr) {
     G.device = dr.device;
     G.queue = G.DeviceGetQueue(G.device);
     if (!G.queue) { snprintf(err, nerr, "no queue"); return 0; }
+
+    /* How large one storage binding may be. A batch whose activations exceed
+       it is split rather than refused: the rows of a forward pass do not see
+       each other. */
+    {
+        WGPULimits lim = WGPU_LIMITS_INIT;
+        G.max_binding = 128u * 1024u * 1024u;
+        if (G.DeviceGetLimits(G.device, &lim) == WGPUStatus_Success &&
+            lim.maxStorageBufferBindingSize > 0 &&
+            lim.maxStorageBufferBindingSize != WGPU_LIMIT_U64_UNDEFINED)
+            G.max_binding = lim.maxStorageBufferBindingSize;
+    }
 
     /* The name is what get_compute_backend_name() reports, so that nobody
        measures a CPU and believes they measured a GPU. */
@@ -597,6 +626,7 @@ static int propagate(const double* cur, const double* d, const double* decay,
     {
         const uint32_t groups = (uint32_t)((n_act + 255) / 256);
         WGPUBindGroup g[2];
+        if (groups > MAX_GROUPS) { rc = 1; goto done; }
         g[0] = g0; g[1] = g1;
         for (step = 0; step < n_steps; ) {
             WGPUCommandEncoder enc = G.DeviceCreateCommandEncoder(G.device, NULL);
@@ -713,6 +743,231 @@ done:
     return rc;
 }
 
+/* ---- the network -------------------------------------------------------- */
+/* One dispatch per layer, ping-ponging two activation buffers. The uniform
+   changes between layers and a queue write runs immediately rather than in
+   dispatch order, so each layer is submitted on its own -- there are a
+   handful of layers against tens of thousands of rows. */
+static struct {
+    int ready;
+    WGPUShaderModule module;
+    WGPUBindGroupLayout bgl;
+    WGPUPipelineLayout layout;
+    WGPUComputePipeline layer;
+} M;
+
+static int build_mlp_pipeline(void) {
+    WGPUShaderSourceWGSL wgsl;
+    WGPUShaderModuleDescriptor smd;
+    WGPUBindGroupLayoutEntry e[5];
+    WGPUBindGroupLayoutDescriptor bgld;
+    WGPUPipelineLayoutDescriptor pld;
+    WGPUComputePipelineDescriptor cpd;
+    int i;
+    if (M.ready) return 1;
+    memset(&wgsl, 0, sizeof wgsl);
+    wgsl.chain.sType = WGPUSType_ShaderSourceWGSL;
+    wgsl.code = sv(kMlpWgsl);
+    memset(&smd, 0, sizeof smd);
+    smd.nextInChain = (WGPUChainedStruct*)&wgsl;
+    M.module = G.DeviceCreateShaderModule(G.device, &smd);
+    if (!M.module) return 0;
+    memset(e, 0, sizeof e);
+    for (i = 0; i < 5; ++i) {
+        e[i].binding = (uint32_t)i;
+        e[i].visibility = WGPUShaderStage_Compute;
+        e[i].buffer.type = (i == 4) ? WGPUBufferBindingType_Uniform
+                         : (i == 1) ? WGPUBufferBindingType_Storage
+                                    : WGPUBufferBindingType_ReadOnlyStorage;
+    }
+    memset(&bgld, 0, sizeof bgld);
+    bgld.entryCount = 5;
+    bgld.entries = e;
+    M.bgl = G.DeviceCreateBindGroupLayout(G.device, &bgld);
+    if (!M.bgl) return 0;
+    memset(&pld, 0, sizeof pld);
+    pld.bindGroupLayoutCount = 1;
+    pld.bindGroupLayouts = &M.bgl;
+    M.layout = G.DeviceCreatePipelineLayout(G.device, &pld);
+    if (!M.layout) return 0;
+    memset(&cpd, 0, sizeof cpd);
+    cpd.layout = M.layout;
+    cpd.compute.module = M.module;
+    cpd.compute.entryPoint = sv("layer");
+    M.layer = G.DeviceCreateComputePipeline(G.device, &cpd);
+    if (!M.layer) return 0;
+    M.ready = 1;
+    return 1;
+}
+
+static int mlp_forward(int n_layers, const int* n_in, const int* n_out,
+                       const int* activation, const double* weights,
+                       const double* biases, const double* x, int n_rows,
+                       double* y) {
+    size_t n_w = 0, n_b = 0, widest = 0, macs = 0;
+    float *wf = NULL, *bf = NULL, *xf = NULL, *yf = NULL;
+    WGPUBuffer bW = NULL, bB = NULL, bA = NULL, bC = NULL, stOut = NULL;
+    WGPUBuffer* bU = NULL;                 /* one per layer, see below */
+    WGPUBindGroup* g = NULL;               /* one per layer */
+    int l, rc = 1, rows_per_chunk = 0, row0;
+    size_t i;
+
+    if (!G.device || n_layers <= 0 || n_rows <= 0) return 1;
+    for (l = 0; l < n_layers; ++l) {
+        if (n_in[l] <= 0 || n_out[l] <= 0) return 1;
+        n_w += (size_t)n_in[l] * (size_t)n_out[l];
+        n_b += (size_t)n_out[l];
+        macs += (size_t)n_rows * (size_t)n_in[l] * (size_t)n_out[l];
+        if ((size_t)n_in[l] > widest) widest = (size_t)n_in[l];
+        if ((size_t)n_out[l] > widest) widest = (size_t)n_out[l];
+    }
+    if (macs < MIN_MLP_MACS) return 1;         /* the CPU is quicker than the trip */
+    if (!build_mlp_pipeline()) return 1;
+
+    /* One activation buffer holds n_rows x widest floats, and a storage
+       binding has a ceiling -- 128 MiB by default, which a 400 000-row batch
+       through a 128-unit layer passes. The rows of a forward pass are
+       independent, so the batch is split into as many as fit. */
+    rows_per_chunk = (int)(G.max_binding / (widest * 4));
+    if (rows_per_chunk < 1) return 1;          /* one row does not fit: not ours */
+    if (rows_per_chunk > n_rows) rows_per_chunk = n_rows;
+
+    wf = (float*)malloc(n_w * 4 + 4);
+    bf = (float*)malloc(n_b * 4 + 4);
+    xf = (float*)malloc((size_t)rows_per_chunk * widest * 4 + 4);
+    yf = (float*)malloc((size_t)rows_per_chunk * widest * 4 + 4);
+    if (!wf || !bf || !xf || !yf) goto done;
+    /* Transposed to n_in x n_out per layer, so that adjacent threads read
+       adjacent weights. The model holds them n_out x n_in. */
+    {
+        size_t off = 0;
+        int li, oi, ii;
+        for (li = 0; li < n_layers; ++li) {
+            const double* W = weights + off;
+            for (oi = 0; oi < n_out[li]; ++oi)
+                for (ii = 0; ii < n_in[li]; ++ii)
+                    wf[off + (size_t)ii * n_out[li] + oi] =
+                        (float)W[(size_t)oi * n_in[li] + ii];
+            off += (size_t)n_in[li] * (size_t)n_out[li];
+        }
+    }
+    for (i = 0; i < n_b; ++i) bf[i] = (float)biases[i];
+
+    bW = make_buffer(n_w * 4, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst);
+    bB = make_buffer(n_b * 4, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst);
+    bA = make_buffer((uint64_t)rows_per_chunk * widest * 4,
+                     WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc |
+                     WGPUBufferUsage_CopyDst);
+    bC = make_buffer((uint64_t)rows_per_chunk * widest * 4,
+                     WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc |
+                     WGPUBufferUsage_CopyDst);
+    stOut = make_buffer((uint64_t)rows_per_chunk * widest * 4,
+                        WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
+    if (!bW || !bB || !bA || !bC || !stOut) goto done;
+    /* A uniform buffer and a bind group per layer, rather than one of each
+       rewritten between dispatches. `wgpuQueueWriteBuffer` runs when it is
+       called, not in the order the dispatches were recorded, so a shared
+       uniform would give every layer the last layer's shape. With one each,
+       the whole network is a single command buffer and a single submission --
+       which is the difference between a device round trip per layer and one
+       per batch. */
+    bU = (WGPUBuffer*)calloc((size_t)n_layers, sizeof(WGPUBuffer));
+    g = (WGPUBindGroup*)calloc((size_t)n_layers, sizeof(WGPUBindGroup));
+    if (!bU || !g) goto done;
+    for (l = 0; l < n_layers; ++l) {
+        bU[l] = make_buffer(32, WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst);
+        if (!bU[l]) goto done;
+    }
+    G.QueueWriteBuffer(G.queue, bW, 0, wf, n_w * 4);
+    G.QueueWriteBuffer(G.queue, bB, 0, bf, n_b * 4);
+
+    {
+        WGPUBindGroupEntry e[5];
+        WGPUBindGroupDescriptor bgd;
+        int k;
+        memset(&bgd, 0, sizeof bgd);
+        bgd.layout = M.bgl;
+        bgd.entryCount = 5;
+        bgd.entries = e;
+        for (l = 0; l < n_layers; ++l) {
+            memset(e, 0, sizeof e);
+            for (k = 0; k < 5; ++k) {
+                e[k].binding = (uint32_t)k;
+                e[k].size = (k == 4) ? 32 : WGPU_WHOLE_SIZE;
+            }
+            e[0].buffer = (l % 2 == 0) ? bA : bC;
+            e[1].buffer = (l % 2 == 0) ? bC : bA;
+            e[2].buffer = bW;
+            e[3].buffer = bB;
+            e[4].buffer = bU[l];
+            g[l] = G.DeviceCreateBindGroup(G.device, &bgd);
+            if (!g[l]) goto done;
+        }
+    }
+
+    for (row0 = 0; row0 < n_rows; row0 += rows_per_chunk) {
+        const int rows = (n_rows - row0 < rows_per_chunk) ? (n_rows - row0)
+                                                          : rows_per_chunk;
+        uint32_t w_off = 0, b_off = 0;
+        WGPUCommandEncoder enc;
+        WGPUCommandBuffer cb;
+        for (i = 0; i < (size_t)rows * (size_t)n_in[0]; ++i)
+            xf[i] = (float)x[(size_t)row0 * (size_t)n_in[0] + i];
+        G.QueueWriteBuffer(G.queue, bA, 0, xf, (size_t)rows * (size_t)n_in[0] * 4);
+        for (l = 0; l < n_layers; ++l) {
+            uint32_t u[8];
+            const uint32_t total = (uint32_t)rows * (uint32_t)n_out[l];
+            uint32_t groups = (total + 63u) / 64u;
+            if (groups > MAX_GROUPS) groups = MAX_GROUPS;
+            u[0] = (uint32_t)rows; u[1] = (uint32_t)n_in[l];
+            u[2] = (uint32_t)n_out[l]; u[3] = (uint32_t)activation[l];
+            u[4] = w_off; u[5] = b_off; u[6] = groups * 64u; u[7] = 0;
+            G.QueueWriteBuffer(G.queue, bU[l], 0, u, 32);
+            w_off += (uint32_t)(n_in[l] * n_out[l]);
+            b_off += (uint32_t)n_out[l];
+        }
+        enc = G.DeviceCreateCommandEncoder(G.device, NULL);
+        if (!enc) goto done;
+        for (l = 0; l < n_layers; ++l) {
+            WGPUComputePassEncoder cp;
+            const uint32_t total = (uint32_t)rows * (uint32_t)n_out[l];
+            uint32_t groups = (total + 63u) / 64u;
+            if (groups > MAX_GROUPS) groups = MAX_GROUPS;
+            cp = G.CommandEncoderBeginComputePass(enc, NULL);
+            G.ComputePassEncoderSetPipeline(cp, M.layer);
+            G.ComputePassEncoderSetBindGroup(cp, 0, g[l], 0, NULL);
+            G.ComputePassEncoderDispatchWorkgroups(cp, groups, 1, 1);
+            G.ComputePassEncoderEnd(cp);
+            G.ComputePassEncoderRelease(cp);
+            if (l + 1 == n_layers)
+                G.CommandEncoderCopyBufferToBuffer(enc, (l % 2 == 0) ? bC : bA, 0,
+                                                   stOut, 0, (uint64_t)total * 4);
+        }
+        cb = G.CommandEncoderFinish(enc, NULL);
+        G.QueueSubmit(G.queue, 1, &cb);
+        G.CommandBufferRelease(cb);
+        G.CommandEncoderRelease(enc);
+        {
+            const size_t total = (size_t)rows * (size_t)n_out[n_layers - 1];
+            if (!read_back(stOut, total * 4, yf)) goto done;
+            for (i = 0; i < total; ++i)
+                y[(size_t)row0 * (size_t)n_out[n_layers - 1] + i] = (double)yf[i];
+        }
+    }
+    rc = 0;
+
+done:
+    if (g) { for (l = 0; l < n_layers; ++l) if (g[l]) G.BindGroupRelease(g[l]); }
+    if (bU) { for (l = 0; l < n_layers; ++l) if (bU[l]) G.BufferRelease(bU[l]); }
+    if (bW) G.BufferRelease(bW);
+    if (bB) G.BufferRelease(bB);
+    if (bA) G.BufferRelease(bA);
+    if (bC) G.BufferRelease(bC);
+    if (stOut) G.BufferRelease(stOut);
+    free(g); free(bU); free(wf); free(bf); free(xf); free(yf);
+    return rc;
+}
+
 /* ---- the door ----------------------------------------------------------- */
 IMPBFF_EXPORT const struct ImpBffComputeBackend* imp_bff_compute_backend(
         const char* argument) {
@@ -725,5 +980,6 @@ IMPBFF_EXPORT const struct ImpBffComputeBackend* imp_bff_compute_backend(
     gBackend.abi = IMPBFF_COMPUTE_BACKEND_ABI;
     gBackend.name = G.name;
     gBackend.propagate = propagate;
+    gBackend.mlp_forward = mlp_forward;
     return &gBackend;
 }
