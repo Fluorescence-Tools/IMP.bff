@@ -9,6 +9,7 @@
 #define IMPBFF_CHISQUARED_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/Dataset.h>
 
 #include <string>
 #include <vector>
@@ -57,6 +58,35 @@ class IMPBFFEXPORT ChiSquared : public Node {
   //! Set the measured curve and its per-point errors.
   /** \param y measured values
       \param ey per-point errors; only used by the Neyman noise model */
+  //! Score against a Dataset, which carries its own noise family.
+  /*!
+      The alternative to #set_noise_model, and the one that composes: the
+      dataset says whether it is counts or a measurement with stored
+      variances, and the residuals follow from that rather than from a
+      setting on the objective. A #JointChiSquared whose members carry
+      datasets can hold a Poisson decay and a Gaussian correlation curve at
+      once, which it cannot when each member is *told* its noise model by
+      whoever built it.
+
+      The dataset's own mask applies. The index window does not, and setting
+      both is refused rather than resolved: two masking mechanisms that
+      disagree is how the wrong points get excluded quietly.
+
+      \note Residuals from this path follow the dataset's sign convention --
+      positive where the data exceeds the model, for every kind. The
+      \p noise_model path's `"poisson"` residuals have the opposite sign to
+      its own `"default"` ones; that is a defect of long standing which
+      chisurf plots today, so it is left alone rather than flipped underneath
+      it. See PRD-140.
+  */
+  void set_dataset(const Dataset& dataset);
+  //! Whether a dataset was given.
+  bool get_has_dataset() const { return has_dataset_; }
+  //! The dataset, if one was given.
+  const Dataset& get_dataset() const { return dataset_; }
+  //! Which residual the dataset path reports; the family's own by default.
+  void set_residual_kind(ResidualKind kind) { residual_kind_ = kind; has_residual_kind_ = true; }
+
   void set_data(const std::vector<double>& y, const std::vector<double>& ey);
 
   const std::vector<double>& get_data() const { return data_y_; }
@@ -164,6 +194,10 @@ class IMPBFFEXPORT ChiSquared : public Node {
   std::string describe() const;
 
  private:
+  Dataset dataset_;
+  bool has_dataset_ = false;
+  ResidualKind residual_kind_ = RESIDUAL_PEARSON;
+  bool has_residual_kind_ = false;
   std::vector<double> data_y_;
   std::vector<double> data_ey_;
   std::vector<double> mask_;

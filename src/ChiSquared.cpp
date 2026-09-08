@@ -156,8 +156,37 @@ void ChiSquared::compute_weighted_residuals_array(double* in_model_y,
   *n_out_wres = n;
 }
 
+void ChiSquared::set_dataset(const Dataset& dataset) {
+  dataset_ = dataset;
+  has_dataset_ = true;
+  set_valid(false);
+}
+
 std::vector<double> ChiSquared::compute_weighted_residuals(
     const std::vector<double>& model_y) const {
+  if (has_dataset_) {
+    if (xmin_ != 0 || xmax_ >= 0) {
+      IMP_THROW("this ChiSquared scores a Dataset, which carries its own mask, "
+                "and an index window was also set. Two masking mechanisms that "
+                "disagree exclude the wrong points quietly, so pick one: mask "
+                "the dataset, or drop the window",
+                IMP::ValueException);
+    }
+    ResidualKind kind = residual_kind_;
+    if (!has_residual_kind_) {
+      // The family's own: the deviance is the likelihood's residual for
+      // counts, Pearson is the natural one for a measured variance.
+      kind = (dataset_.get_noise_family() == NOISE_FAMILY_POISSON)
+                 ? RESIDUAL_DEVIANCE
+                 : RESIDUAL_PEARSON;
+    }
+    double* view = nullptr;
+    int n_view = 0;
+    dataset_.residuals(model_y, kind, &view, &n_view);
+    std::vector<double> out(view, view + n_view);
+    std::free(view);
+    return out;
+  }
   int begin = 0, end = 0;
   resolve_window(&begin, &end);
 
