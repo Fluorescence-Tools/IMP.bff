@@ -38,14 +38,22 @@ def _sha(path):
 
 
 class Tests(IMP.test.TestCase):
-    VENDORED = ("MlpCore.h", "LatticeDiffusion.h")
+    # name -> the tttrlib module it was taken from. A map rather than one
+    # hardcoded directory because the copies do not all come from `math`:
+    # DecayConvolution.h is the spectroscopy module's, and while it said in
+    # its own header that it was "kept in step", nothing checked that it was.
+    VENDORED = {
+        "MlpCore.h": ("math",),
+        "LatticeDiffusion.h": ("math",),
+        "DecayConvolution.h": ("spectroscopy", "decay"),
+    }
 
     def _paths(self, name="MlpCore.h"):
         here = os.path.dirname(os.path.abspath(__file__))
         repo = os.path.dirname(here)
         ours = os.path.join(repo, "include", "internal", name)
-        theirs = os.path.join(os.path.dirname(repo), "tttrlib", "modules", "math",
-                              "include", name)
+        theirs = os.path.join(os.path.dirname(repo), "tttrlib", "modules",
+                              *self.VENDORED[name], "include", name)
         return ours, theirs
 
     def test_copies_exist_and_are_std_only(self):
