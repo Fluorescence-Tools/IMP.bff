@@ -408,6 +408,46 @@ class SpectrumPortTests(unittest.TestCase):
         np.testing.assert_allclose(curve_of(piped), curve_of(scalars),
                                    rtol=0, atol=0)
 
+    def test_re_pushing_an_unchanged_spectrum_can_be_free(self):
+        """The advice in `set_spectrum_from_port`'s documentation, pinned.
+
+        A caller whose Jacobian column perturbs something *other* than the
+        spectrum still pushes the spectrum, and without memoisation pays a
+        full reconvolution for a curve it already had. This node is a
+        function of its inputs, so `set_memoize` is sound for it -- and the
+        curve must come out identical, which is the half that matters.
+        """
+        irf = response()
+        pairs = [(0.6, 0.4), (0.4, 3.9)]
+        flat = np.ascontiguousarray([v for pair in pairs for v in pair],
+                                    dtype=float)
+
+        node = build(2, irf)
+        node.set_spectrum_from_port(True)
+        port = node.get_input_port("lifetime_spectrum")
+        port.set_values_array(flat)
+        expected = curve_of(node).copy()
+
+        node.set_memoize(True)
+        port.set_values_array(flat)
+        node.update()
+        evaluations = node.get_evaluation_count()
+        hits = node.get_memo_hit_count()
+        for _ in range(5):
+            port.set_values_array(flat)
+            node.update()
+        self.assertEqual(node.get_evaluation_count() - evaluations, 0)
+        self.assertEqual(node.get_memo_hit_count() - hits, 5)
+        np.testing.assert_allclose(curve_of(node), expected, rtol=0, atol=0)
+
+        # and a spectrum that genuinely moved still gets through
+        moved = flat.copy()
+        moved[1] = 0.7
+        port.set_values_array(moved)
+        node.update()
+        self.assertEqual(node.get_evaluation_count() - evaluations, 1)
+        self.assertFalse(np.array_equal(curve_of(node), expected))
+
     def test_an_upstream_node_can_drive_it(self):
         """The arrangement, end to end: a node computes the spectrum.
 
