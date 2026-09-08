@@ -1,7 +1,7 @@
 ---
 type: validation
-title: "The diffusion stencil on the GPU: 13x the eight-threaded CPU, and four of the five wins were about bytes"
-description: The explicit Smoluchowski sweep written in WGSL and run through wgpu on an M1 Pro against the same solve on the CPU. The naive kernel is 4.3-5.7x the eight-threaded CPU; five optimisations take it to 12.5-13.1x, and against the single thread that shipped until today it is 14-35x. The two that paid best were both about bytes, not arithmetic: the neighbour index table is redundant (the grid numbering does not change), and f16 weights are exact if the self term is built from the rounded ones. The fluorescence trace agrees to 2.6e-6 (ng=41) and 1.1e-5 (ng=81).
+title: "The diffusion stencil on the GPU: 13-14x the eight-threaded CPU, and the last 16% was a reduction running on one core"
+description: The explicit Smoluchowski sweep written in WGSL and run through wgpu on an M1 Pro against the same solve on the CPU. The naive kernel is 3.8-5.3x the eight-threaded CPU; six optimisations take it to 13.3x/13.2x/14.0x at ng=41/61/81. Most of them were about bytes rather than arithmetic: the neighbour index table is redundant, f16 weights are exact if the self term is built from the rounded ones, and the population sum was running in a single workgroup for 16% of the whole run. Fixing that also took the deviation from 1.1e-5 to 1.3e-7, so most of what looked like f32 error was a serial f32 accumulator. Remaining time: at ng=41 41% is the dispatch floor, at ng=81 85% is the kernel.
 resource: /Users/tpeulen/dev/imp.bff
 tags: [validation, imp.bff, performance, gpu, webgpu, diffusion, openmp]
 timestamp: '2026-09-08T00:00:00Z'
@@ -44,10 +44,11 @@ before:
 | precompute the stencil weights | ~1.6× | `d`, `decay` and `bounds` do not change over a propagation, so neither do the coefficients |
 | drop the neighbour index table | 1.34–1.59× | the six neighbours are `c ± 1`, `c ± ng`, `c ± ng²`; the table was redundant |
 | f16 weights | 1.09–1.23× | with the table gone the weights are most of what is read |
+| two-stage population sum | 1.16–1.19× | the report ran in one workgroup over every active voxel |
 
-**Four of the five are about bytes, not arithmetic**, which is the shape of
-this kernel: seven or eight numbers are read per voxel and six multiply-adds
-are done with them.
+**Most of them are about bytes and parallelism, not arithmetic**, which is
+the shape of this kernel: seven or eight numbers are read per voxel and six
+multiply-adds are done with them.
 
 The last one is the interesting one. Writing the step as
 
@@ -59,14 +60,14 @@ the six weights that replace them are read in a coalesced layout. It is worth
 1.6× on its own, and it is exact: the deviation against the f64 CPU is
 unchanged, and against the naive f32 kernel it is 1e-7.
 
-With all five, against the eight-threaded CPU measured in the same session
-(378 / 788 / 1 550 ms; the single thread is 418 / 1 578 / 4 181 ms):
+With all six, against the eight-threaded CPU measured in the same session
+(351 / 692 / 1 378 ms; the single thread is 418 / 1 578 / 4 181 ms):
 
 | grid | naive | + weights | + no table | + f16 | deviation |
 |---|---|---|---|---|---|
-| 41³ | 5.6× | 9.2× | 11.9× | **13.1×** | 2.6 × 10⁻⁶ |
-| 61³ | 4.8× | 7.4× | 11.4× | **13.3×** | 3.0 × 10⁻⁶ |
-| 81³ | 4.1× | 6.5× | 10.2× | **12.5×** | 1.1 × 10⁻⁵ |
+| 41³ | 5.3× | 8.8× | 12.2× | **13.3×** | 2.6 × 10⁻⁶ |
+| 61³ | 4.1× | 7.0× | 11.1× | **13.2×** | 6.1 × 10⁻⁷ |
+| 81³ | 3.8× | 6.7× | 10.9× | **14.0×** | 2.9 × 10⁻⁷ |
 
 Read the first column against the last. The naive kernel *loses* ground as
 the grid grows, 5.6 → 4.1; the tuned one holds at about 13. A kernel that
@@ -125,15 +126,70 @@ self term is *worse than not compensating at all*, because compensation
 gathers the whole row error into precisely the number that is then thrown
 away. The compensation and the f32 self term are one measure, not two.
 
+## The population sum was running on one core
+
+The report -- the fluorescence value written every hundred steps -- summed the
+density over every active voxel in **one workgroup**. At ng = 81 that is 897
+serial iterations in each of 256 threads while the other thirty-one cores of
+the GPU sit idle. Forty such reports cost 23 ms of a 119 ms run: **16% of the
+whole propagation for forty numbers.**
+
+Split into NPART partial sums and a second tiny pass over those, it costs
+3.7 ms. NPART anywhere from 16 to 256 measures the same (1.6–4.4 ms, which is
+the noise on this machine); what mattered was being more than one.
+
+It also bought two orders of magnitude of accuracy, which nobody was looking
+for. The deviation at ng = 81 fell from 1.1 × 10⁻⁵ to 1.3 × 10⁻⁷, and at
+ng = 61 from 3.0 × 10⁻⁶ to 1.6 × 10⁻⁷. The old kernel was accumulating a
+quarter of a million f32 values in series per thread; the new one accumulates
+fourteen and then folds in a tree. **Most of what had been recorded as the
+cost of f32 was the reduction, not the stencil** -- which strengthens
+`f32_holds_the_diffusion_stencil.md` rather than weakening it, and is a
+reminder that a parity number measures the whole path, not the part being
+questioned.
+
+## Where the remaining time goes
+
+Measured with a no-op sweep (same dispatch count, empty body) and with the
+reports switched off:
+
+| | ng = 41 | ng = 81 |
+|---|---|---|
+| total | 26.5 ms | 98.3 ms |
+| dispatch floor | 10.8 ms (41%) | 11.5 ms (12%) |
+| reports | 2.9 ms | 3.7 ms |
+| kernel | ~13 ms | ~83 ms |
+
+The floor is 2.6–3.0 µs per dispatch and barely depends on the grid, so the
+two ends of the range want opposite things. **At ng = 41 the kernel is already
+cheaper than the command stream that launches it**, and no amount of kernel
+work will show; only fewer dispatches can. At ng = 81 the kernel is 85% of the
+run, and roughly half of that is the six neighbour gathers.
+
+Of the floor, `set_bind_group` before each dispatch is 2.8 ms of 24.8 at
+ng = 41 and nothing measurable at ng = 81; the rest is the dispatch itself.
+
 ## What has not been tried
 
-In rough order of what looks most promising:
+In rough order of what looks most promising, with the headroom each one is
+actually competing for:
 
-- **Tiling with workgroup memory.** The six neighbour reads of `cur` are still
-  scattered over the full cube. A tile with a halo in workgroup storage is the
-  standard answer for a 3-D stencil and the largest remaining structural win.
+- **Tiling with workgroup memory** — competing for the ~40 ms of neighbour
+  gathers at ng = 81, so at best about 1.4× there and nothing at ng = 41. The
+  six neighbour reads of `cur` are still scattered over the full cube; a tile
+  with a halo in workgroup storage is the standard answer for a 3-D stencil.
+  It fights the compaction, though: tiles are dense and the compaction is what
+  made the kernel fast, so it needs tile-level compaction to keep both.
+- **Temporal blocking — two or more steps per dispatch**, with a halo wide
+  enough to cover them. The only idea that attacks *both* remaining costs: it
+  divides the dispatch floor and the global traffic by the number of fused
+  steps. It is also the hardest, and it is the one that helps at ng = 41,
+  where 41% of the time is command overhead.
 - **Renumbering the density into the compacted layout**, so that neighbours
-  are near each other in memory rather than a plane apart.
+  are near each other in memory rather than a plane apart. Measured headroom
+  is smaller than it looks: the base access alone (index, self weight, own
+  density, write) is ~45 ms of the 83 ms kernel at ng = 81, and within a
+  z-run the active voxels are already contiguous.
 - **On the CPU side**, hoisting the OpenMP parallel region out of the step
   loop: that is what makes threading worth nothing at ng = 41 today.
 - **Algorithmically**, the explicit scheme's stability bound `dt ≤ dg²/(6D)`

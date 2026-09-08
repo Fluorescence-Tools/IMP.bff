@@ -223,11 +223,32 @@ def gpu_propagate(dev, ng, cur, d, decay, bnds, n_steps, n_out, batch=500, wgs=6
 #   1.09-1.23x. Naively it costs three orders of magnitude of accuracy
 #   (7e-7 -> 1e-3), which is why it looked like a dead end; see
 #   `half_weights` for the one line that gives all of it back.
+# * **A two-stage population sum.** The report ran in one workgroup over every
+#   active voxel -- 897 serial iterations per thread at ng = 81, while the rest
+#   of the device waited. Forty of them cost 23 ms of 119. Splitting it into
+#   NPART partial sums and a second tiny pass costs 3.7 ms, worth 16% of the
+#   whole run -- and, unlooked for, two orders of magnitude of accuracy: the
+#   deviation at ng = 81 falls from 1.1e-5 to 1.3e-7, because the old
+#   accumulator was summing a quarter of a million f32 values in series. Most
+#   of what was being blamed on f32 was the reduction, not the stencil.
 #
-# Together: 13.1x / 13.3x / 12.5x against the eight-threaded CPU at
-# ng = 41 / 61 / 81, where the naive kernel managed 5.6x / 4.8x / 4.1x. Note
+# Together: 13.3x / 13.2x / 14.0x against the eight-threaded CPU at
+# ng = 41 / 61 / 81, where the naive kernel managed 5.3x / 4.1x / 3.8x. Note
 # which way those two rows run: the naive kernel loses ground as the grid
-# grows, the tuned one does not.
+# grows, the tuned one gains.
+#
+# Where the remaining time goes, measured with a no-op sweep and with the
+# reports switched off (`us` per step, 4 000 steps):
+#
+#   ng    total   dispatch floor   reports   kernel
+#   41   26.5 ms      10.8 (41%)    2.9 ms   ~13 ms
+#   81   98.3 ms      11.5 (12%)    3.7 ms   ~83 ms
+#
+# So the two ends want different things. At ng = 41 the kernel is already
+# cheaper than the command stream that launches it, and only fewer dispatches
+# (temporal blocking) can help. At ng = 81 the kernel is the cost, roughly
+# half of it the six neighbour gathers, which is what workgroup-memory tiling
+# would attack.
 # ---------------------------------------------------------------------------
 
 SHADER_W = """
@@ -237,7 +258,8 @@ struct Params { ng: u32, n: u32, n_act: u32, pad: u32 };
 @group(0) @binding(1) var<storage, read_write> nxt:   array<f32>;
 @group(0) @binding(2) var<storage, read>       w:     array<WT>;   // 6 je Voxel
 @group(0) @binding(3) var<storage, read>       self_: array<f32>;  // decay*(1-Sum w)
-@group(0) @binding(4) var<storage, read>       nbi:   array<u32>;  // nur STENCIL_TABLE
+@group(0) @binding(4) var<storage, read_write> part:  array<f32>;  // Teilsummen
+@group(0) @binding(8) var<storage, read>       nbi:   array<u32>;  // nur GATHER_TABLE
 @group(0) @binding(5) var<uniform>             p:     Params;
 @group(0) @binding(6) var<storage, read_write> trace: array<f32>;
 @group(0) @binding(7) var<storage, read>       idx:   array<u32>;
@@ -253,23 +275,45 @@ NEIGHBOURS
     nxt[c] = acc;
 }
 
+// Die Populationssumme, zweistufig. Einstufig -- eine Arbeitsgruppe ueber
+// alle aktiven Voxel -- kostete bei ng=81 23 ms von 119, also 16% des ganzen
+// Laufs fuer vierzig Zahlen: 897 Durchlaeufe je Thread auf einem Kern, waehrend
+// der Rest des Geraets wartet. Mit NPART Gruppen sind es 3.7 ms.
 var<workgroup> scratch: array<f32, 256>;
-@compute @workgroup_size(256)
-fn reduce(@builtin(local_invocation_id) lid: vec3<u32>) {
-    var acc = 0.0;
-    var i = lid.x;
-    loop { if (i >= p.n_act) { break; } acc = acc + cur[idx[i]]; i = i + 256u; }
-    scratch[lid.x] = acc;
+
+fn fold(lid: u32) {
     workgroupBarrier();
     var s = 128u;
     loop {
         if (s == 0u) { break; }
-        if (lid.x < s) { scratch[lid.x] = scratch[lid.x] + scratch[lid.x + s]; }
+        if (lid < s) { scratch[lid] = scratch[lid] + scratch[lid + s]; }
         workgroupBarrier(); s = s / 2u;
     }
+}
+
+@compute @workgroup_size(256)
+fn reduce_a(@builtin(local_invocation_id) lid: vec3<u32>,
+            @builtin(workgroup_id) wid: vec3<u32>) {
+    var acc = 0.0;
+    var i = wid.x * 256u + lid.x;
+    loop { if (i >= p.n_act) { break; } acc = acc + cur[idx[i]]; i = i + NPART * 256u; }
+    scratch[lid.x] = acc; fold(lid.x);
+    if (lid.x == 0u) { part[wid.x] = scratch[0]; }
+}
+
+@compute @workgroup_size(256)
+fn reduce_b(@builtin(local_invocation_id) lid: vec3<u32>) {
+    var acc = 0.0;
+    var i = lid.x;
+    loop { if (i >= NPART) { break; } acc = acc + part[i]; i = i + 256u; }
+    scratch[lid.x] = acc; fold(lid.x);
     if (lid.x == 0u) { trace[0] = scratch[0]; }
 }
 """
+
+# Wie viele Teilsummen. Zwischen 16 und 256 ist der Unterschied Rauschen
+# (1.6-4.4 ms bei ng=81); was zaehlt, ist ueberhaupt mehr als eine.
+NPART = 64
 
 # Die Nachbarn aus einer Tabelle -- was der erste schnelle Kernel tat.
 GATHER_TABLE = """
@@ -360,6 +404,7 @@ def gpu_weights(dev, ng, cur, d, decay, bnds, n_steps, n_out,
     b_w = buf(w, np.float16 if half else np.float32)
     b_s, b_ix = buf(self_), buf(idx, np.uint32)
     b_nb = buf(np.zeros(1) if stride else nbi, np.uint32)
+    b_pt = dev.create_buffer(size=4 * NPART, usage=U.STORAGE | U.COPY_SRC)
     b_tr = dev.create_buffer(size=4, usage=U.STORAGE | U.COPY_SRC)
     b_all = dev.create_buffer(size=4 * n_rep, usage=U.STORAGE | U.COPY_SRC | U.COPY_DST)
     b_pa = dev.create_buffer(size=16, usage=U.UNIFORM | U.COPY_DST)
@@ -367,6 +412,7 @@ def gpu_weights(dev, ng, cur, d, decay, bnds, n_steps, n_out,
     code = (SHADER_W.replace("ENABLE", "enable f16;" if half else "")
                     .replace("WT", "f16" if half else "f32")
                     .replace("NEIGHBOURS", GATHER_STRIDE if stride else GATHER_TABLE)
+                    .replace("NPART", "%du" % NPART)
                     .replace("WGS", str(wgs)))
     mod = dev.create_shader_module(code=code)
     ro = {"type": wgpu.BufferBindingType.read_only_storage}
@@ -374,12 +420,13 @@ def gpu_weights(dev, ng, cur, d, decay, bnds, n_steps, n_out,
     un = {"type": wgpu.BufferBindingType.uniform}
     bgl = dev.create_bind_group_layout(entries=[
         {"binding": i, "visibility": wgpu.ShaderStage.COMPUTE, "buffer": t}
-        for i, t in enumerate((ro, rw, ro, ro, ro, un, rw, ro))])
+        for i, t in enumerate((ro, rw, ro, ro, rw, un, rw, ro, ro))])
     play = dev.create_pipeline_layout(bind_group_layouts=[bgl])
     p_sw = dev.create_compute_pipeline(layout=play, compute={"module": mod, "entry_point": "sweep"})
-    p_rd = dev.create_compute_pipeline(layout=play, compute={"module": mod, "entry_point": "reduce"})
+    p_ra = dev.create_compute_pipeline(layout=play, compute={"module": mod, "entry_point": "reduce_a"})
+    p_rb = dev.create_compute_pipeline(layout=play, compute={"module": mod, "entry_point": "reduce_b"})
     def group(a, b_):
-        r = [a, b_, b_w, b_s, b_nb, b_pa, b_tr, b_ix]
+        r = [a, b_, b_w, b_s, b_pt, b_pa, b_tr, b_ix, b_nb]
         return dev.create_bind_group(layout=bgl, entries=[
             {"binding": i, "resource": {"buffer": x, "offset": 0, "size": x.size}}
             for i, x in enumerate(r)])
@@ -391,8 +438,11 @@ def gpu_weights(dev, ng, cur, d, decay, bnds, n_steps, n_out,
         enc = dev.create_command_encoder(); n_here = min(batch, n_steps - step); k = 0
         while k < n_here:
             if (step + k) % n_out == 0:
-                cp = enc.begin_compute_pass(); cp.set_pipeline(p_rd)
-                cp.set_bind_group(0, g[which]); cp.dispatch_workgroups(1); cp.end()
+                cp = enc.begin_compute_pass()
+                cp.set_pipeline(p_ra); cp.set_bind_group(0, g[which])
+                cp.dispatch_workgroups(NPART)
+                cp.set_pipeline(p_rb); cp.dispatch_workgroups(1)
+                cp.end()
                 enc.copy_buffer_to_buffer(b_tr, 0, b_all, 4 * slot, 4); slot += 1
             run = min(n_here - k, n_out - ((step + k) % n_out))
             cp = enc.begin_compute_pass(); cp.set_pipeline(p_sw)
@@ -401,8 +451,10 @@ def gpu_weights(dev, ng, cur, d, decay, bnds, n_steps, n_out,
             cp.end(); k += run
         dev.queue.submit([enc.finish()]); step += n_here
     enc = dev.create_command_encoder()
-    cp = enc.begin_compute_pass(); cp.set_pipeline(p_rd)
-    cp.set_bind_group(0, g[which]); cp.dispatch_workgroups(1); cp.end()
+    cp = enc.begin_compute_pass()
+    cp.set_pipeline(p_ra); cp.set_bind_group(0, g[which]); cp.dispatch_workgroups(NPART)
+    cp.set_pipeline(p_rb); cp.dispatch_workgroups(1)
+    cp.end()
     enc.copy_buffer_to_buffer(b_tr, 0, b_all, 4 * slot, 4)
     dev.queue.submit([enc.finish()])
     tr = np.frombuffer(dev.queue.read_buffer(b_all), np.float32)[:slot + 1].copy()
