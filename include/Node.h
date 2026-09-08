@@ -126,40 +126,12 @@ class IMPBFFEXPORT Node : public BaseObject,
   //! map of get_ports() does not preserve).
   const std::vector<std::string>& get_port_order() const;
 
-  //! How many times this node has evaluated, ever.
-  /*!
-      Monotonic, never reset. The invalidation contract -- that `update()`
-      re-evaluates only what a change reached -- is only assertable by
-      counting, and a consumer should not have to monkey-patch its own
-      callbacks to do it. Counts evaluations driven by `update()` and by a
-      reactive port; a direct call to `evaluate()` is the caller's own and is
-      not counted, because the caller already knows it made it.
-  */
-  unsigned long long get_evaluation_count() const { return eval_count_; }
-
-#ifndef SWIG
-  //! About to evaluate. Called by Node and Port; not for callers.
-  void note_evaluation() { ++eval_count_; }
-#endif
-
   //! False while any node a linked input follows is invalid.
   bool inputs_valid() const;
   //! Valid from evaluation, false while inputs are unsettled or changed.
   bool is_valid() const;
   //! Force the validity flag (invalidates nothing; chinet semantics).
   void set_valid(bool v);
-
-#ifndef SWIG
-  //! A port of this node was written. Called by Port; not for callers.
-  /*!
-      Counts writes so that update() can tell a node that *computed* from one
-      that has nothing to do. It cannot ask whether evaluate() was overridden
-      -- a director subclass in Python is indistinguishable from C++ -- but it
-      can ask whether anything came out, which is the question it actually
-      means.
-  */
-  void note_port_write() { ++write_epoch_; }
-#endif
 
   //! Compute the outputs from the inputs; marks the node valid.
   /*!
@@ -194,11 +166,6 @@ class IMPBFFEXPORT Node : public BaseObject,
 
   //! The operator resolved from its name once, instead of per evaluation.
   enum Operator { OP_NONE = 0, OP_ADD, OP_MUL };
-
-  //! Writes to this node's ports, so update() can see that evaluate() worked.
-  unsigned long long write_epoch_ = 0;
-  //! Evaluations, for #get_evaluation_count.
-  unsigned long long eval_count_ = 0;
 
   //! Everything ``evaluate()`` and ``update()`` would otherwise re-derive
   //! from the string-keyed port maps on every call.

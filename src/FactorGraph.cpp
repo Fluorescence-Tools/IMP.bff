@@ -9,11 +9,7 @@
 
 #include <IMP/bff/FactorGraph.h>
 
-#include <IMP/bff/internal/json.h>
-
 #include <algorithm>
-#include <fstream>
-#include <limits>
 #include <sstream>
 #include <stdexcept>
 
@@ -42,22 +38,15 @@ struct DisjointSets {
 FactorGraph::FactorGraph() = default;
 
 void FactorGraph::add_variable(const std::string& key, const std::string& name,
-                               int index, int fit_index, int size,
-                               const std::string& role) {
+                               int index, int fit_index) {
   if (variable_index_of_.count(key)) {
     throw std::invalid_argument("duplicate variable key: " + key);
-  }
-  if (size < 1) {
-    IMP_THROW("variable '" << key << "' must hold at least one free number",
-              IMP::ValueException);
   }
   Variable v;
   v.key = key;
   v.name = name;
   v.index = index;
   v.fit_index = fit_index;
-  v.size = size;
-  v.role = role;
   variables_.push_back(v);
   variable_index_of_[key] = static_cast<int>(variables_.size()) - 1;
   incidence_.push_back({});
@@ -545,144 +534,8 @@ std::vector<std::vector<std::string> > FactorGraph::get_sampling_blocks()
   return out;
 }
 
-int FactorGraph::get_variable_size(const std::string& key) const {
-  auto it = variable_index_of_.find(key);
-  return it == variable_index_of_.end() ? 0 : variables_[it->second].size;
-}
-
-std::string FactorGraph::get_variable_role(const std::string& key) const {
-  auto it = variable_index_of_.find(key);
-  return it == variable_index_of_.end() ? std::string() : variables_[it->second].role;
-}
-
-FactorKind FactorGraph::get_factor_kind(const std::string& factor_key) const {
-  auto it = factor_index_of_.find(factor_key);
-  return it == factor_index_of_.end() ? PRIOR : factors_[it->second].kind;
-}
-
-unsigned int FactorGraph::get_number_of_factors_of_kind(FactorKind kind) const {
-  unsigned int n = 0;
-  for (const auto& f : factors_) {
-    if (f.kind == kind) ++n;
-  }
-  return n;
-}
-
-int FactorGraph::factor_cost(const std::vector<std::string>& block) const {
-  long long total = 0;
-  for (const auto& key : affected_factors(block)) {
-    auto it = factor_index_of_.find(key);
-    if (it != factor_index_of_.end()) total += factors_[it->second].size;
-  }
-  const long long cap = std::numeric_limits<int>::max();
-  return static_cast<int>(total > cap ? cap : total);
-}
-
 int FactorGraph::block_cost(const std::vector<std::string>& block) const {
-  // Two factors, and both are the point of the number. How many local fits
-  // have to be redone when this block moves -- which is what it has always
-  // been -- times how big the block is, which is the product of its
-  // variables' free dimensions.
-  //
-  // The product, not the sum: this is the size of the block's own state, the
-  // same quantity a discrete graphical model calls a clique table. A block of
-  // scalars gives exactly the old answer, so callers written before variables
-  // had sizes are unaffected.
-  const long long fits = static_cast<long long>(affected_fits(block).size());
-  long long dim = 1;
-  const long long cap = std::numeric_limits<int>::max();
-  for (const auto& key : block) {
-    auto it = variable_index_of_.find(key);
-    if (it == variable_index_of_.end()) continue;
-    const long long s = variables_[it->second].size;
-    // Saturate rather than wrap: a block this large is beyond sampling
-    // anyway, and a negative cost would be read as cheap.
-    if (s != 0 && dim > cap / s) return static_cast<int>(cap);
-    dim *= s;
-  }
-  const long long cost = fits * dim;
-  return static_cast<int>(cost > cap ? cap : cost);
-}
-
-std::string FactorGraph::to_json() const {
-  nlohmann::json j;
-  j["format"] = "imp.bff.factorgraph";
-  j["version"] = 1;
-  nlohmann::json vars = nlohmann::json::array();
-  for (const auto& v : variables_) {
-    nlohmann::json o;
-    o["key"] = v.key;
-    o["name"] = v.name;
-    o["index"] = v.index;
-    o["fit_index"] = v.fit_index;
-    o["size"] = v.size;
-    o["role"] = v.role;
-    vars.push_back(o);
-  }
-  j["variables"] = vars;
-  nlohmann::json facs = nlohmann::json::array();
-  for (const auto& f : factors_) {
-    nlohmann::json o;
-    o["key"] = f.key;
-    o["kind"] = static_cast<int>(f.kind);
-    nlohmann::json scope = nlohmann::json::array();
-    // By key, not by position: a document that referred to positions would
-    // be readable only against the graph that wrote it.
-    for (int p : f.scope) scope.push_back(variables_[p].key);
-    o["scope"] = scope;
-    o["fit_index"] = f.fit_index;
-    o["size"] = f.size;
-    facs.push_back(o);
-  }
-  j["factors"] = facs;
-  return j.dump(2);
-}
-
-void FactorGraph::from_json(const std::string& json) {
-  nlohmann::json j = nlohmann::json::parse(json, nullptr, false);
-  if (j.is_discarded()) {
-    IMP_THROW("FactorGraph::from_json: not JSON", IMP::ValueException);
-  }
-  if (j.contains("format") &&
-      j.at("format").get<std::string>() != "imp.bff.factorgraph") {
-    IMP_THROW("FactorGraph::from_json: unexpected format '"
-                      << j.at("format").get<std::string>() << "'",
-              IMP::ValueException);
-  }
-  if (!j.contains("variables") || !j.contains("factors")) {
-    IMP_THROW("FactorGraph::from_json: the document needs 'variables' and "
-              "'factors'", IMP::ValueException);
-  }
-  FactorGraph fresh;
-  for (const auto& v : j.at("variables")) {
-    fresh.add_variable(v.at("key").get<std::string>(),
-                       v.value("name", std::string()),
-                       v.value("index", -1), v.value("fit_index", -1),
-                       v.value("size", 1), v.value("role", std::string()));
-  }
-  for (const auto& f : j.at("factors")) {
-    std::vector<std::string> scope;
-    for (const auto& s : f.at("scope")) scope.push_back(s.get<std::string>());
-    fresh.add_factor(f.at("key").get<std::string>(),
-                     static_cast<FactorKind>(f.value("kind", 0)), scope,
-                     f.value("fit_index", -1), f.value("size", 0));
-  }
-  *this = fresh;
-}
-
-void FactorGraph::save(const std::string& path) const {
-  std::ofstream out(path.c_str());
-  if (!out) IMP_THROW("cannot write " << path, IMP::ValueException);
-  out << to_json();
-  if (!out) IMP_THROW("failed while writing " << path, IMP::ValueException);
-}
-
-void FactorGraph::load(const std::string& path) {
-  std::ifstream in(path.c_str());
-  if (!in) IMP_THROW("cannot read " << path, IMP::ValueException);
-  std::ostringstream all;
-  all << in.rdbuf();
-  from_json(all.str());
+  return static_cast<int>(affected_fits(block).size());
 }
 
 std::vector<std::string> FactorGraph::affected_factors(
@@ -736,15 +589,8 @@ std::vector<std::string> FactorGraph::get_unexplained_variables() const {
 
 std::string FactorGraph::describe() const {
   std::ostringstream lines;
-  long long free_numbers = 0;
-  for (const auto& v : variables_) free_numbers += v.size;
-  lines << "variables      : " << variables_.size() << " ("
-        << free_numbers << " free numbers)\n";
+  lines << "variables      : " << variables_.size() << "\n";
   lines << "likelihoods    : " << get_number_of_likelihood_factors() << "\n";
-  lines << "priors         : " << get_number_of_factors_of_kind(PRIOR) << "\n";
-  if (get_number_of_factors_of_kind(HYPER)) {
-    lines << "hyper factors  : " << get_number_of_factors_of_kind(HYPER) << "\n";
-  }
   lines << "treewidth      : " << get_treewidth() << "\n";
   lines << "components     : " << connected_components().size() << "\n";
   std::vector<std::vector<std::string> > seps;

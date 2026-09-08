@@ -458,29 +458,6 @@ void Port::write_value(double v, bool input_is_float) {
   propagate_to_followers();
 }
 
-void Port::copy_from_link(const Port& source) {
-  if (fixed_) return;
-  const int element = port_value_type_element(value_type_);
-  if (!source.get_is_vector() && source.current_size() == 1) {
-    double v = source.get_value();
-    if (sanitize_ && element == PORT_FLOAT) v = sanitize(v);
-    value_type_ = port_value_type_of(element, false);
-    is_vector_ = false;
-    store_doubles(std::vector<double>(1, v));
-  } else {
-    std::vector<double> incoming = source.get_values_ref();
-    if (sanitize_ && element == PORT_FLOAT) {
-      for (double& e : incoming) e = sanitize(e);
-    }
-    value_type_ = port_value_type_of(element, true);
-    is_vector_ = true;
-    store_doubles(incoming);
-  }
-  finalize_storage();
-  // Deliberately no update_attached_node(): see the header.
-  propagate_to_followers();
-}
-
 void Port::write_vector(const std::vector<double>& v, bool input_is_float) {
   if (fixed_) return;
   // As write_value(): the element type is fixed, only the shape follows the
@@ -729,11 +706,7 @@ void Port::touch_attached_node_structure() {
 void Port::update_attached_node() {
   if (std::shared_ptr<Node> n = node_.lock()) {
     n->set_valid(false);
-    n->note_port_write();
-    if (is_reactive_ && !is_output_) {
-      n->note_evaluation();
-      n->evaluate();
-    }
+    if (is_reactive_ && !is_output_) n->evaluate();
   }
 }
 
