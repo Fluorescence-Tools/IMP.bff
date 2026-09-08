@@ -279,6 +279,15 @@ class IMPBFFEXPORT TcspcDecay : public Node {
       The port is `basis_port_key()`, row-major **bins x species**, so
       element `b * n_species + s`.
 
+      **It is not free today**, whatever this used to imply: the basis costs
+      about 7.5x the curve it accompanies, because it reconvolves one species
+      per call and a one-species call is below the kernel's blocking
+      threshold, so it runs the serial recursion where the summed call runs
+      the 8-way blocked one. It is still far cheaper than the finite
+      differences it replaces -- 113 curve evaluations against 7.5 -- which
+      is why it is worth having in this state. The remaining factor of five
+      needs a multi-column kernel in tttrlib.
+
       **Requesting the basis disables the amplitude compaction**, and the
       columns then correspond to the input spectrum one for one. That is the
       contract and it is deliberate: a compacted basis plus an index map is

@@ -400,9 +400,17 @@ void TcspcDecay::evaluate() {
                           convolution_stop, dt_);
 
   // The basis: each species reconvolved on its own, with unit amplitude, in
-  // the order the input spectrum gave them. Same total work as the summed
-  // call above -- that kernel already recurses per species -- with the terms
-  // kept instead of accumulated.
+  // the order the input spectrum gave them.
+  //
+  // This is NOT the same work as the summed call above, though it recurses
+  // over the same species and this comment claimed it was until it was
+  // measured: 7.5x the curve at K = 33 over 1 563 channels. Each call here
+  // passes `numexp = 1`, which is below FCONV_AD_BLOCK_MIN, so it takes the
+  // serial recursion while the summed call takes the 8-way blocked body --
+  // the basis loses the blocking entirely. Closing that needs a kernel that
+  // writes K columns instead of accumulating them, which belongs in
+  // tttrlib's DecayConvolution.h (this file's copy is vendored and pinned
+  // byte-identical by test/test_vendored_headers.py), not here.
   if (emit_basis_) {
     const std::size_t n_species = static_cast<std::size_t>(n_active_);
     const std::size_t n_bins = static_cast<std::size_t>(n_points);
