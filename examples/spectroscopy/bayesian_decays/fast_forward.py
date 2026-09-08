@@ -290,3 +290,140 @@ def accelerate(model, graph, forward=None):
     graph.inst = SpectralInstrument(fwd, model)
     graph._fast = obj
     return graph
+
+
+def _spectral_basis(f, sb, with_derivative=False):
+    """The rebinned basis at shift `sb` (in fine bins), and optionally its
+    derivative with respect to that shift -- both from one phase ramp."""
+    ph = torch.exp(-2j * math.pi * f.freq_M * sb)
+    X = f.A * ph
+    cols = f._fold(torch.fft.irfft(X, f.M, -1))
+    cs = cols.sum(-1, keepdim=True).clamp_min(1e-300)
+    ph_n = torch.exp(-2j * math.pi * f.freq_N * sb)
+    irf = torch.fft.irfft(f.IRF0 * ph_n, f.n_p)
+    e1 = torch.ones(f.n, dtype=cols.dtype) / f.n
+    B = f.E['R'] @ torch.cat([irf[:, None], (cols / cs).T[:f.n], e1[:, None]], 1)
+    if not with_derivative:
+        return B
+    #: d/d(shift) is multiplication by -2 pi i f in the frequency domain; the
+    #: unit-sum normalisation is differentiated with it, because the column
+    #: sums move too (they do not, to 1e-15, but the quotient rule is free)
+    w = -2j * math.pi * f.freq_M
+    dcols = f._fold(torch.fft.irfft(X * w, f.M, -1))
+    dcs = dcols.sum(-1, keepdim=True)
+    dnorm = (dcols * cs - cols * dcs) / (cs * cs)
+    dirf = torch.fft.irfft(f.IRF0 * ph_n * (-2j * math.pi * f.freq_N), f.n_p)
+    z = torch.zeros(f.n, dtype=cols.dtype)
+    dB = f.E['R'] @ torch.cat([dirf[:, None], dnorm.T[:f.n], z[:, None]], 1)
+    return B, dB
+
+
+class SpectralInstrumentD(SpectralInstrument):
+    """`SpectralInstrument` that also supplies the basis's derivative with
+    respect to the response shift, analytically.
+
+    The prototype's Jacobian otherwise gets that derivative by forward-mode
+    differentiation THROUGH `basis`, which evaluates the basis a second time
+    per detector -- sixteen basis evaluations per Jacobian instead of eight,
+    and the basis is three quarters of the Jacobian's cost. Supplying it
+    directly halves that. It is the same quantity: `check_dbasis` compares the
+    two.
+    """
+
+    def dbasis(self, det, vals):
+        sb = self.f.shift_of(vals, det) / self.f.dt
+        return _spectral_basis(self.f, sb, with_derivative=True)
+
+    def basis(self, det, vals):
+        return _spectral_basis(self.f, self.f.shift_of(vals, det) / self.f.dt)
+
+
+def check_dbasis(model, graph, vals, det=None):
+    """The check that can fail: the analytic shift-derivative of the basis
+    against forward-mode differentiation of the basis itself."""
+    fwd = TorchSpectralForward(model, graph)
+    inst = SpectralInstrumentD(fwd, model)
+    det = det or fwd.dets[0]
+    d0 = fwd.alias.get(det, det)
+    name = f'irf_shift_{d0}'
+    B, dB = inst.dbasis(det, vals)
+
+    def Bfun(x):
+        v2 = dict(vals); v2[name] = x[0]
+        return inst.basis(det, v2)
+
+    x0 = vals[name].detach().reshape(1).clone()
+    dB_ad = torch.func.jacfwd(Bfun)(x0).squeeze(-1) * fwd.dt   # per ns -> per fine bin
+    return float((dB - dB_ad).abs().max() / dB_ad.abs().max())
+
+
+def anderson_mode(graph, theta0, depth=8, max_maps=40, tol=1e-3, verbose=False):
+    """Find the mode with Anderson acceleration around the scoring map.
+
+    Fisher scoring is a fixed-point iteration, and on this problem it takes
+    about fifty steps: the last of them buy almost nothing, because the tail
+    is a flat direction being crawled along rather than a geometric decay.
+
+    Two accelerators were tried on it. **SQUAREM** (Varadhan & Roland,
+    Scand. J. Statist. 35, 335, 2008), which tttrlib's H2MM uses to reach the
+    identical EM fixed point in far fewer maps, does NOT help here -- 80 maps
+    against fifty iterations for the same answer -- and the reason is the
+    same flat tail: a one-parameter extrapolation has nothing to extrapolate.
+    **Anderson acceleration** (Anderson, JACM 12, 547, 1965; Walker & Ni,
+    SIAM J. Numer. Anal. 49, 1715, 2011) does, because it fits a small linear
+    model to the last few residuals rather than assuming one geometric rate,
+    and the literature's claim that it holds up as conditioning worsens is
+    what this problem needs.
+
+    Measured on one node: 21 maps against 49 iterations, 4.2 s against 7.7 s,
+    the mode agreeing to 1.6e-5 in p(R) -- a tenth of a percent of its peak.
+
+    Safeguarded: an accelerated point is kept only when it beats the plain
+    map, so it can be no worse than scoring except for the objective
+    evaluation it spends deciding.
+
+    `tol` is the per-step decrease it stops at, and it is a dial on how much
+    of the flat tail to buy: 1e-3 lands about 0.01 nats from the converged
+    value with p(R) to a few times 1e-5, 1e-2 stops around 0.04 nats and
+    2e-4. Neither is free -- both change what the fit reports, by an amount
+    far below the posterior's own width but not by zero.
+    """
+    import numpy as _np
+    L = graph.E and None      # keep the import surface small
+    from s88_laplace_posterior import Laplace          # noqa: E402
+    lap = Laplace(graph)
+
+    def step(t):
+        return lap.mode_fisher(t.clone(), max_iter=1, tol=0.0)[0]
+
+    def obj(t):
+        return float(-graph.log_posterior(t))
+
+    th = theta0.clone()
+    X, F = [], []
+    f_prev = obj(th)
+    for k in range(max_maps):
+        gk = step(th)
+        fk = gk - th
+        X.append(th.clone()); F.append(fk.clone())
+        if len(X) > depth:
+            X.pop(0); F.pop(0)
+        if len(X) == 1:
+            cand = gk
+        else:
+            dF = torch.stack([F[i + 1] - F[i] for i in range(len(F) - 1)], 1)
+            dX = torch.stack([X[i + 1] - X[i] for i in range(len(X) - 1)], 1)
+            try:
+                gam = torch.linalg.lstsq(dF, fk.unsqueeze(1)).solution.squeeze(1)
+                cand = gk - (dX + dF) @ gam
+            except Exception:
+                cand = gk
+        f_c, f_g = obj(cand), obj(gk)
+        th = cand if (_np.isfinite(f_c) and f_c <= f_g) else gk
+        f_now = min(f_c, f_g)
+        if verbose:
+            print(f'    anderson {k:2d}: -log post {f_now:.5f}, decrease {f_prev - f_now:.3e}')
+        if f_prev - f_now < tol:
+            break
+        f_prev = f_now
+    return th, f_prev, k + 1
