@@ -65,32 +65,6 @@ typedef int (*ImpBffPropagateFn)(const double* cur, const double* d,
                                  double* out_fluorescence, int n_fluorescence,
                                  double* out_density);
 
-//! One forward pass of a dense MLP: the whole network, not one GEMM.
-/*!
-    **Why the whole network.** A door at GEMM granularity would move the
-    activations across it once per layer, and for the shape that matters --
-    a network evaluated per voxel, so tens of thousands of rows against a
-    few dozen units -- that is over a hundred megabytes each way against
-    about a millisecond of arithmetic. The same reasoning that gave
-    #ImpBffPropagateFn the whole loop gives this the whole network.
-
-    Layers are `y = activation(W x + b)`, `W` row-major `n_out x n_in`.
-    \param[in] n_layers how many layers
-    \param[in] n_in,n_out,activation \p n_layers each; the activation codes are
-               `IMP::bff::internal::Activation` in declaration order
-               (identity, relu, tanh, logistic, softplus, silu, sin)
-    \param[in] weights,biases the layers' weights and biases, concatenated
-    \param[in] x the batch, `n_rows x n_in[0]`, already scaled
-    \param[in] n_rows rows in the batch
-    \param[out] y `n_rows x n_out[n_layers-1]`, allocated by the caller, in the
-               network's own units -- the caller unscales
-    \return 0 when it did the work, anything else to decline it
-*/
-typedef int (*ImpBffMlpForwardFn)(int n_layers, const int* n_in, const int* n_out,
-                                  const int* activation, const double* weights,
-                                  const double* biases, const double* x,
-                                  int n_rows, double* y);
-
 //! What a plugin offers. Version first, so a mismatch is caught, not crashed.
 struct ImpBffComputeBackend {
     //! #IMPBFF_COMPUTE_BACKEND_ABI as the plugin was compiled against it.
@@ -99,16 +73,12 @@ struct ImpBffComputeBackend {
     const char* name;
     //! May be null: then this backend has nothing to say about propagation.
     ImpBffPropagateFn propagate;
-    //! May be null: then networks stay on the CPU.
-    ImpBffMlpForwardFn mlp_forward;
 };
 
 }  // extern "C"
 
 //! Bumped whenever #ImpBffComputeBackend changes shape.
-/*! 2 added #ImpBffMlpForwardFn. A plugin built against 1 declines cleanly
-    rather than being read one field short. */
-#define IMPBFF_COMPUTE_BACKEND_ABI 2
+#define IMPBFF_COMPUTE_BACKEND_ABI 1
 
 //! The symbol a plugin exports: `const ImpBffComputeBackend* (*)(void)`.
 #define IMPBFF_COMPUTE_BACKEND_SYMBOL "imp_bff_compute_backend"
