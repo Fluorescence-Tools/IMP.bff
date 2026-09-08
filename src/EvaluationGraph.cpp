@@ -59,7 +59,8 @@ const EvaluationGraph::Output* EvaluationGraph::find(
 
 void EvaluationGraph::add_output(const std::string& label,
                                  std::shared_ptr<Node> node,
-                                 const std::string& port_name) {
+                                 const std::string& port_name,
+                                 const std::string& provenance) {
     if (label.empty()) {
         IMP_THROW("an output needs a label", IMP::ValueException);
     }
@@ -79,6 +80,7 @@ void EvaluationGraph::add_output(const std::string& label,
     o.label = label;
     o.node = node;
     o.port_name = port_name;
+    o.provenance = provenance;
     outputs_.push_back(o);
     index_of_[label] = static_cast<int>(outputs_.size()) - 1;
 }
@@ -110,6 +112,12 @@ std::shared_ptr<Node> EvaluationGraph::get_output_node(
         const std::string& label) const {
     const Output* o = find(label);
     return o ? o->node : std::shared_ptr<Node>();
+}
+
+std::string EvaluationGraph::get_output_provenance(
+        const std::string& label) const {
+    const Output* o = find(label);
+    return o ? o->provenance : std::string();
 }
 
 unsigned int EvaluationGraph::get_number_of_outputs() const {
@@ -194,6 +202,7 @@ std::string EvaluationGraph::to_json() const {
         e["label"] = o.label;
         e["node"] = o.node->get_name();
         e["port"] = o.port_name;
+        if (!o.provenance.empty()) e["provenance"] = o.provenance;
         outs.push_back(e);
     }
     j["outputs"] = outs;
@@ -228,7 +237,8 @@ void EvaluationGraph::from_json(
                       IMP::ValueException);
         }
         fresh.add_output(e.at("label").get<std::string>(), it->second,
-                         e.at("port").get<std::string>());
+                         e.at("port").get<std::string>(),
+                         e.value("provenance", std::string()));
     }
     *this = fresh;
 }

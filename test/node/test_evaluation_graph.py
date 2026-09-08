@@ -189,3 +189,83 @@ def test_loading_against_nodes_that_are_missing_says_so(graph):
     back = IMP.bff.EvaluationGraph()
     with pytest.raises(ValueError):
         back.from_json(text, {"source": nodes["source"]})
+
+
+# --------------------------------------------------------------------------
+# Provenance: what a saved graph can honestly say about the code that made it
+# --------------------------------------------------------------------------
+
+class Other(Add):
+    """A different callback under the same label, to be caught on load."""
+
+    def evaluate(self):
+        self.calls += 1
+        v = np.asarray(self.get_input_port("x").get_value_view(), dtype=float)
+        self.get_output_port("out").set_value_vector((v * 100.0).tolist())
+
+
+def test_provenance_identifies_the_class_and_its_source():
+    node = Add("n")
+    p = IMP.bff.node_provenance(node)
+    module, qualname, digest = p.split(":")
+    assert qualname == "Add"
+    assert len(digest) == 12, "the source of a class defined in a file is readable"
+    assert IMP.bff.node_provenance(Add("m")) == p, "same class, same fingerprint"
+    assert IMP.bff.node_provenance(Other("o")) != p, "different class, different"
+
+
+def test_provenance_survives_a_class_with_no_readable_source():
+    """A node written in a notebook cell or by exec has no source to hash.
+    The name still identifies it, and nothing raises -- refusing to record
+    provenance would make the feature useless exactly where models are
+    written."""
+    ns = {"Add": Add}
+    exec("class Generated(Add):\n    pass\n", ns)
+    p = IMP.bff.node_provenance(ns["Generated"]("g"))
+    assert p.endswith(":"), "no digest, and that is not an error"
+    assert "Generated" in p
+
+
+def test_a_graph_round_trips_its_provenance(graph):
+    g, nodes = graph
+    by_label = {"basis": nodes["basis"], "left": nodes["left"],
+                "right": nodes["right"], "total": nodes["total"]}
+    g2 = IMP.bff.EvaluationGraph()
+    for label, node in by_label.items():
+        IMP.bff.add_output_with_provenance(g2, label, node, "out")
+    assert g2.get_output_provenance("total")
+    back = IMP.bff.EvaluationGraph()
+    back.from_json(g2.to_json(), nodes)
+    assert back.get_output_provenance("total") == g2.get_output_provenance("total")
+    assert not IMP.bff.check_provenance(back, by_label)
+
+
+def test_a_node_fetched_from_the_graph_is_not_your_python_object(graph):
+    """Same C++ node, same uid, and the Python override still runs when the
+    graph evaluates it -- but the wrapper handed back is a plain `Node`,
+    because a director's Python identity is not carried out through the
+    binding. It is why `check_provenance` asks for your objects."""
+    g, nodes = graph
+    back = g.get_output_node("total")
+    assert back.get_uid() == nodes["total"].get_uid()
+    assert back is not nodes["total"]
+    assert type(back).__name__ == "Node"
+    g.run()
+    assert nodes["total"].calls == 1, "the override still ran"
+
+
+def test_loading_against_changed_code_is_reported_not_hidden(graph):
+    """The whole point: a graph saved with one callback and reloaded against
+    another must say so, rather than compute something else in silence."""
+    g, nodes = graph
+    g2 = IMP.bff.EvaluationGraph()
+    IMP.bff.add_output_with_provenance(g2, "left", nodes["left"], "out")
+    text = g2.to_json()
+
+    swapped = Other("left")
+    back = IMP.bff.EvaluationGraph()
+    back.from_json(text, {"left": swapped})
+    bad = IMP.bff.check_provenance(back, {"left": swapped})
+    assert set(bad) == {"left"}
+    recorded, now = bad["left"]
+    assert "Add" in recorded and "Other" in now
