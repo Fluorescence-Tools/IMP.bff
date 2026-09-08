@@ -263,7 +263,9 @@ void TcspcDecay::build_spectrum() {
   // A relative threshold against nothing is meaningless: if every amplitude
   // is zero the spectrum is empty, and an empty spectrum is not something
   // the kernel can be handed. Keep it as it is and let the curve be zero.
-  if (largest > 0.0) {
+  // Compaction is skipped when the basis is wanted, so that its columns line
+  // up with the input spectrum one for one (see set_emit_basis).
+  if (largest > 0.0 && !emit_basis_) {
     const double cutoff = amplitude_threshold_ * largest;
     for (int i = 0; i < n_lifetimes_; ++i) {
       const double amplitude = spectrum_[static_cast<std::size_t>(2 * i)];
@@ -294,6 +296,16 @@ void TcspcDecay::build_spectrum() {
     spectrum_.resize(2 * kept);
   }
   n_active_ = static_cast<int>(spectrum_.size() / 2);
+}
+
+void TcspcDecay::set_emit_basis(bool on) {
+  if (on == emit_basis_) return;
+  emit_basis_ = on;
+  if (on && !get_output_port(basis_port_key())) {
+    add_output_port(basis_port_key(), std::make_shared<Port>(
+                        std::vector<double>{0.0}));
+  }
+  set_valid(false);
 }
 
 void TcspcDecay::set_amplitude_threshold(double relative) {
@@ -370,6 +382,36 @@ void TcspcDecay::evaluate() {
   fconv_per_cs_ad<double>(curve_.data(), spectrum_.data(), irf.data(),
                           n_active_, stop, n_points, period_,
                           convolution_stop, dt_);
+
+  // The basis: each species reconvolved on its own, with unit amplitude, in
+  // the order the input spectrum gave them. Same total work as the summed
+  // call above -- that kernel already recurses per species -- with the terms
+  // kept instead of accumulated.
+  if (emit_basis_) {
+    const std::size_t n_species = static_cast<std::size_t>(n_active_);
+    basis_.assign(static_cast<std::size_t>(n_points) * n_species, 0.0);
+    std::vector<double> column(static_cast<std::size_t>(n_points));
+    double single[2];
+    for (std::size_t s = 0; s < n_species; ++s) {
+      single[0] = 1.0;
+      single[1] = spectrum_[2 * s + 1];
+      std::fill(column.begin(), column.end(), 0.0);
+      fconv_per_cs_ad<double>(column.data(), single, irf.data(), 1, stop,
+                              n_points, period_, convolution_stop, dt_);
+      for (int b = 0; b < n_points; ++b) {
+        basis_[static_cast<std::size_t>(b) * n_species + s] =
+            column[static_cast<std::size_t>(b)];
+      }
+    }
+    const std::shared_ptr<Port> bp = get_output_port(basis_port_key());
+    if (!bp) {
+      throw std::domain_error(
+          "TcspcDecay '" + get_name() +
+          "' emits the basis but has no '" + basis_port_key() + "' port");
+    }
+    bp->set_sanitize(false);
+    bp->set_value_vector(basis_);
+  }
 
   const double scatter = scatter_port_->get_value();
   if (scatter != 0.0) {

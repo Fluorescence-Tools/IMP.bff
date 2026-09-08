@@ -227,6 +227,33 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   //! The key of the input port carrying an interleaved lifetime spectrum.
   static const char* spectrum_port_key() { return "lifetime_spectrum"; }
 
+  //! The key of the optional output port carrying the reconvolved basis.
+  static const char* basis_port_key() { return "basis"; }
+
+  //! Also emit the reconvolved basis: each species' response, before amplitudes.
+  /*!
+      The node normally produces the finished curve, which is the sum over
+      species of `amplitude * (lifetime (*) response)`. A caller that
+      differentiates the model wants the terms rather than the sum: the model
+      is **linear in the amplitudes given the basis**, so the whole
+      derivative with respect to them is that matrix, and with it a Jacobian
+      is one matrix product instead of one finite difference per parameter.
+      Without it a caller with 113 parameters evaluates the curve 113 times
+      per iteration to learn what one matrix already says.
+
+      The port is `basis_port_key()`, row-major **bins x species**, so
+      element `b * n_species + s`.
+
+      **Requesting the basis disables the amplitude compaction**, and the
+      columns then correspond to the input spectrum one for one. That is the
+      contract and it is deliberate: a compacted basis plus an index map is
+      correct the day it is written and drifts afterwards, and the failure --
+      an amplitude indexed against the wrong column -- is silent.
+  */
+  void set_emit_basis(bool on);
+  //! Whether the reconvolved basis is emitted.
+  bool get_emit_basis() const { return emit_basis_; }
+
   //! The interleaved `(a0, t0, a1, t1, ...)` spectrum the last evaluation
   //! built from the ports, after abs() and normalisation.
   const std::vector<double>& get_lifetime_spectrum() const {
@@ -269,6 +296,8 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   //! The lifetime ports, in the order the spectrum interleaves them.
   std::vector<Port*> lifetime_ports_;
   Port* spectrum_port_ = nullptr;
+  bool emit_basis_ = false;
+  std::vector<double> basis_;
   Port* scatter_port_ = nullptr;
   Port* background_port_ = nullptr;
   Port* n0_port_ = nullptr;
