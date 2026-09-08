@@ -568,6 +568,16 @@ unsigned int FactorGraph::get_number_of_factors_of_kind(FactorKind kind) const {
   return n;
 }
 
+int FactorGraph::factor_cost(const std::vector<std::string>& block) const {
+  long long total = 0;
+  for (const auto& key : affected_factors(block)) {
+    auto it = factor_index_of_.find(key);
+    if (it != factor_index_of_.end()) total += factors_[it->second].size;
+  }
+  const long long cap = std::numeric_limits<int>::max();
+  return static_cast<int>(total > cap ? cap : total);
+}
+
 int FactorGraph::block_cost(const std::vector<std::string>& block) const {
   // Two factors, and both are the point of the number. How many local fits
   // have to be redone when this block moves -- which is what it has always

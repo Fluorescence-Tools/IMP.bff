@@ -165,6 +165,22 @@ class IMPBFFEXPORT FactorGraph {
   std::vector<std::string> get_variable_keys() const;
   //! Factor keys in the order they were added.
   std::vector<std::string> get_factor_keys() const;
+  //! The work a block's movement dirties: the sizes of the factors it touches.
+  /*!
+      #block_cost answers "how many local fits does this force", which is what
+      it has always answered and what a scheduler over datasets wants. It is
+      deliberately silent about a variable that forces no fit at all -- a
+      hyperparameter reaching the data only through its own penalty costs
+      zero there, correctly and unhelpfully.
+
+      This is the other question, kept separate rather than folded in: the
+      residuals that have to be recomputed, summed over every factor the block
+      touches, priors and hyper factors included. For a hyperparameter over a
+      24-coefficient curve it is 24 + 1 rather than 0 -- it forces no fit, and
+      it dirties the roughness factor.
+  */
+  int factor_cost(const std::vector<std::string>& block) const;
+
   //! Free numbers a variable holds; 1 unless it was given a size, 0 if absent.
   int get_variable_size(const std::string& key) const;
   //! A variable's role as the caller declared it; empty if none or absent.

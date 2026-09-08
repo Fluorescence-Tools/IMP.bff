@@ -202,3 +202,20 @@ def test_the_defaults_are_the_old_behaviour():
     assert g.get_variable_size("a") == 1
     assert g.get_variable_role("a") == ""
     assert g.block_cost(["a", "b"]) == len(g.affected_fits(["a", "b"]))
+
+
+def test_work_dirtied_is_a_separate_number_from_fits_forced(graph):
+    """The consumer's addition rather than a redefinition: block_cost keeps
+    meaning fits forced, and factor_cost answers the other question -- the
+    residuals a move dirties, summed over every factor it touches, priors and
+    hyper factors included.
+
+    For the hyperparameter that is 24 + 1 rather than 0: it forces no fit, and
+    it dirties the roughness factor over the 24 distribution coefficients and
+    its own prior."""
+    assert graph.block_cost(["log10_lam"]) == 0
+    assert graph.factor_cost(["log10_lam"]) == 25
+
+    # and for a variable that does reach the data, it is the histograms it
+    # touches plus its own prior
+    assert graph.factor_cost(["c"]) > graph.block_cost(["c"])
