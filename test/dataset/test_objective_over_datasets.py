@@ -61,9 +61,9 @@ def test_two_objectives_that_disagree_about_noise_each_weight_their_own_way():
     member, each weighted its own way, summing to the total.
 
     It drives the arithmetic directly rather than through `JointChiSquared`,
-    so it does not yet prove that the *node* composes them -- wiring that is
-    the next step, and this test would be overclaiming if it were named for
-    it."""
+    so on its own it does not prove that the *node* composes them. That is
+    `test_joint_over_datasets.py`, which evaluates the graph and reads the
+    ports; this one stays as the arithmetic underneath it."""
     y_counts = np.array([5.0, 10.0, 20.0])
     mu_counts = np.array([6.0, 9.0, 25.0])
     y_corr = np.array([1.20, 1.10, 1.05])
