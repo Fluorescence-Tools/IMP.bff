@@ -20,6 +20,42 @@ fi
 cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$PREFIX -DCMAKE_INSTALL_PREFIX=$PREFIX "${SCCACHE_ARGS[@]}"
 ninja install -k 0 -j 4
 
+# The compute backend, for the module package as well as the wheel.
+#
+# It is a run-time-loaded plugin: one C file that links nothing but libc and
+# resolves every wgpu entry point by dlopen from a path the Python side finds.
+# IMP's module tooling cannot express a second shared library --
+# `modules/*/CMakeLists.txt` is generated from `tools/build/cmake_templates`
+# and says "any changes will be lost", and no IMP module declares an
+# `add_library` of its own -- but it does not need to. Nothing links this and
+# it is located by path at run time, so compiling it here in one command and
+# dropping it beside the module is enough: `IMP.bff.enable_gpu()` then finds
+# it exactly as it does in the wheel, and still only uses it if a wgpu library
+# (wgpu-py, or IMP_BFF_WGPU_LIBRARY) is present.
+#
+# A failure here is not fatal. The CPU path is the default, and the whole
+# point of a plugin is that its absence costs nothing.
+if [ "$(uname)" = "Darwin" ]; then
+  _gpu_lib=libimp_bff_wgpu.dylib
+  _gpu_extra=""
+else
+  _gpu_lib=libimp_bff_wgpu.so
+  _gpu_extra="-ldl"
+fi
+_impbff_py=$(ls -d "$PREFIX"/lib/python*/site-packages/IMP/bff 2>/dev/null | head -1)
+if [ -n "$_impbff_py" ] && [ -f "$SRC_DIR/gpu/imp_bff_wgpu.c" ]; then
+  if "${CC:-cc}" -std=c11 -O2 -fPIC -shared -fvisibility=hidden \
+       -I"$SRC_DIR/gpu" "$SRC_DIR/gpu/imp_bff_wgpu.c" \
+       -o "$_impbff_py/$_gpu_lib" $_gpu_extra; then
+    echo "IMP.bff: compute backend built into $_impbff_py"
+  else
+    echo "IMP.bff: no compute backend built; the kernels stay on the CPU"
+    rm -f "$_impbff_py/$_gpu_lib"
+  fi
+else
+  echo "IMP.bff: no module directory found; no compute backend built"
+fi
+
 # Copy examples. -p: ninja install's own doc/examples install rules
 # already create this directory for some imp versions.
 mkdir -p $PREFIX/share/doc/IMP/examples/bff

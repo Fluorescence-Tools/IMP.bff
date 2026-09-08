@@ -52,6 +52,20 @@ nothing to ship.**
 | the traps | three abort-class validation errors found so far (workgroup count, binding size, a default that is not zero); wgpu validation failures panic in a callback that cannot unwind, so they kill the process rather than declining |
 | **platforms** | **it has only ever been compiled and run on macOS/Metal.** Vulkan and D3D12 have never executed a line of it |
 
+**What it does *not* cost, corrected 2026-09-08.** An earlier version of this
+note, and of PRD-139, said the plugin could not exist in the conda `imp.bff`
+module package because IMP's tooling cannot build a second shared library.
+That confuses building with shipping. The plugin is one C file, 67 KB
+compiled, that links nothing but libc and is located **by path at run time**.
+IMP's tooling never has to know about it: the recipe compiles it in one
+command and drops it beside the module, and `enable_gpu()` finds it there
+exactly as it does in the wheel -- and still only uses it if a wgpu library is
+present. Both recipes now do this
+(`conda-recipe/build.sh`, `conda-recipe/bld.bat`), verified by building into a
+prefix and loading the result. So the capability is available to **both**
+packages, and the only question left about the backend is whether it is worth
+having at all.
+
 That last row is the sharpest. `gpu/` was wired into the standalone build
 unconditionally, and CI builds wheels with cibuildwheel on Linux and Windows,
 so **CI would have been the first compiler ever to see it on two of three
