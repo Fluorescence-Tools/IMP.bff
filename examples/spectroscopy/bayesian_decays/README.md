@@ -19,6 +19,7 @@ point into it by section.
 
 | | notebook | what it establishes |
 |---|---|---|
+| 0 | `00_what_came_before.ipynb` | the amortised neural network this project tried first: what it measured, what it got right, and the calibration gate it never passed — which is why the rest of the series exists |
 | 1 | `01_the_measurement.ipynb` | what the data are; the forward model; the ruler $E(r)=1/(1+r^6)$ and the window where it stops reading; that the expected counts are **linear in the distance distribution** |
 | 2 | `02_the_inverse_problem.ipynb` | that inverting a decay for $p(R)$ is ill posed even with every nuisance known exactly — 15 of 128 directions above the noise — and what a roughness prior is for |
 | 3 | `03_the_penalty_weight.ipynb` | that the prior's weight **cannot** be fitted jointly (the joint mode flattens two populations into one), and the evidence mixture that replaces it |
@@ -27,9 +28,11 @@ point into it by section.
 | 6 | `06_the_experiment.ipynb` | that the bias is a property of the measurement, and what a second laser buys — computed from the information alone, then measured |
 | 7 | `07_single_molecules.ipynb` | the photon stream, `tttrlib` bursts, and an A/B showing the single-molecule experiment costs the inference almost nothing |
 | 8 | `08_classify_then_pool.ipynb` | classify the bursts by what each one looks like, pool the groups, analyse each — and separate populations the pooled analysis cannot |
+| 9 | `09_what_failed.ipynb` | every mistake serious enough to change a result, with the measurement that caught it — wrong answers that fit, silent losses, and checks that could not fail |
+| 10 | `10_the_factor_graph_in_bff.ipynb` | the model as a factor graph in bff, drawn with `networkx`, and made fast: the forward model 38x, the whole objective 8x, agreeing to 1e-15 |
 
-Notebooks 1, 2 and 4–8 run in a few minutes each; 3 and 5 do several fits and
-take longer. Every one was executed end to end before being committed, and
+Notebooks 0, 1, 2, 4, 6–10 run in a few minutes each; 3 and 5 do several fits
+and take longer. Every one was executed end to end before being committed, and
 carries its outputs.
 
 ## What it needs
@@ -40,11 +43,14 @@ carries its outputs.
   and the posterior. Looked for at
   `~/dev/ucfret/investigation/pinn_pR_anisotropy`; set `UCFRET_S88` to point
   elsewhere.
-* `numpy`, `scipy`, `torch`, `matplotlib`, and `scikit-learn` for one
-  cross-check in notebook 8
+* `IMP.bff` for notebook 10
+* `numpy`, `scipy`, `torch`, `matplotlib`, `networkx`, and `scikit-learn` for
+  the cross-checks in notebooks 8 and 9
 
 `bd.py` is the shared code. It imports `pie_mfd` from `../smfret_pie_mfd` so
 that the series and the finished example run the same implementation.
+`bff_forward.py` is notebook 10's: the decay model as `IMP.bff` nodes, the
+structural factor graph, and the drawing.
 
 ## The short version of the argument
 

@@ -194,7 +194,12 @@ def fine_response(model: dict, det: str, vals) -> "torch.Tensor":
     L = model['L']; Ep = model['Ep']
     off = (Ep.get('pulse_offset') or {}).get(det, 0.0)
     d0 = (Ep.get('pulse_alias') or {}).get(det, det)
-    return L.analytic_irf(Ep, vals[f'irf_shift_{d0}'] + off, vals[f'irf_width_{d0}'], vals[f'irf_skew_{d0}'])
+    nom = Ep['instrument']
+    #: a graph built without response-shape nodes carries only the shift; the
+    #: width and the skew are then the nominal ones, as InstrumentModel does
+    return L.analytic_irf(Ep, vals[f'irf_shift_{d0}'] + off,
+                          vals.get(f'irf_width_{d0}', L.tt(nom[1])),
+                          vals.get(f'irf_skew_{d0}', L.tt(nom[3])))
 
 
 def physics_tables(model: dict, st: dict, p_true: np.ndarray, verbose=True):
