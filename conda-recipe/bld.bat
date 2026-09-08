@@ -17,7 +17,9 @@ echo "Build the compute backend (optional; absence costs nothing)"
 :: time, so IMP's module tooling never has to build it. See build.sh for why.
 :: Failure is deliberately not fatal -- the CPU path is the default.
 set IMPBFF_PY=%PREFIX%\Lib\site-packages\IMP\bff
-if exist "%IMPBFF_PY%" (
+if "%IMPBFF_WITH_GPU%"=="0" (
+  echo "IMP.bff: IMPBFF_WITH_GPU=0; no compute backend built"
+) else if exist "%IMPBFF_PY%" (
   cl /nologo /LD /O2 /I "%SRC_DIR%\gpu" "%SRC_DIR%\gpu\imp_bff_wgpu.c" ^
      /Fo"%TEMP%\imp_bff_wgpu.obj" /Fe:"%IMPBFF_PY%\imp_bff_wgpu.dll"
   if errorlevel 1 echo "IMP.bff: no compute backend built; the kernels stay on the CPU"

@@ -67,3 +67,17 @@ def test_both_module_recipes_build_the_plugin():
         assert "imp_bff_wgpu.c" in text, "%s no longer builds the backend" % script
     cmake = (ROOT / "standalone" / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "IMPBFF_WITH_GPU" in cmake and 'add_subdirectory("${IMPBFF_ROOT}/gpu"' in cmake
+
+
+def test_the_build_says_whether_it_can_load_a_backend_at_all():
+    """`IMPBFF_WITH_GPU=0` compiles the loader out -- no dlopen anywhere in the
+    library. A build that lost the door must say so rather than look like a
+    machine with no GPU, because the two want different things done about
+    them."""
+    import IMP.bff
+    if IMP.bff.built_with_gpu_support():
+        return                                   # the other tests cover this
+    assert IMP.bff.get_compute_backend_name() == "cpu"
+    assert not IMP.bff.load_compute_backend("/nonexistent", "")
+    assert "IMPBFF_WITH_GPU=0" in IMP.bff.get_compute_backend_error()
+    assert IMP.bff.enable_gpu() == "cpu"

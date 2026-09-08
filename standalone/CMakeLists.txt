@@ -191,7 +191,17 @@ else()
   set(_cxx_sources ${_core_sources} ${_standalone_sources})
 endif()
 
+# The compute backend is optional at run time, so it must also be optional at
+# build time: OFF both skips the plugin and compiles the loader out of
+# Compute.cpp, leaving no dlopen anywhere. IMP's module tooling has no
+# per-module options, so that build says the same thing with a compiler flag:
+# `cmake .. -DCMAKE_CXX_FLAGS=-DIMPBFF_WITH_GPU=0`.
+option(IMPBFF_WITH_GPU "Build and allow the run-time-loaded WGSL compute backend" ON)
+
 add_library(imp_bff SHARED ${_cxx_sources} ${_ihm_sources})
+if(NOT IMPBFF_WITH_GPU)
+  target_compile_definitions(imp_bff PUBLIC IMPBFF_WITH_GPU=0)
+endif()
 if(NOT IMPBFF_WITH_RMF)
   target_compile_definitions(imp_bff PUBLIC IMPBFF_NO_RMF=1)
 endif()
@@ -344,7 +354,6 @@ if(IMPBFF_PYTHON)
   # must not be able to break the build that does not need it. As of
   # 2026-09-08 it has only ever been compiled and run on macOS/Metal; the
   # first Linux and Windows builds will be CI's.
-  option(IMPBFF_WITH_GPU "Build the run-time-loaded WGSL compute backend" ON)
   if(IMPBFF_WITH_GPU)
     set(IMPBFF_GPU_OUTPUT_DIR "${_pydir}")
     set(IMPBFF_GPU_INSTALL_DIR "${_py_install_dir}")

@@ -17,7 +17,14 @@ SCCACHE_ARGS=()
 if command -v sccache >/dev/null 2>&1; then
   SCCACHE_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
 fi
-cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$PREFIX -DCMAKE_INSTALL_PREFIX=$PREFIX "${SCCACHE_ARGS[@]}"
+# IMP's module tooling has no per-module options, so the compute door is
+# switched with an ordinary compiler flag. IMPBFF_WITH_GPU=0 in the
+# environment compiles the loader out and skips the plugin below.
+GPU_ARGS=()
+if [ "${IMPBFF_WITH_GPU:-1}" = "0" ]; then
+  GPU_ARGS=(-DCMAKE_CXX_FLAGS=-DIMPBFF_WITH_GPU=0)
+fi
+cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$PREFIX -DCMAKE_INSTALL_PREFIX=$PREFIX "${SCCACHE_ARGS[@]}" "${GPU_ARGS[@]}"
 ninja install -k 0 -j 4
 
 # The compute backend, for the module package as well as the wheel.
@@ -43,7 +50,9 @@ else
   _gpu_extra="-ldl"
 fi
 _impbff_py=$(ls -d "$PREFIX"/lib/python*/site-packages/IMP/bff 2>/dev/null | head -1)
-if [ -n "$_impbff_py" ] && [ -f "$SRC_DIR/gpu/imp_bff_wgpu.c" ]; then
+if [ "${IMPBFF_WITH_GPU:-1}" = "0" ]; then
+  echo "IMP.bff: IMPBFF_WITH_GPU=0; no compute backend built"
+elif [ -n "$_impbff_py" ] && [ -f "$SRC_DIR/gpu/imp_bff_wgpu.c" ]; then
   if "${CC:-cc}" -std=c11 -O2 -fPIC -shared -fvisibility=hidden \
        -I"$SRC_DIR/gpu" "$SRC_DIR/gpu/imp_bff_wgpu.c" \
        -o "$_impbff_py/$_gpu_lib" $_gpu_extra; then
