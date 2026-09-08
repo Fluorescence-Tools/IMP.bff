@@ -284,6 +284,23 @@ class IMPBFFEXPORT Port : public BaseObject,
   bool get_sanitize() const { return sanitize_; }
   //! Write a vector value (no-op when fixed); marks the node invalid.
   void set_value_vector(const std::vector<double>& v);
+
+#ifndef SWIG
+  //! Take a linked source's value without invalidating this port's node.
+  /*!
+      `Node::update()` copies every linked input from its source before
+      evaluating. That copy is the node's own bookkeeping, not a change from
+      outside, and counting it as a write invalidated the node on every pass
+      -- so a terminal node re-evaluated on each run() even when nothing had
+      moved, which is precisely the laziness the graph exists to provide.
+
+      Nothing is lost by staying quiet: a source that actually changed
+      invalidates its followers when *it* is written
+      (`propagate_to_followers`), which is the edge that carries the news.
+  */
+  void copy_from_link(const Port& source);
+#endif
+
   //! Write an integer vector: the port becomes PORT_INT_VECTOR, not float.
   /*! Named rather than overloaded, for the dispatch reason on the vector
       constructor above. This is what closes the int-vector divergence from

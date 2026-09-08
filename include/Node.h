@@ -133,6 +133,18 @@ class IMPBFFEXPORT Node : public BaseObject,
   //! Force the validity flag (invalidates nothing; chinet semantics).
   void set_valid(bool v);
 
+#ifndef SWIG
+  //! A port of this node was written. Called by Port; not for callers.
+  /*!
+      Counts writes so that update() can tell a node that *computed* from one
+      that has nothing to do. It cannot ask whether evaluate() was overridden
+      -- a director subclass in Python is indistinguishable from C++ -- but it
+      can ask whether anything came out, which is the question it actually
+      means.
+  */
+  void note_port_write() { ++write_epoch_; }
+#endif
+
   //! Compute the outputs from the inputs; marks the node valid.
   /*!
       No-op when the node has neither a callback object nor an operator
@@ -166,6 +178,9 @@ class IMPBFFEXPORT Node : public BaseObject,
 
   //! The operator resolved from its name once, instead of per evaluation.
   enum Operator { OP_NONE = 0, OP_ADD, OP_MUL };
+
+  //! Writes to this node's ports, so update() can see that evaluate() worked.
+  unsigned long long write_epoch_ = 0;
 
   //! Everything ``evaluate()`` and ``update()`` would otherwise re-derive
   //! from the string-keyed port maps on every call.
