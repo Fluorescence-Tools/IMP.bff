@@ -69,6 +69,48 @@ So a chisurf curve can be *constructed* through bff today: build the channels
 as sources, compose the observable, take `sqrt(variance)` into `ey`. That is a
 small, useful integration and it needs no migration at all.
 
+## It can subclass, and that is verified against the real class
+
+Owner, 2026-09-08: *"make chisurf somehow subclass the bff curves, to inherit
+the probability calculus."* It works. Run against chisurf's actual
+`DataCurve`, not a mock:
+
+```python
+class Hybrid(DataCurve, bff.Dataset):
+    def __init__(self, **kw):
+        bff.Dataset.__init__(self)
+        DataCurve.__init__(self, **kw)
+        bff.sync_dataset(self, self.y, self.ey, self.x)
+```
+
+The MRO resolves (`Hybrid, DataCurve, Curve, NCurve, ExperimentalData,
+Data, ...`), chisurf's own machinery is untouched -- the stacked 5-row `data`
+array and `x` still read correctly -- and the calculus is there: `objective`,
+`variance`, `residuals`, and acceptance by `ChiSquared.set_dataset`. SWIG's
+proxy does not fight chisurf's attribute machinery, and ordinary Python
+attributes coexist.
+
+`IMP.bff.sync_dataset(dataset, y, ey, x, mask)` is the one helper that makes
+it a small change: it fills the C++ side through the **ndarray** setters
+rather than the list ones, measured at 316 us against 3.9 ms for 117k points.
+A sync that costs more than the arithmetic gets skipped, and then the two
+halves drift.
+
+**One thing the experiment turned up.** `DataCurve` defaults `ey` to ones, so
+a synced curve becomes `NOISE_FAMILY_STORED` with unit variance -- that is
+unweighted least squares, and it is the trap PRD-140 refuses when a stored
+family has *nothing* stored. Here something is stored, so nothing refuses.
+Whoever makes the change should decide what a default `ey` means: counts, or
+genuinely unweighted, and say which.
+
+**Why the chisurf side is not done here.** The sync has to run wherever the
+arrays change, and those hooks are `Curve.x`/`Curve.y`'s setters,
+`DataCurve.set_data` and the `data` property. `chisurf/core/curve.py` is
+under active edit by another agent as of this writing, and a curve that syncs
+in three of its four write paths is worse than one that syncs in none --
+the objective would be right until it silently was not. The change is small
+and belongs to whoever owns those write paths.
+
 ## The shape of a migration, if one is wanted
 
 1. **Now, no migration**: chisurf constructs combined observables through

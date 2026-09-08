@@ -509,9 +509,15 @@ def get_session():
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_wres, int* n_out_wres)};
 %shared_ptr(IMP::bff::ChiSquared);
 /* A dataset of any rank, with its noise family. Its variance and residuals
-   are managed views for the same reason the solver's are. */
+   are managed views for the same reason the solver's are, and its setters
+   take ndarrays because a curve's values change on every write. */
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
+%apply(double* IN_ARRAY1, int DIM1) {(double* in_values, int n_values)};
+%apply(double* IN_ARRAY1, int DIM1) {(double* in_variance, int n_variance)};
+%apply(double* IN_ARRAY1, int DIM1) {(double* in_mask, int n_mask)};
+%apply(double* IN_ARRAY1, int DIM1) {(double* in_coordinate, int n_coordinate)};
 %include "IMP/bff/Dataset.h"
+%include "IMP_bff.dataset.i"
 
 %include "IMP/bff/ChiSquared.h"
 

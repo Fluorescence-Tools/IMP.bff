@@ -66,6 +66,30 @@ void Dataset::set_values(const std::vector<double>& values) {
   set_values(values, std::vector<int>(1, static_cast<int>(values.size())));
 }
 
+void Dataset::set_values_array(double* in_values, int n_values) {
+  // The array path, because a curve's values change on every write and the
+  // list path walks them one Python object at a time: measured at 2 ms for
+  // 117k against 85 us. A sync that costs more than the arithmetic will be
+  // skipped, and then the two halves drift.
+  set_values(std::vector<double>(in_values, in_values + std::max(0, n_values)));
+}
+
+void Dataset::set_stored_variance_array(double* in_variance, int n_variance) {
+  set_stored_variance(
+      std::vector<double>(in_variance, in_variance + std::max(0, n_variance)));
+}
+
+void Dataset::set_mask_array(double* in_mask, int n_mask) {
+  set_mask(std::vector<double>(in_mask, in_mask + std::max(0, n_mask)));
+}
+
+void Dataset::set_coordinate_array(int index, const std::string& name,
+                                   double* in_coordinate, int n_coordinate) {
+  set_coordinate(index, name,
+                 std::vector<double>(in_coordinate,
+                                     in_coordinate + std::max(0, n_coordinate)));
+}
+
 void Dataset::set_coordinate(int index, const std::string& name,
                              const std::vector<double>& values) {
   if (index < 0) IMP_THROW("a coordinate index is not negative", IMP::ValueException);

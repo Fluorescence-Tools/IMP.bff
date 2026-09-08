@@ -90,6 +90,16 @@ class IMPBFFEXPORT Dataset {
   //! How many values.
   int get_size() const { return static_cast<int>(values_.size()); }
 
+  //! The values from a numpy array; the shape follows if it is given.
+  void set_values_array(double* in_values, int n_values);
+  //! A stored variance from a numpy array.
+  void set_stored_variance_array(double* in_variance, int n_variance);
+  //! A mask from a numpy array.
+  void set_mask_array(double* in_mask, int n_mask);
+  //! One coordinate from a numpy array.
+  void set_coordinate_array(int index, const std::string& name,
+                            double* in_coordinate, int n_coordinate);
+
   //! Give every value a coordinate.
   /*!
       **Every y has an x**, so a coordinate is `get_size()` long -- one per
