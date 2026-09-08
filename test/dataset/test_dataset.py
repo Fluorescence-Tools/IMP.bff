@@ -203,3 +203,19 @@ def test_the_stored_objective_is_the_one_the_library_already_computes():
     d.set_stored_variance(list(ey ** 2))
     from_dataset = np.asarray(d.residuals(list(mu), IMP.bff.RESIDUAL_PEARSON))
     np.testing.assert_allclose(from_dataset, existing, rtol=1e-12, atol=1e-12)
+
+
+def test_a_dataset_carries_an_axis_per_dimension():
+    """A curve without its x is not a curve, and a 2-D dataset may need one
+    axis and not the other."""
+    d = IMP.bff.Dataset()
+    d.set_values(list(np.arange(12.0)), [3, 4])
+    assert not d.get_has_axis(0)
+    d.set_axis(0, [10.0, 20.0, 30.0])
+    assert d.get_has_axis(0)
+    assert not d.get_has_axis(1)
+    np.testing.assert_allclose(np.asarray(d.get_axis(0)), [10.0, 20.0, 30.0])
+    with pytest.raises(ValueError):
+        d.set_axis(1, [1.0, 2.0])          # extent is 4
+    with pytest.raises(ValueError):
+        d.set_axis(2, [1.0])               # no such dimension

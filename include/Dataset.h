@@ -90,6 +90,22 @@ class IMPBFFEXPORT Dataset {
   //! How many values.
   int get_size() const { return static_cast<int>(values_.size()); }
 
+  //! The coordinate along one axis: the `x` of a curve, a pixel edge, a lag.
+  /*!
+      Optional, and per dimension, because a curve without its x is not a
+      curve and a 2-D dataset may need one axis and not the other.
+
+      \param[in] dimension which axis, 0 for the slowest
+      \param[in] values as long as that dimension's extent
+      \throws IMP::ValueException if the dimension does not exist or the
+              length is wrong.
+  */
+  void set_axis(int dimension, const std::vector<double>& values);
+  //! The coordinate along one axis, empty if none was given.
+  const std::vector<double>& get_axis(int dimension) const;
+  //! Whether an axis was given for this dimension.
+  bool get_has_axis(int dimension) const;
+
   //! Which points count. Empty means all of them.
   /*! \throws IMP::ValueException if it is neither empty nor the data's size. */
   void set_mask(const std::vector<double>& mask);
@@ -226,6 +242,7 @@ class IMPBFFEXPORT Dataset {
   std::vector<double> values_, mask_, stored_variance_, propagated_variance_;
   std::string provenance_;
   //! The independent sources, their per-point variance, and d(value)/d(source).
+  std::vector<std::vector<double> > axes_;
   std::vector<std::string> source_names_;
   std::vector<std::vector<double> > source_variance_, derivative_;
 

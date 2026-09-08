@@ -58,10 +58,35 @@ void Dataset::set_values(const std::vector<double>& values,
   values_ = values;
   shape_ = shape;
   mask_.clear();
+  axes_.clear();   // the shape may have moved under them
 }
 
 void Dataset::set_values(const std::vector<double>& values) {
   set_values(values, std::vector<int>(1, static_cast<int>(values.size())));
+}
+
+void Dataset::set_axis(int dimension, const std::vector<double>& values) {
+  if (dimension < 0 || dimension >= get_rank()) {
+    IMP_THROW("this dataset has " << get_rank() << " dimensions and no "
+              << dimension, IMP::ValueException);
+  }
+  if (static_cast<int>(values.size()) != shape_[dimension]) {
+    IMP_THROW("axis " << dimension << " has extent " << shape_[dimension]
+              << " and " << values.size() << " coordinates were given",
+              IMP::ValueException);
+  }
+  axes_.resize(shape_.size());
+  axes_[static_cast<std::size_t>(dimension)] = values;
+}
+
+const std::vector<double>& Dataset::get_axis(int dimension) const {
+  static const std::vector<double> none;
+  if (dimension < 0 || dimension >= static_cast<int>(axes_.size())) return none;
+  return axes_[static_cast<std::size_t>(dimension)];
+}
+
+bool Dataset::get_has_axis(int dimension) const {
+  return !get_axis(dimension).empty();
 }
 
 void Dataset::set_mask(const std::vector<double>& mask) {
