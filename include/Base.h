@@ -40,6 +40,10 @@
 #include <IMP/showable_macros.h>
 #include <IMP/value_macros.h>
 #include <IMP/object_macros.h>
+// IMP_WARN. The standalone branch below defines its own, so this branch has
+// to name IMP's: without it the macro is undefined and its argument -- a
+// stream expression -- is compiled as one, which fails on the first `<<`.
+#include <IMP/log_macros.h>
 
 #else
 

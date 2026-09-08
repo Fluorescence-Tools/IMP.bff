@@ -9,7 +9,11 @@
 #ifndef IMPBFF_CONFIG_H
 #define IMPBFF_CONFIG_H
 
-#ifndef IMPBFF_STANDALONE
+// IMPBFF_WITH_IMP: this same header serves the build that links a private
+// IMP (PRD-139). There the module's vocabulary comes from IMP itself, so the
+// standalone branch of Base.h must stay switched off, while the export
+// macros and the three data-path declarations below are wanted either way.
+#if !defined(IMPBFF_WITH_IMP) && !defined(IMPBFF_STANDALONE)
 #define IMPBFF_STANDALONE 1
 #endif
 

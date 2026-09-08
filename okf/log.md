@@ -10980,3 +10980,14 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   the shim tree, Base.h's second branch and the two-lane test hook can all go -- one build, and dye Langevin
   works from `pip install bff`. The price: every user carries IMP's code, CI builds IMP per platform, and
   PRD-137's "links no IMP" premise is given up. Owner's decision, recorded as three options in PRD-139.
+- **Minimales, eingebettetes IMP: gemessen und gebaut** (imp-bff-ce, owner's choice 2026-09-08, PRD-139): the
+  layer names only atom, core, algebra, container plus one `IMP::em` and one `IMP::rotamer` function; the core
+  mentions IMP in comments only. Required libraries kernel/algebra/display/score_functor/core/container/atom =
+  10.1 MB, the two narrow spots (em, statistics, rotamer) 1.4 MB more. A minimal IMP -- ten modules, library
+  targets only, no SWIG, nothing linked against Python -- builds in **57 s**; `libimp_bff` with the connection
+  layer builds against it in **71 s** and is 6.4 MB. `standalone/CMakeLists.txt` gained `IMPBFF_WITH_IMP`
+  (exclusive with the shims by nature), `utility/wheel_deps.sh` builds that IMP behind `WITH_IMP=1`, `Base.h`'s
+  IMP branch now includes `<IMP/log_macros.h>` (IMP_WARN was undefined and its stream argument got compiled),
+  and `bff_config.h` self-defines `IMPBFF_STANDALONE` only when `IMPBFF_WITH_IMP` is absent. Layer symbols
+  verified present; the IMP-free lane still 724/0. Open: the Python surface -- the layer's IMP-typed signatures
+  would drag `_IMP_kernel` into the extension, so array and file doors are what keep a wheel IMP-free.

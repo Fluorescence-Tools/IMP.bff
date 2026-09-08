@@ -9,6 +9,14 @@ set -euo pipefail
 PREFIX="${1:-/usr/local}"
 RMF_VERSION="${RMF_VERSION:-1.7.1}"
 CEREAL_VERSION="${CEREAL_VERSION:-1.3.2}"
+# IMP, when the wheel is to carry the connection layer (IMPBFF_WITH_IMP,
+# PRD-139). Off by default: the plain wheel is the IMP-free core.
+IMP_VERSION="${IMP_VERSION:-2.25.0}"
+WITH_IMP="${WITH_IMP:-0}"
+# What the layer actually names, measured: kernel, algebra, display,
+# score_functor, core, container, atom (10.1 MB), plus em and rotamer for
+# one function each (1.4 MB more). Everything else of IMP is left out.
+IMP_MODULES="${IMP_MODULES:-kernel algebra display score_functor core container atom em statistics rotamer}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$PREFIX/include" "$PREFIX/lib"
@@ -35,4 +43,35 @@ cp -R "$RMF_SRC/include/RMF" "$PREFIX/include/"
 cp -R "$WORK/rmf-build/include/RMF" "$PREFIX/include/"
 cp "$WORK/rmf-build/include/RMF.h" "$PREFIX/include/"
 cp -R "$WORK/rmf-build/lib/"libRMF* "$PREFIX/lib/"
+
+if [ "$WITH_IMP" = "1" ]; then
+  # A minimal IMP: only the modules the connection layer names, only their
+  # libraries. IMP's CMake guards every pyext directory with
+  # `if(NOT IMP_STATIC)`, and building the -lib targets alone skips them
+  # anyway, so no SWIG wrapper of IMP's is built and nothing links Python.
+  # Measured on an M-series Mac: 57 s wall for the ten modules, 11.5 MB.
+  curl -sSL "https://github.com/salilab/imp/archive/refs/tags/${IMP_VERSION}.tar.gz" | tar -xz -C "$WORK"
+  IMP_SRC="$WORK/imp-${IMP_VERSION}"
+  # IMP's build tooling lives in RMF's submodule, which a tarball does not
+  # carry; the RMF source fetched above has it.
+  rm -f "$IMP_SRC/tools/dev_tools"
+  cp -R "$RMF_SRC/tools/dev_tools" "$IMP_SRC/tools/dev_tools"
+  # every module that is not wanted, by name -- the tooling resolves
+  # dependencies by name, so the list has to be explicit
+  disabled=""
+  for m in "$IMP_SRC"/modules/*/; do
+    name="$(basename "$m")"
+    case " $IMP_MODULES cgal " in *" $name "*) ;; *) disabled="${disabled}${name}:" ;; esac
+  done
+  cmake -S "$IMP_SRC" -B "$WORK/imp-build" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" -DIMP_MAX_CHECKS=NONE \
+        -DIMP_DISABLED_MODULES="${disabled%:}" -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+  targets=""
+  for m in $IMP_MODULES; do targets="$targets IMP.$m-lib"; done
+  cmake --build "$WORK/imp-build" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" --target $targets
+  cp -R "$WORK/imp-build/include/IMP" "$PREFIX/include/"
+  cp -R "$WORK/imp-build/lib/"libimp_* "$PREFIX/lib/"
+  echo "IMP ${IMP_VERSION} (${IMP_MODULES}) installed under $PREFIX"
+fi
+
 echo "cereal ${CEREAL_VERSION} and RMF ${RMF_VERSION} installed under $PREFIX"

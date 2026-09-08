@@ -45,6 +45,24 @@ endif()
 set(IMPBFF_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/IMP/bff/data" CACHE PATH "Where get_data_path() looks at run time")
 set(IMPBFF_EXAMPLE_DIR "${CMAKE_INSTALL_PREFIX}/share/IMP/bff/examples" CACHE PATH "Where get_example_path() looks at run time")
 
+# ---- the connection layer, when a pre-built IMP is there (PRD-139)
+#
+# Two worlds, one source tree. Without IMP the shims in standalone/include
+# stand in for IMP's vocabulary and only the core is built. With
+# IMPBFF_WITH_IMP the shims are off the path, IMP's own headers are used, and
+# src/imp/ is compiled in -- so the same sources produce the connection layer
+# too, including the dye Langevin road. The two cannot be mixed in one
+# library: both define IMP::Object, IMP::Exception and IMP::algebra::VectorD,
+# so this is a switch, not an addition.
+#
+# The modules this needs, measured (PRD-139): kernel, algebra, display,
+# score_functor, core, container, atom -- 10 MB -- plus em and rotamer for
+# two single functions (create_density_map, the Dunbrack side-chain
+# placement), 1.4 MB more. Nothing else of IMP is named anywhere in the tree.
+option(IMPBFF_WITH_IMP "Build the IMP connection layer against a pre-built IMP" OFF)
+set(IMPBFF_IMP_MODULES "kernel;algebra;display;score_functor;core;container;atom;em;statistics;rotamer"
+    CACHE STRING "IMP modules to link when IMPBFF_WITH_IMP is on")
+
 # ---- dependencies
 find_package(Eigen3 3.3 REQUIRED CONFIG)
 find_package(Boost 1.66 REQUIRED)            # headers: random (1.66 is what manylinux_2_28 ships)
@@ -55,6 +73,19 @@ endif()
 find_path(RMF_INCLUDE_DIR RMF/FileHandle.h REQUIRED)
 find_library(RMF_LIBRARY NAMES RMF REQUIRED)
 find_package(OpenMP QUIET)
+
+if(IMPBFF_WITH_IMP)
+  # Found by hand rather than through IMPConfig.cmake: a wheel builds these
+  # libraries itself (utility/wheel_deps.sh) and has no IMP installation,
+  # only a prefix -- the same way RMF is found above.
+  find_path(IMP_INCLUDE_DIR IMP/Object.h REQUIRED)
+  set(IMPBFF_IMP_LIBRARIES "")
+  foreach(m ${IMPBFF_IMP_MODULES})
+    find_library(IMP_${m}_LIBRARY NAMES imp_${m} REQUIRED)
+    list(APPEND IMPBFF_IMP_LIBRARIES "${IMP_${m}_LIBRARY}")
+  endforeach()
+  message(STATUS "IMP.bff: with the connection layer, against ${IMP_INCLUDE_DIR}")
+endif()
 
 # ---- the headers, laid out as IMP/bff/... like IMP's build tree
 set(IMPBFF_GEN_INCLUDE "${CMAKE_BINARY_DIR}/include")
@@ -69,10 +100,22 @@ foreach(h ${_internal_headers})
   configure_file("${h}" "${IMPBFF_GEN_INCLUDE}/IMP/bff/internal/${n}" COPYONLY)
 endforeach()
 
-# ---- the sources: the core, not the layer
+# ---- the sources: the core, and the layer when IMP is there
 file(GLOB _core_sources "${IMPBFF_ROOT}/src/*.cpp")
+# ImpLayer.cpp exists only for IMP's own unity build, which compiles no
+# subdirectory; here the layer's sources are named directly.
 list(FILTER _core_sources EXCLUDE REGEX "/ImpLayer\\.cpp$")
 file(GLOB _standalone_sources "${IMPBFF_ROOT}/src/standalone/*.cpp")
+if(IMPBFF_WITH_IMP)
+  file(GLOB _layer_sources "${IMPBFF_ROOT}/src/imp/*.cpp")
+  list(APPEND _core_sources ${_layer_sources})
+  # This build has no IMP.bff module inside IMP, so the module's own config
+  # header and its data paths are still this project's -- only the shims of
+  # IMP's vocabulary are not. The header goes into the generated tree, which
+  # is ahead of IMP's on the include path.
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/IMP/bff/bff_config.h"
+                 "${IMPBFF_GEN_INCLUDE}/IMP/bff/bff_config.h" COPYONLY)
+endif()
 set(_ihm_sources "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm/ihm_format.c")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm/cmp.c")
   list(APPEND _ihm_sources "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm/cmp.c")
@@ -95,13 +138,25 @@ target_compile_definitions(imp_bff PRIVATE IMPBFF_COMPILATION IMPBFF_EXPORTS
   IMPBFF_STANDALONE_VERSION="${PROJECT_VERSION}"
   IMPBFF_STANDALONE_DATA_DIR="${IMPBFF_DATA_DIR}"
   IMPBFF_STANDALONE_EXAMPLE_DIR="${IMPBFF_EXAMPLE_DIR}")
-target_compile_definitions(imp_bff PUBLIC IMPBFF_STANDALONE=1)
-target_include_directories(imp_bff
-  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"   # the IMP/ shims, first
-         "$<BUILD_INTERFACE:${IMPBFF_GEN_INCLUDE}>"
-         "$<INSTALL_INTERFACE:include>"
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" "${RMF_INCLUDE_DIR}")
-target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers PRIVATE "${RMF_LIBRARY}")
+if(IMPBFF_WITH_IMP)
+  # Base.h takes its IMP branch, and IMP's headers are on the path instead of
+  # the shims
+  target_compile_definitions(imp_bff PUBLIC IMPBFF_WITH_IMP=1)
+  target_include_directories(imp_bff
+    PUBLIC "$<BUILD_INTERFACE:${IMPBFF_GEN_INCLUDE}>" "${IMP_INCLUDE_DIR}"
+           "$<INSTALL_INTERFACE:include>"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" "${RMF_INCLUDE_DIR}")
+  target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers
+                        PRIVATE "${RMF_LIBRARY}" ${IMPBFF_IMP_LIBRARIES})
+else()
+  target_compile_definitions(imp_bff PUBLIC IMPBFF_STANDALONE=1)
+  target_include_directories(imp_bff
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"   # the IMP/ shims, first
+           "$<BUILD_INTERFACE:${IMPBFF_GEN_INCLUDE}>"
+           "$<INSTALL_INTERFACE:include>"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" "${RMF_INCLUDE_DIR}")
+  target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers PRIVATE "${RMF_LIBRARY}")
+endif()
 if(cereal_FOUND)
   target_link_libraries(imp_bff PUBLIC cereal::cereal)
 else()
