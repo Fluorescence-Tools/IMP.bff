@@ -11049,3 +11049,14 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   in the fluorescence trace and 1.5e-6 in the final density at ng=41 over 4000 steps -- the scheme is
   contractive, so error is damped rather than accumulated, and longer runs come out *closer*. The adjoint is not
   covered and needs its own measurement. Lane 732/0.
+- **Der Stencil auf der GPU: 5-12x** (imp-bff-ce, 2026-09-08, PRD-140): `benchmark/gpu_diffusion_wgsl.py` is the
+  WGSL the backend will run, held against the CPU kernel. Against the eight-threaded CPU it is 5.3-5.6x at every
+  grid size; against the single thread that shipped until today, 5.9x at ng=41 growing to 12.3x at ng=81 -- and
+  that growth is the point, because `dg^-5` puts the science exactly where the CPU is worst. Deviation 1.2e-6 to
+  1.1e-5, matching what the numpy f32 gate predicted from the other direction. Two traps recorded in the file
+  and worth knowing before writing the C plugin: `queue.write_buffer` runs immediately while dispatches run at
+  submit, so a uniform cannot carry a per-dispatch value; and a dynamic storage-buffer offset did not take
+  effect in this wgpu at all (every reduction wrote slot 0, with a constant as well as with the sum) -- a
+  `copy_buffer_to_buffer` between passes is the way around both, and costs nothing. Also measured on the way:
+  OpenMP is worth 1.0x at ng=41, 1.8x at 61 and 2.3x at 81, which is the same small-slab story the OpenMP note
+  tells. Prototyped through wgpu-py because it already carries wgpu-native; the C plugin is next.
