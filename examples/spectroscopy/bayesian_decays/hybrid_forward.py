@@ -53,7 +53,7 @@ import math
 import numpy as np
 import torch
 
-__all__ = ["HybridForward"]
+__all__ = ["HybridForward", "TttrlibForward", "KERNELS", "KERNEL_NOTES"]
 
 
 class _BffCurve(torch.autograd.Function):
@@ -198,3 +198,86 @@ class HybridForward:
             c = _BffCurve.apply(amplitudes[kk], shift, self, d)
             out[k] = (out[k] + c) if k in out else c
         return {k: self.R @ v for k, v in out.items()}
+
+
+# --------------------------------------------------------------------------
+# choosing the kernel
+# --------------------------------------------------------------------------
+
+KERNELS = ('bff', 'fconv_per_cs', 'fconv_per')
+
+#: what each one is, and why the default is the default
+KERNEL_NOTES = {
+    'bff': "IMP.bff's TcspcDecay node, which calls tttrlib's fconv_per_cs_ad -- "
+           "the kernel that interleaves eight species' recursions in registers. "
+           "Fastest of the three and stable.",
+    'fconv_per_cs': "tttrlib's fconv_per_cs called directly. Correct and stable, "
+                    "and about 1.5x slower than the node above because it uses the "
+                    "two-lane NEON kernel rather than the eight-way blocked one.",
+    'fconv_per': "tttrlib's fconv_per. NOT USABLE in the build this was written "
+                 "against: called repeatedly with identical inputs and freshly "
+                 "allocated arrays it returns a curve growing by one species' worth "
+                 "per call, so a fit through it diverges while a single-call test "
+                 "passes at 1e-15. Reported upstream; kept here only so the "
+                 "comparison can be reproduced.",
+}
+
+
+class TttrlibForward:
+    """The same forward model through tttrlib's kernels directly.
+
+    `kernel` selects which: see `KERNELS` and `KERNEL_NOTES`. This exists to
+    make the comparison runnable rather than asserted -- the numbers in
+    notebook 10 come from it.
+    """
+
+    def __init__(self, model, graph, kernel='fconv_per_cs'):
+        import tttrlib
+        if kernel not in KERNELS:
+            raise ValueError(f'kernel must be one of {KERNELS}')
+        from fast_forward import TorchSpectralForward
+        self.tttrlib = tttrlib
+        self.kernel = kernel
+        self.s = TorchSpectralForward(model, graph)
+        self.L = model['L']
+        self.n, self.K = self.s.n, self.s.K
+        self.dt, self.period, self.n_p = self.s.dt, self.s.period, self.s.n_p
+        self.taus = self.s.taus.numpy()
+        self.col_sum = self.s.col_sum.numpy()
+        self.R = np.asarray(self.s.R)
+        self.keys, self.parts = self.s.keys, self.s.parts
+        self._irf = {}
+
+    def set_response(self, vals):
+        f = self.s
+        fN = f.freq_N.numpy()
+        for d in {p[2] for p in self.parts}:
+            sb = float(f.shift_of(vals, d)) / self.dt
+            self._irf[d] = np.ascontiguousarray(
+                np.fft.irfft(np.fft.rfft(f.irf0_np, self.n_p) * np.exp(-2j * math.pi * fN * sb), self.n_p))
+
+    def __call__(self, vals, amplitudes):
+        if not self._irf:
+            self.set_response(vals)
+        t = self.tttrlib
+        out = {}
+        for k, kk, d in self.parts:
+            a = np.asarray(amplitudes[kk].detach())
+            x = np.empty(2 * self.K)
+            x[0::2] = a[1:self.K + 1] / self.col_sum
+            x[1::2] = self.taus
+            buf = np.zeros(self.n)
+            if self.kernel == 'fconv_per_cs':
+                t.fconv_per_cs(buf, self._irf[d], x, self.period, self.n - 1, self.n - 1, self.dt)
+            else:
+                t.fconv_per(buf, self._irf[d], x, self.period, 0, self.n - 1, self.dt)
+            c = buf + float(a[0]) * self._irf[d] + float(a[-1]) / self.n
+            out[k] = (out[k] + c) if k in out else c
+        return {k: self.R @ v for k, v in out.items()}
+
+    def check_against(self, vals, amplitudes=None):
+        a2 = self.s.graph.amplitudes(vals) if amplitudes is None else amplitudes
+        ref = self.s.graph.raw_counts(vals, a2)
+        got = self(vals, a2)
+        return {k: float(np.abs(got[k] - np.asarray(ref[k].detach())).max()
+                         / np.abs(np.asarray(ref[k].detach())).max()) for k in self.keys}
