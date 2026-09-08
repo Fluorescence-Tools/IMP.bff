@@ -477,6 +477,77 @@ class SpectrumPortTests(unittest.TestCase):
         node.set_response(list(np.asarray(irf) * 7.0))
         np.testing.assert_allclose(curve_of(node), base, rtol=1e-14, atol=0)
 
+    def _basis_node(self, negative=False, **options):
+        irf = response()
+        node = build(4, irf)
+        node.add_output_port(bff.TcspcDecay.basis_port_key(),
+                             bff.Port([0.0], False, True))
+        node.set_emit_basis(True)
+        node.set_spectrum_from_port(True)
+        if options.get("normalize"):
+            node.set_normalize_amplitudes(True)
+        if options.get("absolute"):
+            node.set_absolute_amplitudes(True)
+        if options.get("autoscale"):
+            y = np.maximum(np.arange(N, dtype=float) % 97.0, 1.0)
+            node.set_data(list(y), list(np.sqrt(y)))
+            node.set_autoscale(True)
+        spectrum = np.array([0.5, 0.3, -0.3 if negative else 0.3, 1.1,
+                             0.15, 2.7, 0.05, 5.0])
+        return node, spectrum
+
+    def _curve_at(self, node, spectrum):
+        node.get_input_port("lifetime_spectrum").set_values_array(
+            np.ascontiguousarray(spectrum, dtype=float))
+        node.update()
+        return curve_of(node).copy()
+
+    def _worst_jacobian_error(self, node, spectrum):
+        """max relative error of the basis against a forward difference."""
+        base = self._curve_at(node, spectrum)
+        basis = np.asarray(
+            node.get_output_port(bff.TcspcDecay.basis_port_key())
+            .get_value_view()).reshape(len(base), -1).copy()
+        worst = 0.0
+        for s in range(basis.shape[1]):
+            step = 1e-7 * max(1.0, abs(spectrum[2 * s]))
+            moved = np.array(spectrum, dtype=float)
+            moved[2 * s] += step
+            fd = (self._curve_at(node, moved) - base) / step
+            scale = max(np.max(np.abs(fd)), 1e-30)
+            worst = max(worst, np.max(np.abs(fd - basis[:, s])) / scale)
+        return worst
+
+    def test_the_basis_is_the_jacobian_where_the_node_says_it_is(self):
+        """`set_emit_basis` exists so a caller can build a Jacobian out of the
+        basis, and three of this node's own options quietly break that. The
+        query has to be honest in both directions, so this checks it against
+        a forward difference rather than against the same reasoning that
+        wrote it."""
+        for label, options, negative in (
+                ("plain", {}, False),
+                ("absolute amplitudes, all positive", {"absolute": True}, False),
+                ("a negative amplitude, no transform", {}, True)):
+            node, spectrum = self._basis_node(negative=negative, **options)
+            self._curve_at(node, spectrum)
+            self.assertTrue(node.get_basis_is_jacobian(), label)
+            self.assertLess(self._worst_jacobian_error(node, spectrum), 1e-5,
+                            label)
+
+    def test_and_says_so_where_it_is_not(self):
+        """The half that matters: a caller trusting the basis under these
+        settings gets a wrong Jacobian with no symptom at all."""
+        for label, options, negative in (
+                ("normalize_amplitudes", {"normalize": True}, False),
+                ("autoscale", {"autoscale": True}, False),
+                ("absolute amplitudes, one negative", {"absolute": True}, True)):
+            node, spectrum = self._basis_node(negative=negative, **options)
+            self._curve_at(node, spectrum)
+            self.assertFalse(node.get_basis_is_jacobian(), label)
+            # and it really is wrong, not merely suspected of it
+            self.assertGreater(self._worst_jacobian_error(node, spectrum), 1e-3,
+                               label)
+
     def test_an_upstream_node_can_drive_it(self):
         """The arrangement, end to end: a node computes the spectrum.
 

@@ -118,6 +118,23 @@ void TcspcDecay::set_number_of_lifetimes(int n) {
   set_valid(false);
 }
 
+bool TcspcDecay::get_basis_is_jacobian() const {
+  // Both of these put the amplitudes through something before the
+  // contraction, so the curve depends on each of them by a route the basis
+  // does not carry.
+  if (normalize_amplitudes_ || autoscale_) return false;
+  // |a| is differentiable away from zero and its derivative is the sign, so
+  // the basis is the Jacobian up to a per-species sign -- and only a caller
+  // who knows that can use it. The spectrum here is the one the last
+  // evaluation built, which is where the signs are.
+  //
+  // The sign cannot be read back out of `spectrum_`: `fabs` is applied in
+  // place, so by the time anything can look, every amplitude there is
+  // non-negative whatever the caller wrote. `build_spectrum` records it.
+  if (absolute_amplitudes_ && saw_negative_amplitude_) return false;
+  return true;
+}
+
 void TcspcDecay::set_spectrum_from_port(bool v) {
   if (v && spectrum_port_ == nullptr) {
     throw std::domain_error(
@@ -226,8 +243,10 @@ void TcspcDecay::build_spectrum() {
   // `absolute_amplitudes` and `normalize_amplitudes` describe what the model
   // means by an amplitude, so they apply whichever way the pairs arrived.
   double sum = 0.0;
+  saw_negative_amplitude_ = false;
   for (int i = 0; i < n_lifetimes_; ++i) {
     double amplitude = spectrum_[static_cast<std::size_t>(2 * i)];
+    if (amplitude < 0.0) saw_negative_amplitude_ = true;
     // `fabs`, where ChiSurf writes `sqrt(a**2)`: the same number for every
     // finite amplitude, and it does not overflow on the way.
     if (absolute_amplitudes_) amplitude = std::fabs(amplitude);

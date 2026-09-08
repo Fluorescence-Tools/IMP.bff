@@ -279,6 +279,27 @@ class IMPBFFEXPORT TcspcDecay : public Node {
       The port is `basis_port_key()`, row-major **bins x species**, so
       element `b * n_species + s`.
 
+      **The basis is the Jacobian only in some configurations, and
+      #get_basis_is_jacobian says which.** Three of this node's own options
+      break the identity above, silently, because they change what an
+      amplitude *means* before the contraction:
+
+      | option | `d(curve)/d(a_s)` is then |
+      |---|---|
+      | `normalize_amplitudes` | not the basis -- every column moves when any amplitude does, through the `1/sum|a|` |
+      | autoscale | not the basis -- `n0` is itself a function of every amplitude |
+      | `absolute_amplitudes` | `-basis[:, s]` for a species whose amplitude is negative, `+` otherwise |
+
+      Measured, not reasoned: against a forward difference the basis agrees
+      to 2e-7 plain and with scatter and background, and is wrong by a
+      relative 4.1 under `normalize_amplitudes`, 1.0 under autoscale, and 2.0
+      in the sign for a negative amplitude under `absolute_amplitudes`. A
+      caller building a Jacobian out of it under those settings gets a wrong
+      answer with no symptom, which is why there is a query rather than a
+      remark.
+
+      Scatter and background do not enter: neither depends on an amplitude.
+
       **It is not free today**, whatever this used to imply: the basis costs
       about 7.5x the curve it accompanies, because it reconvolves one species
       per call and a one-species call is below the kernel's blocking
@@ -297,6 +318,22 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   void set_emit_basis(bool on);
   //! Whether the reconvolved basis is emitted.
   bool get_emit_basis() const { return emit_basis_; }
+
+  //! Whether the basis, as configured *now*, is `d(curve)/d(amplitude)`.
+  /*!
+      False when `normalize_amplitudes` or autoscale is on, because both make
+      the curve depend on every amplitude through a term the basis does not
+      contain; false when `absolute_amplitudes` is on and the last evaluation
+      used a negative amplitude, because the derivative is then the negated
+      column for that species. See #set_emit_basis for the measured sizes of
+      being wrong about this.
+
+      It asks about the last evaluation, not about a promise: the
+      `absolute_amplitudes` case depends on the spectrum's signs, so a caller
+      that changes them must ask again. `true` costs nothing to act on --
+      the basis is the Jacobian block as it stands.
+   */
+  bool get_basis_is_jacobian() const;
 
   //! The interleaved `(a0, t0, a1, t1, ...)` spectrum the last evaluation
   //! built from the ports, after abs() and normalisation.
@@ -341,6 +378,11 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   std::vector<Port*> lifetime_ports_;
   Port* spectrum_port_ = nullptr;
   bool emit_basis_ = false;
+  //! Did the last build_spectrum see a negative amplitude *before* `fabs`?
+  /*! The sign is gone from `spectrum_` by the time anyone can ask -- the
+      absolute value is applied in place -- and it is exactly what decides
+      whether the basis is the Jacobian or its negation for that species. */
+  bool saw_negative_amplitude_ = false;
   //! Bumped by set_response, so the normalised copy below can tell.
   unsigned long long response_epoch_ = 0;
   //! What irf_ was built from: skip rebuilding it when neither has moved.
