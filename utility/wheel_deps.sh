@@ -8,6 +8,10 @@
 set -euo pipefail
 PREFIX="${1:-/usr/local}"
 RMF_VERSION="${RMF_VERSION:-1.7.1}"
+# RMF is off by default here, as it is in the wheel (PRD-139): it links
+# Boost.Iostreams, and that drags Boost.Regex and ICU -- 40 MB of bundled
+# libraries for four I/O functions. WITH_RMF=1 builds it.
+WITH_RMF="${WITH_RMF:-0}"
 CEREAL_VERSION="${CEREAL_VERSION:-1.3.2}"
 # IMP, when the wheel is to carry the connection layer (IMPBFF_WITH_IMP,
 # PRD-139). Off by default: the plain wheel is the IMP-free core.
@@ -25,6 +29,7 @@ mkdir -p "$PREFIX/include" "$PREFIX/lib"
 curl -sSL "https://github.com/USCiLab/cereal/archive/refs/tags/v${CEREAL_VERSION}.tar.gz" | tar -xz -C "$WORK"
 cp -R "$WORK/cereal-${CEREAL_VERSION}/include/cereal" "$PREFIX/include/"
 
+if [ "$WITH_RMF" = "1" ]; then
 # RMF: only the library target; its CMake also builds bin/, swig/, tests,
 # which a wheel does not need and whose install rules would drag them in, so
 # the library and the headers (the source tree's and the generated ones) are
@@ -43,6 +48,17 @@ cp -R "$RMF_SRC/include/RMF" "$PREFIX/include/"
 cp -R "$WORK/rmf-build/include/RMF" "$PREFIX/include/"
 cp "$WORK/rmf-build/include/RMF.h" "$PREFIX/include/"
 cp -R "$WORK/rmf-build/lib/"libRMF* "$PREFIX/lib/"
+# RMF's build leaves each dylib's install name pointing into the build
+# directory, which is gone by the time anything loads it. Anything linked
+# against it then fails at import with "Library not loaded". delocate hides
+# this in a wheel; a plain build has to be told.
+if [ "$(uname)" = "Darwin" ]; then
+  for lib in "$PREFIX/lib/"libRMF*.dylib; do
+    [ -f "$lib" ] || continue
+    install_name_tool -id "$lib" "$lib" 2>/dev/null || true
+  done
+fi
+fi
 
 if [ "$WITH_IMP" = "1" ]; then
   # A minimal IMP: only the modules the connection layer names, only their
@@ -53,7 +69,11 @@ if [ "$WITH_IMP" = "1" ]; then
   curl -sSL "https://github.com/salilab/imp/archive/refs/tags/${IMP_VERSION}.tar.gz" | tar -xz -C "$WORK"
   IMP_SRC="$WORK/imp-${IMP_VERSION}"
   # IMP's build tooling lives in RMF's submodule, which a tarball does not
-  # carry; the RMF source fetched above has it.
+  # carry; fetch RMF's source for it if the RMF step above did not.
+  if [ ! -d "${RMF_SRC:-}/tools/dev_tools" ]; then
+    curl -sSL "https://github.com/salilab/rmf/archive/refs/tags/${RMF_VERSION}.tar.gz" | tar -xz -C "$WORK"
+    RMF_SRC="$WORK/rmf-${RMF_VERSION}"
+  fi
   rm -f "$IMP_SRC/tools/dev_tools"
   cp -R "$RMF_SRC/tools/dev_tools" "$IMP_SRC/tools/dev_tools"
   # every module that is not wanted, by name -- the tooling resolves
@@ -74,4 +94,4 @@ if [ "$WITH_IMP" = "1" ]; then
   echo "IMP ${IMP_VERSION} (${IMP_MODULES}) installed under $PREFIX"
 fi
 
-echo "cereal ${CEREAL_VERSION} and RMF ${RMF_VERSION} installed under $PREFIX"
+echo "cereal ${CEREAL_VERSION} installed under $PREFIX${WITH_RMF:+ (RMF: $WITH_RMF)}"

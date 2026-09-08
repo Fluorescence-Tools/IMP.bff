@@ -38,6 +38,10 @@
 %ignore IMP::operator<<;
 %ignore IMP::bff::operator<<;
 
+/* RMF is optional in this build (PRD-139); RmfIO.h hides its declarations
+   when it is absent, and CMake passes IMPBFF_NO_RMF to SWIG as well, so the
+   wrapper and the library agree on what exists. */
+
 %include <std_string.i>
 %implicitconv;  /* a dict is a ProbeMap, a list an FFComponentSpecList -- as under IMP's tooling */
 

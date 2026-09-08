@@ -10991,3 +10991,13 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   and `bff_config.h` self-defines `IMPBFF_STANDALONE` only when `IMPBFF_WITH_IMP` is absent. Layer symbols
   verified present; the IMP-free lane still 724/0. Open: the Python surface -- the layer's IMP-typed signatures
   would drag `_IMP_kernel` into the extension, so array and file doors are what keep a wheel IMP-free.
+- **Das Wheel von 20,7 auf 5,4 MB** (imp-bff-ce, 2026-09-08, PRD-139): the fat was not IMP but RMF's transitive
+  chain -- librmf links Boost.Iostreams, which as packaged (conda-forge and Homebrew alike) links Boost.Regex
+  and all of ICU: 34.8 MB of the 45 MB the repaired wheel bundled. RMF itself is one source file
+  (`src/RmfIO.cpp`, 93 uses) behind four functions whose only callers are two `bin/imp_bff` commands; the whole
+  lane passes without them (724/0). So `IMPBFF_WITH_RMF`, opt-*out* (`IMPBFF_NO_RMF`) so IMP's tooling keeps
+  building what it always built; the wheel turns it off, both conda packages keep it. Also: `install.strip` back
+  on (the install re-signs afterwards), and `wheel_deps.sh` now fixes RMF's install name, which pointed into the
+  build directory -- anything linked against a hand-built RMF failed at import, and only delocate hid it.
+  Hidden visibility was tried and reverted: 0.23 MB for four broken tests, because the exception classes' typeinfo
+  stops being exported and the catch that translates them sits in the extension while the throw is in the library.

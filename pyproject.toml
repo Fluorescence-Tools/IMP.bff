@@ -53,6 +53,14 @@ cmake.source-dir = "standalone"
 cmake.args = [
     "-DIMPBFF_WHEEL:BOOL=ON",
     "-DIMPBFF_PYTHON:BOOL=ON",
+    # No RMF in the wheel, measured (PRD-139): librmf is 3.2 MB but links
+    # Boost.Iostreams, which as packaged -- conda and Homebrew alike -- links
+    # Boost.Regex and all of ICU. The repaired wheel carried 45 MB of bundled
+    # libraries, 40 of them for this; without it the extension links nothing
+    # outside the wheel at all. The whole test lane passes either way: RMF is
+    # four I/O functions called from `imp_bff`, not from the library. The
+    # conda packages keep it, so `.rmf` files stay readable there.
+    "-DIMPBFF_WITH_RMF:BOOL=OFF",
     "-DCMAKE_BUILD_TYPE=Release",
 ]
 # No source-tree package: standalone/CMakeLists.txt installs the SWIG shadow
@@ -62,9 +70,10 @@ cmake.args = [
 # instead.
 wheel.packages = []
 build-dir = "build/{wheel_tag}"
-# no strip: on macOS it follows install_name_tool and leaves the binaries
-# with a stale signature (the CMake install re-signs; delocate signs again)
-install.strip = false
+# Stripped, then re-signed: standalone/CMakeLists.txt signs the binaries in
+# an install(CODE) step that runs after the install, which is what makes this
+# safe on arm64 macOS (a stale signature is a SIGKILL on load).
+install.strip = true
 install.components = ["python", "data"]
 # git-tracked files, minus what a wheel build never reads
 sdist.exclude = ["doc/", "benchmark/", "conda-recipe/", ".github/", "data/rotamer_library/", "data/cgprobe/", "prototypes/"]
@@ -87,12 +96,12 @@ test-command = "python -c \"import IMP.bff as b; assert b.get_build() == 'core';
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 archs = ["x86_64"]
-# Boost (1.66, headers for the core and the compiled parts RMF links),
-# Eigen from the distribution; cereal headers and RMF 1.7.1 (avro backend
-# only) built by utility/wheel_deps.sh into /usr/local, where the
-# standalone CMake finds them and auditwheel vendors libRMF and the Boost
-# libraries into the wheel.
+# Boost and Eigen headers from the distribution; cereal from
+# utility/wheel_deps.sh. The core needs no compiled Boost and, without RMF
+# (above), nothing else outside the wheel -- auditwheel finds nothing to
+# vendor, which is the point.
 before-all = "dnf install -y --nogpgcheck boost-devel eigen3-devel && bash utility/wheel_deps.sh /usr/local"
+# WITH_RMF=0 in wheel_deps.sh too: nothing to build when the wheel has no RMF
 repair-wheel-command = "auditwheel repair --plat manylinux_2_28_{arch} -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.linux.environment]

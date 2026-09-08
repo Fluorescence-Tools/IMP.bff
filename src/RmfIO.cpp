@@ -19,6 +19,9 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
+#include <IMP/bff/bff_config.h>
+#ifndef IMPBFF_NO_RMF
+
 #include <IMP/bff/RmfIO.h>
 #include <IMP/bff/internal/Text.h>
 
@@ -412,3 +415,5 @@ std::vector<ProteinFrame> protein_frames_from_rmf(const std::string& path,
 }
 
 IMPBFF_END_NAMESPACE
+
+#endif  // IMPBFF_NO_RMF

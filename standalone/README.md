@@ -45,7 +45,14 @@ header -- `pytest test` then runs the core's lane.
 
 ## Packaging (PRD-137 step 6d)
 
-Two packages, one import name:
+Two packages, one import name. **RMF is optional** (`IMPBFF_WITH_RMF`, on by
+default): it is one source file and four I/O functions called from
+`bin/imp_bff`, and librmf links Boost.Iostreams, which as packaged pulls
+Boost.Regex and all of ICU -- 40 MB of bundled libraries in a wheel that was
+20.7 MB and is 5.4 MB without them. The wheel therefore has no RMF and the
+conda packages keep it, so `.rmf` files stay readable there. The whole test
+lane passes either way.
+
 
 - **`bff`** -- this core. `pip install bff` (wheels built by cibuildwheel
   from the root `pyproject.toml` over this directory, scikit-build-core;

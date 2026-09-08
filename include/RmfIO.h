@@ -14,6 +14,16 @@
 #define IMPBFF_RMFIO_H
 
 #include <IMP/bff/bff_config.h>
+
+// RMF is optional (PRD-139), and opt-*out*: every build has it unless one
+// says otherwise, so IMP's own tooling -- which knows nothing of this flag --
+// keeps building what it always built. It is one file and four functions,
+// called from `bin/imp_bff` and nowhere in the library, and it costs a wheel
+// dearly: librmf pulls Boost.Iostreams, which as packaged (conda and
+// Homebrew alike) pulls Boost.Regex and all of ICU -- some 40 MB against
+// 3 MB of library. Without RMF the four declarations below are not made, so
+// a caller finds out at compile time rather than at link time.
+#ifndef IMPBFF_NO_RMF
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/RotamerLibrary.h>
 
@@ -80,5 +90,7 @@ IMPBFFEXPORT std::vector<ProteinFrame> protein_frames_from_rmf(
         const std::string& path, int max_frames = -1);
 
 IMPBFF_END_NAMESPACE
+
+#endif  // IMPBFF_NO_RMF
 
 #endif //IMPBFF_RMFIO_H

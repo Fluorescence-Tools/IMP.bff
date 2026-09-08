@@ -22,6 +22,14 @@ project(imp_bff_core VERSION ${_imp_bff_version} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Default, not hidden, and that is a decision rather than an oversight:
+# hidden visibility stops exporting the typeinfo of the exception classes,
+# and the `catch (const IMP::ValueException&)` that translates them lives in
+# the extension module while the `throw` is in this library -- across that
+# boundary the match then fails and every refusal arrives as a bare
+# RuntimeError. Measured: it saved 0.23 MB of a 5.5 MB wheel and broke four
+# tests. Marking each thrown type visible would buy it back, if the size ever
+# matters more than the risk.
 set(CMAKE_CXX_VISIBILITY_PRESET default)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(NOT CMAKE_BUILD_TYPE)
@@ -70,8 +78,17 @@ find_package(cereal CONFIG QUIET)
 if(NOT cereal_FOUND)
   find_path(CEREAL_INCLUDE_DIR cereal/cereal.hpp REQUIRED)
 endif()
-find_path(RMF_INCLUDE_DIR RMF/FileHandle.h REQUIRED)
-find_library(RMF_LIBRARY NAMES RMF REQUIRED)
+# RMF: one source file and four functions (write_rmf, the two rotamer-library
+# doors, protein_frames_from_rmf), called from bin/imp_bff and nowhere in the
+# library. Measured (PRD-139): librmf is 3.2 MB, but it links Boost.Iostreams,
+# which in some builds pulls Boost.Regex and all of ICU -- 35 MB a wheel would
+# carry for a file format most callers never open. On by default; a wheel that
+# wants to stay small turns it off.
+option(IMPBFF_WITH_RMF "Read and write RMF files (librmf)" ON)
+if(IMPBFF_WITH_RMF)
+  find_path(RMF_INCLUDE_DIR RMF/FileHandle.h REQUIRED)
+  find_library(RMF_LIBRARY NAMES RMF REQUIRED)
+endif()
 find_package(OpenMP QUIET)
 
 if(IMPBFF_WITH_IMP)
@@ -134,6 +151,9 @@ else()
 endif()
 
 add_library(imp_bff SHARED ${_cxx_sources} ${_ihm_sources})
+if(NOT IMPBFF_WITH_RMF)
+  target_compile_definitions(imp_bff PUBLIC IMPBFF_NO_RMF=1)
+endif()
 target_compile_definitions(imp_bff PRIVATE IMPBFF_COMPILATION IMPBFF_EXPORTS
   IMPBFF_STANDALONE_VERSION="${PROJECT_VERSION}"
   IMPBFF_STANDALONE_DATA_DIR="${IMPBFF_DATA_DIR}"
@@ -145,17 +165,17 @@ if(IMPBFF_WITH_IMP)
   target_include_directories(imp_bff
     PUBLIC "$<BUILD_INTERFACE:${IMPBFF_GEN_INCLUDE}>" "${IMP_INCLUDE_DIR}"
            "$<INSTALL_INTERFACE:include>"
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" "${RMF_INCLUDE_DIR}")
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" ${RMF_INCLUDE_DIR})
   target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers
-                        PRIVATE "${RMF_LIBRARY}" ${IMPBFF_IMP_LIBRARIES})
+                        PRIVATE ${RMF_LIBRARY} ${IMPBFF_IMP_LIBRARIES})
 else()
   target_compile_definitions(imp_bff PUBLIC IMPBFF_STANDALONE=1)
   target_include_directories(imp_bff
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"   # the IMP/ shims, first
            "$<BUILD_INTERFACE:${IMPBFF_GEN_INCLUDE}>"
            "$<INSTALL_INTERFACE:include>"
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" "${RMF_INCLUDE_DIR}")
-  target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers PRIVATE "${RMF_LIBRARY}")
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ihm" ${RMF_INCLUDE_DIR})
+  target_link_libraries(imp_bff PUBLIC Eigen3::Eigen Boost::headers PRIVATE ${RMF_LIBRARY})
 endif()
 if(cereal_FOUND)
   target_link_libraries(imp_bff PUBLIC cereal::cereal)
@@ -225,6 +245,9 @@ if(IMPBFF_PYTHON)
   set_property(SOURCE "${_entry}" PROPERTY INCLUDE_DIRECTORIES
     "${IMPBFF_ROOT}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${IMPBFF_GEN_INCLUDE}" "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}")
+  if(NOT IMPBFF_WITH_RMF)
+    set_property(SOURCE "${_entry}" PROPERTY COMPILE_DEFINITIONS IMPBFF_NO_RMF)
+  endif()
   set_property(SOURCE "${_entry}" PROPERTY COMPILE_OPTIONS -castmode -naturalvar -fvirtual -Wextra -Dfinal= -DPySwigIterator=IMP_BFF_PySwigIterator -DSwigPyIterator=IMP_BFF_SwigPyIterator)
   swig_add_library(_IMP_bff LANGUAGE python TYPE MODULE
     OUTPUT_DIR "${_pydir}" OUTFILE_DIR "${CMAKE_BINARY_DIR}/swig" SOURCES "${_entry}")
