@@ -59,10 +59,6 @@ def enable_gpu(plugin=None, wgpu_library=None, quiet=False):
     wgpu-native library in a wgpu-py installation.
     """
     global _GPU_TOLD
-    # Compiled out: there is no door to open, so do not go looking and do not
-    # complain about a wgpu that would make no difference.
-    if not built_with_gpu_support():
-        return get_compute_backend_name()
     if _gpu_os.environ.get("IMP_BFF_GPU", "").lower() in ("off", "0", "no"):
         return get_compute_backend_name()
 
