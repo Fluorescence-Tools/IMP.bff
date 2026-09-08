@@ -16,6 +16,7 @@
 
 /* The dynamics of an explicit probe: IMP::atom::Simulator over IMP particles
    (formerly part of sampling.i). */
+%include "IMP_bff.dyedynamics.i"
 %include "IMP_bff.probedynamics.i"
 
 /* The FRET-restrained docking engine. */

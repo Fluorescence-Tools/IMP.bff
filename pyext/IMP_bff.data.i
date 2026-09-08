@@ -101,6 +101,14 @@ if _package_data_dir():
         ([_own] if _own else []) + [_package_data_dir(), get_data_cache_dir()])
 
 
+# IMP's own data (top.lib, par.lib, the element table) where this build links
+# IMP and carries it: the C++ side reads IMP_DATA, so a wheel points it at
+# what it ships unless the caller has already chosen (PRD-139).
+_IMP_DATA = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "imp_data")
+if _os.path.isdir(_IMP_DATA) and not _os.environ.get("IMP_DATA"):
+    _os.environ["IMP_DATA"] = _IMP_DATA
+
+
 def _fetch_data_main(argv=None):
     """`imp_bff_fetch_data`: fetch every registry file, or the ones named."""
     import argparse

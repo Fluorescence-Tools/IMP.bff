@@ -11001,3 +11001,16 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   build directory -- anything linked against a hand-built RMF failed at import, and only delocate hid it.
   Hidden visibility was tried and reverted: 0.23 MB for four broken tests, because the exception classes' typeinfo
   stops being exported and the catch that translates them sits in the extension while the throw is in the library.
+- **Dye-Langevin ohne IMP-Modul** (imp-bff-ce, 2026-09-08, PRD-139): `attach_dye_to_pdb` and
+  `run_dye_langevin` (`include/DyeDynamics.h`, `src/imp/DyeDynamics.cpp`) are the connection layer's dye roads
+  behind file paths and arrays -- model, hierarchies and particle indexes are made and destroyed inside. On a
+  build with the embedded minimal IMP a real trajectory came back (5 frames of 83 atoms with its energies) from
+  a Python where `IMP.atom` is not importable. The rule that makes it work: nothing wrapped may name an IMP
+  type, or SWIG needs IMP's .i files and the extension imports `_IMP_kernel` at load. Cost of the plumbing:
+  SWIG gets IMP's macro spellings (`IMP_VALUES` -> `IMP::Vector`, both `VectorD` spellings), `IMP::Vector` gets
+  the value typemaps, the vector `out` typemap binds a reference (SwigValueWrapper), the wrapper includes
+  `<boost/range/distance.hpp>` (IMP's VectorD calls boost::distance), the director registry no longer asks for
+  `get_ref_count` before holding a subclass (IMP::Object is unwrapped here -- it held nothing and a cancelled
+  minimizer run segfaulted), and the wheel carries IMP's atom data (3.1 MB; score_functor's 18 MB stays out).
+  `get_build()` now answers core / core+imp / imp. `test/test_dye_dynamics_doors.py` asserts in a subprocess
+  that running a dye imports no IMP module. Lanes: 724/0 IMP-free; IMP-linked differs only by the new tests.

@@ -96,6 +96,13 @@ if(IMPBFF_WITH_IMP)
   # libraries itself (utility/wheel_deps.sh) and has no IMP installation,
   # only a prefix -- the same way RMF is found above.
   find_path(IMP_INCLUDE_DIR IMP/Object.h REQUIRED)
+  # IMP reads its own data at run time (IMP::atom's top.lib and par.lib for
+  # the CHARMM topology, the element table) through IMP_DATA. A wheel has to
+  # carry it; an installation beside a real IMP does not.
+  find_path(IMP_DATA_DIR IMP/atom/top.lib PATHS "${IMP_INCLUDE_DIR}/../share" PATH_SUFFIXES share)
+  if(NOT IMP_DATA_DIR)
+    find_path(IMP_DATA_DIR atom/top.lib PATHS "${IMP_INCLUDE_DIR}/../share/IMP" NO_DEFAULT_PATH)
+  endif()
   set(IMPBFF_IMP_LIBRARIES "")
   foreach(m ${IMPBFF_IMP_MODULES})
     find_library(IMP_${m}_LIBRARY NAMES imp_${m} REQUIRED)
@@ -205,6 +212,12 @@ if(IMPBFF_WHEEL)
   # are listed in data/registry.json and fetched on first use
   install(DIRECTORY "${IMPBFF_ROOT}/data/" DESTINATION "${IMPBFF_PY_PKG_DIR}/data" COMPONENT data
     PATTERN "rotamer_library" EXCLUDE PATTERN "cgprobe" EXCLUDE)
+  if(IMPBFF_WITH_IMP AND IMP_DATA_DIR)
+    # score_functor's statistical potentials are 18 of IMP's 21 MB and the dye
+    # roads never open them; atom's topology is what they read.
+    install(DIRECTORY "${IMP_DATA_DIR}/" DESTINATION "${IMPBFF_PY_PKG_DIR}/imp_data"
+            COMPONENT data PATTERN "score_functor" EXCLUDE)
+  endif()
 else()
   install(TARGETS imp_bff EXPORT imp_bffTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT python
@@ -232,6 +245,11 @@ if(IMPBFF_PYTHON)
   foreach(h ${_public_headers})
     get_filename_component(n "${h}" NAME)
     list(FIND _layer_list "${n}" _idx)
+    # DyeDynamics.h is a layer header whose declarations name no IMP type:
+    # where the layer is built it is wrapped like a core header.
+    if(IMPBFF_WITH_IMP AND n STREQUAL "DyeDynamics.h")
+      set(_idx -1)
+    endif()
     if(_idx EQUAL -1 AND NOT n STREQUAL "Base.h")
       string(APPEND _agg_content "#include <IMP/bff/${n}>\n")
     endif()
@@ -245,8 +263,15 @@ if(IMPBFF_PYTHON)
   set_property(SOURCE "${_entry}" PROPERTY INCLUDE_DIRECTORIES
     "${IMPBFF_ROOT}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${IMPBFF_GEN_INCLUDE}" "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}")
+  set(_swig_defs "")
   if(NOT IMPBFF_WITH_RMF)
-    set_property(SOURCE "${_entry}" PROPERTY COMPILE_DEFINITIONS IMPBFF_NO_RMF)
+    list(APPEND _swig_defs IMPBFF_NO_RMF)
+  endif()
+  if(IMPBFF_WITH_IMP)
+    list(APPEND _swig_defs IMPBFF_WITH_IMP)
+  endif()
+  if(_swig_defs)
+    set_property(SOURCE "${_entry}" PROPERTY COMPILE_DEFINITIONS ${_swig_defs})
   endif()
   set_property(SOURCE "${_entry}" PROPERTY COMPILE_OPTIONS -castmode -naturalvar -fvirtual -Wextra -Dfinal= -DPySwigIterator=IMP_BFF_PySwigIterator -DSwigPyIterator=IMP_BFF_SwigPyIterator)
   swig_add_library(_IMP_bff LANGUAGE python TYPE MODULE

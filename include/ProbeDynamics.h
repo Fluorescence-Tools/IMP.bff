@@ -22,6 +22,7 @@
 #define IMPBFF_PROBEDYNAMICS_H
 
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/DyeDynamics.h>
 #include <IMP/bff/ProbeLibrary.h>
 
 #include <IMP/Pointer.h>
@@ -73,32 +74,6 @@ IMPBFFEXPORT IMP::atom::Simulator* make_langevin_simulator(
         const std::string& integrator = "md", double temperature = 300.0,
         double timestep_fs = 2.0, double friction_ps = 10.0, int seed = -1);
 
-//! What a run of #IMP::bff::AttachedProbeDynamics produced.
-struct IMPBFFEXPORT LangevinTrajectory {
-    //! Flat `n_frames * n_atoms * 3`.
-    std::vector<double> coordinates;
-    //! One per frame: the time, the potential energy, and the kinetic energy
-    //! (NaN under `bd`, which has no velocities).
-    std::vector<double> times_fs, potential_energy, kinetic_energy;
-    std::vector<std::string> atom_names;
-    std::string integrator;
-    double temperature, timestep_fs;
-    int n_frames, n_atoms;
-
-    LangevinTrajectory()
-        : integrator("md"), temperature(300.0), timestep_fs(2.0), n_frames(0),
-          n_atoms(0) {}
-
-    void get_coordinates(double** out_view, int* n_out_view) const;
-    void get_times_fs(double** out_view, int* n_out_view) const;
-    void get_potential_energy(double** out_view, int* n_out_view) const;
-    void get_kinetic_energy(double** out_view, int* n_out_view) const;
-
-    IMP_SHOWABLE_INLINE(LangevinTrajectory,
-                        out << "LangevinTrajectory(" << n_frames << " frames of "
-                            << n_atoms << " atoms)");
-};
-IMP_VALUES(LangevinTrajectory, LangevinTrajectories);
 
 //! Langevin (`md`) or Brownian (`bd`) dynamics of an attached label.
 /*!

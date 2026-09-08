@@ -90,9 +90,14 @@ class TestSearchPath(unittest.TestCase):
 class TestBuildIdentity(unittest.TestCase):
 
     def test_get_build_names_this_build(self):
-        self.assertIn(IMP.bff.get_build(), ("core", "imp"))
-        self.assertEqual(IMP.bff.get_build() == "core",
+        # "core+imp" is the standalone build that links IMP as a private
+        # library: no IMP in Python, but the connection layer is there
+        # (PRD-139).
+        build = IMP.bff.get_build()
+        self.assertIn(build, ("core", "core+imp", "imp"))
+        self.assertEqual(build.startswith("core"),
                          bool(getattr(IMP.bff, "IMPBFF_STANDALONE", False)))
+        self.assertEqual(build == "core+imp", hasattr(IMP.bff, "run_dye_langevin"))
 
     def test_fetch_data_and_registry_exist_in_both_builds(self):
         self.assertIsInstance(IMP.bff.get_data_registry(), dict)

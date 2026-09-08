@@ -24,7 +24,12 @@ from IMP import (Exception, InternalException, ModelException, UsageException,
 
 
 def get_build():
-    """Which IMP.bff this is: "imp" (the IMP module, this build) or "core"
-    (the IMP-free package 'bff')."""
+    """Which IMP.bff this is.
+
+    "imp"       -- the IMP module build, this one: IMP's own Python is here.
+    "core"      -- the package `bff`, with no IMP at all.
+    "core+imp"  -- `bff` built against a private IMP: the dye roads work,
+                   still without IMP in Python.
+    """
     return "imp"
 %}

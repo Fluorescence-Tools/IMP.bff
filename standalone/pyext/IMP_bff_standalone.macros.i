@@ -127,7 +127,91 @@ TypeException = _IMP_bff.TypeException
 %enddef
 
 /* ---- values: a std::vector of them crosses as a Python list, as in IMP ---- */
+/* IMP spells a value's plural `IMP::Vector<T>`, which derives from
+   std::vector<T>; the shim build spells it std::vector<T> outright. SWIG has
+   to know the type it will actually write into the wrapper, so both
+   spellings get the same typemaps. Declared here for both builds -- where
+   nothing uses it, nothing matches it. */
+namespace IMP {
+template <class T>
+class Vector : public std::vector<T> {
+ public:
+    Vector();
+    Vector(const std::vector<T>& o);
+};
+}
+
+%define IMP_SWIG_VALUE_VECTOR_TYPEMAPS(Namespace, Name, VectorType)
+%typemap(out) VectorType {
+    // bound to a reference first: SWIG hands a value return through
+    // SwigValueWrapper, which is not the vector but converts to it
+    const VectorType& imp_bff_out = $1;
+    $result = PyList_New(imp_bff_out.size());
+    for (size_t i = 0; i < imp_bff_out.size(); ++i) {
+        PyList_SET_ITEM($result, i, SWIG_NewPointerObj(new Namespace::Name(imp_bff_out[i]), $descriptor(Namespace::Name*), SWIG_POINTER_OWN));
+    }
+}
+%typemap(out) const VectorType& {
+    $result = PyList_New($1->size());
+    for (size_t i = 0; i < $1->size(); ++i) {
+        PyList_SET_ITEM($result, i, SWIG_NewPointerObj(new Namespace::Name((*$1)[i]), $descriptor(Namespace::Name*), SWIG_POINTER_OWN));
+    }
+}
+%typemap(in) const VectorType& (VectorType imp_bff_tmp) {
+    VectorType* imp_bff_direct = 0;
+    if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**)&imp_bff_direct, $descriptor(VectorType*), 0)) && imp_bff_direct) {
+        $1 = imp_bff_direct;
+    } else {
+        if (!PySequence_Check($input) || PyUnicode_Check($input)) { SWIG_exception_fail(SWIG_TypeError, "a sequence of " #Name " is needed"); }
+        Py_ssize_t n = PySequence_Size($input);
+        for (Py_ssize_t i = 0; i < n; ++i) {
+            PyObject* item = PySequence_GetItem($input, i);
+            Namespace::Name* p = 0;
+            int res = SWIG_ConvertPtr(item, (void**)&p, $descriptor(Namespace::Name*), 0);
+            if (!SWIG_IsOK(res) || !p) { Py_DECREF(item); SWIG_exception_fail(SWIG_TypeError, "item " #Name " expected"); }
+            imp_bff_tmp.push_back(*p);
+            Py_DECREF(item);
+        }
+        $1 = &imp_bff_tmp;
+    }
+}
+%typemap(in) VectorType (VectorType imp_bff_tmp) {
+    VectorType* imp_bff_direct = 0;  // NOLINT
+    if (SWIG_IsOK(SWIG_ConvertPtr($input, (void**)&imp_bff_direct, $descriptor(VectorType*), 0)) && imp_bff_direct) {
+        imp_bff_tmp = *imp_bff_direct;
+    } else {
+        if (!PySequence_Check($input) || PyUnicode_Check($input)) { SWIG_exception_fail(SWIG_TypeError, "a sequence of " #Name " is needed"); }
+        Py_ssize_t n = PySequence_Size($input);
+        for (Py_ssize_t i = 0; i < n; ++i) {
+            PyObject* item = PySequence_GetItem($input, i);
+            Namespace::Name* p = 0;
+            int res = SWIG_ConvertPtr(item, (void**)&p, $descriptor(Namespace::Name*), 0);
+            if (!SWIG_IsOK(res) || !p) { Py_DECREF(item); SWIG_exception_fail(SWIG_TypeError, "item " #Name " expected"); }
+            imp_bff_tmp.push_back(*p);
+            Py_DECREF(item);
+        }
+    }
+    $1 = imp_bff_tmp;
+}
+%typemap(typecheck, precedence=SWIG_TYPECHECK_VECTOR) const VectorType&, VectorType {
+    $1 = 0;
+    void* imp_bff_direct = 0;
+    if (SWIG_IsOK(SWIG_ConvertPtr($input, &imp_bff_direct, $descriptor(VectorType*), 0))) {
+        $1 = 1;
+    } else if (PySequence_Check($input) && !PyUnicode_Check($input)) {
+        if (PySequence_Size($input) == 0) { $1 = 1; }
+        else {
+            PyObject* item = PySequence_GetItem($input, 0);
+            void* p = 0;
+            $1 = SWIG_IsOK(SWIG_ConvertPtr(item, &p, $descriptor(Namespace::Name*), 0)) ? 1 : 0;
+            Py_DECREF(item);
+        }
+    }
+}
+%enddef
+
 %define IMP_SWIG_VALUE(Namespace, Name, PluralName)
+IMP_SWIG_VALUE_VECTOR_TYPEMAPS(Namespace, Name, IMP::Vector<Namespace::Name >)
 %typemap(out) Namespace::Name const& {
     $result = SWIG_NewPointerObj(new Namespace::Name(*$1), $descriptor(Namespace::Name*), SWIG_POINTER_OWN);
 }
@@ -259,14 +343,24 @@ class _DirectorObjects:
         self._objects = []
 
     def register(self, obj):
+        # Unconditionally: where IMP is linked, IMP::Object is not wrapped --
+        # SWIG is told the macros, not the class -- so `get_ref_count` is not
+        # on the proxy, and a registry that asked for it first held nothing at
+        # all. The callback then landed on a collected object and the process
+        # died. cleanup() below copes with either shape.
         self.cleanup()
-        if hasattr(obj, "get_ref_count"):
-            self._objects.append(obj)
+        self._objects.append(obj)
 
     def cleanup(self):
         # three references are ours: the list, `x`, and getrefcount's argument
-        self._objects = [x for x in self._objects
-                         if _imp_bff_sys.getrefcount(x) > 3 or x.get_ref_count() > 1]
+        def still_needed(x):
+            if _imp_bff_sys.getrefcount(x) > 3:
+                return True
+            counted = getattr(x, "get_ref_count", None)
+            # without the C++ count, Python's is all there is to go on
+            return counted() > 1 if counted is not None else False
+
+        self._objects = [x for x in self._objects if still_needed(x)]
 
     def get_object_count(self):
         return len(self._objects)
@@ -399,12 +493,29 @@ _director_objects = _DirectorObjects()
 // SWIG must know these names exist so that the headers' unqualified
 // `algebra::Vector3D` (written inside IMP::bff) resolves to the typemapped
 // type instead of being emitted verbatim into the wrapper.
+/* IMP declares VectorD in namespace IMP and pulls it into IMP::algebra, and
+   headers use both spellings; SWIG matches typemaps on the spelling it sees,
+   so both are declared and both get the typemaps below. */
+namespace IMP {
+template <int D> class VectorD {
+ public:
+    VectorD();
+    VectorD(const VectorD<D>& o);
+    double operator[](unsigned int i) const;
+};
+}
+
 namespace IMP { namespace algebra {
-template <int D> class VectorD;
+// Enough of the shape for SWIG to treat it as an ordinary value: without a
+// default constructor in view it wraps every return in SwigValueWrapper and
+// writes code the real class does not support.
+using IMP::VectorD;
 typedef VectorD<3> Vector3D;
 typedef VectorD<4> Vector4D;
-typedef std::vector<VectorD<3> > Vector3Ds;
-typedef std::vector<VectorD<4> > Vector4Ds;
+typedef IMP::Vector<VectorD<3> > Vector3Ds;
+typedef IMP::Vector<VectorD<4> > Vector4Ds;
 } }
 IMPBFF_VECTOR_TYPEMAPS(3, IMP::algebra::Vector3D)
 IMPBFF_VECTOR_TYPEMAPS(4, IMP::algebra::Vector4D)
+IMPBFF_VECTOR_TYPEMAPS(3, IMP::VectorD<3>)
+IMPBFF_VECTOR_TYPEMAPS(4, IMP::VectorD<4>)

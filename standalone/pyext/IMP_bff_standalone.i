@@ -14,6 +14,13 @@
 
 %{
 #define SWIG_FILE_WITH_INIT
+#ifdef IMPBFF_WITH_IMP
+// IMP's VectorD calls boost::distance in a constructor template, and its own
+// translation units get the declaration from headers this one does not
+// include. Ahead of everything, so the order the wrapper includes IMP in
+// does not matter.
+#include <boost/range/distance.hpp>
+#endif
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/Base.h>
 #include "bff_core_headers.h"
@@ -51,6 +58,8 @@
 %include "IMP_bff_standalone.macros.i"
 
 %include <IMP/bff/bff_config.h>
+
+#ifndef IMPBFF_WITH_IMP
 /* Base.h hides its C++ exception classes from SWIG; the module makes Python
    ones (IMP_bff_standalone.macros.i), as IMP's kernel does. */
 %ignore IMP::Pointer;
@@ -59,6 +68,30 @@
 %ignore IMP::Object::release_ref;
 %include <IMP/Object.h>
 %include <IMP/bff/Base.h>
+#else
+/* Where IMP is linked, Base.h forwards to IMP's own headers, and those need
+   IMP's SWIG interfaces to parse -- which is exactly what this module does
+   not want (they make the extension import _IMP_kernel). SWIG does not
+   compile anything, though: it only has to *parse* the declarations, so it
+   is enough to tell it what these macros expand to. The compiler still sees
+   IMP's real definitions through the %{ %} block above.
+   `IMP::Object` is then an unknown base class, which SWIG says out loud and
+   then ignores; the three classes that derive from it are directors, and
+   their reference counting comes from IMP_SWIG_OBJECT rather than the base. */
+#define IMP_SHOWABLE_INLINE(Name, how_to_show) void show(std::ostream &out=std::cout) const
+#define IMP_SHOWABLE(Name) void show(std::ostream &out=std::cout) const
+/* IMP's own spellings, so that what SWIG writes into the wrapper is the
+   type the compiler will see. IMP_SWIG_VALUE gives IMP::Vector the same
+   typemaps as std::vector. */
+#define IMP_VALUES(Name, PluralName) typedef IMP::Vector<Name> PluralName;
+#define IMP_OBJECTS(Name, PluralName) typedef IMP::Vector<IMP::Pointer<Name> > PluralName; typedef IMP::Vector<Name*> PluralName##Temp;
+#define IMP_OBJECT_METHODS(Name) virtual ~Name();
+#define IMP_OBJECT_SERIALIZE_DECL(Name)
+#define IMP_DECORATORS(Name, PluralName, Parent)
+#define IMP_USAGE_CHECK(expr, message)
+#define IMP_WARN(message)
+#define IMP_THROW(message, exception_name)
+#endif
 
 %pythoncode %{
 # The standalone core: no IMP.atom, no IMP.Model. What is here is what
@@ -66,7 +99,24 @@
 IMPBFF_STANDALONE = True
 %}
 
+#ifdef IMPBFF_WITH_IMP
+%pythoncode %{
+_IMP_BFF_WITH_IMP = True
+%}
+#else
+%pythoncode %{
+_IMP_BFF_WITH_IMP = False
+%}
+#endif
+
 %include "IMP_bff.core.i"
+
+/* The dye roads by file path, where this build links IMP (PRD-139). Their
+   signatures name no IMP type, so they need none of IMP's own interfaces --
+   see IMP_bff.dyedynamics.i. */
+#ifdef IMPBFF_WITH_IMP
+%include "IMP_bff.dyedynamics.i"
+#endif
 
 %pythoncode %{
 def get_module_version():
@@ -76,9 +126,15 @@ def get_module_name():
     return "IMP::bff"
 
 def get_build():
-    """Which IMP.bff this is: "core" (no IMP, this build) or "imp" (the IMP
-    module, which adds the connection layer)."""
-    return "core"
+    """Which IMP.bff this is.
+
+    "core"      -- no IMP at all: the fitting stack, volumes, rotamer dyes.
+    "core+imp"  -- the same, plus the roads that run on an atomistic model
+                   (attach_dye_to_pdb, run_dye_langevin). IMP is linked as a
+                   private library; there is still no IMP in Python.
+    "imp"       -- the IMP module build, where IMP's own Python is there too.
+    """
+    return "core+imp" if _IMP_BFF_WITH_IMP else "core"
 
 def _warn_if_this_replaced_the_imp_module():
     # The pip core and the conda imp.bff package both own site-packages/IMP/bff/.

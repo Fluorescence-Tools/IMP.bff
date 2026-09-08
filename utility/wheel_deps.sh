@@ -91,6 +91,13 @@ if [ "$WITH_IMP" = "1" ]; then
   cmake --build "$WORK/imp-build" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" --target $targets
   cp -R "$WORK/imp-build/include/IMP" "$PREFIX/include/"
   cp -R "$WORK/imp-build/lib/"libimp_* "$PREFIX/lib/"
+  # IMP reads its own data at run time (IMP::atom's top.lib and par.lib for
+  # the CHARMM topology); without it every read_pdb fails with "IMP is not
+  # installed or set up correctly".
+  mkdir -p "$PREFIX/share/IMP"
+  for m in $IMP_MODULES; do
+    [ -d "$IMP_SRC/modules/$m/data" ] && cp -R "$IMP_SRC/modules/$m/data" "$PREFIX/share/IMP/$m"
+  done
   echo "IMP ${IMP_VERSION} (${IMP_MODULES}) installed under $PREFIX"
 fi
 
