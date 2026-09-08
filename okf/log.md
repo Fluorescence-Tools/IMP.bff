@@ -10964,3 +10964,10 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   project's own CMake (`find_package(IMP)`), which would retire the flat-header rule, `src/imp/Headers.cmake`,
   the `src/ImpLayer.cpp` bridge and `dependencies.py`. The core conda package (`bff`) builds and passes its recipe tests on this machine
   with the data fetched at build time; `build_core.bat` gives it Windows, so CI runs it on all three platforms.
+- **What a core Langevin would need** (imp-bff-ce, measured 2026-09-08, recorded in PRD-137): the topology is
+  already core (`ProbeForceFieldSystem` and its builders); the force-field energies are array-based and
+  IMP-free in their signatures even though they live in the layer's `Potentials.h` (`clash_energy`, `go_energy`,
+  `lennard_jones_bead_energy`, `generalized_born_energy`, `ramachandran_energy`, `residue_asa` -- all over
+  `const std::vector<double>& xyz`), so they would move like `States.h` did. Missing everywhere in bff:
+  **gradients**. IMP's restraints supply the derivatives its integrator steps on. So a bff-only Langevin is
+  analytic gradients plus an integrator, not attachment plumbing. Stays IMP-only by the owner's ruling.
