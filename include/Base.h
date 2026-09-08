@@ -53,6 +53,7 @@
 #include <string>
 #include <vector>
 
+#ifndef SWIG  /* the Python module makes these as Python exception classes */
 namespace IMP {
 
 //! The base of every error this module raises.
@@ -84,6 +85,7 @@ class ModelException : public Exception {
 };
 
 }  // namespace IMP
+#endif  // SWIG
 
 //! Build a message with `<<` and throw \p exception_name carrying it.
 /*! The `do { } while (true)` -- rather than the usual `while (false)` -- is
@@ -132,6 +134,7 @@ class ModelException : public Exception {
     typedef std::vector<IMP::Pointer<Name> > PluralName; \
     typedef std::vector<Name*> PluralName##Temp
 
+#ifndef SWIG
 namespace IMP {
 //! A caller broke a documented precondition (IMP's UsageException).
 class UsageException : public Exception {
@@ -139,6 +142,7 @@ class UsageException : public Exception {
     explicit UsageException(const std::string& m) : Exception(m) {}
 };
 }
+#endif  // SWIG
 
 //! IMP's IMP_USAGE_CHECK: a precondition, checked always here (IMP checks it at its usage level).
 #define IMP_USAGE_CHECK(expr, message)                                   \

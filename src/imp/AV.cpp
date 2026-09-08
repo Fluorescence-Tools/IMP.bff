@@ -35,41 +35,6 @@ void AV::show(std::ostream &out) const {
 }
 
 
-std::string AVPairDistanceMeasurement::get_json(){
-    // create an empty structure (null)
-    nlohmann::json j;
-    j["position1_name"] = position_1;
-    j["position2_name"] = position_2;
-    j["distance"] = distance;
-    j["error_neg"] = error_neg;
-    j["error_pos"] = error_pos;
-    j["Forster_radius"] = forster_radius;
-    j["distance_type"] = distance_type;
-    return j.dump();
-}
-
-
-double AVPairDistanceMeasurement::score_model(double model) const{
-    // One implementation of the asymmetric chi2, `chi2_score`. What stood
-    // here selected the *opposite* error bar -- it measured the deviation as
-    // data minus model and then read the branch as if it were model minus
-    // data, so a model that was too large was judged against error_neg -- and
-    // with asymmetric errors this restraint therefore disagreed with
-    // `chi2_score` and with the FPS tables by up to two orders of magnitude
-    // (experiment 50 A, errors (1, 10): 25.0 against 1.0). Nothing asserted
-    // either number; see okf/validation/two_chi2_conventions.md.
-    //
-    // The factor is 0.5, which is what a Gaussian restraint is worth:
-    // -log L = (dev/sigma)^2 / 2, and it is what `IMP::core::Harmonic` scores
-    // for k = 1/sigma^2. Halve it here and the restraint is worth half an
-    // IMP harmonic, so it mixes with other terms at the wrong weight.
-    if(std::isnan(model)){
-        return std::numeric_limits<double>::infinity();
-    }
-    return 0.5 * chi2_score(model, distance, error_neg, error_pos);
-}
-
-
 double av_distance(
         const IMP::bff::AV& av1,
         const IMP::bff::AV& av2,

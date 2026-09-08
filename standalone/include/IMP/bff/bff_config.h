@@ -15,7 +15,10 @@
 
 #include <string>
 
-#ifdef _MSC_VER
+#if defined(SWIG)
+#define IMPBFFEXPORT
+#define IMPBFF_EXPORT_TEMPLATE(name)
+#elif defined(_MSC_VER)
 #define NOMINMAX
 #ifdef IMPBFF_EXPORTS
 #define IMPBFFEXPORT __declspec(dllexport)

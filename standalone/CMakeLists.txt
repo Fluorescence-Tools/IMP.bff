@@ -101,3 +101,56 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION include)
 install(DIRECTORY "${IMPBFF_GEN_INCLUDE}/" DESTINATION include)
 install(DIRECTORY "${IMPBFF_ROOT}/data/" DESTINATION share/IMP/bff/data)
 install(DIRECTORY "${IMPBFF_ROOT}/examples/" DESTINATION share/IMP/bff/examples)
+
+# ---- the Python module: IMP/bff/{__init__.py,_IMP_bff.so}, importable without IMP
+option(IMPBFF_PYTHON "Build the Python module (SWIG, Python3, numpy)" ON)
+if(IMPBFF_PYTHON)
+  find_package(SWIG 4.0 REQUIRED)
+  include(UseSWIG)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
+  # every core header, for the wrapper's %{ %} block
+  set(_agg "${CMAKE_BINARY_DIR}/bff_core_headers.h")
+  file(READ "${IMPBFF_ROOT}/src/imp/Headers.cmake" _hc)
+  string(REGEX MATCH "\"([^\"]*)\"" _m "${_hc}")
+  string(REPLACE ";" " " _layer_list "${CMAKE_MATCH_1}")
+  separate_arguments(_layer_list)
+  set(_agg_content "// generated: every public core header\n")
+  foreach(h ${_public_headers})
+    get_filename_component(n "${h}" NAME)
+    list(FIND _layer_list "${n}" _idx)
+    if(_idx EQUAL -1 AND NOT n STREQUAL "Base.h")
+      string(APPEND _agg_content "#include <IMP/bff/${n}>\n")
+    endif()
+  endforeach()
+  file(WRITE "${_agg}" "${_agg_content}")
+  set(_pydir "${CMAKE_BINARY_DIR}/python/IMP/bff")
+  file(MAKE_DIRECTORY "${_pydir}")
+  set(_entry "${CMAKE_CURRENT_SOURCE_DIR}/pyext/IMP_bff_standalone.i")
+  set_property(SOURCE "${_entry}" PROPERTY CPLUSPLUS ON)
+  set_property(SOURCE "${_entry}" PROPERTY SWIG_MODULE_NAME IMP_bff)
+  set_property(SOURCE "${_entry}" PROPERTY INCLUDE_DIRECTORIES
+    "${IMPBFF_ROOT}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${IMPBFF_GEN_INCLUDE}" "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}")
+  set_property(SOURCE "${_entry}" PROPERTY COMPILE_OPTIONS -castmode -naturalvar -fvirtual -Wextra -Dfinal= -DPySwigIterator=IMP_BFF_PySwigIterator -DSwigPyIterator=IMP_BFF_SwigPyIterator)
+  swig_add_library(_IMP_bff LANGUAGE python TYPE MODULE
+    OUTPUT_DIR "${_pydir}" OUTFILE_DIR "${CMAKE_BINARY_DIR}/swig" SOURCES "${_entry}")
+  target_include_directories(_IMP_bff PRIVATE "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}" "${RMF_INCLUDE_DIR}")
+  target_link_libraries(_IMP_bff PRIVATE imp_bff Python3::Module)
+  set_target_properties(_IMP_bff PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${_pydir}" PREFIX "" SUFFIX "${Python3_SOABI_SUFFIX}")
+  if(APPLE)
+    set_target_properties(_IMP_bff PROPERTIES SUFFIX ".so" INSTALL_RPATH "@loader_path/../../lib;@loader_path" BUILD_RPATH "${CMAKE_BINARY_DIR}")
+  else()
+    set_target_properties(_IMP_bff PROPERTIES SUFFIX ".so" INSTALL_RPATH "$ORIGIN/../../lib;$ORIGIN" BUILD_RPATH "${CMAKE_BINARY_DIR}")
+  endif()
+  # the shadow module is the package
+  add_custom_command(TARGET _IMP_bff POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "${_pydir}/IMP_bff.py" "${_pydir}/__init__.py"
+    COMMENT "IMP/bff/__init__.py from the SWIG shadow module")
+  # In the build tree only: an IMP/__init__.py so that this IMP/ wins over an
+  # installed IMP on PYTHONPATH (a regular package beats a namespace one). It
+  # is not installed -- an installed core is a namespace portion of IMP/.
+  file(WRITE "${CMAKE_BINARY_DIR}/python/IMP/__init__.py" "# build-tree marker: the standalone IMP.bff (PRD-137)\n")
+  set(IMPBFF_PYTHON_INSTALL_DIR "${Python3_SITEARCH}" CACHE PATH "Where IMP/bff/ is installed")
+  install(TARGETS _IMP_bff LIBRARY DESTINATION "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
+  install(FILES "${_pydir}/__init__.py" DESTINATION "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
+endif()

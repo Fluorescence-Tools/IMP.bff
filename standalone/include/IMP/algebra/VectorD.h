@@ -65,6 +65,9 @@ class VectorD {
     VectorD& operator-=(const VectorD& o) { for (int i = 0; i < D; ++i) v_[i] -= o.v_[i]; return *this; }
     VectorD& operator*=(double s) { for (int i = 0; i < D; ++i) v_[i] *= s; return *this; }
     VectorD& operator/=(double s) { for (int i = 0; i < D; ++i) v_[i] /= s; return *this; }
+    //! cereal: the D doubles, so a value holding a vector pickles.
+    template <class Archive>
+    void serialize(Archive& ar) { ar(v_); }
     void show(std::ostream& out = std::cout) const {
         out << "(";
         for (int i = 0; i < D; ++i) out << (i ? ", " : "") << v_[i];

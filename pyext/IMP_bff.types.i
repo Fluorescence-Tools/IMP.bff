@@ -479,7 +479,7 @@ static PyObject* imp_bff_adopt_vector_double(std::vector<double>* v) {
 
 // Float/Double
 %apply(double* IN_ARRAY1, int DIM1) {(double *input, int n_input)}
-%apply(double* IN_ARRAY2, int DIM1, DIM2) {(double *input, int n_input1, int n_input2)}
+%apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double *input, int n_input1, int n_input2)}
 
 // Integers
 %apply(char* IN_ARRAY1, int DIM1) {(char *input, int n_input)}

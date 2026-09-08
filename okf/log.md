@@ -10893,3 +10893,16 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   (own PDB reader + vdW table) vs IMP's road installed by the layer at load; radii table choice deferred to the
   owner. Suite 1784/0. Next: 6b, the standalone CMake build of libimp_bff (Eigen, cereal, Boost headers, RMF,
   vendored python-ihm C parser), then the standalone SWIG entry, then packaging.
+- **PRD-137 step 6b+6c** (imp-bff-ce): `standalone/CMakeLists.txt` builds `libimp_bff` with no IMP (Eigen,
+  cereal, Boost headers, RMF, vendored python-ihm C parser; links RMF/libomp/libc++ only), and now the Python
+  module: `standalone/pyext/IMP_bff_standalone.i` wraps the same `IMP_bff.core.i` the IMP build wraps, under
+  `IMP_bff_standalone.macros.i` (IMP_SWIG_* equivalents, VectorD tuples, IMP's exception family as Python classes
+  with IMP's std:: mapping, IMP's director registry, %implicitconv). `import IMP.bff` with no IMP loaded; the
+  surface is the IMP build's minus IMP's config constants and the layer, checked name by name. One lane for both
+  builds: `test/conftest.py` deselects files naming another IMP module or a layer name when `IMP.atom` is absent
+  -- standalone 718/0, IMP build 1790/0. Found on the way: a value-vector `in` typemap must copy the item before
+  dropping its reference (a wrapped std::vector's `__getitem__` hands out an owning temporary); the two
+  `AVPairDistanceMeasurement` definitions had stayed in the layer. Shared-tree note: another agent's ptolib /
+  ExpressionEngine move (uncommitted) does not link under the unity build in either state, so the IMP gate was
+  built with their six files at HEAD (plus `cmake .`, since IMP links headers by symlink at configure) and they
+  were put back byte-for-byte. Next: 6d packaging (pyproject on scikit-build-core, wheels, the second recipe).

@@ -13,3 +13,12 @@
    standalone build wraps too, layer.i is IMP-only. */
 %include "IMP_bff.core.i"
 %include "IMP_bff.layer.i"
+
+/* The exception family under IMP.bff as well as under IMP, so a caller
+   writes IMP.bff.ValueException in both builds: the standalone module makes
+   these classes itself (standalone/pyext/IMP_bff_standalone.macros.i). */
+%pythoncode %{
+from IMP import (Exception, InternalException, ModelException, UsageException,
+                 EventException, IndexException, IOException, ValueException,
+                 TypeException)
+%}

@@ -17,6 +17,30 @@
   nothing of IMP. `cmake -S standalone -B build -DCMAKE_PREFIX_PATH=$CONDA_PREFIX`.
 - `thirdparty/ihm/` -- python-ihm's C mmCIF/BinaryCIF parser, which the
   core's CIF reader uses; the IMP build takes IMP's copy.
+- `pyext/` -- the Python module without IMP (`-DIMPBFF_PYTHON=ON`, the
+  default; needs SWIG 4 and numpy). `IMP_bff_standalone.i` wraps the very
+  same `pyext/IMP_bff.core.i` the IMP build wraps (the IMP build adds
+  `IMP_bff.layer.i` after it); `IMP_bff_standalone.macros.i` supplies what
+  IMP's kernel interface supplies there: the `IMP_SWIG_VALUE/OBJECT/
+  DIRECTOR/VALUE_SERIALIZE_IMPL` equivalents, `Vector3D`/`Vector4D` as
+  tuples, IMP's exception family (`IMP.bff.ValueException` is a
+  `ValueError`, `IOException` an `IOError`, ... -- the same classes and the
+  same `std::` mapping as IMP's kernel), IMP's director registry, and
+  `%implicitconv`. The build writes `python/IMP/bff/{__init__.py,
+  _IMP_bff.so}`; `python/IMP/__init__.py` is a build-tree-only marker so
+  that this `IMP/` wins over an installed IMP on `PYTHONPATH`.
+
+Running it from the build tree:
+
+    cmake -S standalone -B build -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
+    cmake --build build -j
+    IMP_BFF_DATA=$PWD/data PYTHONPATH=build/python python -c "import IMP.bff"
+
+`IMP_BFF_DATA` / `IMP_BFF_EXAMPLES` point `get_data_path()` at a checkout;
+an installed core finds `share/IMP/bff/` on its own. The test suite serves
+both builds: with no `IMP.atom` importable, `test/conftest.py` leaves out
+every file that names another IMP module (or a connection-layer name) and
+says so in the report header -- `pytest test` then runs the core's lane.
 
 The IMP-module build is the top-level `CMakeLists.txt` and is untouched by
 any of this. `test/expensive_test_standalone_core_compiles.py` is the gate
