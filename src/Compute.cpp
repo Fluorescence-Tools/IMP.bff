@@ -9,10 +9,12 @@
 
 #include <sstream>
 
+#if IMPBFF_WITH_GPU
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#endif
 #endif
 
 IMPBFF_BEGIN_NAMESPACE
@@ -34,6 +36,7 @@ State& state() {
     return s;
 }
 
+#if IMPBFF_WITH_GPU
 void close_handle(void*& handle) {
     if (!handle) return;
 #ifdef _WIN32
@@ -55,8 +58,25 @@ std::string last_error() {
     return e ? std::string(e) : std::string("unknown error");
 #endif
 }
+#endif  // IMPBFF_WITH_GPU
 
 }  // namespace
+
+#if !IMPBFF_WITH_GPU
+
+// Compiled without the door: no loader, no dynamic-library call anywhere in
+// this translation unit, and a refusal that says why rather than one that
+// looks like a missing file.
+bool load_compute_backend(const std::string& library, const std::string& argument) {
+    (void)library;
+    (void)argument;
+    state().error =
+            "this build of IMP.bff was compiled with IMPBFF_WITH_GPU=0, so it "
+            "loads no compute backend; the kernels run on the CPU";
+    return false;
+}
+
+#else
 
 bool load_compute_backend(const std::string& library, const std::string& argument) {
     State& s = state();
@@ -117,6 +137,8 @@ bool load_compute_backend(const std::string& library, const std::string& argumen
     return true;
 }
 
+#endif  // IMPBFF_WITH_GPU
+
 void reset_compute_backend() {
     State& s = state();
     s.backend = 0;
@@ -134,5 +156,7 @@ std::string get_compute_backend_name() {
 std::string get_compute_backend_error() { return state().error; }
 
 const ImpBffComputeBackend* get_compute_backend() { return state().backend; }
+
+bool built_with_gpu_support() { return IMPBFF_WITH_GPU != 0; }
 
 IMPBFF_END_NAMESPACE

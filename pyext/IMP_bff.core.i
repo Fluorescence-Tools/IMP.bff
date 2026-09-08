@@ -914,6 +914,16 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    not own (see the note in `IMP_bff.types.i`). */
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_fluorescence, int* n_out_fluorescence)};
 %include "IMP/bff/DiffusionSolver.h"
+/* A dense network, evaluated in batches. The outputs are one managed view --
+   `n_rows * n_outputs` of them -- for the same reason the diffusion solver's
+   are: a walked SWIG proxy costs ~340 ns an element. */
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
+%include "IMP/bff/NeuralNet.h"
+/* The evaluation graph: labels naming ports, run on demand. Node is a
+   director, so a graph of Python-subclassed nodes works here too. The
+   provenance helpers that go with it are Python, so they live in their own
+   interface file. */
+%include "IMP_bff.evaluationgraph.i"
 /* The photon trace returns delay and emitted-flag views, and the decay curve
    accumulates in place into the caller's histogram. The %apply has to sit
    here, before the header that declares them. */
