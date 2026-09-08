@@ -169,6 +169,45 @@ run, and roughly half of that is the six neighbour gathers.
 Of the floor, `set_bind_group` before each dispatch is 2.8 ms of 24.8 at
 ng = 41 and nothing measurable at ng = 81; the rest is the dispatch itself.
 
+## The backend exists now, and f16 turned out to be flux-form-specific
+
+`gpu/imp_bff_wgpu.c` is the plugin the door in `Compute.h` was built for: a C
+library that links nothing, resolves every wgpu entry point with dlopen from a
+path the Python side finds, and installs itself beside the extension module.
+`IMP.bff.get_compute_backend_name()` answers `wgpu:Metal:Apple M1 Pro:f16`.
+Through the real API, against the eight-threaded CPU:
+
+| grid | Smoluchowski | Ito |
+|---|---|---|
+| 41³ | 10.2× | 10.0× |
+| 61³ | 9.2× | 7.8× |
+| 81³ | 9.2× | 7.6× |
+
+Lower than the 13× the harness measured, because the plugin does per call what
+the harness did once: build the active-voxel list and the weights, create and
+upload the buffers, and read back. The shader and the pipelines are cached
+across calls, which is what matters for calibration's 100-1 000 solves.
+
+**f16 weights are right for one flux form and wrong for the other**, and it
+took a measurement to see why. The compensation that makes f16 exact keeps the
+*row sum* exact, so the step is `(self + sum w) * p0` plus a term in the
+differences between neighbouring voxels: the rounding cancels to first order
+exactly when neighbours hold nearly the same density.
+
+| flux form | equilibrium | neighbour-to-neighbour variation of the density | deviation with f16 |
+|---|---|---|---|
+| Smoluchowski | uniform, whatever D | 0.06% (median) | 4.5e-7 after 32 steps |
+| Ito | `p ~ 1/D` | **12%** (median) | 2.3e-4 after 32 steps |
+
+The Ito density inherits the mobility's own voxel-to-voxel variation — 12%
+against the mobility's 11.9% on this field — so there is nothing for the
+compensation to cancel against and the raw f16 error survives. It is a
+per-step error, not an accumulating one: 32 steps and 4 000 steps are within a
+factor of seven of each other, where an accumulating error would be 125 times
+apart. The plugin therefore uses f16 for Smoluchowski and f32 for Ito, which
+costs Ito about 1.2× and buys back three orders of magnitude
+(1.2e-7 trace, 5.0e-7 density). `IMP_BFF_GPU_F16=off` turns it off everywhere.
+
 ## What has not been tried
 
 In rough order of what looks most promising, with the headroom each one is
