@@ -1,32 +1,18 @@
-
-
 /**
  * \file Pto.cpp
- * \brief The PTO envelope: EBML variable-width integers and nothing else.
+ * \brief ptolib's implementation, compiled once for IMP.bff, and the thin
+ *        PtoWriter/PtoReader face this package's writers and readers use.
  *
- * EBML is a handful of variable-width integers and twenty element IDs, and
- * the whole argument for the format is that a reader needs exactly that and
- * never a framework -- so this file is deliberately small. The layout it
- * writes is the one in `../tttrlib/okf/specs/pto-binary-decoding.md`:
- *
- *     EBML header (DocType "pto")
- *     Segment
- *       SeekHead      -- reserved at the head, patched at close
- *       Attachments
- *         AttachedFile  FileUID FileName PtoKind PtoEncoding FileData
- *         ...
- *
- * Two rules ride along, both paid for in tttrlib and both cheap here: payload
- * bytes land on an 8-byte boundary (padded with `Void`) so a mapped file
- * hands out slices rather than copies, and any Data Size that may be
- * rewritten in place is written at a fixed width, so patching it cannot shift
- * the bytes that follow.
+ * The container lives in `internal/ptolib.h` (a vendored copy of
+ * https://github.com/tpeulen/ptolib). This is the one translation unit in the
+ * module that defines PTOLIB_IMPLEMENTATION; the JSON dependency it needs for
+ * `.dstore` column descriptions is the module's own vendored nlohmann copy.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-// -------- from Pto.cpp --------
-
+#define PTOLIB_JSON_INCLUDE <IMP/bff/internal/json.h>
+#define PTOLIB_IMPLEMENTATION
 #include <IMP/bff/Pto.h>
 
 #include <IMP/bff/Base.h>
@@ -34,149 +20,88 @@
 #include <cstdio>
 #include <cstring>
 
+#include "brotli/include/brotli/decode.h"
+#include "brotli/include/brotli/encode.h"
+
 IMPBFF_BEGIN_NAMESPACE
 
 namespace {
 
-// -- element IDs, as the specification prints them ---------------------------
-const unsigned int kEbmlHeader = 0x1A45DFA3u;
-const unsigned int kEbmlVersion = 0x4286u;
-const unsigned int kEbmlReadVersion = 0x42F7u;
-const unsigned int kEbmlMaxIdLength = 0x42F2u;
-const unsigned int kEbmlMaxSizeLength = 0x42F3u;
-const unsigned int kDocType = 0x4282u;
-const unsigned int kDocTypeVersion = 0x4287u;
-const unsigned int kDocTypeReadVersion = 0x4285u;
-const unsigned int kSegment = 0x18538067u;
-const unsigned int kSeekHead = 0x114D9B74u;
-const unsigned int kSeek = 0x4DBBu;
-const unsigned int kSeekId = 0x53ABu;
-const unsigned int kSeekPosition = 0x53ACu;
-const unsigned int kVoid = 0xECu;
-const unsigned int kAttachments = 0x1941A469u;
-const unsigned int kAttachedFile = 0x61A7u;
-const unsigned int kFileUid = 0x46AEu;
-const unsigned int kFileName = 0x466Eu;
-const unsigned int kFileData = 0x465Cu;
-const unsigned int kPtoKind = 0x1E54F001u;
-const unsigned int kPtoEncoding = 0x1E54F002u;
-
-//! Payload alignment: 8 keeps float64 columns and 16-byte rows natural.
-const std::size_t kAlignment = 8;
-//! The width every rewritten Data Size is written at.
-const std::size_t kFixedSizeWidth = 8;
-//! One Seek entry, fixed by construction so the table patches in place.
-const std::size_t kSeekEntryBytes = 19;
-
-typedef std::vector<unsigned char> Bytes;
-
-void put_id(Bytes& out, unsigned int id) {
-    // The marker bits are part of the ID -- `0x61A7` is two octets, and
-    // `0x1A45DFA3` is four -- which is why the spec prints IDs as numbers.
-    int width = 1;
-    while (width < 4 && (id >> (8 * width)) != 0) ++width;
-    for (int i = width - 1; i >= 0; --i) {
-        out.push_back(static_cast<unsigned char>((id >> (8 * i)) & 0xFF));
+// ptolib names the codecs and carries none; this library carries brotli
+// (src/brotli, vendored for the .drot libraries), so it registers it once,
+// and every `+brotli` payload and brotli-compressed store column read
+// through ptolib here decodes.
+bool brotli_compress_for_ptolib(const unsigned char* in, std::size_t n, int level,
+                                std::vector<unsigned char>& out) {
+    int quality = level < 0 ? 5 : level;
+    if (quality > BROTLI_MAX_QUALITY) quality = BROTLI_MAX_QUALITY;
+    if (quality < BROTLI_MIN_QUALITY) quality = BROTLI_MIN_QUALITY;
+    std::size_t size = BrotliEncoderMaxCompressedSize(n);
+    if (size == 0) size = n + 64;
+    out.resize(size);
+    if (!BrotliEncoderCompress(quality, BROTLI_DEFAULT_WINDOW, BROTLI_MODE_GENERIC, n, in, &size,
+                               out.data())) {
+        out.clear();
+        return false;
     }
+    out.resize(size);
+    return true;
 }
 
-//! A Data Size VINT: `width` octets, or the narrowest that fits.
-void put_size(Bytes& out, unsigned long long value, std::size_t width = 0) {
-    if (width == 0) {
-        width = 1;
-        while (width <= 8 && value > ((1ULL << (7 * width)) - 2)) ++width;
+bool brotli_decompress_for_ptolib(const unsigned char* in, std::size_t n, std::size_t raw_size,
+                                  std::vector<unsigned char>& out) {
+    BrotliDecoderState* st = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+    if (st == nullptr) return false;
+    std::size_t available_in = n;
+    const std::uint8_t* next_in = in;
+    out.clear();
+    out.reserve(raw_size);
+    std::vector<unsigned char> chunk(1u << 16);
+    bool ok = true;
+    for (;;) {
+        std::size_t available_out = chunk.size();
+        std::uint8_t* next_out = chunk.data();
+        const BrotliDecoderResult r = BrotliDecoderDecompressStream(
+                st, &available_in, &next_in, &available_out, &next_out, nullptr);
+        out.insert(out.end(), chunk.begin(),
+                   chunk.begin() + static_cast<std::ptrdiff_t>(chunk.size() - available_out));
+        if (r == BROTLI_DECODER_RESULT_SUCCESS) break;
+        if (r == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) continue;
+        ok = false;
+        break;
     }
-    if (width > 8 || value > ((1ULL << (7 * width)) - 2)) {
-        IMP_THROW("PTO: " << value << " does not fit a " << width
-                          << "-octet Data Size", IOException);
-    }
-    const unsigned long long raw = (1ULL << (7 * width)) | value;
-    for (int i = static_cast<int>(width) - 1; i >= 0; --i) {
-        out.push_back(static_cast<unsigned char>((raw >> (8 * i)) & 0xFF));
-    }
+    BrotliDecoderDestroyInstance(st);
+    if (ok && raw_size != 0 && out.size() != raw_size) ok = false;
+    if (!ok) out.clear();
+    return ok;
 }
 
-void put_uint(Bytes& out, unsigned int id, unsigned long long value,
-              std::size_t octets = 0) {
-    if (octets == 0) {
-        octets = 1;
-        while (octets < 8 && (value >> (8 * octets)) != 0) ++octets;
+struct RegisterBrotliWithPtolib {
+    RegisterBrotliWithPtolib() {
+        pto::Codec c;
+        c.name = "brotli";
+        c.compress = &brotli_compress_for_ptolib;
+        c.decompress = &brotli_decompress_for_ptolib;
+        pto::register_codec(c);
     }
-    put_id(out, id);
-    put_size(out, octets);
-    for (int i = static_cast<int>(octets) - 1; i >= 0; --i) {
-        out.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
-    }
+} register_brotli_with_ptolib;
+
+PtoObject to_object(const pto::PtoObject& o) {
+    PtoObject out;
+    out.uid = o.uid;
+    out.name = o.name;
+    out.kind = o.kind;
+    out.encoding = o.encoding;
+    out.offset = static_cast<std::size_t>(o.offset);
+    out.size = static_cast<std::size_t>(o.size);
+    return out;
 }
 
-void put_string(Bytes& out, unsigned int id, const std::string& text) {
-    put_id(out, id);
-    put_size(out, text.size());
-    out.insert(out.end(), text.begin(), text.end());
-}
-
-//! A `Void` element occupying exactly `total` octets (0, or at least 2).
-Bytes void_bytes(std::size_t total) {
-    Bytes out;
-    if (total == 0) return out;
-    if (total < 2) {
-        IMP_THROW("PTO: a Void element needs at least two octets", IOException);
-    }
-    for (std::size_t width = 1; width <= 8; ++width) {
-        if (total < 1 + width) continue;
-        const std::size_t payload = total - 1 - width;
-        if (payload <= ((1ULL << (7 * width)) - 2)) {
-            put_id(out, kVoid);
-            put_size(out, payload, width);
-            out.resize(out.size() + payload, 0);
-            return out;
-        }
-    }
-    IMP_THROW("PTO: cannot write a " << total << "-octet Void", IOException);
-}
-
-// -- reading ----------------------------------------------------------------
-
-//! Decode an element ID at `at`; returns its width, 0 when there is none.
-std::size_t read_id(const unsigned char* buf, std::size_t left,
-                    unsigned int* out) {
-    if (left == 0 || buf[0] == 0) return 0;
-    std::size_t width = 1;
-    while (width <= 4 && !(buf[0] & (0x80 >> (width - 1)))) ++width;
-    if (width > 4 || width > left) return 0;
-    unsigned int value = 0;
-    for (std::size_t i = 0; i < width; ++i) {
-        value = (value << 8) | buf[i];
-    }
-    *out = value;
-    return width;
-}
-
-//! Decode a Data Size at `at`. An unknown size is legal EBML for a live
-//! stream and the one thing PTO promises never to write, so it is refused
-//! here rather than guessed at.
-std::size_t read_size(const unsigned char* buf, std::size_t left,
-                      unsigned long long* out) {
-    if (left == 0 || buf[0] == 0) return 0;
-    std::size_t width = 1;
-    while (width <= 8 && !(buf[0] & (0x80 >> (width - 1)))) ++width;
-    if (width > 8 || width > left) return 0;
-    unsigned long long value = buf[0] & (0xFFu >> width);
-    for (std::size_t i = 1; i < width; ++i) value = (value << 8) | buf[i];
-    if (value == ((1ULL << (7 * width)) - 1)) return 0;   // unknown size
-    *out = value;
-    return width;
-}
-
-std::string as_string(const unsigned char* at, std::size_t n) {
-    return std::string(reinterpret_cast<const char*>(at), n);
-}
-
-unsigned long long as_uint(const unsigned char* at, std::size_t n) {
-    unsigned long long value = 0;
-    for (std::size_t i = 0; i < n; ++i) value = (value << 8) | at[i];
-    return value;
-}
+const std::string kBanner =
+        std::string(pto::kDefaultBanner) +
+        "\n"
+        "This container was written by IMP.bff.\n"
+        "https://github.com/tpeulen/IMP.bff\n";
 
 }  // namespace
 
@@ -184,83 +109,13 @@ unsigned long long as_uint(const unsigned char* at, std::size_t n) {
 // the writer
 // --------------------------------------------------------------------------
 
-struct PtoWriter::Impl {
-    std::FILE* file;
-    std::string path;
-    long segment_size_at, segment_data_at;
-    long seek_head_data_at;
-    long attachments_size_at, attachments_data_at;
-    std::size_t seek_head_bytes;
-    std::vector<long> seeks;
-    bool closed;
-
-    Impl() : file(NULL), segment_size_at(0), segment_data_at(0),
-             seek_head_data_at(0), attachments_size_at(0),
-             attachments_data_at(0), seek_head_bytes(0), closed(false) {}
-
-    void write(const Bytes& b) {
-        if (b.empty()) return;
-        if (std::fwrite(&b[0], 1, b.size(), file) != b.size()) {
-            IMP_THROW("PTO: writing " << path << " failed", IOException);
-        }
+PtoWriter::PtoWriter(const std::string& path, int /*doctype_version*/)
+        : closed_(false) {
+    if (!file_.create(path, "", kBanner)) {
+        IMP_THROW("PTO: cannot open " << path << " for writing: " << file_.error(),
+                  IOException);
     }
-};
-
-PtoWriter::PtoWriter(const std::string& path, int doctype_version)
-        : impl_(new Impl) {
-    impl_->path = path;
-    impl_->file = std::fopen(path.c_str(), "wb+");
-    if (impl_->file == NULL) {
-        delete impl_;
-        impl_ = NULL;
-        IMP_THROW("PTO: cannot open " << path << " for writing", IOException);
-    }
-
-    Bytes header;
-    put_uint(header, kEbmlVersion, 1);
-    put_uint(header, kEbmlReadVersion, 1);
-    put_uint(header, kEbmlMaxIdLength, 4);
-    put_uint(header, kEbmlMaxSizeLength, 8);
-    put_string(header, kDocType, "pto");
-    put_uint(header, kDocTypeVersion, static_cast<unsigned long long>(
-                                              doctype_version));
-    put_uint(header, kDocTypeReadVersion, 1);
-
-    Bytes out;
-    put_id(out, kEbmlHeader);
-    put_size(out, header.size());
-    out.insert(out.end(), header.begin(), header.end());
-    impl_->write(out);
-
-    out.clear();
-    put_id(out, kSegment);
-    impl_->write(out);
-    impl_->segment_size_at = std::ftell(impl_->file);
-    out.clear();
-    put_size(out, 0, kFixedSizeWidth);
-    impl_->write(out);
-    impl_->segment_data_at = std::ftell(impl_->file);
-
-    // The seek table is reserved here, at the head of the Segment, and filled
-    // at close: a reader then reaches the directory objects without walking
-    // every attachment. Reserved as Void, so an interrupted write still
-    // leaves a document that walks.
-    impl_->seek_head_bytes = kSeekEntryBytes * 8;
-    out.clear();
-    put_id(out, kSeekHead);
-    put_size(out, impl_->seek_head_bytes, kFixedSizeWidth);
-    impl_->write(out);
-    impl_->seek_head_data_at = std::ftell(impl_->file);
-    impl_->write(void_bytes(impl_->seek_head_bytes));
-
-    out.clear();
-    put_id(out, kAttachments);
-    impl_->write(out);
-    impl_->attachments_size_at = std::ftell(impl_->file);
-    out.clear();
-    put_size(out, 0, kFixedSizeWidth);
-    impl_->write(out);
-    impl_->attachments_data_at = std::ftell(impl_->file);
+    file_.set_writing_app("IMP.bff");
 }
 
 PtoWriter::~PtoWriter() {
@@ -269,289 +124,58 @@ PtoWriter::~PtoWriter() {
     } catch (...) {
         // a destructor is the wrong place to raise; close() reports properly
     }
-    delete impl_;
-    impl_ = NULL;
 }
 
 PtoObject PtoWriter::add(const std::string& name, const std::string& kind,
                          const std::string& encoding, const void* data,
                          std::size_t size) {
-    if (impl_ == NULL || impl_->closed) {
-        IMP_THROW("PTO: the writer is closed", IOException);
+    if (closed_) IMP_THROW("PTO: the writer is closed", IOException);
+    const unsigned long long uid =
+            file_.add(kind, encoding, name, static_cast<const unsigned char*>(data), size);
+    if (uid == 0) {
+        IMP_THROW("PTO: writing " << file_.filename() << " failed: " << file_.error(),
+                  IOException);
     }
-    const unsigned long long uid = objects_.size() + 1;
-
-    Bytes children;
-    put_uint(children, kFileUid, uid, 8);
-    put_string(children, kFileName, name);
-    put_string(children, kPtoKind, kind);
-    put_string(children, kPtoEncoding, encoding);
-
-    Bytes data_head;
-    put_id(data_head, kFileData);
-    put_size(data_head, size, kFixedSizeWidth);
-
-    Bytes head;
-    put_id(head, kAttachedFile);
-    put_size(head, children.size() + data_head.size() + size, kFixedSizeWidth);
-    head.insert(head.end(), children.begin(), children.end());
-    head.insert(head.end(), data_head.begin(), data_head.end());
-
-    long at = std::ftell(impl_->file);
-    // Pad so the payload -- not the header -- lands on the boundary. A Void
-    // cannot be one octet long, so a shortfall of one borrows a whole one.
-    std::size_t shortfall =
-            (kAlignment - ((at + head.size()) % kAlignment)) % kAlignment;
-    if (shortfall == 1) shortfall += kAlignment;
-    if (shortfall != 0) {
-        impl_->write(void_bytes(shortfall));
-        at += static_cast<long>(shortfall);
-    }
-    impl_->write(head);
-
-    PtoObject object;
-    object.uid = uid;
-    object.name = name;
-    object.kind = kind;
-    object.encoding = encoding;
-    object.offset = static_cast<std::size_t>(std::ftell(impl_->file));
-    object.size = size;
-    if (size != 0) {
-        if (std::fwrite(data, 1, size, impl_->file) != size) {
-            IMP_THROW("PTO: writing " << impl_->path << " failed", IOException);
-        }
-    }
-    // Every object of a `.drot.pto` is a directory object -- there are eight
-    // of them, not sixty thousand -- so all of them are seekable.
-    if (impl_->seeks.size() * kSeekEntryBytes < impl_->seek_head_bytes) {
-        impl_->seeks.push_back(at - impl_->segment_data_at);
-    }
+    PtoObject object = to_object(file_.object(uid));
     objects_.push_back(object);
     return object;
 }
 
 void PtoWriter::close() {
-    if (impl_ == NULL || impl_->closed) return;
-    const long end = std::ftell(impl_->file);
-
-    Bytes size_bytes;
-    put_size(size_bytes, end - impl_->attachments_data_at, kFixedSizeWidth);
-    std::fseek(impl_->file, impl_->attachments_size_at, SEEK_SET);
-    impl_->write(size_bytes);
-
-    size_bytes.clear();
-    put_size(size_bytes, end - impl_->segment_data_at, kFixedSizeWidth);
-    std::fseek(impl_->file, impl_->segment_size_at, SEEK_SET);
-    impl_->write(size_bytes);
-
-    Bytes table;
-    for (std::size_t i = 0; i < impl_->seeks.size(); ++i) {
-        Bytes entry_body;
-        put_id(entry_body, kSeekId);
-        Bytes target;
-        put_id(target, kAttachedFile);
-        put_size(entry_body, target.size());
-        entry_body.insert(entry_body.end(), target.begin(), target.end());
-        put_uint(entry_body, kSeekPosition,
-                 static_cast<unsigned long long>(impl_->seeks[i]), 8);
-        put_id(table, kSeek);
-        put_size(table, entry_body.size());
-        table.insert(table.end(), entry_body.begin(), entry_body.end());
-    }
-    const Bytes tail = void_bytes(impl_->seek_head_bytes - table.size());
-    table.insert(table.end(), tail.begin(), tail.end());
-    std::fseek(impl_->file, impl_->seek_head_data_at, SEEK_SET);
-    impl_->write(table);
-
-    std::fclose(impl_->file);
-    impl_->file = NULL;
-    impl_->closed = true;
+    if (closed_) return;
+    closed_ = true;
+    if (!file_.is_open()) return;
+    const bool ok = file_.commit();
+    const std::string why = file_.error();
+    const std::string path = file_.filename();
+    file_.close();
+    if (!ok) IMP_THROW("PTO: writing " << path << " failed: " << why, IOException);
 }
 
 // --------------------------------------------------------------------------
 // the reader
 // --------------------------------------------------------------------------
 
-
-struct PtoReader::Impl {
-    //! An element header: its ID, its payload's offset and its payload's size.
-    struct Header {
-        unsigned int id;
-        long body;
-        unsigned long long size;
-    };
-
-    //! What one buffered read pulls in. An `AttachedFile`'s framing -- its
-    //! own header, then uid, name, kind, encoding and the `FileData` header
-    //! -- is a couple of hundred octets, so a window this size turns the ten
-    //! reads that walking one object would take into one. It is small
-    //! deliberately: the payloads it must not drag in are up to a hundred
-    //! thousand times larger than the framing between them.
-    static const std::size_t kBlock = 512;
-
-    std::FILE* file;
-    std::string path;
-    long end;
-    //! The cached window: `block` holds `block_size` octets from `block_at`.
-    std::vector<unsigned char> block;
-    long block_at;
-    std::size_t block_size;
-
-    Impl() : file(NULL), end(0), block(kBlock), block_at(-1), block_size(0) {}
-    ~Impl() { if (file != NULL) std::fclose(file); }
-
-    //! Decode the header at `at`. Reads at most 12 octets -- an ID is up to
-    //! four and a Data Size up to eight -- so walking a document of a hundred
-    //! objects costs a kilobyte of reads, not the document.
-    bool read_header(long at, long limit, Header* out) {
-        if (at + 2 > limit) return false;
-        unsigned char buf[12];
-        std::size_t n = static_cast<std::size_t>(limit - at);
-        if (n > sizeof(buf)) n = sizeof(buf);
-        read_at(at, buf, n);
-        const std::size_t id_len = read_id(buf, n, &out->id);
-        if (id_len == 0) return false;
-        const std::size_t size_len =
-                read_size(buf + id_len, n - id_len, &out->size);
-        if (size_len == 0) return false;
-        out->body = at + static_cast<long>(id_len + size_len);
-        return true;
-    }
-
-    //! Read `n` bytes at `at`; the one place this reader touches the disk.
-    /*! Small reads come out of the cached window and refill it when they
-        miss; a read larger than the window goes straight to the file, so a
-        payload is never copied twice. Walking a container of a few hundred
-        objects is thousands of these, and the cost of crossing the framing
-        was the cost of its syscalls, not of its bytes. */
-    void read_at(long at, void* into, std::size_t n) {
-        if (n == 0) return;
-        if (n <= kBlock) {
-            const bool hit = block_at >= 0 && at >= block_at &&
-                    at + static_cast<long>(n) <=
-                            block_at + static_cast<long>(block_size);
-            if (!hit) {
-                std::size_t want = kBlock;
-                if (end > 0 && at + static_cast<long>(want) > end) {
-                    want = static_cast<std::size_t>(end - at);
-                }
-                if (want < n) want = n;
-                if (std::fseek(file, at, SEEK_SET) != 0) {
-                    IMP_THROW("PTO: seeking " << path << " to " << at
-                              << " failed", IOException);
-                }
-                block_size = std::fread(&block[0], 1, want, file);
-                if (block_size < n) {
-                    block_at = -1;
-                    IMP_THROW("PTO: reading " << path << " at " << at
-                              << " failed", IOException);
-                }
-                block_at = at;
-            }
-            std::memcpy(into, &block[at - block_at], n);
-            return;
-        }
-        if (std::fseek(file, at, SEEK_SET) != 0 ||
-            std::fread(into, 1, n, file) != n) {
-            IMP_THROW("PTO: reading " << path << " at " << at << " failed",
-                      IOException);
-        }
-    }
-};
-
 bool PtoReader::looks_like_pto(const std::string& path) {
-    std::FILE* f = std::fopen(path.c_str(), "rb");
-    if (f == NULL) return false;
-    unsigned char magic[4] = {0, 0, 0, 0};
-    const std::size_t got = std::fread(magic, 1, 4, f);
-    std::fclose(f);
-    return got == 4 && magic[0] == 0x1A && magic[1] == 0x45 &&
-           magic[2] == 0xDF && magic[3] == 0xA3;
+    return pto::is_pto_file(path);
 }
 
-PtoReader::PtoReader(const std::string& path)
-        : impl_(new Impl), doctype_version_(0) {
-    impl_->path = path;
-    impl_->file = std::fopen(path.c_str(), "rb");
-    if (impl_->file == NULL) {
-        delete impl_;
-        impl_ = NULL;
-        IMP_THROW("PTO: cannot open " << path, IOException);
-    }
-    std::fseek(impl_->file, 0, SEEK_END);
-    const long end = std::ftell(impl_->file);
-    impl_->end = end;
-
-    unsigned char magic[4] = {0, 0, 0, 0};
-    if (end < 4) IMP_THROW("PTO: " << path << " is too short", IOException);
-    impl_->read_at(0, magic, 4);
-    if (magic[0] != 0x1A || magic[1] != 0x45 || magic[2] != 0xDF ||
-        magic[3] != 0xA3) {
-        IMP_THROW("PTO: " << path << " does not begin with an EBML header",
+PtoReader::PtoReader(const std::string& path) : doctype_version_(0) {
+    if (!file_.open(path, false)) {
+        // The message keeps "EBML" and "container" in it: bin/ programs match
+        // on them to say something useful about a file that is not a .pto.
+        IMP_THROW("PTO: cannot open container " << path << ": "
+                  << (file_.error().empty() ? "not an EBML document with DocType pto"
+                                            : file_.error()),
                   IOException);
     }
-
-    // Walk the framing. Master elements whose children matter are descended
-    // into; everything else is stepped over by its own size, which is what
-    // makes an element this reader has never heard of harmless.
-    std::string doctype;
-    long pos = 0;
-    while (pos < end) {
-        Impl::Header h;
-        if (!impl_->read_header(pos, end, &h)) break;
-        if (h.body + static_cast<long>(h.size) > end) {
-            IMP_THROW("PTO: " << path << " is truncated", IOException);
-        }
-
-        if (h.id == kSegment || h.id == kAttachments) {
-            pos = h.body;                                     // descend
-            continue;
-        }
-        if (h.id == kEbmlHeader || h.id == kAttachedFile) {
-            const long stop = h.body + static_cast<long>(h.size);
-            PtoObject object;
-            long at = h.body;
-            while (at < stop) {
-                Impl::Header c;
-                if (!impl_->read_header(at, stop, &c)) break;
-                const std::size_t n = static_cast<std::size_t>(c.size);
-                if (h.id == kEbmlHeader) {
-                    if (c.id == kDocType || c.id == kDocTypeVersion) {
-                        std::vector<unsigned char> v(n);
-                        impl_->read_at(c.body, n ? &v[0] : NULL, n);
-                        if (c.id == kDocType) doctype = as_string(n ? &v[0] : NULL, n);
-                        else doctype_version_ = static_cast<int>(as_uint(&v[0], n));
-                    }
-                } else if (c.id == kFileData) {
-                    object.offset = static_cast<std::size_t>(c.body);
-                    object.size = n;
-                } else if (c.id == kFileUid || c.id == kFileName ||
-                           c.id == kPtoKind || c.id == kPtoEncoding) {
-                    std::vector<unsigned char> v(n);
-                    impl_->read_at(c.body, n ? &v[0] : NULL, n);
-                    const unsigned char* p = n ? &v[0] : NULL;
-                    if (c.id == kFileUid) object.uid = as_uint(p, n);
-                    else if (c.id == kFileName) object.name = as_string(p, n);
-                    else if (c.id == kPtoKind) object.kind = as_string(p, n);
-                    else object.encoding = as_string(p, n);
-                }
-                at = c.body + static_cast<long>(c.size);
-            }
-            if (h.id == kAttachedFile) objects_.push_back(object);
-        }
-        pos = h.body + static_cast<long>(h.size);
-    }
-
-    if (doctype != "pto") {
-        IMP_THROW("PTO: " << path << " has DocType '" << doctype
-                          << "', not 'pto'", IOException);
-    }
+    doctype_version_ = static_cast<int>(file_.doctype_version());
+    const std::vector<pto::PtoObject> objs = file_.objects();
+    objects_.reserve(objs.size());
+    for (std::size_t i = 0; i < objs.size(); ++i) objects_.push_back(to_object(objs[i]));
 }
 
-PtoReader::~PtoReader() {
-    delete impl_;
-    impl_ = NULL;
-}
+PtoReader::~PtoReader() {}
 
 int PtoReader::find(const std::string& name) const {
     for (std::size_t i = 0; i < objects_.size(); ++i) {
@@ -561,11 +185,7 @@ int PtoReader::find(const std::string& name) const {
 }
 
 std::vector<unsigned char> PtoReader::data(const PtoObject& object) const {
-    std::vector<unsigned char> out(object.size);
-    if (object.size != 0) {
-        impl_->read_at(static_cast<long>(object.offset), &out[0], object.size);
-    }
-    return out;
+    return file_.read(object.uid);
 }
 
 IMPBFF_END_NAMESPACE

@@ -36,14 +36,14 @@ IMPBFF_BEGIN_NAMESPACE
  * unary minus and is right-associative, and division by zero yields
  * infinity rather than throwing.
  *
- * The evaluator itself is **not here**. It is
- * ``tttrlib::data::ExpressionEngine``, and this class is a `Node` wrapper
- * over it. That is not an accident of history: `tttrlib::DataStore` needs
- * the same evaluator to gate burst columns, tttrlib cannot depend on
- * imp.bff, and the placement rule in ``AGENTS.md`` puts photons and curves
- * in tttrlib. One implementation therefore has to live on that side of the
- * layering, and this is the consumer. imp.bff carried its own copy until
- * 2026-08-31; two evaluators of the same language is one too many.
+ * The evaluator itself is **not here**. It is ``pto::ExpressionEngine``
+ * from ptolib (https://github.com/tpeulen/ptolib), vendored verbatim as
+ * ``include/internal/ptolib.h``, and this class is a `Node` wrapper over
+ * it. That is not an accident of history: tttrlib's `DataStore` gates burst
+ * columns with the same evaluator, neither library may depend on the other,
+ * so the one implementation lives in the header both carry. imp.bff had
+ * its own copy until 2026-08-31 and a stale byte-copy of the engine until
+ * 2026-09-08; two evaluators of the same language is one too many.
  *
  * An equation the engine cannot compile is refused as ``std::domain_error``
  * (which bff surfaces to Python as ``ValueError``) so a caller can fall
@@ -213,10 +213,10 @@ class IMPBFFEXPORT Expression : public Node {
   std::string describe() const;
 
  private:
-  //! Holds the tttrlib evaluator, so its header stays in the implementation.
+  //! Holds the ptolib evaluator, so its header stays in the implementation.
   /*! It must stay out of this header for two reasons: SWIG parses this file
       and would try to parse that one too, and every translation unit that
-      includes an IMP header should not acquire tttrlib's. */
+      includes an IMP header should not acquire ptolib's. */
   struct Impl;
 
   std::string expression_;   //!< as the caller wrote it, in Python syntax

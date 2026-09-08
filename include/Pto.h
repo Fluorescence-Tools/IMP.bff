@@ -21,17 +21,19 @@
  *  rotamer libraries as `.drot.pto` here. The domain lives in the file's
  *  profile suffix and in each object's kind, never in the container.
  *
- *  **This is a vendored core, not a dependency.** The rule the convergence
- *  record sets is that each repository writes the small walker from the
- *  specification rather than importing another's: imp.bff does not depend on
- *  tttrlib, and this file exists so that it does not have to start. It was
- *  written from `../tttrlib/okf/specs/pto-binary-decoding.md` (§2 the layout,
- *  §3 the reference C99 decoder); `../chimol/chimol/render/pto.py` is the
- *  same exercise in Python and the size a second implementation should be.
- *  Divergence is held down by a shared conformance corpus:
- *  `../tttrlib/test/tools/pto_ebml_check.cpp` walks a container with
- *  **libebml**, the reference implementation, and that -- never this file's
- *  own reader -- is what a container written here is proved against.
+ *  **The container is ptolib, vendored.** `internal/ptolib.h` is a verbatim
+ *  copy of https://github.com/tpeulen/ptolib -- the one C++ implementation of
+ *  the container (and of the DataStore it embeds) that tttrlib carries too, so
+ *  a file written by either library is the file the other reads. imp.bff does
+ *  not depend on tttrlib and does not start: the header is copied, not
+ *  linked (`utility/sync_ptolib.sh`; `test/test_vendored_headers.py` fails
+ *  when the copy and a sibling checkout disagree). Before 2026-09-07 this file
+ *  carried its own small walker written from the specification; the two
+ *  walkers had drifted (tttrlib could not open a `.drot.pto`), which is what
+ *  the shared header ends. `../tttrlib/test/tools/pto_ebml_check.cpp` moved
+ *  to ptolib as `tools/pto_ebml_check.cpp`; it walks a container with
+ *  **libebml**, the reference implementation, and that -- never ptolib's own
+ *  reader -- is what a container written here is proved against.
  *
  *  What this frames is bytes. What the payloads mean belongs to the profile
  *  and travels in the kind strings, which is the extension point PTO already
@@ -42,8 +44,9 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-// -------- from Pto.h --------
+// -------- the container: ptolib --------
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/internal/ptolib.h>
 
 #include <cstddef>
 #include <string>
@@ -70,20 +73,21 @@ struct IMPBFFEXPORT PtoObject {
 
 //! Write a PTO document: objects in, one file out.
 /*!
-    Objects are appended in the order they are added, each payload padded to
-    the alignment boundary with `Void`. Sizes that close over the whole file
-    (`Segment`, `Attachments`) are written as fixed-octet placeholders and
-    patched at `close()` -- fixed-octet because a Data Size that narrows when
-    its value shrinks shifts every byte after it, which is how a `FileUID`
-    once corrupted a container; the lesson is cheap to keep and expensive to
-    relearn.
+    A thin face over `pto::File` for the writers in this package, which add
+    objects in order and close. The file ptolib writes is the full container:
+    two indexes with generation and CRC-32 (so a reader never sees a torn
+    write), 8-byte aligned payloads, a banner, an Info element, random 64-bit
+    `FileUID`s. It is complete only after `close()`, which the destructor
+    calls; `close()` commits.
 
-    The file is complete only after `close()`, which the destructor calls.
+    Anything beyond append-and-close -- tags, annotations, updating an object
+    in place, reading a table back as a `pto::DataStore` -- is `pto::File`'s
+    own API; use it directly.
 */
 class IMPBFFEXPORT PtoWriter {
 public:
     //! \param[in] path the file to write
-    //! \param[in] doctype_version what the document claims to be
+    //! \param[in] doctype_version accepted for compatibility; ptolib writes 2
     explicit PtoWriter(const std::string& path, int doctype_version = 2);
     ~PtoWriter();
 
@@ -97,30 +101,31 @@ public:
                   const std::string& encoding, const void* data,
                   std::size_t size);
 
-    //! Patch the deferred sizes and close. Idempotent.
+    //! Commit and close. Idempotent.
     void close();
 
     //! The objects written so far.
     const std::vector<PtoObject>& objects() const { return objects_; }
 
+    //! The container itself, for what this face does not cover (tags,
+    //! annotations, embedding a DataStore). Valid until `close()`.
+    pto::File& file() { return file_; }
+
 private:
     PtoWriter(const PtoWriter&);
     PtoWriter& operator=(const PtoWriter&);
 
-    struct Impl;
-    Impl* impl_;
+    pto::File file_;
     std::vector<PtoObject> objects_;
+    bool closed_;
 };
 
 //! Read a PTO document: its objects, and any one payload on demand.
 /*!
-    Opening walks the framing only -- element headers, which are a few bytes
-    each -- and reads no payload. `data()` then seeks to the one object asked
-    for. That is what makes a container holding a hundred libraries cheap to
-    open: pulling one 25 KB library out of a 19 MB file touches 25 KB, not
-    19 MB. Seeking rather than mapping keeps this portable; the offsets in
-    `PtoObject` are absolute, so a mapping reader can be dropped in later
-    without changing a caller.
+    Opening reads the index only, no payload; `data()` then seeks to the one
+    object asked for. A container written by this package before it used
+    ptolib (one index, every object in one `Attachments` element) reads the
+    same as one written after.
 */
 class IMPBFFEXPORT PtoReader {
 public:
@@ -141,15 +146,17 @@ public:
     //! What the document's `DocTypeVersion` says.
     int doctype_version() const { return doctype_version_; }
 
-    //! Does this file begin with an EBML header?
+    //! Is this file a PTO container (an EBML document whose DocType is "pto")?
     static bool looks_like_pto(const std::string& path);
+
+    //! The container itself, read-only, for tags and embedded tables.
+    const pto::File& file() const { return file_; }
 
 private:
     PtoReader(const PtoReader&);
     PtoReader& operator=(const PtoReader&);
 
-    struct Impl;
-    Impl* impl_;
+    pto::File file_;
     std::vector<PtoObject> objects_;
     int doctype_version_;
 };

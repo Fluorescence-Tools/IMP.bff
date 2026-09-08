@@ -1,12 +1,12 @@
 /**
  * \file Expression.cpp
- * \brief A model equation as a node, evaluated by tttrlib's engine.
+ * \brief A model equation as a node, evaluated by ptolib's engine.
  *
  * This file used to be ~1900 lines: a tokeniser, a shunting-yard parser, an
  * RPN compiler with constant folding and common-subexpression elimination, a
  * block-vectorised evaluator with NEON kernels, and a vendored 1.6 MB copy of
  * ExprTk behind it as a fallback. All of that now lives in
- * `tttrlib::data::ExpressionEngine`, and what remains here is the part that is
+ * `pto::ExpressionEngine` (ptolib), and what remains here is the part that is
  * genuinely imp.bff's: presenting it as a `Node` with ports, and the
  * numpy-facing entry points SWIG wraps.
  *
@@ -20,19 +20,12 @@
 
 #include <IMP/bff/Expression.h>
 
-// A byte-identical copy of tttrlib's `modules/core/include/ExpressionEngine.h`.
-//
-// Copied rather than depended on. The engine is header-only and pure
-// arithmetic, so there is nothing to link; taking it from an installed tttrlib
-// would still have made this repository need tttrlib's headers present to
-// build, for a file that has no dependencies of its own. A copy costs one
-// `cp` and buys imp.bff a build that needs nothing outside IMP.
-//
-// The copies must not drift, so that is a test rather than a hope:
-// `test/expression/test_engine_copy_is_identical.py` compares the two byte
-// for byte against the sibling checkout, and fails if they differ. tttrlib
-// owns the original; changes go there and are copied here, never the reverse.
-#include <IMP/bff/internal/ExpressionEngine.h>
+// The engine is ptolib's (https://github.com/tpeulen/ptolib), carried here as
+// the verbatim copy `include/internal/ptolib.h` and compiled once in
+// `src/Pto.cpp`. One implementation serves this node, tttrlib's DataStore
+// gating and every other consumer; `test/test_vendored_headers.py` fails on
+// drift from the sibling checkout. ptolib owns it; changes go there.
+#include <IMP/bff/internal/ptolib.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -43,12 +36,12 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-using tttrlib::data::ExprColumn;
-using tttrlib::data::ExprScalarType;
+using pto::ExprColumn;
+using pto::ExprScalarType;
 
 //! The compiled engine, kept out of the header.
 struct Expression::Impl {
-  tttrlib::data::ExpressionEngine engine;
+  pto::ExpressionEngine engine;
   //! Counts trips to the parser, so a fit that re-parsed per step is visible.
   unsigned int compilations = 0;
 
@@ -115,7 +108,7 @@ void Expression::compile(const std::string& expression) {
   // equation typed wrongly in a GUI should not destroy the fit that was
   // already running. Compiling in place would clear the program and leave
   // every later `compute()` throwing "no compiled program".
-  tttrlib::data::ExpressionEngine probe;
+  pto::ExpressionEngine probe;
   if (!probe.compile(expression)) {
     // Refused, not approximated. There is no second evaluator behind this
     // one, deliberately: the one that used to be there answered
@@ -135,7 +128,7 @@ void Expression::compile(const std::string& expression) {
   // show it climbing; a caller that simply sets a new equation would not.
   impl.compilations = 1;
   expression_ = expression;
-  translated_ = tttrlib::data::ExpressionEngine::normalise(expression);
+  translated_ = pto::ExpressionEngine::normalise(expression);
   variables_ = impl.engine.variables();
 }
 
@@ -148,7 +141,7 @@ bool Expression::is_supported(const std::string& expression) {
   // Never throws: callers use this to decide whether to offer an equation at
   // all, and an exception escaping a predicate is its own bug.
   try {
-    tttrlib::data::ExpressionEngine probe;
+    pto::ExpressionEngine probe;
     return probe.compile(expression);
   } catch (...) {
     return false;
@@ -469,7 +462,7 @@ void Expression::evaluate() {
 std::string Expression::describe() const {
   std::string s = "Expression '" + get_name() + "'\n";
   s += "  equation:  " + expression_ + "\n";
-  s += "  evaluated: tttrlib::data::ExpressionEngine\n";
+  s += "  evaluated: pto::ExpressionEngine\n";
   s += "  variables: ";
   for (std::size_t i = 0; i < variables_.size(); ++i) {
     s += (i ? ", " : "") + variables_[i];

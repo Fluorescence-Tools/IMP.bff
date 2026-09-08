@@ -72,6 +72,33 @@ class Tests(IMP.test.TestCase):
                 "tttrlib is the source -- refresh with "
                 f"`cp ../tttrlib/modules/math/include/{name} include/internal/{name}`")
 
+    def test_ptolib_copy_matches_the_checkout_when_present(self):
+        """include/internal/ptolib.h is ptolib's header, verbatim. A symlink
+        (utility/sync_ptolib.sh --link) is a working-tree convenience and is
+        refused here, since a clone has no checkout to point at.
+
+        The PTO container and the DataStore are written once, in ptolib
+        (https://github.com/tpeulen/ptolib), and carried here and in tttrlib as
+        copies; a container written by one library that the other cannot open
+        is the defect the shared header ends. Refresh with
+        ``utility/sync_ptolib.sh``; never edit the copy.
+        """
+        here = os.path.dirname(os.path.abspath(__file__))
+        repo = os.path.dirname(here)
+        ours = os.path.join(repo, "include", "internal", "ptolib.h")
+        theirs = os.path.join(os.path.dirname(repo), "ptolib", "include", "ptolib", "ptolib.h")
+        self.assertFalse(os.path.islink(ours), "include/internal/ptolib.h must be a copy, not a symlink")
+        self.assertTrue(os.path.exists(ours), ours)
+        with open(ours) as fh:
+            text = fh.read()
+        self.assertIn("PTOLIB_H", text)
+        self.assertIn("PTOLIB_IMPLEMENTATION", text)
+        if not os.path.exists(theirs):
+            self.skipTest("../ptolib checkout not present; cannot compare")
+        self.assertEqual(_sha(ours), _sha(theirs),
+                         "include/internal/ptolib.h differs from ../ptolib; "
+                         "refresh with utility/sync_ptolib.sh")
+
     def test_bff_evaluates_and_differentiates_a_tttrlib_trained_model(self):
         """A network trained by tttrlib runs, and differentiates, here.
 
