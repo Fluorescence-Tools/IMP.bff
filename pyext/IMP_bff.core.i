@@ -912,6 +912,11 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    gets a 2-tuple. The population was a `std::vector<double>&` out-parameter,
    which made a caller construct a wrapped vector of a class this module does
    not own (see the note in `IMP_bff.types.i`). */
+/* A dataset of any rank, with its noise family. Its variance and residuals
+   are managed views for the same reason the solver's are. */
+%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
+%include "IMP/bff/Dataset.h"
+
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_fluorescence, int* n_out_fluorescence)};
 %include "IMP/bff/DiffusionSolver.h"
 /* A dense network, evaluated in batches. The outputs are one managed view --
