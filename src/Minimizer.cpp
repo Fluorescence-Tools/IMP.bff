@@ -21,6 +21,7 @@
 
 #include <IMP/bff/Node.h>
 #include <IMP/bff/Port.h>
+#include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
 #include <cmath>
@@ -818,6 +819,63 @@ void Minimizer::validate() const {
   if (!diag_.empty() && diag_.size() != ndim_)
     throw MinimizerConfigurationError(
         "the scale factors and the parameters differ in number");
+}
+
+void Minimizer::compute_objective_batch(double* in_candidates, int n_rows,
+                                       int n_cols, double** out_view,
+                                       int* n_out_view) {
+  if (!has_objective()) {
+    throw MinimizerConfigurationError(
+        "no objective: call set_objective() or set_residual_function()");
+  }
+  if (ndim_ == 0) {
+    throw MinimizerConfigurationError(
+        "no parameters: call set_parameter_ports() or set_initial_values()");
+  }
+  if (n_cols != static_cast<int>(ndim_)) {
+    std::ostringstream m;
+    m << "compute_objective_batch: the candidates have " << n_cols
+      << " columns and there are " << ndim_
+      << " free parameters; one column per parameter, one row per candidate";
+    throw MinimizerConfigurationError(m.str());
+  }
+  const int rows = std::max(0, n_rows);
+  if (rows == 0 || in_candidates == nullptr) {
+    internal::new_double_view(0, out_view, n_out_view);
+    return;
+  }
+
+  // What the ports hold now, so a surface scan does not move somebody's fit.
+  // Not needed for the residual-function path, which never touches them.
+  std::vector<double> saved;
+  if (!residual_function_) {
+    saved.resize(ndim_);
+    for (unsigned int i = 0; i < ndim_; ++i) saved[i] = parameters_[i]->get_value();
+  }
+
+  double* out = internal::new_double_view(static_cast<std::size_t>(rows),
+                                          out_view, n_out_view);
+  if (out == nullptr) return;
+
+  std::vector<double> xe(ndim_);
+  for (int r = 0; r < rows; ++r) {
+    const double* row = in_candidates + static_cast<std::size_t>(r) * ndim_;
+    for (unsigned int i = 0; i < ndim_; ++i) xe[i] = row[i];
+    // evaluate_external, not evaluate_internal: the bounds transform belongs
+    // to the optimiser's internal coordinates, and a caller scanning a
+    // surface gave the values it means, in the parameters' own units.
+    const std::vector<double>& res = evaluate_external(xe);
+    double chi2 = 0.0;
+    for (double v : res) chi2 += v * v;
+    out[r] = std::isnan(chi2) ? std::numeric_limits<double>::infinity() : chi2;
+  }
+
+  // Put the ports back and leave the graph consistent with them, so the model
+  // curve a caller reads off the graph is the one the ports say it is.
+  if (!residual_function_) {
+    for (unsigned int i = 0; i < ndim_; ++i) parameters_[i]->set_value(saved[i]);
+    objective_node_->update();
+  }
 }
 
 void Minimizer::reset() {

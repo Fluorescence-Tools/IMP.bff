@@ -630,6 +630,10 @@ IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
         self.__dict__['_objective_node_keepalive'] = (
             args[0] if args else kwargs.get('node'))
 %}
+/* The candidates of compute_objective_batch: one row per candidate, one
+   column per free parameter, so a scan hands over its whole grid at once and
+   pays one crossing rather than one per point. */
+%apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* in_candidates, int n_rows, int n_cols)};
 %include "IMP/bff/Minimizer.h"
 
 %extend IMP::bff::Sampler {

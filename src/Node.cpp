@@ -226,7 +226,56 @@ bool Node::is_valid() const {
   return node_valid_;
 }
 
-void Node::set_valid(bool v) { node_valid_ = v; }
+void Node::set_valid(bool v) {
+  node_valid_ = v;
+  // An explicit invalidation is a claim the inputs cannot support: whatever
+  // changed, it is not something a comparison of the input values would
+  // find. Drop the record so the node genuinely re-evaluates.
+  if (!v) memo_valid_ = false;
+}
+
+void Node::set_memoize(bool v) {
+  memoize_ = v;
+  // Switching it off drops the record, and that is not tidiness. While off
+  // the node evaluates without recording, so the record describes inputs the
+  // outputs no longer correspond to; switching back on and happening to write
+  // those inputs again would hit, and keep outputs computed from different
+  // ones. Cheaper to forget than to reason about.
+  if (!v) memo_valid_ = false;
+}
+
+bool Node::memo_matches() const {
+  if (!memo_valid_) return false;
+  // The inputs, in `in_`'s order, which is a std::map's and therefore stable
+  // across calls; each port contributes its length and then its slots, so a
+  // port that changed shape is a miss rather than a coincidence.
+  std::size_t at = 0;
+  for (const auto& kv : in_) {
+    const std::vector<double>& v = kv.second->get_values_ref();
+    if (at >= memo_inputs_.size()) return false;
+    if (memo_inputs_[at++] != static_cast<double>(v.size())) return false;
+    if (at + v.size() > memo_inputs_.size()) return false;
+    // Bitwise, via the raw slots: an integer-typed port keeps its exact value
+    // in this buffer, and a NaN input must count as *changed* rather than
+    // matching itself, which is what `!=` gives -- a node fed a NaN evaluates
+    // every time, which is the safe direction.
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (memo_inputs_[at + i] != v[i]) return false;
+    }
+    at += v.size();
+  }
+  return at == memo_inputs_.size();
+}
+
+void Node::memo_record() {
+  memo_inputs_.clear();
+  for (const auto& kv : in_) {
+    const std::vector<double>& v = kv.second->get_values_ref();
+    memo_inputs_.push_back(static_cast<double>(v.size()));
+    memo_inputs_.insert(memo_inputs_.end(), v.begin(), v.end());
+  }
+  memo_valid_ = true;
+}
 
 void Node::evaluate() {
   // chinet: a node with neither a callback object nor an operator does
@@ -356,6 +405,14 @@ void Node::update() {
   // and re-deriving it would walk the whole upstream graph a second time
   // for every node in it.
   if (!node_valid_) {
+    // Nothing upstream actually moved: keep the outputs and skip the work.
+    // Only reachable through a port write, because every other invalidation
+    // clears the record (Node::set_valid).
+    if (memoize_ && memo_matches()) {
+      ++memo_hits_;
+      node_valid_ = true;
+      return;
+    }
     const unsigned long long before = write_epoch_;
     note_evaluation();
     evaluate();
@@ -377,6 +434,7 @@ void Node::update() {
       }
       node_valid_ = true;
     }
+    if (memoize_) memo_record();
   }
 }
 

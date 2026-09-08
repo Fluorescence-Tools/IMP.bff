@@ -728,8 +728,10 @@ void Port::touch_attached_node_structure() {
 
 void Port::update_attached_node() {
   if (std::shared_ptr<Node> n = node_.lock()) {
-    n->set_valid(false);
-    n->note_port_write();
+    // Not set_valid(false): a port write is the change a memoising node
+    // filters by comparing its inputs, so it must not clear the record that
+    // makes the comparison possible. See Node::invalidate_from_port.
+    n->invalidate_from_port();
     if (is_reactive_ && !is_output_) {
       n->note_evaluation();
       n->evaluate();

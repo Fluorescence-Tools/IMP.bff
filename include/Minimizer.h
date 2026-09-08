@@ -263,6 +263,40 @@ class IMPBFFEXPORT Minimizer {
   //! Reset the results, keeping the configuration.
   void reset();
 
+  //! Score many candidate parameter vectors in one crossing of the boundary.
+  /*!
+      \param[in] in_candidates the candidates, row-major `n_rows x n_cols`
+      \param[in] n_rows how many candidates
+      \param[in] n_cols must equal the number of free parameters
+      \param[out] out_view `n_rows` objective values, allocated here
+      \param[out] n_out_view how many, i.e. \p n_rows
+
+      The objective is the sum of the squared residuals -- the same number
+      `get_chi2()` reports -- and a NaN becomes `+inf`, so a sampler rejects
+      the candidate rather than propagating the NaN into a posterior. That is
+      `ChiSquared`'s convention and `JointChiSquared`'s.
+
+      **Why this exists.** A chi-square surface, a support-plane interval, a
+      population sampler and a random restart all ask the same question of a
+      few hundred to a few million points, and asked one at a time each point
+      pays a boundary crossing for arithmetic that is often shorter than the
+      crossing. This walks the candidates in C++ and hands back one array.
+      The graph is evaluated exactly as `run()` evaluates it, so the numbers
+      are the optimiser's own, not a second implementation of them.
+
+      **Not parallel, and it cannot be.** The candidates are independent but
+      the graph is not: they are scored by writing the shared parameter ports,
+      so two threads would race over one set of ports. Parallelism here needs
+      a graph per thread, which is a different feature (a `Node` deep copy)
+      and not this one.
+
+      The parameter ports are restored to what they held on entry, and the
+      graph is left evaluated at those values -- scoring a surface must not
+      quietly move the fit somebody is holding.
+   */
+  void compute_objective_batch(double* in_candidates, int n_rows, int n_cols,
+                               double** out_view, int* n_out_view);
+
   // --------------------------------------------------------------- results
 
   //! The solution, in external (bounded) coordinates.
