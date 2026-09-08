@@ -5,7 +5,7 @@
  *        encoding, in one header.
  * \author Thomas-Otavio Peulen
  * \copyright MIT License, Thomas-Otavio Peulen
- * \version 0.3.0
+ * \version 0.3.1
  *
  * PTO is a self-contained, packed data container: an EBML document (DocType
  * `"pto"`) that binds opaque payloads into one file, gives each a UID that
@@ -32,8 +32,8 @@
 
 #define PTOLIB_VERSION_MAJOR 0
 #define PTOLIB_VERSION_MINOR 3
-#define PTOLIB_VERSION_PATCH 0
-#define PTOLIB_VERSION_STRING "0.3.0"
+#define PTOLIB_VERSION_PATCH 1
+#define PTOLIB_VERSION_STRING "0.3.1"
 
 #ifndef PTOLIB_API
 #define PTOLIB_API
@@ -4525,7 +4525,10 @@ void check_exactly_representable(const pto::Column& c,
             }
         }
     } else if (c.type() == pto::ColumnType::UInt64) {
-        const std::uint64_t* v = c.u64_ptr();
+        // The accessor's own type: `std::uint64_t` is `unsigned long` on Linux
+        // and `unsigned long long` on macOS, so naming it here would compile on
+        // one and not the other.
+        const unsigned long long* v = c.u64_ptr();
         for (std::size_t i = 0; i < n; ++i) {
             if (static_cast<double>(v[i]) > limit) {
                 throw std::invalid_argument(
@@ -5226,10 +5229,12 @@ inline void fun_libm(int f, T* __restrict a, std::size_t n) {
         case F_LOG2: for (std::size_t i = 0; i < n; ++i) a[i] = std::log2(a[i]); break;
         case F_EXPM1: for (std::size_t i = 0; i < n; ++i) a[i] = std::expm1(a[i]); break;
         case F_LOG1P: for (std::size_t i = 0; i < n; ++i) a[i] = std::log1p(a[i]); break;
-        case F_DEG2RAD: for (std::size_t i = 0; i < n; ++i)
-            a[i] = a[i] * T(3.14159265358979323846 / 180.0); break;
-        case F_RAD2DEG: for (std::size_t i = 0; i < n; ++i)
-            a[i] = a[i] * T(180.0 / 3.14159265358979323846); break;
+        case F_DEG2RAD:
+            for (std::size_t i = 0; i < n; ++i) a[i] = a[i] * T(3.14159265358979323846 / 180.0);
+            break;
+        case F_RAD2DEG:
+            for (std::size_t i = 0; i < n; ++i) a[i] = a[i] * T(180.0 / 3.14159265358979323846);
+            break;
         case F_ERF: for (std::size_t i = 0; i < n; ++i) a[i] = std::erf(a[i]); break;
         case F_ERFC: for (std::size_t i = 0; i < n; ++i) a[i] = std::erfc(a[i]); break;
         case F_FRAC: for (std::size_t i = 0; i < n; ++i) a[i] = a[i] - std::trunc(a[i]); break;
@@ -5246,10 +5251,12 @@ inline void apply_fun2(int f, T* __restrict a, const T* __restrict b, std::size_
         case F_MIN2: for (std::size_t i = 0; i < n; ++i) a[i] = numpy_min(a[i], b[i]); break;
         case F_ATAN2: for (std::size_t i = 0; i < n; ++i) a[i] = std::atan2(a[i], b[i]); break;
         case F_HYPOT: for (std::size_t i = 0; i < n; ++i) a[i] = std::hypot(a[i], b[i]); break;
-        case F_ROOT: for (std::size_t i = 0; i < n; ++i)
-            a[i] = std::pow(a[i], T(1) / b[i]); break;
-        case F_LOGN: for (std::size_t i = 0; i < n; ++i)
-            a[i] = std::log(a[i]) / std::log(b[i]); break;
+        case F_ROOT:
+            for (std::size_t i = 0; i < n; ++i) a[i] = std::pow(a[i], T(1) / b[i]);
+            break;
+        case F_LOGN:
+            for (std::size_t i = 0; i < n; ++i) a[i] = std::log(a[i]) / std::log(b[i]);
+            break;
         default: for (std::size_t i = 0; i < n; ++i) a[i] = numpy_max(a[i], b[i]);
     }
 }
@@ -8367,6 +8374,15 @@ const std::uint32_t kLockOffsetLo = 0;
 const std::uint32_t kLockOffsetHi = 0x7FFFFFFF;
 #endif
 
+}  // namespace   (the anonymous one; reopened just below)
+
+// FileHandle lives in `detail`, not in the anonymous namespace, because
+// File::Impl keeps one as a member. A member whose type has internal
+// linkage gives the enclosing class a different type in every translation
+// unit -- GCC says so as -Wsubobject-linkage -- which is exactly the kind
+// of quiet one-definition-rule breach a header must not carry, however
+// few translation units compile the implementation today.
+namespace detail {
 class FileHandle {
 public:
     /// What \ref open_exclusive did about the lock.
@@ -8526,6 +8542,10 @@ private:
     std::FILE* f_ = nullptr;
     bool locked_ = false;
 };
+}  // namespace detail
+
+namespace {
+using detail::FileHandle;
 
 /*!
  * \brief A fresh object identity: 53 random bits in a 64-bit element, never zero.
