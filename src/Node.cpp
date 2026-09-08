@@ -343,40 +343,21 @@ void Node::update() {
         source_node->update();
       }
     }
-    // p.value = source.value, without counting as a write: this is the
-    // node's own bookkeeping and treating it as an external change made every
-    // node re-evaluate on every pass. `copy_from_link` also avoids
-    // `get_value_vector`, which would copy once more -- a joint objective has
-    // one full residual vector per member coming through here on every
-    // iteration of a fit.
-    p->copy_from_link(*source_port);
+    // p.value = source.value: the write follows the source's shape.
+    if (!source_port->get_is_vector() && source_port->current_size() == 1) {
+      p->set_value(source_port->get_value());
+    } else {
+      // `get_values_ref`, not `get_value_vector`: this runs once per linked
+      // input per update, and a joint objective has one full residual vector
+      // per member coming through it on every iteration of a fit.
+      p->set_value_vector(source_port->get_values_ref());
+    }
   }
   // node_valid_, not is_valid(): the loop above has just brought every
   // linked input's source node up to date, so inputs_valid() is known true
   // and re-deriving it would walk the whole upstream graph a second time
   // for every node in it.
-  if (!node_valid_) {
-    const unsigned long long before = write_epoch_;
-    evaluate();
-    // evaluate() claims the node itself when it is the one below. An
-    // *override* -- a C++ subclass, or a Python one through the SWIG director
-    // -- replaces that method wholesale and cannot be expected to, so a
-    // director node was never valid and update() re-ran it every time,
-    // however little had changed. Claim it here on their behalf, and do the
-    // follower invalidation they also miss.
-    //
-    // The test is "did anything come out", not "was there a callback": a node
-    // with nothing to do writes nothing and stays invalid, which is what
-    // chinet does and what this class documents.
-    if (!node_valid_ && write_epoch_ != before) {
-      for (Port* out : plan_.outputs) {
-        if (const std::shared_ptr<Node> n = out->get_node()) {
-          if (n.get() != this) n->set_valid(false);
-        }
-      }
-      node_valid_ = true;
-    }
-  }
+  if (!node_valid_) evaluate();
 }
 
 std::string Node::describe() const {

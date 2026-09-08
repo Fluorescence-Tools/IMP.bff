@@ -58,7 +58,7 @@ numbers**. This is the payload for "a variable needs a size and a role".
 
 | role | count | numbers | the variables |
 |---|---|---|---|
-| `distribution` | 1 | **24** | `c`, the spline coefficients of p(R_DA) on a sum-to-zero basis |
+| `distribution` | 1 | **24** | `c`: 25 spline coefficients constrained to sum to zero, so 24 free numbers. The size bff needs is the FREE one, 24; the basis (Helmert contrasts) is the consumer's transform and bff need not know it |
 | `physics` | 7 | 51 | `spec_eps` (33, the donor lifetime spectrum), `w_rho` (8) and `w_rho_a` (4) and `w_a` (3) (rotational and acceptor-lifetime weights, on simplices), `x_d0`, `r0_d`, `r0_a` |
 | `calibration` | 12 | 12 | `g`, `l1`, `l2`, four crosstalk constants, two detection efficiencies, two quantum yields, one excitation crosstalk |
 | `instrument` | 25 | 25 | per detector: response shift, width, skew (6); per sample: a log scale (3); **per histogram: scatter and background (16)** |
@@ -78,30 +78,54 @@ The interleaved configuration adds two calibration constants and one more
 response set, and grows the per-histogram nuisances to 24: 121 numbers over
 12 histograms.
 
+**Machine-readable**: `../ucfret/investigation/pinn_pR_anisotropy/s88_scratch/graph_spec_ensemble.json`
+and `graph_spec_pie_full.json` -- every variable with its key, size, role,
+transform and prior family, and every factor with its kind and measured scope.
+Regenerate with `emit_graph_spec.py`. The interleaved model is 86 variables
+holding 153 numbers over 12 histograms.
+
 ## 4. The factors -- what reads what
 
-**Likelihood, one per histogram** (8 or 12 of them). Its scope is: `c`, every
-physics variable, every calibration constant, the response of its own
-detector (3), its sample's scale (1), and its own scatter and background (2).
-That is: **everything global, plus three or four local variables**. The
-histograms therefore share a large separator -- this is a star, not a chain,
-and its treewidth is essentially the number of global numbers.
+**Likelihood, one per histogram** (8 or 12 of them). Its scope is NOT the
+same for every histogram, and the difference is the physics rather than an
+implementation detail. **The scopes below were measured, not declared**: every
+variable was perturbed and every histogram's expected counts recomputed
+(`../ucfret/investigation/pinn_pR_anisotropy/s88_scratch/emit_graph_spec.py`,
+whose JSON output is the machine-readable version of this section). An earlier
+draft of this file said "every likelihood reads everything global"; that is
+wrong, and the measurement is why this paragraph exists.
 
-**Prior, one per variable** (46 of them), scope one variable. Families:
-Gaussian, log-normal, uniform, logistic-normal on a simplex. Six transforms
-carry the constraint: identity, log, logit, additive log-ratio, sum-to-zero
-(Helmert contrasts), and a stick-breaking-like map for the spline.
+| histogram | variables in its scope | numbers | reads the distance distribution? |
+|---|---|---|---|
+| donor-only, green parallel | 13 | 52 | **no** |
+| donor-only, green perpendicular | 14 | 53 | no |
+| labelled, green parallel | 21 | 88 | **yes** |
+| labelled, red perpendicular | 21 | 88 | yes |
+| acceptor-only, red parallel | 12 | 21 | no |
 
-**Hyper, one factor** and the reason PRD-139 needs a third kind: the roughness
-prior couples **all 24 distribution coefficients AND the weight `log10_lam`**
-in one factor, of the form
+In the ensemble configuration all 8 histograms have DIFFERENT scopes (8
+distinct patterns), and in the interleaved one all 12 do. **No variable is in
+every scope.** The structure is:
 
-    log p(c | lambda) = (rank/2) log lambda - (lambda/2) ||D c||^2 - (a weak prior on the null space)
+- the **distance distribution `c` (24 numbers) is read by the four labelled-sample
+  histograms only** -- the donor-only and acceptor-only samples have nothing to
+  say about it directly, which is exactly why they are measured: they pin the
+  nuisances that would otherwise be confounded with it;
+- the donor's spectrum, its rotational weights and `r0_d` are read by the
+  donor-only and labelled histograms, not by the acceptor-only ones;
+- the acceptor's variables (`w_a`, `w_rho_a`, `r0_a`, `QY_A`, `EX_AG`, the red
+  crosstalks) are read by the labelled and acceptor-only histograms;
+- each histogram reads its own detector's three response numbers, its sample's
+  scale, and its own scatter and background -- and, under interleaved
+  excitation, the scatter and background of BOTH its pulses (its partner
+  channel's nodes), which is why an interleaved histogram has four local
+  nuisances rather than two;
+- `g` appears only in perpendicular channels, `l1` only in parallel ones,
+  `l2` only in perpendicular ones.
 
-with `D` the second (or third) difference operator on the coefficients. It is
-not a prior on one variable, and declaring it as one loses exactly the
-coupling that makes the analysis work: the whole method is the treatment of
-`lambda` as a hyperparameter to be integrated over rather than optimised.
+So this is not a complete graph and not a simple star: it is three overlapping
+groups sharing subsets of a global block, and that is precisely the
+factorisation worth having bff analyse.
 
 **What is NOT a factor**: the physics between the parameters and the expected
 counts (transfer maps, spectra, anisotropy, crosstalk, convolution with the
