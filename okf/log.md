@@ -10952,3 +10952,15 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   `IMP::algebra::VectorD`, so no translation unit holds both (measured) -- anything linking IMP is the IMP-mode
   build, which is `imp.bff`. The core conda package (`bff`) builds and passes its recipe tests on this machine
   with the data fetched at build time; `build_core.bat` gives it Windows, so CI runs it on all three platforms.
+- **PRD-137, where dye simulation stops without IMP** (imp-bff-ce, owner ruling 2026-09-08): the core covers
+  rotamer-library dyes, grid diffusion, RRT linker sampling, probe force fields and FASPR packing; attaching a
+  dye onto a hierarchy and Langevin dynamics on it stay IMP-only. Linking IMP into the core was considered and
+  is possible but does not remove the shims: no translation unit can hold both the shim tree and IMP's headers
+  (they redefine `IMP::Exception`, `IMP::Object`, `IMP::Pointer`, `IMP::algebra::VectorD` -- measured), while
+  the same sources built against real IMP with no shims do compile (83 of 84 in a hand-rolled IMP-mode build;
+  the one failure is a logging-macro flag). So IMP-as-a-library is a second configuration of these sources, and
+  the shims stay because they are what lets the core build with no IMP present at all (the pip package). PRD-139
+  carries the follow-up question: whether the IMP-mode build should leave IMP's in-tree tooling for this
+  project's own CMake (`find_package(IMP)`), which would retire the flat-header rule, `src/imp/Headers.cmake`,
+  the `src/ImpLayer.cpp` bridge and `dependencies.py`. The core conda package (`bff`) builds and passes its recipe tests on this machine
+  with the data fetched at build time; `build_core.bat` gives it Windows, so CI runs it on all three platforms.
