@@ -1,0 +1,1239 @@
+{
+ "model": "ensemble",
+ "unconstrained_dim": 113,
+ "n_variables": 46,
+ "n_histograms": 8,
+ "bins_per_histogram": 130,
+ "variables": [
+  {
+   "key": "log10_lam",
+   "name": "log10_lam",
+   "size": 1,
+   "role": "hyper",
+   "transform": "logit",
+   "prior": "uniform",
+   "constrained_size": 1,
+   "offset": [
+    0,
+    1
+   ]
+  },
+  {
+   "key": "c",
+   "name": "c",
+   "size": 24,
+   "role": "distribution",
+   "transform": "sum_to_zero",
+   "prior": null,
+   "constrained_size": 24,
+   "offset": [
+    1,
+    25
+   ]
+  },
+  {
+   "key": "x_d0",
+   "name": "x_d0",
+   "size": 1,
+   "role": "physics",
+   "transform": "logit",
+   "prior": "uniform",
+   "constrained_size": 1,
+   "offset": [
+    25,
+    26
+   ]
+  },
+  {
+   "key": "spec_eps",
+   "name": "spec_eps",
+   "size": 33,
+   "role": "physics",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 33,
+   "offset": [
+    26,
+    59
+   ]
+  },
+  {
+   "key": "w_a",
+   "name": "w_a",
+   "size": 3,
+   "role": "physics",
+   "transform": "alr",
+   "prior": "logistic_normal",
+   "constrained_size": 3,
+   "offset": [
+    59,
+    62
+   ]
+  },
+  {
+   "key": "w_rho",
+   "name": "w_rho",
+   "size": 8,
+   "role": "physics",
+   "transform": "alr",
+   "prior": "logistic_normal",
+   "constrained_size": 8,
+   "offset": [
+    62,
+    70
+   ]
+  },
+  {
+   "key": "w_rho_a",
+   "name": "w_rho_a",
+   "size": 4,
+   "role": "physics",
+   "transform": "alr",
+   "prior": "logistic_normal",
+   "constrained_size": 4,
+   "offset": [
+    70,
+    74
+   ]
+  },
+  {
+   "key": "r0_d",
+   "name": "r0_d",
+   "size": 1,
+   "role": "physics",
+   "transform": "logit",
+   "prior": "uniform",
+   "constrained_size": 1,
+   "offset": [
+    74,
+    75
+   ]
+  },
+  {
+   "key": "r0_a",
+   "name": "r0_a",
+   "size": 1,
+   "role": "physics",
+   "transform": "logit",
+   "prior": "uniform",
+   "constrained_size": 1,
+   "offset": [
+    75,
+    76
+   ]
+  },
+  {
+   "key": "g",
+   "name": "g",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    76,
+    77
+   ]
+  },
+  {
+   "key": "l1",
+   "name": "l1",
+   "size": 1,
+   "role": "calibration",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    77,
+    78
+   ]
+  },
+  {
+   "key": "l2",
+   "name": "l2",
+   "size": 1,
+   "role": "calibration",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    78,
+    79
+   ]
+  },
+  {
+   "key": "C_GD",
+   "name": "C_GD",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    79,
+    80
+   ]
+  },
+  {
+   "key": "C_GA",
+   "name": "C_GA",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    80,
+    81
+   ]
+  },
+  {
+   "key": "C_RD",
+   "name": "C_RD",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    81,
+    82
+   ]
+  },
+  {
+   "key": "C_RA",
+   "name": "C_RA",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    82,
+    83
+   ]
+  },
+  {
+   "key": "G_GREEN",
+   "name": "G_GREEN",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    83,
+    84
+   ]
+  },
+  {
+   "key": "G_RED",
+   "name": "G_RED",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    84,
+    85
+   ]
+  },
+  {
+   "key": "QY_D",
+   "name": "QY_D",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    85,
+    86
+   ]
+  },
+  {
+   "key": "QY_A",
+   "name": "QY_A",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    86,
+    87
+   ]
+  },
+  {
+   "key": "EX_AG",
+   "name": "EX_AG",
+   "size": 1,
+   "role": "calibration",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    87,
+    88
+   ]
+  },
+  {
+   "key": "irf_shift_g",
+   "name": "irf_shift_g",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    88,
+    89
+   ]
+  },
+  {
+   "key": "irf_width_g",
+   "name": "irf_width_g",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    89,
+    90
+   ]
+  },
+  {
+   "key": "irf_skew_g",
+   "name": "irf_skew_g",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    90,
+    91
+   ]
+  },
+  {
+   "key": "irf_shift_r",
+   "name": "irf_shift_r",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    91,
+    92
+   ]
+  },
+  {
+   "key": "irf_width_r",
+   "name": "irf_width_r",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    92,
+    93
+   ]
+  },
+  {
+   "key": "irf_skew_r",
+   "name": "irf_skew_r",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    93,
+    94
+   ]
+  },
+  {
+   "key": "log_scale_D0",
+   "name": "log_scale_D0",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    94,
+    95
+   ]
+  },
+  {
+   "key": "log_scale_DA",
+   "name": "log_scale_DA",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    95,
+    96
+   ]
+  },
+  {
+   "key": "log_scale_A0",
+   "name": "log_scale_A0",
+   "size": 1,
+   "role": "instrument",
+   "transform": "identity",
+   "prior": "gaussian",
+   "constrained_size": 1,
+   "offset": [
+    96,
+    97
+   ]
+  },
+  {
+   "key": "scat_D0_g_vv",
+   "name": "scat_D0_g_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    97,
+    98
+   ]
+  },
+  {
+   "key": "bkg_D0_g_vv",
+   "name": "bkg_D0_g_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    98,
+    99
+   ]
+  },
+  {
+   "key": "scat_D0_g_vh",
+   "name": "scat_D0_g_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    99,
+    100
+   ]
+  },
+  {
+   "key": "bkg_D0_g_vh",
+   "name": "bkg_D0_g_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    100,
+    101
+   ]
+  },
+  {
+   "key": "scat_DA_g_vv",
+   "name": "scat_DA_g_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    101,
+    102
+   ]
+  },
+  {
+   "key": "bkg_DA_g_vv",
+   "name": "bkg_DA_g_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    102,
+    103
+   ]
+  },
+  {
+   "key": "scat_DA_g_vh",
+   "name": "scat_DA_g_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    103,
+    104
+   ]
+  },
+  {
+   "key": "bkg_DA_g_vh",
+   "name": "bkg_DA_g_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    104,
+    105
+   ]
+  },
+  {
+   "key": "scat_DA_r_vv",
+   "name": "scat_DA_r_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    105,
+    106
+   ]
+  },
+  {
+   "key": "bkg_DA_r_vv",
+   "name": "bkg_DA_r_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    106,
+    107
+   ]
+  },
+  {
+   "key": "scat_DA_r_vh",
+   "name": "scat_DA_r_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    107,
+    108
+   ]
+  },
+  {
+   "key": "bkg_DA_r_vh",
+   "name": "bkg_DA_r_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    108,
+    109
+   ]
+  },
+  {
+   "key": "scat_A0_r_vv",
+   "name": "scat_A0_r_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    109,
+    110
+   ]
+  },
+  {
+   "key": "bkg_A0_r_vv",
+   "name": "bkg_A0_r_vv",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    110,
+    111
+   ]
+  },
+  {
+   "key": "scat_A0_r_vh",
+   "name": "scat_A0_r_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    111,
+    112
+   ]
+  },
+  {
+   "key": "bkg_A0_r_vh",
+   "name": "bkg_A0_r_vh",
+   "size": 1,
+   "role": "instrument",
+   "transform": "log",
+   "prior": "lognormal",
+   "constrained_size": 1,
+   "offset": [
+    112,
+    113
+   ]
+  }
+ ],
+ "factors": [
+  {
+   "key": "L:D0_g_vv",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "spec_eps",
+    "w_rho",
+    "r0_d",
+    "l1",
+    "C_GD",
+    "G_GREEN",
+    "QY_D",
+    "irf_shift_g",
+    "irf_width_g",
+    "irf_skew_g",
+    "log_scale_D0",
+    "scat_D0_g_vv",
+    "bkg_D0_g_vv"
+   ],
+   "fit_index": 0,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:D0_g_vh",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "spec_eps",
+    "w_rho",
+    "r0_d",
+    "g",
+    "l2",
+    "C_GD",
+    "G_GREEN",
+    "QY_D",
+    "irf_shift_g",
+    "irf_width_g",
+    "irf_skew_g",
+    "log_scale_D0",
+    "scat_D0_g_vh",
+    "bkg_D0_g_vh"
+   ],
+   "fit_index": 1,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:DA_g_vv",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "c",
+    "x_d0",
+    "spec_eps",
+    "w_a",
+    "w_rho",
+    "w_rho_a",
+    "r0_d",
+    "r0_a",
+    "l1",
+    "C_GD",
+    "C_GA",
+    "G_GREEN",
+    "QY_D",
+    "QY_A",
+    "EX_AG",
+    "irf_shift_g",
+    "irf_width_g",
+    "irf_skew_g",
+    "log_scale_DA",
+    "scat_DA_g_vv",
+    "bkg_DA_g_vv"
+   ],
+   "fit_index": 2,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:DA_g_vh",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "c",
+    "x_d0",
+    "spec_eps",
+    "w_a",
+    "w_rho",
+    "w_rho_a",
+    "r0_d",
+    "r0_a",
+    "g",
+    "l2",
+    "C_GD",
+    "C_GA",
+    "G_GREEN",
+    "QY_D",
+    "QY_A",
+    "EX_AG",
+    "irf_shift_g",
+    "irf_width_g",
+    "irf_skew_g",
+    "log_scale_DA",
+    "scat_DA_g_vh",
+    "bkg_DA_g_vh"
+   ],
+   "fit_index": 3,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:DA_r_vv",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "c",
+    "x_d0",
+    "spec_eps",
+    "w_a",
+    "w_rho",
+    "w_rho_a",
+    "r0_d",
+    "r0_a",
+    "l1",
+    "C_RD",
+    "C_RA",
+    "G_RED",
+    "QY_D",
+    "QY_A",
+    "EX_AG",
+    "irf_shift_r",
+    "irf_width_r",
+    "irf_skew_r",
+    "log_scale_DA",
+    "scat_DA_r_vv",
+    "bkg_DA_r_vv"
+   ],
+   "fit_index": 4,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:DA_r_vh",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "c",
+    "x_d0",
+    "spec_eps",
+    "w_a",
+    "w_rho",
+    "w_rho_a",
+    "r0_d",
+    "r0_a",
+    "g",
+    "l2",
+    "C_RD",
+    "C_RA",
+    "G_RED",
+    "QY_D",
+    "QY_A",
+    "EX_AG",
+    "irf_shift_r",
+    "irf_width_r",
+    "irf_skew_r",
+    "log_scale_DA",
+    "scat_DA_r_vh",
+    "bkg_DA_r_vh"
+   ],
+   "fit_index": 5,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:A0_r_vv",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "w_a",
+    "w_rho_a",
+    "r0_a",
+    "l1",
+    "C_RA",
+    "G_RED",
+    "QY_A",
+    "irf_shift_r",
+    "irf_width_r",
+    "irf_skew_r",
+    "log_scale_A0",
+    "scat_A0_r_vv",
+    "bkg_A0_r_vv"
+   ],
+   "fit_index": 6,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "L:A0_r_vh",
+   "kind": "LIKELIHOOD",
+   "scope": [
+    "w_a",
+    "w_rho_a",
+    "r0_a",
+    "g",
+    "l2",
+    "C_RA",
+    "G_RED",
+    "QY_A",
+    "irf_shift_r",
+    "irf_width_r",
+    "irf_skew_r",
+    "log_scale_A0",
+    "scat_A0_r_vh",
+    "bkg_A0_r_vh"
+   ],
+   "fit_index": 7,
+   "size": 130,
+   "note": "one histogram"
+  },
+  {
+   "key": "pi:log10_lam",
+   "kind": "PRIOR",
+   "scope": [
+    "log10_lam"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:x_d0",
+   "kind": "PRIOR",
+   "scope": [
+    "x_d0"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:spec_eps",
+   "kind": "PRIOR",
+   "scope": [
+    "spec_eps"
+   ],
+   "fit_index": -1,
+   "size": 33
+  },
+  {
+   "key": "pi:w_a",
+   "kind": "PRIOR",
+   "scope": [
+    "w_a"
+   ],
+   "fit_index": -1,
+   "size": 3
+  },
+  {
+   "key": "pi:w_rho",
+   "kind": "PRIOR",
+   "scope": [
+    "w_rho"
+   ],
+   "fit_index": -1,
+   "size": 8
+  },
+  {
+   "key": "pi:w_rho_a",
+   "kind": "PRIOR",
+   "scope": [
+    "w_rho_a"
+   ],
+   "fit_index": -1,
+   "size": 4
+  },
+  {
+   "key": "pi:r0_d",
+   "kind": "PRIOR",
+   "scope": [
+    "r0_d"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:r0_a",
+   "kind": "PRIOR",
+   "scope": [
+    "r0_a"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:g",
+   "kind": "PRIOR",
+   "scope": [
+    "g"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:l1",
+   "kind": "PRIOR",
+   "scope": [
+    "l1"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:l2",
+   "kind": "PRIOR",
+   "scope": [
+    "l2"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:C_GD",
+   "kind": "PRIOR",
+   "scope": [
+    "C_GD"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:C_GA",
+   "kind": "PRIOR",
+   "scope": [
+    "C_GA"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:C_RD",
+   "kind": "PRIOR",
+   "scope": [
+    "C_RD"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:C_RA",
+   "kind": "PRIOR",
+   "scope": [
+    "C_RA"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:G_GREEN",
+   "kind": "PRIOR",
+   "scope": [
+    "G_GREEN"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:G_RED",
+   "kind": "PRIOR",
+   "scope": [
+    "G_RED"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:QY_D",
+   "kind": "PRIOR",
+   "scope": [
+    "QY_D"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:QY_A",
+   "kind": "PRIOR",
+   "scope": [
+    "QY_A"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:EX_AG",
+   "kind": "PRIOR",
+   "scope": [
+    "EX_AG"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_shift_g",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_shift_g"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_width_g",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_width_g"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_skew_g",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_skew_g"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_shift_r",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_shift_r"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_width_r",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_width_r"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:irf_skew_r",
+   "kind": "PRIOR",
+   "scope": [
+    "irf_skew_r"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:log_scale_D0",
+   "kind": "PRIOR",
+   "scope": [
+    "log_scale_D0"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:log_scale_DA",
+   "kind": "PRIOR",
+   "scope": [
+    "log_scale_DA"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:log_scale_A0",
+   "kind": "PRIOR",
+   "scope": [
+    "log_scale_A0"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_D0_g_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_D0_g_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_D0_g_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_D0_g_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_D0_g_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_D0_g_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_D0_g_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_D0_g_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_DA_g_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_DA_g_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_DA_g_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_DA_g_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_DA_g_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_DA_g_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_DA_g_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_DA_g_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_DA_r_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_DA_r_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_DA_r_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_DA_r_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_DA_r_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_DA_r_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_DA_r_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_DA_r_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_A0_r_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_A0_r_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_A0_r_vv",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_A0_r_vv"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:scat_A0_r_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "scat_A0_r_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "pi:bkg_A0_r_vh",
+   "kind": "PRIOR",
+   "scope": [
+    "bkg_A0_r_vh"
+   ],
+   "fit_index": -1,
+   "size": 1
+  },
+  {
+   "key": "rough:c",
+   "kind": "HYPER",
+   "scope": [
+    "c",
+    "log10_lam"
+   ],
+   "fit_index": -1,
+   "size": 24,
+   "note": "the roughness prior: (rank/2) log lambda - (lambda/2) ||D c||^2, difference order 2, rank 23"
+  }
+ ],
+ "scopes_measured_by": "perturbing each variable and recomputing the expected counts (tolerance 1e-9 relative)",
+ "source": "ucfret/investigation/pinn_pR_anisotropy/s88_laplace_posterior.py"
+}

@@ -56,7 +56,18 @@ IMPBFF_BEGIN_NAMESPACE
 //! What a factor is: a dataset likelihood or a per-variable prior.
 enum FactorKind {
   PRIOR = 0,
-  LIKELIHOOD = 1
+  LIKELIHOOD = 1,
+  //! A factor over a hyperparameter and the variables it governs.
+  /*!
+      Not a prior on one constant: a roughness penalty couples every
+      coefficient of the curve it smooths *and* the weight that scales it, and
+      integrating that weight out rather than optimising it is what makes such
+      an analysis work. Declared as a PRIOR it is indistinguishable from a
+      Gaussian on a scalar, and the elimination order that follows is not the
+      one the analysis uses. Scope semantics are the others': it couples
+      everything it names.
+  */
+  HYPER = 2
 };
 
 //! One edge of a junction (clique) tree, joining two maximal cliques.
@@ -110,9 +121,19 @@ class IMPBFFEXPORT FactorGraph {
       \param[in] index position in the model's flat free-parameter vector
       \param[in] fit_index local fit the parameter belongs to, or -1 for a
                            global parameter
+      \param[in] size how many free numbers the variable holds -- 1 for a
+                 scalar, 24 for a curve on a 24-dimensional basis. It is the
+                 *free* dimension that matters, not the constrained one: a
+                 25-coefficient spline constrained to sum to zero has 24, and
+                 24 is what enters #block_cost, elimination and treewidth.
+      \param[in] role what kind of quantity it is -- the caller's vocabulary,
+                 stored and returned unchanged. A consumer that keeps a
+                 parallel dictionary of roles is keeping it because this
+                 argument did not exist.
   */
   void add_variable(const std::string& key, const std::string& name,
-                    int index, int fit_index = -1);
+                    int index, int fit_index = -1, int size = 1,
+                    const std::string& role = "");
 
   //! Add a factor (a dataset likelihood or a per-variable prior).
   /*!
@@ -144,6 +165,29 @@ class IMPBFFEXPORT FactorGraph {
   std::vector<std::string> get_variable_keys() const;
   //! Factor keys in the order they were added.
   std::vector<std::string> get_factor_keys() const;
+  //! Free numbers a variable holds; 1 unless it was given a size, 0 if absent.
+  int get_variable_size(const std::string& key) const;
+  //! A variable's role as the caller declared it; empty if none or absent.
+  std::string get_variable_role(const std::string& key) const;
+  //! A factor's kind; PRIOR for an unknown key, so check with factor_keys().
+  FactorKind get_factor_kind(const std::string& factor_key) const;
+  //! Factors of one kind.
+  unsigned int get_number_of_factors_of_kind(FactorKind kind) const;
+
+  //! The graph as a JSON document: every variable and factor, nothing derived.
+  /*!
+      Round trips exactly through #from_json. Structure only -- the moral
+      graph, the orders and the cliques are recomputed on demand and are not
+      written, because they are answers rather than state.
+  */
+  std::string to_json() const;
+  //! Replace this graph with one read from #to_json's output.
+  void from_json(const std::string& json);
+  //! #to_json to a file.
+  void save(const std::string& path) const;
+  //! #from_json from a file.
+  void load(const std::string& path);
+
   //! Flat-parameter-vector position of a variable key, or -1 if absent.
   int index_of(const std::string& key) const;
   //! Variable key at a position of the flat parameter vector, "" if absent.
@@ -256,6 +300,8 @@ class IMPBFFEXPORT FactorGraph {
     std::string key, name;
     int index;
     int fit_index;
+    int size = 1;
+    std::string role;
   };
   struct Factor {
     std::string key;
