@@ -89,7 +89,41 @@ if(IMPBFF_WITH_RMF)
   find_path(RMF_INCLUDE_DIR RMF/FileHandle.h REQUIRED)
   find_library(RMF_LIBRARY NAMES RMF REQUIRED)
 endif()
+# OpenMP, and the AppleClang hole it usually falls into.
+#
+# `find_package(OpenMP)` reports success on this platform and hands back an
+# *empty* `OpenMP_CXX_FLAGS`: AppleClang does not accept `-fopenmp` directly,
+# so CMake fills in the C flags and leaves C++ blank. A `#pragma` the compiler
+# does not recognise is a comment, and nothing warns -- which is how every
+# speed figure ever recorded for this library came to be single-threaded with
+# 19 `#pragma omp` in the sources (okf/validation/openmp_is_not_enabled.md).
+#
+# So: take what CMake found when it is usable, and otherwise look for libomp
+# ourselves and pass `-Xclang -fopenmp`, which is what AppleClang wants.
+# `IMP::bff::built_with_openmp()` and `parallel_threads()` report the outcome
+# at run time, so a build that silently lost it can be caught from Python.
 find_package(OpenMP QUIET)
+set(IMPBFF_OPENMP_FLAGS "")
+set(IMPBFF_OPENMP_LIBS "")
+set(IMPBFF_OPENMP_INCLUDE "")
+if(OpenMP_CXX_FOUND AND NOT "${OpenMP_CXX_FLAGS}" STREQUAL "")
+  # a string, and `-Xclang -fopenmp` is two arguments: passed whole it
+  # reaches the compiler as one unknown option
+  separate_arguments(IMPBFF_OPENMP_FLAGS NATIVE_COMMAND "${OpenMP_CXX_FLAGS}")
+  set(IMPBFF_OPENMP_LIBS OpenMP::OpenMP_CXX)
+  message(STATUS "IMP.bff: OpenMP through CMake (${OpenMP_CXX_FLAGS})")
+else()
+  find_path(IMPBFF_OMP_INCLUDE_DIR omp.h)
+  find_library(IMPBFF_OMP_LIBRARY NAMES omp gomp iomp5)
+  if(IMPBFF_OMP_INCLUDE_DIR AND IMPBFF_OMP_LIBRARY)
+    set(IMPBFF_OPENMP_FLAGS "-Xclang;-fopenmp")
+    set(IMPBFF_OPENMP_LIBS "${IMPBFF_OMP_LIBRARY}")
+    set(IMPBFF_OPENMP_INCLUDE "${IMPBFF_OMP_INCLUDE_DIR}")
+    message(STATUS "IMP.bff: OpenMP by hand (-Xclang -fopenmp, ${IMPBFF_OMP_LIBRARY})")
+  else()
+    message(STATUS "IMP.bff: no OpenMP; the kernels run on one thread")
+  endif()
+endif()
 
 if(IMPBFF_WITH_IMP)
   # Found by hand rather than through IMPConfig.cmake: a wheel builds these
@@ -189,8 +223,12 @@ if(cereal_FOUND)
 else()
   target_include_directories(imp_bff PUBLIC "${CEREAL_INCLUDE_DIR}")
 endif()
-if(OpenMP_CXX_FOUND)
-  target_link_libraries(imp_bff PRIVATE OpenMP::OpenMP_CXX)
+if(IMPBFF_OPENMP_FLAGS)
+  target_compile_options(imp_bff PRIVATE ${IMPBFF_OPENMP_FLAGS})
+  target_link_libraries(imp_bff PRIVATE ${IMPBFF_OPENMP_LIBS})
+  if(IMPBFF_OPENMP_INCLUDE)
+    target_include_directories(imp_bff PRIVATE "${IMPBFF_OPENMP_INCLUDE}")
+  endif()
 endif()
 if(IMPBFF_WHEEL)
   # one file, no version symlinks: a wheel cannot carry symlinks

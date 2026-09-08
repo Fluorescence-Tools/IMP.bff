@@ -11027,3 +11027,12 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   everywhere else. New bridge `hierarchy_from_protein_frame` (the inverse of `protein_frame_from_hierarchy`)
   is what lets arrays reach IMP's machinery with no file in between. The same six lines drive both simulations;
   lanes 724/0 IMP-free, IMP-linked equal in the same environment.
+- **OpenMP läuft zum ersten Mal** (imp-bff-ce, 2026-09-08, PRD-140 Schritt 0): the standalone build now gets
+  `-Xclang -fopenmp` -- CMake finds it on a fresh configure, and where it does not, the CMake looks for `libomp`
+  itself. `built_with_openmp()` went false -> true and `parallel_threads()` 1 -> 8; the suite passes with the 19
+  pragmas executing for the first time (724/0). Two traps recorded in
+  `okf/validation/openmp_is_not_enabled.md`: the empty flags live in the *cache* of ~/dev/imp's build, not in
+  this compiler, and the flags string has to be `separate_arguments`-split or `-Xclang -fopenmp` reaches the
+  compiler as one unknown option. Also measured, and against expectation: `diffusion_propagate` at ng=41 is
+  *slower* with eight threads (0.138 vs 0.115 ms/step, machine at load 18.9 so not a verdict) -- the pragma sits
+  inside the per-step loop over x-slabs, and a 41-voxel slab does not pay for four thousand forks and joins.
