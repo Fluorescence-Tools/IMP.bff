@@ -21,4 +21,20 @@
 from IMP import (Exception, InternalException, ModelException, UsageException,
                  EventException, IndexException, IOException, ValueException,
                  TypeException)
+
+
+def get_build():
+    """Which IMP.bff this is: "imp" (the IMP module, this build) or "core"
+    (the IMP-free package 'bff')."""
+    return "imp"
+
+
+def get_data_registry():
+    """Empty: the IMP module build installs all of data/."""
+    return {}
+
+
+def fetch_data(file_names=None, progressbar=False):
+    """Nothing to fetch under the IMP module build; returns the installed paths."""
+    return [get_data_path(n) for n in (file_names or [])]
 %}

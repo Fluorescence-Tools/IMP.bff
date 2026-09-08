@@ -57,7 +57,7 @@ struct Expression::Impl {
       means "the curve axis", anything else is an index into the parameter
       array. Resolved once by bind_parameters() so a fit's inner loop passes
       no names and does no lookups. Empty until then. */
-  static const int kAxisSlot = -1;
+  static constexpr int kAxisSlot = -1;  // constexpr: ODR-used (push_back), so it needs a definition -- inline in C++17
   std::vector<int> binding;
   std::size_t bound_parameters = 0;
 

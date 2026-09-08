@@ -10906,3 +10906,23 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   ExpressionEngine move (uncommitted) does not link under the unity build in either state, so the IMP gate was
   built with their six files at HEAD (plus `cmake .`, since IMP links headers by symlink at configure) and they
   were put back byte-for-byte. Next: 6d packaging (pyproject on scikit-build-core, wheels, the second recipe).
+- **PRD-137 step 6d** (imp-bff-ce): two packages, one import. Package `bff` = the core (root `pyproject.toml`,
+  scikit-build-core over `standalone/`; `conda-recipe/recipe-core.yaml`), package `imp.bff` = the IMP module
+  build as before; both import as `IMP.bff`, both own `site-packages/IMP/bff/`, so the recipes constrain each
+  other and `IMP.bff.get_build()` tells them apart (owner's naming, 2026-09-08). The wheel carries ~2 MB of
+  `data/` and fetches `rotamer_library/` + `cgprobe/` (62 MB, 284 files) through `data/registry.json` (sha256,
+  `utility/data_registry.py`) with pooch from `https://www.peulen.xyz/downloads/imp-bff-data/`
+  (`get_data_path()`, `fetch_data()`, `imp_bff_fetch_data`; `IMP_BFF_DATA` is now a PATH-like list). No RMF on
+  PyPI: `utility/wheel_deps.sh` builds RMF 1.7.1 (avro only) + cereal on a wheel image. CI gains `build_core`,
+  `wheels` (Linux x86_64, macOS arm64/x86_64; Windows deferred) and `publish_wheels` (trusted publishing on
+  release). Gates: wheel built and installed into a venv with no IMP -- import, shipped data, registry files
+  fetched from a local server and verified; the same after `delocate-wheel` against an RMF built by
+  `utility/wheel_deps.sh` (the script patches RMF's CMakeLists, which runs FindHDF5 directly, so the library
+  links no HDF5); standalone lane 724/0; IMP build 1794/0; the core conda recipe built with rattler-build,
+  passed its recipe tests, installed from the local channel and ran a slice of the suite (3 failures = tests
+  that assume tttrlib is installed, a pre-existing suite property). Found on the way: `%exception` must precede the `bff_config.h` include
+  (get_data_path's wrapper had no handler and an IOException terminated the process); `install(TARGETS)`
+  COMPONENT binds per artifact group; install_name_tool + strip leave a stale signature on arm64 macOS
+  (SIGKILL) -- no strip, codesign after install; conda-forge's clang refused `static const int kAxisSlot`
+  ODR-used in Expression.cpp (now constexpr). Owner's steps: upload the two data directories to the host,
+  register `bff` on pypi.org with the workflow as trusted publisher. PRD-137 is implemented end to end.

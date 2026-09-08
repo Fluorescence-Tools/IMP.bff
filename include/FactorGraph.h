@@ -47,6 +47,7 @@
 #include <IMP/bff/bff_config.h>
 
 #include <ostream>
+#include <set>
 #include <string>
 #include <vector>
 

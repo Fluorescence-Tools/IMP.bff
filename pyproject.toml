@@ -1,0 +1,110 @@
+# The IMP-free core of IMP.bff as a pip package (PRD-137 step 6d).
+#
+# Package name `bff`, import name `IMP.bff` -- the same import the IMP module
+# build (conda package `imp.bff`) provides. The two are alternatives, not
+# companions: both own site-packages/IMP/bff/.
+#
+# The build is standalone/CMakeLists.txt under scikit-build-core; the wheel
+# holds IMP/bff/{__init__.py,_IMP_bff.so,libimp_bff.*,data/<small set>}.
+# rotamer_library/ and cgprobe/ (62 MB) are fetched on first use from
+# IMP.bff.DATA_URL against data/registry.json (utility/data_registry.py).
+[project]
+name = "bff"
+dynamic = ["version"]
+requires-python = ">=3.9"
+description = "Bayesian Framework for Fluorescence: the IMP-free core, importable as IMP.bff"
+readme = "README.md"
+authors = [{ name = "Thomas-Otavio Peulen", email = "thomas.otavio.peulen@gmail.com" }]
+license = { text = "MPL-2.0" }
+keywords = ["fluorescence", "FRET", "accessible volume", "spectroscopy", "integrative modeling"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy",
+    "pooch>=1.8",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "scipy", "pandas", "mrcfile"]
+
+[project.scripts]
+imp_bff_fetch_data = "IMP.bff:_fetch_data_main"
+
+[project.urls]
+homepage = "https://github.com/fluorescence-tools/imp.bff"
+documentation = "https://docs.peulen.xyz/imp.bff"
+repository = "https://github.com/fluorescence-tools/imp.bff.git"
+
+[build-system]
+requires = ["scikit-build-core>=0.10", "setuptools_scm>=8", "numpy", "swig>=4.1"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.version = ">=3.18"
+cmake.source-dir = "standalone"
+cmake.args = [
+    "-DIMPBFF_WHEEL:BOOL=ON",
+    "-DIMPBFF_PYTHON:BOOL=ON",
+    "-DCMAKE_BUILD_TYPE=Release",
+]
+# No source-tree package: standalone/CMakeLists.txt installs the SWIG shadow
+# module as IMP/bff/__init__.py with the extension and libimp_bff beside it.
+# IMP/ itself gets no __init__.py -- it is a namespace portion, so a real IMP
+# (a regular package) can own IMP/ when the conda imp.bff package is used
+# instead.
+wheel.packages = []
+build-dir = "build/{wheel_tag}"
+# no strip: on macOS it follows install_name_tool and leaves the binaries
+# with a stale signature (the CMake install re-signs; delocate signs again)
+install.strip = false
+install.components = ["python", "data"]
+# git-tracked files, minus what a wheel build never reads
+sdist.exclude = ["doc/", "benchmark/", "conda-recipe/", ".github/", "data/rotamer_library/", "data/cgprobe/", "prototypes/"]
+
+[tool.scikit-build.metadata]
+version.provider = "scikit_build_core.metadata.setuptools_scm"
+
+[tool.setuptools_scm]
+# tags are vX.Y.Z (v0.14.3); a commit past the tag is X.Y.(Z+1).devN+g<sha>
+
+[tool.cibuildwheel]
+build-verbosity = 1
+# Windows waits for a Boost/Eigen/RMF story on that platform (tttrlib's vcpkg
+# pattern); 3.13t/3.14 wait for numpy and SWIG.
+skip = ["pp*", "*-win*", "*-manylinux_i686", "*-musllinux_*", "cp314-*", "cp314t-*", "cp313t-*"]
+test-requires = ["pytest", "pooch"]
+test-command = "python -c \"import IMP.bff as b; assert b.get_build() == 'core'; print(b.get_module_version())\""
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+archs = ["x86_64"]
+# Boost (1.66, headers for the core and the compiled parts RMF links),
+# Eigen from the distribution; cereal headers and RMF 1.7.1 (avro backend
+# only) built by utility/wheel_deps.sh into /usr/local, where the
+# standalone CMake finds them and auditwheel vendors libRMF and the Boost
+# libraries into the wheel.
+before-all = "dnf install -y --nogpgcheck boost-devel eigen3-devel && bash utility/wheel_deps.sh /usr/local"
+repair-wheel-command = "auditwheel repair --plat manylinux_2_28_{arch} -w {dest_dir} {wheel}"
+
+[tool.cibuildwheel.linux.environment]
+CMAKE_PREFIX_PATH = "/usr/local;/usr"
+
+[tool.cibuildwheel.macos]
+# one architecture per runner (RMF is built natively in before-all);
+# the workflow runs macos-14 (arm64) and macos-13 (x86_64)
+before-all = "brew install boost eigen && bash utility/wheel_deps.sh $HOME/imp-bff-deps"
+before-build = "pip install delocate"
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.macos.environment]
+CMAKE_PREFIX_PATH = "$HOME/imp-bff-deps;$(brew --prefix)"
+MACOSX_DEPLOYMENT_TARGET = "11.0"

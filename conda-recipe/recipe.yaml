@@ -67,6 +67,10 @@ requirements:
     - tqdm
     - click
     - click-didyoumean
+  run_constraints:
+    # never beside the IMP-free core (package `bff`, recipe-core.yaml): both
+    # install site-packages/IMP/bff/
+    - bff <0.0.0a0
 
 tests:
   - script:

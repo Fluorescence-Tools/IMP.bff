@@ -11,7 +11,14 @@
 # IMP. The IMP-module build is the top-level CMakeLists.txt; this file never
 # touches it.
 cmake_minimum_required(VERSION 3.18)
-project(imp_bff_core VERSION 0.13.0 LANGUAGES C CXX)
+# The version: the wheel build hands it in from the git tag
+# (scikit-build-core's SKBUILD_PROJECT_VERSION); otherwise the release the
+# conda recipe names. project() wants digits and dots only.
+set(_imp_bff_version "0.14.3")
+if(DEFINED SKBUILD_PROJECT_VERSION)
+  string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _imp_bff_version "${SKBUILD_PROJECT_VERSION}")
+endif()
+project(imp_bff_core VERSION ${_imp_bff_version} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,12 +30,24 @@ endif()
 
 set(IMPBFF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 option(IMPBFF_UNITY "Compile the core as one translation unit, as IMP's build does" ON)
+# The wheel layout (PRD-137 step 6d): everything under site-packages/IMP/bff/
+# -- the extension, the shadow module, libimp_bff beside them (RPATH
+# @loader_path / $ORIGIN), and the small data set in IMP/bff/data. The rest
+# of data/ is fetched on demand (IMP.bff.fetch_data). scikit-build-core sets
+# SKBUILD, so a `pip wheel .` needs no flag; a conda or plain install keeps
+# the usual lib/ + include/ + share/IMP/bff layout.
+option(IMPBFF_WHEEL "Lay the install out as a Python wheel" "${SKBUILD}")
+if(IMPBFF_WHEEL)
+  # no compiled-in directory: the wheel's __init__ sets IMP_BFF_DATA
+  set(IMPBFF_DATA_DIR "")
+  set(IMPBFF_EXAMPLE_DIR "")
+endif()
 set(IMPBFF_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/IMP/bff/data" CACHE PATH "Where get_data_path() looks at run time")
 set(IMPBFF_EXAMPLE_DIR "${CMAKE_INSTALL_PREFIX}/share/IMP/bff/examples" CACHE PATH "Where get_example_path() looks at run time")
 
 # ---- dependencies
 find_package(Eigen3 3.3 REQUIRED CONFIG)
-find_package(Boost 1.70 REQUIRED)            # headers: random
+find_package(Boost 1.66 REQUIRED)            # headers: random (1.66 is what manylinux_2_28 ships)
 find_package(cereal CONFIG QUIET)
 if(NOT cereal_FOUND)
   find_path(CEREAL_INCLUDE_DIR cereal/cereal.hpp REQUIRED)
@@ -91,16 +110,36 @@ endif()
 if(OpenMP_CXX_FOUND)
   target_link_libraries(imp_bff PRIVATE OpenMP::OpenMP_CXX)
 endif()
-set_target_properties(imp_bff PROPERTIES OUTPUT_NAME imp_bff VERSION ${PROJECT_VERSION} SOVERSION 0)
+if(IMPBFF_WHEEL)
+  # one file, no version symlinks: a wheel cannot carry symlinks
+  set_target_properties(imp_bff PROPERTIES OUTPUT_NAME imp_bff)
+else()
+  set_target_properties(imp_bff PROPERTIES OUTPUT_NAME imp_bff VERSION ${PROJECT_VERSION} SOVERSION 0)
+endif()
 
-# ---- install: the library, the headers (shims first, then the module's), the data
+# ---- install, in three components: python (the module and what it loads),
+# data (what get_data_path() reads), dev (headers, the CMake export).
 include(GNUInstallDirs)
-install(TARGETS imp_bff EXPORT imp_bffTargets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION include)
-install(DIRECTORY "${IMPBFF_GEN_INCLUDE}/" DESTINATION include)
-install(DIRECTORY "${IMPBFF_ROOT}/data/" DESTINATION share/IMP/bff/data)
-install(DIRECTORY "${IMPBFF_ROOT}/examples/" DESTINATION share/IMP/bff/examples)
+if(IMPBFF_WHEEL)
+  set(IMPBFF_PY_PKG_DIR "IMP/bff")
+  # (COMPONENT binds to the artifact group it follows, so each group names it)
+  install(TARGETS imp_bff
+    LIBRARY DESTINATION "${IMPBFF_PY_PKG_DIR}" COMPONENT python
+    RUNTIME DESTINATION "${IMPBFF_PY_PKG_DIR}" COMPONENT python)
+  # the small set travels with the wheel; rotamer_library/ and cgprobe/ (62 MB)
+  # are listed in data/registry.json and fetched on first use
+  install(DIRECTORY "${IMPBFF_ROOT}/data/" DESTINATION "${IMPBFF_PY_PKG_DIR}/data" COMPONENT data
+    PATTERN "rotamer_library" EXCLUDE PATTERN "cgprobe" EXCLUDE)
+else()
+  install(TARGETS imp_bff EXPORT imp_bffTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT python
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT dev
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT python)
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION include COMPONENT dev)
+  install(DIRECTORY "${IMPBFF_GEN_INCLUDE}/" DESTINATION include COMPONENT dev)
+  install(DIRECTORY "${IMPBFF_ROOT}/data/" DESTINATION share/IMP/bff/data COMPONENT data)
+  install(DIRECTORY "${IMPBFF_ROOT}/examples/" DESTINATION share/IMP/bff/examples COMPONENT data)
+endif()
 
 # ---- the Python module: IMP/bff/{__init__.py,_IMP_bff.so}, importable without IMP
 option(IMPBFF_PYTHON "Build the Python module (SWIG, Python3, numpy)" ON)
@@ -150,7 +189,26 @@ if(IMPBFF_PYTHON)
   # installed IMP on PYTHONPATH (a regular package beats a namespace one). It
   # is not installed -- an installed core is a namespace portion of IMP/.
   file(WRITE "${CMAKE_BINARY_DIR}/python/IMP/__init__.py" "# build-tree marker: the standalone IMP.bff (PRD-137)\n")
-  set(IMPBFF_PYTHON_INSTALL_DIR "${Python3_SITEARCH}" CACHE PATH "Where IMP/bff/ is installed")
-  install(TARGETS _IMP_bff LIBRARY DESTINATION "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
-  install(FILES "${_pydir}/__init__.py" DESTINATION "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
+  if(IMPBFF_WHEEL)
+    set(_py_install_dir "${IMPBFF_PY_PKG_DIR}")
+  else()
+    set(IMPBFF_PYTHON_INSTALL_DIR "${Python3_SITEARCH}" CACHE PATH "Where IMP/bff/ is installed")
+    set(_py_install_dir "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
+  endif()
+  install(TARGETS _IMP_bff LIBRARY DESTINATION "${_py_install_dir}" COMPONENT python)
+  install(FILES "${_pydir}/__init__.py" DESTINATION "${_py_install_dir}" COMPONENT python)
+  if(IMPBFF_WHEEL AND APPLE)
+    # install_name_tool rewrites the binaries' load commands at install and
+    # leaves them with a stale ad-hoc signature, which arm64 macOS refuses
+    # to load (the process is killed). Sign again, in place, after that.
+    install(CODE "
+      foreach(f \"\${CMAKE_INSTALL_PREFIX}/${_py_install_dir}/_IMP_bff.so\" \"\${CMAKE_INSTALL_PREFIX}/${_py_install_dir}/libimp_bff.dylib\")
+        if(EXISTS \"\${f}\")
+          execute_process(COMMAND /usr/bin/codesign --force --sign - \"\${f}\" RESULT_VARIABLE _rc)
+          if(NOT _rc EQUAL 0)
+            message(WARNING \"codesign failed for \${f}\")
+          endif()
+        endif()
+      endforeach()" COMPONENT python)
+  endif()
 endif()

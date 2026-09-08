@@ -1,0 +1,82 @@
+schema_version: 1
+
+# The IMP-free core (PRD-137 step 6d): package `bff`, import `IMP.bff`, built
+# from standalone/CMakeLists.txt with no `imp` anywhere. The IMP module build
+# is recipe.yaml (package `imp.bff`). The two install the same
+# site-packages/IMP/bff/ and are alternatives -- see run_constraints.
+
+context:
+  version: "0.14.3"
+
+package:
+  name: bff
+  version: ${{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  script: build_core.sh
+  python:
+    entry_points:
+      - imp_bff_fetch_data = IMP.bff:_fetch_data_main
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - if: osx
+      then: llvm-openmp
+    - if: linux
+      then: libgomp
+    - swig >=4.1
+    - cmake
+    - ninja
+    - python
+    - numpy
+  host:
+    - python
+    - numpy
+    - libboost-devel
+    - eigen
+    - cereal
+    - rmf
+  run:
+    - ${{ pin_compatible('numpy') }}
+    - python
+    - rmf   # libimp_bff links libRMF; the rmf package has no run export
+    - pooch >=1.8
+    - pandas
+    - mdtraj
+    - tqdm
+    - click
+    - click-didyoumean
+  run_constraints:
+    # never beside the IMP module build: same files
+    - imp.bff <0.0.0a0
+
+tests:
+  - python:
+      imports:
+        - IMP.bff
+  - script:
+      - python -c "import IMP.bff as b; assert b.get_build() == 'core'"
+      - imp_bff_fetch_data --list
+
+about:
+  homepage: https://github.com/fluorescence-tools/imp.bff
+  license: MPL-2.0
+  license_file: COPYING.LGPL
+  summary: Bayesian Framework for Fluorescence -- the IMP-free core, importable as IMP.bff
+  description: |
+    The Bayesian Framework for Fluorescence (BFF) without the Integrative
+    Modeling Platform: fitting of time-resolved fluorescence, FCS, label
+    accessible volumes, rotamer libraries, structure IO. Imports as IMP.bff;
+    the conda package imp.bff is the same library built as an IMP module,
+    with the connection layer to IMP's model.
+  documentation: https://docs.peulen.xyz/imp.bff
+
+extra:
+  recipe-maintainers:
+    - tpeulen
