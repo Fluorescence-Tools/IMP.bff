@@ -427,3 +427,162 @@ def anderson_mode(graph, theta0, depth=8, max_maps=40, tol=1e-3, verbose=False):
             break
         f_prev = f_now
     return th, f_prev, k + 1
+
+
+# --------------------------------------------------------------------------
+# variable projection: solve the linear coordinates exactly at every step
+# --------------------------------------------------------------------------
+
+LINEAR_PREFIXES = ('log_scale_', 'scat_', 'bkg_')
+
+
+def linear_indices(graph):
+    """The coordinates the model is (log-)linear in: one scale per sample, a
+    scatter fraction and a background fraction per channel."""
+    names = [n for n in graph.offsets if n.startswith(LINEAR_PREFIXES)]
+    names.sort(key=lambda n: graph.offsets[n][0])
+    idx = torch.cat([torch.arange(*graph.offsets[n]) for n in names]) if names else torch.zeros(0, dtype=torch.long)
+    return names, idx
+
+
+def linear_shapes(model, graph, vals):
+    """The three fixed shapes every pulse's contribution is built from.
+
+    For one part -- a channel, or one pulse of an interleaved channel -- the
+    expected counts before the positivity floor are
+
+        e^s ( u + c_scat * S * v + c_bkg * S * w ),
+
+    with u the physics decay, v the instrument response, w flat, and S the sum
+    of the physics amplitudes. None of u, v, w, S depends on the scale, the
+    scatter or the background, which is what makes those coordinates
+    separable -- the structure variable projection exploits (Golub & Pereyra,
+    SIAM J. Numer. Anal. 10, 413, 1973; used for this model class by FLIMfit,
+    Warren et al., PLoS ONE 8, e70687, 2013).
+
+    Returns u, v, w and S per part, on the model's rebinned axis.
+    """
+    L, E = model['L'], model['Ep']
+    spec = graph.spectrum(vals)
+    pv = graph.distribution(vals)
+    scopes = sorted({L.channel_scope(k, E) for k in graph.keys})
+    st = L.stage1(E, vals, spec, pv, scopes)
+    a_phys = L.stage2(E, vals, st, graph.keys)
+    B = {}
+    U, V, W, S = {}, {}, {}, {}
+    for k in graph.keys:
+        d = L.parse_channel(k)[1]
+        if d not in B:
+            B[d] = graph.inst.basis(d, vals)
+        U[k] = B[d] @ a_phys[k]
+        V[k] = B[d][:, 0]
+        W[k] = B[d][:, -1]
+        S[k] = a_phys[k].sum()
+    return dict(U=U, V=V, W=W, S=S)
+
+
+def profile_linear(model, graph, theta, shapes=None, n_newton=12, verbose=False):
+    """Re-solve the linear coordinates at fixed nonlinear ones.
+
+    The inner problem is small (about twenty coordinates) and cheap, because
+    the shapes are held fixed: one evaluation costs a few vector operations on
+    the histograms rather than a pass through the physics. It maximises the
+    FULL log posterior over those coordinates -- the Poisson likelihood with
+    its positivity floor and the priors on the scale, the scatter and the
+    background -- so it is the profile of the thing actually being optimised,
+    not of the likelihood alone.
+
+    An earlier attempt profiled only the three sample scales, in closed form,
+    ignoring the floor and the priors. It moved the objective the WRONG way by
+    1443 nats. The closed form is exact for a pure multiplicative factor and
+    the scale stops being one as soon as the floor bites.
+
+    MEASURED, AND IT DOES NOT SPEED THE FIT UP. The structure is real: lambda
+    rebuilt from the three shapes matches the model to 1.3e-15, and one solve
+    at the starting point gains 43518 nats. It still does not pay. Used as a
+    start improver it costs 1.3 s and saves two Anderson maps -- 4.71 s
+    against 3.74 s, and a worse answer. The reason is that the scoring step
+    already handles these coordinates well; they are not what the fit is slow
+    on. Two independent attempts say the same thing, so the separable
+    parameters are not the ill-conditioned ones.
+
+    Kept because the machinery is correct and reusable -- `linear_shapes` is
+    how one asks what a histogram is made of -- and because a negative result
+    with a validated implementation behind it is worth more than an untried
+    idea.
+    """
+    L, E = model['L'], model['Ep']
+    names, idx = linear_indices(graph)
+    if len(idx) == 0:
+        return theta, 0.0
+    vals, _ = graph.unpack(theta)
+    sh = shapes if shapes is not None else linear_shapes(model, graph, vals)
+    U, V, W, S = sh['U'], sh['V'], sh['W'], sh['S']
+    pairs = dict(getattr(graph, 'pairs', {}) or {})
+    dk = list(graph.data_keys)
+    lin_ = E.get('linearisation') or {}
+
+    #: the parts, resolved once
+    part_of = {}
+    for k in dk:
+        part_of[k] = [k] + ([pairs[k]] if k in pairs else [])
+
+    def neg_log_post(z_lin):
+        t = theta.clone()
+        t[idx] = z_lin
+        v, zz = graph.unpack(t)
+        ll = 0.0
+        for k in dk:
+            raw = None
+            for kk in part_of[k]:
+                kn = f'{kk[0]}_{kk[1]}'
+                sc = v[f'log_scale_{kk[0]}'].exp()
+                cs = v.get(f'scat_{kn}'); cb = v.get(f'bkg_{kn}')
+                term = U[kk] + cs * S[kk] * V[kk] + cb * S[kk] * W[kk]
+                raw = sc * term if raw is None else raw + sc * term
+            d = L.parse_channel(k)[1]
+            lam = L.soft_positive(raw)
+            if d in lin_:
+                lam = lam * lin_[d]
+            lam = lam.clamp_min(1e-300)
+            ll = ll + (graph.data.mask[k] * (graph.data.y[k] * torch.log(lam) - lam)).sum()
+        return -(ll + graph.log_prior(v, zz))
+
+    z = theta[idx].detach().clone()
+    f0 = float(neg_log_post(z))
+    #: MODIFIED NEWTON. The inner Hessian costs sixty times a gradient here
+    #: (99 ms against 5), so it is built once and reused while the gradient is
+    #: refreshed -- the curvature of a twenty-three dimensional smooth problem
+    #: changes slowly compared with its gradient.
+    H = torch.func.hessian(neg_log_post)(z)
+    H = 0.5 * (H + H.T)
+    eye = torch.eye(len(z), dtype=H.dtype)
+    mu = 1e-6
+    f_cur = f0
+    for _ in range(n_newton):
+        zz = z.clone().requires_grad_(True)
+        gr = torch.autograd.grad(neg_log_post(zz), zz)[0].detach()
+        if float(gr.norm()) < 1e-8:
+            break
+        ok = False
+        for _ in range(24):
+            try:
+                step = torch.linalg.solve(H + mu * eye, gr)
+            except Exception:
+                mu *= 10
+                continue
+            cand = z - step
+            fc = float(neg_log_post(cand))
+            if np.isfinite(fc) and fc < f_cur:
+                z, f_cur = cand, fc
+                mu = max(mu / 3, 1e-12)
+                ok = True
+                break
+            mu *= 4
+        if not ok:
+            break
+    t = theta.clone(); t[idx] = z
+    gain = f0 - float(neg_log_post(z))
+    if verbose:
+        print(f'    profile: {len(idx)} coordinates, gain {gain:.4f} nats')
+    return t, gain
