@@ -336,6 +336,21 @@ if(IMPBFF_PYTHON)
     set(IMPBFF_PYTHON_INSTALL_DIR "${Python3_SITEARCH}" CACHE PATH "Where IMP/bff/ is installed")
     set(_py_install_dir "${IMPBFF_PYTHON_INSTALL_DIR}/IMP/bff")
   endif()
+  # The GPU backend sits beside the extension, because that is where
+  # `IMP.bff.enable_gpu` looks for it. It is a plugin loaded at run time and
+  # links no wgpu, so building it costs nothing and requires nothing.
+  #
+  # It has an off switch because it is *optional at run time* and therefore
+  # must not be able to break the build that does not need it. As of
+  # 2026-09-08 it has only ever been compiled and run on macOS/Metal; the
+  # first Linux and Windows builds will be CI's.
+  option(IMPBFF_WITH_GPU "Build the run-time-loaded WGSL compute backend" ON)
+  if(IMPBFF_WITH_GPU)
+    set(IMPBFF_GPU_OUTPUT_DIR "${_pydir}")
+    set(IMPBFF_GPU_INSTALL_DIR "${_py_install_dir}")
+    add_subdirectory("${IMPBFF_ROOT}/gpu" "${CMAKE_BINARY_DIR}/gpu")
+  endif()
+
   install(TARGETS _IMP_bff LIBRARY DESTINATION "${_py_install_dir}" COMPONENT python)
   install(FILES "${_pydir}/__init__.py" DESTINATION "${_py_install_dir}" COMPONENT python)
   if(IMPBFF_WHEEL AND APPLE)
