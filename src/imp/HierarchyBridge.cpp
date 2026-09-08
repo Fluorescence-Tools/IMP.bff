@@ -9,6 +9,8 @@
  */
 
 #include <IMP/bff/HierarchyBridge.h>
+#include <utility>
+#include <IMP/atom/element.h>
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
@@ -130,6 +132,87 @@ std::vector<std::string> hierarchy_atom_metadata(IMP::atom::Hierarchy hierarchy)
         out.push_back(chain);
     }
     return out;
+}
+
+IMP::atom::Hierarchy hierarchy_from_protein_frame(const ProteinFrame& frame,
+                                                 IMP::Model* m) {
+    const int n_atoms = frame.get_n_atoms();
+    const std::size_t n = static_cast<std::size_t>(n_atoms);
+    if (!frame.atom_names.empty() && frame.atom_names.size() != n) {
+        IMP_THROW("the frame has " << n_atoms << " atoms but "
+                  << frame.atom_names.size() << " names", ValueException);
+    }
+    if (!frame.residue_indices.empty() && frame.residue_indices.size() != n) {
+        IMP_THROW("the frame has " << n_atoms << " atoms but "
+                  << frame.residue_indices.size() << " residue indices",
+                  ValueException);
+    }
+
+    IMP::atom::Hierarchy root = IMP::atom::Hierarchy::setup_particle(
+            new IMP::Particle(m, "frame"));
+    // one chain per chain id, one residue per (chain, residue index), in the
+    // order the atoms arrive -- which is the order a caller's arrays are in
+    std::map<std::string, IMP::atom::Chain> chains;
+    std::map<std::pair<std::string, int>, IMP::atom::Residue> residues;
+    for (std::size_t i = 0; i < n; ++i) {
+        const std::string chain_id =
+                i < frame.chain_ids.size() ? frame.chain_ids[i] : std::string(" ");
+        const int resi = i < frame.residue_indices.size()
+                                 ? frame.residue_indices[i] : static_cast<int>(i);
+        const std::string resname =
+                i < frame.resnames.size() ? frame.resnames[i] : std::string("UNK");
+        const std::string name =
+                i < frame.atom_names.size() ? frame.atom_names[i] : std::string("X");
+
+        std::map<std::string, IMP::atom::Chain>::iterator ch = chains.find(chain_id);
+        if (ch == chains.end()) {
+            IMP::atom::Chain chain = IMP::atom::Chain::setup_particle(
+                    new IMP::Particle(m, "chain " + chain_id), chain_id);
+            root.add_child(chain);
+            ch = chains.insert(std::make_pair(chain_id, chain)).first;
+        }
+        const std::pair<std::string, int> key(chain_id, resi);
+        std::map<std::pair<std::string, int>, IMP::atom::Residue>::iterator re =
+                residues.find(key);
+        if (re == residues.end()) {
+            IMP::atom::Residue residue = IMP::atom::Residue::setup_particle(
+                    new IMP::Particle(m, resname + " " + std::to_string(resi)),
+                    IMP::atom::ResidueType(
+                            IMP::atom::ResidueType::get_key_exists(resname)
+                                    ? resname : "UNK"),
+                    resi);
+            ch->second.add_child(residue);
+            re = residues.insert(std::make_pair(key, residue)).first;
+        }
+
+        // An unfamiliar atom name still becomes an atom: a label's atoms are
+        // not in IMP's table, and refusing them would refuse every dye. The
+        // element comes from the frame's atom_types when it has them, and
+        // otherwise from the first letter of the name, which is what a PDB
+        // reader falls back to as well.
+        IMP::atom::Element element = IMP::atom::UNKNOWN_ELEMENT;
+        if (i < frame.atom_types.size() && !frame.atom_types[i].empty()) {
+            element = IMP::atom::get_element_table().get_element(frame.atom_types[i]);
+        }
+        if (element == IMP::atom::UNKNOWN_ELEMENT && !name.empty()) {
+            element = IMP::atom::get_element_table().get_element(
+                    std::string(1, name[0]));
+        }
+        if (element == IMP::atom::UNKNOWN_ELEMENT) element = IMP::atom::C;
+        const IMP::atom::AtomType type =
+                IMP::atom::AtomType::get_key_exists(name)
+                        ? IMP::atom::AtomType(name)
+                        : IMP::atom::add_atom_type(name, element);
+        IMP::Particle* p = new IMP::Particle(m, name);
+        IMP::atom::Atom atom = IMP::atom::Atom::setup_particle(p, type);
+        const IMP::algebra::Vector3D xyz(frame.coords[i * 3],
+                                         frame.coords[i * 3 + 1],
+                                         frame.coords[i * 3 + 2]);
+        IMP::core::XYZR::setup_particle(p, IMP::algebra::Sphere3D(xyz, 1.7));
+        IMP::atom::Mass::setup_particle(p, IMP::atom::get_element_table().get_mass(element));
+        re->second.add_child(atom);
+    }
+    return root;
 }
 
 ProteinFrame protein_frame_from_hierarchy(IMP::atom::Hierarchy hierarchy) {

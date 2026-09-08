@@ -1,18 +1,19 @@
 /**
  *  \file IMP/bff/DyeDynamics.h
- *  \brief Dye dynamics on a labelled structure, without naming IMP.
+ *  \brief A dye on a structure, simulated -- without naming IMP.
  *
- * The dye roads that run on an atomistic model -- placing a dye on a residue
- * and then integrating its motion -- are built on IMP: its hierarchies, its
- * decorators, its integrators (`ProbeAttachment.h`, `ProbeDynamics.h`). That
- * is a fine way to *implement* them and a poor way to *offer* them: a caller
- * who installed one package should not need IMP's Python to run a dye.
+ * Placing a dye on a residue and integrating its motion is built on IMP: its
+ * hierarchies, its decorators, its integrators (`ProbeAttachment.h`,
+ * `ProbeDynamics.h`). That is a fine way to *implement* it and a poor way to
+ * *offer* it. A caller who installed one package should not need IMP's
+ * Python to run a dye, and should not have to write a PDB file to say where
+ * the atoms are.
  *
- * So this header is the same computation behind file paths and arrays. It is
- * part of the connection layer -- it exists only where IMP is linked -- but
- * nothing in it names an IMP type, which is what lets it be wrapped without
- * IMP's own SWIG interfaces and shipped in a wheel that carries IMP as a
- * private library.
+ * So #IMP::bff::DyeSimulation is the same computation behind
+ * #IMP::bff::ProbeSimulation -- coordinates in arrays, `minimize()`,
+ * `step()`, `run()` -- and it names no IMP type anywhere in this header.
+ * That is what lets it be wrapped without IMP's own SWIG interfaces and
+ * shipped in a package that carries IMP as a private library (PRD-139).
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -23,93 +24,88 @@
 
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/Base.h>
+#include <IMP/bff/HierarchyFrame.h>
+#include <IMP/bff/Simulation.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
 
-//! What a run of #IMP::bff::AttachedProbeDynamics produced.
-struct IMPBFFEXPORT LangevinTrajectory {
-    //! Flat `n_frames * n_atoms * 3`.
-    std::vector<double> coordinates;
-    //! One per frame: the time, the potential energy, and the kinetic energy
-    //! (NaN under `bd`, which has no velocities).
-    std::vector<double> times_fs, potential_energy, kinetic_energy;
-    std::vector<std::string> atom_names;
-    std::string integrator;
-    double temperature, timestep_fs;
-    int n_frames, n_atoms;
+//! The trajectory a dye run produces; the module's one trajectory record.
+typedef SimulationTrajectory LangevinTrajectory;
 
-    LangevinTrajectory()
-        : integrator("md"), temperature(300.0), timestep_fs(2.0), n_frames(0),
-          n_atoms(0) {}
+//! A dye placed on a structure and moved, as an ordinary simulation object.
+/*!
+    Construction places the dye and builds the system; after that it is
+    #IMP::bff::ProbeSimulation like any other -- `minimize()`, `step()`,
+    `run()`, positions in and out.
 
-    void get_coordinates(double** out_view, int* n_out_view) const;
-    void get_times_fs(double** out_view, int* n_out_view) const;
-    void get_potential_energy(double** out_view, int* n_out_view) const;
-    void get_kinetic_energy(double** out_view, int* n_out_view) const;
+    The structure and the dye arrive as #IMP::bff::ProteinFrame, which is
+    arrays: coordinates, atom names, residue names and indices, chain ids.
+    Where they came from is the caller's business -- a PDB read by
+    #IMP::bff::load_structure, a frame of a trajectory, a generator. The
+    dye's *chemistry* -- its bonds, angles and torsions -- comes from its
+    MOL2, because that is a chemistry file and there is nothing to gain by
+    re-deriving it from coordinates.
 
-    IMP_SHOWABLE_INLINE(LangevinTrajectory,
-                        out << "LangevinTrajectory(" << n_frames << " frames of "
-                            << n_atoms << " atoms)");
+    Everything IMP is kept behind the pointer: this header names none of it,
+    and neither does anything a wrapper sees.
+*/
+class IMPBFFEXPORT DyeSimulation : public ProbeSimulation {
+    struct Impl;
+    std::shared_ptr<Impl> impl_;
+
+ public:
+    //! Place \p dye on \p residue of \p chain in \p protein and set up.
+    /*!
+        \param[in] protein the structure to label
+        \param[in] dye the dye's atoms, as they sit before placement
+        \param[in] dye_mol2 the dye's MOL2: its bonds, angles and torsions
+        \param[in] chain,residue the labelled site
+        \param[in] parameters a JSON object; empty means the defaults.
+                   `integrator` (`md` or `bd`), `temperature` (K),
+                   `timestep_fs` (negative lets the integrator choose),
+                   `friction_ps` (`md` only), `interaction_sphere` (A, how
+                   far around the site the protein pushes back),
+                   `repulsion_k`, `seed` (negative leaves the generator
+                   alone), `strip_site_sidechain`.
+        \throw ValueException when the site is not in the structure, or for
+               an integrator that is neither `md` nor `bd`
+        \throw IOException when the MOL2 cannot be read
+    */
+    DyeSimulation(const ProteinFrame& protein, const ProteinFrame& dye,
+                  const std::string& dye_mol2, const std::string& chain,
+                  int residue, const std::string& parameters = "");
+
+    //! The dye's atoms -- the ones that move.
+    int get_n_atoms() const override;
+    void get_positions(double** out_view, int* n_out_view) const override;
+    void set_positions(const std::vector<double>& xyz) override;
+    double minimize(int n_steps = 200) override;
+    void step(int n_steps) override;
+    SimulationTrajectory run(int n_steps, int write_every = 1) override;
+    double get_potential_energy() const override;
+    bool has_energy() const override { return true; }
+    std::string get_type() const override { return "dye-langevin"; }
+    std::string get_parameters() const override;
+    //! Only before the system is built: the integrator and its constants are
+    //! fixed once the dye is placed, so this refuses afterwards.
+    /*! \throw ValueException after construction */
+    void set_parameters(const std::string& json) override;
+
+    //! The dye's atom names, in the order the positions are in.
+    std::vector<std::string> get_atom_names() const;
+    //! How many atoms the labelled residue's side chain lost.
+    int get_n_stripped() const;
+    //! The labelled structure: the protein's atoms, then the dye's.
+    ProteinFrame get_labelled_frame() const;
+    //! The temperature a kinetic energy implies, \f$2E/(3Nk_B)\f$.
+    /*! Takes the energy rather than reading one, so that a caller can ask it
+        of any frame of a trajectory, not only of the state as it stands. */
+    double kinetic_temperature(double kinetic_energy) const;
 };
-IMP_VALUES(LangevinTrajectory, LangevinTrajectories);
-
-//! Place a dye on a residue and write the labelled structure.
-/*!
-    The dye is superimposed on the site's backbone frame and its clashes with
-    the residue's own side chain are resolved the way #IMP::bff::attach_probes
-    does -- this is that function, reached by file rather than by hierarchy.
-
-    \param[in] protein_pdb the structure to label
-    \param[in] dye_pdb the dye, as an atomistic model
-    \param[in] chain,residue where to put it
-    \param[in] out_pdb where the labelled structure goes; empty writes nothing
-    \param[in] strip_site_sidechain remove the labelled residue's side chain
-    \return the number of atoms stripped from the site
-    \throw ValueException when the site is not in the structure
-    \throw IOException when a file cannot be read or written
-*/
-IMPBFFEXPORT int attach_dye_to_pdb(
-        const std::string& protein_pdb, const std::string& dye_pdb,
-        const std::string& chain, int residue,
-        const std::string& out_pdb = "", bool strip_site_sidechain = true);
-
-//! Langevin (`md`) or Brownian (`bd`) dynamics of a dye on a structure.
-/*!
-    The whole road in one call: read the structure and the dye, place the dye
-    at the site, build the dye's force field from its MOL2, hold the anchor
-    still, let the protein's heavy atoms near the site repel it, relax, and
-    integrate. What comes back is #IMP::bff::LangevinTrajectory -- the frames,
-    the times and the two energies, as arrays.
-
-    \param[in] protein_pdb,dye_pdb the structure and the dye
-    \param[in] dye_mol2 the dye's MOL2: its bonds, angles and torsions
-    \param[in] chain,residue the labelled site
-    \param[in] n_steps how long to integrate
-    \param[in] write_every frames are kept every so many steps
-    \param[in] minimize_steps conjugate-gradient relaxation first; 0 skips it
-    \param[in] integrator `md` (velocity Verlet with a Langevin thermostat)
-               or `bd` (Brownian, overdamped)
-    \param[in] temperature K
-    \param[in] timestep_fs the step, fs; negative picks the integrator's own
-    \param[in] friction_ps the thermostat's friction, 1/ps; `md` only
-    \param[in] interaction_sphere how far around the site the protein repels, A
-    \param[in] repulsion_k the repulsion's force constant
-    \param[in] seed negative leaves the generator alone
-    \param[in] strip_site_sidechain remove the labelled residue's side chain
-    \throw ValueException for an unknown integrator or a site that is not there
-    \throw IOException when a file cannot be read
-*/
-IMPBFFEXPORT LangevinTrajectory run_dye_langevin(
-        const std::string& protein_pdb, const std::string& dye_pdb,
-        const std::string& dye_mol2, const std::string& chain, int residue,
-        int n_steps = 3000, int write_every = 100, int minimize_steps = 200,
-        const std::string& integrator = "md", double temperature = 300.0,
-        double timestep_fs = -1.0, double friction_ps = 10.0,
-        double interaction_sphere = 25.0, double repulsion_k = 10.0,
-        int seed = -1, bool strip_site_sidechain = true);
 
 IMPBFF_END_NAMESPACE
 

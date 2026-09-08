@@ -97,7 +97,7 @@ class TestBuildIdentity(unittest.TestCase):
         self.assertIn(build, ("core", "core+imp", "imp"))
         self.assertEqual(build.startswith("core"),
                          bool(getattr(IMP.bff, "IMPBFF_STANDALONE", False)))
-        self.assertEqual(build == "core+imp", hasattr(IMP.bff, "run_dye_langevin"))
+        self.assertEqual(build == "core+imp", hasattr(IMP.bff, "DyeSimulation"))
 
     def test_fetch_data_and_registry_exist_in_both_builds(self):
         self.assertIsInstance(IMP.bff.get_data_registry(), dict)

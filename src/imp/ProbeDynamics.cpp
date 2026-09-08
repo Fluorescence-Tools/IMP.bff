@@ -120,22 +120,9 @@ IMP::atom::Simulator* make_langevin_simulator(
     return md.release();
 }
 
-void LangevinTrajectory::get_coordinates(double** out_view,
-                                         int* n_out_view) const {
-    internal::copy_to_view(coordinates, out_view, n_out_view);
-}
-void LangevinTrajectory::get_times_fs(double** out_view,
-                                      int* n_out_view) const {
-    internal::copy_to_view(times_fs, out_view, n_out_view);
-}
-void LangevinTrajectory::get_potential_energy(double** out_view,
-                                              int* n_out_view) const {
-    internal::copy_to_view(potential_energy, out_view, n_out_view);
-}
-void LangevinTrajectory::get_kinetic_energy(double** out_view,
-                                            int* n_out_view) const {
-    internal::copy_to_view(kinetic_energy, out_view, n_out_view);
-}
+// The trajectory's array views live with the record itself, in
+// src/Simulation.cpp: SimulationTrajectory is the module's one
+// trajectory type, shared by every simulation.
 
 namespace {
 

@@ -63,6 +63,27 @@ IMPBFFEXPORT std::string atom_name(IMP::atom::Atom atom);
 IMPBFFEXPORT std::vector<std::string> hierarchy_atom_metadata(
         IMP::atom::Hierarchy hierarchy);
 
+//! An `IMP::atom::Hierarchy` built from a frame's arrays -- no file, no parser.
+/*!
+    The inverse of #IMP::bff::protein_frame_from_hierarchy, and the door that
+    lets the dye roads take coordinates rather than a PDB (PRD-139): a caller
+    who has positions, names and residues in arrays -- from a trajectory, from
+    a generator, from anywhere -- gets the model IMP's machinery needs without
+    a structure file in between.
+
+    Chains come from `chain_ids`, residues from `residue_indices` paired with
+    `resnames`, and each atom's type from its name; an unknown name still
+    becomes an atom, with a type made from the name, because refusing here
+    would reject every non-standard label. Radii and masses are set the way
+    #IMP::atom::read_pdb sets them, from the element the name implies.
+
+    \param[in] frame the structure as arrays
+    \param[in] m the model to build in
+    \throw ValueException when the arrays disagree on the number of atoms
+*/
+IMPBFFEXPORT IMP::atom::Hierarchy hierarchy_from_protein_frame(
+        const ProteinFrame& frame, IMP::Model* m);
+
 IMPBFFEXPORT ProteinFrame protein_frame_from_hierarchy(
         IMP::atom::Hierarchy hierarchy);
 

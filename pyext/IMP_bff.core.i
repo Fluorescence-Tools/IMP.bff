@@ -1012,6 +1012,8 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 %include "IMP_bff.topology.i"
 
 /* The cgprobe samplers: linker Metropolis, rotamer libraries, RRT, kinetics. */
+/* the shape every simulation shares (PRD-139) */
+%include "IMP_bff.simulation.i"
 %include "IMP_bff.sampling.i"
 
 /* The cgprobe MD runner: IMP MD/MC driver. */

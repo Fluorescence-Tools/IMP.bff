@@ -173,23 +173,23 @@ class ProbeDiffusionSimulationTests(IMP.test.TestCase):
     def test_the_trajectory_comes_back_in_the_structure_frame(self):
         """The walk runs on the grid; the anchor puts it back on the protein."""
         simulation = self.simulation()
-        simulation.run(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
+        simulation.simulate(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
         self.assertAlmostEqual(
             float(np.linalg.norm(simulation.get_mean_position() - self.x0)), 0.0,
             delta=3.0)
 
     def test_trajectories_are_concatenated_not_averaged(self):
         one = self.simulation()
-        one.run(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
+        one.simulate(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
         four = self.simulation()
-        four.run(t_max=100.0, t_step=0.002, n_trajectories=4, random_seed=3)
+        four.simulate(t_max=100.0, t_step=0.002, n_trajectories=4, random_seed=3)
         self.assertEqual(four.n_frames, 4 * one.n_frames)
 
     def test_a_seed_pins_the_walk(self):
         first = self.simulation()
-        first.run(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
+        first.simulate(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
         second = self.simulation()
-        second.run(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
+        second.simulate(t_max=100.0, t_step=0.002, n_trajectories=2, random_seed=5)
         self.assertTrue(
             np.array_equal(first.get_trajectory(), second.get_trajectory()))
 
@@ -197,12 +197,12 @@ class ProbeDiffusionSimulationTests(IMP.test.TestCase):
         simulation = ProbeDiffusionSimulation(
             np.zeros_like(self.density), self.dg, self.x0
         )
-        self.assertEqual(simulation.run(t_max=10.0, random_seed=1), 0)
+        self.assertEqual(simulation.simulate(t_max=10.0, random_seed=1), 0)
         self.assertEqual(simulation.n_frames, 0)
 
     def test_no_rate_map_means_no_quenching(self):
         simulation = self.simulation()
-        simulation.run(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
+        simulation.simulate(t_max=100.0, t_step=0.002, n_trajectories=1, random_seed=3)
         self.assertEqual(float(simulation.get_k_quench().sum()), 0.0)
         self.assertEqual(simulation.collision_fraction, 0.0)
 
@@ -217,7 +217,7 @@ class ProbeDiffusionSimulationTests(IMP.test.TestCase):
             np.array([self.x0]), self.x0, np.array([3.0]),
         )
         simulation = self.simulation(rate_map)
-        simulation.run(t_max=200.0, t_step=0.002, n_trajectories=1, random_seed=3)
+        simulation.simulate(t_max=200.0, t_step=0.002, n_trajectories=1, random_seed=3)
         # The sphere of influence covers the whole volume, so every frame sees it.
         self.assertAlmostEqual(float(simulation.get_k_quench().min()), 3.0, places=5)
         self.assertTrue(np.all(simulation.get_k_quench() > 0.0))
@@ -227,7 +227,7 @@ class ProbeDiffusionSimulationTests(IMP.test.TestCase):
         ng = self.density.shape[0]
         field = np.arange(ng ** 3, dtype=np.float64).reshape((ng,) * 3)
         simulation = self.simulation()
-        simulation.run(t_max=50.0, t_step=0.002, n_trajectories=1, random_seed=3)
+        simulation.simulate(t_max=50.0, t_step=0.002, n_trajectories=1, random_seed=3)
         sampled = simulation.sample_grid(field, ng)
         centre = grid_center_index(ng)
         expected = []

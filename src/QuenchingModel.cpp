@@ -395,7 +395,7 @@ bool QuenchedDonorDecay::simulate_diffusion() {
     walk_ = ProbeDiffusionSimulation(density(), av_.get_grid_step(), x0(),
                                    std::vector<int>(), slow_factor_map_,
                                    quenching_rate_map_);
-    walk_.run(diffusion_coefficient_, slow_fact_, t_step_, t_max_,
+    walk_.simulate(diffusion_coefficient_, slow_fact_, t_step_, t_max_,
               n_trajectories_, random_seed_);
     has_walk_ = true;
     has_photons_ = false;

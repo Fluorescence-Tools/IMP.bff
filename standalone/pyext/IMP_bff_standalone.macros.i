@@ -508,14 +508,30 @@ template <int D> class VectorD {
 namespace IMP { namespace algebra {
 // Enough of the shape for SWIG to treat it as an ordinary value: without a
 // default constructor in view it wraps every return in SwigValueWrapper and
-// writes code the real class does not support.
+// writes code the real class does not support. Where IMP is linked the class
+// is IMP's own, spelled `IMP::VectorD` and pulled in here; where it is not,
+// the shim's `IMP::algebra::VectorD` is all there is, and naming the other
+// spelling would emit traits for a class the compiler never sees.
+#ifdef IMPBFF_WITH_IMP
 using IMP::VectorD;
-typedef VectorD<3> Vector3D;
-typedef VectorD<4> Vector4D;
 typedef IMP::Vector<VectorD<3> > Vector3Ds;
 typedef IMP::Vector<VectorD<4> > Vector4Ds;
+#else
+template <int D> class VectorD {
+ public:
+    VectorD();
+    VectorD(const VectorD<D>& o);
+    double operator[](unsigned int i) const;
+};
+typedef std::vector<VectorD<3> > Vector3Ds;
+typedef std::vector<VectorD<4> > Vector4Ds;
+#endif
+typedef VectorD<3> Vector3D;
+typedef VectorD<4> Vector4D;
 } }
 IMPBFF_VECTOR_TYPEMAPS(3, IMP::algebra::Vector3D)
 IMPBFF_VECTOR_TYPEMAPS(4, IMP::algebra::Vector4D)
+#ifdef IMPBFF_WITH_IMP
 IMPBFF_VECTOR_TYPEMAPS(3, IMP::VectorD<3>)
 IMPBFF_VECTOR_TYPEMAPS(4, IMP::VectorD<4>)
+#endif

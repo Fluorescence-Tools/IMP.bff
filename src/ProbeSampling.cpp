@@ -16,6 +16,8 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/ProbeSampling.h>
+#include <limits>
+#include <IMP/bff/internal/json.h>
 #include <IMP/bff/internal/PdbFrames.h>
 #include <IMP/bff/BrownianWalk.h>
 #include <IMP/bff/internal/GridShape.h>
@@ -80,7 +82,9 @@ ProbeDiffusionSimulation::ProbeDiffusionSimulation(
           quenching_rate_map_(quenching_rate_map),
           x0_(x0.empty() ? std::vector<double>(3, 0.0) : x0),
           dg_(dg), t_step_(0.0), ng_(internal::cube_side(density.size())),
-          n_accepted_(0), n_rejected_(0) {
+          n_accepted_(0), n_rejected_(0),
+      diffusion_coefficient_(40.0), slow_fact_(0.01), t_max_(10000.0),
+      n_trajectories_(1), random_seed_(-1) {
     if (!density_.empty() && ng_ == 0) {
         IMP_THROW("an occupancy grid must be cubic; " << density_.size()
                           << " values are not a whole cube",
@@ -91,7 +95,7 @@ ProbeDiffusionSimulation::ProbeDiffusionSimulation(
     }
 }
 
-int ProbeDiffusionSimulation::run(double D, double slow_fact, double t_step,
+int ProbeDiffusionSimulation::simulate(double D, double slow_fact, double t_step,
                                 double t_max, int n_trajectories, int seed) {
     t_step_ = t_step;
     if (n_trajectories < 0) n_trajectories = default_trajectory_count();
@@ -629,6 +633,105 @@ int sample_weighted_index(const std::vector<double>& weights, int seed) {
                                  : static_cast<unsigned int>(seed));
     std::discrete_distribution<int> draw(weights.begin(), weights.end());
     return draw(engine);
+}
+
+
+// ---- the shared simulation interface -----------------------------------
+
+std::string ProbeDiffusionSimulation::get_parameters() const {
+    nlohmann::json j;
+    j["diffusion_coefficient"] = diffusion_coefficient_;
+    j["slow_factor"] = slow_fact_;
+    j["t_step"] = t_step_;
+    j["t_max"] = t_max_;
+    j["n_trajectories"] = n_trajectories_;
+    j["seed"] = random_seed_;
+    j["voxel_edge"] = dg_;
+    return j.dump();
+}
+
+void ProbeDiffusionSimulation::set_parameters(const std::string& json) {
+    if (json.empty()) return;
+    nlohmann::json j;
+    try {
+        j = nlohmann::json::parse(json);
+    } catch (const std::exception& e) {
+        IMP_THROW("the parameters are not JSON: " << e.what(), ValueException);
+    }
+    if (!j.is_object()) {
+        IMP_THROW("the parameters must be a JSON object, not " << j.type_name(),
+                  ValueException);
+    }
+    for (nlohmann::json::const_iterator it = j.begin(); it != j.end(); ++it) {
+        const std::string& k = it.key();
+        if (k == "diffusion_coefficient") diffusion_coefficient_ = it.value().get<double>();
+        else if (k == "slow_factor") slow_fact_ = it.value().get<double>();
+        else if (k == "t_step") t_step_ = it.value().get<double>();
+        else if (k == "t_max") t_max_ = it.value().get<double>();
+        else if (k == "n_trajectories") n_trajectories_ = it.value().get<int>();
+        else if (k == "seed") random_seed_ = it.value().get<int>();
+        else if (k == "voxel_edge") dg_ = it.value().get<double>();
+        else {
+            IMP_THROW("a grid diffusion simulation has no parameter '" << k
+                      << "'; it has diffusion_coefficient, slow_factor, t_step,"
+                         " t_max, n_trajectories, seed and voxel_edge",
+                      ValueException);
+        }
+    }
+    if (t_step_ <= 0.0) {
+        IMP_THROW("t_step is above zero, not " << t_step_, ValueException);
+    }
+}
+
+void ProbeDiffusionSimulation::get_positions(double** out_view,
+                                             int* n_out_view) const {
+    // the walker as it stands: the last frame, or where it started
+    if (trajectory_.size() >= 3) {
+        const std::size_t last = trajectory_.size() - 3;
+        std::vector<double> p(trajectory_.begin() + last, trajectory_.end());
+        internal::copy_to_view(p, out_view, n_out_view);
+        return;
+    }
+    internal::copy_to_view(x0_, out_view, n_out_view);
+}
+
+void ProbeDiffusionSimulation::set_positions(const std::vector<double>& xyz) {
+    if (xyz.size() != 3) {
+        IMP_THROW("a walk has one position, three coordinates, not "
+                  << xyz.size(), ValueException);
+    }
+    // the walk starts from x0_, so putting the walker somewhere *is* moving
+    // the start: there is no other state to move
+    x0_ = xyz;
+    trajectory_.clear();
+}
+
+void ProbeDiffusionSimulation::step(int n_steps) {
+    if (n_steps <= 0) return;
+    simulate(diffusion_coefficient_, slow_fact_, t_step_,
+             t_step_ * static_cast<double>(n_steps), 1, random_seed_);
+}
+
+SimulationTrajectory ProbeDiffusionSimulation::run(int n_steps, int write_every) {
+    if (write_every < 1) write_every = 1;
+    simulate(diffusion_coefficient_, slow_fact_, t_step_,
+             t_step_ * static_cast<double>(n_steps), n_trajectories_,
+             random_seed_);
+    SimulationTrajectory out;
+    out.integrator = "grid-walk";
+    out.temperature = std::numeric_limits<double>::quiet_NaN();
+    // t_step is ns here and the record is femtoseconds, as every trajectory is
+    out.timestep_fs = t_step_ * 1e6;
+    out.n_atoms = 1;
+    const int n = get_n_frames();
+    for (int f = 0; f < n; f += write_every) {
+        out.coordinates.push_back(trajectory_[f * 3]);
+        out.coordinates.push_back(trajectory_[f * 3 + 1]);
+        out.coordinates.push_back(trajectory_[f * 3 + 2]);
+        out.times_fs.push_back(out.timestep_fs * f);
+    }
+    out.n_frames = static_cast<int>(out.times_fs.size());
+    return out;
 }
 
 IMPBFF_END_NAMESPACE

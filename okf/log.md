@@ -11014,3 +11014,16 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   minimizer run segfaulted), and the wheel carries IMP's atom data (3.1 MB; score_functor's 18 MB stays out).
   `get_build()` now answers core / core+imp / imp. `test/test_dye_dynamics_doors.py` asserts in a subprocess
   that running a dye imports no IMP module. Lanes: 724/0 IMP-free; IMP-linked differs only by the new tests.
+- **Eine Form für jede Simulation** (imp-bff-ce, owner's review 2026-09-08, PRD-139): the first cut of the dye
+  doors was two free functions taking PDB paths; the owner refused both halves -- a path where an array belongs,
+  and a one-shot call where a simulation object belongs ("like in OpenMM"), general enough for Langevin, MD,
+  diffusion, lattice diffusion and a learned model, "maybe json style". `include/Simulation.h` is that shape:
+  `SimulationTrajectory` (the module's one trajectory record; `LangevinTrajectory` is a typedef) and
+  `ProbeSimulation` (`get_type`, `get_parameters`/`set_parameters`, `get_positions`/`set_positions`, `minimize`,
+  `step`, `run`, `has_energy`). Parameters are JSON because that is what lets one interface carry kinds with
+  disjoint knobs; state stays arrays. `DyeSimulation` takes two `ProteinFrame`s and the dye's MOL2, keeps IMP
+  behind a pimpl, and refuses parameter changes after the system is built. `ProbeDiffusionSimulation` joins the
+  interface: its old `run(D, ...)` is `simulate(...)` and `run(n_steps, write_every)` now means what it means
+  everywhere else. New bridge `hierarchy_from_protein_frame` (the inverse of `protein_frame_from_hierarchy`)
+  is what lets arrays reach IMP's machinery with no file in between. The same six lines drive both simulations;
+  lanes 724/0 IMP-free, IMP-linked equal in the same environment.

@@ -46,6 +46,7 @@
  *
  */
 #include <IMP/bff/bff_config.h>
+#include <IMP/bff/Simulation.h>
 
 #include <IMP/bff/Base.h>
 
@@ -105,7 +106,7 @@ IMPBFFEXPORT std::vector<int> trajectory_seeds(int random_seed,
     \param quenching_rate_map per-voxel quenching rate, 1/ns, sampled along the
            trajectory to give k_quench()
 */
-class IMPBFFEXPORT ProbeDiffusionSimulation {
+class IMPBFFEXPORT ProbeDiffusionSimulation : public ProbeSimulation {
     std::vector<int> density_;
     std::vector<int> slow_density_;
     std::vector<double> slow_factor_map_;
@@ -114,6 +115,9 @@ class IMPBFFEXPORT ProbeDiffusionSimulation {
     std::vector<double> x0_;
     double dg_;
     double t_step_;
+    //! What #run() drives #simulate() with; #set_parameters changes them.
+    double diffusion_coefficient_, slow_fact_, t_max_;
+    int n_trajectories_, random_seed_;
     int ng_;
     int n_accepted_;
     int n_rejected_;
@@ -139,9 +143,26 @@ public:
         \return the number of frames, or 0 when no walk found a starting point
                 -- an empty accessible volume
     */
-    int run(double D = 40.0, double slow_fact = 0.01, double t_step = 0.002,
-            double t_max = 10000.0, int n_trajectories = 1,
-            int random_seed = -1);
+    int simulate(double D = 40.0, double slow_fact = 0.01, double t_step = 0.002,
+                 double t_max = 10000.0, int n_trajectories = 1,
+                 int random_seed = -1);
+
+    // ---- IMP::bff::ProbeSimulation: the shape every simulation shares ----
+    //
+    // The walk is one particle on a grid, so `get_n_atoms()` is 1 and the
+    // positions are its own. It has no energy and no minimiser, and says so
+    // rather than returning a polite zero. `run()` drives #simulate() with
+    // the parameters in force, taking `n_steps * t_step` as the time to
+    // cover; `write_every` thins the record the walk already produces.
+
+    std::string get_type() const override { return "grid-diffusion"; }
+    std::string get_parameters() const override;
+    void set_parameters(const std::string& json) override;
+    int get_n_atoms() const override { return 1; }
+    void get_positions(double** out_view, int* n_out_view) const override;
+    void set_positions(const std::vector<double>& xyz) override;
+    void step(int n_steps) override;
+    SimulationTrajectory run(int n_steps, int write_every = 1) override;
 
     //! `(n_frames, 3)` positions in Angstrom, as a numpy view.
     void get_trajectory(double** out_view, int* n_out_view) const;
