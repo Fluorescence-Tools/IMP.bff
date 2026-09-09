@@ -129,7 +129,7 @@ def flat_chain(sampler, burn=300):
 
 # ------------------------------------------------------------- reproducible
 
-@pytest.mark.parametrize("algorithm", ["stretch", "de", "metropolis"])
+@pytest.mark.parametrize("algorithm", ["stretch", "slice", "de", "metropolis"])
 def test_a_run_under_a_fixed_seed_is_reproducible(algorithm):
     """Two identically-seeded samplers give the same chain, byte for byte."""
     first = make_sampler(algorithm, seed=5, n_steps=300)
@@ -140,7 +140,7 @@ def test_a_run_under_a_fixed_seed_is_reproducible(algorithm):
                           np.asarray(second.get_log_prob()))
 
 
-@pytest.mark.parametrize("algorithm", ["stretch", "de", "metropolis"])
+@pytest.mark.parametrize("algorithm", ["stretch", "slice", "de", "metropolis"])
 def test_a_different_seed_gives_a_different_chain(algorithm):
     first = make_sampler(algorithm, seed=5, n_steps=300)
     second = make_sampler(algorithm, seed=6, n_steps=300)
@@ -604,8 +604,11 @@ def test_a_sampler_without_an_objective_is_refused():
 
 
 def test_an_unknown_algorithm_is_refused():
+    """`"slice"` used to be the example here, because it did not exist. It
+    does now, so the example has to be a name that really is not a backend --
+    otherwise this test passes by accident the day one is added."""
     with pytest.raises(ValueError):
-        Sampler("slice")
+        Sampler("hamiltonian")
 
 
 # ------------------------------------------------------------ misc surface
@@ -620,3 +623,60 @@ def test_the_temperature_flattens_acceptance_but_stays_valid():
     sampler = make_sampler("metropolis", seed=89, n_steps=400, temp=4.0)
     assert 0.0 < sampler.get_acceptance_rate() <= 1.0
     assert np.all(np.isfinite(np.asarray(sampler.get_log_prob())))
+
+
+# --------------------------------------------------------------- slice/zeus
+
+def test_slice_is_selected_by_every_name_it_is_known_by():
+    """`zeus` is the package people arrive from; `slice` is the move."""
+    for name in ("slice", "zeus", "ensemble_slice", "sample_slice"):
+        assert Sampler(name, 1).get_algorithm() == "slice"
+
+
+def test_slice_recovers_the_width_of_the_target():
+    """The measurement that catches a truncated stepping-out.
+
+    A slice sampler whose interval is capped before it clears the density
+    still produces draws that are all *inside* the slice, so nothing looks
+    wrong: the acceptance is 100% by construction and the chain moves. What
+    it loses is the tails, and the posterior comes out too narrow. So the
+    test is the width, not the mean.
+    """
+    sampler = make_sampler("slice", n_steps=3000)
+    chain = flat_chain(sampler)
+    sd = chain.std(axis=0)
+    truth = np.sqrt(np.diag(SIGMA))
+    assert sd[0] == pytest.approx(truth[0], rel=0.15), (sd, truth)
+    assert sd[1] == pytest.approx(truth[1], rel=0.15), (sd, truth)
+
+
+def test_slice_recovers_the_correlation():
+    sampler = make_sampler("slice", n_steps=3000)
+    chain = flat_chain(sampler)
+    truth = SIGMA[0, 1] / np.sqrt(SIGMA[0, 0] * SIGMA[1, 1])
+    assert np.corrcoef(chain.T)[0, 1] == pytest.approx(truth, abs=0.1)
+
+
+def test_a_converged_slice_run_truncates_nothing():
+    """`slice_truncations` is the diagnostic for the failure above.
+
+    It counts the times the stepping-out cap bound rather than the density
+    ending the expansion. On a Gaussian with the default cap it must be zero;
+    a non-zero count means the recorded chain's width is not to be believed.
+    """
+    sampler = make_sampler("slice", n_steps=1000)
+    assert sampler.get_slice_truncations() == 0
+
+
+def test_the_slice_scale_is_tuned_and_then_frozen():
+    """Tuning during the recorded chain would make it non-Markovian."""
+    sampler = make_sampler("slice", n_steps=1000)
+    mu = sampler.get_slice_mu()
+    assert mu > 0.0
+    sampler.run(200, 1)
+    assert sampler.get_slice_mu() == pytest.approx(mu)
+
+
+def test_an_explicit_slice_scale_is_not_overwritten():
+    sampler = make_sampler("slice", n_steps=200, slice_mu=0.75)
+    assert sampler.get_slice_mu() == pytest.approx(0.75)

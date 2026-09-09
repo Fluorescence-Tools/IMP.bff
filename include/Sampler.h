@@ -12,7 +12,10 @@
  *  per proposal per parameter. This class writes the walker into the
  *  input ports, evaluates the node graph and accepts, all in C++.
  *
- *  Three algorithms, exactly chisurf's:
+ *  Four algorithms behind one interface. The interface is the point:
+ *  a caller names a backend and everything else -- the objective, the
+ *  bounds, the walkers, the chain, the diagnostics -- is the same, so
+ *  swapping a sampler is a string and not a rewrite.
  *
  *  - "stretch": the affine-invariant ensemble stretch move of
  *    Goodman & Weare as chisurf's EnsembleSampler implements it. The
@@ -28,6 +31,24 @@
  *    direct mode-to-mode jump), and a fraction of proposals are snooker
  *    updates along the line to another chain. The population is seeded
  *    and jittered exactly as sample_differential_evolution seeds it.
+ *
+ *  - "slice": the ensemble slice sampler (Karamanis & Beutler; what
+ *    `zeus` implements). Like "stretch" the walkers are split into two
+ *    halves and a walker moves along the line to one of the other half,
+ *    but the move is a *slice* rather than a Metropolis proposal: a
+ *    height is drawn under the density, the interval is stepped out
+ *    until both ends are below it, and points are drawn and the interval
+ *    shrunk until one lands above. Every step is accepted, which is what
+ *    it buys -- no tuning of an acceptance rate, and no rejected
+ *    evaluations. The direction scale mu is tuned during warm-up from
+ *    the ratio of expansions to contractions and frozen afterwards.
+ *
+ *    **The stepping-out must be allowed to overshoot.** Capping it
+ *    tightly looks harmless -- every draw is still inside the slice --
+ *    and it silently truncates the tails: measured on a Gaussian target,
+ *    a cap that binds gives a posterior some 30% too narrow, with no
+ *    diagnostic saying so. #get_slice_truncations counts the times the
+ *    cap bound, and it should be zero on a converged run.
  *
  *  - "metropolis": the blocked random-walk Metropolis of
  *    walk_mcmc_blocked. Blocks come from an attached FactorGraph's
@@ -62,9 +83,6 @@
  *
  *  What is deliberately NOT here:
  *
- *  - the ensemble slice sampler (chisurf's EnsembleSliceSampler) stays
- *    in Python; it is a different move with its own tuning loop, and
- *    nothing in this class is shared with it but the bookkeeping.
  *  - walk_mcmc's Robbins-Monro variant; the blocked sampler with one
  *    block is chisurf's own fallback for an unstructured fit and covers
  *    that role.
@@ -233,6 +251,19 @@ class IMPBFFEXPORT Sampler {
   void set_stretch_scale(double a);
   //! The stretch scale.
   double get_stretch_scale() const;
+
+  //! The slice sampler's direction scale (tuned during warm-up).
+  double get_slice_mu() const;
+  //! Set it explicitly, and stop tuning it.
+  void set_slice_mu(double mu);
+  //! Cap on stepping-out expansions per side; 0 restores the default.
+  /*! Raise it, never lower it, unless a run is known to be pathological:
+      a cap that binds truncates the tails silently. */
+  void set_slice_max_steps(int n);
+  int get_slice_max_steps() const;
+  //! How often the stepping-out cap bound. Non-zero means the chain is
+  //! truncated and its width is not to be believed.
+  long get_slice_truncations() const;
   //! Skip the nwalkers >= 2*ndim requirement (chisurf's flag).
   void set_live_dangerously(bool v);
   //! Whether the walker-count requirement is skipped.
@@ -449,6 +480,13 @@ class IMPBFFEXPORT Sampler {
 
   //! One ensemble step of the stretch move (EnsembleSampler._step).
   void stretch_step();
+  //! One ensemble slice sweep: both halves, every walker, always accepted.
+  void slice_step();
+  //! Slice-sample one walker along \p direction from \p x; returns the new point.
+  std::vector<double> slice_along(const std::vector<double>& x,
+                                  const std::vector<double>& direction,
+                                  double log_p_x, int* expansions,
+                                  int* contractions, bool* truncated);
   //! One DE generation (sample_differential_evolution._generation).
   void de_generation(long generation_index);
   //! One blocked sweep (walk_mcmc_blocked._sweep).
@@ -480,6 +518,15 @@ class IMPBFFEXPORT Sampler {
   unsigned int seed_ = 42u;
   int n_walkers_setting_ = 0;              //!< 0: chisurf default
   double stretch_scale_ = 2.0;
+  //! The slice sampler's direction scale, tuned during warm-up.
+  double slice_mu_ = 1.0;
+  //! How many stepping-out expansions the cap cut short. Should stay 0.
+  long slice_truncations_ = 0;
+  long slice_expansions_ = 0;
+  long slice_contractions_ = 0;
+  //! Cap on stepping-out expansions per side. Generous on purpose.
+  int slice_max_steps_ = 10000;
+  bool slice_tuning_ = true;
   bool live_dangerously_ = false;
   int n_chains_setting_ = 0;               //!< 0: chisurf default
   double jitter_ = 1e-4;

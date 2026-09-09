@@ -190,7 +190,27 @@ IMPBFFEXPORT double reference_rmsd(const ReferenceFits& fits);
 
 //! Control parameters for rigid-body FRET docking.
 struct IMPBFFEXPORT DockingParameters {
-    //! Outer Monte-Carlo iterations, and steps per iteration.
+    //! Which sampler #IMP::bff::dock runs.
+    /*! One interface, four backends -- the names #IMP::bff::Sampler takes:
+
+        - `"metropolis"` (aliases `"mc"`, `"walk"`): a single-chain random
+          walk over the pose vector. The plain one, and the default.
+        - `"stretch"` (aliases `"emcee"`, `"ensemble"`, `"affine"`): the
+          affine-invariant ensemble move. Scale-free, so it does not need the
+          mover amplitudes tuned.
+        - `"slice"` (aliases `"zeus"`, `"ensemble_slice"`): the ensemble slice
+          sampler. Every move is accepted, so there is no acceptance rate to
+          tune either.
+        - `"de"`: differential-evolution MCMC.
+
+        The pose is `(tx, ty, tz, rx, ry, rz)` per mobile body -- a
+        translation and a rotation vector -- so an ensemble sampler over six
+        numbers per body is an ordinary small problem, and the same objective
+        serves all four. */
+    std::string sampler;
+    //! Ensemble size for `"stretch"`, `"slice"` and `"de"`; 0 picks 4 * ndim.
+    int n_walkers;
+    //! Outer sampler iterations, and steps per iteration.
     int n_frames, mc_steps;
     //! kT, and the per-step rigid-body mover amplitudes (Å, radian).
     double mc_temperature, max_translation, max_rotation;
@@ -310,7 +330,8 @@ struct IMPBFFEXPORT DockingParameters {
     double clash_radii_scale;
 
     DockingParameters()
-        : n_frames(500), mc_steps(10), mc_temperature(1.0),
+        : sampler("metropolis"), n_walkers(0), n_frames(500), mc_steps(10),
+          mc_temperature(1.0),
           max_translation(4.0), max_rotation(0.1),
           simulated_annealing(false), sa_tmin(1.0), sa_tmax(2.5), n_best(20),
           ev_weight(1.0), shuffle_max_translation(10.0),
@@ -839,6 +860,74 @@ IMPBFFEXPORT DockingResult dock_minimize(
         const std::string& fps_json_path, const std::string& output_dir,
         const DockingParameters& params = DockingParameters(),
         DockingStop* stop = NULL, const std::string& initial_poses = "");
+
+//! Dock by FRET-restrained Monte Carlo.
+/*!
+    The stochastic alternative to #IMP::bff::dock_minimize, and what
+    `imp_bff dock` runs. Each mobile rigid body gets an
+    `IMP::core::RigidBodyMover`; the sampler proposes, the network scores, and
+    Metropolis at \c mc_temperature decides. Unlike the minimiser this needs no
+    point-member proxies -- nothing differentiates the score, so the volumes'
+    own mean positions can be scored directly, which is why the assembly is
+    built with \c mean_position_restraint.
+
+    **The best pose is what comes back**, not the last one. A Monte-Carlo walk
+    ends wherever it happens to be, and at a temperature that samples properly
+    that is routinely worse than the best state it passed through; the
+    optimiser is told to restore the best, and the returned pose, PDB and table
+    are all read from it.
+
+    \param[in] pdb_paths one structure per rigid body
+    \param[in] fps_json_path the labelling and distance file
+    \param[in] output_dir where `docked.pdb`, `best_*.pdb`, `scores.csv` and
+               `convergence.csv` are written
+    \param[in] params `n_frames` outer iterations of `mc_steps` each,
+               `mc_temperature` the Metropolis kT, `max_translation` and
+               `max_rotation` the mover amplitudes, `shuffle_max_translation`
+               the initial randomisation (0 does not shuffle), `n_best` how
+               many best-scoring models to write, `fixed_body` the body held
+               still as the reference frame
+    \param[in] stop asked between frames; null never stops
+    \param[in] initial_poses a docked state to resume from, as JSON; empty
+               starts from the input pose (and shuffles, if asked to)
+    \return the best score, its table, its pose and what was written
+*/
+IMPBFFEXPORT DockingResult dock(const std::vector<std::string>& pdb_paths,
+                                const std::string& fps_json_path,
+                                const std::string& output_dir,
+                                const DockingParameters& params =
+                                        DockingParameters(),
+                                DockingStop* stop = NULL,
+                                const std::string& initial_poses = "");
+
+//! Repeat a docking run from independent random starts and report the spread.
+/*!
+    The precision an experiment's distances actually pin down, as opposed to
+    the score one run happened to reach: each trial shuffles and docks again,
+    and what the trials disagree about is what the data does not determine.
+    This is the *sampling* spread; #IMP::bff::fps_bootstrap is the other
+    question, how much the distance uncertainties move the answer.
+
+    Trials run in sequence, each in `output_dir/trial_000` and so on. The
+    returned #IMP::bff::DockingResult is the best trial's, with the spread in
+    its `extra` JSON: `n_trials`, `score_mean`, `score_std`, `best_trial`, and
+    `trial_scores` in trial order.
+
+    \param[in] pdb_paths,fps_json_path,output_dir as for #dock
+    \param[in] params the per-trial parameters; `n_frames` is one trial's
+               budget, not the total
+    \param[in] n_trials how many independent starts
+    \param[in] minimize run #dock_minimize per trial rather than #dock. The
+               default: independent random starts followed by a deterministic
+               descent is what the spread of a *fit* means.
+    \param[in] stop asked between trials; null never stops
+    \throw ValueException when \p n_trials is below one
+*/
+IMPBFFEXPORT DockingResult estimate_docking_errors(
+        const std::vector<std::string>& pdb_paths,
+        const std::string& fps_json_path, const std::string& output_dir,
+        const DockingParameters& params = DockingParameters(), int n_trials = 10,
+        bool minimize = true, DockingStop* stop = NULL);
 
 //! Refine a pose in place: minimise, write the structure and the table.
 /*! No shuffle and no proxies -- the volumes' own mean positions are scored,

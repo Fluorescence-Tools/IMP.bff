@@ -22,6 +22,7 @@
 #include <IMP/container/ListSingletonContainer.h>
 #include <IMP/algebra/vector_generators.h>
 #include <IMP/core/ConjugateGradients.h>
+#include <IMP/bff/Sampler.h>
 #include <IMP/core/ExcludedVolumeRestraint.h>
 #include <IMP/core/XYZR.h>
 #include <IMP/core/rigid_bodies.h>
@@ -1248,6 +1249,357 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
     out.converged = converged && !stopped;
     set_bond_totals(out, params.max_force);
     return out;
+}
+
+namespace {
+
+//! The pose of the mobile bodies as one vector: 6 numbers each.
+/*! `(tx, ty, tz, rx, ry, rz)` -- a translation and a rotation vector (the
+    axis scaled by the angle), which is the smallest unconstrained encoding of
+    a rigid motion. Unconstrained matters: a sampler that proposes a
+    quaternion has to renormalise it, and the renormalisation is a projection
+    the acceptance ratio does not know about. */
+class PoseVector {
+    IMP::core::RigidBodies mobile_;
+    std::vector<IMP::algebra::ReferenceFrame3D> home_;
+
+ public:
+    PoseVector() {}
+    explicit PoseVector(const IMP::core::RigidBodies& bodies) {
+        for (std::size_t i = 0; i < bodies.size(); ++i) {
+            IMP::core::RigidBody rb = bodies[i];
+            if (!rb.get_coordinates_are_optimized()) continue;
+            mobile_.push_back(rb);
+            home_.push_back(rb.get_reference_frame());
+        }
+    }
+
+    std::size_t size() const { return mobile_.size() * 6; }
+    std::size_t n_bodies() const { return mobile_.size(); }
+
+    //! Write \p v onto the model, as a motion away from the home frames.
+    void apply(const std::vector<double>& v) {
+        for (std::size_t b = 0; b < mobile_.size(); ++b) {
+            const std::size_t o = b * 6;
+            const IMP::algebra::Vector3D t(v[o], v[o + 1], v[o + 2]);
+            const IMP::algebra::Vector3D r(v[o + 3], v[o + 4], v[o + 5]);
+            const double angle = r.get_magnitude();
+            const IMP::algebra::Rotation3D rot =
+                    angle > 1e-12
+                            ? IMP::algebra::get_rotation_about_axis(
+                                      r / angle, angle)
+                            : IMP::algebra::get_identity_rotation_3d();
+            const IMP::algebra::Transformation3D h =
+                    home_[b].get_transformation_to();
+            IMP::core::RigidBody(mobile_[b]).set_reference_frame(IMP::algebra::ReferenceFrame3D(
+                    IMP::algebra::Transformation3D(
+                            rot * h.get_rotation(),
+                            h.get_translation() + t)));
+        }
+    }
+
+    //! The zero vector: the pose the bodies were in when this was built.
+    std::vector<double> home() const {
+        return std::vector<double>(size(), 0.0);
+    }
+};
+
+}  // namespace
+
+DockingResult dock(const std::vector<std::string>& pdb_paths,
+                   const std::string& fps_json_path,
+                   const std::string& output_dir,
+                   const DockingParameters& params, DockingStop* stop,
+                   const std::string& initial_poses) {
+    internal::make_directory(output_dir);
+
+    // The sampler differentiates nothing, so the volumes' own mean positions
+    // are scored directly and the point-member proxies dock_minimize needs
+    // (see its note) have no reason to exist here.
+    const DockingAssembly assembly = create_docking_assembly(
+            pdb_paths, fps_json_path, params.score_set,
+            params.mean_position_restraint, params.ev_weight, params.sigma_da,
+            params.clash_tolerance, params.max_force,
+            params.clash_radii_source, params.clash_radii_scale);
+    IMP::Model* model = assembly.get_model();
+    IMP::atom::Hierarchy root = assembly.get_root();
+
+    if (!initial_poses.empty()) apply_poses(assembly, initial_poses);
+
+    const IMP::core::RigidBodies bodies = assembly.get_rigid_bodies();
+    const std::vector<int> body_of_pdb = assembly.get_body_of_pdb();
+    int n_mobile = 0;
+    for (std::size_t i = 0; i < bodies.size(); ++i) {
+        const int body_id = i < body_of_pdb.size() ? body_of_pdb[i]
+                                                   : static_cast<int>(i);
+        const bool mobile = body_id != params.fixed_body;
+        IMP::core::RigidBody(bodies[i]).set_coordinates_are_optimized(mobile);
+        if (mobile) ++n_mobile;
+    }
+    if (n_mobile == 0 && !bodies.empty()) {
+        IMP::core::RigidBody(bodies[0]).set_coordinates_are_optimized(true);
+        n_mobile = 1;
+    }
+    if (initial_poses.empty()) {
+        shuffle_bodies(bodies, params.shuffle_max_translation);
+    }
+    model->update();
+
+    PoseVector pose(bodies);
+    if (pose.n_bodies() == 0) {
+        IMP_THROW("dock: no body is free to move -- every one of the "
+                  << bodies.size() << " is the fixed body "
+                  << params.fixed_body,
+                  ValueException);
+    }
+    IMP::core::RestraintsScoringFunction* sf = assembly.get_scoring_function();
+
+    // Everything the samplers share: one objective, one set of bounds, one
+    // chain. The backend is a string, which is the whole point of routing
+    // through IMP::bff::Sampler rather than writing a walk here.
+    const double kt = params.mc_temperature > 0.0 ? params.mc_temperature : 1.0;
+    double best = std::numeric_limits<double>::infinity();
+    std::vector<double> best_v = pose.home();
+    long n_evaluations = 0;
+    // The best few, by score, kept as pose vectors. A multimap because the
+    // runners-up are written at the end and only n_best are kept.
+    std::multimap<double, std::vector<double> > best_states;
+    const int n_best = std::max(0, params.n_best);
+    bool stopped = false;
+
+    Sampler sampler(params.sampler.empty() ? std::string("metropolis")
+                                           : params.sampler);
+    sampler.set_objective_function(
+            [&](const std::vector<double>& v) -> double {
+                if (stop != NULL && stop->should_stop()) {
+                    stopped = true;
+                    // A stopped run must still answer, and it must answer
+                    // something the sampler will not chase: -inf rejects
+                    // every further proposal rather than walking off.
+                    return -std::numeric_limits<double>::infinity();
+                }
+                pose.apply(v);
+                model->update();
+                const double score = sf->evaluate(false);
+                ++n_evaluations;
+                if (!std::isfinite(score)) {
+                    return -std::numeric_limits<double>::infinity();
+                }
+                if (score < best) {
+                    best = score;
+                    best_v = v;
+                }
+                if (n_best > 0) {
+                    best_states.insert(std::make_pair(score, v));
+                    while (static_cast<int>(best_states.size()) > n_best) {
+                        std::multimap<double, std::vector<double> >::iterator
+                                worst = best_states.end();
+                        --worst;
+                        best_states.erase(worst);
+                    }
+                }
+                // The score is an energy; the sampler wants a log-posterior.
+                return -score / kt;
+            });
+
+    // The walk starts at the current pose, and the box is the amplitude the
+    // caller gave, per body: a translation of max_translation and a rotation
+    // of max_rotation are one step, so a hundred of them is the reach.
+    const std::size_t ndim = pose.size();
+    std::vector<double> lower(ndim), upper(ndim);
+    const double t_reach = std::max(1e-6, params.max_translation) * 100.0;
+    for (std::size_t i = 0; i < ndim; ++i) {
+        const bool is_rotation = (i % 6) >= 3;
+        // Rotations are periodic, so the box is the full sphere of rotation
+        // vectors rather than a multiple of the step.
+        lower[i] = is_rotation ? -IMP::PI : -t_reach;
+        upper[i] = is_rotation ? IMP::PI : t_reach;
+    }
+    sampler.set_bounds(lower, upper);
+    sampler.set_initial_values(pose.home());
+    if (params.n_walkers > 0) sampler.set_number_of_walkers(params.n_walkers);
+
+    const int n_frames = std::max(1, params.n_frames);
+    const int mc_steps = std::max(1, params.mc_steps);
+    sampler.run(n_frames, mc_steps);
+
+    // The walk ends wherever it happens to be, and at a temperature that
+    // samples properly that is routinely worse than the best state it passed
+    // through. Everything below is read from the best.
+    pose.apply(best_v);
+    model->update();
+
+    const double total = sf->evaluate(false);
+    const double e_clash = clash_energy_of(assembly);
+    std::vector<PairDistance> pairs = collect_pair_distances(
+            assembly.get_network(), assembly.get_mean_position(),
+            params.sigma_da);
+    for (std::size_t i = 0; i < pairs.size(); ++i) {
+        pairs[i].is_bond = assembly.get_network()->get_is_bond(pairs[i].name);
+    }
+
+    const std::string convergence_csv = output_dir + "/convergence.csv";
+    {
+        std::ofstream trace(convergence_csv.c_str());
+        if (!trace) {
+            IMP_THROW("cannot write " << convergence_csv, IOException);
+        }
+        trace << "step,log_posterior\n";
+        trace << std::setprecision(10);
+        const std::vector<double> lp = sampler.get_log_prob();
+        for (std::size_t i = 0; i < lp.size(); ++i) {
+            trace << i << "," << lp[i] << "\n";
+        }
+    }
+
+    const std::string out_pdb = output_dir + "/docked.pdb";
+    IMP::atom::write_pdb(root, out_pdb);
+    std::vector<std::string> written;
+    written.push_back(out_pdb);
+    int rank = 0;
+    for (std::multimap<double, std::vector<double> >::const_iterator it =
+                 best_states.begin();
+         it != best_states.end(); ++it, ++rank) {
+        std::ostringstream name;
+        name << output_dir << "/best_" << std::setw(3) << std::setfill('0')
+             << rank << ".pdb";
+        pose.apply(it->second);
+        model->update();
+        IMP::atom::write_pdb(root, name.str());
+        written.push_back(name.str());
+    }
+    // ... and back to the best, so the object a caller inspects afterwards is
+    // the one the score and the table describe.
+    pose.apply(best_v);
+    model->update();
+
+    const std::string score_csv = output_dir + "/scores.csv";
+    write_score_csv(score_csv, total, pairs);
+
+    nlohmann::json extra;
+    extra["method"] = "sample";
+    extra["sampler"] = sampler.get_algorithm();
+    extra["n_frames"] = n_frames;
+    extra["mc_steps"] = mc_steps;
+    extra["mc_temperature"] = kt;
+    extra["n_walkers"] = sampler.get_number_of_walkers();
+    extra["ndim"] = static_cast<int>(ndim);
+    extra["n_evaluations"] = static_cast<long long>(n_evaluations);
+    extra["max_translation"] = params.max_translation;
+    extra["max_rotation"] = params.max_rotation;
+    extra["shuffle_max_translation"] = params.shuffle_max_translation;
+    extra["n_mobile"] = n_mobile;
+    extra["convergence_csv"] = convergence_csv;
+    extra["stopped"] = stopped;
+    extra["e_clash"] = e_clash;
+    extra["mean_position_restraint"] = params.mean_position_restraint;
+    extra["clash_radii_source"] = params.clash_radii_source;
+    extra["clash_radii_scale"] = params.clash_radii_scale;
+    // Read this before the score. A slice run that truncated has a chain
+    // whose width is not to be believed, and a stretch run at zero
+    // acceptance never moved.
+    if (sampler.get_algorithm() == "slice") {
+        extra["slice_truncations"] =
+                static_cast<long long>(sampler.get_slice_truncations());
+        extra["slice_mu"] = sampler.get_slice_mu();
+    }
+    {
+        // One number per walker for the ensemble backends, one for the
+        // single-chain ones; the mean is what a caller reads either way.
+        const std::vector<double> af = sampler.get_acceptance_fractions();
+        double sum = 0.0;
+        for (std::size_t i = 0; i < af.size(); ++i) sum += af[i];
+        extra["acceptance"] = af.empty() ? 0.0 : sum / af.size();
+    }
+
+    DockingResult out;
+    out.score = total;
+    out.n_avs =
+            static_cast<int>(assembly.get_network()->get_used_avs().size());
+    out.n_distances = static_cast<int>(pairs.size());
+    out.pairs = PairDistances(pairs.begin(), pairs.end());
+    out.output_dir = output_dir;
+    out.best_pdbs = written;
+    out.score_csv = score_csv;
+    out.extra = extra.dump();
+    out.poses = capture_poses(assembly);
+    out.e_clash = e_clash;
+    out.converged = !stopped;
+    set_bond_totals(out, params.max_force);
+    return out;
+}
+
+DockingResult estimate_docking_errors(
+        const std::vector<std::string>& pdb_paths,
+        const std::string& fps_json_path, const std::string& output_dir,
+        const DockingParameters& params, int n_trials, bool minimize,
+        DockingStop* stop) {
+    if (n_trials < 1) {
+        IMP_THROW("estimate_docking_errors needs at least one trial, not "
+                          << n_trials,
+                  ValueException);
+    }
+    internal::make_directory(output_dir);
+
+    // Every trial shuffles: independent starts are the whole point, and a
+    // parameter set that says otherwise would give n_trials copies of one run.
+    DockingParameters trial_params = params;
+    if (trial_params.shuffle_max_translation <= 0.0) {
+        trial_params.shuffle_max_translation = 10.0;
+    }
+
+    std::vector<double> scores;
+    std::vector<std::string> dirs;
+    DockingResult best;
+    int best_trial = -1;
+    for (int t = 0; t < n_trials; ++t) {
+        if (stop != NULL && stop->should_stop()) break;
+        std::ostringstream d;
+        d << output_dir << "/trial_" << std::setw(3) << std::setfill('0') << t;
+        const DockingResult r =
+                minimize ? dock_minimize(pdb_paths, fps_json_path, d.str(),
+                                         trial_params, stop)
+                         : dock(pdb_paths, fps_json_path, d.str(),
+                                trial_params, stop);
+        scores.push_back(r.score);
+        dirs.push_back(d.str());
+        if (best_trial < 0 || r.score < best.score) {
+            best = r;
+            best_trial = t;
+        }
+    }
+    if (scores.empty()) {
+        IMP_THROW("estimate_docking_errors: every trial was stopped before it "
+                  "ran",
+                  ValueException);
+    }
+
+    double sum = 0.0;
+    for (std::size_t i = 0; i < scores.size(); ++i) sum += scores[i];
+    const double mean = sum / scores.size();
+    double var = 0.0;
+    for (std::size_t i = 0; i < scores.size(); ++i) {
+        var += (scores[i] - mean) * (scores[i] - mean);
+    }
+    // The sample standard deviation: n - 1, because the trials are a sample of
+    // the starts that could have been drawn, not the population of them. One
+    // trial has no spread rather than a spread of zero.
+    const double sd = scores.size() > 1
+                              ? std::sqrt(var / (scores.size() - 1))
+                              : std::numeric_limits<double>::quiet_NaN();
+
+    nlohmann::json extra = nlohmann::json::parse(
+            best.extra.empty() ? std::string("{}") : best.extra);
+    extra["n_trials"] = static_cast<int>(scores.size());
+    extra["score_mean"] = mean;
+    extra["score_std"] = sd;
+    extra["best_trial"] = best_trial;
+    extra["trial_scores"] = scores;
+    extra["trial_dirs"] = dirs;
+    extra["trials_minimize"] = minimize;
+    best.extra = extra.dump();
+    best.output_dir = output_dir;
+    return best;
 }
 
 DockingResult refine_docking(const std::vector<std::string>& pdb_paths,

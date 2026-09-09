@@ -251,6 +251,9 @@ void Sampler::set_algorithm(const std::string& algorithm) {
   } else if (algorithm == "de" || algorithm == "differential_evolution" ||
              algorithm == "sample_differential_evolution") {
     canonical = "de";
+  } else if (algorithm == "slice" || algorithm == "zeus" ||
+             algorithm == "ensemble_slice" || algorithm == "sample_slice") {
+    canonical = "slice";
   } else if (algorithm == "metropolis" || algorithm == "walk" ||
              algorithm == "walk_mcmc" || algorithm == "blocked" ||
              algorithm == "walk_mcmc_blocked") {
@@ -258,7 +261,7 @@ void Sampler::set_algorithm(const std::string& algorithm) {
   } else {
     throw SamplerConfigurationError(
         "unknown sampler algorithm '" + algorithm +
-        "'; expected 'stretch', 'de' or 'metropolis'");
+        "'; expected 'stretch', 'slice', 'de' or 'metropolis'");
   }
   if (canonical != algorithm_) {
     algorithm_ = canonical;
@@ -429,7 +432,7 @@ void Sampler::set_number_of_walkers(int n) {
 }
 
 int Sampler::get_number_of_walkers() const {
-  if (algorithm_ != "stretch") return 1;
+  if (algorithm_ != "stretch" && algorithm_ != "slice") return 1;
   if (n_walkers_setting_ > 0) return n_walkers_setting_;
   const int d = static_cast<int>(ndim_);
   return std::max(2 * d + 2, 10);
@@ -442,6 +445,25 @@ void Sampler::set_stretch_scale(double a) {
 }
 
 double Sampler::get_stretch_scale() const { return stretch_scale_; }
+
+double Sampler::get_slice_mu() const { return slice_mu_; }
+
+void Sampler::set_slice_mu(double mu) {
+  if (!(mu > 0.0))
+    throw SamplerConfigurationError(
+        "the slice direction scale must be positive");
+  slice_mu_ = mu;
+  // An explicit scale is a decision; tuning would overwrite it.
+  slice_tuning_ = false;
+}
+
+void Sampler::set_slice_max_steps(int n) {
+  slice_max_steps_ = n > 0 ? n : 10000;
+}
+
+int Sampler::get_slice_max_steps() const { return slice_max_steps_; }
+
+long Sampler::get_slice_truncations() const { return slice_truncations_; }
 
 void Sampler::set_live_dangerously(bool v) { live_dangerously_ = v; }
 
@@ -984,7 +1006,7 @@ void Sampler::initialize_ensemble() {
   de_accepted_ = 0;
   de_proposed_ = 0;
 
-  if (algorithm_ == "stretch") {
+  if (algorithm_ == "stretch" || algorithm_ == "slice") {
     const int n = get_number_of_walkers();
     if (n < 4)
       throw SamplerConfigurationError(
@@ -1061,6 +1083,140 @@ void Sampler::record_state() {
 }
 
 // ------------------------------------------------------------------- moves
+
+std::vector<double> Sampler::slice_along(const std::vector<double>& x,
+                                         const std::vector<double>& direction,
+                                         double log_p_x, int* expansions,
+                                         int* contractions, bool* truncated) {
+  std::uniform_real_distribution<double> uniform(0.0, 1.0);
+  // The slice height, in log space: y = log p(x) + log u, u ~ U(0, 1).
+  const double threshold = log_p_x + std::log(uniform(rng_));
+
+  // The initial interval straddles x at a random offset, so the move is
+  // reversible: [L, R) of unit length with x somewhere inside it.
+  double left = -uniform(rng_);
+  double right = left + 1.0;
+
+  std::vector<double> probe(x.size());
+  const std::size_t n = x.size();
+  // A point on the line, as a lambda would be if this file were C++14.
+  struct At {
+    static void fill(std::vector<double>* out, const std::vector<double>& x0,
+                     const std::vector<double>& d, double t, std::size_t n) {
+      for (std::size_t i = 0; i < n; ++i) (*out)[i] = x0[i] + t * d[i];
+    }
+  };
+
+  // Stepping out. This is the half that must be allowed to overshoot: a cap
+  // that binds leaves the interval short of the slice and every draw comes
+  // from a truncated line, which narrows the posterior without ever
+  // producing a rejected point to notice.
+  int steps = 0;
+  while (steps < slice_max_steps_) {
+    At::fill(&probe, x, direction, left, n);
+    if (evaluate(probe).lnpost <= threshold) break;
+    left -= 1.0;
+    ++steps;
+    ++(*expansions);
+  }
+  if (steps >= slice_max_steps_) *truncated = true;
+  steps = 0;
+  while (steps < slice_max_steps_) {
+    At::fill(&probe, x, direction, right, n);
+    if (evaluate(probe).lnpost <= threshold) break;
+    right += 1.0;
+    ++steps;
+    ++(*expansions);
+  }
+  if (steps >= slice_max_steps_) *truncated = true;
+
+  // Shrinkage. A draw outside the slice replaces the end it came from, so
+  // the interval closes on the slice and the walk is exact.
+  for (int attempt = 0; attempt < slice_max_steps_; ++attempt) {
+    const double t = left + uniform(rng_) * (right - left);
+    At::fill(&probe, x, direction, t, n);
+    if (evaluate(probe).lnpost > threshold) return probe;
+    if (t < 0.0) {
+      left = t;
+    } else {
+      right = t;
+    }
+    ++(*contractions);
+  }
+  // The interval collapsed onto x without a point above the threshold, which
+  // happens when the density is flat to numerical precision. Staying is the
+  // correct answer: the walker is already in the slice.
+  return x;
+}
+
+void Sampler::slice_step() {
+  // Karamanis & Beutler's ensemble slice sampler, which is what zeus runs:
+  // the halves and the differential direction of "stretch" above, and a
+  // slice along that direction instead of a Metropolis proposal.
+  const int n = static_cast<int>(walkers_.size());
+  const int half = n / 2;
+  std::vector<int> order(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) order[static_cast<std::size_t>(i)] = i;
+  std::shuffle(order.begin(), order.end(), rng_);
+  // Every move is accepted; the tally is filled so that a caller reading
+  // acceptance across backends is not handed zeros for this one.
+  substep_accepted_.assign(walkers_.size(), 1);
+
+  long expansions = 0, contractions = 0;
+  std::vector<double> direction(ndim_);
+  for (int pass = 0; pass < 2; ++pass) {
+    for (int s = 0; s < (pass == 0 ? half : n - half); ++s) {
+      const int a = pass == 0 ? order[static_cast<std::size_t>(s)]
+                              : order[static_cast<std::size_t>(half + s)];
+      const int comp_offset = pass == 0 ? half : 0;
+      const int comp_size = pass == 0 ? n - half : half;
+      // The direction is the difference of **two other** walkers, not the
+      // line from this one to a partner. That is not a detail: a direction
+      // built from the current point makes the move's geometry depend on
+      // where the walker is, the slice is then not a slice of a fixed line,
+      // and the chain is not the target. Measured on the correlated Gaussian
+      // the (partner - self) version samples 20% narrow with no truncation
+      // and no other symptom.
+      if (comp_size < 2) continue;
+      std::uniform_int_distribution<int> comp_pick(0, comp_size - 1);
+      const int i1 = comp_pick(rng_);
+      int i2 = comp_pick(rng_);
+      while (i2 == i1) i2 = comp_pick(rng_);
+      const int p1 = order[static_cast<std::size_t>(comp_offset + i1)];
+      const int p2 = order[static_cast<std::size_t>(comp_offset + i2)];
+      for (unsigned int d = 0; d < ndim_; ++d) {
+        direction[d] = slice_mu_ *
+                       (walkers_[static_cast<std::size_t>(p1)][d] -
+                        walkers_[static_cast<std::size_t>(p2)][d]);
+      }
+      int e = 0, c = 0;
+      bool truncated = false;
+      const std::vector<double> moved = slice_along(
+          walkers_[static_cast<std::size_t>(a)], direction,
+          walker_parts_[static_cast<std::size_t>(a)].lnpost, &e, &c,
+          &truncated);
+      walkers_[static_cast<std::size_t>(a)] = moved;
+      walker_parts_[static_cast<std::size_t>(a)] = evaluate(moved);
+      expansions += e;
+      contractions += c;
+      if (truncated) ++slice_truncations_;
+    }
+  }
+  slice_expansions_ += expansions;
+  slice_contractions_ += contractions;
+
+  // Tuning: the scale is right when the interval neither has to be grown nor
+  // shrunk much, so mu is moved toward the ratio the two counts imply. Frozen
+  // once warm-up is over, because a scale that keeps adapting on the recorded
+  // chain makes the chain non-Markovian.
+  if (slice_tuning_ && (expansions + contractions) > 0) {
+    const double ratio = 2.0 * static_cast<double>(expansions) /
+                         static_cast<double>(expansions + contractions);
+    slice_mu_ *= std::pow(ratio > 0.0 ? ratio : 0.5, 0.25);
+    if (!(slice_mu_ > 1e-8)) slice_mu_ = 1e-8;
+    if (slice_mu_ > 1e8) slice_mu_ = 1e8;
+  }
+}
 
 void Sampler::stretch_step() {
   // EnsembleSampler._step: two randomly assigned halves, a stretch per
@@ -1250,6 +1406,23 @@ void Sampler::run(int n_steps, int thin) {
       for (int g = 0; g < n_adapt; ++g) de_generation(g);
       de_accepted_ = 0;
       de_proposed_ = 0;
+    } else if (algorithm_ == "slice") {
+      // Warm-up here tunes one number, the direction scale, and it is tuned
+      // by *running* -- the expansion/contraction counts are the signal.
+      // Frozen afterwards: a scale that keeps adapting on the recorded chain
+      // makes the chain non-Markovian.
+      if (n_adapt < 0)
+        n_adapt = std::min(200, std::max(20, (n_samples * thin_) / 20));
+      const bool was_tuning = slice_tuning_;
+      for (int i = 0; i < n_adapt; ++i) slice_step();
+      slice_tuning_ = false;
+      // The truncation counter answers a question about the recorded chain,
+      // so warm-up's expansions -- taken with an untuned scale, where a long
+      // stepping-out is expected -- do not count against it.
+      slice_truncations_ = 0;
+      slice_expansions_ = 0;
+      slice_contractions_ = 0;
+      (void)was_tuning;
     } else if (algorithm_ == "metropolis") {
       if (n_adapt < 0)
         n_adapt = std::min(500, std::max(100, (n_samples * thin_) / 20));
@@ -1329,6 +1502,15 @@ void Sampler::run(int n_steps, int thin) {
     for (int t = 0; t < thin_; ++t) {
       if (algorithm_ == "stretch") {
         stretch_step();
+        if (t == thin_ - 1)
+          for (std::size_t w = 0; w < walkers_.size(); ++w)
+            accepted_[w] += substep_accepted_[w];
+      } else if (algorithm_ == "slice") {
+        slice_step();
+        // Every slice move is accepted by construction, so the tally that
+        // means something for "stretch" would read 100% here and say
+        // nothing. It is still filled, so a caller reading acceptance
+        // across backends is not handed zeros.
         if (t == thin_ - 1)
           for (std::size_t w = 0; w < walkers_.size(); ++w)
             accepted_[w] += substep_accepted_[w];

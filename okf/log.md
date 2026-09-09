@@ -2,6 +2,41 @@
 
 ## 2026-09-09
 
+- **One sampling interface, four backends -- and docking is now one of its
+  callers** (owner, 2026-09-09: "i do not want too diverse sampling
+  interfaces, make it such that there are different backends, zeus, emcee
+  like, and plain normal mc").
+  `Sampler` gains **`"slice"`** (aliases `zeus`, `ensemble_slice`): the
+  ensemble slice sampler of Karamanis & Beutler. The halves and the
+  differential direction of `"stretch"`, and a slice along that direction
+  instead of a Metropolis proposal -- every move accepted, so there is no
+  acceptance rate to tune. The header's "deliberately NOT here" note about it
+  is retired. Backends are now `metropolis` / `stretch` / `slice` / `de`.
+  **`IMP::bff::dock`** is the FRET-restrained sampler, in C++, and it does not
+  write a walk of its own: the mobile bodies' poses are one vector -- six
+  numbers each, a translation and a rotation vector -- and `Sampler` samples
+  it against the network score. So `params.sampler` is a string and swapping
+  emcee for slice for plain MC is not a rewrite. **`estimate_docking_errors`**
+  repeats a run from independent random starts and reports the spread, which
+  is what `bin/imp_bff`'s Python `estimate_errors` did.
+  Two traps, both silent, both found by measurement rather than by reading:
+  **the slice direction must be the difference of two OTHER walkers.** Built
+  from the walker being moved (`partner - self`) the geometry depends on where
+  that walker is, the line is not fixed, and the chain is not the target. It
+  looks fine: acceptance is 100% by construction, the chain moves, the mean is
+  right, and `slice_truncations` stays 0. What it loses is width -- **20% narrow
+  on the correlated Gaussian**, and nothing else says so.
+  And **the stepping-out must be allowed to overshoot**; a cap that binds
+  truncates the tails the same silent way. `get_slice_truncations()` counts
+  it, and `test_a_converged_slice_run_truncates_nothing` asserts it is zero.
+  A rotation vector, not a quaternion, for the pose: a sampler that proposes a
+  quaternion has to renormalise it, and the renormalisation is a projection
+  the acceptance ratio does not know about.
+  `test/sampler/test_sampler.py` runs its whole parametrised suite over the
+  four backends, 48 pass. Its `test_an_unknown_algorithm_is_refused` used
+  `"slice"` as the example of a name that is not a backend; that would now
+  pass by accident, so it names one that really is not.
+
 - **`write_points_mrc`: the voxelisation belongs with the format, not with the
   application** (owner, 2026-09-09). chisurf's AV export decided how a weighted
   point cloud becomes a grid -- the rounding, the origin, the extent and the
