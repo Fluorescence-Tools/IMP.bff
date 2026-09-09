@@ -2,6 +2,38 @@
 
 ## 2026-09-09
 
+- **The codec moved into the container layer** (imp-bff-ce + ptolib 0.4.0; owner ruling "it should be in
+  ptolib", then "ptolib.h must change and support a set of standard codecs, all named"): ptolib embeds
+  `zstd`, `brotli`, `lz4` and `deflate` in the vendored header's implementation TU — pristine trees under
+  `thirdparty/`, spliced by `tools/embed_codecs.py` behind `PTOLIB_CODECS_REGION` fences, compiled hidden
+  (the API macros' `visibility("default")` stands down via knob macros and one `[ptolib]` patch to brotli's
+  `port.h`), registered under their format names, `PTOLIB_WITH_*`/`PTOLIB_NO_*` as overrides, and a new
+  `codec_by_name` so a test can take a built-in out and put it back. The trigger was CI's gcc verdict on
+  the private copy: clang had accepted the single-TU brotli's C/C++ linkage conflicts (`kIsBase64` declared
+  inside one extern "C" and defined outside another's, ten file-local helpers defined by both fragment
+  compressors) and gcc rejected them — repair work that would have been spent on a copy. imp.bff loses
+  `src/brotli/` and `src/Brotli.cpp` (~40k lines), the registration shim in `Pto.cpp`, and the window knob
+  (ptolib writes lgwin 24 at every quality; 24 was the shipped default) — `DrotEncoding.window` is gone,
+  `quality` stays. Pinned and measured: the new codec's q11 bytes are **identical** to the old writer's
+  (52/52 on the parity vector), ptolib's golden `.drot` fixtures decode through the embedded copy, and
+  `test/io`'s drot suites fail identically before and after (local data incomplete — environment, not the
+  codec). `sync_ptolib.sh` refreshed `include/internal/ptolib.h` (6.2 MB); `test_vendored_headers.py`
+  unchanged. tttrlib's older copy keeps working; re-sync at its leisure (its board has the note).
+- **CI narrowed to what it is for, and repaired** (owner: "ci.yml should ... 1. build bff as imp module,
+  2. build bff as standalone pip pkg, 3. test; target platforms: osx, lnx, win"): ci.yml now has exactly
+  `imp_module` (conda package, fast+medium tiers), `pip_wheel` (cibuildwheel: ubuntu x86_64, macos-14
+  arm64, macos-15-intel x86_64 — macos-13 is retired by GitHub and sat queued forever — and **windows**
+  for the first time: MSVC via msvc-dev-cmd, header-only Boost+Eigen from a cached vcpkg, cereal from
+  `wheel_deps.sh`, delvewheel repair), `publish_wheels` on a release, and nothing else — the core conda
+  package, the weekly expensive lane, the docs build and the anaconda deploy left ci.yml (the recipes and
+  workflows to do them locally remain). Three build repairs rode along, each diagnosed from the fork's
+  failing runs: the module build could not find `ihm_format.h` (IMP exports the header only inside its own
+  tree — the module build now points at the vendored standalone copy); `find_package(Eigen3 3.3)` refused
+  conda-forge's Eigen 5.0.1 (the floor became a breaker; the version is dropped, and the whole tree
+  compiles clean against 5.0.1, measured locally); and Windows lost `rattler-build` between steps (its
+  conda prefix bin dirs now go on PATH in the build step). Fork `tpeulen/IMP.bff` had never had a green
+  run — everything was cancelled-by-concurrency or failed at one of the three.
+
 - **A sampling run keeps its path.** `IMP::bff::dock` writes an RMF
   trajectory, a frame each time the walk improves -- not per proposal, which
   would be a file the size of the run. `DockingParameters::save_trajectory`
@@ -10994,6 +11026,8 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   seven flipped verdict at load 13–18). Provisional baseline in `okf/validation/av_solver_baseline.md`.
 - **Fork**: `tpeulen/IMP.bff` created (public, parent `Fluorescence-Tools/IMP.bff`), remote `fork` added. Owner
   decision: commit locally on `independent-core`, **do not push yet**. Layout stays flat (IMP-compatible); merges only.
+- Owner narrowed PRD-136 to Alexa488 maleimide (`A48_C1R`) for a conference: `s07 conf` tranche (13 C1R sites,
+  fragments first), probe loop on A48_C1R, pAcF/B1R and A64_C2R runs deferred; GPU 0 requested from rotamer-simulation.
 - **PRD-138 merges done** (imp-bff-ce): 14 commits on `independent-core`, 97 → 75 headers, 106 → 76 sources,
   40 → 35 topic `.i`; suite 1780/0 after each. Lessons: SWIG `%include` is first-wins, so a merge that folds a
   late-wrapped header into an early-wrapped one must move the survivor *late* and carry the value declarations
@@ -11007,6 +11041,17 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   raw-pointer audit: no change (IMP-object returns in layer code, one hidden buffer, one non-owning association);
   one `%typemap(out) std::vector<double>` → ndarray owning the moved vector, 91 functions, zero copy. Suite 1780/0.
   Downstream to expect: bff vector returns are ndarrays, not tuples (`assert not x` → `len(x) == 0`).
+- **PTO container now ptolib** (fable-5.1/b19b35ca, T-20260907-07 on the shared board): the
+  hand-written EBML walker in `Pto.cpp` (PtoWriter/PtoReader, ~570 lines) is replaced by a verbatim
+  copy of ptolib (https://github.com/tpeulen/ptolib, private; `include/internal/ptolib.h`,
+  `utility/sync_ptolib.sh`, byte-compared by `test/test_vendored_headers.py`), the same header tttrlib
+  now builds on. `Pto.h` keeps `PtoWriter`/`PtoReader`/`PtoObject` as a thin face so the 25 call sites
+  compile unchanged, and exposes `.file()` for tags, annotations and `pto::DataStore` tables. Files written
+  from now on carry two indexes, an Info element and random uids; every shipped `.drot.pto`,
+  `potentials.pto` and `.mmfdb.pto` still opens (the reader accepts the old single-index layout, read-only).
+  `Pto.cpp` is the module's `PTOLIB_IMPLEMENTATION` TU with `PTOLIB_JSON_INCLUDE` pointed at the vendored
+  nlohmann copy. The header compiles as C++14 (ptolib shims std::filesystem) so the module's standard and
+  its macOS 10.13 floor are untouched.
 - **PRD-137 steps 4+5 (main cut)** (imp-bff-ce): connection layer = `src/imp/` behind the flat bridge
   `src/ImpLayer.cpp` (IMP's tooling: only `src/*.cpp`+`src/internal/*.cpp` compiled, only `include/*.h`+
   `include/internal/*.h` linked -- a public `include/imp/` cannot exist); Scoring's five restraint factories →
@@ -11089,13 +11134,6 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   (17 cases; the parity ones run against the real LabelLib where it is installed -- mean distance within 0.5 A,
   mean efficiency within 0.02). Owner's ruling: the Langevin/attachment dye road stays IMP-only.
   README gains install instructions for both packages, the LabelLib migration and a first-volume example.
-- **PRD-137, where dye simulation stops without IMP** (imp-bff-ce, owner ruling 2026-09-08): the core covers
-  rotamer-library dyes, grid diffusion, RRT linker sampling, probe force fields and FASPR packing; attaching a
-  dye onto a hierarchy and Langevin dynamics on it stay IMP-only. Linking IMP into the core was considered and
-  is not possible: the shim tree and IMP's headers redefine `IMP::Exception`, `IMP::Object`, `IMP::Pointer` and
-  `IMP::algebra::VectorD`, so no translation unit holds both (measured) -- anything linking IMP is the IMP-mode
-  build, which is `imp.bff`. The core conda package (`bff`) builds and passes its recipe tests on this machine
-  with the data fetched at build time; `build_core.bat` gives it Windows, so CI runs it on all three platforms.
 - **PRD-137, where dye simulation stops without IMP** (imp-bff-ce, owner ruling 2026-09-08): the core covers
   rotamer-library dyes, grid diffusion, RRT linker sampling, probe force fields and FASPR packing; attaching a
   dye onto a hierarchy and Langevin dynamics on it stay IMP-only. Linking IMP into the core was considered and

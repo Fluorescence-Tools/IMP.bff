@@ -182,14 +182,13 @@ struct IMPBFFEXPORT DrotEncoding {
     double grid_a;
     //! Compact rung only: step for bond angles and dihedrals, degrees.
     double grid_deg;
-    //! brotli quality, 0-11 (11 is what the shipped libraries use).
+    //! brotli quality, 0-11 (11 is what the shipped libraries use). The
+    //! window is the codec's, the largest standard one (24) at every
+    //! quality -- what the shipped libraries are pinned against.
     int quality;
-    //! brotli window bits, 10-24.
-    int window;
 
     DrotEncoding()
-        : lossless(true), grid_a(0.001), grid_deg(0.01), quality(11),
-          window(24) {}
+        : lossless(true), grid_a(0.001), grid_deg(0.01), quality(11) {}
 
     IMP_SHOWABLE_INLINE(DrotEncoding,
                         out << "DrotEncoding("

@@ -21,41 +21,38 @@
 
 // The vendored codec, the same one `.drot` uses. The paths are relative to
 // `src/`, which is where this file also sits.
-#include "brotli/include/brotli/decode.h"
-#include "brotli/include/brotli/encode.h"
 
 IMPBFF_BEGIN_NAMESPACE
 
 namespace {
 
-//! brotli, one shot, behind an eight-octet little-endian decompressed size.
-/*! The size is in the payload because the one-shot decoder needs the whole
-    output buffer up front and **reports a buffer that is too small as an
-    error, not as `NEEDS_MORE_OUTPUT`**. A reader that guesses the size from
-    the compressed length -- `size * 8`, which is what `.drot`'s reader does --
-    therefore fails outright on anything that compresses better than eight
-    times, and a table of repeated numbers compresses far better than that: the
-    UNRES text is 2.4 MB of digits in 100 KB. Writing the length down costs
-    eight octets and removes the guess.
+//! brotli, behind an eight-octet little-endian decompressed size.
+/*! The size is in the payload because the decoder needs the whole output
+    buffer up front and reports a buffer that is too small as an error, not
+    as "needs more room". A reader that guesses the size from the compressed
+    length -- `size * 8`, which is what `.drot`'s reader does -- therefore
+    fails outright on anything that compresses better than eight times, and
+    a table of repeated numbers compresses far better than that: the UNRES
+    text is 2.4 MB of digits in 100 KB. Writing the length down costs eight
+    octets and removes the guess.
 
     Named apart from `.drot`'s copies because the module is built as one
     translation unit, where two file-local functions of one name collide. */
 std::vector<unsigned char> pot_brotli_compress(
-        const std::vector<unsigned char>& in, int quality = 11,
-        int window = 24) {
-    std::size_t cap = BrotliEncoderMaxCompressedSize(in.size()) + 1024;
-    std::vector<unsigned char> out(8 + cap);
-    unsigned long long raw = in.size();
-    for (int i = 0; i < 8; ++i) {
-        out[i] = static_cast<unsigned char>((raw >> (8 * i)) & 0xff);
-    }
-    std::size_t n = cap;
-    if (!BrotliEncoderCompress(quality, window, BROTLI_MODE_GENERIC, in.size(),
-                               in.empty() ? NULL : &in[0], &n, &out[8])) {
+        const std::vector<unsigned char>& in, int quality = 11) {
+    std::vector<unsigned char> packed;
+    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
+                             quality, packed)) {
         IMP_THROW("write_potential_tables: brotli compression failed",
                   IOException);
     }
-    out.resize(8 + n);
+    std::vector<unsigned char> out;
+    out.reserve(8 + packed.size());
+    unsigned long long raw = in.size();
+    for (int i = 0; i < 8; ++i) {
+        out.push_back(static_cast<unsigned char>((raw >> (8 * i)) & 0xff));
+    }
+    out.insert(out.end(), packed.begin(), packed.end());
     return out;
 }
 
@@ -75,11 +72,9 @@ std::vector<unsigned char> pot_brotli_decompress(const unsigned char* data,
                                                       << " octet payload",
                   IOException);
     }
-    std::vector<unsigned char> out(static_cast<std::size_t>(raw));
-    std::size_t out_size = out.size();
-    const BrotliDecoderResult r = BrotliDecoderDecompress(
-            size - 8, data + 8, &out_size, out.empty() ? NULL : &out[0]);
-    if (r != BROTLI_DECODER_RESULT_SUCCESS || out_size != out.size()) {
+    std::vector<unsigned char> out;
+    if (!pto::decompress_bytes("brotli", data + 8, size - 8,
+                               static_cast<std::size_t>(raw), out)) {
         IMP_THROW("the potential container's payload does not decompress",
                   IOException);
     }

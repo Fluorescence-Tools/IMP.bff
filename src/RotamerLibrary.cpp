@@ -10,7 +10,6 @@
 #include <IMP/bff/Pto.h>
 #include <IMP/bff/ZMatrix.h>
 #include <IMP/bff/Base.h>
-#include "brotli/include/brotli/decode.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -20,7 +19,6 @@
 #include <map>
 #include <memory>
 #include <sstream>
-#include "brotli/include/brotli/encode.h"
 #include <string>
 #include <vector>
 
@@ -67,48 +65,19 @@ typedef std::map<std::string, std::string> JsonFlat;
 // -- layer 1: brotli --------------------------------------------------------
 
 //! Whole-file decompression, streamed: the decoded size is not known up front.
-/*! **Not the one-shot API.** `BrotliDecoderDecompress` reports a too-small
-    output buffer as `BROTLI_DECODER_RESULT_ERROR`, not as
-    `NEEDS_MORE_OUTPUT` -- the growth branch below it never fired -- so a
-    reader that guesses the size from the compressed length, as this one did
-    with `size * 8`, fails outright on anything that compresses better than
-    eight times. Every shipped `.drot` is under that ratio, which is why it
-    worked; a library of near-identical conformers is not, and would have been
-    the first file to be reported as corrupt while being perfectly good.
-
-    The streaming decoder is told how much room it has and asks for more when
-    it runs out, so there is nothing to guess and nothing to re-decode. */
+/*! **Not the one-shot API.** The one-shot decoder reports a too-small output
+    buffer as an error, not as "needs more room" -- so a reader that guesses
+    the size from the compressed length, as this one did with `size * 8`,
+    fails outright on anything that compresses better than eight times. Every
+    shipped `.drot` is under that ratio, which is why it worked; a library of
+    near-identical conformers is not, and would have been the first file to
+    be reported as corrupt while being perfectly good. A raw size of 0 sends
+    ptolib's codec down the same streaming path: it grows as it goes, so
+    there is nothing to guess and nothing to re-decode. */
 std::vector<unsigned char> brotli_decompress(const unsigned char* data,
                                              std::size_t size) {
-    BrotliDecoderState* state =
-            BrotliDecoderCreateInstance(NULL, NULL, NULL);
-    if (state == NULL) {
-        IMP_THROW("read_drot: cannot start the brotli decoder", IOException);
-    }
-
     std::vector<unsigned char> out;
-    std::size_t chunk = std::max<std::size_t>(size * 4, 1u << 16);
-    std::size_t available_in = size;
-    const unsigned char* next_in = data;
-    BrotliDecoderResult r = BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT;
-
-    while (r == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) {
-        if (out.size() > (std::size_t)1 << 29) {   // 512 MB sanity cap
-            BrotliDecoderDestroyInstance(state);
-            IMP_THROW("read_drot: decompressed payload exceeds 512 MB",
-                      IOException);
-        }
-        const std::size_t written = out.size();
-        out.resize(written + chunk);
-        std::size_t available_out = chunk;
-        unsigned char* next_out = &out[written];
-        r = BrotliDecoderDecompressStream(state, &available_in, &next_in,
-                                          &available_out, &next_out, NULL);
-        out.resize(out.size() - available_out);
-        chunk *= 2;
-    }
-    BrotliDecoderDestroyInstance(state);
-    if (r != BROTLI_DECODER_RESULT_SUCCESS) {
+    if (!pto::decompress_bytes("brotli", data, size, 0, out)) {
         IMP_THROW("read_drot: corrupt brotli stream", IOException);
     }
     return out;
@@ -853,16 +822,15 @@ std::vector<unsigned char> pack_weights(const std::vector<double>& w,
 
 // -- layer 3: brotli --------------------------------------------------------
 
+//! The window is ptolib's, the largest standard one (24) at every quality,
+//! so quality 11 here writes what the shipped libraries were pinned against.
 std::vector<unsigned char> brotli_compress(
-        const std::vector<unsigned char>& in, int quality, int window) {
-    std::size_t cap = BrotliEncoderMaxCompressedSize(in.size()) + 1024;
-    std::vector<unsigned char> out(cap);
-    std::size_t n = cap;
-    if (!BrotliEncoderCompress(quality, window, BROTLI_MODE_GENERIC,
-                               in.size(), in.data(), &n, out.data())) {
+        const std::vector<unsigned char>& in, int quality) {
+    std::vector<unsigned char> out;
+    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
+                             quality, out)) {
         IMP_THROW("write_drot: brotli compression failed", IOException);
     }
-    out.resize(n);
     return out;
 }
 
@@ -902,7 +870,7 @@ void add_object(PtoWriter& pto, const std::string& name,
                 const std::vector<unsigned char>& payload,
                 const DrotEncoding& encoding) {
     const std::vector<unsigned char> packed =
-            brotli_compress(payload, encoding.quality, encoding.window);
+            brotli_compress(payload, encoding.quality);
     pto.add(name, kind, encoding_name,
             packed.empty() ? NULL : &packed[0], packed.size());
 }
@@ -1373,26 +1341,19 @@ int bin_of(double angle_deg) {
 }
 
 std::vector<unsigned char> brotli_pack(const std::vector<unsigned char>& in) {
-    std::size_t cap = BrotliEncoderMaxCompressedSize(in.size()) + 1024;
-    std::vector<unsigned char> out(cap);
-    std::size_t n = cap;
-    if (!BrotliEncoderCompress(11, 24, BROTLI_MODE_GENERIC, in.size(),
-                               in.empty() ? NULL : &in[0], &n,
-                               out.empty() ? NULL : &out[0])) {
+    std::vector<unsigned char> out;
+    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
+                             11, out)) {
         IMP_THROW("dunbrack: brotli compression failed", IOException);
     }
-    out.resize(n);
     return out;
 }
 
 std::vector<unsigned char> brotli_unpack(const std::vector<unsigned char>& in,
                                          std::size_t expected) {
-    std::vector<unsigned char> out(expected);
-    std::size_t n = expected;
-    if (BrotliDecoderDecompress(in.size(), in.empty() ? NULL : &in[0], &n,
-                                out.empty() ? NULL : &out[0]) !=
-                BROTLI_DECODER_RESULT_SUCCESS ||
-        n != expected) {
+    std::vector<unsigned char> out;
+    if (!pto::decompress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
+                               expected, out)) {
         IMP_THROW("dunbrack: the payload did not decompress to its stated "
                   << expected << " bytes", IOException);
     }

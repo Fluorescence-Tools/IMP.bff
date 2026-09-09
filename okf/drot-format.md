@@ -13,10 +13,14 @@ A `.drot` file is one dye+linker rotamer library: an ensemble of conformers
 with a weight each, stored as internal coordinates. It is written by
 `IMP::bff::write_drot` (`include/DrotWriter.h`, program
 `bin/imp_bff_traj2drot`) and read by `IMP::bff::read_drot`
-(`include/DrotReader.h`). Both sides use the vendored brotli
-([`src/brotli/VENDORING.md`](../src/brotli/VENDORING.md)) and the vendored PTO
-core (`include/Pto.h`), so neither adds a dependency — the container is shared
-with tttrlib and chimol by specification, not by linkage
+(`include/DrotReader.h`). Both sides go through ptolib's built-in
+brotli codec (`compress_bytes`/`decompress_bytes` under the name `"brotli"` —
+ptolib 0.4.0 embeds the codec in the vendored PTO core
+(`include/internal/ptolib.h`, a verbatim copy of
+[ptolib](https://github.com/tpeulen/ptolib), the header tttrlib carries too;
+`include/Pto.h` is the thin `PtoWriter`/`PtoReader` face over it), so neither
+adds a dependency — the container is shared with tttrlib by one header and with
+chimol by specification, not by linkage
 ([the convergence record](../../chimol/okf/references/pto-chm-convergence.md)). The design ledger — what was measured and what was rejected — is
 [PRD-118](prds/prd-118.md); the prototype that arrived at the format is
 `prototypes/drot_rotlib/` and its `CONVERTING.md` describes the older v8.
@@ -61,8 +65,11 @@ intact. See [`include/DunbrackLibrary.h`](../include/DunbrackLibrary.h).
 
 ## The container
 
-A **PTO** document — EBML (RFC 8794), `DocType "pto"` — written by the vendored
-core in [`include/Pto.h`](../include/Pto.h). One file per library, named
+A **PTO** document — EBML (RFC 8794), `DocType "pto"` — written through
+[`include/Pto.h`](../include/Pto.h), the face over the vendored
+[ptolib](https://github.com/tpeulen/ptolib) header (`include/internal/ptolib.h`).
+Libraries written before 2026-09-07 carry one SeekHead and every object in one
+`Attachments` element; ptolib reads those as it reads its own, read-only. One file per library, named
 `<stem>.drot.pto`: `.pto` because that is the container the whole stack shares
 (`.mmfbd.pto` for photons in tttrlib, `.chm.pto` for structures in chimol), and
 `.drot` because a profile suffix names the primary payload kind so a human, a

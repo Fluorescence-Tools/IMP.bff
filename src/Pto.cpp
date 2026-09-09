@@ -37,71 +37,10 @@
 #include <cstdio>
 #include <cstring>
 
-#include "brotli/include/brotli/decode.h"
-#include "brotli/include/brotli/encode.h"
 
 IMPBFF_BEGIN_NAMESPACE
 
 namespace {
-
-// ptolib names the codecs and carries none; this library carries brotli
-// (src/brotli, vendored for the .drot libraries), so it registers it once,
-// and every `+brotli` payload and brotli-compressed store column read
-// through ptolib here decodes.
-bool brotli_compress_for_ptolib(const unsigned char* in, std::size_t n, int level,
-                                std::vector<unsigned char>& out) {
-    int quality = level < 0 ? 5 : level;
-    if (quality > BROTLI_MAX_QUALITY) quality = BROTLI_MAX_QUALITY;
-    if (quality < BROTLI_MIN_QUALITY) quality = BROTLI_MIN_QUALITY;
-    std::size_t size = BrotliEncoderMaxCompressedSize(n);
-    if (size == 0) size = n + 64;
-    out.resize(size);
-    if (!BrotliEncoderCompress(quality, BROTLI_DEFAULT_WINDOW, BROTLI_MODE_GENERIC, n, in, &size,
-                               out.data())) {
-        out.clear();
-        return false;
-    }
-    out.resize(size);
-    return true;
-}
-
-bool brotli_decompress_for_ptolib(const unsigned char* in, std::size_t n, std::size_t raw_size,
-                                  std::vector<unsigned char>& out) {
-    BrotliDecoderState* st = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
-    if (st == nullptr) return false;
-    std::size_t available_in = n;
-    const std::uint8_t* next_in = in;
-    out.clear();
-    out.reserve(raw_size);
-    std::vector<unsigned char> chunk(1u << 16);
-    bool ok = true;
-    for (;;) {
-        std::size_t available_out = chunk.size();
-        std::uint8_t* next_out = chunk.data();
-        const BrotliDecoderResult r = BrotliDecoderDecompressStream(
-                st, &available_in, &next_in, &available_out, &next_out, nullptr);
-        out.insert(out.end(), chunk.begin(),
-                   chunk.begin() + static_cast<std::ptrdiff_t>(chunk.size() - available_out));
-        if (r == BROTLI_DECODER_RESULT_SUCCESS) break;
-        if (r == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) continue;
-        ok = false;
-        break;
-    }
-    BrotliDecoderDestroyInstance(st);
-    if (ok && raw_size != 0 && out.size() != raw_size) ok = false;
-    if (!ok) out.clear();
-    return ok;
-}
-
-struct RegisterBrotliWithPtolib {
-    RegisterBrotliWithPtolib() {
-        pto::Codec c;
-        c.name = "brotli";
-        c.compress = &brotli_compress_for_ptolib;
-        c.decompress = &brotli_decompress_for_ptolib;
-        pto::register_codec(c);
-    }
-} register_brotli_with_ptolib;
 
 PtoObject to_object(const pto::PtoObject& o) {
     PtoObject out;
