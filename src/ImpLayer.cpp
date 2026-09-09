@@ -31,3 +31,4 @@
 #include "imp/ProbeAttachment.cpp"
 #include "imp/ProbeDynamics.cpp"
 #include "imp/ProbeNetworkRestraint.cpp"
+#include "imp/StructureTable.cpp"

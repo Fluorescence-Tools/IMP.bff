@@ -116,6 +116,10 @@ _IMP_BFF_WITH_IMP = False
    see IMP_bff.dyedynamics.i. */
 #ifdef IMPBFF_WITH_IMP
 %include "IMP_bff.dyedynamics.i"
+/* IMP's PDB and mmCIF readers behind a flat table -- the radius a docking
+   score measures clashes against, and the one format the core cannot parse
+   at all. Names no IMP type, so it needs none of IMP's interfaces either. */
+%include "IMP_bff.structuretable.i"
 #endif
 
 %pythoncode %{

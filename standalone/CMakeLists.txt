@@ -289,14 +289,22 @@ if(IMPBFF_PYTHON)
   string(REGEX MATCH "\"([^\"]*)\"" _m "${_hc}")
   string(REPLACE ";" " " _layer_list "${CMAKE_MATCH_1}")
   separate_arguments(_layer_list)
+  # Layer headers whose declarations name no IMP type. Where the layer is
+  # built they are wrapped like core headers -- that is the whole point of
+  # them: a door shaped as arrays and file paths can be offered by a package
+  # that carries IMP as a private C++ library and has no IMP in Python
+  # (PRD-139). A header added here must keep that property, or SWIG needs
+  # IMP's own .i files and the extension imports _IMP_kernel at load.
+  set(_layer_array_doors "DyeDynamics.h" "StructureTable.h")
   set(_agg_content "// generated: every public core header\n")
   foreach(h ${_public_headers})
     get_filename_component(n "${h}" NAME)
     list(FIND _layer_list "${n}" _idx)
-    # DyeDynamics.h is a layer header whose declarations name no IMP type:
-    # where the layer is built it is wrapped like a core header.
-    if(IMPBFF_WITH_IMP AND n STREQUAL "DyeDynamics.h")
-      set(_idx -1)
+    if(IMPBFF_WITH_IMP)
+      list(FIND _layer_array_doors "${n}" _door_idx)
+      if(NOT _door_idx EQUAL -1)
+        set(_idx -1)
+      endif()
     endif()
     if(_idx EQUAL -1 AND NOT n STREQUAL "Base.h")
       string(APPEND _agg_content "#include <IMP/bff/${n}>\n")

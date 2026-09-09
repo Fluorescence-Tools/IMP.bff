@@ -14,6 +14,11 @@
    hierarchies (formerly part of label.i). */
 %include "IMP_bff.probeattachment.i"
 
+/* A coordinate file as flat columns, read by IMP's PDB and mmCIF readers.
+   Like dyedynamics.i below it, this is a layer door whose declaration names
+   no IMP type, so it is wrapped in the standalone WITH_IMP build too. */
+%include "IMP_bff.structuretable.i"
+
 /* The dynamics of an explicit probe: IMP::atom::Simulator over IMP particles
    (formerly part of sampling.i). */
 %include "IMP_bff.dyedynamics.i"

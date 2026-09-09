@@ -1,5 +1,39 @@
 # Update Log
 
+## 2026-09-09
+
+- **`read_structure_table`: IMP's PDB and mmCIF readers behind a flat table**
+  (`include/StructureTable.h`, `src/imp/StructureTable.cpp`,
+  `pyext/IMP_bff.structuretable.i`, `test/io/test_structure_table.py`).
+  chisurf imported `IMP.atom` directly to read a structure, for two things the
+  core cannot do: the **radius a docking score measures clashes against** (the
+  particle's, after `read_pdb` -- `VdwRadii.h` says why it may not be swapped
+  for the core's element-keyed table) and **mmCIF**, which the core does not
+  parse at all. Both are here now, as columns -- xyz, radius, mass, bfactor,
+  atom/residue id, chain, residue and atom name, element -- with no IMP type
+  in the header, so the wheel that links IMP privately (PRD-139) offers them
+  in a Python where `import IMP.atom` fails. Verified in that configuration:
+  9315 atoms from a PDB and 4585 from an mmCIF, `get_build() == "core+imp"`,
+  `IMP.atom` not importable; chisurf then reads structures and computes an
+  accessible volume through it with **no IMP import anywhere**, and its
+  field-for-field parity gate against the in-tree parser passes 36/36 on three
+  structures.
+  The walk out of the hierarchy is in C++ on purpose: doing it in Python cost
+  a measured ~100 us per atom in SWIG traffic, 1.3 s of the 1.4 s it took to
+  read 9315 atoms. Parsing was never the expensive part.
+  `standalone/CMakeLists.txt` now names the layer headers that may be wrapped
+  like core headers in one list, `_layer_array_doors` (`DyeDynamics.h`,
+  `StructureTable.h`), instead of a hardcoded special case for the first one.
+  Two traps, both silent: an int out-view **must** be spelled
+  `out_view_i`/`n_out_view_i` or numpy's `%apply` does not match and the
+  generated property calls a two-argument C++ method with none; and SWIG does
+  not re-run when only a *header* changes -- deleting the generated
+  `*_wrap.cxx` is not enough either, the entry `.i` has to be touched, or the
+  shadow module keeps the previous signature and the build still reports
+  success.
+
+
+
 ## 2026-09-07 (1) — the pair layer could not see a homodimer
 
 Two defects, found while screening labelling sites on BmrA (a homodimeric ABC
