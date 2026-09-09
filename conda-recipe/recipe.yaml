@@ -58,6 +58,11 @@ requirements:
     # the 2.25.0 build. Without this floor the solver is free to pick an
     # older, broken imp build even though a fixed one is available.
     - imp >=2.25.0
+    # conda-forge's imp pins the SWIG runtime ABI through this metapackage,
+    # and the module generated here shares IMP's SWIG type tables -- the
+    # runtime our `swig` generates against has to be the one imp was built
+    # with, so pin it the same way (imp-feedstock hosts it too).
+    - swig-abi
   run:
     - ${{ pin_compatible('numpy') }}
     - python

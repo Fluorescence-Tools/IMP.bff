@@ -68,9 +68,12 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   INCLUDE_DIRECTORIES("${CMAKE_BINARY_DIR}/include")
   # `include/internal/Cif.h` includes "ihm_format.h" unqualified. IMP puts
   # its copy on the include path only inside its own build tree
-  # (python-ihm.cmake), never in what an installed IMP exports, so the
+  # (python-ihm.cmake), never in what an installed IMP exports -- even
+  # conda-forge's imp, which builds with IMP_USE_SYSTEM_IHM=on against the
+  # ihm package and keeps that header out of the module include path. So the
   # module build needs a copy of its own: the one vendored for the
-  # standalone build, byte-identical to IMP's (standalone/thirdparty/ihm).
+  # standalone build, byte-identical to IMP's (standalone/thirdparty/ihm),
+  # and the ihm_* symbols come from the libimp_atom we already link.
   INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/standalone/thirdparty/ihm")
 
   enable_testing()
