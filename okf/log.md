@@ -2,6 +2,20 @@
 
 ## 2026-09-09
 
+- **`write_points_mrc`: the voxelisation belongs with the format, not with the
+  application** (owner, 2026-09-09). chisurf's AV export decided how a weighted
+  point cloud becomes a grid -- the rounding, the origin, the extent and the
+  `.mrc`/`.map`/`.ccp4` suffix rule -- and all four are format questions. They
+  are here now, over `write_mrc_grid`, and chisurf names the file and nothing
+  else. `rint((xyz - origin) / step)`, so a point sits at the *centre* of its
+  voxel, which is the convention the AV raster uses: a cloud that came from one
+  lands back on it. Weights sum per voxel; a cloud with no fourth column counts
+  each point once. `test/io/test_points_mrc.py`, 17 cases.
+  Trap: `%apply` reaches only what is wrapped *after* it, so a typemap for a
+  function in `StructureIO.h` has to precede that `%include` -- placed after,
+  the build succeeds and the Python signature silently keeps the raw
+  `(pointer, n, cols)` triple.
+
 - **`write_mrc_grid`: a dense grid to MRC2014, without `IMP::em`**
   (`include/StructureIO.h`, `src/StructureIO.cpp`). The free `write_mrc` takes
   a `GridHeader` and a `float*` and is `%ignore`d in Python, so the only way

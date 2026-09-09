@@ -601,6 +601,80 @@ void write_mrc_grid(const std::string& path,
     write_mrc(path, header, values.data(), values.size());
 }
 
+std::string write_points_mrc(const std::string& path, double* points,
+                             int n_points, int n_columns, double grid_step) {
+    if (points == nullptr || n_points <= 0) {
+        IMP_THROW("write_points_mrc needs a non-empty point cloud",
+                  ValueException);
+    }
+    if (n_columns != 3 && n_columns != 4) {
+        IMP_THROW("write_points_mrc takes (N, 3) or (N, 4) points, not (N, "
+                          << n_columns << ")",
+                  ValueException);
+    }
+    if (!(grid_step > 0.0) || !std::isfinite(grid_step)) {
+        IMP_THROW("the grid step must be positive and finite, not "
+                          << grid_step,
+                  ValueException);
+    }
+
+    // The cloud's own minimum corner is the origin, and its span the shape:
+    // a caller that has points has said everything about the extent already.
+    std::vector<double> origin(3, 0.0);
+    for (int k = 0; k < 3; ++k) origin[k] = points[k];
+    for (int i = 1; i < n_points; ++i) {
+        for (int k = 0; k < 3; ++k) {
+            const double v = points[(std::size_t) i * n_columns + k];
+            if (v < origin[k]) origin[k] = v;
+        }
+    }
+
+    // rint, so a point sits at the *centre* of its voxel rather than at a
+    // corner -- the convention the accessible-volume raster uses, so a cloud
+    // that came from one lands back on it.
+    std::vector<long> idx((std::size_t) n_points * 3);
+    long shape[3] = {0, 0, 0};
+    for (int i = 0; i < n_points; ++i) {
+        for (int k = 0; k < 3; ++k) {
+            const double v = points[(std::size_t) i * n_columns + k];
+            const long j = (long) std::llround((v - origin[k]) / grid_step);
+            idx[(std::size_t) i * 3 + k] = j;
+            if (j > shape[k]) shape[k] = j;
+        }
+    }
+    const int nx = (int) shape[0] + 1;
+    const int ny = (int) shape[1] + 1;
+    const int nz = (int) shape[2] + 1;
+
+    std::vector<double> density((std::size_t) nx * ny * nz, 0.0);
+    for (int i = 0; i < n_points; ++i) {
+        const std::size_t c =
+                ((std::size_t) idx[(std::size_t) i * 3] * ny +
+                 (std::size_t) idx[(std::size_t) i * 3 + 1]) *
+                        (std::size_t) nz +
+                (std::size_t) idx[(std::size_t) i * 3 + 2];
+        density[c] += n_columns == 4
+                              ? points[(std::size_t) i * n_columns + 3]
+                              : 1.0;
+    }
+
+    // ends_with is case-insensitive here, so `X.MRC` is already an MRC path.
+    std::string out = path;
+    if (!internal::ends_with(out, ".mrc") &&
+        !internal::ends_with(out, ".map") &&
+        !internal::ends_with(out, ".ccp4")) {
+        const std::size_t dot = out.find_last_of('.');
+        const std::size_t slash = out.find_last_of("/\\");
+        if (dot != std::string::npos &&
+            (slash == std::string::npos || dot > slash)) {
+            out = out.substr(0, dot);
+        }
+        out += ".mrc";
+    }
+    write_mrc_grid(out, density, nx, ny, nz, origin, grid_step);
+    return out;
+}
+
 void convert_pdb_to_cif(const std::string& pdb_path,
                         const std::string& cif_path,
                         const std::string& probe_id) {

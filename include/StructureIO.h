@@ -238,6 +238,33 @@ IMPBFFEXPORT void write_mrc_grid(const std::string& path,
                                  const std::vector<double>& origin,
                                  double spacing);
 
+//! Write a weighted point cloud as an MRC2014 map, voxelising it first.
+/*! An accessible volume, a dye's sampled positions, any `(N, 4)` cloud: the
+    points are binned onto a grid of \p grid_step, weights summed per voxel,
+    and the grid written with #IMP::bff::write_mrc_grid. The origin is the
+    cloud's own minimum corner and the shape is whatever the cloud spans, so
+    nothing has to be said about extent.
+
+    The rounding is `rint((xyz - origin) / step)`, which puts a point at the
+    *centre* of its voxel rather than at a corner -- the same convention the
+    accessible-volume raster uses, so a cloud that came from one lands back on
+    it.
+
+    \param[in] path where to write; `.mrc` is appended unless the path already
+               ends in `.mrc`, `.map` or `.ccp4`
+    \param[in] points flat, three or four per point: x, y, z and optionally a
+               weight. Without a weight every point counts once.
+    \param[in] n_points,n_columns the shape, `(N, 3)` or `(N, 4)`
+    \param[in] grid_step the voxel spacing, A
+    \return the path actually written
+    \throw ValueException for an empty cloud, a column count that is not 3 or
+           4, or a grid step that is not positive and finite
+    \throw IOException when the file cannot be opened
+*/
+IMPBFFEXPORT std::string write_points_mrc(const std::string& path,
+                                          double* points, int n_points,
+                                          int n_columns, double grid_step);
+
 //! Convert a dye PDB to mmCIF with `_atom_site` records.
 /*! \param[in] probe_id the data block name; empty takes the PDB's stem */
 IMPBFFEXPORT void convert_pdb_to_cif(const std::string& pdb_path,

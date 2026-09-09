@@ -13,6 +13,15 @@ IMP_SWIG_VALUE(IMP::bff, AtomBond, AtomBonds);
 IMP_SWIG_VALUE(IMP::bff, CrossLink, CrossLinks);
 IMP_SWIG_VALUE(IMP::bff, AtomReference, AtomReferences);
 
+// The cloud `write_points_mrc` voxelises, straight from numpy. This has to
+// precede the header: %apply only reaches declarations wrapped after it, and
+// the same rule is why write_rmf's typemap sits above RmfIO.h below rather
+// than up here with this one.
+%apply(double* IN_ARRAY2, int DIM1, int DIM2) {
+    (double* points, int n_points, int n_columns)
+};
+%feature("kwargs") IMP::bff::write_points_mrc;
+
 %include "IMP/bff/TrajectoryIO.h"
 %include "IMP/bff/StructureIO.h"
 
