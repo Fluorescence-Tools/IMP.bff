@@ -46,7 +46,8 @@ __all__ = ['P', 'default_settings', 'build_model', 'truth_distribution', 'physic
            'classify_bursts', 'group_indices', 'group_summary', 'label_groups',
            'hdbscan_labels', 'check_hdbscan_selection', 'constant_values', 'fit',
            'gaussian_truth', 'expected_counts', 'simulate_ensemble', 'fit_at_lambda',
-           'fit_ensemble', 'window', 'figure', 'mix_nodes', 'joint_mode', 'keep_inline', 'assert_inline']
+           'fit_ensemble', 'window', 'figure', 'mix_nodes', 'joint_mode', 'keep_inline', 'assert_inline',
+           'GALLERY_CASES', 'gallery', 'plot_gallery']
 
 
 # --------------------------------------------------------------------------
@@ -159,7 +160,8 @@ def fit_at_lambda(model, y, log10_lam, verbose=False, hessian='fisher'):
     return r
 
 
-def fit_ensemble(model, y, lam_nodes=(1.0, 0.0, -1.0), seed=0, verbose=False, refine=0.0):
+def fit_ensemble(model, y, lam_nodes=(1.0, 0.0, -1.0), seed=0, verbose=False, refine=0.0,
+                 accelerate=True):
     """The whole procedure: a Laplace at each node of the roughness grid, the
     nodes mixed by their evidences."""
     import torch
@@ -168,12 +170,114 @@ def fit_ensemble(model, y, lam_nodes=(1.0, 0.0, -1.0), seed=0, verbose=False, re
     L.LAM_REFINE_STEP = float(refine)
     try:
         g = _route_b_graph(model, y)
+        if accelerate:
+            #: THE FAST PATH BY DEFAULT.  `fast_forward.accelerate` installs the
+            #: spectral forward model, the vectorised prior and the analytic
+            #: instrument derivative on this graph AND on every graph derived
+            #: from it -- the nodes of the penalty grid and the candidates of
+            #: the spectrum-smoothness search.  It is checked against the
+            #: prototype before it is installed and reproduces p(R) to 1e-13,
+            #: so there is no reason to fit without it; notebooks 00-09
+            #: deliberately do, because a slow implementation that mirrors the
+            #: equations is the better teacher.
+            import fast_forward as _FF
+            _FF.accelerate(model, g)
         gen = torch.Generator().manual_seed(int(seed))
         post = L.fit_sample(g, y, gen, model['rel'], verbose=verbose, start='mem', optimiser='fisher',
                             lam_nodes=tuple(float(x) for x in lam_nodes), hessian='fisher')
     finally:
         L.LAM_REFINE_STEP = keep
     return g, post
+
+
+# --------------------------------------------------------------------------
+# the gallery: the same procedure on cases it handles and cases it does not
+# --------------------------------------------------------------------------
+
+#: FIVE TRUTHS, chosen so that two of them are meant to fail.  A gallery of
+#: successes says nothing about when to believe a result; what a reader needs
+#: is the boundary.  The two that fail are not badly posed -- they are the
+#: ordinary situations this measurement cannot resolve: populations closer
+#: together than the decay can separate, and a distance far enough out that the
+#: transfer efficiency is pinned against one.
+GALLERY_CASES = [
+    dict(name='one population',
+         centres=[1.00], weights=[1.0], widths=0.05, x_d0=0.15,
+         expect='recovered: position and width both inside the band'),
+    dict(name='two, resolved',
+         centres=[0.80, 1.25], weights=[0.5, 0.5], widths=0.06, x_d0=0.15,
+         expect='recovered: two modes, the far one broadened'),
+    dict(name='two, too close',
+         centres=[0.98, 1.10], weights=[0.5, 0.5], widths=0.06, x_d0=0.15,
+         expect='NOT resolved: one mode at the mean of the two'),
+    dict(name='broad',
+         centres=[1.00], weights=[1.0], widths=0.28, x_d0=0.15,
+         expect='recovered in width, but the penalty pulls the tails in'),
+    dict(name='large donor-only',
+         centres=[0.90, 1.20], weights=[0.6, 0.4], widths=0.06, x_d0=0.45,
+         expect='the donor-only atom competes with the far population'),
+]
+
+
+def gallery(model, settings, cases=None, photons=3e5, seed=3,
+            lam_nodes=(1.0, 0.0, -1.0), verbose=False):
+    """Fit each case and return everything a reader needs to judge it.
+
+    Every entry carries the posterior mean and its delta-method band, the
+    truth, and Rule 0's numbers -- the deviance per degree of freedom with its
+    dof, and the runs test of every histogram.  A recovered distribution
+    without those is a picture, not a result.
+    """
+    import time
+    import numpy as np
+    L = model['L']
+    cases = GALLERY_CASES if cases is None else cases
+    out = []
+    for c in cases:
+        p_true = gaussian_truth(model, c['centres'], c['weights'], c['widths'])
+        y, _, _ = simulate_ensemble(model, settings, p_true,
+                                    x_d0=c['x_d0'], photons=photons, seed=seed)
+        t0 = time.time()
+        g, post = fit_ensemble(model, y, lam_nodes=lam_nodes, seed=seed, verbose=verbose)
+        dt = time.time() - t0
+        gi = post['graph']
+        vals, _ = gi.unpack(post['theta'])
+        lam = gi.expected_counts(vals)
+        rows, dev, dof = L.rule0(gi, y, lam)
+        m, lo1, hi1, lo2, hi2 = L.delta_bands(None, post, model['rel'], space='linear')
+        out.append(dict(case=c, p_true=p_true, mean=m, lo1=lo1, hi1=hi1, lo2=lo2, hi2=hi2,
+                        dev=float(dev), dof=int(dof), dpd=float(dev) / int(dof),
+                        runs=np.array([rows[k]['runs_p'] for k in rows]),
+                        x_d0_post=float(vals['x_d0']), seconds=dt))
+    return out
+
+
+def plot_gallery(model, results, dE=0.01):
+    """One panel per case: the posterior with its band against the truth, the
+    fit statistic in the title, and the expectation stated in advance."""
+    P._inline()
+    import matplotlib.pyplot as plt
+    rel = model['rel']
+    n = len(results)
+    fig, axes = plt.subplots(1, n, figsize=(3.1 * n, 3.3), sharey=False)
+    axes = np.atleast_1d(axes)
+    for ax, r in zip(axes, results):
+        L = model['L']
+        #: the window must be shaded AFTER the limits are set -- it reads them
+        ax.set_xlim(0.5, 1.7)
+        L.shade_window(ax, dE, label=False)
+        ax.fill_between(rel, r['lo2'], r['hi2'], color='C0', alpha=0.18, lw=0)
+        ax.fill_between(rel, r['lo1'], r['hi1'], color='C0', alpha=0.35, lw=0)
+        ax.plot(rel, r['mean'], color='C0', lw=1.6, label='posterior')
+        ax.plot(rel, r['p_true'], color='k', lw=1.1, ls='--', label='truth')
+        ax.set_xlim(0.5, 1.7); ax.set_xlabel('R / R0')
+        bad = int((r['runs'] < 0.05).sum())
+        ax.set_title(f"{r['case']['name']}\nD/dof {r['dpd']:.3f} on {r['dof']} dof, "
+                     f"{bad} of {len(r['runs'])} runs < 0.05", fontsize=8.5)
+    axes[0].set_ylabel('p per grid point')
+    axes[0].legend(fontsize=7, frameon=False)
+    fig.tight_layout()
+    return fig
 
 
 # --------------------------------------------------------------------------
