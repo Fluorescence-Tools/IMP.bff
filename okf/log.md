@@ -2,6 +2,16 @@
 
 ## 2026-09-09
 
+- **`read_score_series` returned nothing for the format `count_frames`
+  counted.** PMI writes its stat *values* quoted -- `{1: '10.0', 4: '0'}` --
+  and `literal_int_map` sorted a quoted value into the *names* map, so every
+  data line's numbers went where the column headings go and the value map was
+  empty. The reader then skipped each line for want of a score key and
+  answered `[]`, on a file whose frames `count_frames` had just counted
+  correctly. A quoted value that reads as a number is now recorded as both.
+  Found by chisurf's `test_read_score_series`, which had never run: the plugin
+  that calls it has been unimportable since August.
+
 - **One sampling interface, four backends -- and docking is now one of its
   callers** (owner, 2026-09-09: "i do not want too diverse sampling
   interfaces, make it such that there are different backends, zeus, emcee

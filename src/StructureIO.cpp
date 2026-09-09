@@ -240,14 +240,17 @@ bool literal_int_map(const std::string& line, std::map<int, double>& out,
         char* stop = nullptr;
         const long key = std::strtol(key_text.c_str(), &stop, 10);
         if (stop != key_text.c_str() && *stop == '\0') {
-            if (is_string) {
-                names[static_cast<int>(key)] = value_text;
-            } else {
-                char* vstop = nullptr;
-                const double v = std::strtod(value_text.c_str(), &vstop);
-                if (vstop != value_text.c_str() && *vstop == '\0') {
-                    out[static_cast<int>(key)] = v;
-                }
+            if (is_string) names[static_cast<int>(key)] = value_text;
+            // A quoted value is a number too, when it reads as one. PMI
+            // writes its stat *values* quoted -- `{1: '10.0', 4: '0'}` -- so
+            // treating a quoted value as a name only put every data line's
+            // numbers in the wrong map, and the reader returned an empty
+            // series for a file `count_frames` was happy to count.
+            char* vstop = nullptr;
+            const double v = std::strtod(value_text.c_str(), &vstop);
+            if (!value_text.empty() && vstop != value_text.c_str() &&
+                *vstop == '\0') {
+                out[static_cast<int>(key)] = v;
             }
         }
     }
