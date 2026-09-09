@@ -136,6 +136,20 @@ inline void magic_angle(const T* vv, const T* vh, std::size_t n, const T& g, T* 
  * toward zero; and the additive terms, which must be removed first with
  * \ref subtract_additive.
  *
+ * **This is tttrlib's `fit23` expression**, reached from the other direction.
+ * `DecayFit23.cpp`'s `decay23_r_ad` writes the denominator as
+ * `Fp (1 - 3 l2) + (2 - 3 l1) g Fs`; expanding `w_vv` and `w_vh` above gives
+ * `(1 - 3 l2) VV + (2 - 3 l1) g VH`, the same thing. The two agree to 1.2e-16
+ * in this project's test, which is worth more than either derivation alone:
+ * they are independent implementations and they do not share an error.
+ *
+ * `fit23` corrects its background as `(S - gamma B) / (1 - gamma)` with
+ * `gamma` the background FRACTION rather than by subtracting counts. For the
+ * anisotropy the difference is nothing: the `1 / (1 - gamma)` multiplies both
+ * channels and cancels in the ratio. It matters for `Fp` and `Fs` as
+ * intensities, which is why that form is the one to use when the isotropic
+ * signal is wanted on an absolute scale.
+ *
  * \param floor denominators at or below this give zero rather than a division
  */
 template <typename T = double>
