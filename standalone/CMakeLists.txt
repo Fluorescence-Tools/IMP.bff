@@ -295,7 +295,7 @@ if(IMPBFF_PYTHON)
   # that carries IMP as a private C++ library and has no IMP in Python
   # (PRD-139). A header added here must keep that property, or SWIG needs
   # IMP's own .i files and the extension imports _IMP_kernel at load.
-  set(_layer_array_doors "DyeDynamics.h" "StructureTable.h")
+  set(_layer_array_doors "DyeDynamics.h" "StructureReader.h")
   set(_agg_content "// generated: every public core header\n")
   foreach(h ${_public_headers})
     get_filename_component(n "${h}" NAME)

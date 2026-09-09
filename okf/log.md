@@ -2,6 +2,36 @@
 
 ## 2026-09-09
 
+- **`RmfStructureWriter`: a structure as a PMI-shaped RMF trajectory**
+  (`include/RmfIO.h`, `src/RmfIO.cpp`, `test/io/test_rmf_structure_writer.py`).
+  chisurf built the same tree in Python through `IMP.rmf` -- a decorator call
+  per atom per frame, and a dependency the connection layer's IMP does not
+  even carry (`rmf` is not in `IMPBFF_IMP_MODULES`). This builds it through
+  **RMF's own decorators**, the way `write_rotamer_library_rmf` already did,
+  so it is **core**: it needs no IMP at all, only RMF. Per-frame scalars go to
+  the `stat` category where `IMP.pmi.output.Output` puts them, as a JSON
+  object, so the set of names need not be known in advance.
+  It takes a `StructureTable`, which is why that record moved to the core
+  (`src/StructureTable.cpp`) with the IMP-backed reader left behind in the
+  layer as `StructureReader.h` / `src/imp/StructureReader.cpp`. The record
+  also gained setters: a table is *built* by a caller with coordinates of its
+  own, not only filled by the reader.
+  Verified: chisurf writes a 9315-atom three-frame trajectory through it and
+  `chimol` reads it back, in a Python where `IMP.atom`, `IMP.core` and
+  `IMP.rmf` are all unimportable.
+  Three defects the tests caught, all of which would have been silent:
+  **`close()` flushed but did not close** -- RMF has no `close`, a file stays
+  open until the last handle goes, and handles hide in the node list and the
+  decorator factory as well as in the `FileHandle`, so reopening the path
+  answered "This file is currently being written to";
+  **a second constructor turned the real one into an overload**, and SWIG
+  switches keyword arguments off for overloads without saying so, making the
+  Python signature quietly positional-only;
+  and **a `stat` key was looked up by type rather than by name** -- RMF
+  namespaces keys by type, so a value that arrived as `4` after arriving as
+  `4.75` created a *second* key of the same name and every reader asking for
+  the first type got nothing back for that frame.
+
 - **`read_structure_table`: IMP's PDB and mmCIF readers behind a flat table**
   (`include/StructureTable.h`, `src/imp/StructureTable.cpp`,
   `pyext/IMP_bff.structuretable.i`, `test/io/test_structure_table.py`).
@@ -31,7 +61,6 @@
   `*_wrap.cxx` is not enough either, the entry `.i` has to be touched, or the
   shadow module keeps the previous signature and the build still reports
   success.
-
 
 
 ## 2026-09-07 (1) — the pair layer could not see a homodimer

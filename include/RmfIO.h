@@ -26,6 +26,9 @@
 #ifndef IMPBFF_NO_RMF
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/RotamerLibrary.h>
+#include <IMP/bff/StructureTable.h>
+
+#include <memory>
 
 #include <string>
 #include <vector>
@@ -88,6 +91,76 @@ IMPBFFEXPORT RotamerLibrary read_rotamer_library_rmf(const std::string& path);
 */
 IMPBFFEXPORT std::vector<ProteinFrame> protein_frames_from_rmf(
         const std::string& path, int max_frames = -1);
+
+//! A structure written as an RMF trajectory: one hierarchy, many frames.
+/*!
+    The shape is PMI's, and deliberately so -- root, one node per chain, one
+    per residue, one per atom -- because that is what the viewers and the
+    analysis scripts around this ecosystem open. It is built through **RMF's
+    own decorators**, not through `IMP::rmf`: the connection layer's IMP does
+    not carry that module, and a writer that needed it could not run in a
+    package that links IMP privately.
+
+    Per-frame scalars go into RMF's `stat` category, which is where PMI's
+    `IMP.pmi.output.Output` puts them, so a stat plot drawn from a PMI run
+    reads one of these unchanged. They arrive as a JSON object because that
+    is what carries a set of names the writer cannot know in advance; a
+    number becomes a float or int key by its JSON type, anything else a
+    string. A key is created once, on the frame that first mentions it.
+
+    \see #IMP::bff::write_rmf for the single-frame sphere writer, which is a
+         different thing: it has no residues, no chains and no names.
+*/
+class IMPBFFEXPORT RmfStructureWriter {
+    struct Impl;
+    std::shared_ptr<Impl> impl_;
+
+ public:
+    // No default constructor: a writer without a file is not a useful object,
+    // and a second constructor would make this one an *overload*, which is
+    // where SWIG switches keyword arguments off -- silently, so the Python
+    // signature quietly becomes positional-only.
+
+    //! Open \p path and build the hierarchy \p structure describes.
+    /*!
+        \param[in] path the file to write; `.rmf3` is appended when missing
+        \param[in] structure the atoms -- their names, residues and chains fix
+                   the tree, their radii and masses the particle decorators.
+                   The coordinates it carries are *not* written: a frame is
+                   #append.
+        \param[in] root_name names the hierarchy root
+        \param[in] metadata_json the file's description, and the stat keys to
+                   create up front. Empty writes no description.
+        \throw ValueException when the table has no atoms, or its columns
+               disagree on how many there are
+        \throw IOException when \p path cannot be opened
+    */
+    RmfStructureWriter(const std::string& path, const StructureTable& structure,
+                       const std::string& root_name = "structure",
+                       const std::string& metadata_json = "");
+
+    //! Append one frame.
+    /*!
+        \param[in] coords flat, three per atom, in the table's atom order
+        \param[in] frame_name empty takes the frame index
+        \param[in] metadata_json per-frame scalars for the `stat` category
+        \throw ValueException when \p coords is not three per atom
+    */
+    void append(const std::vector<double>& coords,
+                const std::string& frame_name = "",
+                const std::string& metadata_json = "");
+
+    int get_n_atoms() const;
+    int get_number_of_frames() const;
+
+    //! Flush and release the file. Destruction does this too.
+    void close();
+
+    IMP_SHOWABLE_INLINE(RmfStructureWriter,
+                        out << "RmfStructureWriter(" << get_n_atoms()
+                            << " atoms, " << get_number_of_frames()
+                            << " frames)");
+};
 
 IMPBFF_END_NAMESPACE
 

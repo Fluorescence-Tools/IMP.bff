@@ -895,6 +895,10 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
    measurement record, which the network restraint below takes by the map. */
 %include "IMP_bff.fps.i"
 
+/* The structure record every reader fills and every writer takes: flat
+   columns, no IMP and no RMF type. */
+%include "IMP_bff.structuretable.i"
+
 /* Reading a frame out of a hierarchy without a SWIG call per atom, and the
    `ProteinFrame` value that reading is for. */
 IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);

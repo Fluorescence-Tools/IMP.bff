@@ -24,6 +24,7 @@
 
 #include <IMP/bff/RmfIO.h>
 #include <IMP/bff/internal/Text.h>
+#include <IMP/bff/internal/json.h>
 
 #include <RMF/FileConstHandle.h>
 #include <RMF/FileHandle.h>
@@ -33,7 +34,10 @@
 #include <RMF/infrastructure_macros.h>
 
 #include <cmath>
+#include <map>
 #include <sstream>
+#include <string>
+#include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -297,6 +301,251 @@ void write_rotamer_library_rmf(const std::string& path,
                                            ? library.weights[r]
                                            : 0.0));
     }
+}
+
+// ---------------------------------------------------------------------------
+// RmfStructureWriter
+// ---------------------------------------------------------------------------
+
+struct RmfStructureWriter::Impl {
+    //! Everything that holds the file open, so that #close can drop all of it.
+    /*! RMF has no `close`: a file stays open until the last handle to it goes,
+        and a handle hides in the node list and in the decorator factory as
+        well as in the `FileHandle`. Keeping only a flag and flushing left the
+        file open -- reopening it read-only answered "This file is currently
+        being written to", which is what the tests here found. */
+    struct File {
+        RMF::FileHandle fh;
+        RMF::decorator::ParticleFactory pf;
+        std::vector<RMF::NodeHandle> atoms;
+        RMF::Category stat;
+        // A key is created the first time a frame mentions its name, and
+        // kept: RMF types a key once, so a name that arrives as an int on
+        // frame 0 and a float on frame 7 stays an int key rather than
+        // becoming two keys of one name.
+        std::map<std::string, RMF::FloatKey> float_keys;
+        std::map<std::string, RMF::IntKey> int_keys;
+        std::map<std::string, RMF::StringKey> string_keys;
+
+        explicit File(const std::string& path)
+            : fh(RMF::create_rmf_file(with_rmf3(path))), pf(fh),
+              stat(fh.get_category("stat")) {}
+
+        //! Set one `stat` value, by the type the key already has.
+        /*! RMF types a key once and namespaces keys by type, so
+            `get_key<FloatTag>` and `get_key<IntTag>` on one name are two
+            different keys. Choosing the branch from *this frame's* JSON type
+            therefore silently splits a name in two the first time a value
+            arrives as 4 rather than 4.75, and a reader asking for the type it
+            saw first gets nothing back for that frame. So the name is looked
+            up across all three maps before its type is considered. */
+        void set_stat(RMF::NodeHandle& root, const std::string& key,
+                      const nlohmann::json& value) {
+            std::map<std::string, RMF::FloatKey>::iterator f = float_keys.find(key);
+            if (f != float_keys.end()) {
+                root.set_frame_value(f->second,
+                                     value.is_number()
+                                             ? static_cast<float>(value.get<double>())
+                                             : 0.0f);
+                return;
+            }
+            std::map<std::string, RMF::IntKey>::iterator i = int_keys.find(key);
+            if (i != int_keys.end()) {
+                root.set_frame_value(
+                        i->second,
+                        value.is_boolean() ? (value.get<bool>() ? 1 : 0)
+                        : value.is_number() ? static_cast<int>(value.get<double>())
+                                            : 0);
+                return;
+            }
+            std::map<std::string, RMF::StringKey>::iterator t =
+                    string_keys.find(key);
+            if (t != string_keys.end()) {
+                root.set_frame_value(t->second, value.is_string()
+                                                        ? value.get<std::string>()
+                                                        : value.dump());
+                return;
+            }
+
+            // First time this name is seen: its JSON type picks the key's type.
+            if (value.is_boolean() || value.is_number_integer()) {
+                RMF::IntKey k = fh.get_key<RMF::IntTag>(stat, key);
+                int_keys.insert(std::make_pair(key, k));
+                root.set_frame_value(k, value.is_boolean()
+                                                ? (value.get<bool>() ? 1 : 0)
+                                                : value.get<int>());
+            } else if (value.is_number()) {
+                RMF::FloatKey k = fh.get_key<RMF::FloatTag>(stat, key);
+                float_keys.insert(std::make_pair(key, k));
+                root.set_frame_value(k, static_cast<float>(value.get<double>()));
+            } else {
+                RMF::StringKey k = fh.get_key<RMF::StringTag>(stat, key);
+                string_keys.insert(std::make_pair(key, k));
+                root.set_frame_value(k, value.is_string() ? value.get<std::string>()
+                                                          : value.dump());
+            }
+        }
+    };
+
+    std::shared_ptr<File> file;
+    // Kept beside the file so that a closed writer can still say what it
+    // wrote, rather than reporting zero atoms and zero frames.
+    int n_atoms;
+    int n_frames;
+
+    explicit Impl(const std::string& path)
+        : file(std::make_shared<File>(path)), n_atoms(0), n_frames(0) {}
+};
+
+RmfStructureWriter::RmfStructureWriter(const std::string& path,
+                                       const StructureTable& structure,
+                                       const std::string& root_name,
+                                       const std::string& metadata_json) {
+    const int n = structure.get_n_atoms();
+    if (n <= 0) {
+        IMP_THROW("RmfStructureWriter: the structure has no atoms",
+                  ValueException);
+    }
+    const std::size_t un = static_cast<std::size_t>(n);
+    if (structure.chain.size() != un || structure.res_id.size() != un ||
+        structure.res_name.size() != un || structure.atom_name.size() != un ||
+        structure.mass.size() != un) {
+        IMP_THROW("RmfStructureWriter: the structure's columns disagree on "
+                  "how many atoms there are",
+                  ValueException);
+    }
+
+    impl_ = std::make_shared<Impl>(path);
+    if (!metadata_json.empty()) impl_->file->fh.set_description(metadata_json);
+
+    RMF::decorator::ChainFactory cf(impl_->file->fh);
+    RMF::decorator::ResidueFactory rf(impl_->file->fh);
+    RMF::NodeHandle root =
+            impl_->file->fh.get_root_node().add_child(root_name, RMF::REPRESENTATION);
+
+    // One pass, in atom order: a chain node opens when its id changes and a
+    // residue node when (chain, residue) changes. Keyed on the *previous* row
+    // rather than on a map, because a file that returns to a chain later --
+    // which happens -- should get a second node there, the way reading it back
+    // as a hierarchy would.
+    RMF::NodeHandle chain_node, residue_node;
+    std::string current_chain;
+    int current_res = 0;
+    std::string current_res_name;
+    bool started = false;
+
+    impl_->file->atoms.reserve(un);
+    for (int i = 0; i < n; ++i) {
+        std::string chain_id = structure.chain[i];
+        if (chain_id.empty()) chain_id = "A";
+        const int res_id = structure.res_id[i];
+        std::string res_name = structure.res_name[i];
+        if (res_name.empty()) res_name = "UNK";
+
+        if (!started || chain_id != current_chain) {
+            chain_node = root.add_child(chain_id, RMF::REPRESENTATION);
+            cf.get(chain_node).set_chain_id(chain_id);
+            current_chain = chain_id;
+            started = false;  // force a new residue under the new chain
+        }
+        if (!started || res_id != current_res || res_name != current_res_name) {
+            std::ostringstream label;
+            label << res_name << " " << res_id;
+            residue_node = chain_node.add_child(label.str(),
+                                                RMF::REPRESENTATION);
+            RMF::decorator::Residue rd = rf.get(residue_node);
+            rd.set_residue_index(res_id);
+            rd.set_residue_type(res_name);
+            current_res = res_id;
+            current_res_name = res_name;
+        }
+        started = true;
+
+        std::string atom_name = structure.atom_name[i];
+        if (atom_name.empty()) {
+            std::ostringstream a;
+            a << "A" << i;
+            atom_name = a.str();
+        }
+        RMF::NodeHandle node = residue_node.add_child(atom_name,
+                                                      RMF::REPRESENTATION);
+        RMF::decorator::Particle d = impl_->file->pf.get(node);
+        // A radius of zero makes a particle a reader cannot draw; the writer
+        // this replaced clamped the same way.
+        const double r = i < static_cast<int>(structure.radius.size())
+                                 ? structure.radius[i]
+                                 : 1.5;
+        d.set_radius(static_cast<float>(r > 0.1 ? r : 0.1));
+        d.set_mass(static_cast<float>(structure.mass[i]));
+        impl_->file->atoms.push_back(node);
+    }
+    impl_->n_atoms = static_cast<int>(impl_->file->atoms.size());
+}
+
+void RmfStructureWriter::append(const std::vector<double>& coords,
+                                const std::string& frame_name,
+                                const std::string& metadata_json) {
+    if (!impl_ || !impl_->file) {
+        IMP_THROW("RmfStructureWriter: the file is closed", ValueException);
+    }
+    const std::size_t n = impl_->file->atoms.size();
+    if (coords.size() != n * 3) {
+        IMP_THROW("RmfStructureWriter::append takes three coordinates per "
+                  "atom -- " << n * 3 << " numbers, not " << coords.size(),
+                  ValueException);
+    }
+
+    std::string name = frame_name;
+    if (name.empty()) {
+        std::ostringstream s;
+        s << impl_->file->fh.get_number_of_frames();
+        name = s.str();
+    }
+    impl_->file->fh.add_frame(name, RMF::FRAME);
+
+    for (std::size_t i = 0; i < n; ++i) {
+        impl_->file->pf.get(impl_->file->atoms[i])
+                .set_coordinates(
+                        RMF::Vector3(static_cast<float>(coords[3 * i]),
+                                     static_cast<float>(coords[3 * i + 1]),
+                                     static_cast<float>(coords[3 * i + 2])));
+    }
+
+    if (!metadata_json.empty()) {
+        nlohmann::json values;
+        try {
+            values = nlohmann::json::parse(metadata_json);
+        } catch (const std::exception& e) {
+            IMP_THROW("RmfStructureWriter::append: the frame's metadata does "
+                      "not parse as JSON: " << e.what(),
+                      ValueException);
+        }
+        if (values.is_object()) {
+            RMF::NodeHandle root = impl_->file->fh.get_root_node();
+            for (nlohmann::json::const_iterator it = values.begin();
+                 it != values.end(); ++it) {
+                impl_->file->set_stat(root, it.key(), it.value());
+            }
+        }
+    }
+    impl_->file->fh.flush();
+    impl_->n_frames = static_cast<int>(impl_->file->fh.get_number_of_frames());
+}
+
+int RmfStructureWriter::get_n_atoms() const {
+    return impl_ ? impl_->n_atoms : 0;
+}
+
+int RmfStructureWriter::get_number_of_frames() const {
+    return impl_ ? impl_->n_frames : 0;
+}
+
+void RmfStructureWriter::close() {
+    if (!impl_ || !impl_->file) return;
+    impl_->file->fh.flush();
+    // Dropping the last handle is what closes the file; a flush is not, and a
+    // reader opening the path meanwhile is told it is still being written to.
+    impl_->file.reset();
 }
 
 RotamerLibrary read_rotamer_library_rmf(const std::string& path) {
