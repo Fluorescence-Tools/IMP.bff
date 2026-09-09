@@ -1,10 +1,11 @@
 # Bayesian fluorescence decays — how the model was arrived at
 
-*2026-09-08*
+*2026-09-08, extended 2026-09-09*
 
-Eight notebooks that build one model, in the order it was actually built. The
-end of the road is `../smfret_pie_mfd`, which is the whole thing as a single
-runnable example; this series exists so that nothing in it looks arbitrary.
+Eleven notebooks that build one model, in the order it was actually built, and
+then five that show how to point it at an experiment of your own. The end of
+the road is `../smfret_pie_mfd`, which is the whole thing as a single runnable
+example; this series exists so that nothing in it looks arbitrary.
 
 Each notebook states the mathematics of the step it adds, runs it, and shows
 the figure. Several also record what was tried and **abandoned**, because a
@@ -30,10 +31,21 @@ point into it by section.
 | 8 | `08_classify_then_pool.ipynb` | classify the bursts by what each one looks like, pool the groups, analyse each — and separate populations the pooled analysis cannot |
 | 9 | `09_what_failed.ipynb` | every mistake serious enough to change a result, with the measurement that caught it — wrong answers that fit, silent losses, and checks that could not fail |
 | 10 | `10_the_factor_graph_in_bff.ipynb` | the model as a factor graph in bff, drawn with `networkx`, and made fast: the forward model 38x, the whole objective 8x, agreeing to 1e-15 |
+| 11 | `11_configuring_the_network.ipynb` | **the experiment as data**: samples, pulses, detectors and the histograms recorded, in Python and in JSON, from which the channels, the physics, the unknowns and the factor graph are derived |
+| 12 | `12_mfd_donor_excitation.ipynb` | one laser, four detectors, the labelled sample alone — the commonest smFRET measurement and the hardest case for this model |
+| 13 | `13_mfd_pie.ipynb` | two lasers interleaved, three samples, twelve histograms, and what the second pulse makes measurable |
+| 14 | `14_separate_measurements.ipynb` | three cuvettes measured on their own — the ensemble geometry the first ten notebooks use, now as a description |
+| 15 | `15_magic_angle_minimal.ipynb` | two histograms and no polarisation: the smallest experiment the model accepts, and the seven numbers it must not be asked for |
 
 Notebooks 0, 1, 2, 4, 6–10 run in a few minutes each; 3 and 5 do several fits
 and take longer. Every one was executed end to end before being committed, and
 carries its outputs.
+
+**Notebooks 11–15 are the ones to read if you have your own measurement.** 11 is
+about describing it; 12–15 each take one description, say what it can and cannot
+determine *before* fitting, simulate data from it, fit, and report Rule 0
+against a measured deviance reference. The four differ only in their
+description.
 
 ## What it needs
 
@@ -46,6 +58,13 @@ carries its outputs.
 * `IMP.bff` for notebook 10
 * `numpy`, `scipy`, `torch`, `matplotlib`, `networkx`, and `scikit-learn` for
   the cross-checks in notebooks 8 and 9
+
+`experiment.py` is the description layer: the four dataclasses, the rule that
+derives what each histogram carries, the JSON round trip, the identifiability
+measurement and the bff factor graph. Running it directly
+(`python experiment.py`) prints every geometry, checks the derived channels and
+scopes against the literals in the prototype, and shows what the validator
+refuses.
 
 `bd.py` is the shared code. It imports `pie_mfd` from `../smfret_pie_mfd` so
 that the series and the finished example run the same implementation.

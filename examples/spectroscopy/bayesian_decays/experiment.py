@@ -43,7 +43,8 @@ from pathlib import Path
 from typing import Sequence
 
 __all__ = ['Detector', 'Excitation', 'Sample', 'Channel', 'Scope', 'Experiment',
-           'build', 'graph', 'simulate', 'truth_values', 'identifiability', 'unidentified',
+           'build', 'graph', 'simulate', 'truth_values', 'fit', 'rule0',
+           'identifiability', 'unidentified', 'factor_scopes', 'structural_graph',
            'mfd_donor_excitation', 'mfd_pie', 'separate_measurements',
            'magic_angle_minimal', 'GEOMETRIES', 'check_against_prototype']
 
@@ -536,7 +537,10 @@ def build(spec: Experiment, knots: int = 25, threads: int = 4) -> dict:
         Eu['pie_full'] = True
     else:
         Eu = E
-    return dict(L=L, E=E, Eu=Eu, rel=np.asarray(rel), spl=spl, edges=edges,
+    #: `Ep` is the name the older helpers in this folder use for the
+    #: environment the model is actually fitted in; kept as an alias so
+    #: `bff_forward.structural_graph` and `bd`'s plotting take this model too
+    return dict(L=L, E=E, Eu=Eu, Ep=Eu, rel=np.asarray(rel), spl=spl, edges=edges,
                 spec=spec, keys=spec.channel_keys(), n_coef=int(spl.shape[1]),
                 n_bin=int(Eu['n_bin']), dt=float(E['dt']), period=float(E['period']))
 
@@ -740,6 +744,92 @@ def identifiability(spec: Experiment, model: dict, p_true=None, photons=3e5, ste
                          information=float(tot.max()),
                          carried_by=', '.join(carried) if carried else 'nothing'))
     return rows
+
+
+def factor_scopes(spec: Experiment, model: dict, p_true=None, photons=3e5,
+                  threshold=1e-6) -> dict:
+    """Which unknowns each histogram's likelihood factor actually touches --
+    MEASURED, by moving each coordinate and seeing whether that histogram's
+    expected counts move.
+
+    The hand-written version of this list is in `bff_forward.structural_graph`
+    and it is a reasonable guess. A guess is the wrong thing to build a graph
+    decomposition on, though: the elimination order, the treewidth and the
+    separators are all statements about which variables share a factor, so a
+    scope that is wrong by one variable is a decomposition that is wrong.
+    """
+    import numpy as np
+    rows = _per_channel_information(spec, model, p_true, photons)
+    out = {}
+    for k, info in rows.items():
+        tot = max(sum(info.values()), 1e-300)
+        out[k] = sorted(n for n, v in info.items() if v > threshold * tot)
+    return out
+
+
+def _per_channel_information(spec, model, p_true=None, photons=3e5, step=1e-4):
+    """`{channel: {variable: Fisher information this channel carries}}`."""
+    import numpy as np
+    L = model['L']
+    if p_true is None:
+        p_true = np.exp(-0.5 * ((model['rel'] - 0.9) / 0.08) ** 2)
+        p_true = p_true / p_true.sum()
+    g = graph(spec, model, None, photons=photons)
+    vals, _ = truth_values(spec, model, p_true, photons)
+    zd = L.prior_median_z(g)
+    for v in g.free:
+        if v.name in vals:
+            zd[v.name] = v.transform.to_unconstrained(L.tt(vals[v.name]).reshape(-1))
+    zd['c'] = g.index['c'].transform.to_unconstrained(
+        L.coefficients_of(g, p_true, float(vals['x_d0'])).reshape(-1))
+    th = g.pack(zd)
+    keys = model['keys']
+
+    def counts(theta):
+        v, _ = g.unpack(theta)
+        c = g.expected_counts(v)
+        return {k: c[k].detach().numpy() for k in keys}
+
+    base = counts(th)
+    out = {k: {} for k in keys}
+    for var in g.free:
+        a0 = g.offsets[var.name][0]
+        acc = {k: 0.0 for k in keys}
+        for i in range(var.size):
+            h = step * max(1.0, abs(float(th[a0 + i])))
+            t2 = th.clone(); t2[a0 + i] = th[a0 + i] + h
+            pert = counts(t2)
+            for k in keys:
+                d = (pert[k] - base[k]) / h
+                acc[k] += float((d * d / np.maximum(base[k], 1e-12)).sum())
+        for k in keys:
+            out[k][var.name] = acc[k]
+    return out
+
+
+def structural_graph(spec: Experiment, model: dict, scopes=None, p_true=None, photons=3e5):
+    """The model as an `IMP.bff.FactorGraph`: which unknowns exist, which
+    factors touch which of them, and what that implies for how the posterior
+    can be decomposed.
+
+    This is the graph in the graphical-model sense and it knows nothing about
+    numbers -- it knows that the spline coefficients and the donor-only
+    fraction appear together in every likelihood factor and therefore cannot be
+    updated independently. `scopes` defaults to the MEASURED ones.
+    """
+    import IMP.bff as bff
+    g = graph(spec, model, None, photons=photons)
+    scopes = factor_scopes(spec, model, p_true, photons) if scopes is None else scopes
+    fg = bff.FactorGraph()
+    for i, name in enumerate(sorted(g.offsets, key=lambda n: g.offsets[n][0])):
+        fg.add_variable(name, name, i)
+    for name in sorted(g.offsets):
+        fg.add_factor(f'prior_{name}', 0, [name])          # 0 = a prior
+    for k in g.data_keys:
+        sc = [n for n in scopes.get(k, []) if n in g.offsets]
+        if sc:
+            fg.add_factor(f'counts_{k[0]}_{k[1]}', 1, sorted(sc))   # 1 = a likelihood
+    return fg, scopes
 
 
 def unidentified(rows, threshold=0.05):
