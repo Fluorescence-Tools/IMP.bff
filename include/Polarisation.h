@@ -72,35 +72,89 @@ inline void mix_polarised(const T* iso, const T* aniso, std::size_t n,
 }
 
 /**
- * \brief The magic-angle (total) intensity from the two polarised channels:
- *        `(I_vv + 2 g I_vh) / 3`.
+ * \brief Remove an additive contribution from a channel before inverting.
  *
- * Anisotropy-free whatever the rotation is doing, which is the point: it is
- * the combination in which the polarisation cancels exactly, so a lifetime can
- * be fitted from polarised data without modelling the rotation.
+ * **The inverse is a ratio of differences, so anything additive biases it.**
+ * Uncorrelated background -- dark counts, room light, afterpulsing -- and
+ * scattered excitation light both add to `VV` and `VH` and neither belongs to
+ * the fluorescence. Leaving them in pulls the recovered anisotropy toward the
+ * anisotropy of the contaminant, which is zero for background and nearly one
+ * for scatter, so the bias does not even have a consistent sign.
+ *
+ * Scatter deserves its own subtraction rather than being lumped into the
+ * background: it is the excitation pulse's own polarisation, so it is close to
+ * fully polarised and enters the two channels with the ideal weights, not the
+ * sample's. Treating it as isotropic is the mistake that makes a rotational
+ * correlation time come out short.
  */
 template <typename T = double>
-inline void magic_angle(const T* vv, const T* vh, std::size_t n, const T& g, T* out) {
-  for (std::size_t i = 0; i < n; ++i) out[i] = (vv[i] + T(2.0) * g * vh[i]) / T(3.0);
+inline void subtract_additive(const T* channel, const T* additive, std::size_t n, T* out) {
+  for (std::size_t i = 0; i < n; ++i) out[i] = channel[i] - additive[i];
 }
 
 /**
- * \brief The anisotropy from the two polarised channels:
- *        `r = (I_vv - g I_vh) / (I_vv + 2 g I_vh)`.
+ * \brief The isotropic (anisotropy-free) signal from two corrected channels.
  *
- * The difference over the total. Note what it does NOT need: the total
- * intensity, the quantum yield, the concentration, or the excitation power.
- * They divide out, which is why anisotropy is measurable on a sample whose
- * brightness is unknown -- and why a wrong `g` is the one instrument error it
- * cannot survive.
+ * With `VV = S + w_vv R` and `g VH = S + w_vh R`, eliminating `R` gives
+ *
+ *     S = (w_vv * g * VH - w_vh * VV) / (w_vv - w_vh)
+ *
+ * For ideal polarisers `w_vv = 2` and `w_vh = -1`, and this is the familiar
+ * magic-angle combination `(VV + 2 g VH) / 3`. **For real optics it is not**:
+ * using the ideal weights on data taken with `l1` and `l2` leaves a residual
+ * anisotropy in what is supposed to be the anisotropy-free signal.
+ *
+ * The channels must already have background and scatter removed.
+ */
+template <typename T = double>
+inline void isotropic_from_polarised(const T* vv, const T* vh, std::size_t n, const T& g,
+                                     const T& w_vv, const T& w_vh, T* out) {
+  const T den = w_vv - w_vh;
+  for (std::size_t i = 0; i < n; ++i) out[i] = (w_vv * g * vh[i] - w_vh * vv[i]) / den;
+}
+
+//! The ideal-polariser case of \ref isotropic_from_polarised: `(VV + 2 g VH) / 3`.
+template <typename T = double>
+inline void magic_angle(const T* vv, const T* vh, std::size_t n, const T& g, T* out) {
+  isotropic_from_polarised(vv, vh, n, g, T(2.0), T(-1.0), out);
+}
+
+/**
+ * \brief The anisotropy from two corrected channels, for real optics.
+ *
+ *     r = (VV - g VH) / (w_vv * g * VH - w_vh * VV)
+ *
+ * -- the difference over the isotropic signal. At `w_vv = 2`, `w_vh = -1` this
+ * is the textbook `(VV - g VH) / (VV + 2 g VH)`.
+ *
+ * Note what it does NOT need: the total intensity, the quantum yield, the
+ * concentration, or the excitation power. They divide out, which is why
+ * anisotropy is measurable on a sample whose brightness is unknown -- and why
+ * the corrections it DOES need are the ones worth insisting on. There are
+ * three: `g`, because it multiplies one channel and not the other; `l1` and
+ * `l2` through the weights, because ideal weights on real optics bias `r`
+ * toward zero; and the additive terms, which must be removed first with
+ * \ref subtract_additive.
+ *
+ * \param floor denominators at or below this give zero rather than a division
  */
 template <typename T = double>
 inline void anisotropy_from_polarised(const T* vv, const T* vh, std::size_t n,
-                                      const T& g, T* out, double floor = 1e-300) {
+                                      const T& g, const T& w_vv, const T& w_vh,
+                                      T* out, double floor = 1e-300) {
   for (std::size_t i = 0; i < n; ++i) {
-    const T tot = vv[i] + T(2.0) * g * vh[i];
-    out[i] = (tot > T(floor)) ? (vv[i] - g * vh[i]) / tot : T(0.0);
+    //  (w_vv - w_vh) divides out of numerator and denominator alike, so this
+    //  is r = R / S written without forming either
+    const T scaled_iso = w_vv * g * vh[i] - w_vh * vv[i];
+    out[i] = (scaled_iso > T(floor)) ? (vv[i] - g * vh[i]) / scaled_iso : T(0.0);
   }
+}
+
+//! The ideal-polariser case of \ref anisotropy_from_polarised.
+template <typename T = double>
+inline void anisotropy_from_polarised(const T* vv, const T* vh, std::size_t n,
+                                      const T& g, T* out, double floor = 1e-300) {
+  anisotropy_from_polarised(vv, vh, n, g, T(2.0), T(-1.0), out, floor);
 }
 
 //! @}
