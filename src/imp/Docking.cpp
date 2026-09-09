@@ -23,6 +23,7 @@
 #include <IMP/algebra/vector_generators.h>
 #include <IMP/core/ConjugateGradients.h>
 #include <IMP/bff/Sampler.h>
+#include <IMP/bff/RmfIO.h>
 #include <IMP/core/ExcludedVolumeRestraint.h>
 #include <IMP/core/XYZR.h>
 #include <IMP/core/rigid_bodies.h>
@@ -1253,6 +1254,64 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
 
 namespace {
 
+//! The assembly's atoms as a #IMP::bff::StructureTable, for the RMF writer.
+/*! Read once, before the walk: the tree does not change while a rigid body
+    moves, only the coordinates do, and rebuilding it per frame would cost
+    more than the sampling. */
+StructureTable structure_table_of(const DockingAssembly& assembly) {
+    StructureTable table;
+    const IMP::atom::Hierarchies atoms =
+            IMP::atom::get_by_type(assembly.get_root(), IMP::atom::ATOM_TYPE);
+    for (unsigned int i = 0; i < atoms.size(); ++i) {
+        IMP::atom::Atom atom(atoms[i]);
+        IMP::atom::Hierarchy parent = atom.get_parent();
+        if (!IMP::atom::Residue::get_is_setup(parent)) continue;
+        IMP::atom::Residue residue(parent);
+        IMP::atom::Hierarchy chain_particle = residue.get_parent();
+        std::string chain_id;
+        if (IMP::atom::Chain::get_is_setup(chain_particle)) {
+            chain_id = IMP::atom::Chain(chain_particle).get_id();
+        }
+        IMP::core::XYZR xyzr(atoms[i]);
+        const IMP::algebra::Vector3D v = xyzr.get_coordinates();
+        table.xyz.push_back(v[0]);
+        table.xyz.push_back(v[1]);
+        table.xyz.push_back(v[2]);
+        table.radius.push_back(xyzr.get_radius());
+        table.mass.push_back(IMP::atom::Mass(atoms[i]).get_mass());
+        table.bfactor.push_back(0.0);
+        table.atom_id.push_back(atom.get_input_index());
+        table.res_id.push_back(residue.get_index());
+        table.chain.push_back(chain_id.empty() ? std::string("A") : chain_id);
+        table.res_name.push_back(residue.get_residue_type().get_string());
+        table.atom_name.push_back(atom_name(atom));
+        table.element.push_back("");
+    }
+    return table;
+}
+
+//! The same atoms' coordinates now, flat, in the table's order.
+std::vector<double> leaf_coordinates(const DockingAssembly& assembly) {
+    std::vector<double> out;
+    const IMP::atom::Hierarchies atoms =
+            IMP::atom::get_by_type(assembly.get_root(), IMP::atom::ATOM_TYPE);
+    out.reserve(atoms.size() * 3);
+    for (unsigned int i = 0; i < atoms.size(); ++i) {
+        IMP::atom::Hierarchy parent = IMP::atom::Atom(atoms[i]).get_parent();
+        if (!IMP::atom::Residue::get_is_setup(parent)) continue;
+        const IMP::algebra::Vector3D v =
+                IMP::core::XYZ(atoms[i]).get_coordinates();
+        out.push_back(v[0]);
+        out.push_back(v[1]);
+        out.push_back(v[2]);
+    }
+    return out;
+}
+
+}  // namespace
+
+namespace {
+
 //! The pose of the mobile bodies as one vector: 6 numbers each.
 /*! `(tx, ty, tz, rx, ry, rz)` -- a translation and a rotation vector (the
     axis scaled by the angle), which is the smallest unconstrained encoding of
@@ -1367,6 +1426,24 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
     const int n_best = std::max(0, params.n_best);
     bool stopped = false;
 
+    // The walk as a trajectory, when asked for and when this build has RMF.
+    // A frame per accepted state is what makes a sampling run watchable; the
+    // PDBs below are only its endpoints.
+    std::string rmf_path;
+#ifndef IMPBFF_NO_RMF
+    // A value, not an IMP::Object: RmfStructureWriter owns its file through a
+    // shared_ptr and has no reference count, so IMP::Pointer cannot hold it.
+    std::shared_ptr<RmfStructureWriter> trajectory;
+    if (params.save_trajectory) {
+        StructureTable table = structure_table_of(assembly);
+        if (table.get_n_atoms() > 0) {
+            rmf_path = output_dir + "/trajectory.rmf3";
+            trajectory = std::make_shared<RmfStructureWriter>(
+                    rmf_path, table, "docking");
+        }
+    }
+#endif
+
     Sampler sampler(params.sampler.empty() ? std::string("metropolis")
                                            : params.sampler);
     sampler.set_objective_function(
@@ -1388,6 +1465,14 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
                 if (score < best) {
                     best = score;
                     best_v = v;
+#ifndef IMPBFF_NO_RMF
+                    // Only improvements: a frame per *proposal* is a file
+                    // the size of the run, and what a viewer is watching for
+                    // is the path the answer took.
+                    if (trajectory) {
+                        trajectory->append(leaf_coordinates(assembly));
+                    }
+#endif
                 }
                 if (n_best > 0) {
                     best_states.insert(std::make_pair(score, v));
@@ -1475,6 +1560,9 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
 
     const std::string score_csv = output_dir + "/scores.csv";
     write_score_csv(score_csv, total, pairs);
+#ifndef IMPBFF_NO_RMF
+    if (trajectory) trajectory->close();
+#endif
 
     nlohmann::json extra;
     extra["method"] = "sample";
@@ -1525,6 +1613,7 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
     out.poses = capture_poses(assembly);
     out.e_clash = e_clash;
     out.converged = !stopped;
+    out.rmf_file = rmf_path;
     set_bond_totals(out, params.max_force);
     return out;
 }

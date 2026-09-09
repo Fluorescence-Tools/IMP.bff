@@ -2,6 +2,18 @@
 
 ## 2026-09-09
 
+- **A sampling run keeps its path.** `IMP::bff::dock` writes an RMF
+  trajectory, a frame each time the walk improves -- not per proposal, which
+  would be a file the size of the run. `DockingParameters::save_trajectory`
+  now defaults to **true**, and the default is the point: a trajectory is what
+  distinguishes a sampling run from a minimisation, and a walk whose path was
+  thrown away cannot be judged for mixing, for the basin it settled in, or for
+  whether it moved at all.
+  Trap: `RmfStructureWriter` is a **value** that owns its file through a
+  `shared_ptr`, not an `IMP::Object`, so `IMP::Pointer` will not hold it --
+  the error is `no member named 'ref'`, from `PointerBase.h`, which does not
+  name the class that is missing it.
+
 - **`read_score_series` returned nothing for the format `count_frames`
   counted.** PMI writes its stat *values* quoted -- `{1: '10.0', 4: '0'}` --
   and `literal_int_map` sorted a quoted value into the *names* map, so every

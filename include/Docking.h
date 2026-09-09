@@ -247,7 +247,13 @@ struct IMPBFFEXPORT DockingParameters {
     int refine_av_cycles;
     //! Export the full \f$p(R_{DA})\f$ distributions after docking.
     bool save_distributions;
-    //! Save the minimisation path as PDB frames.
+    //! Record the run's path as an RMF trajectory.
+    /*! On by default, and that is not an arbitrary default: a sampling run's
+        trajectory *is* what distinguishes it from a minimisation, and a walk
+        whose path was thrown away cannot be judged for mixing, for the basin
+        it settled in, or for whether it moved at all. #IMP::bff::dock writes a
+        frame each time the walk improves -- a frame per *proposal* would be a
+        file the size of the run. Ignored where the build has no RMF. */
     bool save_trajectory;
     //! FPS's `OptimizeSelected`: `"Selected"`, `"All"` or `"SelectedThenAll"`.
     /*!
@@ -337,7 +343,7 @@ struct IMPBFFEXPORT DockingParameters {
           ev_weight(1.0), shuffle_max_translation(10.0),
           mean_position_restraint(true), sigma_da(6.0), fixed_body(0),
           coarse_clash(true), refine_av_cycles(0), save_distributions(false),
-          save_trajectory(false), optimize_selected("Selected"),
+          save_trajectory(true), optimize_selected("Selected"),
           max_force(400.0), clash_tolerance(1.0),
           clash_radii_source("imp"), clash_radii_scale(1.0) {}
 
