@@ -148,7 +148,9 @@ before-build = "pip install delocate"
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
-CMAKE_PREFIX_PATH = "$HOME/imp-bff-deps;$(brew --prefix)"
+# CMAKE_PREFIX_PATH comes from the job environment (the workflow writes it);
+# this table's own value would have to be expanded by cibuildwheel, and
+# neither $HOME nor $(brew --prefix) survives that.
 MACOSX_DEPLOYMENT_TARGET = "11.0"
 # sccache: see the Linux table above for why this lives here.
 CMAKE_C_COMPILER_LAUNCHER = "sccache"
@@ -167,10 +169,8 @@ before-build = "pip install delvewheel"
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.windows.environment]
-# VCPKG_PREFIX and IMP_BFF_CEREAL_PREFIX are written to the job environment
-# by the workflow's Windows steps, in Windows notation; $NAME here is
-# expanded by cibuildwheel from the host environment.
-CMAKE_PREFIX_PATH = "$IMP_BFF_CEREAL_PREFIX;$VCPKG_PREFIX"
+# CMAKE_PREFIX_PATH comes from the job environment (the workflow writes it,
+# Windows notation); an entry here would not be expanded.
 # Ninja over MSBuild: MSBuild parallelises whole projects, so every source
 # waits on the slowest; Ninja schedules individual compiles (tttrlib's
 # measured 507 s serial -> 165 s at twelve jobs). scikit-build-core only
