@@ -13,6 +13,23 @@
 
 #define PTOLIB_JSON_INCLUDE <IMP/bff/internal/json.h>
 #define PTOLIB_IMPLEMENTATION
+// ptolib directly, and *before* Pto.h, rather than letting Pto.h pull it in.
+//
+// ptolib is an stb-style single header: its declarations sit inside a
+// `PTOLIB_H` guard and its implementation *outside* one, compiled only where
+// `PTOLIB_IMPLEMENTATION` is defined. This file is that place. But `Pto.h`
+// has its own include guard, and in IMP's module build every `.cpp` is
+// concatenated into one translation unit (`bff_all.cpp`) in alphabetical
+// order -- so `Faspr.cpp`, `Labelizer.cpp` and two others include `Pto.h`
+// first, and by the time this line is reached that guard is already closed.
+// The include would then do nothing at all, ptolib's implementation would
+// never be compiled, and the module failed to link on every `pto::File`
+// symbol. Including ptolib itself is immune: its declaration half is skipped
+// by its own guard and its implementation half is not guarded against this.
+//
+// The standalone build never saw it, because there each `.cpp` is its own
+// translation unit and this file gets a clean slate.
+#include <IMP/bff/internal/ptolib.h>
 #include <IMP/bff/Pto.h>
 
 #include <IMP/bff/Base.h>

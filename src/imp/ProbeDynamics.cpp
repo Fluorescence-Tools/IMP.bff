@@ -5,6 +5,12 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/ProbeDynamics.h>
+// IMP::atom::Atom, used by value below and so needed complete
+#include <IMP/atom/Atom.h>
+// atom_name
+#include <IMP/bff/HierarchyBridge.h>
+// create_probe_restraints
+#include <IMP/bff/Potentials.h>
 
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/Mol2IO.h>

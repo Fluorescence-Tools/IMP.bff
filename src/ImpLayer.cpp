@@ -22,6 +22,7 @@
 #include "imp/AVMeanDistanceRestraint.cpp"
 #include "imp/AVOccupancyMap.cpp"
 #include "imp/Docking.cpp"
+#include "imp/DyeDynamics.cpp"
 #include "imp/EmBridge.cpp"
 #include "imp/FPSExport.cpp"
 #include "imp/FPSProject.cpp"

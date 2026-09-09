@@ -5,6 +5,8 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/ProbeAttachment.h>
+// atom_name, selection_from_expression
+#include <IMP/bff/HierarchyBridge.h>
 
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/internal/Text.h>

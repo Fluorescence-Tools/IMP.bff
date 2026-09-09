@@ -23,6 +23,9 @@
 #define IMPBFF_RRT_H
 
 #include <IMP/bff/bff_config.h>
+// IMP_OBJECT_METHODS, used below; Base.h resolves the IMP macros in either
+// configuration.
+#include <IMP/bff/Base.h>
 
 #include <IMP/Object.h>
 

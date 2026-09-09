@@ -62,6 +62,11 @@
 #define IMPBFF_MINIMIZER_H
 
 #include <IMP/bff/bff_config.h>
+// IMP_OBJECT_METHODS, used by MinimizerObserver below. Base.h is what
+// resolves the IMP macros in *either* configuration -- IMP's own headers in
+// the module build, the standalone definitions otherwise -- so a header that
+// uses one has to include it rather than rely on a neighbour having done so.
+#include <IMP/bff/Base.h>
 
 #include <IMP/Object.h>
 #include <IMP/Pointer.h>

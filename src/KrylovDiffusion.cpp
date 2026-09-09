@@ -46,6 +46,9 @@
  * therefore a different one.
  */
 #include <IMP/bff/DiffusionSolver.h>
+// IMP_THROW and IMP::ValueException: IMP's real ones in the module build,
+// the standalone definitions otherwise. Both live behind Base.h.
+#include <IMP/bff/Base.h>
 
 
 #include <algorithm>

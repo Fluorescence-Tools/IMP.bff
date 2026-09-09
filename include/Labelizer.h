@@ -51,6 +51,14 @@
 #include <IMP/bff/bff_config.h>
 
 #include <IMP/bff/Base.h>
+// AccessibleVolume, which `LlAvDoor` below is a function type over. This
+// header used it without declaring it and compiled anyway, because every
+// translation unit that included it happened to include AVModel.h first --
+// true in the standalone build and, until PRD-137 split the sources, in the
+// IMP module build too. Compiled on its own it failed at the typedef, which
+// degraded `LlAvDoor` to an implicit int and produced errors two thousand
+// lines away at the call sites. A header has to stand by itself.
+#include <IMP/bff/AVModel.h>
 
 #include <map>
 #include <string>

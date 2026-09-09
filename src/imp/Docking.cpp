@@ -5,6 +5,8 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/Docking.h>
+// olga_vdw_particle_radius
+#include <IMP/bff/HierarchyBridge.h>
 
 #include <IMP/bff/States.h>
 #include <IMP/bff/AVMeanDistanceRestraint.h>
