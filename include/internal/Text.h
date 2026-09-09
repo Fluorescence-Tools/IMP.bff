@@ -17,11 +17,18 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <dirent.h>
 #include <vector>
 #include <limits>
 #include <string>
 #include <sys/stat.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <direct.h>
+#else
+#include <dirent.h>
+#endif
 
 IMPBFF_BEGIN_INTERNAL_NAMESPACE
 
@@ -63,25 +70,44 @@ inline void make_directory(const std::string& path) {
     if (slash != std::string::npos && slash > 0) {
         make_directory(path.substr(0, slash));
     }
+#ifdef _WIN32
+    _mkdir(path.c_str());
+#else
     ::mkdir(path.c_str(), 0755);
+#endif
 }
 
 //! The files directly in \p path with the given lower-case suffix, sorted.
 /*! Empty when \p path is not a directory, which is how a caller tells a
-    directory of structures from one structure. */
+    directory of structures from one structure. \p path may be empty, which
+    lists the working directory. */
 inline std::vector<std::string> directory_entries(const std::string& path,
                                                   const std::string& suffix) {
+    const std::string dir = path.empty() ? std::string(".") : path;
     std::vector<std::string> out;
-    DIR* dir = opendir(path.c_str());
-    if (dir == NULL) return out;
-    for (struct dirent* entry = readdir(dir); entry != NULL;
-         entry = readdir(dir)) {
+#ifdef _WIN32
+    WIN32_FIND_DATAA data;
+    HANDLE handle = FindFirstFileA((dir + "\\*").c_str(), &data);
+    if (handle == INVALID_HANDLE_VALUE) return out;
+    do {
+        const std::string name = data.cFileName;
+        if (name == "." || name == "..") continue;
+        if (!ends_with(name, suffix)) continue;
+        out.push_back(path.empty() ? name : path + "/" + name);
+    } while (FindNextFileA(handle, &data));
+    FindClose(handle);
+#else
+    DIR* d = opendir(dir.c_str());
+    if (d == NULL) return out;
+    for (struct dirent* entry = readdir(d); entry != NULL;
+         entry = readdir(d)) {
         const std::string name = entry->d_name;
         if (name == "." || name == "..") continue;
         if (!ends_with(name, suffix)) continue;
-        out.push_back(path + "/" + name);
+        out.push_back(path.empty() ? name : path + "/" + name);
     }
-    closedir(dir);
+    closedir(d);
+#endif
     std::sort(out.begin(), out.end());
     return out;
 }

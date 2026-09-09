@@ -102,7 +102,23 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
           echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
 
-      - name: Install rattler-build
+      # Windows: `bash -el` steps degraded into a cmd banner and never ran
+      # mamba (two runs in a row), so the builder is the standalone release
+      # binary -- Rust, no conda needed. Linux and macOS keep the conda
+      # package.
+      - name: Install rattler-build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "v0.76.0"
+          $url = "https://github.com/prefix-dev/rattler-build/releases/download/$tag/rattler-build-x86_64-pc-windows-msvc.zip"
+          $dest = "$env:RUNNER_TEMP\rattler-build"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "$dest\rattler-build.zip"
+          Expand-Archive -Path "$dest\rattler-build.zip" -DestinationPath $dest -Force
+          echo "$dest" >> $env:GITHUB_PATH
+      - name: Install rattler-build (Linux and macOS)
+        if: runner.os != 'Windows'
         shell: bash -el {0}
         run: mamba install -y rattler-build
       # The large data (data/registry.json) is not in git: it comes from the
@@ -124,15 +140,7 @@ jobs:
 
       - name: Build the conda package
         shell: bash -el {0}
-        # Windows: conda puts a native executable's .exe where the POSIX
-        # login shell's PATH does not follow (Library/bin), and the run that
-        # found `mamba install rattler-build` succeed lost the next step to
-        # "rattler-build: command not found". Both candidate directories go
-        # on PATH here, for every platform, harmlessly.
-        run: |
-          export PATH="$CONDA_PREFIX/Scripts:$CONDA_PREFIX/Library/bin:$PATH"
-          command -v rattler-build
-          rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+        run: rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
 
       - name: Compiler cache statistics
         if: always()

@@ -32,6 +32,11 @@ copy "%RECIPE_DIR%\app_wrapper.c" .
 cl app_wrapper.c shell32.lib
 if errorlevel 1 exit 1
 
+:: The module's swig run %includes RMF.i (through IMP's rmf fragments); the
+:: fragments live in RMF's own swig share, not in IMP's, so put them where
+:: the swig flags already point. See build.sh for the longer story.
+if exist "%PREFIX%\share\RMF\swig" xcopy /E /I /Y "%PREFIX%\share\RMF\swig" "%PREFIX%\share\IMP\swig\" >nul
+
 mkdir build
 cd build
 

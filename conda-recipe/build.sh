@@ -6,6 +6,14 @@
 python "$SRC_DIR/utility/data_registry.py" --fetch "$SRC_DIR/data" --quiet \
   ${IMP_BFF_DATA_CACHE:+--cache "$IMP_BFF_DATA_CACHE"}
 
+# The module's swig run %includes RMF.i (through IMP's rmf fragments), and
+# IMP's swig share dir is on the include list while RMF's own is not -- the
+# built IMP's build_info/RMF descriptor carries the path, but it does not
+# reach the flags. Place the fragments where the flags already point.
+if [ -d "$PREFIX/share/RMF/swig" ]; then
+  cp -R "$PREFIX/share/RMF/swig/." "$PREFIX/share/IMP/swig/"
+fi
+
 mkdir build
 cd build
 

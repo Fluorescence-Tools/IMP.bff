@@ -128,17 +128,12 @@ before-all = "dnf install -y --nogpgcheck boost-devel eigen3-devel && bash utili
 repair-wheel-command = "auditwheel repair --plat manylinux_2_28_{arch} -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.linux.environment]
+# No sccache launchers here, deliberately: this build runs inside the
+# manylinux container, where there is no sccache binary and no GitHub
+# Actions cache service -- a launcher whose binary is missing breaks the
+# C compiler test at configure (measured). macOS and Windows build on the
+# runner, where the action's binary and tokens are live.
 CMAKE_PREFIX_PATH = "/usr/local;/usr"
-# sccache: CMake reads these as the initial values of the
-# CMAKE_<LANG>_COMPILER_LAUNCHER cache variables, and the standalone
-# CMakeLists sets no launcher of its own, so the environment's initial value
-# stands. SCCACHE_GHA_ENABLED switches the GitHub Actions cache backend; the
-# action's tokens are inherited from the job. These live here rather than in
-# the workflow's CIBW_ENVIRONMENT_* -- that variable REPLACES this whole
-# table instead of adding to it (tttrlib's measured lesson).
-CMAKE_C_COMPILER_LAUNCHER = "sccache"
-CMAKE_CXX_COMPILER_LAUNCHER = "sccache"
-SCCACHE_GHA_ENABLED = "true"
 
 [tool.cibuildwheel.macos]
 # one architecture per runner (RMF is built natively in before-all);
@@ -148,11 +143,18 @@ before-build = "pip install delocate"
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
-# CMAKE_PREFIX_PATH comes from the job environment (the workflow writes it);
-# this table's own value would have to be expanded by cibuildwheel, and
-# neither $HOME nor $(brew --prefix) survives that.
+# cibuildwheel hands the build a restricted environment: only what this
+# table lists (evaluated against the outer environment) plus its own
+# variables. `$CMAKE_PREFIX_PATH` reads the value the workflow wrote to the
+# job environment -- a literal `$HOME` or `$(brew ...)` here does not
+# expand, which is how cereal went missing twice.
+CMAKE_PREFIX_PATH = "$CMAKE_PREFIX_PATH"
 MACOSX_DEPLOYMENT_TARGET = "11.0"
-# sccache: see the Linux table above for why this lives here.
+# sccache: CMake reads these as the initial values of the
+# CMAKE_<LANG>_COMPILER_LAUNCHER cache variables, and the standalone
+# CMakeLists sets no launcher of its own, so the environment's initial
+# value stands. The action's binary is on PATH and its tokens are inherited
+# from the job.
 CMAKE_C_COMPILER_LAUNCHER = "sccache"
 CMAKE_CXX_COMPILER_LAUNCHER = "sccache"
 SCCACHE_GHA_ENABLED = "true"
@@ -169,8 +171,9 @@ before-build = "pip install delvewheel"
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.windows.environment]
-# CMAKE_PREFIX_PATH comes from the job environment (the workflow writes it,
-# Windows notation); an entry here would not be expanded.
+# As on macOS: the table is evaluated against the outer environment, and the
+# workflow has written CMAKE_PREFIX_PATH there in Windows notation.
+CMAKE_PREFIX_PATH = "$CMAKE_PREFIX_PATH"
 # Ninja over MSBuild: MSBuild parallelises whole projects, so every source
 # waits on the slowest; Ninja schedules individual compiles (tttrlib's
 # measured 507 s serial -> 165 s at twelve jobs). scikit-build-core only

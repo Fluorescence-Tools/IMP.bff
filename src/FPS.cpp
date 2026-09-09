@@ -1115,7 +1115,6 @@ IMPBFF_END_NAMESPACE
 
 
 
-#include <dirent.h>
 #include <fstream>
 #include <sys/stat.h>
 
@@ -1151,19 +1150,10 @@ std::string stem_lowered(const std::string& path) {
 
 
 std::vector<std::string> pdbs_in(const std::string& dir) {
-    std::vector<std::string> out;
-    DIR* handle = opendir(dir.empty() ? "." : dir.c_str());
-    if (handle == nullptr) return out;
-    while (struct dirent* entry = readdir(handle)) {
-        const std::string name(entry->d_name);
-        if (!ends_with(name, ".pdb")) continue;
-        out.push_back(dir.empty() ? name : dir + "/" + name);
-    }
-    closedir(handle);
-    // `readdir` order is the filesystem's; sorted so the same directory gives
-    // the same reading twice.
-    std::sort(out.begin(), out.end());
-    return out;
+    // The portable walk (Text.h) sorts the same way this one did:
+    // `readdir` order is the filesystem's, and a stable order is what makes
+    // the same directory read the same twice.
+    return internal::directory_entries(dir, ".pdb");
 }
 
 std::vector<std::string> split_ws(const std::string& line) {
