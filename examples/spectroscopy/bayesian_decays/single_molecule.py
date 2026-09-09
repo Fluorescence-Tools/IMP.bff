@@ -43,7 +43,8 @@ from bd import P                                            # noqa: E402
 
 __all__ = ['two_state_truth', 'per_molecule', 'line_table', 'static_line', 'dynamic_line',
            'line_curvature', 'above_static', 'exchange_stream', 'check_slow_limit', 'observables',
-           'line_slope', 'scatter_about_line', 'donor_only_from_s', 'plot_e_tau', 'plot_e_s', 'segment', 'group_photons', 'burst_state_fraction']
+           'line_slope', 'scatter_about_line', 'donor_only_from_s', 'plot_e_tau', 'plot_e_s', 'segment', 'group_photons', 'burst_state_fraction',
+           'donor_only_reference', 'group_fit', 'summarise_groups', 'resolved', 'COLUMNS']
 
 #: the four physics channels of the labelled sample under the green pulse, in
 #: the order `physics_tables` builds them: green parallel, green perpendicular,
@@ -471,6 +472,94 @@ def donor_only_from_s(feat, threshold=0.85):
     f = np.asarray(feat)
     ok = np.isfinite(f[:, 1])
     return float((f[ok, 1] > threshold).mean()), int(ok.sum())
+
+
+# --------------------------------------------------------------------------
+# sub-ensemble analysis: fit one group of bursts
+# --------------------------------------------------------------------------
+
+def donor_only_reference(model, st, tab, seed=11, n_bursts=None):
+    """The donor-only sample's four histograms, simulated once and reused by
+    every group.
+
+    A sub-ensemble fit still needs the reference measurement: the donor's
+    unquenched decay is what the quenching in the labelled sample is measured
+    against, and it does not change when the labelled sample is cut into
+    groups.
+    """
+    n = int(st['n_bursts_donor']) if n_bursts is None else int(n_bursts)
+    s = P._sample_bursts(model, st, tab, np.random.default_rng(seed), n,
+                         np.ones(len(model['rel'])) / len(model['rel']), 'D0')
+    tt = P.to_tttr(model, s)
+    sel, _ = P.burst_search(model, tt, st)
+    return P.burst_decays(model, tt, sel, 'D0')
+
+
+def group_fit(model, st, tttr, photon_index, y_d0, lam_nodes=(1.0, 0.0, -1.0),
+              seed=0, verbose=False):
+    """The Laplace posterior of one group of bursts.
+
+    Exactly the analysis notebooks 12-15 run, on the photons of a subset of the
+    bursts instead of on all of them. Nothing about the model changes: the
+    grouping happens before the histogram is built, which is the whole point of
+    sorting.
+    """
+    import bd
+    y_da = P.burst_decays(model, tttr, photon_index, 'DA')
+    y = P.assemble_data(model, y_d0, y_da)
+    #: `bd.fit_ensemble` is the same route-B graph `pie_mfd.fit` builds, with
+    #: the accelerated forward model installed. Measured on one group of 2102
+    #: bursts: **407 s through `pie_mfd.fit`, 53 s through this one**, and the
+    #: answer is the same to the digits that are reported -- mean R/R0 0.795
+    #: either way, D/dof 1.079 against 1.080.
+    g, post = bd.fit_ensemble(model, y, lam_nodes=lam_nodes, seed=seed,
+                              verbose=verbose, accelerate=True)
+    ref = P.poisson_reference(post, n_draw=150, seed=seed)
+    rel = model['rel']
+    L = model['L']
+    m, lo1, hi1, lo2, hi2 = L.delta_bands(None, post, rel, space='linear')
+    dpd = post['dev'] / post['dof']
+    #: the posterior mean distance WITH its uncertainty, mixed over the penalty
+    #: nodes -- which is what a resolution question needs and the band does not
+    #: give: two groups are separated when their means differ by more than the
+    #: two uncertainties together, and that is computable on a real sample.
+    mom = L.mixture_summary_moments(post['graph'], post, rel)
+    w = sum(wi for wi, _ in mom.values())
+    mu = sum(wi * dm['mean'][0] for wi, dm in mom.values()) / w
+    sd = float(np.sqrt(sum(wi * (dm['mean'][1] ** 2 + (dm['mean'][0] - mu) ** 2)
+                           for wi, dm in mom.values()) / w))
+    width = sum(wi * dm['sd'][0] for wi, dm in mom.values()) / w
+    return dict(graph=g, post=post, y=y, p_mean=np.asarray(m),
+                p_lo=np.asarray(lo2), p_hi=np.asarray(hi2),
+                mean_rel=float(mu), mean_sd=sd, width_rel=float(width),
+                dpd=float(dpd), reference=ref,
+                z=float((dpd - ref[0]) / max(ref[1], 1e-12)),
+                photons=float(sum(float(v.sum()) for v in y_da.values())))
+
+
+def resolved(a, b, k=2.0):
+    """Are two groups' recovered distances separated?
+
+    `|mean_a - mean_b| > k * sqrt(sd_a^2 + sd_b^2)`, with the posterior
+    uncertainties of the two means. It is deliberately a statement about the
+    two ANSWERS and not about the truth, because on a real sample the truth is
+    not available and a criterion that needs it is not a criterion.
+    """
+    d = abs(a['mean_rel'] - b['mean_rel'])
+    e = float(np.sqrt(a['mean_sd'] ** 2 + b['mean_sd'] ** 2))
+    return dict(separation=d, uncertainty=e, ratio=d / max(e, 1e-12),
+                resolved=bool(d > k * e))
+
+
+def summarise_groups(model, results, truth_rel=()):
+    """One row per group: how many photons, what came back, and whether the fit
+    is allowed to be quoted at all."""
+    rows = []
+    for name, r in results.items():
+        rows.append(dict(group=name, photons=r['photons'], mean_rel=r['mean_rel'],
+                         dpd=r['dpd'], reference=r['reference'][0], z=r['z'],
+                         verdict='quotable' if abs(r['z']) < 3 else 'EXCLUDED'))
+    return rows
 
 
 # --------------------------------------------------------------------------
