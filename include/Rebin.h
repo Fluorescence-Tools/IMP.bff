@@ -31,6 +31,15 @@ IMPBFF_BEGIN_NAMESPACE
  * anyone looked, because a matrix product is what a rebinning looks like when
  * it is written down.
  *
+ * **Related, and narrower**: `tttrlib`'s `HistogramNd::rebin(dim, group)`
+ * groups a histogram axis by a fixed factor, which is the uniform case of this
+ * and the right tool when that is what you have. This takes an arbitrary
+ * linear map, so it also covers non-uniform bin edges, a map that is not a
+ * partition, and one that is not even a rebinning. Its documented invariant --
+ * the total before and after must agree -- is the check this one is gated on
+ * too, and it is a better check than agreeing with a matrix product, because a
+ * dropped or double-counted bin fails it and cannot fail that.
+ *
  * **The structure is discovered, not assumed.** `Rebin` inspects the matrix
  * once: if every nonzero is exactly one, each row's nonzeros are contiguous,
  * and the rows are disjoint, it stores runs; otherwise it keeps the matrix.
