@@ -211,6 +211,33 @@ IMPBFFEXPORT void write_opendx(const std::string& path,
                                const std::vector<double>& origin,
                                double spacing);
 
+//! Write a scalar grid as an MRC2014 map.
+/*! The volumetric format ChimeraX, PyMOL, `mrcfile` and `IMP::em` all read,
+    and the sibling of #IMP::bff::write_opendx above: same arguments, other
+    format. It is the array door to the writer #IMP::bff::DensityGrid::write_mrc
+    uses, for a caller that has a dense grid rather than a `DensityGrid` --
+    filling one from Python would cost a wrapped call per voxel.
+
+    Values run in **C order** here, `(nx, ny, nz)` with z fastest, and are
+    transposed on the way out because MRC specifies x fastest. That is the
+    same convention #IMP::bff::write_opendx takes, so the two are
+    interchangeable at the call site.
+
+    \param[in] path where to write
+    \param[in] density the grid, `nx * ny * nz`, in C order
+    \param[in] nx,ny,nz the grid shape
+    \param[in] origin three coordinates of the lowest corner, A
+    \param[in] spacing the grid step, A
+    \throw ValueException on a shape mismatch, or a spacing that is not
+           positive and finite
+    \throw IOException when \p path cannot be opened
+*/
+IMPBFFEXPORT void write_mrc_grid(const std::string& path,
+                                 const std::vector<double>& density,
+                                 int nx, int ny, int nz,
+                                 const std::vector<double>& origin,
+                                 double spacing);
+
 //! Convert a dye PDB to mmCIF with `_atom_site` records.
 /*! \param[in] probe_id the data block name; empty takes the PDB's stem */
 IMPBFFEXPORT void convert_pdb_to_cif(const std::string& pdb_path,

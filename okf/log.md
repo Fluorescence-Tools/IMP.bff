@@ -2,6 +2,16 @@
 
 ## 2026-09-09
 
+- **`write_mrc_grid`: a dense grid to MRC2014, without `IMP::em`**
+  (`include/StructureIO.h`, `src/StructureIO.cpp`). The free `write_mrc` takes
+  a `GridHeader` and a `float*` and is `%ignore`d in Python, so the only way
+  to write a map from a caller's own array was `DensityGrid` -- one wrapped
+  call per voxel -- or `IMP::em`, which is what chisurf did. This is the
+  sibling of `write_opendx`: same arguments, other format, C-order in and the
+  x-fastest transposition done inside. It is a distinct **name** rather than
+  an overload on purpose: SWIG turns keyword arguments off for overloads
+  without saying so.
+
 - **`RmfStructureWriter`: a structure as a PMI-shaped RMF trajectory**
   (`include/RmfIO.h`, `src/RmfIO.cpp`, `test/io/test_rmf_structure_writer.py`).
   chisurf built the same tree in Python through `IMP.rmf` -- a decorator call

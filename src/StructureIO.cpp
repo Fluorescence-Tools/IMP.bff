@@ -6,6 +6,7 @@
  */
 
 #include <IMP/bff/StructureIO.h>
+#include <IMP/bff/DensityGrid.h>
 #include <IMP/bff/internal/PdbFrames.h>
 #include <iomanip>
 
@@ -554,6 +555,50 @@ void write_opendx(const std::string& path, const std::vector<double>& density,
         << "component \"positions\" value 1\n"
         << "component \"connections\" value 2\n"
         << "component \"data\" value 3\n";
+}
+
+void write_mrc_grid(const std::string& path,
+                    const std::vector<double>& density, int nx, int ny, int nz,
+                    const std::vector<double>& origin, double spacing) {
+    const std::size_t want = (std::size_t) std::max(0, nx) *
+                             (std::size_t) std::max(0, ny) *
+                             (std::size_t) std::max(0, nz);
+    if (density.size() != want) {
+        IMP_THROW("density has " << density.size() << " values for a "
+                                 << nx << "x" << ny << "x" << nz << " grid",
+                  ValueException);
+    }
+    if (origin.size() != 3) {
+        IMP_THROW("origin must be three coordinates", ValueException);
+    }
+    if (!(spacing > 0.0) || !std::isfinite(spacing)) {
+        IMP_THROW("the grid step must be positive and finite, not " << spacing,
+                  ValueException);
+    }
+
+    // MRC runs x fastest; a C-order (nx, ny, nz) array runs z fastest. The
+    // transposition is done here so that a caller never has to know, and so
+    // that this takes the same array write_opendx takes.
+    std::vector<float> values(want);
+    for (int k = 0; k < nz; ++k) {
+        for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i) {
+                const std::size_t c =
+                        ((std::size_t) i * ny + j) * (std::size_t) nz + k;
+                const std::size_t f =
+                        ((std::size_t) k * ny + j) * (std::size_t) nx + i;
+                values[f] = static_cast<float>(density[c]);
+            }
+        }
+    }
+
+    GridHeader header;
+    header.update_map_dimensions(nx, ny, nz);
+    header.set_spacing(static_cast<float>(spacing));
+    header.set_xorigin(static_cast<float>(origin[0]));
+    header.set_yorigin(static_cast<float>(origin[1]));
+    header.set_zorigin(static_cast<float>(origin[2]));
+    write_mrc(path, header, values.data(), values.size());
 }
 
 void convert_pdb_to_cif(const std::string& pdb_path,
