@@ -15,9 +15,18 @@ SCCACHE_ARGS=()
 if command -v sccache >/dev/null 2>&1; then
   SCCACHE_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
 fi
+# The compute backend is on by default and costs nothing -- it is a plugin
+# that links only libc and is never loaded unless a wgpu library is present.
+# The switch exists so a build that does not want it cannot be broken by it,
+# and is spelt the same way as in build.sh (the IMP module build), which takes
+# the same variable.
+GPU_ARGS=()
+if [ "${IMPBFF_WITH_GPU:-1}" = "0" ]; then
+  GPU_ARGS=(-DIMPBFF_WITH_GPU=OFF)
+fi
 cmake ../standalone -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_INSTALL_LIBDIR=lib \
   -DPython3_EXECUTABLE="$PYTHON" -DIMPBFF_PYTHON_INSTALL_DIR="$SP_DIR" \
-  "${SCCACHE_ARGS[@]}"
+  "${SCCACHE_ARGS[@]}" "${GPU_ARGS[@]}"
 ninja -j "${CPU_COUNT:-4}"
 ninja install

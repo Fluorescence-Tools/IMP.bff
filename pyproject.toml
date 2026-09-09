@@ -34,6 +34,22 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest", "scipy", "pandas", "mrcfile"]
+# The accelerator, which this package deliberately does not carry itself.
+#
+# `libimp_bff_wgpu` -- a few hundred kilobytes, built here and shipped in the
+# wheel -- is a plugin that links nothing and resolves every wgpu entry point
+# by `dlopen` at run time. What it needs is a wgpu-native library, and that is
+# 6.6-8.9 MB that somebody already ships for every platform this wheel
+# targets: `wgpu` (wgpu-py) puts it in `wgpu/resources/`, where
+# `IMP.bff.enable_gpu()` looks for it. So `pip install bff` stays as small as
+# it is and runs on the CPU; `pip install bff[gpu]` turns the GPU on.
+#
+# Not a hard dependency, and not vendored: the CPU path is the default and
+# must keep working on machines with no GPU at all. The conda packages take
+# the same line -- neither recipe lists wgpu, and a conda user who wants the
+# accelerator installs `wgpu` into the same environment, where the same search
+# finds it.
+gpu = ["wgpu>=0.32"]
 
 [project.scripts]
 imp_bff_fetch_data = "IMP.bff:_fetch_data_main"
@@ -82,7 +98,11 @@ sdist.exclude = ["doc/", "benchmark/", "conda-recipe/", ".github/", "data/rotame
 version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 [tool.setuptools_scm]
-# tags are vX.Y.Z (v0.14.3); a commit past the tag is X.Y.(Z+1).devN+g<sha>
+# tags are vX.Y.Z; a commit past the tag is X.Y.(Z+1).devN+g<sha>.
+# The wheel's version comes from the tag, not from the number in
+# standalone/CMakeLists.txt or the conda recipes -- those are the fallback
+# and the conda packages respectively, so a release is not a release until
+# the tag exists.
 
 [tool.cibuildwheel]
 build-verbosity = 1
@@ -90,7 +110,7 @@ build-verbosity = 1
 # pattern); 3.13t/3.14 wait for numpy and SWIG.
 skip = ["pp*", "*-win*", "*-manylinux_i686", "*-musllinux_*", "cp314-*", "cp314t-*", "cp313t-*"]
 test-requires = ["pytest", "pooch"]
-test-command = "python -c \"import IMP.bff as b; assert b.get_build() == 'core'; print(b.get_module_version())\""
+test-command = "python -c \"import IMP.bff as b; assert b.get_build() == 'core'; [getattr(b, n) for n in ('Dataset', 'ChiSquared', 'JointChiSquared', 'EvaluationGraph', 'Minimizer', 'TcspcDecay')]; assert b.built_with_gpu_support(); print(b.get_module_version())\""
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"

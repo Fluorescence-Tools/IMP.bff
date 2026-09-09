@@ -6,7 +6,7 @@ schema_version: 1
 # site-packages/IMP/bff/ and are alternatives -- see run_constraints.
 
 context:
-  version: "0.14.3"
+  version: "0.15.0"
 
 package:
   name: bff
@@ -67,6 +67,13 @@ tests:
   - script:
       - python -c "import IMP.bff as b; assert b.get_build() == 'core'"
       - imp_bff_fetch_data --list
+      # the surface a consumer relies on, so a package missing half its
+      # classes fails here rather than in chisurf
+      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('Dataset', 'sync_dataset', 'ChiSquared', 'JointChiSquared', 'EvaluationGraph', 'Minimizer', 'TcspcDecay')]"
+      # the plugin is built and installed beside the extension; it stays
+      # unused until a wgpu library is present, which is a machine question
+      - python -c "import IMP.bff as b; assert b.built_with_gpu_support()"
+      - python -c "import IMP.bff as b; assert b.get_compute_backend_name() is not None"
 
 about:
   homepage: https://github.com/fluorescence-tools/imp.bff

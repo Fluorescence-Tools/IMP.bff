@@ -1,7 +1,7 @@
 schema_version: 1
 
 context:
-  version: "0.14.3"
+  version: "0.15.0"
 
 package:
   name: imp.bff
@@ -12,7 +12,7 @@ source:
   use_gitignore: true   # the root scratch (.gitignore) stays out of the source copy
 
 build:
-  number: 1
+  number: 0
   # No explicit `script:` -- rattler-build auto-discovers build.sh (unix) /
   # bld.bat (windows) in the recipe directory by platform. An explicit
   # `script:` field does not support if/then/else selectors (only
@@ -75,8 +75,27 @@ requirements:
     - bff <0.0.0a0
 
 tests:
+  # The module must *import*, and until 2026-09-09 nothing here checked that.
+  # `imp_bff --help` is a console script that does not touch the extension, so
+  # a package whose `_IMP_bff.so` could not resolve its symbols passed these
+  # tests and failed on the user's first `import IMP.bff`. That is exactly
+  # what happened: `src/ImpLayer.cpp` omitted one of the fourteen files it
+  # aggregates, the module would not link, and the installed library had been
+  # built before the omission existed so nothing noticed for weeks.
+  - python:
+      imports:
+        - IMP.bff
   - script:
       - imp_bff --help
+      # this build, not the IMP-free core (recipe-core.yaml asserts 'core')
+      - python -c "import IMP.bff as b; assert b.get_build() == 'imp', b.get_build()"
+      # a spot-check of the surface, so a package that imports but is missing
+      # half its classes fails here rather than in a consumer
+      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('Dataset', 'ChiSquared', 'JointChiSquared', 'EvaluationGraph', 'Minimizer', 'TcspcDecay')]"
+      # the compute door is compiled in; whether a *backend* loads is a
+      # run-time question about the machine and is deliberately not asserted
+      - python -c "import IMP.bff as b; assert b.built_with_gpu_support()"
+
 
 about:
   homepage: https://github.com/fluorescence-tools/imp.bff

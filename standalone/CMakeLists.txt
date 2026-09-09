@@ -14,7 +14,7 @@ cmake_minimum_required(VERSION 3.18)
 # The version: the wheel build hands it in from the git tag
 # (scikit-build-core's SKBUILD_PROJECT_VERSION); otherwise the release the
 # conda recipe names. project() wants digits and dots only.
-set(_imp_bff_version "0.14.3")
+set(_imp_bff_version "0.15.0")
 if(DEFINED SKBUILD_PROJECT_VERSION)
   string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _imp_bff_version "${SKBUILD_PROJECT_VERSION}")
 endif()
