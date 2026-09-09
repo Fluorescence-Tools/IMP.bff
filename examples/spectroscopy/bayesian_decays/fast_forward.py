@@ -268,8 +268,19 @@ def accelerate(model, graph, forward=None):
     obj.forward = fwd
     L = model['L']
 
+    scopes = sorted({L.channel_scope(k, graph.E) for k in graph.keys})
+
+    def fast_amplitudes(vals):
+        #: the same two-stage path the objective uses; `graph.amplitudes` goes
+        #: through `physics_amplitudes`, whose contraction order is the one
+        #: forward-mode differentiation wants and four times the cost of this
+        #: one for a value
+        st = L.stage1(graph.E, vals, graph.spectrum(vals), graph.distribution(vals), scopes)
+        a = L.stage2(graph.E, vals, st, graph.keys)
+        return {k: L.instrument_amplitudes(vals, a[k], k) for k in graph.keys}
+
     def raw_counts(vals, a2=None):
-        a2 = graph.amplitudes(vals) if a2 is None else a2
+        a2 = fast_amplitudes(vals) if a2 is None else a2
         return fwd(vals, a2)
 
     def expected_counts(vals, a2=None):
@@ -287,8 +298,15 @@ def accelerate(model, graph, forward=None):
     graph.log_posterior = obj
     graph.raw_counts = raw_counts
     graph.expected_counts = expected_counts
-    graph.inst = SpectralInstrument(fwd, model)
+    graph.inst = SpectralInstrumentD(fwd, model)
     graph._fast = obj
+    graph.fast_amplitudes = fast_amplitudes
+    #: EVERY GRAPH DERIVED FROM THIS ONE GETS THE SAME TREATMENT. A fit builds
+    #: several -- one per node of the penalty grid, and one per candidate in
+    #: the donor-only search that chooses the lifetime spectrum's smoothness.
+    #: Accelerating only the graph handed in leaves that search at full price,
+    #: and it is the largest single phase of a fit.
+    graph.accelerator = lambda gg: accelerate(model, gg)
     return graph
 
 
