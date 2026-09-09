@@ -225,6 +225,12 @@ class DampedNewton {
           r.mu = mu;
           return r;
         }
+        //  Halving, and not the textbook quadratic interpolation of Nocedal &
+        //  Wright Sec. 3.5, which was tried and is WORSE here: the interpolated
+        //  minimiser hit its own lower safeguard on every backtrack, whatever
+        //  the upper one was set to, because the objective along the ray has a
+        //  barrier near the full step that a quadratic cannot represent. The
+        //  grid it is used on went from 51 steps to 97 (measured 2026-09-09).
         alpha *= 0.5;
       }
       mu *= mu_up;

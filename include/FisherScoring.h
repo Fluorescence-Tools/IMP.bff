@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <thread>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -50,7 +51,7 @@ enum InformationKind {
 inline void poisson_score(const double* y, const double* m, const double* J,
                           const double* w, std::size_t n_bin, std::size_t n_par,
                           InformationKind kind, double* grad, double* A,
-                          double floor = 1e-12) {
+                          double floor = 1e-12, std::size_t n_threads = 1) {
   std::vector<double> u(n_bin), Wd(n_bin);
   for (std::size_t b = 0; b < n_bin; ++b) {
     const double mb = m[b] > floor ? m[b] : floor;
@@ -71,16 +72,40 @@ inline void poisson_score(const double* y, const double* m, const double* J,
   //  1.94 ms this way**, and 2.06 ms for a blocked, threaded GEMM
   //  (`tttrlib::Mat`) doing the same product. The order is worth ten times
   //  what the library is, which is worth knowing before reaching for one.
-  for (std::size_t i = 0; i < n_par * n_par; ++i) A[i] = 0.0;
-  for (std::size_t b = 0; b < n_bin; ++b) {
-    const double* Jb = &J[b * n_par];
-    const double w = Wd[b];
-    if (w == 0.0) continue;
-    for (std::size_t p = 0; p < n_par; ++p) {
-      const double wj = w * Jb[p];
-      if (wj == 0.0) continue;
-      double* Ap = &A[p * n_par];
-      for (std::size_t q = p; q < n_par; ++q) Ap[q] += wj * Jb[q];
+  //  **And it partitions over the bins when asked.** Each thread owns a full
+  //  `n_par x n_par` accumulator -- 104 kB at 114 parameters, which is nothing
+  //  beside the Jacobian it is reading -- and the reduction is one pass at the
+  //  end. Partitioning over PARAMETERS instead would have every thread stream
+  //  the whole of `J`; partitioning over bins has each read a contiguous slice
+  //  of it once. The serial path is kept exactly as it was, bit for bit, so a
+  //  caller that does not ask for threads gets the same numbers as before.
+  auto accumulate = [&](std::size_t b0, std::size_t b1, double* Aout) {
+    for (std::size_t i = 0; i < n_par * n_par; ++i) Aout[i] = 0.0;
+    for (std::size_t b = b0; b < b1; ++b) {
+      const double* Jb = &J[b * n_par];
+      const double wb = Wd[b];
+      if (wb == 0.0) continue;
+      for (std::size_t p = 0; p < n_par; ++p) {
+        const double wj = wb * Jb[p];
+        if (wj == 0.0) continue;
+        double* Ap = &Aout[p * n_par];
+        for (std::size_t q = p; q < n_par; ++q) Ap[q] += wj * Jb[q];
+      }
+    }
+  };
+  if (n_threads <= 1) {
+    accumulate(0, n_bin, A);
+  } else {
+    std::vector<std::vector<double>> part(n_threads, std::vector<double>(n_par * n_par));
+    std::vector<std::thread> th;
+    for (std::size_t t = 0; t < n_threads; ++t)
+      th.emplace_back(accumulate, n_bin * t / n_threads, n_bin * (t + 1) / n_threads,
+                      part[t].data());
+    for (auto& x : th) x.join();
+    for (std::size_t i = 0; i < n_par * n_par; ++i) {
+      double s = 0.0;
+      for (std::size_t t = 0; t < n_threads; ++t) s += part[t][i];
+      A[i] = s;
     }
   }
   for (std::size_t p = 0; p < n_par; ++p)
