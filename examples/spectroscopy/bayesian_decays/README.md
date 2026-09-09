@@ -2,8 +2,9 @@
 
 *2026-09-08, extended 2026-09-09*
 
-Eleven notebooks that build one model, in the order it was actually built, and
-then five that show how to point it at an experiment of your own. The end of
+Eleven notebooks that build one model, in the order it was actually built,
+five that show how to point it at an experiment of your own, and three on what a
+single-molecule measurement carries that a pooled decay does not. The end of
 the road is `../smfret_pie_mfd`, which is the whole thing as a single runnable
 example; this series exists so that nothing in it looks arbitrary.
 
@@ -36,10 +37,18 @@ point into it by section.
 | 13 | `13_mfd_pie.ipynb` | two lasers interleaved, three samples, twelve histograms, and what the second pulse makes measurable |
 | 14 | `14_separate_measurements.ipynb` | three cuvettes measured on their own — the ensemble geometry the first ten notebooks use, now as a description |
 | 15 | `15_magic_angle_minimal.ipynb` | two histograms and no polarisation: the smallest experiment the model accepts, and the seven numbers it must not be asked for |
+| 16 | `16_the_two_dimensional_diagrams.ipynb` | **photon sorting**: $E^*$ against the mean donor arrival time with its static and dynamic lines, stoichiometry against $E^*$, and how much of the scatter is arithmetic |
+| 17 | `17_exchange_between_states.ipynb` | molecules that interconvert, over five exchange times: where burst sorting recovers both states, and where it returns a confident answer at a distance no molecule ever had |
+| 18 | `18_how_close_is_too_close.ipynb` | the two states brought together until the diagram, the clustering and the sub-ensemble fits each stop separating them, against the pooled analysis on the same photons |
 
 Notebooks 0, 1, 2, 4, 6–10 run in a few minutes each; 3 and 5 do several fits
 and take longer. Every one was executed end to end before being committed, and
 carries its outputs.
+
+**Notebooks 16–18 are the single-molecule analysis proper.** 1–15 fit pooled
+histograms, which is what a cuvette gives you; 16–18 sort the photons burst by
+burst first, and are mostly about establishing where that stops working. They
+need `single_molecule.py`.
 
 **Notebooks 11–15 are the ones to read if you have your own measurement.** 11 is
 about describing it; 12–15 each take one description, say what it can and cannot
@@ -58,6 +67,11 @@ description.
 * `IMP.bff` for notebook 10
 * `numpy`, `scipy`, `torch`, `matplotlib`, `networkx`, and `scikit-learn` for
   the cross-checks in notebooks 8 and 9
+
+`single_molecule.py` is the sorting layer: the two per-burst rulers, the static
+and dynamic reference lines taken from the model's own tables, a two-state
+Markov exchange in the burst simulation with the gate that it reproduces the
+static one, and the sub-ensemble fit of a group of bursts.
 
 `experiment.py` is the description layer: the four dataclasses, the rule that
 derives what each histogram carries, the JSON round trip, the identifiability
