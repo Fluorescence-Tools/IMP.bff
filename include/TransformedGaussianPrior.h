@@ -120,6 +120,36 @@ class TransformedGaussianPrior {
     return false;
   }
 
+  /**
+   * \brief The same, with per-element parameters.
+   *
+   * A prior on a vector is often not the same prior repeated: a
+   * logistic-normal centred on a shape has a different mean in every
+   * coordinate. Passing the first element and hoping is a mistake that a
+   * synthetic test with constant parameters cannot catch and a real model
+   * finds immediately -- it shifts the density by a constant and its gradient
+   * by a constant, leaving the Hessian exactly right, which is a confusing
+   * place to start debugging.
+   *
+   * \param a per-element mean (Gaussian, Gaussian-on-z) or median (lognormal)
+   * \param b per-element standard deviation
+   */
+  bool add_vector(std::size_t offset, std::size_t size, PriorFamily family,
+                  TransformKind transform, const double* a, const double* b) {
+    const bool gaussian_in_z =
+        (family == PRIOR_GAUSSIAN_ON_Z) ||
+        (family == PRIOR_GAUSSIAN && transform == TRANSFORM_IDENTITY) ||
+        (family == PRIOR_LOGNORMAL && transform == TRANSFORM_LOG);
+    if (!gaussian_in_z) return false;
+    for (std::size_t i = 0; i < size; ++i) {
+      if (!(b[i] > 0.0)) throw std::invalid_argument("TransformedGaussianPrior: sd must be positive");
+      idx_.push_back(offset + i);
+      mu_.push_back((family == PRIOR_LOGNORMAL) ? std::log(a[i]) : a[i]);
+      sd_.push_back(b[i]);
+    }
+    return true;
+  }
+
   //! Number of coordinates recognised as Gaussian in `z`.
   std::size_t n_gaussian() const { return idx_.size(); }
   //! Number of coordinates contributing only a logit Jacobian.
