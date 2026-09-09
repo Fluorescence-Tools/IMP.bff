@@ -72,7 +72,13 @@ set(IMPBFF_IMP_MODULES "kernel;algebra;display;score_functor;core;container;atom
     CACHE STRING "IMP modules to link when IMPBFF_WITH_IMP is on")
 
 # ---- dependencies
-find_package(Eigen3 3.3 REQUIRED CONFIG)
+# Eigen: no version asked. A "3.3" request makes Eigen 5's config refuse the
+# match -- its PACKAGE_VERSION_COMPATIBLE holds only for a same-major
+# request -- and conda-forge has moved to 5.0.1, so the version floor here
+# became a build breaker. What this library uses of Eigen is stable across
+# the 3/5 boundary; a real API break will surface as a compile error, not
+# as a silent wrong answer.
+find_package(Eigen3 REQUIRED CONFIG)
 find_package(Boost 1.66 REQUIRED)            # headers: random (1.66 is what manylinux_2_28 ships)
 find_package(cereal CONFIG QUIET)
 if(NOT cereal_FOUND)
