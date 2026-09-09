@@ -170,10 +170,8 @@ std::string read_potential_manifest(std::string path) {
     PtoReader reader(container_path(path));
     const int i = reader.find(kManifestName);
     if (i < 0) return std::string("{}");
-    const std::vector<unsigned char> packed = reader.data(reader.objects()[i]);
-    const std::vector<unsigned char> raw =
-            pot_brotli_decompress(packed.empty() ? NULL : &packed[0],
-                                  packed.size());
+    // ptolib's reader decodes by the object's encoding -- no second pass.
+    const std::vector<unsigned char> raw = reader.data(reader.objects()[i]);
     return std::string(raw.begin(), raw.end());
 }
 
@@ -189,10 +187,8 @@ PotentialTable read_potential_table(std::string name, std::string path) {
                   IOException);
     }
     const PtoObject& object = reader.objects()[i];
-    const std::vector<unsigned char> packed = reader.data(object);
-    const std::vector<unsigned char> raw =
-            pot_brotli_decompress(packed.empty() ? NULL : &packed[0],
-                                  packed.size());
+    // ptolib's reader decodes by the object's encoding -- no second pass.
+    const std::vector<unsigned char> raw = reader.data(object);
 
     PotentialTable table(name, object.kind);
     if (object.kind == kPmfKind) {

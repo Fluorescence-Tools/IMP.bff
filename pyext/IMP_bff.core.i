@@ -1133,3 +1133,24 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* LabelLib's API, name for name (PRD-137 6d) */
 %include "IMP_bff.labellib.i"
+
+/*
+ * The command line, compiled. bin_main runs one sub of the compiled bin --
+ * the bin/ scripts whose subject is the IMP-free core, callable from a
+ * wheel with no IMP at all (PRD-137; the owner's ruling of 2026-09-09 that
+ * the command line belongs to the library). The subs and their grammar live
+ * in include/Bin.h and src/Bin.cpp; the console script is the few lines
+ * below.
+ */
+namespace IMP {
+namespace bff {
+int bin_main(const std::vector<std::string>& args);
+}
+}
+
+%pythoncode %{
+def bin_cli(argv=None):
+    """The compiled command line, as a console script entry point."""
+    import sys
+    return bin_main(sys.argv[1:] if argv is None else list(argv))
+%}

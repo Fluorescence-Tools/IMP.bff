@@ -1,5 +1,32 @@
 # Update Log
 
+## 2026-09-10
+
+- **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
+  file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
+  `include/Bin.h` + `src/Bin.cpp` are that file -- a CLI11 dispatcher (vendored verbatim as
+  `include/internal/CLI11.h`, v2.7.2, BSD-3; the consensus header-only CLI, subcommands first-class) whose
+  subs are the bin/ scripts that need nothing beyond the core. Two are ported end-to-end: `pdb2cif`
+  (the one-liner it always was) and `traj2drot` (convert with weights/--cluster/--grid and the self-check,
+  and --bundle; the bulk --all path stays Python for its directory walk). The wheel gains
+  `imp_bff = IMP.bff:bin_cli` as a console script; `bin_main` is wrapped for both builds through
+  `pyext/IMP_bff.core.i`. The IMP/pmi/RMF-bound modelling commands stay with the click program -- no
+  dispatcher makes them lighter; this amends the "a program is Python because a click command is" rule for
+  core-only subs, recorded here and in Bin.h. `test/test_bin_subs.py` drives the dispatcher as the console
+  script does. First lesson of the port: CLI11's vector parse reads words **reversed** -- the (argc, argv)
+  overload is the one that behaves.
+- **The drot reads have been broken since the ptolib move -- this session's sub surfaced it, and the reads
+  are fixed.** ptolib's `File::read` (so `PtoReader::data`) **decodes by the object's encoding**; the old
+  hand-written walker returned raw bytes, and every reader kept its second decompression after the move:
+  `read_drot` decompressed already-decoded JSON and failed with "corrupt brotli stream" on every shipped
+  library. Fixed across `read_drot`, `drot_catalog`, `drot_provenance`, the Dunbrack records and
+  `write_dunbrack_bin`, and the potentials manifest/table reads; `write_drot_bundle` had the inverse bug
+  (wrote decoded bytes labelled `+brotli`) and now copies with `read_stored`, which is what its
+  "bytes cross unread" comment always meant. The dyes/spinlabels containers read again, and the compiled
+  `traj2drot` writes and verifies end-to-end. What remains of the fallout is on the board
+  (T-20260910-01): byte-determinism of ptolib containers, the Dunbrack record-size arithmetic, container
+  overhead vs the 8x ratio pin -- each with the test that holds it.
+
 ## 2026-09-09
 
 - **The codec moved into the container layer** (imp-bff-ce + ptolib 0.4.0; owner ruling "it should be in

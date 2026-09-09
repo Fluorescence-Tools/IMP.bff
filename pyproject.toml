@@ -53,6 +53,10 @@ gpu = ["wgpu>=0.32"]
 
 [project.scripts]
 imp_bff_fetch_data = "IMP.bff:_fetch_data_main"
+# The compiled command line: the core's own bin/ subs (pdb2cif, traj2drot,
+# ...) with no IMP in the process. The IMP- and RMF-bound modelling commands
+# stay with the conda package's Python program.
+imp_bff = "IMP.bff:bin_cli"
 
 [project.urls]
 homepage = "https://github.com/fluorescence-tools/imp.bff"

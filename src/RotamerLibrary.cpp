@@ -385,14 +385,11 @@ RotamerLibrary read_drot(const std::string& path, const std::string& library) {
                 continue;                     // a bundle, and none was asked
             }
             found = true;
-            const std::vector<unsigned char> bytes = pto.data(objects[i]);
-            const std::string& enc = objects[i].encoding;
-            const bool packed = enc.size() >= 7 &&
-                    enc.compare(enc.size() - 7, 7, "+brotli") == 0;
-            members[name.substr(prefix.size())] = packed
-                    ? brotli_decompress(bytes.empty() ? NULL : &bytes[0],
-                                        bytes.size())
-                    : bytes;
+            // ptolib's reader decodes by the object's encoding -- the bytes
+            // here are the payload, not the stream. (Since the container
+            // moved to ptolib this used to decompress a second time, and
+            // every .drot read failed with "corrupt brotli stream".)
+            members[name.substr(prefix.size())] = pto.data(objects[i]);
         }
         if (!found) {
             std::ostringstream have;
@@ -692,10 +689,7 @@ std::vector<std::string> drot_catalog(const std::string& path) {
     const int at = pto.find("drot.catalog");
     if (at >= 0) {
         // The catalog is the one object read: `{"libraries":["a","b",...]}`.
-        const std::vector<unsigned char> packed = pto.data(pto.objects()[at]);
-        const std::vector<unsigned char> bytes =
-                brotli_decompress(packed.empty() ? NULL : &packed[0],
-                                  packed.size());
+        const std::vector<unsigned char> bytes = pto.data(pto.objects()[at]);
         const Json listed = JsonParser(bytes).parse();
         const Json& libraries = json_get(listed, "libraries");
         for (std::size_t i = 0; i < libraries.array.size(); ++i) {
@@ -725,9 +719,7 @@ MfdbTags drot_provenance(const std::string& path, const std::string& library) {
                                              : library + "/provenance.json";
     const int at = pto.find(want);
     if (at < 0) return out;
-    const std::vector<unsigned char> packed = pto.data(pto.objects()[at]);
-    const std::vector<unsigned char> bytes =
-            brotli_decompress(packed.empty() ? NULL : &packed[0], packed.size());
+    const std::vector<unsigned char> bytes = pto.data(pto.objects()[at]);
     const Json listed = JsonParser(bytes).parse();
     for (std::size_t i = 0; i < listed.array.size(); ++i) {
         const Json& e = listed.array[i];
@@ -935,8 +927,11 @@ void write_drot_bundle(const std::vector<std::string>& sources,
             if (objects[j].name == "drot.catalog") continue;  // never nested
             // Payload bytes cross unread and unaltered: they are already the
             // encoding their `PtoEncoding` names, and re-compressing them
-            // would only cost time and change nothing.
-            const std::vector<unsigned char> payload = in.data(objects[j]);
+            // would only cost time and change nothing. read_stored, not
+            // data(): data() decodes by the encoding, and decoded bytes
+            // labelled `+brotli` are a stream no reader can decode.
+            const std::vector<unsigned char> payload =
+                    in.file().read_stored(objects[j].uid);
             pto.add(names[i] + "/" + objects[j].name, objects[j].kind,
                     objects[j].encoding,
                     payload.empty() ? NULL : &payload[0], payload.size());
@@ -1476,8 +1471,8 @@ void write_dunbrack_bin(const std::string& path, const std::string& bin_path) {
             IMP_THROW("write_dunbrack_bin: " << path << " has no records for "
                       << r.code, IOException);
         }
-        const std::vector<unsigned char> records =
-                brotli_unpack(pto.data(pto.objects()[at]), residue_bytes(r));
+        // ptolib's reader decodes by the object's encoding.
+        const std::vector<unsigned char> records = pto.data(pto.objects()[at]);
         if (std::fwrite(&records[0], 1, records.size(), out) !=
             records.size()) {
             std::fclose(out);
@@ -1505,8 +1500,16 @@ DunbrackRotamers read_dunbrack_rotamers(const std::string& path, char residue_,
         IMP_THROW("read_dunbrack_rotamers: " << path << " has no records for "
                   << r->code, IOException);
     }
-    const std::vector<unsigned char> records =
-            brotli_unpack(pto.data(pto.objects()[at]), residue_bytes(*r));
+    // ptolib's reader decodes by the object's encoding; brotli_unpack's
+    // second pass here decompressed plain records and failed.
+    const std::vector<unsigned char> records = pto.data(pto.objects()[at]);
+    if (records.size() != static_cast<std::size_t>(r->n_rotamers) *
+                                   residue_bytes(*r)) {
+        IMP_THROW("read_dunbrack_rotamers: " << path << " holds "
+                  << records.size() << " bytes for " << r->code
+                  << ", expected " << r->n_rotamers * residue_bytes(*r),
+                  IOException);
+    }
 
     // Where this (phi, psi) bin's slots begin, in records.
     const std::size_t bin = static_cast<std::size_t>(36 * bin_of(phi) +
