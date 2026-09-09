@@ -23,14 +23,27 @@ namespace {
 /** ChiSurf's ``deviance_residuals``: the model is floored at the smallest
     positive double so its logarithm stays finite, the ``y log(y/mu)`` term
     is zero where there are no counts, and the deviance is clipped at zero
-    before the square root so rounding cannot produce a NaN. */
+    before the square root so rounding cannot produce a NaN.
+
+    The sign is ``sign(y - mu)`` -- positive where the observation exceeds the
+    fit. That is the standard convention for a deviance residual and is what
+    makes one comparable with a Pearson residual, which is defined that way.
+    It reads backwards against this library's history: both this function and
+    chisurf's ``deviance_residuals`` used ``sign(mu - y)`` until 2026-09-09,
+    which put them at odds with the ``"default"`` noise model, with every
+    ``Dataset`` residual kind, and with chisurf's own Gaussian residuals --
+    so a residual plot flipped when the noise model changed. Baker & Cousins,
+    cited in chisurf for the statistic, define the deviance and not a
+    residual sign, so nothing was resting on the old choice. Flipped in both
+    libraries in one change; no objective, chi-square or fitted parameter
+    moves, because the magnitude is unchanged. See PRD-140. */
 double deviance_residual(double y, double mu) {
   const double tiny = std::numeric_limits<double>::min();
   if (!(mu > tiny)) mu = tiny;
   const double ylog = (y > 0.0) ? y * (std::log(y) - std::log(mu)) : 0.0;
   double dev = 2.0 * (mu - y + ylog);
   if (!(dev > 0.0)) dev = 0.0;
-  const double sign = (mu > y) ? 1.0 : ((mu < y) ? -1.0 : 0.0);
+  const double sign = (y > mu) ? 1.0 : ((y < mu) ? -1.0 : 0.0);
   return sign * std::sqrt(dev);
 }
 

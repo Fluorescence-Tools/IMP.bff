@@ -171,21 +171,17 @@ def test_the_poisson_objective_is_the_one_the_library_already_computes():
     d = _poisson(y)
     from_dataset = np.asarray(d.residuals(list(mu), IMP.bff.RESIDUAL_DEVIANCE))
 
-    # Same magnitudes, so the objective is identical and no fit moves.
-    np.testing.assert_allclose(np.abs(from_dataset), np.abs(existing),
-                               rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(d.objective(list(mu)), (existing ** 2).sum(),
                                rtol=1e-12)
 
-    # Opposite signs, and the reason is a defect in the existing class rather
-    # than a choice here: `weighted_residuals` returns (y - mu)/e under
-    # "default" -- positive where the data exceeds the model -- and the
-    # opposite under "poisson". So switching noise model there flips every
-    # residual, and a residual plot or a runs test flips with it. Dataset is
-    # consistent: Pearson, deviance and Neyman all read positive where the
-    # data exceeds the model. Not fixed in ChiSquared, because chisurf plots
-    # those signs today; recorded in PRD-140.
-    np.testing.assert_allclose(from_dataset, -existing, rtol=1e-12, atol=1e-12)
+    # Sign included, since 2026-09-09. `weighted_residuals` under "poisson"
+    # used to return `sign(mu - y)` while everything else in both libraries
+    # used `sign(y - mu)`, so switching noise model flipped every residual
+    # plot while no fitted number moved. Both were flipped to the standard
+    # convention in one change across bff and chisurf (PRD-140), and the two
+    # paths now agree outright rather than up to a sign.
+    np.testing.assert_allclose(from_dataset, existing, rtol=1e-12, atol=1e-12)
+    np.testing.assert_array_equal(np.sign(from_dataset), np.sign(y - mu))
 
 
 def test_the_stored_objective_is_the_one_the_library_already_computes():
