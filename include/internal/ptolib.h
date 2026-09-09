@@ -77278,6 +77278,9 @@ BROTLI_BOOL BrotliDecoderEnsureStaticInit(void) {
 #if defined(__cplusplus) || defined(c_plusplus)
 }  /* extern "C" */
 #endif
+extern "C" {
+extern const BROTLI_MODEL("small") uint8_t kIsBase64[256];
+}
 /* Copyright 2013 Google Inc. All Rights Reserved.
 
    Distributed under MIT license.
@@ -104688,6 +104691,7 @@ void BrotliInitEncoderDictionaryForTest(BrotliEncoderDictionary* d) {
 #endif
 #undef Hash
 #define SortHuffmanTree SortHuffmanTree_entropy_encode
+#define BrotliReverseBits BrotliReverseBits_entropy_encode
 /* Copyright 2010 Google Inc. All Rights Reserved.
 
    Distributed under MIT license.
@@ -105190,6 +105194,7 @@ void BrotliConvertBitDepthsToSymbols(const uint8_t* depth,
 }  /* extern "C" */
 #endif
 #undef SortHuffmanTree
+#undef BrotliReverseBits
 /* Copyright 2013 Google Inc. All Rights Reserved.
 
    Distributed under MIT license.

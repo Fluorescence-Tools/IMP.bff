@@ -187,7 +187,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.wheel_matrix) }}
+    # sccache, via the same GitHub Actions cache backend the conda builds
+    # use; the compiler launchers that switch it on live in pyproject.toml's
+    # [tool.cibuildwheel.*.environment] tables -- setting them here through
+    # CIBW_ENVIRONMENT_* would replace those tables wholesale (tttrlib's
+    # measured lesson). The sccache action's ACTIONS_CACHE_URL and
+    # ACTIONS_RUNTIME_TOKEN are inherited from the job by the cibuildwheel
+    # subprocesses. SCCACHE_IDLE_TIMEOUT=0 keeps the server alive for the
+    # whole job: it otherwise exits after 600 s idle and takes the counters
+    # with it, so a build followed by tests reports "0 compile requests"
+    # while the cache was in fact hitting.
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        continue-on-error: true
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # setuptools_scm reads the tag
@@ -236,8 +251,8 @@ jobs:
           # vcpkg's status database is inside installed/, so a partially
           # restored cache reports "already installed" and the failure
           # surfaces much later as a configure error with nothing pointing
-          # back here.
-          foreach ($f in @("include\boost\version.hpp", "include\Eigen\Dense", "share\Eigen3\cmake\Eigen3Config.cmake")) {
+          # back here. The eigen3 port keeps the headers under include/eigen3.
+          foreach ($f in @("include\boost\version.hpp", "include\eigen3\Eigen\Dense", "share\eigen3\Eigen3Config.cmake")) {
             if (-not (Test-Path "$root\$f")) {
               Write-Host "::error::vcpkg reported success but $root\$f is missing."
               Write-Host "The cached vcpkg tree is incomplete. Bump the key"
@@ -259,6 +274,10 @@ jobs:
           python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
+      - name: Compiler cache statistics
+        if: always()
+        continue-on-error: true
+        run: sccache --show-stats
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.arch }}

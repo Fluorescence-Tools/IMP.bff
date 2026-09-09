@@ -40,7 +40,8 @@ void atom_fields(IMP::atom::Atom atom, std::string& chain, int& residue,
     }
     chain.clear();
     residue = -1;
-    const IMP::atom::Hierarchy parent = IMP::atom::Hierarchy(atom).get_parent();
+    // Atom is a Hierarchy: see ProbeDynamics.cpp for why no wrap.
+    const IMP::atom::Hierarchy parent = atom.get_parent();
     if (parent && IMP::atom::Residue::get_is_setup(parent)) {
         residue = IMP::atom::Residue(parent).get_index();
         const IMP::atom::Hierarchy grandparent = parent.get_parent();

@@ -215,8 +215,9 @@ AttachedProbeDynamics::AttachedProbeDynamics(
     for (std::size_t i = 0; i < protein_atoms.size(); ++i) {
         const IMP::atom::Atom atom(protein_atoms[i]);
         const std::string name = atom_name(atom);
-        const IMP::atom::Hierarchy parent =
-                IMP::atom::Hierarchy(atom).get_parent();
+        // Atom is a Hierarchy: the wrap-then-ask construction is
+        // ambiguous under gcc (copy vs conversion), the call is not.
+        const IMP::atom::Hierarchy parent = atom.get_parent();
         const bool is_residue =
                 parent && IMP::atom::Residue::get_is_setup(parent);
         std::string chain_id;
