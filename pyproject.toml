@@ -170,7 +170,11 @@ archs = ["AMD64"]
 # Eigen there, so like on Linux the wheel links nothing outside itself and
 # delvewheel has nothing to bundle but the module's own DLLs.
 before-build = "pip install delvewheel"
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
+# --no-dll for our own two libraries: both ship inside the wheel beside the
+# extension (install RUNTIME DESTINATION IMP/bff), which is where the loader
+# finds them; delvewheel does not treat a same-dir companion DLL as found and
+# dies vendoring it (FileNotFoundError: imp_bff.dll, on a wheel that has it).
+repair-wheel-command = "delvewheel repair --no-dll imp_bff.dll -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.windows.config-settings]
 # Same story as the macOS table above; forward slashes are what CMake

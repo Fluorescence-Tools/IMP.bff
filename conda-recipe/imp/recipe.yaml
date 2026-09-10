@@ -44,8 +44,13 @@ source:
 
 build:
   number: 0
-  # No explicit `script:` -- rattler-build auto-discovers build.sh (unix) /
-  # bld.bat (windows) beside this recipe.
+  # The scripts are named explicitly: with auto-discovery the Windows build
+  # "succeeded" through the VS activation and packaged an empty package --
+  # bld.bat's body never ran (no echo output, six-second build, zero files).
+  script:
+    - if: win
+      then: bld.bat
+      else: build.sh
   skip:
     - win and arm64
 
