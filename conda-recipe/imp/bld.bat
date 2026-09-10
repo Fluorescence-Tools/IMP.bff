@@ -16,6 +16,13 @@ if errorlevel 1 exit 1
 copy modules\rmf\dependency\RMF\tools\dev_tools\python_tools\* tools\dev_tools\python_tools\
 if errorlevel 1 exit 1
 
+:: Activation scripts: see build.sh -- IMP_DATA, because the kernel's
+:: compiled-in data path does not survive prefix relocation.
+if not exist "%PREFIX%\etc\conda\activate.d" mkdir "%PREFIX%\etc\conda\activate.d"
+if not exist "%PREFIX%\etc\conda\deactivate.d" mkdir "%PREFIX%\etc\conda\deactivate.d"
+echo @set "IMP_DATA=%%CONDA_PREFIX%%\share\IMP"> "%PREFIX%\etc\conda\activate.d\imp.bat"
+echo @set IMP_DATA=> "%PREFIX%\etc\conda\deactivate.d\imp.bat"
+
 echo "Build app wrapper"
 
 :: build app wrapper
@@ -30,14 +37,13 @@ cd build
 set CGAL_DIR=%PREFIX%\Library\lib\cmake\CGAL
 
 :: Help CMake to find OpenCV
-python "%RECIPE_DIR%\find_opencv_libs.py" "%PREFIX%"
 if errorlevel 1 exit 1
 
 :: Avoid running out of memory (particularly on 32-bit) by splitting up IMP.cgal
 set PERCPPCOMP="-DIMP_PER_CPP_COMPILATION=cgal"
 
 :: Don't build the scratch or cnmultifit modules
-set DISABLED="scratch:cnmultifit"
+set DISABLED=EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry:test
 
 :: We use the conda boost package, which includes
 :: zlib support, but defining BOOST_ALL_DYN_LINK (below) makes boost try to

@@ -26,6 +26,9 @@ set(CMAKE_CXX_STANDARD 17)
 # <windows.h> leaks min/max into every translation unit that includes it.
 if(MSVC)
   add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+  # The unity build (bff_core_all.cpp) exceeds MSVC's object-file section
+  # count without this (C1128).
+  add_compile_options(/bigobj)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Default, not hidden, and that is a decision rather than an oversight:
