@@ -34,6 +34,11 @@ source:
   sha256: 2f7c1403524e8fa991e8b6cb59fa6c0d5d6c2005c41c20cabb66185f07ba3c5c
   patches:
     - imp-swig45.patch
+    # the bundled RMF's swig_helpers.h has the same Python-2-era spellings
+    # (PyString_*/PyInt_*) that swig 4.5 removed -- the same fix
+    # imp-swig45.patch applies to IMP's own copy, which does not reach
+    # into modules/rmf/dependency
+    - imp-bundled-rmf-swig45.patch
     - imp-directories.patch  # [win]
     - imp-abseil-windows.patch  # [win]
 
