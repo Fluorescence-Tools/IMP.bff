@@ -47,6 +47,17 @@
   ConSurf grades internal; `consurf.tau.ac.il` submission endpoints from its own `test/consurf.py` recipe
   404/400, and consurfdb.tau.ac.il is a redirect loop) -- so the section runs on the shipped grades and the
   cs-parity column waits for the deployment to recover.
+- **The grades endpoint, deployed** (labelizer-backend `00b1a7a`, live on labelizer.org): the server held
+  277 ConSurf grades files across 85 proteins that no client could reach. New REST surface:
+  `GET backend/conservationscore/<entry_id>` lists the chains with grades on disk, `GET
+  backend/conservationscore/<entry_id>/<chain>` serves the grades PDB (normalised grade in the B-factor,
+  exactly what `ll_read_consurf` reads); rows whose ConSurf job never delivered 404 with the JSON error
+  shape. The notebook's conservation section gains the webserver route: T4 lysozyme has real grades under
+  **148L chain E** (`148L_consurf_grades.pdb`, cached, cache-first fetch), and the full model vs
+  no-conservation comparison runs on T4L itself -- 164 sites, top-10 overlap 7/10, cs lifts E44 into the
+  top-3. Server deployment: host source patched + `docker cp` into the running web container + restart;
+  the deployed tree carries unrelated uncommitted server changes (MaintenanceStatus etc.), so the local
+  labelizer-backend commit is a surgical patch of the same two files, not the deployed blob.
 
 - **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
   file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
