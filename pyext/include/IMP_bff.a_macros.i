@@ -6,7 +6,9 @@
    first consumer of std::map -- reached its %template before types.i
    delivered the map typemaps. SWIG's library files are idempotent. */
 %include <std_map.i>
-%include <std_attribute.i>
+// SWIG 4.4+ ships the attribute support as python/attribute.i (it wraps
+// typemaps/attribute.swg); the older std_attribute.i spelling is gone.
+%include <attribute.i>
 
 %define %attribute_np(Class, Type, Name, GetMethod, SetMethod...)
     %extend Class {
