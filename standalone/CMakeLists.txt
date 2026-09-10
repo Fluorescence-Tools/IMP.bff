@@ -350,7 +350,12 @@ if(IMPBFF_PYTHON)
   target_include_directories(_IMP_bff PRIVATE "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}" "${RMF_INCLUDE_DIR}")
   target_link_libraries(_IMP_bff PRIVATE imp_bff Python3::Module)
   set_target_properties(_IMP_bff PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${_pydir}" PREFIX "" SUFFIX "${Python3_SOABI_SUFFIX}")
-  if(APPLE)
+  if(WIN32)
+    # Windows Python imports .pyd, never .so (the wheel landed with
+    # _IMP_bff.so beside __init__.py and import failed as a circular-import
+    # report -- the tell is the extension naming in the install log).
+    set_target_properties(_IMP_bff PROPERTIES SUFFIX ".pyd")
+  elseif(APPLE)
     set_target_properties(_IMP_bff PROPERTIES SUFFIX ".so" INSTALL_RPATH "@loader_path/../../lib;@loader_path" BUILD_RPATH "${CMAKE_BINARY_DIR}")
   else()
     set_target_properties(_IMP_bff PROPERTIES SUFFIX ".so" INSTALL_RPATH "$ORIGIN/../../lib;$ORIGIN" BUILD_RPATH "${CMAKE_BINARY_DIR}")
