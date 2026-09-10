@@ -24,7 +24,14 @@ mkdir build && cd build
 # (measured on cn1: add_hierarchies SIGSEGVs in std::string::_M_construct,
 # only when IMP.bff imports before IMP.rmf). One bundled RMF inside imp
 # removes the cross-library binding entirely.
-cmake -DCMAKE_BUILD_TYPE=Release -DIMP_DISABLED_MODULES=${DISABLED} \
+# sccache when present, as imp.bff's build.sh has it: the cache makes a
+# build killed mid-way (cn1 reboots every ~17 minutes) resume where it
+# stopped instead of starting over.
+SCCACHE_ARGS=()
+if command -v sccache >/dev/null 2>&1; then
+  SCCACHE_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
+fi
+cmake "${SCCACHE_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DIMP_DISABLED_MODULES=${DISABLED} \
       -G Ninja \
       -DIMP_USE_SYSTEM_RMF=off \
       -DIMP_USE_SYSTEM_IHM=off \
