@@ -73,6 +73,10 @@ bool stat_key(const std::string& path, CacheKey* key) {
 #ifdef __APPLE__
     key->mtime_ns = (long long) info.st_mtimespec.tv_sec * 1000000000LL +
                     info.st_mtimespec.tv_nsec;
+#elif defined(_WIN32)
+    // MSVC's stat carries seconds only; the cache key wants a coarse
+    // timestamp, not a clock.
+    key->mtime_ns = (long long) info.st_mtime * 1000000000LL;
 #else
     key->mtime_ns = (long long) info.st_mtim.tv_sec * 1000000000LL +
                     info.st_mtim.tv_nsec;

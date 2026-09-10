@@ -21,6 +21,12 @@ endif()
 project(imp_bff_core VERSION ${_imp_bff_version} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+
+# MSVC's <cmath> hides M_PI and friends behind _USE_MATH_DEFINES, and its
+# <windows.h> leaks min/max into every translation unit that includes it.
+if(MSVC)
+  add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Default, not hidden, and that is a decision rather than an oversight:
 # hidden visibility stops exporting the typeinfo of the exception classes,
@@ -323,7 +329,7 @@ if(IMPBFF_PYTHON)
   set_property(SOURCE "${_entry}" PROPERTY CPLUSPLUS ON)
   set_property(SOURCE "${_entry}" PROPERTY SWIG_MODULE_NAME IMP_bff)
   set_property(SOURCE "${_entry}" PROPERTY INCLUDE_DIRECTORIES
-    "${IMPBFF_ROOT}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${IMPBFF_ROOT}/pyext" "${IMPBFF_ROOT}/pyext/include" "${CMAKE_CURRENT_SOURCE_DIR}/pyext" "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${IMPBFF_GEN_INCLUDE}" "${CMAKE_BINARY_DIR}" "${Python3_NumPy_INCLUDE_DIRS}")
   set(_swig_defs "")
   if(NOT IMPBFF_WITH_RMF)

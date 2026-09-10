@@ -71,7 +71,12 @@ std::string ensure_dir(std::string path) {
         const std::string component = path.substr(start, end - start);
         if (!component.empty()) {
             built = data_paths::join(built, component);
-            if (mkdir(built.c_str(), 0777) != 0 && errno != EEXIST) {
+#ifdef _WIN32
+            const int made = _mkdir(built.c_str());
+#else
+            const int made = mkdir(built.c_str(), 0777);
+#endif
+            if (made != 0 && errno != EEXIST) {
                 IMP_THROW("cannot create " << built << ": " << std::strerror(errno),
                           IOException);
             }
