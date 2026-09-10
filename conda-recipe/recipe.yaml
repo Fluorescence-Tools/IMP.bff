@@ -90,6 +90,10 @@ tests:
       imports:
         - IMP.bff
   - script:
+      # IMP_DATA: our imp package's activation script exports it for real
+      # environments; rattler-build's test harness does not run activation
+      # scripts, so it is said here too.
+      - export IMP_DATA=${CONDA_PREFIX}/share/IMP
       - imp_bff --help
       # this build, not the IMP-free core (recipe-core.yaml asserts 'core')
       # the spot-check runs first: it says how deep the surface goes, so a

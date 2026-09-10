@@ -1,0 +1,8 @@
+diff --git a/modules/npctransport/dependency/Abseil.description b/modules/npctransport/dependency/Abseil.description
+index 7403464..54394e9 100644
+--- a/modules/npctransport/dependency/Abseil.description
++++ b/modules/npctransport/dependency/Abseil.description
+@@ -1,2 +1,2 @@
+ headers="google/protobuf/text_format.h"
+-libraries="absl_spinlock_wait"
++libraries="abseil_dll"

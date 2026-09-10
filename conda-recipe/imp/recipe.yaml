@@ -1,0 +1,111 @@
+# IMP, built the way imp.bff needs it: conda-forge's recipe (this is a
+# trimmed port of conda-forge/imp-feedstock's meta.yaml, files beside this
+# recipe fetched verbatim from the feedstock), with every module the BFF
+# module does not use disabled -- above all `bff` itself, salilab/imp's
+# historical fluorescence module.
+#
+# Why our own: the published conda-forge `imp` ships that old bff -- its
+# Python files land in site-packages/IMP/bff/ and its swig fragments in
+# share/IMP/swig/, clobbering (or clobbered by) this package's IMP.bff,
+# which is how a freshly built imp.bff answered import with the *old*
+# module's surface (DecayCurve et al., no Dataset). An imp with bff
+# disabled owns none of those paths.
+#
+# The keep-set is the transitive closure of imp.bff's dependencies.py
+# (container:core:em:atom:rmf:rotamer) over IMP's own module graph:
+# kernel, algebra, display, score_functor, statistics, core, container,
+# atom, em, rotamer, isd, saxs, rmf. Everything else is disabled, which
+# also drops the heavy host dependencies only those modules need
+# (protobuf, opencv, fftw, gsl, cgal, MPI).
+schema_version: 1
+
+context:
+  version: "2.25.0"
+  # IMP_PER_CPP_COMPILATION splits the named modules' unity build; none of
+  # the kept modules need it.
+  disabled: "EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry:test"
+
+package:
+  name: imp
+  version: ${{ version }}
+
+source:
+  url: https://github.com/salilab/imp/releases/download/${{ version }}/imp-src-${{ version }}.tar.gz
+  sha256: 2f7c1403524e8fa991e8b6cb59fa6c0d5d6c2005c41c20cabb66185f07ba3c5c
+  patches:
+    - imp-swig45.patch
+    - imp-directories.patch  # [win]
+    - imp-abseil-windows.patch  # [win]
+
+build:
+  number: 0
+  activation:
+    # Our kernel's compiled-in data path does not survive rattler-build's
+    # prefix relocation (the search list arrives empty at run time; conda-
+    # build's builds do not hit this). The env var is the first thing
+    # IMP::internal::get_data_prefixes checks, and activation scripts are
+    # conda's own mechanism for exactly this.
+    script:
+      - if: unix
+        then:
+          - mkdir -p "${PREFIX}/etc/conda/activate.d"
+          - echo "export IMP_DATA=${CONDA_PREFIX}/share/IMP" > "${PREFIX}/etc/conda/activate.d/imp.sh"
+          - mkdir -p "${PREFIX}/etc/conda/deactivate.d"
+          - echo "unset IMP_DATA" > "${PREFIX}/etc/conda/deactivate.d/imp.sh"
+  # No explicit `script:` -- rattler-build auto-discovers build.sh (unix) /
+  # bld.bat (windows) beside this recipe.
+  skip:
+    - win and arm64
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - python
+    - numpy
+    - if: osx
+      then: llvm-openmp
+    - if: linux
+      then: libgomp
+    - if: unix
+      then: pkg-config
+    - swig
+    - swig-abi
+    - cmake
+    - ninja
+  host:
+    - python
+    - numpy
+    - rmf >=1.7
+    - ihm
+    - libboost-devel
+    - hdf5
+    - eigen
+    - cereal
+  run:
+    - python
+    # RMF does not pin its exports, but we link against the C++ DSO
+    - ${{ pin_compatible('rmf', upper_bound='x.x') }}
+    - ihm
+    - numpy
+
+tests:
+  - python:
+      imports:
+        - IMP
+        - IMP.atom
+        # the old module must not be here -- that is the point of this build
+  - script:
+      - python -c "import IMP; assert not __import__('importlib.util', fromlist=['x']).find_spec('IMP.bff'), 'the old IMP.bff ships in this imp'"
+
+about:
+  homepage: https://integrativemodeling.org
+  license: GPL-3.0-or-later
+  license_file:
+    - COPYING.LGPL
+    - COPYING.GPL
+  summary: "The Integrative Modeling Platform, without the historical bff module (for imp.bff)"
+
+extra:
+  recipe-maintainers:
+    - tpeulen

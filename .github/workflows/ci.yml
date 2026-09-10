@@ -128,6 +128,33 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash -el {0}
         run: mamba install -y rattler-build
+
+      # ── our own imp ────────────────────────────────────────────────────────
+      # The published conda-forge imp ships salilab/imp's historical bff
+      # module -- its Python files land in site-packages/IMP/bff/ and its
+      # swig fragments in share/IMP/swig/, clobbering (or clobbered by)
+      # this package's IMP.bff: a fresh build answered import with the old
+      # module's surface. So the job builds imp itself, from conda-forge's
+      # recipe (conda-recipe/imp/, trimmed to the 14 modules bff uses,
+      # bff disabled) and cached by the recipe's content.
+      - name: Cache our imp package
+        id: imp-cache
+        uses: actions/cache@v4
+        with:
+          path: imp-bld
+          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
+      - name: Build our imp (when the cache is cold)
+        if: steps.imp-cache.outputs.cache-hit != 'true'
+        shell: bash -el {0}
+        run: |
+          ls imp-bld/*/*.conda >/dev/null 2>&1 && exit 0
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            RB="$RATTLER_BUILD_EXE"
+          else
+            RB=rattler-build
+          fi
+          "$RB" build --recipe conda-recipe/imp/recipe.yaml \
+                      --channel conda-forge --output-dir imp-bld
       # The large data (data/registry.json) is not in git: it comes from the
       # download host, cached between runs keyed by the registry (tttrlib's
       # pattern) so only a changed registry downloads again. The build
@@ -153,7 +180,9 @@ jobs:
         run: |
           RB=rattler-build
           if [ "$RUNNER_OS" = "Windows" ]; then RB="$RATTLER_BUILD_EXE"; fi
-          "$RB" build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+          "$RB" build --recipe conda-recipe/recipe.yaml \
+                      --channel ./imp-bld --channel conda-forge \
+                      --output-dir conda-bld
 
       - name: Compiler cache statistics
         if: always()

@@ -73,6 +73,28 @@
   (T-20260910-01): byte-determinism of ptolib containers, the Dunbrack record-size arithmetic, container
   overhead vs the 8x ratio pin -- each with the test that holds it.
 
+## 2026-09-10 (second half)
+
+- **Why every conda build answered import with the old module — and the fix: our own imp.** The published conda-forge
+  `imp` ships salilab/imp's *historical bff module*: its Python files land in `site-packages/IMP/bff/` and its swig
+  fragments (`AV.i`, `BFF.types.i`, `Decay*.i`, `PathMap.i`) in `share/IMP/swig/`, clobbering and clobbered by this
+  package's IMP.bff. A freshly built, fully correct imp.bff package imported as the *old* module (DecayCurve et al.,
+  no Dataset) — the wrapper itself was complete; the files just never survived the install. Owner's ruling: build our
+  own imp. `conda-recipe/imp/` is a trimmed port of conda-forge/imp-feedstock (files fetched verbatim): the keep-set is
+  the transitive closure of bff's dependencies.py plus what `bin/imp_bff` imports (kinematics, pmi, mmcif — 17 modules),
+  everything else disabled, which drops protobuf/opencv/fftw/gsl/cgal/MPI from the host set. CI's imp_module job builds
+  it first, cached by the recipe's hash, and bff builds against `./imp-bld` ahead of conda-forge. Two build findings:
+  the kernel's compiled-in data path does not survive rattler's prefix relocation (search list empty at run time,
+  where conda-build builds work) — the imp package ships activation scripts exporting `IMP_DATA` and bff's tests say it
+  themselves; and `benchmark` must stay enabled because kept modules' benchmarks include its config header. Verified
+  locally, end to end: imp package → bff package against it → all recipe tests green (imports, surface spot-check,
+  get_build() == 'imp', imp_bff --help, gpu support flag).
+- **Windows, the slow peel:** MSVC keeps the 16-bit-era segment-modifier words — `near` tripped three locals (two in
+  RRT, one in SelectionExpression) as C2513; `_mktemp` is not reliably declared, so Faspr's scratch dir is
+  std::filesystem under the user's temp path; and the unity build makes `#define` a loaded weapon — ForceFieldCIF's
+  `#define open _open` renamed `pto::File::open` and everything after it in bff_core_all.cpp (the hundred-error
+  ptolib cascade was that, not a ptolib defect).
+
 ## 2026-09-09
 
 - **The codec moved into the container layer** (imp-bff-ce + ptolib 0.4.0; owner ruling "it should be in
