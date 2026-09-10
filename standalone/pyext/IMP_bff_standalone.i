@@ -130,17 +130,6 @@ def get_module_version():
 def get_module_name():
     return "IMP::bff"
 
-def get_build():
-    """Which IMP.bff this is.
-
-    "core"      -- no IMP at all: the fitting stack, volumes, rotamer dyes.
-    "core+imp"  -- the same, plus the roads that run on an atomistic model
-                   (attach_dye_to_pdb, run_dye_langevin). IMP is linked as a
-                   private library; there is still no IMP in Python.
-    "imp"       -- the IMP module build, where IMP's own Python is there too.
-    """
-    return "core+imp" if _IMP_BFF_WITH_IMP else "core"
-
 def _warn_if_this_replaced_the_imp_module():
     # The pip core and the conda imp.bff package both own site-packages/IMP/bff/.
     # When an IMP kernel is importable next to this core, the pip install has

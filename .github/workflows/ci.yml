@@ -140,7 +140,15 @@ jobs:
 
       - name: Build the conda package
         shell: bash -el {0}
-        run: rattler-build build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
+        # Windows: a login shell rebuilds PATH from the system profile, so
+        # GITHUB_PATH additions do not survive into it -- the builder is
+        # invoked by absolute path there.
+        run: |
+          RB=rattler-build
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            RB=$(cygpath -u "$RUNNER_TEMP")/rattler-build/rattler-build.exe
+          fi
+          "$RB" build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
 
       - name: Compiler cache statistics
         if: always()

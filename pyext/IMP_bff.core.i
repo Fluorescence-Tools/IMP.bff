@@ -1145,6 +1145,7 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 namespace IMP {
 namespace bff {
 int bin_main(const std::vector<std::string>& args);
+std::string get_build();
 }
 }
 

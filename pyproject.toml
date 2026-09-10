@@ -142,13 +142,15 @@ before-all = "brew install boost eigen && bash utility/wheel_deps.sh $HOME/imp-b
 before-build = "pip install delocate"
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
+[tool.cibuildwheel.macos.config-settings]
+# As a CMake cache variable this beats every environment question: the
+# hosted runner's user is 'runner' and Homebrew on arm64 lives in
+# /opt/homebrew, so the value is literal and nothing in the chain has to
+# expand it. (Env-table and job-env spellings of this were both tried and
+# both failed to reach CMake.)
+"cmake.define.CMAKE_PREFIX_PATH" = "/Users/runner/imp-bff-deps;/opt/homebrew"
+
 [tool.cibuildwheel.macos.environment]
-# The table is delivered verbatim into the build environment, but nothing
-# in the chain expands $VARS in it (measured: $HOME and $(brew ...) arrived
-# literally, and cereal was never found) -- so these are literal runner
-# paths: the hosted runner's user is 'runner', and Homebrew on arm64 lives
-# in /opt/homebrew.
-CMAKE_PREFIX_PATH = "/Users/runner/imp-bff-deps;/opt/homebrew"
 MACOSX_DEPLOYMENT_TARGET = "11.0"
 # sccache: CMake reads these as the initial values of the
 # CMAKE_<LANG>_COMPILER_LAUNCHER cache variables, and the standalone
@@ -170,10 +172,12 @@ archs = ["AMD64"]
 before-build = "pip install delvewheel"
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
 
+[tool.cibuildwheel.windows.config-settings]
+# Same story as the macOS table above; forward slashes are what CMake
+# prefers, and the hosted runner's user is 'runneradmin'.
+"cmake.define.CMAKE_PREFIX_PATH" = "C:/Users/runneradmin/imp-bff-deps;C:/vcpkg/installed/x64-windows"
+
 [tool.cibuildwheel.windows.environment]
-# Literal runner paths (hosted user 'runneradmin'), for the same reason as
-# the macOS table: no $-expansion happens in a table value.
-CMAKE_PREFIX_PATH = "C:\\Users\\runneradmin\\imp-bff-deps;C:\\vcpkg\\installed\\x64-windows"
 # Ninja over MSBuild: MSBuild parallelises whole projects, so every source
 # waits on the slowest; Ninja schedules individual compiles (tttrlib's
 # measured 507 s serial -> 165 s at twelve jobs). scikit-build-core only

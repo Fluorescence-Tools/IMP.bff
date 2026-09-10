@@ -166,4 +166,38 @@ class UsageException : public Exception {
 
 #endif  // IMPBFF_STANDALONE
 
+namespace IMP {
+
+namespace bff {
+
+//! Which IMP.bff this translation unit was built as.
+/*!
+    "core"      -- no IMP at all: the fitting stack, volumes, rotamer dyes.
+    "core+imp"  -- the same, plus the roads that run on an atomistic model
+                   (attach_dye_to_pdb, run_dye_langevin). IMP is linked as a
+                   private library; there is still no IMP in Python.
+    "imp"       -- the IMP module build, where IMP's own Python is there too.
+
+    A header-inline so the module build and the standalone build answer with
+    no extra file: the switch is compile-time and the whole function is the
+    switch.
+*/
+inline std::string get_build() {
+#if defined(IMPBFF_WITH_IMP)
+#  if defined(IMPBFF_STANDALONE)
+  return std::string("core+imp");
+#  else
+  return std::string("imp");
+#  endif
+#elif defined(IMPBFF_STANDALONE)
+  return std::string("core");
+#else
+  return std::string("imp");
+#endif
+}
+
+}  // namespace bff
+
+}  // namespace IMP
+
 #endif  // IMPBFF_BASE_H
