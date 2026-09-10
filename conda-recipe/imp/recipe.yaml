@@ -63,17 +63,12 @@ requirements:
   host:
     - python
     - numpy
-    - rmf >=1.7
-    - ihm
     - libboost-devel
     - hdf5
     - eigen
     - cereal
   run:
     - python
-    # RMF does not pin its exports, but we link against the C++ DSO
-    - ${{ pin_compatible('rmf', upper_bound='x.x') }}
-    - ihm
     - numpy
 
 tests:

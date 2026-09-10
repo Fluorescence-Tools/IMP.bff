@@ -16,10 +16,18 @@ if [ `uname -s` = "Darwin" ]; then
 fi
 
 mkdir build && cd build
+# Bundled RMF and ihm (the tarball ships both under modules/*/dependency):
+# against the system rmf package, our libimp_rmf binds RMF inline functions
+# lazily across .so boundaries -- with a second RMF-linked extension loaded
+# first (this package's IMP.bff does exactly that), the calls can resolve
+# into conda-forge's _IMP_rmf.so copy of the inline and operate on garbage
+# (measured on cn1: add_hierarchies SIGSEGVs in std::string::_M_construct,
+# only when IMP.bff imports before IMP.rmf). One bundled RMF inside imp
+# removes the cross-library binding entirely.
 cmake -DCMAKE_BUILD_TYPE=Release -DIMP_DISABLED_MODULES=${DISABLED} \
       -G Ninja \
-      -DIMP_USE_SYSTEM_RMF=on \
-      -DIMP_USE_SYSTEM_IHM=on \
+      -DIMP_USE_SYSTEM_RMF=off \
+      -DIMP_USE_SYSTEM_IHM=off \
       ${CMAKE_ARGS} \
       -DCMAKE_CXX_FLAGS="${CXX_FLAGS}" \
       -DPython3_FIND_FRAMEWORK=NEVER \
