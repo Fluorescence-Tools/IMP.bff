@@ -36,6 +36,17 @@
   labelability constraint costs only 2.39 vs 2.24 A -- while the hand-picked sites' median LS is 1.24 vs
   1.69 and two of them (127, 150) are zero-vetoed outright. Decay-curve overlay `labelizer_greedy_decay.png`;
   `MIN_LS` is the dial the closing section prices.
+- **Conservation joins the labelizer notebook** (new closing section, `labelizer_score.ipynb`): the full
+  published model (cs at weight 1) on 1DDB model 39 -- the paper's worked example -- scored against the real
+  ConSurf grades the reference distribution ships (`1DDB-conservationscore-39-A.pdb`, 187 distinct grades in
+  the B-factor; nothing to download). Conservation reshapes the ranking: top-10 overlap 3/10 with/without cs;
+  variable sites rise (one rank 108 -> 55), the conserved core sinks. The degenerate `1DDB-39_cs.pdb`
+  two-cycle is called out (validation note + guard tests). Finding recorded after four webserver analyses
+  across 3GUN/1DDB (custom upload and PDB-DB load): **labelizer.org's conservation pipeline delivers nothing
+  right now** -- no `*_cs.csv` in any result, no grades endpoint in its REST surface (its backend keeps the
+  ConSurf grades internal; `consurf.tau.ac.il` submission endpoints from its own `test/consurf.py` recipe
+  404/400, and consurfdb.tau.ac.il is a redirect loop) -- so the section runs on the shipped grades and the
+  cs-parity column waits for the deployment to recover.
 
 - **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
   file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
