@@ -18,6 +18,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <direct.h>
+#include <stdlib.h>
 #include <cstring>
 #endif
 #include <IMP/bff/Pto.h>

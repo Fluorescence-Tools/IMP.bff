@@ -120,8 +120,10 @@ RRTTree grow_torsion_rrt(int n_dof, int n_iter, double step_size,
             }
         }
 
-        const int near = nearest_node(tree, target, torsion_distance);
-        const std::vector<double> from = tree.get_configuration(near);
+        // `near` is a reserved word to MSVC (a 16-bit-era segment modifier
+        // it still honours), which made this declaration not one.
+        const int nearest = nearest_node(tree, target, torsion_distance);
+        const std::vector<double> from = tree.get_configuration(nearest);
         const double d = torsion_distance(from, target);
         std::vector<double> candidate(tree.n_dof);
         const double alpha = d > 0.0 ? std::min(1.0, step_size / d) : 0.0;
@@ -131,7 +133,7 @@ RRTTree grow_torsion_rrt(int n_dof, int n_iter, double step_size,
         }
 
         if (collision != NULL && collision->is_collision(candidate)) continue;
-        append_node(tree, candidate, near);
+        append_node(tree, candidate, nearest);
         if (has_goal &&
             torsion_distance(candidate, goal) <= goal_tolerance) {
             tree.goal_node = tree.n_nodes - 1;
@@ -175,12 +177,12 @@ RRTTree grow_rigid_body_rrt(const std::vector<double>& start,
             }
         }
 
-        const int near = nearest_node(
+        const int nearest = nearest_node(
                 tree, target, [rot_weight](const std::vector<double>& a,
                                            const std::vector<double>& b) {
                     return rigid_distance(a, b, rot_weight);
                 });
-        const std::vector<double> from = tree.get_configuration(near);
+        const std::vector<double> from = tree.get_configuration(nearest);
         const double d = rigid_distance(from, target, rot_weight);
         std::vector<double> candidate(6);
         if (d <= step_size) {
@@ -193,7 +195,7 @@ RRTTree grow_rigid_body_rrt(const std::vector<double>& start,
         }
 
         if (collision != NULL && collision->is_collision(candidate)) continue;
-        append_node(tree, candidate, near);
+        append_node(tree, candidate, nearest);
         if (!goal_configuration.empty() &&
             rigid_distance(candidate, goal_configuration, rot_weight) <=
                     goal_tolerance) {
