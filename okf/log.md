@@ -6,8 +6,17 @@
   the native port (PRD-120) as an executed notebook -- `3GUN-processed.pdb` under the no-conservation model
   (T4L ships no ConSurf grades; `cs` dropped, the `--no-conservation` semantics), features + `ll_score_structure`
   in 0.1 s, all 162 residues scored, top site A135 (LS 1.89). One figure: LS along the sequence above the
-  per-term heatmap; a bridge cell runs `ll_pair_scores` (R0 52, n_refine 5, 4560 pairs) so the sites flow
-  into `greedy_pair_selection.ipynb`. Figure + executed notebook both committed.
+  per-term heatmap; the structure embedded color-coded by LS (LS in the B-factor column, `3GUN_LS.pdb`,
+  py3Dmol/3Dmol.js, red = high); a bridge cell runs `ll_pair_scores` (R0 52, n_refine 5, 4560 pairs) so the
+  sites flow into `greedy_pair_selection.ipynb`; and a parity section replays the labelizer.org webserver
+  (REST contract reverse-engineered from its SPA: `POST backend/load_pdb {chains,pdbID,payload}` →
+  `POST backend/analysis` → poll `GET backend/analysis/{job}` → fetch `{pdbID}_LSlong.csv`; job
+  `b6957587-94dd-4727-95bf-a5ca01a34264`, result cached beside the notebook). Measured parity: CR identical
+  162/162, SS 156/162, SE 107/162 (same binned table, different SASA engines at bin edges), combined LS
+  identical 104/162, median |diff| 0, max 0.60. The webserver evaluates neither tp nor ce ("coming soon"),
+  so its LS is the corrected arithmetic -- the published model's zero-veto over weight-0 terms
+  (`src/Labelizer.cpp:1404`) zeroes 34 further sites the webserver leaves standing. Its short `*_LS.csv`
+  drops rows; only `*_LSlong.csv` is complete.
 
 - **Greedy Olga gets a notebook example** (`ipynb/example/greedy_pair_selection.ipynb`): the pair-selection
   pipeline of `examples/labels/plot_pair_selection.py` as an executed Jupyter notebook, for Olga -- ensemble
