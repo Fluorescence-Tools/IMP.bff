@@ -23,7 +23,7 @@ context:
   version: "2.25.0"
   # IMP_PER_CPP_COMPILATION splits the named modules' unity build; none of
   # the kept modules need it.
-  disabled: "EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry:test"
+  disabled: "EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry"
 
 package:
   name: imp

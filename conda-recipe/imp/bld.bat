@@ -43,7 +43,7 @@ if errorlevel 1 exit 1
 set PERCPPCOMP="-DIMP_PER_CPP_COMPILATION=cgal"
 
 :: Don't build the scratch or cnmultifit modules
-set DISABLED=EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry:test
+set DISABLED=EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:example:foxs:gsl:integrative_docking:kmeans:misc:modeller:mpi:multi_state:multifit:nestor:npc:npctransport:parallel:pepdock:pmi1:sampcon:saxs_merge:scratch:spatiotemporal:spb:symmetry
 
 :: We use the conda boost package, which includes
 :: zlib support, but defining BOOST_ALL_DYN_LINK (below) makes boost try to
