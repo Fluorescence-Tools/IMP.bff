@@ -44,6 +44,15 @@
 %apply(double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) {(double* density, int ng, int ng2, int ng3)};
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* rs, int n_rs, int n_rsc)};
 %apply(int** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(int** output_i, int* dim1, int* dim2, int* dim3)};
+// IMP's kernel registers refusal typemaps for bare `int*`/`double*`
+// parameters (values_like_*: they fail to compile on purpose -- a pointer
+// into Python-owned memory is a bug waiting). The 2-D output trio above
+// covers the full form of `density_to_points`; the default-argument split
+// also generates a partial overload (output + one dimension), whose lone
+// `int* n_output1` matches the refusal typemap. Python callers always take
+// the full `(n, 4)` view, so the partial form is refused at wrap time.
+%ignore IMP::bff::density_to_points(double*,int,int,int,double,const std::vector<double>&,double,double**,int*);
+%ignore IMP::bff::density_to_points(double*,int,int,int,double,const std::vector<double>&,double,double**);
 %apply(unsigned char** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(unsigned char** contact, int* contact_dim1, int* contact_dim2, int* contact_dim3)};
 %apply(unsigned char** ARGOUTVIEWM_ARRAY3, int* DIM1, int* DIM2, int* DIM3) {(unsigned char** free, int* free_dim1, int* free_dim2, int* free_dim3)};
 

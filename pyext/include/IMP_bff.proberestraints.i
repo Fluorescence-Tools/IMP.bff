@@ -17,6 +17,10 @@ IMP_SWIG_VALUE(IMP::bff, DirectProbeRestraint, DirectProbeRestraints);
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {
     (double* xyz, int n_atoms, int n_dim)
 };
+// The overloads without a dimension count cannot bind the array typemap
+// (IN_ARRAY2 needs the two int dims to follow) -- refuse them at wrap time.
+%ignore IMP::bff::DirectProbeRestraint::DirectProbeRestraint(double* xyz, int n_atoms);
+%ignore IMP::bff::DirectProbeRestraint::DirectProbeRestraint(double* xyz);
 
 %include "IMP/bff/ProbeRestraints.h"
 
