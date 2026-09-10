@@ -68,7 +68,7 @@ requirements:
   host:
     - python
     - numpy
-    - libboost-devel
+    - libboost-devel 1.90.*
     - hdf5
     - eigen
     - cereal

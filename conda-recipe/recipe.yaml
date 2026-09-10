@@ -44,7 +44,9 @@ requirements:
     # already builds against the split packages -- boost-cpp and libboost
     # are mutually exclusive in one environment. Matches imp's own recipe
     # (conda-forge/imp-feedstock/recipe/meta.yaml).
-    - libboost-devel
+    # same libboost our imp package links (its run export pins <1.91);
+    # unpinned, the solve can drift to 1.92 and the two exports conflict
+    - libboost-devel 1.90.*
     - eigen
     - cereal
     - if: win
