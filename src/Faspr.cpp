@@ -13,6 +13,13 @@
  * touched).
  */
 #include <IMP/bff/RotamerLibrary.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <direct.h>
+#include <cstring>
+#endif
 #include <IMP/bff/Pto.h>
 
 #include "Faspr.h"
@@ -68,9 +75,20 @@ struct TemporaryBin {
   }
 
   void make(const std::string& container) {
+#ifdef _WIN32
+    // mkdtemp is POSIX; Windows spells it _mktemp + _mkdir, under the user's
+    // temp directory rather than /tmp.
+    char pattern[MAX_PATH];
+    GetTempPathA(MAX_PATH, pattern);
+    std::strcat(pattern, "imp_bff_faspr_XXXXXX");
+    const char* made = _mktemp(pattern) != nullptr && _mkdir(pattern) == 0
+                               ? pattern : nullptr;
+    if (made == NULL) {
+#else
     char pattern[] = "/tmp/imp_bff_faspr_XXXXXX";
     const char* made = mkdtemp(pattern);
     if (made == NULL) {
+#endif
       IMP_THROW("faspr_pack: cannot make a scratch directory for "
                         << container, IOException);
     }

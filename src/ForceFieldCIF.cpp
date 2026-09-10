@@ -21,7 +21,6 @@
 #include <fcntl.h>
 #ifdef _WIN32
 #include <io.h>
-#define open _open
 #endif
 #include <map>
 #include <string>
@@ -251,7 +250,11 @@ void on_improper(ihm_reader*, int, void* d, ihm_error**) {
 }  // namespace
 
 ProbeForceFieldSystem read_forcefield_cif(const std::string& path) {
+#ifdef _WIN32
+    const int fd = _open(path.c_str(), _O_RDONLY);
+#else
     const int fd = open(path.c_str(), O_RDONLY);
+#endif
     if (fd < 0) IMP_THROW("cannot open " << path, IOException);
 
     Ctx c;

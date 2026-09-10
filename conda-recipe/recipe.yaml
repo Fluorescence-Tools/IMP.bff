@@ -49,7 +49,6 @@ requirements:
     - cereal
     - if: win
       then:
-        - mpir
         - msmpi
     # >=2.25.0: older imp builds ship a swig_helpers_base.h that calls
     # Python-2-only C API symbols (PyString_Check, PyInt_Check, ...) removed
