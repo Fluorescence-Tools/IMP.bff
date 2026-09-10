@@ -59,6 +59,17 @@
   the deployed tree carries unrelated uncommitted server changes (MaintenanceStatus etc.), so the local
   labelizer-backend commit is a surgical patch of the same two files, not the deployed blob.
 
+- **Conservation in the main line** (`labelizer_score.ipynb` + `labelizer_greedy_pipeline.ipynb` reworked):
+  both notebooks now score the LS with the full published model, cs at weight 1, on grades pulled from the
+  new endpoint -- 148L chain E remapped to chain A (identity check included: 162/162 shared positions, the
+  only mismatches are variant sites 26/54/97; grades are positional), cached as
+  `3GUN_consurf_grades.pdb` and never re-fetched. Consequence on T4L: A44 leads at LS 1.97 (135 leaves the
+  top ten), the 34-site tp zero-veto stands (corrected arithmetic: 5), the pair bridge and the greedy
+  pipeline shift -- 18 -> 16 labelable sites, 106 candidates, first pair still `80-135` (1.66 A), after 5
+  pairs 2.42 vs 2.24 A for the hand-picked set, whose median LS drops to 1.33 (127 and 150 still vetoed).
+  The 1DDB section stays as the offline, in-repo worked example; the stale "no grades endpoint" claims are
+  rewritten; the redundant 148L subsection is absorbed into the main flow.
+
 - **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
   file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
   `include/Bin.h` + `src/Bin.cpp` are that file -- a CLI11 dispatcher (vendored verbatim as

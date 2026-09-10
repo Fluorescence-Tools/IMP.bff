@@ -1,131 +1,5 @@
 {
  "Distances": {
-  "21-35_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "35A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-36_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "36A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-40_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "40A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-44_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "44A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-48_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "48A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-52_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "52A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-55_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "55A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-69_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "69A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-80_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "80A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-90_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "90A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-109_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "109A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-123_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "123A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-135_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "135A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
-  "21-136_C1": {
-   "error_neg": 3.0,
-   "error_pos": 3.0,
-   "distance": 30.0,
-   "position1_name": "21D",
-   "position2_name": "136A",
-   "Forster_radius": 52.0,
-   "distance_type": "RDAMean"
-  },
   "35-48_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
@@ -135,21 +9,21 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "35-52_C1": {
+  "35-53_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "35D",
-   "position2_name": "52A",
+   "position2_name": "53A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "35-55_C1": {
+  "35-65_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "35D",
-   "position2_name": "55A",
+   "position2_name": "65A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -159,6 +33,15 @@
    "distance": 30.0,
    "position1_name": "35D",
    "position2_name": "69A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "35-76_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "35D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -177,6 +60,15 @@
    "distance": 30.0,
    "position1_name": "35D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "35-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "35D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -207,12 +99,12 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "35-136_C1": {
+  "35-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "35D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -225,21 +117,21 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "36-52_C1": {
+  "36-53_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "36D",
-   "position2_name": "52A",
+   "position2_name": "53A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "36-55_C1": {
+  "36-65_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "36D",
-   "position2_name": "55A",
+   "position2_name": "65A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -249,6 +141,15 @@
    "distance": 30.0,
    "position1_name": "36D",
    "position2_name": "69A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "36-76_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "36D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -267,6 +168,15 @@
    "distance": 30.0,
    "position1_name": "36D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "36-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "36D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -297,30 +207,30 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "36-136_C1": {
+  "36-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "36D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "40-52_C1": {
+  "40-53_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "40D",
-   "position2_name": "52A",
+   "position2_name": "53A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "40-55_C1": {
+  "40-65_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "40D",
-   "position2_name": "55A",
+   "position2_name": "65A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -330,6 +240,15 @@
    "distance": 30.0,
    "position1_name": "40D",
    "position2_name": "69A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "40-76_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "40D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -348,6 +267,15 @@
    "distance": 30.0,
    "position1_name": "40D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "40-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "40D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -378,21 +306,21 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "40-136_C1": {
+  "40-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "40D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "44-55_C1": {
+  "44-65_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "44D",
-   "position2_name": "55A",
+   "position2_name": "65A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -402,6 +330,15 @@
    "distance": 30.0,
    "position1_name": "44D",
    "position2_name": "69A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "44-76_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "44D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -420,6 +357,15 @@
    "distance": 30.0,
    "position1_name": "44D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "44-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "44D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -450,12 +396,21 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "44-136_C1": {
+  "44-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "44D",
-   "position2_name": "136A",
+   "position2_name": "147A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "48-65_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "48D",
+   "position2_name": "65A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -465,6 +420,15 @@
    "distance": 30.0,
    "position1_name": "48D",
    "position2_name": "69A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "48-76_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "48D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -483,6 +447,15 @@
    "distance": 30.0,
    "position1_name": "48D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "48-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "48D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -513,138 +486,174 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "48-136_C1": {
+  "48-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "48D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-69_C1": {
+  "53-65_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
+   "position2_name": "65A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "53-69_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "53D",
    "position2_name": "69A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-80_C1": {
+  "53-76_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
+   "position2_name": "76A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "53-80_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "53D",
    "position2_name": "80A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-90_C1": {
+  "53-90_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
    "position2_name": "90A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-109_C1": {
+  "53-93_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
+   "position2_name": "93A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "53-109_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "53D",
    "position2_name": "109A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-123_C1": {
+  "53-123_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
    "position2_name": "123A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-135_C1": {
+  "53-135_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
+   "position1_name": "53D",
    "position2_name": "135A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "52-136_C1": {
+  "53-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "52D",
-   "position2_name": "136A",
+   "position1_name": "53D",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-69_C1": {
+  "65-76_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
-   "position2_name": "69A",
+   "position1_name": "65D",
+   "position2_name": "76A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-80_C1": {
+  "65-80_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
+   "position1_name": "65D",
    "position2_name": "80A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-90_C1": {
+  "65-90_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
+   "position1_name": "65D",
    "position2_name": "90A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-109_C1": {
+  "65-93_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
+   "position1_name": "65D",
+   "position2_name": "93A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "65-109_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "65D",
    "position2_name": "109A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-123_C1": {
+  "65-123_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
+   "position1_name": "65D",
    "position2_name": "123A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-135_C1": {
+  "65-135_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
+   "position1_name": "65D",
    "position2_name": "135A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "55-136_C1": {
+  "65-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
-   "position1_name": "55D",
-   "position2_name": "136A",
+   "position1_name": "65D",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -663,6 +672,15 @@
    "distance": 30.0,
    "position1_name": "69D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "69-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "69D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -693,12 +711,66 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "69-136_C1": {
+  "69-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "69D",
-   "position2_name": "136A",
+   "position2_name": "147A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-90_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "93A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-109_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "109A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-123_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "123A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-135_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "135A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "76-147_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "76D",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -708,6 +780,15 @@
    "distance": 30.0,
    "position1_name": "80D",
    "position2_name": "90A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "80-93_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "80D",
+   "position2_name": "93A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -738,12 +819,12 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "80-136_C1": {
+  "80-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "80D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -774,12 +855,48 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "90-136_C1": {
+  "90-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "90D",
-   "position2_name": "136A",
+   "position2_name": "147A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "93-109_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "93D",
+   "position2_name": "109A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "93-123_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "93D",
+   "position2_name": "123A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "93-135_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "93D",
+   "position2_name": "135A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "93-147_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "93D",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -801,12 +918,12 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "109-136_C1": {
+  "109-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "109D",
-   "position2_name": "136A",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
@@ -819,17 +936,44 @@
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   },
-  "123-136_C1": {
+  "123-147_C1": {
    "error_neg": 3.0,
    "error_pos": 3.0,
    "distance": 30.0,
    "position1_name": "123D",
-   "position2_name": "136A",
+   "position2_name": "147A",
+   "Forster_radius": 52.0,
+   "distance_type": "RDAMean"
+  },
+  "135-147_C1": {
+   "error_neg": 3.0,
+   "error_pos": 3.0,
+   "distance": 30.0,
+   "position1_name": "135D",
+   "position2_name": "147A",
    "Forster_radius": 52.0,
    "distance_type": "RDAMean"
   }
  },
  "Positions": {
+  "65D": {
+   "allowed_sphere_radius": 5,
+   "anchor_atoms": "",
+   "atom_name": "CB",
+   "chain_identifier": "",
+   "chain_weighting": false,
+   "contact_volume_thickness": 3,
+   "contact_volume_trapped_fraction": 0.55,
+   "linker_length": 22,
+   "linker_width": 4.5,
+   "min_sphere_volume_fraction": 0.125,
+   "radius1": 3.5,
+   "residue_name": "LYS",
+   "residue_seq_number": 65,
+   "simulation_grid_resolution": 2.0,
+   "simulation_type": "AV1",
+   "strip_mask": "(resid 65 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+  },
   "35D": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
@@ -884,6 +1028,24 @@
    "simulation_type": "AV1",
    "strip_mask": "(resid 69 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
+  "135D": {
+   "allowed_sphere_radius": 5,
+   "anchor_atoms": "",
+   "atom_name": "CB",
+   "chain_identifier": "",
+   "chain_weighting": false,
+   "contact_volume_thickness": 3,
+   "contact_volume_trapped_fraction": 0.55,
+   "linker_length": 22,
+   "linker_width": 4.5,
+   "min_sphere_volume_fraction": 0.125,
+   "radius1": 3.5,
+   "residue_name": "LYS",
+   "residue_seq_number": 135,
+   "simulation_grid_resolution": 2.0,
+   "simulation_type": "AV1",
+   "strip_mask": "(resid 135 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+  },
   "40D": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
@@ -919,6 +1081,24 @@
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
    "strip_mask": "(resid 44 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+  },
+  "76D": {
+   "allowed_sphere_radius": 5,
+   "anchor_atoms": "",
+   "atom_name": "CB",
+   "chain_identifier": "",
+   "chain_weighting": false,
+   "contact_volume_thickness": 3,
+   "contact_volume_trapped_fraction": 0.55,
+   "linker_length": 22,
+   "linker_width": 4.5,
+   "min_sphere_volume_fraction": 0.125,
+   "radius1": 3.5,
+   "residue_name": "ARG",
+   "residue_seq_number": 76,
+   "simulation_grid_resolution": 2.0,
+   "simulation_type": "AV1",
+   "strip_mask": "(resid 76 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
   "109D": {
    "allowed_sphere_radius": 5,
@@ -974,43 +1154,7 @@
    "simulation_type": "AV1",
    "strip_mask": "(resid 80 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
-  "52D": {
-   "allowed_sphere_radius": 5,
-   "anchor_atoms": "",
-   "atom_name": "CB",
-   "chain_identifier": "",
-   "chain_weighting": false,
-   "contact_volume_thickness": 3,
-   "contact_volume_trapped_fraction": 0.55,
-   "linker_length": 22,
-   "linker_width": 4.5,
-   "min_sphere_volume_fraction": 0.125,
-   "radius1": 3.5,
-   "residue_name": "ARG",
-   "residue_seq_number": 52,
-   "simulation_grid_resolution": 2.0,
-   "simulation_type": "AV1",
-   "strip_mask": "(resid 52 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
-  },
-  "21D": {
-   "allowed_sphere_radius": 5,
-   "anchor_atoms": "",
-   "atom_name": "CB",
-   "chain_identifier": "",
-   "chain_weighting": false,
-   "contact_volume_thickness": 3,
-   "contact_volume_trapped_fraction": 0.55,
-   "linker_length": 22,
-   "linker_width": 4.5,
-   "min_sphere_volume_fraction": 0.125,
-   "radius1": 3.5,
-   "residue_name": "THR",
-   "residue_seq_number": 21,
-   "simulation_grid_resolution": 2.0,
-   "simulation_type": "AV1",
-   "strip_mask": "(resid 21 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
-  },
-  "55D": {
+  "53D": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
    "atom_name": "CB",
@@ -1023,10 +1167,10 @@
    "min_sphere_volume_fraction": 0.125,
    "radius1": 3.5,
    "residue_name": "ASN",
-   "residue_seq_number": 55,
+   "residue_seq_number": 53,
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
-   "strip_mask": "(resid 55 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+   "strip_mask": "(resid 53 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
   "90D": {
    "allowed_sphere_radius": 5,
@@ -1064,7 +1208,25 @@
    "simulation_type": "AV1",
    "strip_mask": "(resid 123 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
-  "35A": {
+  "93D": {
+   "allowed_sphere_radius": 5,
+   "anchor_atoms": "",
+   "atom_name": "CB",
+   "chain_identifier": "",
+   "chain_weighting": false,
+   "contact_volume_thickness": 3,
+   "contact_volume_trapped_fraction": 0.55,
+   "linker_length": 22,
+   "linker_width": 4.5,
+   "min_sphere_volume_fraction": 0.125,
+   "radius1": 3.5,
+   "residue_name": "ALA",
+   "residue_seq_number": 93,
+   "simulation_grid_resolution": 2.0,
+   "simulation_type": "AV1",
+   "strip_mask": "(resid 93 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+  },
+  "65A": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
    "atom_name": "CB",
@@ -1077,28 +1239,10 @@
    "min_sphere_volume_fraction": 0.125,
    "radius1": 3.5,
    "residue_name": "LYS",
-   "residue_seq_number": 35,
+   "residue_seq_number": 65,
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
-   "strip_mask": "(resid 35 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
-  },
-  "36A": {
-   "allowed_sphere_radius": 5,
-   "anchor_atoms": "",
-   "atom_name": "CB",
-   "chain_identifier": "",
-   "chain_weighting": false,
-   "contact_volume_thickness": 3,
-   "contact_volume_trapped_fraction": 0.55,
-   "linker_length": 22,
-   "linker_width": 4.5,
-   "min_sphere_volume_fraction": 0.125,
-   "radius1": 3.5,
-   "residue_name": "SER",
-   "residue_seq_number": 36,
-   "simulation_grid_resolution": 2.0,
-   "simulation_type": "AV1",
-   "strip_mask": "(resid 36 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+   "strip_mask": "(resid 65 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
   "69A": {
    "allowed_sphere_radius": 5,
@@ -1136,7 +1280,7 @@
    "simulation_type": "AV1",
    "strip_mask": "(resid 135 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
-  "40A": {
+  "76A": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
    "atom_name": "CB",
@@ -1148,47 +1292,11 @@
    "linker_width": 4.5,
    "min_sphere_volume_fraction": 0.125,
    "radius1": 3.5,
-   "residue_name": "ASN",
-   "residue_seq_number": 40,
+   "residue_name": "ARG",
+   "residue_seq_number": 76,
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
-   "strip_mask": "(resid 40 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
-  },
-  "136A": {
-   "allowed_sphere_radius": 5,
-   "anchor_atoms": "",
-   "atom_name": "CB",
-   "chain_identifier": "",
-   "chain_weighting": false,
-   "contact_volume_thickness": 3,
-   "contact_volume_trapped_fraction": 0.55,
-   "linker_length": 22,
-   "linker_width": 4.5,
-   "min_sphere_volume_fraction": 0.125,
-   "radius1": 3.5,
-   "residue_name": "SER",
-   "residue_seq_number": 136,
-   "simulation_grid_resolution": 2.0,
-   "simulation_type": "AV1",
-   "strip_mask": "(resid 136 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
-  },
-  "44A": {
-   "allowed_sphere_radius": 5,
-   "anchor_atoms": "",
-   "atom_name": "CB",
-   "chain_identifier": "",
-   "chain_weighting": false,
-   "contact_volume_thickness": 3,
-   "contact_volume_trapped_fraction": 0.55,
-   "linker_length": 22,
-   "linker_width": 4.5,
-   "min_sphere_volume_fraction": 0.125,
-   "radius1": 3.5,
-   "residue_name": "SER",
-   "residue_seq_number": 44,
-   "simulation_grid_resolution": 2.0,
-   "simulation_type": "AV1",
-   "strip_mask": "(resid 44 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+   "strip_mask": "(resid 76 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
   "109A": {
    "allowed_sphere_radius": 5,
@@ -1244,7 +1352,7 @@
    "simulation_type": "AV1",
    "strip_mask": "(resid 80 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
-  "52A": {
+  "147A": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
    "atom_name": "CB",
@@ -1256,13 +1364,13 @@
    "linker_width": 4.5,
    "min_sphere_volume_fraction": 0.125,
    "radius1": 3.5,
-   "residue_name": "ARG",
-   "residue_seq_number": 52,
+   "residue_name": "LYS",
+   "residue_seq_number": 147,
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
-   "strip_mask": "(resid 52 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+   "strip_mask": "(resid 147 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
-  "55A": {
+  "53A": {
    "allowed_sphere_radius": 5,
    "anchor_atoms": "",
    "atom_name": "CB",
@@ -1275,10 +1383,10 @@
    "min_sphere_volume_fraction": 0.125,
    "radius1": 3.5,
    "residue_name": "ASN",
-   "residue_seq_number": 55,
+   "residue_seq_number": 53,
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
-   "strip_mask": "(resid 55 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+   "strip_mask": "(resid 53 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   },
   "90A": {
    "allowed_sphere_radius": 5,
@@ -1315,6 +1423,24 @@
    "simulation_grid_resolution": 2.0,
    "simulation_type": "AV1",
    "strip_mask": "(resid 123 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
+  },
+  "93A": {
+   "allowed_sphere_radius": 5,
+   "anchor_atoms": "",
+   "atom_name": "CB",
+   "chain_identifier": "",
+   "chain_weighting": false,
+   "contact_volume_thickness": 3,
+   "contact_volume_trapped_fraction": 0.55,
+   "linker_length": 22,
+   "linker_width": 4.5,
+   "min_sphere_volume_fraction": 0.125,
+   "radius1": 3.5,
+   "residue_name": "ALA",
+   "residue_seq_number": 93,
+   "simulation_grid_resolution": 2.0,
+   "simulation_type": "AV1",
+   "strip_mask": "(resid 93 and not name CA+CB+C+N+O) or resname HOH SOL WAT DU CL NA 'Cl-' 'Na+'"
   }
  },
  "χ²": {
@@ -1322,96 +1448,110 @@
    "distances": [
     "109-123_C1",
     "109-135_C1",
-    "109-136_C1",
+    "109-147_C1",
     "123-135_C1",
-    "123-136_C1",
-    "21-109_C1",
-    "21-123_C1",
-    "21-135_C1",
-    "21-136_C1",
-    "21-35_C1",
-    "21-36_C1",
-    "21-40_C1",
-    "21-44_C1",
-    "21-48_C1",
-    "21-52_C1",
-    "21-55_C1",
-    "21-69_C1",
-    "21-80_C1",
-    "21-90_C1",
+    "123-147_C1",
+    "135-147_C1",
     "35-109_C1",
     "35-123_C1",
     "35-135_C1",
-    "35-136_C1",
+    "35-147_C1",
     "35-48_C1",
-    "35-52_C1",
-    "35-55_C1",
+    "35-53_C1",
+    "35-65_C1",
     "35-69_C1",
+    "35-76_C1",
     "35-80_C1",
     "35-90_C1",
+    "35-93_C1",
     "36-109_C1",
     "36-123_C1",
     "36-135_C1",
-    "36-136_C1",
+    "36-147_C1",
     "36-48_C1",
-    "36-52_C1",
-    "36-55_C1",
+    "36-53_C1",
+    "36-65_C1",
     "36-69_C1",
+    "36-76_C1",
     "36-80_C1",
     "36-90_C1",
+    "36-93_C1",
     "40-109_C1",
     "40-123_C1",
     "40-135_C1",
-    "40-136_C1",
-    "40-52_C1",
-    "40-55_C1",
+    "40-147_C1",
+    "40-53_C1",
+    "40-65_C1",
     "40-69_C1",
+    "40-76_C1",
     "40-80_C1",
     "40-90_C1",
+    "40-93_C1",
     "44-109_C1",
     "44-123_C1",
     "44-135_C1",
-    "44-136_C1",
-    "44-55_C1",
+    "44-147_C1",
+    "44-65_C1",
     "44-69_C1",
+    "44-76_C1",
     "44-80_C1",
     "44-90_C1",
+    "44-93_C1",
     "48-109_C1",
     "48-123_C1",
     "48-135_C1",
-    "48-136_C1",
+    "48-147_C1",
+    "48-65_C1",
     "48-69_C1",
+    "48-76_C1",
     "48-80_C1",
     "48-90_C1",
-    "52-109_C1",
-    "52-123_C1",
-    "52-135_C1",
-    "52-136_C1",
-    "52-69_C1",
-    "52-80_C1",
-    "52-90_C1",
-    "55-109_C1",
-    "55-123_C1",
-    "55-135_C1",
-    "55-136_C1",
-    "55-69_C1",
-    "55-80_C1",
-    "55-90_C1",
+    "48-93_C1",
+    "53-109_C1",
+    "53-123_C1",
+    "53-135_C1",
+    "53-147_C1",
+    "53-65_C1",
+    "53-69_C1",
+    "53-76_C1",
+    "53-80_C1",
+    "53-90_C1",
+    "53-93_C1",
+    "65-109_C1",
+    "65-123_C1",
+    "65-135_C1",
+    "65-147_C1",
+    "65-76_C1",
+    "65-80_C1",
+    "65-90_C1",
+    "65-93_C1",
     "69-109_C1",
     "69-123_C1",
     "69-135_C1",
-    "69-136_C1",
+    "69-147_C1",
     "69-80_C1",
     "69-90_C1",
+    "69-93_C1",
+    "76-109_C1",
+    "76-123_C1",
+    "76-135_C1",
+    "76-147_C1",
+    "76-90_C1",
+    "76-93_C1",
     "80-109_C1",
     "80-123_C1",
     "80-135_C1",
-    "80-136_C1",
+    "80-147_C1",
     "80-90_C1",
+    "80-93_C1",
     "90-109_C1",
     "90-123_C1",
     "90-135_C1",
-    "90-136_C1"
+    "90-147_C1",
+    "93-109_C1",
+    "93-123_C1",
+    "93-135_C1",
+    "93-147_C1"
    ]
   }
  }
