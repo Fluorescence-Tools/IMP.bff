@@ -2,6 +2,14 @@
 
 ## 2026-09-10
 
+- **Greedy Olga gets a notebook example** (`ipynb/example/greedy_pair_selection.ipynb`): the pair-selection
+  pipeline of `examples/labels/plot_pair_selection.py` as an executed Jupyter notebook, for Olga -- ensemble
+  in (`t4l_docking.rmf3`, 100 frames, `fret.fps.json` `chi2_C1_33p`, 33 candidates), `pairwise_rmsd` +
+  `select_informative_pairs` (err = 6%), and the requested plot of number of FRET pairs vs resulting
+  resolution (expected mean RMSD). On this ensemble the curve answers "how many pairs": pair 1 (70-132_C1)
+  buys 1.6 Å of the 4.7 Å prior, the knee is at ~8-10 pairs, and pairs past that re-measure separations
+  already resolved. The executed PNG sits beside the notebook; a copy of the figure is in the notebook itself.
+
 - **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
   file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
   `include/Bin.h` + `src/Bin.cpp` are that file -- a CLI11 dispatcher (vendored verbatim as
