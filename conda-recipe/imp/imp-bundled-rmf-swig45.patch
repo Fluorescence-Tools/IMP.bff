@@ -1,6 +1,6 @@
---- a/modules/rmf/dependency/RMF/include/RMF/internal/swig_helpers.h
-+++ b/modules/rmf/dependency/RMF/include/RMF/internal/swig_helpers.h
-@@ -322,15 +322,15 @@
+--- a/modules/rmf/dependency/RMF/include/RMF/internal/swig_helpers.h	2026-09-10 18:34:05.240790289 +0200
++++ b/modules/rmf/dependency/RMF/include/RMF/internal/swig_helpers.h	2026-09-10 18:46:20.962460358 +0200
+@@ -322,19 +322,19 @@
    static const int converter = 10;
    template <class SwigData>
    static std::string get_cpp_object(PyObject* o, SwigData) {
@@ -19,6 +19,11 @@
    }
    template <class SwigData>
    static PyObject* create_python_object(std::string f, SwigData, int) {
+-    return PyString_FromString(f.c_str());
++    return PyUnicode_FromString(f.c_str());
+   }
+ };
+ 
 @@ -372,20 +372,20 @@
    static const int converter = 13;
    template <class SwigData>
