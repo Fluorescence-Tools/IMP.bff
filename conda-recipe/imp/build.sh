@@ -35,5 +35,13 @@ else
   ninja install -j 4
 fi
 
+# Activation scripts: our kernel's compiled-in data path does not survive
+# rattler-build's prefix relocation (the search list arrives empty at run
+# time; conda-build builds don't hit this), so IMP_DATA -- the first thing
+# IMP::internal::get_data_prefixes checks -- is exported on activation.
+mkdir -p ${PREFIX}/etc/conda/activate.d ${PREFIX}/etc/conda/deactivate.d
+echo "export IMP_DATA=\$CONDA_PREFIX/share/IMP" > ${PREFIX}/etc/conda/activate.d/imp.sh
+echo "unset IMP_DATA" > ${PREFIX}/etc/conda/deactivate.d/imp.sh
+
 # Don't distribute example application
 rm -f ${PREFIX}/bin/imp_example_app

@@ -39,19 +39,6 @@ source:
 
 build:
   number: 0
-  activation:
-    # Our kernel's compiled-in data path does not survive rattler-build's
-    # prefix relocation (the search list arrives empty at run time; conda-
-    # build's builds do not hit this). The env var is the first thing
-    # IMP::internal::get_data_prefixes checks, and activation scripts are
-    # conda's own mechanism for exactly this.
-    script:
-      - if: unix
-        then:
-          - mkdir -p "${PREFIX}/etc/conda/activate.d"
-          - echo "export IMP_DATA=${CONDA_PREFIX}/share/IMP" > "${PREFIX}/etc/conda/activate.d/imp.sh"
-          - mkdir -p "${PREFIX}/etc/conda/deactivate.d"
-          - echo "unset IMP_DATA" > "${PREFIX}/etc/conda/deactivate.d/imp.sh"
   # No explicit `script:` -- rattler-build auto-discovers build.sh (unix) /
   # bld.bat (windows) beside this recipe.
   skip:

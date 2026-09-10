@@ -6,6 +6,11 @@
  */
 
 #include <IMP/bff/internal/Text.h>
+#ifdef _WIN32
+#include <filesystem>
+#include <random>
+#include <sstream>
+#endif
 #include <IMP/bff/StripMask.h>
 
 
@@ -219,6 +224,9 @@ std::string stripped_pdb_for(const std::string& pdb_path,
 #ifdef __APPLE__
         key.mtime_ns = (long long) info.st_mtimespec.tv_sec * 1000000000LL +
                        info.st_mtimespec.tv_nsec;
+#elif defined(_WIN32)
+        // MSVC's stat carries seconds only; see AVBuilder.cpp's stat_key.
+        key.mtime_ns = (long long) info.st_mtime * 1000000000LL;
 #else
         key.mtime_ns = (long long) info.st_mtim.tv_sec * 1000000000LL +
                        info.st_mtim.tv_nsec;
@@ -245,8 +253,17 @@ std::string stripped_pdb_for(const std::string& pdb_path,
     const std::vector<std::string> kept =
             strip_pdb_lines(lines, effective, chain, resseq, atom_name);
 
-    // `mkstemp` rather than tmpnam: the name is created and opened in one step,
-    // so two AVs stripping in parallel cannot be handed the same path.
+    // A name two AVs stripping in parallel cannot share. POSIX: mkstemp
+    // creates and opens in one step. Windows: a random name under the user's
+    // temp directory -- unique by construction, and the shared ofstream
+    // below creates the file.
+#ifdef _WIN32
+    std::random_device rng;
+    std::ostringstream name;
+    name << std::filesystem::temp_directory_path().string() << "\\bff_av_"
+         << std::hex << rng() << rng() << ".pdb";
+    const std::string out_path = name.str();
+#else
     std::string tmpl = "/tmp/bff_av_XXXXXX";
     std::vector<char> buffer(tmpl.begin(), tmpl.end());
     buffer.push_back('\0');
@@ -254,6 +271,7 @@ std::string stripped_pdb_for(const std::string& pdb_path,
     if (fd < 0) return pdb_path;
     const std::string out_path(&buffer[0]);
     close(fd);
+#endif
 
     std::ofstream out(out_path.c_str());
     if (!out) return pdb_path;
