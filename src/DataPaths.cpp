@@ -13,7 +13,12 @@
 #include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <direct.h>
+#define getcwd _getcwd
+#else
 #include <unistd.h>
+#endif
 
 IMPBFF_BEGIN_NAMESPACE
 

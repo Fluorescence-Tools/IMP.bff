@@ -29,7 +29,6 @@
 #include <fcntl.h>
 #include <limits>
 #include <sys/stat.h>
-#include <unistd.h>
 
 IMPBFF_BEGIN_NAMESPACE
 

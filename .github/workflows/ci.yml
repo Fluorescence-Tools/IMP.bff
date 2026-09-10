@@ -225,13 +225,6 @@ jobs:
         if: runner.os == 'Windows'
         with:
           arch: x64
-      # CMake reads CMAKE_PREFIX_PATH from the environment; on macOS and
-      # Windows there is no container, so a job-env variable is the one
-      # channel that arrives. (The pyproject env tables' $HOME and
-      # $(brew ...) spellings do not expand -- that is what killed cereal.)
-      - name: Locate the header-only deps (macOS)
-        if: runner.os == 'macOS'
-        run: echo "CMAKE_PREFIX_PATH=$HOME/imp-bff-deps;/opt/homebrew" >> "$GITHUB_ENV"
       # actions/cache's `path` is evaluated from the `env` context, which
       # holds only what a workflow, job or step declared -- not the runner
       # image's own environment. VCPKG_INSTALLATION_ROOT is the latter, so
@@ -281,8 +274,6 @@ jobs:
         shell: bash
         run: |
           bash utility/wheel_deps.sh "$USERPROFILE/imp-bff-deps"
-          echo "IMP_BFF_CEREAL_PREFIX=$USERPROFILE/imp-bff-deps" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$USERPROFILE/imp-bff-deps;$VCPKG_PREFIX" >> "$GITHUB_ENV"
 
       - name: Build the wheels
         run: |

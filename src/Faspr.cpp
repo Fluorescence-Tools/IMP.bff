@@ -20,7 +20,6 @@
 #include <IMP/bff/Base.h>
 
 #include <fstream>
-#include <unistd.h>
 #include <sstream>
 
 IMPBFF_BEGIN_NAMESPACE

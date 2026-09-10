@@ -21,7 +21,6 @@
 #include <fcntl.h>
 #include <map>
 #include <string>
-#include <unistd.h>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE
