@@ -26,6 +26,17 @@
   buys 1.6 Å of the 4.7 Å prior, the knee is at ~8-10 pairs, and pairs past that re-measure separations
   already resolved. The executed PNG sits beside the notebook; a copy of the figure is in the notebook itself.
 
+- **Sites then pairs: the combined notebook** (`ipynb/example/labelizer_greedy_pipeline.ipynb`) -- the
+  pipeline Olga asked for: Labelizer LS >= 1.5 picks 17 labelable sites on 3GUN, the accessibility filter
+  drops 82/83 (the docking ensemble leaves the 61-84 loop unmodelled -- "labelable in the structure" must
+  become "modelled in the ensemble"), all 92 pairs with |i-j| >= 10 go into a generated
+  `labelizer_sites.fps.json` (D/A role convention; a site without CB in the coarse ensemble anchors at
+  residue resolution), one 100-frame pass (10.9 s) feeds `select_informative_pairs`. Greedy's first pair
+  `80-135` (4.71 -> 3.05 A) edges the shipped fps set's `70-132` (1.63 A), and after 5 pairs the
+  labelability constraint costs only 2.39 vs 2.24 A -- while the hand-picked sites' median LS is 1.24 vs
+  1.69 and two of them (127, 150) are zero-vetoed outright. Decay-curve overlay `labelizer_greedy_decay.png`;
+  `MIN_LS` is the dial the closing section prices.
+
 - **The command line, compiled** (owner: "all the python scripts in bin end up in a single compiled cpp
   file with corresponding subs ... distributed along with the pip wheel and/or used without the heavy IMP"):
   `include/Bin.h` + `src/Bin.cpp` are that file -- a CLI11 dispatcher (vendored verbatim as
