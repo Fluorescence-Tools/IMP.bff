@@ -12,6 +12,15 @@
 #endif
 %}
 
+%init %{
+// Owning the pointer is only half of it: someone must initialize it. The
+// standalone entry does this in its own %init; the generated module entry
+// runs only IMP kernel's numpy init, which initializes kernel's
+// PyArray_API, not this TU's -- every numpy-array typemap then dereferenced
+// NULL and segfaulted (found on cn1: every Port.get_value_view() call).
+    import_array();
+%}
+
 /* The standard-library typemaps the topic files rely on. In the standalone
    build the order happens to work out; in the module build the entry
    %includes the topics alphabetically, and avbuilder.i -- the alphabetically

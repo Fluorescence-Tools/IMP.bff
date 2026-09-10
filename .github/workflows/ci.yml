@@ -212,6 +212,13 @@ jobs:
       # explicitly rather than relying on collection.
       - name: Run fast + medium tests
         shell: bash -el {0}
+        env: &imp_paths
+          # Our imp's compiled-in data/example paths do not survive rattler's
+          # prefix relocation; these are the env vars IMP::internal checks
+          # first (verified on cn1). The examples install under
+          # share/doc/IMP/examples, the data under share/IMP.
+          IMP_DATA: ${{ env.CONDA_PREFIX }}/share/IMP
+          IMP_EXAMPLE_DATA: ${{ env.CONDA_PREFIX }}/share/doc/IMP/examples
         run: |
           conda activate bff-test
           # bash 3.2 (the macOS runners' /bin/bash) has no mapfile
