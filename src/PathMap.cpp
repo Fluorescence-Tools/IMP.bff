@@ -7,6 +7,10 @@
  *
  */
 #include <IMP/bff/PathMap.h>
+#ifdef _WIN32
+// gcc/clang's branch hint; MSVC reads the expression and hopes.
+#define __builtin_expect(x, y) (x)
+#endif
 
 // Only `write_map_feature` needs these, and only until it moves to the
 // connection layer; `PathMap` itself no longer knows what an EM map is.

@@ -19,6 +19,10 @@
 
 #include <cstdlib>
 #include <fcntl.h>
+#ifdef _WIN32
+#include <io.h>
+#define open _open
+#endif
 #include <map>
 #include <string>
 #include <vector>

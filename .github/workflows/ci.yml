@@ -116,7 +116,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Invoke-WebRequest -Uri $url -OutFile "$dest\rattler-build.zip"
           Expand-Archive -Path "$dest\rattler-build.zip" -DestinationPath $dest -Force
-          echo "$dest" >> $env:GITHUB_PATH
+          $exe = Get-ChildItem -Path $dest -Recurse -Filter rattler-build.exe |
+                  Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) {
+            Write-Host "::error::the rattler-build zip holds no rattler-build.exe"
+            Get-ChildItem -Path $dest -Recurse | Select-Object FullName
+            exit 1
+          }
+          echo "RATTLER_BUILD_EXE=$($exe -replace '\\','/')" >> $env:GITHUB_ENV
       - name: Install rattler-build (Linux and macOS)
         if: runner.os != 'Windows'
         shell: bash -el {0}
@@ -145,9 +152,7 @@ jobs:
         # invoked by absolute path there.
         run: |
           RB=rattler-build
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            RB=$(cygpath -u "$RUNNER_TEMP")/rattler-build/rattler-build.exe
-          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then RB="$RATTLER_BUILD_EXE"; fi
           "$RB" build --recipe conda-recipe/recipe.yaml --channel conda-forge --output-dir conda-bld
 
       - name: Compiler cache statistics

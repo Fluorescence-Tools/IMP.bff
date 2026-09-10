@@ -1,5 +1,13 @@
 /* [bff] The shared swig macros, defined once, sorted first. */
 
+/* The standard-library typemaps the topic files rely on. In the standalone
+   build the order happens to work out; in the module build the entry
+   %includes the topics alphabetically, and avbuilder.i -- the alphabetically
+   first consumer of std::map -- reached its %template before types.i
+   delivered the map typemaps. SWIG's library files are idempotent. */
+%include <std_map.i>
+%include <std_attribute.i>
+
 %define %attribute_np(Class, Type, Name, GetMethod, SetMethod...)
     %extend Class {
     #if #SetMethod != ""
