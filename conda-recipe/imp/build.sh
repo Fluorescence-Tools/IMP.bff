@@ -55,10 +55,9 @@ else
   # rattler-build does not pass the parent environment to the build script,
   # which is why this is computed here rather than taken from an env var;
   # IMP_BUILD_JOBS still wins when the script is run by hand.
-  JOBS=${IMP_BUILD_JOBS:-$(awk -v m="$(nproc)" \
-      -v g="$(free -g | awk '/Mem:/{print $7}')" \
-      'BEGIN{j=int(g/6); if(j<1)j=1; if(j>m)j=m; print j}')}
-  echo "imp build: -j ${JOBS} ($(nproc) cores, $(free -g | awk '/Mem:/{print $7}') GB available)"
+  JOBS=${IMP_BUILD_JOBS:-$(python -c "import os;c=os.cpu_count() or 1;m=sum(int(l.split()[1]) for l in open('/proc/meminfo') if l.startswith('MemAvailable'))//1024 if os.path.exists('/proc/meminfo') else 0;print(max(1,min(c,m//6)) if m else max(1,c//2))")}
+
+  echo "build: -j ${JOBS}"
   ninja install -j ${JOBS}
 fi
 

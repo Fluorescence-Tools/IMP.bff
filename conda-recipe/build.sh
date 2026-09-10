@@ -36,10 +36,9 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_
 # Memory-aware job count, as conda-recipe/imp/build.sh has it: the unity
 # build file bff_all.cpp is one large translation unit; one job per 6 GB of
 # available memory, capped by the core count, IMPBFF_BUILD_JOBS overriding.
-JOBS=${IMPBFF_BUILD_JOBS:-$(awk -v m="$(nproc)" \
-    -v g="$(free -g | awk '/Mem:/{print $7}')" \
-    'BEGIN{j=int(g/6); if(j<1)j=1; if(j>m)j=m; print j}')}
-echo "imp.bff build: -j ${JOBS} ($(nproc) cores, $(free -g | awk '/Mem:/{print $7}') GB available)"
+JOBS=${IMPBFF_BUILD_JOBS:-$(python -c "import os;c=os.cpu_count() or 1;m=sum(int(l.split()[1]) for l in open('/proc/meminfo') if l.startswith('MemAvailable'))//1024 if os.path.exists('/proc/meminfo') else 0;print(max(1,min(c,m//6)) if m else max(1,c//2))")}
+
+echo "build: -j ${JOBS}"
 ninja install -k 0 -j ${JOBS}
 
 # The compute backend, for the module package as well as the wheel.
