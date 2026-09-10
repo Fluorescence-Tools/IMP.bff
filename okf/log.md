@@ -2,6 +2,13 @@
 
 ## 2026-09-10
 
+- **The Labelizer LS gets a notebook example** (`ipynb/example/labelizer_score.ipynb`): the label score via
+  the native port (PRD-120) as an executed notebook -- `3GUN-processed.pdb` under the no-conservation model
+  (T4L ships no ConSurf grades; `cs` dropped, the `--no-conservation` semantics), features + `ll_score_structure`
+  in 0.1 s, all 162 residues scored, top site A135 (LS 1.89). One figure: LS along the sequence above the
+  per-term heatmap; a bridge cell runs `ll_pair_scores` (R0 52, n_refine 5, 4560 pairs) so the sites flow
+  into `greedy_pair_selection.ipynb`. Figure + executed notebook both committed.
+
 - **Greedy Olga gets a notebook example** (`ipynb/example/greedy_pair_selection.ipynb`): the pair-selection
   pipeline of `examples/labels/plot_pair_selection.py` as an executed Jupyter notebook, for Olga -- ensemble
   in (`t4l_docking.rmf3`, 100 frames, `fret.fps.json` `chi2_C1_33p`, 33 candidates), `pairwise_rmsd` +

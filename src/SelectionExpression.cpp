@@ -819,19 +819,19 @@ void evaluate_node(const NodePtr& n, const std::vector<SelectionAtom>& atoms,
                 if (a[i]) reference.push_back(i);
             }
             for (std::size_t i = 0; i < atoms.size(); ++i) {
-                bool near = false;
-                for (std::size_t k = 0; k < reference.size() && !near; ++k) {
+                bool is_near = false;   // `near` is a word MSVC keeps (see RRT.cpp)
+                for (std::size_t k = 0; k < reference.size() && !is_near; ++k) {
                     const std::size_t j = reference[k];
                     if (n->noself && j == i) continue;
                     const double dx = atoms[i].x - atoms[j].x;
                     const double dy = atoms[i].y - atoms[j].y;
                     const double dz = atoms[i].z - atoms[j].z;
-                    near = (dx * dx + dy * dy + dz * dz) <= r2;
+                    is_near = (dx * dx + dy * dy + dz * dz) <= r2;
                 }
                 if (n->what == D_BEYOND) {
-                    out[i] = near ? 0 : 1;
+                    out[i] = is_near ? 0 : 1;
                 } else {
-                    out[i] = near ? 1 : 0;
+                    out[i] = is_near ? 1 : 0;
                 }
             }
             break;

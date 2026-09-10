@@ -13,14 +13,9 @@
  * touched).
  */
 #include <IMP/bff/RotamerLibrary.h>
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <direct.h>
-#include <stdlib.h>
-#include <cstring>
-#endif
+#include <filesystem>
+#include <random>
+#include <sstream>
 #include <IMP/bff/Pto.h>
 
 #include "Faspr.h"
@@ -77,25 +72,36 @@ struct TemporaryBin {
 
   void make(const std::string& container) {
 #ifdef _WIN32
-    // mkdtemp is POSIX; Windows spells it _mktemp + _mkdir, under the user's
-    // temp directory rather than /tmp.
-    char pattern[MAX_PATH];
-    GetTempPathA(MAX_PATH, pattern);
-    std::strcat(pattern, "imp_bff_faspr_XXXXXX");
-    const char* made = _mktemp(pattern) != nullptr && _mkdir(pattern) == 0
-                               ? pattern : nullptr;
-    if (made == NULL) {
+    // mkdtemp is POSIX and _mktemp is a legacy declaration MSVC's headers
+    // do not always expose; std::filesystem is C++17 and always there. A
+    // random hex suffix under the user's temp directory is a scratch name
+    // nobody else holds.
+    std::random_device rng;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+      std::ostringstream name;
+      name << std::filesystem::temp_directory_path().string()
+           << "\\imp_bff_faspr_" << std::hex << rng() << rng();
+      std::error_code ec;
+      if (std::filesystem::create_directory(name.str(), ec) && !ec) {
+        dir = name.str();
+        path = dir + "\\dun2010bbdep.bin";
+        write_dunbrack_bin(container, path);
+        return;
+      }
+    }
+    IMP_THROW("faspr_pack: cannot make a scratch directory for "
+                      << container, IOException);
 #else
     char pattern[] = "/tmp/imp_bff_faspr_XXXXXX";
     const char* made = mkdtemp(pattern);
     if (made == NULL) {
-#endif
       IMP_THROW("faspr_pack: cannot make a scratch directory for "
                         << container, IOException);
     }
     dir = made;
     path = dir + "/dun2010bbdep.bin";
     write_dunbrack_bin(container, path);
+#endif
   }
 
  private:
