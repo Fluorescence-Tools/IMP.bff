@@ -1,5 +1,17 @@
 /* [bff] The shared swig macros, defined once, sorted first. */
 
+%{
+// numpy.i owns PyArray_API in this translation unit only when this is
+// defined; without it NO_IMPORT_ARRAY makes the symbol an undefined extern
+// and the module build's link fails (the standalone entry defines it in its
+// own preamble; the generated module entry does not -- this file sorts first
+// among the module's bff topics, so the define lands before numpy.i's
+// include. The old bff module solved it the same way, in its swig.i-in).
+#ifndef SWIG_FILE_WITH_INIT
+#define SWIG_FILE_WITH_INIT
+#endif
+%}
+
 /* The standard-library typemaps the topic files rely on. In the standalone
    build the order happens to work out; in the module build the entry
    %includes the topics alphabetically, and avbuilder.i -- the alphabetically

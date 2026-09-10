@@ -32,7 +32,19 @@ python "${RECIPE_DIR}/check_disabled_modules.py" ${DISABLED} || exit 1
 if [ `uname -s` = "Darwin" ]; then
   ninja install
 else
-  ninja install -j 4
+  # The unity build files (core_all.cpp et al.) are the largest
+  # translation units and want ~6 GB each at peak; parallel runs beyond the
+  # machine's memory are OOM-killed (measured: cc1plus Killed in a 7 GB act
+  # container -- the feedstock ships -j 1 for exactly this). So the job
+  # count is one per 6 GB of available memory, capped by the core count.
+  # rattler-build does not pass the parent environment to the build script,
+  # which is why this is computed here rather than taken from an env var;
+  # IMP_BUILD_JOBS still wins when the script is run by hand.
+  JOBS=${IMP_BUILD_JOBS:-$(awk -v m="$(nproc)" \
+      -v g="$(free -g | awk '/Mem:/{print $7}')" \
+      'BEGIN{j=int(g/6); if(j<1)j=1; if(j>m)j=m; print j}')}
+  echo "imp build: -j ${JOBS} ($(nproc) cores, $(free -g | awk '/Mem:/{print $7}') GB available)"
+  ninja install -j ${JOBS}
 fi
 
 # Activation scripts: our kernel's compiled-in data path does not survive

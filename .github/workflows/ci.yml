@@ -214,7 +214,10 @@ jobs:
         shell: bash -el {0}
         run: |
           conda activate bff-test
-          mapfile -t TESTS < <(find test \( -name 'test_*.py' -o -name 'medium_test_*.py' \) | sort)
+          # bash 3.2 (the macOS runners' /bin/bash) has no mapfile
+          TESTS=()
+          while IFS= read -r f; do TESTS+=("$f"); done \
+              < <(find test \( -name 'test_*.py' -o -name 'medium_test_*.py' \) | sort)
           echo "${#TESTS[@]} test files selected"
           pytest "${TESTS[@]}" -v
 
