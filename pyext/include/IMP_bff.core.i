@@ -1150,8 +1150,19 @@ std::string get_build();
 }
 
 %pythoncode %{
+# The historical spelling of kb_kcal(): tests and downstream code read
+# KB_KCAL (it was a Python constant before the potentials moved to C++).
+KB_KCAL = None  # set after kb_kcal is wrapped, below
+
 def bin_cli(argv=None):
     """The compiled command line, as a console script entry point."""
     import sys
     return bin_main(sys.argv[1:] if argv is None else list(argv))
+%}
+
+%pythoncode %{
+try:
+    KB_KCAL = kb_kcal()
+except NameError:
+    pass
 %}
