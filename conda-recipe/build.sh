@@ -33,7 +33,14 @@ if [ "${IMPBFF_WITH_GPU:-1}" = "0" ]; then
   GPU_ARGS=(-DCMAKE_CXX_FLAGS=-DIMPBFF_WITH_GPU=0)
 fi
 cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH=$PREFIX -DCMAKE_INSTALL_PREFIX=$PREFIX "${SCCACHE_ARGS[@]}" "${GPU_ARGS[@]}"
-ninja install -k 0 -j 4
+# Memory-aware job count, as conda-recipe/imp/build.sh has it: the unity
+# build file bff_all.cpp is one large translation unit; one job per 6 GB of
+# available memory, capped by the core count, IMPBFF_BUILD_JOBS overriding.
+JOBS=${IMPBFF_BUILD_JOBS:-$(awk -v m="$(nproc)" \
+    -v g="$(free -g | awk '/Mem:/{print $7}')" \
+    'BEGIN{j=int(g/6); if(j<1)j=1; if(j>m)j=m; print j}')}
+echo "imp.bff build: -j ${JOBS} ($(nproc) cores, $(free -g | awk '/Mem:/{print $7}') GB available)"
+ninja install -k 0 -j ${JOBS}
 
 # The compute backend, for the module package as well as the wheel.
 #
