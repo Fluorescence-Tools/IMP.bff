@@ -199,7 +199,11 @@ jobs:
         shell: bash -el {0}
         run: |
           for attempt in 1 2 3; do
-            mamba create -y -n bff-test -c ./conda-bld -c conda-forge \
+            # --strict-channel-priority: our imp must win the 2.25.0 tie
+            # against conda-forge's (whose build carries the historical bff
+            # on the same paths) even if its build number ever ties again.
+            mamba create -y -n bff-test --strict-channel-priority \
+              -c ./conda-bld -c ./imp-bld -c conda-forge \
               imp.bff pytest && break
             [ "$attempt" -lt 3 ] || exit 1
             echo "retrying test env creation (attempt $attempt failed)"
