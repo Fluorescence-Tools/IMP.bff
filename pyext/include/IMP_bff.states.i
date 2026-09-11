@@ -68,6 +68,14 @@ IMP_SWIG_VALUE(IMP::bff, FRETDistanceConverter, FRETDistanceConverters);
 // same question, so it stays out of the binding.
 %ignore IMP::bff::States::get_points_vector;
 
+// The default-argument split of the trailing (double** out_view,
+// int* n_out_view) pair grows a middle overload -- the view pointer without
+// its dimension -- that the multi-argument typemap cannot bind; dispatched,
+// it converts a bare Python object into the pointer and segfaults (the
+// module build hit it in histogram_rda; density_to_points' ignores in
+// states.i and proberestraints.i are the same story). The no-output and
+// full-view forms stay; the middle form is refused at wrap time.
+%ignore IMP::bff::histogram_rda(const States&, const States&, const std::vector<double>&, int, bool, double**);
 %include "IMP/bff/States.h"
 
 // Scalar state is exposed as native attributes through SWIG's `%attribute`,
