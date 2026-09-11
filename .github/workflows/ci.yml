@@ -176,7 +176,11 @@ jobs:
         shell: bash -el {0}
         run: |
           python -m pip install -q pooch
-          python utility/data_registry.py --fetch data --cache "$HOME/.cache/imp-bff-data" --quiet
+          # cgprobe only: the 229-file rotamer_library is the bulk of the
+          # download, and the tests read it through the packaged copy
+          # (share/IMP/bff), not the checkout.
+          python utility/data_registry.py --fetch data --only cgprobe \
+              --cache "$HOME/.cache/imp-bff-data" --quiet
           echo "IMP_BFF_DATA_CACHE=$HOME/.cache/imp-bff-data" >> "$GITHUB_ENV"
 
       - name: Build the conda package

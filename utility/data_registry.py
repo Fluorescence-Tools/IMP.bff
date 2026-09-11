@@ -52,15 +52,23 @@ def tree():
     return out
 
 
-def fetch(target, cache=None, quiet=False):
-    """Bring every registry file into `target` (a data/ directory), through
+def fetch(target, cache=None, quiet=False, only=None):
+    """Bring registry files into `target` (a data/ directory), through
     `cache` when given (pooch keeps its copy there; the file is then copied
-    into place), checked against the registry's sums."""
+    into place), checked against the registry's sums.
+
+    `only` restricts the fetch to files under the given top-level data/
+    directories (e.g. `["cgprobe"]`) -- CI fetches just what its lane
+    reads, not the 229-file rotamer_library too."""
     import shutil
     import pooch
     with open(REGISTRY) as fh:
         registry = json.load(fh)
-    pup = pooch.create(path=cache or target, base_url=DATA_URL, registry=registry)
+    if only:
+        prefixes = tuple(f"{d}/" for d in only)
+        registry = {k: v for k, v in registry.items() if k.startswith(prefixes)}
+    pup = pooch.create(path=cache or target, base_url=DATA_URL,
+                       registry=registry)
     n = 0
     for name in sorted(registry):
         src = pup.fetch(name, progressbar=not quiet)
@@ -79,9 +87,15 @@ def main(argv=None):
                     help="fetch every registry file into DIR (default: data/)")
     ap.add_argument("--cache", metavar="DIR", help="with --fetch: pooch's download directory")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--only", nargs="+", metavar="DIR",
+                    help="with --fetch: top-level data/ directories to take "
+                         "(default: all). CI passes --only cgprobe: the "
+                         "229-file rotamer_library is the bulk of the "
+                         "download and the lane reads it through the "
+                         "packaged copy, not the checkout.")
     a = ap.parse_args(argv)
     if a.fetch:
-        n = fetch(a.fetch, a.cache, a.quiet)
+        n = fetch(a.fetch, a.cache, a.quiet, a.only)
         print("%d files in %s" % (n, a.fetch))
         return 0
     current = tree()
