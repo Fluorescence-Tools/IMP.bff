@@ -34,6 +34,10 @@ fi
 cmake "${SCCACHE_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DIMP_DISABLED_MODULES=${DISABLED} \
       -G Ninja \
       -DIMP_USE_SYSTEM_RMF=off \
+      # the bundled RMF wires doxygen targets into its install; a doxygen
+      # anywhere on the machine makes them build (windows found one in the
+      # SDK) -- refuse it explicitly, both platforms
+      -DDOXYGEN_EXECUTABLE=DOXYGEN_EXECUTABLE-NOTFOUND \
       -DIMP_USE_SYSTEM_IHM=off \
       ${CMAKE_ARGS} \
       -DCMAKE_CXX_FLAGS="${CXX_FLAGS}" \
