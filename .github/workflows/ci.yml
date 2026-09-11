@@ -11,7 +11,11 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    # Only the integration branches build on push: independent-core reaches
+    # CI as a push to dev in the same breath (the same commit), so a push
+    # trigger on '**' built everything twice. Other branches enter through
+    # a PR to dev/main or a manual dispatch.
+    branches: [dev, main]
   pull_request:
     branches: [main, dev]
   release:
@@ -43,14 +47,7 @@ jobs:
       - id: check
         run: |
           BRANCH="${{ github.ref }}"
-          # Owner's holding pattern (2026-09-11): the full matrix waits until
-          # the ubuntu IMP-module leg compiles -- linux only until then, so
-          # every push's signal is the one lane that still fails.
-          if true; then
-            echo "lane=lnx" >> "$GITHUB_OUTPUT"
-            echo 'os_matrix={"os":["ubuntu-latest"]}' >> "$GITHUB_OUTPUT"
-            echo 'wheel_matrix={"include":[{"os":"ubuntu-latest","arch":"x86_64"}]}' >> "$GITHUB_OUTPUT"
-          elif [[ "$BRANCH" == "refs/heads/main" || "$BRANCH" == "refs/heads/dev" || \
+          if [[ "$BRANCH" == "refs/heads/main" || "$BRANCH" == "refs/heads/dev" || \
                 "$BRANCH" == refs/tags/* || \
                 "${{ github.event_name }}" == "release" || \
                 "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -144,12 +141,18 @@ jobs:
       # module's surface. So the job builds imp itself, from conda-forge's
       # recipe (conda-recipe/imp/, trimmed to the 14 modules bff uses,
       # bff disabled) and cached by the recipe's content.
-      - name: Cache our imp package
+      # Restore/save split (tttrlib's discipline): the key carries the run
+      # id, so a run whose imp build died midway can never save a half-empty
+      # tree under the recipe's hash and poison every later run -- the cold
+      # cache "even after a fresh build" was exactly that. The prefix
+      # restore-key picks up whichever run last succeeded.
+      - name: Restore our imp package
         id: imp-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: imp-bld
-          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
+          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-${{ github.run_id }}
+          restore-keys: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-
       - name: Build our imp (when the cache is cold)
         if: steps.imp-cache.outputs.cache-hit != 'true'
         shell: bash -el {0}
@@ -161,7 +164,14 @@ jobs:
             RB=rattler-build
           fi
           "$RB" build --recipe conda-recipe/imp/recipe.yaml \
+                      --env-isolation none \
                       --channel conda-forge --output-dir imp-bld
+      - name: Save our imp package
+        if: steps.imp-cache.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: imp-bld
+          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-${{ github.run_id }}
       # The large data (data/registry.json) is not in git: it comes from the
       # download host, cached between runs keyed by the registry (tttrlib's
       # pattern) so only a changed registry downloads again. The build
@@ -185,19 +195,18 @@ jobs:
 
       - name: Build the conda package
         shell: bash -el {0}
-        # ACTIONS_CACHE_URL/ACTIONS_RUNTIME_TOKEN are what an in-env sccache
-        # needs for the GHA backend (the mozilla action exports them as job
-        # env; a login shell re-sourcing profiles can drop them, so they are
-        # restated). Windows: a login shell rebuilds PATH from the system
-        # profile, so GITHUB_PATH additions do not survive into it -- the
-        # builder is invoked by absolute path there.
-        env:
-          ACTIONS_CACHE_URL: ${{ env.ACTIONS_CACHE_URL }}
-          ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
+        # --env-isolation none: rattler-build's default (`strict`) hands
+        # build.sh a clean environment, which silently cost two caches --
+        # IMP_BFF_DATA_CACHE never reached it, so every package build
+        # re-downloaded all 284 registry files from peulen.xyz, and the
+        # sccache GHA tokens never did, so compiles cached to local disk
+        # (wiped with the work dir). `none` inherits the host environment,
+        # tttrlib's effective behavior under conda-build.
         run: |
           RB=rattler-build
           if [ "$RUNNER_OS" = "Windows" ]; then RB="$RATTLER_BUILD_EXE"; fi
           "$RB" build --recipe conda-recipe/recipe.yaml \
+                      --env-isolation none \
                       --channel ./imp-bld --channel conda-forge \
                       --output-dir conda-bld
 
