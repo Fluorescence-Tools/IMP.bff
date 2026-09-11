@@ -915,7 +915,10 @@ void histogram_rda(const States& s1, const States& s2,
 
     const std::size_t n_bins = used_axis.size() > 1 ? used_axis.size() - 1 : 0;
     double* out = internal::new_double_view(n_bins, out_view, n_out_view);
-    if (out == NULL || n_bins == 0) return;
+    if (out == NULL || n_bins == 0) {
+        if (out_view == NULL) std::free(out);
+        return;
+    }
 
     double total = 0.0;
     for (std::size_t i = 0; i < d.size(); ++i) {
@@ -929,6 +932,11 @@ void histogram_rda(const States& s1, const States& s2,
     }
     if (normalize && total > 0.0) {
         for (std::size_t b = 0; b < n_bins; ++b) out[b] /= total;
+    }
+    if (out_view == NULL) {
+        // No output pointers: the buffer was scratch (new_double_view did
+        // not publish it), so the histogram is discarded here, not leaked.
+        std::free(out);
     }
 }
 

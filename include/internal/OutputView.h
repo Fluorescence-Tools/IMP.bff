@@ -67,6 +67,13 @@ IMPBFF_BEGIN_INTERNAL_NAMESPACE
 */
 inline double* new_double_view(std::size_t n, double** out_view, int* n_out_view) {
     double* buffer = static_cast<double*>(std::calloc(n ? n : 1, sizeof(double)));
+    if (out_view == nullptr || n_out_view == nullptr) {
+        // A C++ caller without output pointers (the header's defaults): the
+        // buffer is scratch, nothing is published, and the caller frees it.
+        // Publishing unconditionally dereferenced a NULL out_view -- the
+        // module build's 2-argument histogram_rda reached C++ exactly so.
+        return buffer;
+    }
     if (buffer == nullptr) {
         *out_view = static_cast<double*>(std::calloc(1, sizeof(double)));
         *n_out_view = 0;
@@ -80,6 +87,9 @@ inline double* new_double_view(std::size_t n, double** out_view, int* n_out_view
 //! The same, for an integer result.
 inline int* new_int_view(std::size_t n, int** out_view, int* n_out_view) {
     int* buffer = static_cast<int*>(std::calloc(n ? n : 1, sizeof(int)));
+    if (out_view == nullptr || n_out_view == nullptr) {
+        return buffer;  // see new_double_view: C++ scratch, nothing published
+    }
     if (buffer == nullptr) {
         *out_view = static_cast<int*>(std::calloc(1, sizeof(int)));
         *n_out_view = 0;
