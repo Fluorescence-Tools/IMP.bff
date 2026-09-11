@@ -1,5 +1,15 @@
 /* [bff] The shared swig macros, defined once, sorted first. */
 
+/* Keyword arguments, as the standalone entry grants them globally: the
+   generated module entry does not, and 432 test failures on the first
+   full lane run were one thing -- every call passing a keyword
+   (`linker_length=`, `points=`, `density=`, ...) rejected. This file
+   sorts ahead of every bff topic, so the feature covers them all; the
+   kernel and IMP's own modules declared above are unaffected (their
+   entry block grants or withholds kwargs on its own). */
+%feature("kwargs", 1);
+
+
 %{
 // numpy.i owns PyArray_API in this translation unit only when this is
 // defined; without it NO_IMPORT_ARRAY makes the symbol an undefined extern

@@ -221,7 +221,7 @@ jobs:
             # on the same paths) even if its build number ever ties again.
             mamba create -y -n bff-test --strict-channel-priority \
               -c ./conda-bld -c ./imp-bld -c conda-forge \
-              imp.bff pytest && break
+              imp.bff pytest pooch && break
             [ "$attempt" -lt 3 ] || exit 1
             echo "retrying test env creation (attempt $attempt failed)"
             sleep 10

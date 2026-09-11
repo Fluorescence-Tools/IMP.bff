@@ -26,6 +26,7 @@ import sys
 import unittest
 
 import numpy as np
+import pytest
 
 from IMP import bff
 
@@ -82,6 +83,9 @@ def reference_curve(irf, pairs, timeshift=0.0, scatter=0.0, background=0.0,
     a transcription of the implementation under test would pass whatever the
     implementation did.
     """
+    pytest.importorskip("chisurf",
+                        reason="the reference timeshift lives in a sibling "
+                               "chisurf checkout; CI has neither installed")
     from chisurf.core.math.signal import shift_array
 
     spectrum = np.asarray([v for pair in pairs for v in pair], dtype=float)
