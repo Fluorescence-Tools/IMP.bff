@@ -51,6 +51,17 @@ void pairwise_rmsd(double* cluster_coords, int n_frames, int n_atoms, int n_dim,
     if (n_dim != 3) {
         IMP_THROW("coords must be (n_frames, n_atoms, 3)", ValueException);
     }
+    // The module build's no-output wrapper reaches here with all three
+    // pointers NULL (the header's defaults); publishing through them is the
+    // crash histogram_rda and density_to_points already taught us about.
+    if (output == nullptr || n_output1 == nullptr || n_output2 == nullptr) {
+        int scratch = 0;
+        double* out = internal::new_double_view(
+                (std::size_t) n_frames * (std::size_t) n_frames, nullptr,
+                &scratch);
+        std::free(out);
+        return;
+    }
     int published = 0;
     double* out = internal::new_double_view(
             (std::size_t) n_frames * (std::size_t) n_frames, output, &published);
@@ -110,6 +121,10 @@ void assign_frames_to_clusters(double* cluster_coords, int n_frames, int n_atoms
     const int stride = n_atoms * 3;
 
     int* view = internal::new_int_view(n_frames < 0 ? 0 : n_frames, out_view_i, n_out_view_i);
+    if (out_view_i == nullptr || n_out_view_i == nullptr) {
+        std::free(view);  // C++ scratch: the header's NULL defaults
+        return;
+    }
     if (view == nullptr) return;
     for (int i = 0; i < n_frames; ++i) {
         int best = 0;

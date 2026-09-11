@@ -204,6 +204,14 @@ void density_to_points(
         if (dens[k] > threshold) ++kept;
     }
     double* points = internal::new_double_view(kept * 4, output, n_output1);
+    if (output == nullptr || n_output1 == nullptr || n_output2 == nullptr) {
+        // A C++ caller taking the header's defaults: the buffer is scratch,
+        // publishing through NULL pointers is the crash the module build's
+        // 3-argument wrapper found (new_double_view already declined to
+        // publish; this function wrote through them a second time).
+        std::free(points);
+        return;
+    }
     if (points == nullptr) { *n_output1 = 0; *n_output2 = 4; return; }
     // Shape (kept, 4): dim1 is the point count, not the element count.
     *n_output1 = static_cast<int>(kept);

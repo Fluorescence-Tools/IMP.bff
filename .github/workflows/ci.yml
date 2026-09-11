@@ -43,7 +43,14 @@ jobs:
       - id: check
         run: |
           BRANCH="${{ github.ref }}"
-          if [[ "$BRANCH" == "refs/heads/main" || "$BRANCH" == "refs/heads/dev" || \
+          # Owner's holding pattern (2026-09-11): the full matrix waits until
+          # the ubuntu IMP-module leg compiles -- linux only until then, so
+          # every push's signal is the one lane that still fails.
+          if true; then
+            echo "lane=lnx" >> "$GITHUB_OUTPUT"
+            echo 'os_matrix={"os":["ubuntu-latest"]}' >> "$GITHUB_OUTPUT"
+            echo 'wheel_matrix={"include":[{"os":"ubuntu-latest","arch":"x86_64"}]}' >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "refs/heads/main" || "$BRANCH" == "refs/heads/dev" || \
                 "$BRANCH" == refs/tags/* || \
                 "${{ github.event_name }}" == "release" || \
                 "${{ github.event_name }}" == "workflow_dispatch" ]]; then

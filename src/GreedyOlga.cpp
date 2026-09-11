@@ -267,7 +267,18 @@ void select_informative_pairs(
     }
 
     // Publish both views; the kernel's vectors are copied out exactly once.
+    // A C++ caller may take the header's NULL defaults -- the allocators
+    // decline to publish then (scratch), and the dereferences below must
+    // not happen either.
     const std::size_t n_sel = pairs.size();
+    if (out_pairs == nullptr || n_out_pairs == nullptr ||
+        out_decay == nullptr || n_out_decay == nullptr) {
+        int* s1 = internal::new_int_view(n_sel, nullptr, nullptr);
+        double* s2 = internal::new_double_view(n_sel, nullptr, nullptr);
+        std::free(s1);
+        std::free(s2);
+        return;
+    }
     internal::new_int_view(n_sel, out_pairs, n_out_pairs);
     if (*out_pairs != nullptr && !pairs.empty()) {
         std::memcpy(*out_pairs, pairs.data(), n_sel * sizeof(int));
