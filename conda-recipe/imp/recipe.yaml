@@ -43,7 +43,12 @@ source:
     - imp-abseil-windows.patch  # [win]
 
 build:
-  number: 0
+  # Above conda-forge's build number: their 2.25.0 _1 carries the historical
+  # bff module whose files land on the same paths as imp.bff's, and under
+  # flexible channel priority (mamba's default at env-creation) the higher
+  # build wins the tie against this one -- the test env then imports the old
+  # module and segfaults in its first numpy view. Ours must always outrank.
+  number: 2
   # The scripts are named explicitly: with auto-discovery the Windows build
   # "succeeded" through the VS activation and packaged an empty package --
   # bld.bat's body never ran (no echo output, six-second build, zero files).
