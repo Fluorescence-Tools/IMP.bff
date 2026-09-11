@@ -30,6 +30,17 @@ mkdir build && cd build
 SCCACHE_ARGS=()
 if command -v sccache >/dev/null 2>&1; then
   SCCACHE_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
+  # The GitHub Actions cache backend, when the runner's tokens reached this
+  # env (setup-miniconda's bash -el keeps them; rattler-build passes the
+  # parent environment through). Without it the server falls back to local
+  # disk, which is wiped with the work dir -- measured: full rebuilds every
+  # run while the log said "Local disk".
+  if [ "${ACTIONS_CACHE_URL:-}" != "" ] && [ "${ACTIONS_RUNTIME_TOKEN:-}" != "" ]; then
+    export SCCACHE_GHA_ENABLED=true
+    export SCCACHE_IDLE_TIMEOUT=0
+  fi
+  sccache --stop-server >/dev/null 2>&1 || true
+  echo "sccache backend: $(sccache --show-stats 2>/dev/null | grep -m1 'Cache location' || echo starting)"
 fi
 # the bundled RMF wires doxygen targets into its install; a doxygen
 # anywhere on the machine makes them build (windows found one in the SDK)

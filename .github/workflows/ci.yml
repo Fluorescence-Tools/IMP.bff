@@ -181,9 +181,15 @@ jobs:
 
       - name: Build the conda package
         shell: bash -el {0}
-        # Windows: a login shell rebuilds PATH from the system profile, so
-        # GITHUB_PATH additions do not survive into it -- the builder is
-        # invoked by absolute path there.
+        # ACTIONS_CACHE_URL/ACTIONS_RUNTIME_TOKEN are what an in-env sccache
+        # needs for the GHA backend (the mozilla action exports them as job
+        # env; a login shell re-sourcing profiles can drop them, so they are
+        # restated). Windows: a login shell rebuilds PATH from the system
+        # profile, so GITHUB_PATH additions do not survive into it -- the
+        # builder is invoked by absolute path there.
+        env:
+          ACTIONS_CACHE_URL: ${{ env.ACTIONS_CACHE_URL }}
+          ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
         run: |
           RB=rattler-build
           if [ "$RUNNER_OS" = "Windows" ]; then RB="$RATTLER_BUILD_EXE"; fi

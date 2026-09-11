@@ -61,6 +61,9 @@ build:
 
 requirements:
   build:
+    # the compiler launcher the build scripts switch on; from the build
+    # env itself so `command -v sccache` finds it inside rattler-build
+    - sccache
     - ${{ compiler('c') }}
     - ${{ compiler('cxx') }}
     - python
