@@ -1,5 +1,38 @@
 # Update Log
 
+## 2026-09-11
+
+- **Greedy Olga learns homo-oligomers: the unit of selection becomes the labelling site**
+  (`select_informative_sites`, `include/GreedyOlga.h` / `src/GreedyOlga.cpp`): in an oligomer under a
+  statistical labelling mix each site is mutated **once** and every cross-protomer combination of the chosen
+  sites is measurable — a dimer labelled at {1, 2} measures 1:1, 2:2, 1:2 *and* 2:1 — so a greedy over pairs
+  (`select_informative_pairs`, the monomer case, where a pair really is a double mutant) silently charges two
+  mutations for the first measurement and half the experiment per mutation thereafter. The new kernel greedies
+  over sites and scores each candidate by the expected mean RMSD left by **every pair the enlarged site set
+  implies**, the implied pairs' chi-squared gains accumulating together in a per-candidate scratch matrix
+  (OpenMP over candidates, one scratch each, no reductions, deterministic). The oligomer is passed as an
+  `(n_pairs, 2)` `pair_sites` array — the whole model the kernel needs, order-agnostic, so trimers and
+  tetramers are more rows rather than more code. Olga's ndof conventions are kept exactly (selection scores
+  with `max(measurements - 2, 1)`, the decay pass with the measurement count), which is what makes the
+  reduction exact: **one pair per site reproduces `select_informative_pairs` bit for bit**. A site is never
+  re-selected — a residue cannot be mutated twice — so there is no `unique_only`. Pinned in
+  `test/restraints/test_greedy_sites.py`: exact parity with a numpy reference of the algorithm, the reduction,
+  the {0, 1} → four-measurements check, capped/unique/empty behaviour, and the shape guards. Board ticket
+  T-20260911-01.
+- **The homodimer example** (`ipynb/example/labelizer_greedy_homodimer.ipynb`, executed, with its PNG): T4L
+  assembled into a synthetic C2 dimer (copy through a π rotation 52 Å off-centre) — a toy assembly on purpose,
+  because the grades, the labelizer scores and the machinery all ship in-tree and the point is the *unit of
+  selection*, not this interface. Labelizer LS ≥ 1.5 plus 10-residue separation gives 8 sites; the candidate
+  set is the full product, each site generated once per protomer: 16 positions, 64 pairs. Ensemble: 60
+  alternative arrangements (chain B ≤ 18°, ≤ 2 Å), one 3.3 s pass. A symmetry honesty check on the way: at the
+  exact C2 frame |E(i:j) − E(j:i)| ≤ 0.011 — accessible-volume grid noise, well under the 6% error — against
+  0.174 mean once perturbed, i.e. the two orientations are distinct observables of one assembly, not duplicate
+  columns. The result on the mutation axis: **the site-greedy holds 1.94 Å at two mutations** (which already
+  own four measurements; *k* sites own *k*²) **where the pair-greedy over the same 64 columns needs five
+  mutations for 1.84 Å**; the first pick, GLN69, is the single-cysteine 1:1 screen and alone takes 3.01 Å off
+  the 4.55 Å prior. Trimers/tetramers covered in the closing markdown: more protomer pairs per site pair, same
+  kernel.
+
 ## 2026-09-10
 
 - **The Labelizer LS gets a notebook example** (`ipynb/example/labelizer_score.ipynb`): the label score via

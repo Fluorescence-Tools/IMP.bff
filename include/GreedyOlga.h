@@ -1,13 +1,18 @@
 /**
  *  \file IMP/bff/GreedyOlga.h
- *  \brief Greedy Olga — which FRET pair to measure next.
+ *  \brief Greedy Olga — which FRET pair (or, for a homo-oligomer, which
+ *         labelling site) to measure next.
  *
  * Experiment planning, after Olga: given an ensemble of candidate structures and
  * a set of measurable pairs, repeatedly add the pair that most reduces the
  * expected RMSD between the true structure and the one the measurements would
  * pick out. Greedy because each step takes the locally best pair and never
  * revisits it — which is what makes it tractable, and what makes the scoring
- * step the whole cost.
+ * step the whole cost. When the experiment is a homo-oligomer with a
+ * statistical labelling mix, the unit changes: sites are mutated once and all
+ * their cross-protomer combinations are measured, so
+ * #IMP::bff::select_informative_sites greedies over sites and scores each step
+ * by the pair set the sites imply.
  *
  * The cost is in the scoring step. Every remaining candidate pair has to be
  * scored against every ordered pair of ensemble frames, and the natural
@@ -108,6 +113,56 @@ IMPBFFEXPORT void select_informative_pairs(
         double err, int max_pairs,
         bool unique_only = true, double diag_weight = 0.99,
         int** out_pairs = 0, int* n_out_pairs = 0,
+        double** out_decay = 0, int* n_out_decay = 0);
+
+//! Olga-style greedy informative *labelling site* selection.
+/*!
+    For a monomer, a FRET pair is a double mutant and pairs are the unit worth
+    greedy over. For a homo-oligomer it is not: the labelling mix is
+    statistical, each site is mutated once, and every cross-protomer
+    combination of the chosen sites is measurable — in a dimer, sites {1, 2}
+    measure 1:1, 2:2, 1:2 and 2:1. A pair-wise greedy would credit each of
+    those as its own double mutant and buy, per mutation, roughly half the
+    experiment that is actually there.
+
+    So this selector greedies over **sites**. Each step scores a candidate
+    site by the expected mean RMSD left by *all* pairs the enlarged site set
+    implies — a pair is implied when both of its sites are chosen — not by the
+    single pair the monomeric selector would add. The arithmetic per pair is
+    Olga's unchanged: the implied pairs' \f$\chi^2\f$ gains accumulate together,
+    and the right-tail probability of the sum weights the pairwise RMSDs.
+
+    Which pairs exist is the caller's statement about the biology, passed as
+    `pair_sites`: row \f$p\f$ holds the two site indices pair \f$p\f$ connects
+    (a homodimer's inter-protomer 1:2 pair is `(0, 1)`, its 1:1 pair `(0, 0)`).
+    The selector is agnostic to the oligomer order — a trimer or tetramer
+    simply offers more rows per site — and never re-selects a site: a residue
+    cannot be mutated twice, so there is no `unique_only` to turn off.
+
+    The result is published as two managed numpy views: the selected site
+    indices in selection order, and the expected mean RMSD after each of them
+    (same length). The number of *measurements* a step implies is
+    \f$|\{p : \mathrm{both\ sites\ chosen}\}|\f$, which the caller can count
+    from `pair_sites` directly.
+
+    \param[in] effs,n_frames,n_pairs FRET efficiency per frame and pair
+    \param[in] rmsds,n_rmsd_rows,n_rmsd_cols pairwise RMSD between frames
+    \param[in] pair_sites,n_site_rows,n_site_cols the two site indices per
+               pair, `n_pairs * 2`, values in `[0, n_sites)`
+    \param[in] err expected absolute error in FRET efficiency
+    \param[in] max_sites how many sites to select; capped at the site count
+    \param[in] diag_weight Olga's diagonal correction on the denominator
+    \param[out] out_sites,n_out_sites selected site indices (int view)
+    \param[out] out_decay,n_out_decay expected mean RMSD after each (double
+                view)
+*/
+IMPBFFEXPORT void select_informative_sites(
+        double* effs, int n_frames, int n_pairs,
+        double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
+        int* pair_sites, int n_site_rows, int n_site_cols,
+        double err, int max_sites,
+        double diag_weight = 0.99,
+        int** out_sites = 0, int* n_out_sites = 0,
         double** out_decay = 0, int* n_out_decay = 0);
 
 IMPBFF_END_NAMESPACE
