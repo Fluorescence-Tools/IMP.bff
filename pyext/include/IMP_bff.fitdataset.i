@@ -1,17 +1,17 @@
 /*
- * A Dataset, and the one helper that lets an existing curve class inherit its
+ * A FitDataset, and the one helper that lets an existing curve class inherit its
  * probability calculus without rewriting how it stores anything.
  */
 
 %pythoncode %{
 def sync_dataset(dataset, y, ey=None, x=None, mask=None, shape=None,
                  coordinate_name="x"):
-    """Fill a `Dataset` from the arrays a measured curve already holds.
+    """Fill a `FitDataset` from the arrays a measured curve already holds.
 
     Written so a class that stores its data as numpy arrays -- chisurf's
-    `DataCurve`, for instance -- can add `IMP.bff.Dataset` to its bases and
-    call this whenever those arrays change. It then *is* a Dataset: it scores,
-    it propagates, and it can be handed to `ChiSquared.set_dataset`, without
+    `DataCurve`, for instance -- can add `IMP.bff.FitDataset` to its bases and
+    call this whenever those arrays change. It then *is* a FitDataset: it scores,
+    it propagates, and it can be handed to `FitChiSquared.set_dataset`, without
     anything about its own storage changing.
 
     The arrays go through the ndarray setters and not the list ones, because
@@ -35,13 +35,13 @@ def sync_dataset(dataset, y, ey=None, x=None, mask=None, shape=None,
     if ey is not None:
         ey = _np.ascontiguousarray(_np.asarray(ey, dtype=float).ravel())
         if ey.size == y.size and _np.any(ey != 0.0):
-            dataset.set_noise_family(NOISE_FAMILY_STORED)
+            dataset.set_noise_family(FIT_NOISE_FAMILY_STORED)
             dataset.set_stored_variance_array(
                 _np.ascontiguousarray(ey.astype(float) ** 2))
         else:
-            dataset.set_noise_family(NOISE_FAMILY_POISSON)
+            dataset.set_noise_family(FIT_NOISE_FAMILY_POISSON)
     else:
-        dataset.set_noise_family(NOISE_FAMILY_POISSON)
+        dataset.set_noise_family(FIT_NOISE_FAMILY_POISSON)
     if x is not None:
         x = _np.ascontiguousarray(_np.asarray(x, dtype=float).ravel())
         if x.size == y.size:

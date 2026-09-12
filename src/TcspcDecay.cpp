@@ -88,7 +88,7 @@ void TcspcDecay::set_number_of_lifetimes(int n) {
   if (scatter_port_ == nullptr) {
     // The interleaved spectrum, for a caller that computes it upstream. A
     // vector port, and one that does *not* sanitise: it is fit transport,
-    // and a NaN lifetime has to reach `ChiSquared` and make the misfit
+    // and a NaN lifetime has to reach `FitChiSquared` and make the misfit
     // infinite rather than be floored to `tiny` and read as a good fit.
     std::shared_ptr<GraphPort> spectrum(new GraphPort(std::vector<double>(1, 0.0)));
     spectrum->set_sanitize(false);
@@ -560,7 +560,7 @@ void TcspcDecay::evaluate() {
         "this node does not have");
   }
   // Fit transport: a NaN must survive rather than be floored to `tiny`,
-  // which in a fit reads as a *good* fit near zero. See ChiSquared::update.
+  // which in a fit reads as a *good* fit near zero. See FitChiSquared::update.
   out->set_sanitize(false);
   out->set_value_vector(curve_);
   set_valid(true);

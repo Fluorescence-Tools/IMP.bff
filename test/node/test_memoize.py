@@ -9,7 +9,7 @@ work: a value written back over itself.
 That is not a contrived case. A sampler that rejects a move restores the
 parameters it came from; a line search that overshoots puts the old point
 back; a UI re-evaluates after an event that touched nothing; and
-`Minimizer::compute_objective_batch` restores the ports it borrowed. Each of
+`FitMinimizer::compute_objective_batch` restores the ports it borrowed. Each of
 those writes the values already there, invalidates the whole graph, and pays
 for a full evaluation to arrive at the number it already had.
 
@@ -26,7 +26,7 @@ from IMP import bff
 
 
 def decay_graph(n=512):
-    """`GraphExpression -> ChiSquared`, the shape a fit actually runs."""
+    """`GraphExpression -> FitChiSquared`, the shape a fit actually runs."""
     x = np.linspace(0.1, 15.0, n)
     y = 2.0 * np.exp(-x / 3.0)
 
@@ -45,7 +45,7 @@ def decay_graph(n=512):
     out = bff.GraphPort([0.0], False, True)
     curve.add_output_port("model", out)
 
-    chi2 = bff.ChiSquared("chi2")
+    chi2 = bff.FitChiSquared("chi2")
     chi2.set_data_arrays(np.ascontiguousarray(y), np.ones(n))
     model_in = bff.GraphPort([0.0])
     model_in.link = out

@@ -1,4 +1,4 @@
-"""A Python GraphNode held only by its Minimizer/Sampler must survive (T-20260901-13).
+"""A Python GraphNode held only by its FitMinimizer/Sampler must survive (T-20260901-13).
 
 The C++ side keeps a shared_ptr to the objective node, but a SWIG director
 keeps only a weak pointer back to the Python proxy: before the fix, a
@@ -37,7 +37,7 @@ class TestNodeLifetime(unittest.TestCase):
 
     def test_a_dropped_python_node_survives_a_minimizer_run(self):
         node = Residual()
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports(node._p)
         m.set_objective(node, "residuals")
         # The exact pattern that lost the proxy: bind to _, rebind _.
@@ -63,7 +63,7 @@ class TestNodeLifetime(unittest.TestCase):
         node replaced as the objective loses its stash and may die."""
         import weakref
         node = Residual()
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports(node._p)
         m.set_objective(node, "residuals")
         ref = weakref.ref(node)

@@ -1,11 +1,11 @@
 /**
- * \file ChiSquared.cpp
+ * \file FitChiSquared.cpp
  * \brief The data misfit of a model curve, as a node in the model graph.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/ChiSquared.h>
+#include <IMP/bff/FitChiSquared.h>
 
 #include <algorithm>
 #include <new>
@@ -31,7 +31,7 @@ namespace {
     It reads backwards against this library's history: both this function and
     chisurf's ``deviance_residuals`` used ``sign(mu - y)`` until 2026-09-09,
     which put them at odds with the ``"default"`` noise model, with every
-    ``Dataset`` residual kind, and with chisurf's own Gaussian residuals --
+    ``FitDataset`` residual kind, and with chisurf's own Gaussian residuals --
     so a residual plot flipped when the noise model changed. Baker & Cousins,
     cited in chisurf for the statistic, define the deviance and not a
     residual sign, so nothing was resting on the old choice. Flipped in both
@@ -49,57 +49,57 @@ double deviance_residual(double y, double mu) {
 
 }  // namespace
 
-ChiSquared::ChiSquared(const std::string& name) : GraphNode(name) {}
+FitChiSquared::FitChiSquared(const std::string& name) : GraphNode(name) {}
 
-void ChiSquared::set_data(const std::vector<double>& y,
+void FitChiSquared::set_data(const std::vector<double>& y,
                           const std::vector<double>& ey) {
   if (!ey.empty() && ey.size() != y.size()) {
     throw std::domain_error(
-        "ChiSquared::set_data: the errors must be as long as the data");
+        "FitChiSquared::set_data: the errors must be as long as the data");
   }
   data_y_ = y;
   data_ey_ = ey;
   set_valid(false);
 }
 
-void ChiSquared::set_fit_range(int xmin, int xmax) {
+void FitChiSquared::set_fit_range(int xmin, int xmax) {
   if (xmax >= 0 && xmax < xmin) {
     throw std::domain_error(
-        "ChiSquared::set_fit_range: the range end precedes its start");
+        "FitChiSquared::set_fit_range: the range end precedes its start");
   }
   xmin_ = xmin;
   xmax_ = xmax;
   set_valid(false);
 }
 
-void ChiSquared::set_mask(const std::vector<double>& mask) {
+void FitChiSquared::set_mask(const std::vector<double>& mask) {
   mask_ = mask;
   set_valid(false);
 }
 
-void ChiSquared::set_noise_model(NoiseModel model) {
+void FitChiSquared::set_noise_model(FitNoiseModel model) {
   noise_model_ = model;
   set_valid(false);
 }
 
-void ChiSquared::set_noise_model_name(const std::string& name) {
+void FitChiSquared::set_noise_model_name(const std::string& name) {
   if (name == "poisson" || name == "mle" || name == "ml") {
-    set_noise_model(NOISE_POISSON);
+    set_noise_model(FIT_NOISE_POISSON);
   } else if (name == "default" || name == "neyman" || name == "wls" ||
              name == "chi2") {
-    set_noise_model(NOISE_NEYMAN);
+    set_noise_model(FIT_NOISE_NEYMAN);
   } else {
     throw std::domain_error(
-        "ChiSquared: unknown noise model '" + name +
+        "FitChiSquared: unknown noise model '" + name +
         "'; expected 'default' or 'poisson'");
   }
 }
 
-std::string ChiSquared::get_noise_model_name() const {
-  return noise_model_ == NOISE_POISSON ? "poisson" : "default";
+std::string FitChiSquared::get_noise_model_name() const {
+  return noise_model_ == FIT_NOISE_POISSON ? "poisson" : "default";
 }
 
-void ChiSquared::resolve_window(int* begin, int* end) const {
+void FitChiSquared::resolve_window(int* begin, int* end) const {
   const int n = static_cast<int>(data_y_.size());
   int lo = std::max(0, xmin_);
   int hi = (xmax_ < 0) ? n : std::min(n, xmax_);
@@ -108,7 +108,7 @@ void ChiSquared::resolve_window(int* begin, int* end) const {
   *end = hi;
 }
 
-void ChiSquared::set_data_arrays(double* in_data_y, int n_data_y,
+void FitChiSquared::set_data_arrays(double* in_data_y, int n_data_y,
                                  double* in_data_ey, int n_data_ey) {
   data_y_.assign(in_data_y, in_data_y + std::max(0, n_data_y));
   data_ey_.assign(in_data_ey, in_data_ey + std::max(0, n_data_ey));
@@ -120,12 +120,12 @@ void ChiSquared::set_data_arrays(double* in_data_y, int n_data_y,
   set_valid(false);
 }
 
-void ChiSquared::set_mask_array(double* in_mask_a, int n_mask_a) {
+void FitChiSquared::set_mask_array(double* in_mask_a, int n_mask_a) {
   mask_.assign(in_mask_a, in_mask_a + std::max(0, n_mask_a));
   set_valid(false);
 }
 
-void ChiSquared::compute_weighted_residuals_array(double* in_model_y,
+void FitChiSquared::compute_weighted_residuals_array(double* in_model_y,
                                                   int n_model_y,
                                                   double** out_wres,
                                                   int* n_out_wres) const {
@@ -147,7 +147,7 @@ void ChiSquared::compute_weighted_residuals_array(double* in_model_y,
     const std::size_t k = static_cast<std::size_t>(begin + i);
     const double y = data_y_[k];
     const double mu = in_model_y[k];
-    if (noise_model_ == NOISE_POISSON) {
+    if (noise_model_ == FIT_NOISE_POISSON) {
       out[i] = deviance_residual(y, mu);
     } else {
       const double e = data_ey_.empty() ? 1.0 : data_ey_[k];
@@ -169,27 +169,27 @@ void ChiSquared::compute_weighted_residuals_array(double* in_model_y,
   *n_out_wres = n;
 }
 
-void ChiSquared::set_dataset(const Dataset& dataset) {
+void FitChiSquared::set_dataset(const FitDataset& dataset) {
   dataset_ = dataset;
   has_dataset_ = true;
   set_valid(false);
 }
 
-std::vector<double> ChiSquared::compute_weighted_residuals(
+std::vector<double> FitChiSquared::compute_weighted_residuals(
     const std::vector<double>& model_y) const {
   if (has_dataset_) {
     if (xmin_ != 0 || xmax_ >= 0) {
-      IMP_THROW("this ChiSquared scores a Dataset, which carries its own mask, "
+      IMP_THROW("this FitChiSquared scores a FitDataset, which carries its own mask, "
                 "and an index window was also set. Two masking mechanisms that "
                 "disagree exclude the wrong points quietly, so pick one: mask "
                 "the dataset, or drop the window",
                 IMP::ValueException);
     }
-    ResidualKind kind = residual_kind_;
+    FitResidualKind kind = residual_kind_;
     if (!has_residual_kind_) {
       // The family's own: the deviance is the likelihood's residual for
       // counts, Pearson is the natural one for a measured variance.
-      kind = (dataset_.get_noise_family() == NOISE_FAMILY_POISSON)
+      kind = (dataset_.get_noise_family() == FIT_NOISE_FAMILY_POISSON)
                  ? RESIDUAL_DEVIANCE
                  : RESIDUAL_PEARSON;
     }
@@ -213,7 +213,7 @@ std::vector<double> ChiSquared::compute_weighted_residuals(
   for (int i = 0; i < n; ++i) {
     const double y = data_y_[static_cast<std::size_t>(begin + i)];
     const double mu = model_y[static_cast<std::size_t>(begin + i)];
-    if (noise_model_ == NOISE_POISSON) {
+    if (noise_model_ == FIT_NOISE_POISSON) {
       wres[static_cast<std::size_t>(i)] = deviance_residual(y, mu);
     } else {
       const double e = data_ey_.empty()
@@ -240,7 +240,7 @@ std::vector<double> ChiSquared::compute_weighted_residuals(
   return wres;
 }
 
-double ChiSquared::compute_chi2(const std::vector<double>& model_y) const {
+double FitChiSquared::compute_chi2(const std::vector<double>& model_y) const {
   const std::vector<double> wres = compute_weighted_residuals(model_y);
   double chi2 = 0.0;
   for (double r : wres) chi2 += r * r;
@@ -250,13 +250,13 @@ double ChiSquared::compute_chi2(const std::vector<double>& model_y) const {
   return chi2;
 }
 
-double ChiSquared::get_chi2r(int n_free) const {
+double FitChiSquared::get_chi2r(int n_free) const {
   const double dof =
       static_cast<double>(wres_.size()) - static_cast<double>(n_free) - 1.0;
   return chi2_ / dof;
 }
 
-void ChiSquared::update() {
+void FitChiSquared::update() {
   const std::shared_ptr<GraphPort> model_port = get_input_port(model_key_);
   if (model_port) model_port->set_sanitize(false);
   const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
@@ -264,11 +264,11 @@ void ChiSquared::update() {
   GraphNode::update();
 }
 
-void ChiSquared::evaluate() {
+void FitChiSquared::evaluate() {
   const std::shared_ptr<GraphPort> model_port = get_input_port(model_key_);
   if (!model_port) {
     throw std::domain_error(
-        "ChiSquared '" + get_name() + "': no input port '" + model_key_ +
+        "FitChiSquared '" + get_name() + "': no input port '" + model_key_ +
         "' carrying the model curve");
   }
   wres_ = compute_weighted_residuals(model_port->get_values_ref());
@@ -279,7 +279,7 @@ void ChiSquared::evaluate() {
   const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
-        "ChiSquared '" + get_name() +
+        "FitChiSquared '" + get_name() +
         "' writes chi-square to the output port keyed by its own name, "
         "which this node does not have");
   }
@@ -292,7 +292,7 @@ void ChiSquared::evaluate() {
   set_valid(true);
 }
 
-std::string ChiSquared::describe() const {
+std::string FitChiSquared::describe() const {
   std::ostringstream out;
   out << "points         : " << data_y_.size() << "\n"
       << "noise model    : " << get_noise_model_name() << "\n"
@@ -303,7 +303,7 @@ std::string ChiSquared::describe() const {
   return out.str();
 }
 
-void weighted_residuals(
+void fit_weighted_residuals(
     double* in_data_y, int n_data_y,
     double* in_data_ey, int n_data_ey,
     double* in_model_y, int n_model_y,

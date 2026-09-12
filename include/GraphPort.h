@@ -253,7 +253,7 @@ class IMPBFFEXPORT GraphPort : public GraphObject,
   /*!
       `get_value_vector()` returns by value, which is right for a Python
       caller and wrong for the inside of a fit: an `GraphExpression` reading its
-      axis, a `ChiSquared` reading the model curve and a `Minimizer` reading
+      axis, a `FitChiSquared` reading the model curve and a `FitMinimizer` reading
       the residuals each copied a full-length vector on **every** residual
       evaluation. At 512 points that was several kilobytes of memcpy per
       iteration, for buffers none of them writes to.
@@ -272,11 +272,11 @@ class IMPBFFEXPORT GraphPort : public GraphObject,
       floored to `tiny` it reads as *zero* -- so a model that blows up looks
       like a model that fits perfectly, and the optimiser is attracted to it
       instead of rejecting it. Measured: a NaN model curve came out of
-      `ChiSquared` as chi2 = 14 rather than infinity, where the numpy path
+      `FitChiSquared` as chi2 = 14 rather than infinity, where the numpy path
       returns NaN and MINPACK rejects the step.
 
-      So the fit's own ports -- an `GraphExpression`'s curve, a `ChiSquared`'s
-      model input and residual output, a `JointChiSquared`'s blocks -- turn
+      So the fit's own ports -- an `GraphExpression`'s curve, a `FitChiSquared`'s
+      model input and residual output, a `FitJointChiSquared`'s blocks -- turn
       it off. Everything else keeps chinet's behaviour, which is what a
       saved document still needs.
   */

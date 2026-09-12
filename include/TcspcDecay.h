@@ -7,7 +7,7 @@
  * TCSPC setup makes of such a spectrum: convolved with a measured response,
  * shifted against it, scaled to the data, plus scatter and a constant
  * background. As a `GraphNode`, so a whole fit is one C++ graph:
- * `TcspcDecay -> ChiSquared -> Minimizer`, exactly the arrangement
+ * `TcspcDecay -> FitChiSquared -> FitMinimizer`, exactly the arrangement
  * `GraphExpression` gives a parse model.
  *
  * \par The arithmetic is not here either
@@ -38,7 +38,7 @@
  * response as given, followed by the unit-sum normalisation, which is the
  * order ChiSurf uses and is not interchangeable with the other one.
  *
- * \see LifetimeSpectrum, ChiSquared, GraphExpression, Minimizer, GraphNode
+ * \see LifetimeSpectrum, FitChiSquared, GraphExpression, FitMinimizer, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -70,7 +70,7 @@ IMPBFF_BEGIN_NAMESPACE
  * | `timeshift` | shift of the response against the data, in samples |
  *
  * The curve is written to the output port keyed by the node's own name,
- * which is the protocol `ChiSquared` and `GraphExpression` already use.
+ * which is the protocol `FitChiSquared` and `GraphExpression` already use.
  *
  * **A spectrum of any size should arrive on the `lifetime_spectrum` port,
  * not on the `a{i}`/`t{i}` scalars.** The scalars are the obvious thing to
@@ -97,7 +97,7 @@ class IMPBFFEXPORT TcspcDecay : public GraphNode {
   const std::vector<double>& get_response() const { return response_; }
 
   //! The measured curve and its errors, used **only** for autoscaling.
-  /** A node that does not autoscale needs neither; `ChiSquared` downstream
+  /** A node that does not autoscale needs neither; `FitChiSquared` downstream
       holds its own copy of the data, and that is the one the misfit uses. */
   void set_data(const std::vector<double>& y, const std::vector<double>& ey);
 
@@ -219,7 +219,7 @@ class IMPBFFEXPORT TcspcDecay : public GraphNode {
 
       So the spectrum can instead arrive on an input port, which some
       upstream node writes: `<whatever computes a spectrum> -> TcspcDecay ->
-      ChiSquared`. The node keeps its opinion about the instrument and holds
+      FitChiSquared`. The node keeps its opinion about the instrument and holds
       none about the photophysics.
 
       The port carries the interleaved `(a0, t0, a1, t1, ...)` layout the

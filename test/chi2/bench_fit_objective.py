@@ -48,7 +48,7 @@ def build_graph(x, y, ey):
              _follow(bx2.get_output_port("bx2")), "addition_double")
     model = _op("model", _follow(s1.get_output_port("s1")), c, "addition_double")
 
-    chi2 = bff.ChiSquared("chi2")
+    chi2 = bff.FitChiSquared("chi2")
     chi2.add_input_port("model", _follow(model.get_output_port("model")))
     chi2.add_output_port("chi2", bff.GraphPort(0.0, name="chi2"))
     chi2.set_data(list(y), list(ey))

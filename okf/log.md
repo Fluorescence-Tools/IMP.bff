@@ -2,6 +2,13 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 1b — deterministic fitting gets its own vocabulary**
+  ([PRD-141](prds/prd-141.md)): `Dataset`, `ChiSquared`,
+  `JointChiSquared`, `Minimizer`, their enum/observer/helper support, headers
+  and binding topic are now `Fit*`; old public names are absent, not aliases.
+  Bff: 496 passed, 5 skipped + 42 subtests; direct ChiSurf fit boundary:
+  97 passed, 1 skipped + 69 subtests.
+
 - **PRD-141 stage 1a — the graph runtime has names that say what it is**
   ([PRD-141](prds/prd-141.md)): `Node`/`Port`/`Session`/`EvaluationGraph`/
   `Expression` are now `GraphNode`/`GraphPort`/`GraphSession`/

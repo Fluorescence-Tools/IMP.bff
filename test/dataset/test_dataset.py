@@ -20,9 +20,9 @@ import IMP.bff
 
 
 def _poisson(y, mask=None):
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.asarray(y, dtype=float)))
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_POISSON)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_POISSON)
     if mask is not None:
         d.set_mask(list(np.asarray(mask, dtype=float)))
     return d
@@ -38,7 +38,7 @@ def test_a_curve_is_the_rank_one_case():
 def test_the_same_class_carries_an_image_and_a_density():
     for shape in ([4, 5], [3, 4, 5]):
         n = int(np.prod(shape))
-        d = IMP.bff.Dataset()
+        d = IMP.bff.FitDataset()
         d.set_values(list(np.arange(n, dtype=float)), list(shape))
         assert d.get_rank() == len(shape)
         assert list(d.get_shape()) == list(shape)
@@ -46,7 +46,7 @@ def test_the_same_class_carries_an_image_and_a_density():
 
 
 def test_a_shape_that_does_not_describe_the_values_is_refused():
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     with pytest.raises(ValueError):
         d.set_values([1.0, 2.0, 3.0], [2, 2])
     with pytest.raises(ValueError):
@@ -65,9 +65,9 @@ def test_poisson_variance_is_the_model_not_the_data():
 
 
 def test_a_stored_variance_is_the_data_s_own():
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values([1.0, 2.0, 3.0])
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_STORED)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_STORED)
     d.set_stored_variance([4.0, 4.0, 9.0])
     np.testing.assert_allclose(np.asarray(d.variance([0.0, 0.0, 0.0])),
                                [4.0, 4.0, 9.0])
@@ -76,9 +76,9 @@ def test_a_stored_variance_is_the_data_s_own():
 def test_a_stored_family_with_nothing_stored_refuses():
     """It must not fall back to ones. Unweighted least squares on counts over
     four decades fits the peak and ignores the tail, and says nothing."""
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values([1.0, 2.0, 3.0])
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_STORED)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_STORED)
     with pytest.raises(ValueError):
         d.variance([1.0, 1.0, 1.0])
     with pytest.raises(ValueError):
@@ -151,22 +151,22 @@ def test_a_three_dimensional_dataset_scores_like_a_flat_one():
     y = rng.integers(1, 50, 3 * 4 * 5).astype(float)
     mu = y + rng.normal(0.0, 1.0, y.size)
     mu = np.abs(mu) + 0.5
-    nd = IMP.bff.Dataset()
+    nd = IMP.bff.FitDataset()
     nd.set_values(list(y), [3, 4, 5])
-    nd.set_noise_family(IMP.bff.NOISE_FAMILY_POISSON)
+    nd.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_POISSON)
     flat = _poisson(y)
     assert nd.objective(list(mu)) == pytest.approx(flat.objective(list(mu)))
     assert "shape=[3, 4, 5]" in nd.describe()
 
 
 def test_the_poisson_objective_is_the_one_the_library_already_computes():
-    """The migration claim, checked rather than asserted: a Poisson Dataset
-    scores a model exactly as `weighted_residuals(..., "poisson")` does, so
+    """The migration claim, checked rather than asserted: a Poisson FitDataset
+    scores a model exactly as `fit_weighted_residuals(..., "poisson")` does, so
     moving an objective onto the dataset does not move any number."""
     rng = np.random.default_rng(3)
     y = rng.integers(0, 500, 200).astype(float)
     mu = np.abs(y + rng.normal(0.0, 8.0, y.size)) + 0.5
-    existing = np.asarray(IMP.bff.weighted_residuals(
+    existing = np.asarray(IMP.bff.fit_weighted_residuals(
         list(y), [], list(mu), 0, -1, "poisson"))
     d = _poisson(y)
     from_dataset = np.asarray(d.residuals(list(mu), IMP.bff.RESIDUAL_DEVIANCE))
@@ -174,7 +174,7 @@ def test_the_poisson_objective_is_the_one_the_library_already_computes():
     np.testing.assert_allclose(d.objective(list(mu)), (existing ** 2).sum(),
                                rtol=1e-12)
 
-    # Sign included, since 2026-09-09. `weighted_residuals` under "poisson"
+    # Sign included, since 2026-09-09. `fit_weighted_residuals` under "poisson"
     # used to return `sign(mu - y)` while everything else in both libraries
     # used `sign(y - mu)`, so switching noise model flipped every residual
     # plot while no fitted number moved. Both were flipped to the standard
@@ -191,11 +191,11 @@ def test_the_stored_objective_is_the_one_the_library_already_computes():
     y = rng.normal(100.0, 10.0, 150)
     ey = np.full(y.size, 10.0)
     mu = y + rng.normal(0.0, 3.0, y.size)
-    existing = np.asarray(IMP.bff.weighted_residuals(
+    existing = np.asarray(IMP.bff.fit_weighted_residuals(
         list(y), list(ey), list(mu), 0, -1, "default"))
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(y))
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_STORED)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_STORED)
     d.set_stored_variance(list(ey ** 2))
     from_dataset = np.asarray(d.residuals(list(mu), IMP.bff.RESIDUAL_PEARSON))
     np.testing.assert_allclose(from_dataset, existing, rtol=1e-12, atol=1e-12)
@@ -204,7 +204,7 @@ def test_the_stored_objective_is_the_one_the_library_already_computes():
 def test_every_value_has_a_coordinate():
     """A coordinate is one per point, not one per index along an axis. An
     axis can be any shape and the samples need not lie on a lattice."""
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values([1.0, 2.0, 3.0])
     d.set_coordinate(0, "time", [0.0, 0.7, 2.9])   # unevenly spaced
     assert d.get_number_of_coordinates() == 1
@@ -219,7 +219,7 @@ def test_how_many_coordinates_is_independent_of_the_rank():
     stoichiometry. Tying coordinates to dimensions would rule that out, and it
     is a real kind of data rather than a curiosity."""
     n = 5
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.arange(float(n))))
     assert d.get_rank() == 1
     d.set_coordinate(0, "E", list(np.linspace(0.1, 0.9, n)))
@@ -231,7 +231,7 @@ def test_how_many_coordinates_is_independent_of_the_rank():
 def test_a_separable_grid_axis_is_expanded_to_one_per_value():
     """The convenience for the easy case, giving exactly what writing the full
     coordinate by hand would give."""
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.arange(12.0)), [3, 4])
     d.set_grid_axis(0, "row", [10.0, 20.0, 30.0])
     d.set_grid_axis(1, "col", [1.0, 2.0, 3.0, 4.0])
@@ -248,7 +248,7 @@ def test_a_separable_grid_axis_is_expanded_to_one_per_value():
 def test_a_grid_that_is_not_separable_is_still_expressible():
     """The reason coordinates are per point: a warped or scattered sampling
     has no per-axis vector to be built from."""
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.arange(6.0)), [2, 3])
     warped_x = [0.0, 1.0, 2.0, 0.5, 1.7, 2.4]     # rows sampled differently
     d.set_coordinate(0, "x", warped_x)
@@ -256,7 +256,7 @@ def test_a_grid_that_is_not_separable_is_still_expressible():
 
 
 def test_coordinates_are_dropped_when_the_shape_moves():
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values([1.0, 2.0, 3.0])
     d.set_coordinate(0, "t", [0.0, 1.0, 2.0])
     d.set_values([1.0, 2.0])

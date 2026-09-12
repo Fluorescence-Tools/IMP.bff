@@ -126,7 +126,7 @@ class ModelException : public Exception {
 /*! IMP spells the owning pointer `IMP::Pointer` and the borrowed one
     `IMP::WeakPointer`; standalone spells them `std::shared_ptr` and a raw
     pointer, which is the same distinction with the same guarantees. The three
-    classes that use this (`MinimizerObserver`, `InteractionTerm`,
+    classes that use this (`FitMinimizerObserver`, `InteractionTerm`,
     `RRTCollision`) derive from `IMP::Object` only so that Python can subclass
     them, and the standalone SWIG layer gets that from a director over
     `shared_ptr` instead. */

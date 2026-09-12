@@ -35,7 +35,7 @@ void add_scalar_port(GraphNode* node, const std::string& key, double value,
 
 //! Write a spectrum to the output port keyed by the node's own name.
 /** Fit transport, so it does not sanitise: a NaN lifetime has to reach
-    `ChiSquared` and make the misfit infinite rather than be floored to
+    `FitChiSquared` and make the misfit infinite rather than be floored to
     `tiny`, which in a fit reads as a *good* fit near zero. */
 void publish(GraphNode* node, const std::vector<double>& spectrum) {
   const std::shared_ptr<GraphPort> out = node->get_output_port(node->get_name());

@@ -1,5 +1,5 @@
 /**
- *  \file Minimizer.cpp
+ *  \file FitMinimizer.cpp
  *  \brief ChiSurf's bounded least-squares optimiser, in C++.
  *
  *  The Levenberg-Marquardt core is MINPACK's `lmdif` and its helpers
@@ -17,7 +17,7 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/Minimizer.h>
+#include <IMP/bff/FitMinimizer.h>
 
 #include <IMP/bff/GraphNode.h>
 #include <IMP/bff/GraphPort.h>
@@ -472,29 +472,29 @@ int minimizer_reported_total(int nfev, int expected) {
 
 // -------------------------------------------------------------- the class
 
-Minimizer::Minimizer(const std::string& algorithm) { set_algorithm(algorithm); }
+FitMinimizer::FitMinimizer(const std::string& algorithm) { set_algorithm(algorithm); }
 
-Minimizer::~Minimizer() {}
+FitMinimizer::~FitMinimizer() {}
 
-void Minimizer::set_algorithm(const std::string& algorithm) {
+void FitMinimizer::set_algorithm(const std::string& algorithm) {
   if (algorithm != "leastsq") {
-    throw MinimizerConfigurationError(
-        "Minimizer: unknown algorithm '" + algorithm + "'; the only one is "
+    throw FitMinimizerConfigurationError(
+        "FitMinimizer: unknown algorithm '" + algorithm + "'; the only one is "
         "'leastsq' (MINPACK's lmdif with chisurf's bounds transform)");
   }
   algorithm_ = algorithm;
 }
 
-const std::string& Minimizer::get_algorithm() const { return algorithm_; }
+const std::string& FitMinimizer::get_algorithm() const { return algorithm_; }
 
-void Minimizer::set_parameter_ports(
+void FitMinimizer::set_parameter_ports(
     const std::vector<std::shared_ptr<GraphPort> >& parameters) {
   for (std::size_t i = 0; i < parameters.size(); ++i) {
     if (!parameters[i])
-      throw MinimizerConfigurationError(
+      throw FitMinimizerConfigurationError(
           "set_parameter_ports: a null port in the list");
     if (parameters[i]->get_fixed())
-      throw MinimizerConfigurationError(
+      throw FitMinimizerConfigurationError(
           "set_parameter_ports: port '" + parameters[i]->get_name() +
           "' is fixed and cannot be optimised");
   }
@@ -502,11 +502,11 @@ void Minimizer::set_parameter_ports(
   configure_from_ports();
 }
 
-std::vector<std::shared_ptr<GraphPort> > Minimizer::get_parameter_ports() const {
+std::vector<std::shared_ptr<GraphPort> > FitMinimizer::get_parameter_ports() const {
   return parameters_;
 }
 
-std::vector<std::string> Minimizer::get_parameter_names() const {
+std::vector<std::string> FitMinimizer::get_parameter_names() const {
   std::vector<std::string> names;
   names.reserve(parameters_.size());
   for (std::size_t i = 0; i < parameters_.size(); ++i)
@@ -514,7 +514,7 @@ std::vector<std::string> Minimizer::get_parameter_names() const {
   return names;
 }
 
-void Minimizer::configure_from_ports() {
+void FitMinimizer::configure_from_ports() {
   const double inf = std::numeric_limits<double>::infinity();
   ndim_ = static_cast<unsigned int>(parameters_.size());
   initial_values_.assign(ndim_, 0.0);
@@ -529,9 +529,9 @@ void Minimizer::configure_from_ports() {
   }
 }
 
-void Minimizer::set_initial_values(const std::vector<double>& values) {
+void FitMinimizer::set_initial_values(const std::vector<double>& values) {
   if (ndim_ != 0 && values.size() != ndim_)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "set_initial_values: as many values as parameters are needed");
   initial_values_ = values;
   if (ndim_ == 0) {
@@ -542,17 +542,17 @@ void Minimizer::set_initial_values(const std::vector<double>& values) {
   }
 }
 
-std::vector<double> Minimizer::get_initial_values() const {
+std::vector<double> FitMinimizer::get_initial_values() const {
   return initial_values_;
 }
 
-void Minimizer::set_bounds(const std::vector<double>& lower,
+void FitMinimizer::set_bounds(const std::vector<double>& lower,
                            const std::vector<double>& upper) {
   if (lower.size() != upper.size())
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "set_bounds: the lower and upper lists differ in length");
   if (ndim_ != 0 && lower.size() != ndim_)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "set_bounds: as many bounds as parameters are needed");
   for (std::size_t i = 0; i < lower.size(); ++i) {
     if (!is_unbounded(lower[i]) && !is_unbounded(upper[i]) &&
@@ -560,7 +560,7 @@ void Minimizer::set_bounds(const std::vector<double>& lower,
       std::ostringstream m;
       m << "set_bounds: parameter " << i << " has an upper bound (" << upper[i]
         << ") that does not exceed its lower bound (" << lower[i] << ")";
-      throw MinimizerConfigurationError(m.str());
+      throw FitMinimizerConfigurationError(m.str());
     }
   }
   lower_ = lower;
@@ -569,16 +569,16 @@ void Minimizer::set_bounds(const std::vector<double>& lower,
   if (initial_values_.size() != ndim_) initial_values_.assign(ndim_, 0.0);
 }
 
-std::vector<double> Minimizer::get_lower_bounds() const { return lower_; }
-std::vector<double> Minimizer::get_upper_bounds() const { return upper_; }
+std::vector<double> FitMinimizer::get_lower_bounds() const { return lower_; }
+std::vector<double> FitMinimizer::get_upper_bounds() const { return upper_; }
 
-void Minimizer::set_objective(std::shared_ptr<GraphNode> node,
+void FitMinimizer::set_objective(std::shared_ptr<GraphNode> node,
                               const std::string& residual_key) {
   if (!node)
-    throw MinimizerConfigurationError("set_objective: the node is a null pointer");
+    throw FitMinimizerConfigurationError("set_objective: the node is a null pointer");
   if (!residual_key.empty()) residual_key_ = residual_key;
   if (!node->get_output_port(residual_key_)) {
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "set_objective: node '" + node->get_name() + "' has no output port '" +
         residual_key_ + "' to carry the residual vector");
   }
@@ -586,71 +586,71 @@ void Minimizer::set_objective(std::shared_ptr<GraphNode> node,
   residual_function_ = nullptr;
 }
 
-std::shared_ptr<GraphNode> Minimizer::get_objective() const {
+std::shared_ptr<GraphNode> FitMinimizer::get_objective() const {
   return objective_node_;
 }
 
-void Minimizer::set_residual_port_key(const std::string& key) {
+void FitMinimizer::set_residual_port_key(const std::string& key) {
   if (key.empty())
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "set_residual_port_key: the key is empty");
   residual_key_ = key;
 }
 
-const std::string& Minimizer::get_residual_port_key() const {
+const std::string& FitMinimizer::get_residual_port_key() const {
   return residual_key_;
 }
 
-void Minimizer::set_residual_function(
+void FitMinimizer::set_residual_function(
     std::function<std::vector<double>(const std::vector<double>&)> f) {
   if (!f)
-    throw MinimizerConfigurationError("set_residual_function: a null function");
+    throw FitMinimizerConfigurationError("set_residual_function: a null function");
   residual_function_ = f;
   objective_node_.reset();
 }
 
-bool Minimizer::has_objective() const {
+bool FitMinimizer::has_objective() const {
   return objective_node_ != nullptr || residual_function_ != nullptr;
 }
 
-void Minimizer::set_observer(MinimizerObserver* observer) {
+void FitMinimizer::set_observer(FitMinimizerObserver* observer) {
   observer_ = observer;
 }
 
-MinimizerObserver* Minimizer::get_observer() const { return observer_.get(); }
+FitMinimizerObserver* FitMinimizer::get_observer() const { return observer_.get(); }
 
-void Minimizer::clear_observer() { observer_ = nullptr; }
+void FitMinimizer::clear_observer() { observer_ = nullptr; }
 
-void Minimizer::set_ftol(double v) { ftol_ = v; }
-double Minimizer::get_ftol() const { return ftol_; }
-void Minimizer::set_xtol(double v) { xtol_ = v; }
-double Minimizer::get_xtol() const { return xtol_; }
-void Minimizer::set_gtol(double v) { gtol_ = v; }
-double Minimizer::get_gtol() const { return gtol_; }
-void Minimizer::set_maxfev(int v) { maxfev_ = v; }
-int Minimizer::get_maxfev() const { return maxfev_; }
-void Minimizer::set_epsfcn(double v) { epsfcn_ = v; }
-double Minimizer::get_epsfcn() const { return epsfcn_; }
+void FitMinimizer::set_ftol(double v) { ftol_ = v; }
+double FitMinimizer::get_ftol() const { return ftol_; }
+void FitMinimizer::set_xtol(double v) { xtol_ = v; }
+double FitMinimizer::get_xtol() const { return xtol_; }
+void FitMinimizer::set_gtol(double v) { gtol_ = v; }
+double FitMinimizer::get_gtol() const { return gtol_; }
+void FitMinimizer::set_maxfev(int v) { maxfev_ = v; }
+int FitMinimizer::get_maxfev() const { return maxfev_; }
+void FitMinimizer::set_epsfcn(double v) { epsfcn_ = v; }
+double FitMinimizer::get_epsfcn() const { return epsfcn_; }
 
-void Minimizer::set_factor(double v) {
+void FitMinimizer::set_factor(double v) {
   if (!(v > 0.0))
-    throw MinimizerConfigurationError("set_factor: the factor must be positive");
+    throw FitMinimizerConfigurationError("set_factor: the factor must be positive");
   factor_ = v;
 }
-double Minimizer::get_factor() const { return factor_; }
+double FitMinimizer::get_factor() const { return factor_; }
 
-void Minimizer::set_diag(const std::vector<double>& diag) {
+void FitMinimizer::set_diag(const std::vector<double>& diag) {
   for (std::size_t i = 0; i < diag.size(); ++i)
     if (!(diag[i] > 0.0))
-      throw MinimizerConfigurationError(
+      throw FitMinimizerConfigurationError(
           "set_diag: every scale factor must be positive");
   diag_ = diag;
 }
-std::vector<double> Minimizer::get_diag() const { return diag_; }
+std::vector<double> FitMinimizer::get_diag() const { return diag_; }
 
 // ------------------------------------------------------- bounds transform
 
-double Minimizer::to_external(double xi, unsigned int i) const {
+double FitMinimizer::to_external(double xi, unsigned int i) const {
   const bool lo_free = is_unbounded(lower_[i]);
   const bool up_free = is_unbounded(upper_[i]);
   if (lo_free && up_free) return xi;
@@ -659,7 +659,7 @@ double Minimizer::to_external(double xi, unsigned int i) const {
   return lower_[i] + ((upper_[i] - lower_[i]) / 2.0) * (std::sin(xi) + 1.0);
 }
 
-double Minimizer::to_internal(double xe, unsigned int i) const {
+double FitMinimizer::to_internal(double xe, unsigned int i) const {
   const bool lo_free = is_unbounded(lower_[i]);
   const bool up_free = is_unbounded(upper_[i]);
   if (lo_free && up_free) return xe;
@@ -679,7 +679,7 @@ double Minimizer::to_internal(double xe, unsigned int i) const {
   return std::asin(t);
 }
 
-double Minimizer::external_gradient(double xi, unsigned int i) const {
+double FitMinimizer::external_gradient(double xi, unsigned int i) const {
   const bool lo_free = is_unbounded(lower_[i]);
   const bool up_free = is_unbounded(upper_[i]);
   // chisurf's `_internal2external_grad` tests `is None` here while its
@@ -740,7 +740,7 @@ double Minimizer::external_gradient(double xi, unsigned int i) const {
 //! two-sided (`sin`) phenomenon -- the one-sided (`sqrt`) transform's
 //! derivative does not collapse the same way -- and every already-pinned
 //! fit with a one-sided or absent bound must not move.
-double Minimizer::fdjac2_step(double xi, unsigned int i, double eps) const {
+double FitMinimizer::fdjac2_step(double xi, unsigned int i, double eps) const {
   const bool lo_free = is_unbounded(lower_[i]);
   const bool up_free = is_unbounded(upper_[i]);
   double h = eps * std::fabs(xi);
@@ -758,7 +758,7 @@ double Minimizer::fdjac2_step(double xi, unsigned int i, double eps) const {
 
 // ------------------------------------------------------------- evaluation
 
-std::vector<double> Minimizer::evaluate_external(
+std::vector<double> FitMinimizer::evaluate_external(
     const std::vector<double>& xe) {
   if (residual_function_) return residual_function_(xe);
   for (unsigned int i = 0; i < ndim_; ++i) parameters_[i]->set_value(xe[i]);
@@ -766,24 +766,24 @@ std::vector<double> Minimizer::evaluate_external(
   const std::shared_ptr<GraphPort> out =
       objective_node_->get_output_port(residual_key_);
   if (!out) {
-    throw MinimizerConfigurationError(
-        "Minimizer: the objective node lost its output port '" + residual_key_ +
+    throw FitMinimizerConfigurationError(
+        "FitMinimizer: the objective node lost its output port '" + residual_key_ +
         "' while running");
   }
   return out->get_values_ref();
 }
 
-bool Minimizer::evaluate_internal(const std::vector<double>& xi,
+bool FitMinimizer::evaluate_internal(const std::vector<double>& xi,
                                   std::vector<double>* fvec) {
   std::vector<double> xe(ndim_);
   for (unsigned int i = 0; i < ndim_; ++i) xe[i] = to_external(xi[i], i);
   std::vector<double> res = evaluate_external(xe);
   if (!fvec->empty() && res.size() != fvec->size()) {
     std::ostringstream m;
-    m << "Minimizer: the objective returned " << res.size()
+    m << "FitMinimizer: the objective returned " << res.size()
       << " residuals after returning " << fvec->size()
       << "; the residual length must not depend on the parameters";
-    throw MinimizerConfigurationError(m.str());
+    throw FitMinimizerConfigurationError(m.str());
   }
   *fvec = res;
   ++n_evaluations_;
@@ -803,33 +803,33 @@ bool Minimizer::evaluate_internal(const std::vector<double>& xi,
 
 // -------------------------------------------------------------------- run
 
-void Minimizer::validate() const {
+void FitMinimizer::validate() const {
   if (ndim_ == 0)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "no parameters: call set_parameter_ports() or set_initial_values()");
   if (!has_objective())
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "no objective: call set_objective() or set_residual_function()");
   if (initial_values_.size() != ndim_)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "the starting values and the parameters differ in number");
   if (lower_.size() != ndim_ || upper_.size() != ndim_)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "the bounds and the parameters differ in number");
   if (!diag_.empty() && diag_.size() != ndim_)
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "the scale factors and the parameters differ in number");
 }
 
-void Minimizer::compute_objective_batch(double* in_candidates, int n_rows,
+void FitMinimizer::compute_objective_batch(double* in_candidates, int n_rows,
                                        int n_cols, double** out_view,
                                        int* n_out_view) {
   if (!has_objective()) {
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "no objective: call set_objective() or set_residual_function()");
   }
   if (ndim_ == 0) {
-    throw MinimizerConfigurationError(
+    throw FitMinimizerConfigurationError(
         "no parameters: call set_parameter_ports() or set_initial_values()");
   }
   if (n_cols != static_cast<int>(ndim_)) {
@@ -837,7 +837,7 @@ void Minimizer::compute_objective_batch(double* in_candidates, int n_rows,
     m << "compute_objective_batch: the candidates have " << n_cols
       << " columns and there are " << ndim_
       << " free parameters; one column per parameter, one row per candidate";
-    throw MinimizerConfigurationError(m.str());
+    throw FitMinimizerConfigurationError(m.str());
   }
   const int rows = std::max(0, n_rows);
   if (rows == 0 || in_candidates == nullptr) {
@@ -878,7 +878,7 @@ void Minimizer::compute_objective_batch(double* in_candidates, int n_rows,
   }
 }
 
-void Minimizer::reset() {
+void FitMinimizer::reset() {
   x_.clear();
   fvec_.clear();
   r_.clear();
@@ -891,7 +891,7 @@ void Minimizer::reset() {
   cancelled_ = false;
 }
 
-int Minimizer::run() {
+int FitMinimizer::run() {
   validate();
   reset();
   const int n = static_cast<int>(ndim_);
@@ -957,7 +957,7 @@ int Minimizer::run() {
 }
 
 //! MINPACK's `lmdif`, over the internal (unconstrained) coordinates.
-int Minimizer::lmdif(std::vector<double>* xv, std::vector<double>* fvecv) {
+int FitMinimizer::lmdif(std::vector<double>* xv, std::vector<double>* fvecv) {
   const double p1 = 0.1, p5 = 0.5, p25 = 0.25, p75 = 0.75, p0001 = 1.0e-4;
   const int n = static_cast<int>(ndim_);
   double* x = &(*xv)[0];
@@ -974,10 +974,10 @@ int Minimizer::lmdif(std::vector<double>* xv, std::vector<double>* fvecv) {
   const int m = static_cast<int>(fvec.size());
   if (m < n) {
     std::ostringstream msg;
-    msg << "Minimizer: " << n << " parameters against " << m
+    msg << "FitMinimizer: " << n << " parameters against " << m
         << " residuals; a least-squares fit needs at least as many residuals "
            "as parameters";
-    throw MinimizerConfigurationError(msg.str());
+    throw FitMinimizerConfigurationError(msg.str());
   }
   const int ldfjac = m;
 
@@ -1166,21 +1166,21 @@ int Minimizer::lmdif(std::vector<double>* xv, std::vector<double>* fvecv) {
 
 // ---------------------------------------------------------------- results
 
-std::vector<double> Minimizer::get_x() const { return x_; }
-std::vector<double> Minimizer::get_residuals() const { return fvec_; }
-double Minimizer::get_chi2() const { return chi2_; }
+std::vector<double> FitMinimizer::get_x() const { return x_; }
+std::vector<double> FitMinimizer::get_residuals() const { return fvec_; }
+double FitMinimizer::get_chi2() const { return chi2_; }
 
-double Minimizer::get_chi2r() const {
+double FitMinimizer::get_chi2r() const {
   const double dof = static_cast<double>(fvec_.size()) -
                      static_cast<double>(ndim_) - 1.0;
   return chi2_ / dof;
 }
 
-int Minimizer::get_number_of_evaluations() const { return n_evaluations_; }
-int Minimizer::get_status() const { return status_; }
-bool Minimizer::get_cancelled() const { return cancelled_; }
+int FitMinimizer::get_number_of_evaluations() const { return n_evaluations_; }
+int FitMinimizer::get_status() const { return status_; }
+bool FitMinimizer::get_cancelled() const { return cancelled_; }
 
-std::string Minimizer::get_message() const {
+std::string FitMinimizer::get_message() const {
   std::ostringstream m;
   switch (status_) {
     case -1:
@@ -1229,9 +1229,9 @@ std::string Minimizer::get_message() const {
   }
 }
 
-std::vector<double> Minimizer::get_covariance() const { return covariance_; }
+std::vector<double> FitMinimizer::get_covariance() const { return covariance_; }
 
-std::vector<double> Minimizer::get_errors() const {
+std::vector<double> FitMinimizer::get_errors() const {
   std::vector<double> errors;
   if (covariance_.empty()) return errors;
   const std::size_t n = ndim_;
@@ -1244,7 +1244,7 @@ std::vector<double> Minimizer::get_errors() const {
   return errors;
 }
 
-std::vector<double> Minimizer::jacobian_impl(const std::vector<double>& x,
+std::vector<double> FitMinimizer::jacobian_impl(const std::vector<double>& x,
                                              const std::vector<double>& f0,
                                              double epsilon, double floor) {
   const std::size_t m = f0.size();
@@ -1265,10 +1265,10 @@ std::vector<double> Minimizer::jacobian_impl(const std::vector<double>& x,
     xp[k] = x[k];
     if (f.size() != m) {
       std::ostringstream msg;
-      msg << "Minimizer: the objective returned " << f.size()
+      msg << "FitMinimizer: the objective returned " << f.size()
           << " residuals after returning " << m
           << "; the residual length must not depend on the parameters";
-      throw MinimizerConfigurationError(msg.str());
+      throw FitMinimizerConfigurationError(msg.str());
     }
     for (std::size_t i = 0; i < m; ++i)
       jac[k * m + i] = (f[i] - f0[i]) / step;
@@ -1283,7 +1283,7 @@ std::vector<double> Minimizer::jacobian_impl(const std::vector<double>& x,
   return jac;
 }
 
-void Minimizer::covariance_defaults(double* epsilon, double* floor) {
+void FitMinimizer::covariance_defaults(double* epsilon, double* floor) {
   // chisurf's `FINITE_DIFFERENCE_STEP` and `approx_grad`'s `max(|x|, 1.0)`.
   // Defaulted here rather than at the call site so that a caller who asks
   // for "the covariance" gets the one the error bars are pinned to.
@@ -1291,7 +1291,7 @@ void Minimizer::covariance_defaults(double* epsilon, double* floor) {
   if (!(*floor > 0.0)) *floor = 1.0;
 }
 
-std::vector<double> Minimizer::compute_jacobian(const std::vector<double>& x,
+std::vector<double> FitMinimizer::compute_jacobian(const std::vector<double>& x,
                                                 double epsilon, double floor) {
   if (ndim_ == 0 || !has_objective() || x.size() != ndim_)
     return std::vector<double>();
@@ -1301,7 +1301,7 @@ std::vector<double> Minimizer::compute_jacobian(const std::vector<double>& x,
   return jacobian_impl(x, f0, epsilon, floor);
 }
 
-std::vector<double> Minimizer::covariance_from_jacobian(
+std::vector<double> FitMinimizer::covariance_from_jacobian(
     const std::vector<double>& jac, std::size_t m) {
   const int n = static_cast<int>(ndim_);
   covariance_parameters_.clear();
@@ -1336,7 +1336,7 @@ std::vector<double> Minimizer::covariance_from_jacobian(
   return pseudo_inverse_symmetric(alpha, p);
 }
 
-std::vector<double> Minimizer::compute_covariance_at(
+std::vector<double> FitMinimizer::compute_covariance_at(
     const std::vector<double>& x, double epsilon, double floor) {
   covariance_parameters_.clear();
   if (ndim_ == 0 || !has_objective() || x.size() != ndim_)
@@ -1348,7 +1348,7 @@ std::vector<double> Minimizer::compute_covariance_at(
                                   f0.size());
 }
 
-std::vector<double> Minimizer::compute_covariance(double epsilon,
+std::vector<double> FitMinimizer::compute_covariance(double epsilon,
                                                   double floor) {
   covariance_parameters_.clear();
   if (ndim_ == 0 || !has_objective() || x_.size() != ndim_)
@@ -1367,11 +1367,11 @@ std::vector<double> Minimizer::compute_covariance(double epsilon,
                                   f0.size());
 }
 
-std::vector<int> Minimizer::get_covariance_parameters() const {
+std::vector<int> FitMinimizer::get_covariance_parameters() const {
   return covariance_parameters_;
 }
 
-std::string Minimizer::describe() const {
+std::string FitMinimizer::describe() const {
   std::ostringstream out;
   out << "algorithm      : " << algorithm_ << "\n"
       << "parameters     : " << ndim_ << "\n"

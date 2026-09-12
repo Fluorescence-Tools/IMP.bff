@@ -1,11 +1,11 @@
 /**
- * \file JointChiSquared.cpp
+ * \file FitJointChiSquared.cpp
  * \brief One misfit over several datasets: the grouping, as a node.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/JointChiSquared.h>
+#include <IMP/bff/FitJointChiSquared.h>
 
 #include <cmath>
 #include <limits>
@@ -14,18 +14,18 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-JointChiSquared::JointChiSquared(const std::string& name) : GraphNode(name) {}
+FitJointChiSquared::FitJointChiSquared(const std::string& name) : GraphNode(name) {}
 
-int JointChiSquared::add_member(std::shared_ptr<GraphNode> member,
+int FitJointChiSquared::add_member(std::shared_ptr<GraphNode> member,
                                 const std::string& residual_key) {
   if (!member) {
     throw std::domain_error(
-        "JointChiSquared::add_member: the member is a null pointer");
+        "FitJointChiSquared::add_member: the member is a null pointer");
   }
   const std::shared_ptr<GraphPort> source = member->get_output_port(residual_key);
   if (!source) {
     throw std::domain_error(
-        "JointChiSquared::add_member: member '" + member->get_name() +
+        "FitJointChiSquared::add_member: member '" + member->get_name() +
         "' has no output port '" + residual_key + "' carrying its residuals");
   }
 
@@ -47,24 +47,24 @@ int JointChiSquared::add_member(std::shared_ptr<GraphNode> member,
   return static_cast<int>(members_.size()) - 1;
 }
 
-std::shared_ptr<GraphNode> JointChiSquared::get_member(int index) const {
+std::shared_ptr<GraphNode> FitJointChiSquared::get_member(int index) const {
   if (index < 0 || static_cast<std::size_t>(index) >= members_.size()) {
     std::ostringstream m;
-    m << "JointChiSquared::get_member: index " << index << " of "
+    m << "FitJointChiSquared::get_member: index " << index << " of "
       << members_.size() << " members";
     throw std::domain_error(m.str());
   }
   return members_[static_cast<std::size_t>(index)];
 }
 
-std::vector<std::string> JointChiSquared::get_member_names() const {
+std::vector<std::string> FitJointChiSquared::get_member_names() const {
   std::vector<std::string> names;
   names.reserve(members_.size());
   for (const std::shared_ptr<GraphNode>& m : members_) names.push_back(m->get_name());
   return names;
 }
 
-std::vector<int> JointChiSquared::get_block_offsets() const {
+std::vector<int> FitJointChiSquared::get_block_offsets() const {
   std::vector<int> offsets;
   offsets.reserve(block_sizes_.size());
   int at = 0;
@@ -75,13 +75,13 @@ std::vector<int> JointChiSquared::get_block_offsets() const {
   return offsets;
 }
 
-double JointChiSquared::get_chi2r(int n_free) const {
+double FitJointChiSquared::get_chi2r(int n_free) const {
   const double dof =
       static_cast<double>(wres_.size()) - static_cast<double>(n_free) - 1.0;
   return chi2_ / dof;
 }
 
-void JointChiSquared::evaluate() {
+void FitJointChiSquared::evaluate() {
   block_sizes_.clear();
   block_sizes_.reserve(blocks_.size());
   std::size_t total = 0;
@@ -101,21 +101,21 @@ void JointChiSquared::evaluate() {
   chi2_ = 0.0;
   for (double r : wres_) chi2_ += r * r;
   // A NaN anywhere makes the whole group infinitely bad, which is
-  // `ChiSquared`'s convention and what makes a sampler reject rather than
+  // `FitChiSquared`'s convention and what makes a sampler reject rather than
   // propagate the NaN into the posterior.
   if (std::isnan(chi2_)) chi2_ = std::numeric_limits<double>::infinity();
 
   const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
-        "JointChiSquared '" + get_name() +
+        "FitJointChiSquared '" + get_name() +
         "' writes chi-square to the output port keyed by its own name, "
         "which this node does not have");
   }
   out->set_value(chi2_);
 
   // The concatenated residuals, when the graph asked for them. Absent by
-  // default, exactly as in `ChiSquared`: a sampler wants the scalar and
+  // default, exactly as in `FitChiSquared`: a sampler wants the scalar and
   // would otherwise pay for a copy of every dataset's residuals per move.
   const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
   if (res) {
@@ -125,7 +125,7 @@ void JointChiSquared::evaluate() {
   set_valid(true);
 }
 
-std::string JointChiSquared::describe() const {
+std::string FitJointChiSquared::describe() const {
   std::ostringstream out;
   out << "members        : " << members_.size() << "\n";
   const std::vector<int> offsets = get_block_offsets();

@@ -169,7 +169,7 @@ class IMPBFFEXPORT GraphNode : public GraphObject,
       whose evaluation is cheaper than reading its own inputs should leave
       this off.
 
-      Measured on `GraphExpression("a*exp(-x/t)") -> ChiSquared`, 3 000 updates,
+      Measured on `GraphExpression("a*exp(-x/t)") -> FitChiSquared`, 3 000 updates,
       2026-09-08:
 
       | points  | value rewritten | every step new |

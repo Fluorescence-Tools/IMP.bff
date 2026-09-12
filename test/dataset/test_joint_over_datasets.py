@@ -9,7 +9,7 @@ the group and every crossing into Python is one that a sampler pays for
 thousands of times.
 
 So these tests hold the objective at arm's length. They evaluate the joint
-node and read the ports, which is the path `Minimizer` takes.
+node and read the ports, which is the path `FitMinimizer` takes.
 """
 
 import unittest
@@ -20,22 +20,22 @@ from IMP import bff
 
 
 def poisson_dataset(y):
-    d = bff.Dataset()
+    d = bff.FitDataset()
     d.set_values_array(np.ascontiguousarray(y, dtype=float))
-    d.set_noise_family(bff.NOISE_FAMILY_POISSON)
+    d.set_noise_family(bff.FIT_NOISE_FAMILY_POISSON)
     return d
 
 
 def gaussian_dataset(y, variance):
-    d = bff.Dataset()
+    d = bff.FitDataset()
     d.set_values_array(np.ascontiguousarray(y, dtype=float))
-    d.set_noise_family(bff.NOISE_FAMILY_STORED)
+    d.set_noise_family(bff.FIT_NOISE_FAMILY_STORED)
     d.set_stored_variance_array(np.ascontiguousarray(variance, dtype=float))
     return d
 
 
 def make_member(equation, x, dataset, name):
-    """One dataset as a node: `GraphExpression -> ChiSquared`, residuals on a port.
+    """One dataset as a node: `GraphExpression -> FitChiSquared`, residuals on a port.
 
     The same shape as `test/minimizer/test_joint.py`'s member, except the
     misfit is *given the dataset* rather than told a noise model name.
@@ -55,7 +55,7 @@ def make_member(equation, x, dataset, name):
     out = bff.GraphPort([0.0], False, True)
     curve.add_output_port(name + "_model", out)
 
-    chi2 = bff.ChiSquared(name)
+    chi2 = bff.FitChiSquared(name)
     chi2.set_dataset(dataset)
     model_in = bff.GraphPort([0.0])
     model_in.link = out
@@ -91,7 +91,7 @@ class HeterogeneousGroupTests(unittest.TestCase):
         # the coupling: one lifetime, two datasets, two noise families
         p2["t"].link = p1["t"]
 
-        joint = bff.JointChiSquared("joint")
+        joint = bff.FitJointChiSquared("joint")
         joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
         joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
@@ -171,7 +171,7 @@ class HeterogeneousGroupTests(unittest.TestCase):
         free = [p1["a"], p1["t"], p2["a"]]
         for port, v in zip(free, (300.0, 2.0, 0.1)):
             port.value = v
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports(free)
         m.set_objective(joint, "residuals")
         m._graph = (joint, m1, m2)

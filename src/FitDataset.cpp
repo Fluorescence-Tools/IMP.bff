@@ -1,10 +1,10 @@
 /**
- * \file Dataset.cpp
+ * \file FitDataset.cpp
  * \brief Measured values of any rank, and the noise family that goes with them.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#include <IMP/bff/Dataset.h>
+#include <IMP/bff/FitDataset.h>
 
 #include <IMP/bff/internal/OutputView.h>
 
@@ -21,7 +21,7 @@ namespace {
     sign is the direction of the miss, so a run of like signs still means what
     it means. `y == 0` drops the logarithm, which is its limit. */
 double deviance_term(double y, double mu) {
-  // Spelt exactly as ChiSquared::deviance_residual spells it -- the model
+  // Spelt exactly as FitChiSquared::deviance_residual spells it -- the model
   // floored at the smallest positive double so the logarithm stays finite,
   // and `y*(log y - log mu)` rather than `y*log(y/mu)`. The two differ only
   // in rounding, but after a square root and a near-cancellation that showed
@@ -36,9 +36,9 @@ double deviance_term(double y, double mu) {
 
 }  // namespace
 
-Dataset::Dataset() {}
+FitDataset::FitDataset() {}
 
-void Dataset::set_values(const std::vector<double>& values,
+void FitDataset::set_values(const std::vector<double>& values,
                          const std::vector<int>& shape) {
   if (shape.empty()) {
     IMP_THROW("a dataset needs a shape; a curve's shape is its length",
@@ -62,11 +62,11 @@ void Dataset::set_values(const std::vector<double>& values,
   coordinate_names_.clear();
 }
 
-void Dataset::set_values(const std::vector<double>& values) {
+void FitDataset::set_values(const std::vector<double>& values) {
   set_values(values, std::vector<int>(1, static_cast<int>(values.size())));
 }
 
-void Dataset::set_values_array(double* in_values, int n_values) {
+void FitDataset::set_values_array(double* in_values, int n_values) {
   // The array path, because a curve's values change on every write and the
   // list path walks them one Python object at a time: measured at 2 ms for
   // 117k against 85 us. A sync that costs more than the arithmetic will be
@@ -74,23 +74,23 @@ void Dataset::set_values_array(double* in_values, int n_values) {
   set_values(std::vector<double>(in_values, in_values + std::max(0, n_values)));
 }
 
-void Dataset::set_stored_variance_array(double* in_variance, int n_variance) {
+void FitDataset::set_stored_variance_array(double* in_variance, int n_variance) {
   set_stored_variance(
       std::vector<double>(in_variance, in_variance + std::max(0, n_variance)));
 }
 
-void Dataset::set_mask_array(double* in_mask, int n_mask) {
+void FitDataset::set_mask_array(double* in_mask, int n_mask) {
   set_mask(std::vector<double>(in_mask, in_mask + std::max(0, n_mask)));
 }
 
-void Dataset::set_coordinate_array(int index, const std::string& name,
+void FitDataset::set_coordinate_array(int index, const std::string& name,
                                    double* in_coordinate, int n_coordinate) {
   set_coordinate(index, name,
                  std::vector<double>(in_coordinate,
                                      in_coordinate + std::max(0, n_coordinate)));
 }
 
-void Dataset::set_coordinate(int index, const std::string& name,
+void FitDataset::set_coordinate(int index, const std::string& name,
                              const std::vector<double>& values) {
   if (index < 0) IMP_THROW("a coordinate index is not negative", IMP::ValueException);
   if (values.size() != values_.size()) {
@@ -106,7 +106,7 @@ void Dataset::set_coordinate(int index, const std::string& name,
   coordinate_names_[static_cast<std::size_t>(index)] = name;
 }
 
-void Dataset::set_grid_axis(int dimension, const std::string& name,
+void FitDataset::set_grid_axis(int dimension, const std::string& name,
                             const std::vector<double>& values) {
   if (dimension < 0 || dimension >= get_rank()) {
     IMP_THROW("this dataset has " << get_rank() << " dimensions and no "
@@ -134,53 +134,53 @@ void Dataset::set_grid_axis(int dimension, const std::string& name,
   set_coordinate(dimension, name, full);
 }
 
-const std::vector<double>& Dataset::get_coordinate(int index) const {
+const std::vector<double>& FitDataset::get_coordinate(int index) const {
   static const std::vector<double> none;
   if (index < 0 || index >= static_cast<int>(coordinates_.size())) return none;
   return coordinates_[static_cast<std::size_t>(index)];
 }
 
-std::string Dataset::get_coordinate_name(int index) const {
+std::string FitDataset::get_coordinate_name(int index) const {
   if (index < 0 || index >= static_cast<int>(coordinate_names_.size())) {
     return std::string();
   }
   return coordinate_names_[static_cast<std::size_t>(index)];
 }
 
-void Dataset::set_mask(const std::vector<double>& mask) {
+void FitDataset::set_mask(const std::vector<double>& mask) {
   if (!mask.empty() && mask.size() != values_.size()) {
     IMP_THROW("a mask is empty or as long as the data", IMP::ValueException);
   }
   mask_ = mask;
 }
 
-void Dataset::set_stored_variance(const std::vector<double>& variance) {
+void FitDataset::set_stored_variance(const std::vector<double>& variance) {
   if (!variance.empty() && variance.size() != values_.size()) {
     IMP_THROW("a stored variance is as long as the data", IMP::ValueException);
   }
   stored_variance_ = variance;
 }
 
-void Dataset::set_constant_variance(double variance) {
+void FitDataset::set_constant_variance(double variance) {
   if (!(variance > 0.0)) {
     IMP_THROW("a variance must be positive", IMP::ValueException);
   }
   constant_variance_ = variance;
 }
 
-void Dataset::check_model(const std::vector<double>& model) const {
+void FitDataset::check_model(const std::vector<double>& model) const {
   if (model.size() != values_.size()) {
     std::ostringstream s;
     s << "the model has " << model.size() << " values and the data has "
       << values_.size();
     IMP_THROW(s.str(), IMP::ValueException);
   }
-  if (family_ == NOISE_FAMILY_PROPAGATED && propagated_variance_.empty()) {
+  if (family_ == FIT_NOISE_FAMILY_PROPAGATED && propagated_variance_.empty()) {
     IMP_THROW("this dataset says its variance was propagated and none was; "
               "build it with set_linear_combination()",
               IMP::ValueException);
   }
-  if (family_ == NOISE_FAMILY_STORED && stored_variance_.empty()) {
+  if (family_ == FIT_NOISE_FAMILY_STORED && stored_variance_.empty()) {
     // Deliberately not a fall back to ones. Unweighted least squares on counts
     // spanning four decades fits the peak and ignores the tail, silently.
     IMP_THROW("this dataset says its variance was measured and stored, and "
@@ -190,26 +190,26 @@ void Dataset::check_model(const std::vector<double>& model) const {
   }
 }
 
-std::vector<double> Dataset::own_variance() const {
+std::vector<double> FitDataset::own_variance() const {
   std::vector<double> v(values_.size(), 0.0);
   for (std::size_t i = 0; i < values_.size(); ++i) {
     switch (family_) {
-      case NOISE_FAMILY_POISSON: v[i] = values_[i]; break;
-      case NOISE_FAMILY_STORED: v[i] = stored_variance_.empty() ? 0.0 : stored_variance_[i]; break;
-      case NOISE_FAMILY_CONSTANT: v[i] = constant_variance_; break;
-      case NOISE_FAMILY_PROPAGATED: v[i] = propagated_variance_.empty() ? 0.0 : propagated_variance_[i]; break;
+      case FIT_NOISE_FAMILY_POISSON: v[i] = values_[i]; break;
+      case FIT_NOISE_FAMILY_STORED: v[i] = stored_variance_.empty() ? 0.0 : stored_variance_[i]; break;
+      case FIT_NOISE_FAMILY_CONSTANT: v[i] = constant_variance_; break;
+      case FIT_NOISE_FAMILY_PROPAGATED: v[i] = propagated_variance_.empty() ? 0.0 : propagated_variance_[i]; break;
     }
   }
   return v;
 }
 
-void Dataset::set_as_source(const std::string& name) {
+void FitDataset::set_as_source(const std::string& name) {
   source_names_.assign(1, name);
   source_variance_.assign(1, own_variance());
   derivative_.assign(1, std::vector<double>(values_.size(), 1.0));
 }
 
-void Dataset::finish_propagation(const std::vector<double>& values,
+void FitDataset::finish_propagation(const std::vector<double>& values,
                                  const std::string& provenance) {
   const std::size_t n = values.size();
   std::vector<double> var(n, 0.0);
@@ -225,14 +225,14 @@ void Dataset::finish_propagation(const std::vector<double>& values,
   source_names_ = names;
   source_variance_ = svar;
   derivative_ = der;
-  family_ = NOISE_FAMILY_PROPAGATED;
+  family_ = FIT_NOISE_FAMILY_PROPAGATED;
   propagated_variance_ = var;
   stored_variance_.clear();
   provenance_ = provenance;
 }
 
 //! op: 0 add, 1 subtract, 2 multiply, 3 divide.
-Dataset Dataset::binary(const Dataset& a, const Dataset& b, int op,
+FitDataset FitDataset::binary(const FitDataset& a, const FitDataset& b, int op,
                         const char* symbol) {
   const std::size_t n = a.values_.size();
   if (b.values_.size() != n) {
@@ -244,7 +244,7 @@ Dataset Dataset::binary(const Dataset& a, const Dataset& b, int op,
               "operand would contribute no variance and say nothing",
               IMP::ValueException);
   }
-  Dataset out;
+  FitDataset out;
   // The union of the sources, so that an operand appearing on both sides --
   // which is what makes anisotropy correlated -- is one source with the two
   // derivatives added, not two independent ones.
@@ -291,16 +291,16 @@ Dataset Dataset::binary(const Dataset& a, const Dataset& b, int op,
   return out;
 }
 
-Dataset Dataset::add(const Dataset& a, const Dataset& b) { return binary(a, b, 0, "+"); }
-Dataset Dataset::subtract(const Dataset& a, const Dataset& b) { return binary(a, b, 1, "-"); }
-Dataset Dataset::multiply(const Dataset& a, const Dataset& b) { return binary(a, b, 2, "*"); }
-Dataset Dataset::divide(const Dataset& a, const Dataset& b) { return binary(a, b, 3, "/"); }
+FitDataset FitDataset::add(const FitDataset& a, const FitDataset& b) { return binary(a, b, 0, "+"); }
+FitDataset FitDataset::subtract(const FitDataset& a, const FitDataset& b) { return binary(a, b, 1, "-"); }
+FitDataset FitDataset::multiply(const FitDataset& a, const FitDataset& b) { return binary(a, b, 2, "*"); }
+FitDataset FitDataset::divide(const FitDataset& a, const FitDataset& b) { return binary(a, b, 3, "/"); }
 
-Dataset Dataset::affine(const Dataset& a, double scale, double offset) {
+FitDataset FitDataset::affine(const FitDataset& a, double scale, double offset) {
   if (a.source_names_.empty()) {
     IMP_THROW("the operand must carry uncertainty", IMP::ValueException);
   }
-  Dataset out;
+  FitDataset out;
   const std::size_t n = a.values_.size();
   std::vector<double> values(n, 0.0);
   for (std::size_t i = 0; i < n; ++i) values[i] = scale * a.values_[i] + offset;
@@ -316,7 +316,7 @@ Dataset Dataset::affine(const Dataset& a, double scale, double offset) {
   return out;
 }
 
-Dataset Dataset::transform(const Dataset& a, const std::vector<double>& values,
+FitDataset FitDataset::transform(const FitDataset& a, const std::vector<double>& values,
                            const std::vector<double>& derivative) {
   const std::size_t n = a.values_.size();
   if (values.size() != n || derivative.size() != n) {
@@ -325,7 +325,7 @@ Dataset Dataset::transform(const Dataset& a, const std::vector<double>& values,
   if (a.source_names_.empty()) {
     IMP_THROW("the operand must carry uncertainty", IMP::ValueException);
   }
-  Dataset out;
+  FitDataset out;
   out.source_names_ = a.source_names_;
   out.source_variance_ = a.source_variance_;
   out.derivative_ = a.derivative_;
@@ -336,7 +336,7 @@ Dataset Dataset::transform(const Dataset& a, const std::vector<double>& values,
   return out;
 }
 
-void Dataset::set_linear_combination(const std::vector<Dataset>& sources,
+void FitDataset::set_linear_combination(const std::vector<FitDataset>& sources,
                                      const std::vector<double>& coefficients) {
   if (sources.empty()) {
     IMP_THROW("a combination needs at least one source", IMP::ValueException);
@@ -363,18 +363,18 @@ void Dataset::set_linear_combination(const std::vector<Dataset>& sources,
       // variance and a Poisson reading of the result does not know that.
       double vi = 0.0;
       switch (sources[k].get_noise_family()) {
-        case NOISE_FAMILY_POISSON:
+        case FIT_NOISE_FAMILY_POISSON:
           // The measured value, because the combination cannot be decomposed
           // into per-source predictions. See the header.
           vi = y[i];
           break;
-        case NOISE_FAMILY_STORED:
-        case NOISE_FAMILY_PROPAGATED:
+        case FIT_NOISE_FAMILY_STORED:
+        case FIT_NOISE_FAMILY_PROPAGATED:
           vi = sources[k].stored_variance_.empty()
                    ? sources[k].propagated_variance_[i]
                    : sources[k].stored_variance_[i];
           break;
-        case NOISE_FAMILY_CONSTANT:
+        case FIT_NOISE_FAMILY_CONSTANT:
           vi = sources[k].constant_variance_;
           break;
       }
@@ -384,29 +384,29 @@ void Dataset::set_linear_combination(const std::vector<Dataset>& sources,
     prov << coefficients[k] << "*s" << k;
   }
   set_values(v);
-  family_ = NOISE_FAMILY_PROPAGATED;
+  family_ = FIT_NOISE_FAMILY_PROPAGATED;
   propagated_variance_ = var;
   stored_variance_.clear();
   provenance_ = prov.str();
 }
 
-void Dataset::variance(const std::vector<double>& model, double** out_view,
+void FitDataset::variance(const std::vector<double>& model, double** out_view,
                        int* n_out_view) const {
   check_model(model);
   std::vector<double> v(values_.size(), 0.0);
   for (std::size_t i = 0; i < values_.size(); ++i) {
     switch (family_) {
-      case NOISE_FAMILY_POISSON:
+      case FIT_NOISE_FAMILY_POISSON:
         // The model's prediction, not the datum: this is the whole point.
         v[i] = model[i];
         break;
-      case NOISE_FAMILY_STORED:
+      case FIT_NOISE_FAMILY_STORED:
         v[i] = stored_variance_[i];
         break;
-      case NOISE_FAMILY_CONSTANT:
+      case FIT_NOISE_FAMILY_CONSTANT:
         v[i] = constant_variance_;
         break;
-      case NOISE_FAMILY_PROPAGATED:
+      case FIT_NOISE_FAMILY_PROPAGATED:
         v[i] = propagated_variance_[i];
         break;
     }
@@ -414,7 +414,7 @@ void Dataset::variance(const std::vector<double>& model, double** out_view,
   internal::copy_to_view(v, out_view, n_out_view);
 }
 
-void Dataset::residuals(const std::vector<double>& model, ResidualKind kind,
+void FitDataset::residuals(const std::vector<double>& model, FitResidualKind kind,
                         double** out_view, int* n_out_view) const {
   check_model(model);
   std::vector<double> r(values_.size(), 0.0);
@@ -424,9 +424,9 @@ void Dataset::residuals(const std::vector<double>& model, ResidualKind kind,
     switch (kind) {
       case RESIDUAL_PEARSON: {
         double var = constant_variance_;
-        if (family_ == NOISE_FAMILY_POISSON) var = mu;
-        else if (family_ == NOISE_FAMILY_STORED) var = stored_variance_[i];
-        else if (family_ == NOISE_FAMILY_PROPAGATED) var = propagated_variance_[i];
+        if (family_ == FIT_NOISE_FAMILY_POISSON) var = mu;
+        else if (family_ == FIT_NOISE_FAMILY_STORED) var = stored_variance_[i];
+        else if (family_ == FIT_NOISE_FAMILY_PROPAGATED) var = propagated_variance_[i];
         r[i] = (var > 0.0) ? (y - mu) / std::sqrt(var) : 0.0;
         break;
       }
@@ -441,18 +441,18 @@ void Dataset::residuals(const std::vector<double>& model, ResidualKind kind,
   internal::copy_to_view(r, out_view, n_out_view);
 }
 
-double Dataset::objective(const std::vector<double>& model) const {
+double FitDataset::objective(const std::vector<double>& model) const {
   check_model(model);
   double total = 0.0;
   for (std::size_t i = 0; i < values_.size(); ++i) {
     if (!mask_.empty() && mask_[i] == 0.0) continue;
     const double y = values_[i], mu = model[i];
-    if (family_ == NOISE_FAMILY_POISSON) {
+    if (family_ == FIT_NOISE_FAMILY_POISSON) {
       total += deviance_term(y, mu);
     } else {
-      const double var = (family_ == NOISE_FAMILY_STORED)
+      const double var = (family_ == FIT_NOISE_FAMILY_STORED)
                              ? stored_variance_[i]
-                             : (family_ == NOISE_FAMILY_PROPAGATED
+                             : (family_ == FIT_NOISE_FAMILY_PROPAGATED
                                     ? propagated_variance_[i]
                                     : constant_variance_);
       if (var > 0.0) {
@@ -464,7 +464,7 @@ double Dataset::objective(const std::vector<double>& model) const {
   return total;
 }
 
-int Dataset::get_number_of_active_points() const {
+int FitDataset::get_number_of_active_points() const {
   if (mask_.empty()) return static_cast<int>(values_.size());
   int n = 0;
   for (double m : mask_) {
@@ -473,19 +473,19 @@ int Dataset::get_number_of_active_points() const {
   return n;
 }
 
-std::string Dataset::describe() const {
+std::string FitDataset::describe() const {
   std::ostringstream s;
-  s << "Dataset(shape=[";
+  s << "FitDataset(shape=[";
   for (std::size_t i = 0; i < shape_.size(); ++i) {
     if (i) s << ", ";
     s << shape_[i];
   }
   s << "], noise=";
   switch (family_) {
-    case NOISE_FAMILY_POISSON: s << "poisson (variance = model)"; break;
-    case NOISE_FAMILY_STORED: s << "stored"; break;
-    case NOISE_FAMILY_CONSTANT: s << "constant"; break;
-    case NOISE_FAMILY_PROPAGATED:
+    case FIT_NOISE_FAMILY_POISSON: s << "poisson (variance = model)"; break;
+    case FIT_NOISE_FAMILY_STORED: s << "stored"; break;
+    case FIT_NOISE_FAMILY_CONSTANT: s << "constant"; break;
+    case FIT_NOISE_FAMILY_PROPAGATED:
       s << "propagated (" << provenance_ << ")";
       break;
   }

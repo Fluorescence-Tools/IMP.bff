@@ -412,7 +412,7 @@ void FcsMdfCurve::evaluate() {
   }
 
   // Fit transport, so it does not sanitise: a non-finite shape (a waist the
-  // optimiser walked to zero) has to reach `ChiSquared` and make the misfit
+  // optimiser walked to zero) has to reach `FitChiSquared` and make the misfit
   // infinite rather than be floored, which in a fit reads as a *good* fit.
   out->set_sanitize(false);
   out->set_value_vector(curve_);
@@ -983,7 +983,7 @@ void FcsSaturationCurve::evaluate() {
     curve_d_ = D_m2s;
   }
 
-  // Fit transport: a non-finite shape must reach ChiSquared and make the
+  // Fit transport: a non-finite shape must reach FitChiSquared and make the
   // misfit infinite, not be silently floored.
   out->set_sanitize(false);
   out->set_value_vector(curve_);

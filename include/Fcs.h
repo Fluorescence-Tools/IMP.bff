@@ -199,7 +199,7 @@ IMPBFFEXPORT double fcs_mdf_g_raw(
  * node that publishes the shape, with an `GraphExpression` downstream
  * multiplying the terms that *are* formulas onto it --
  *
- *     FcsMdfCurve -> GraphExpression -> ChiSquared -> Minimizer
+ *     FcsMdfCurve -> GraphExpression -> FitChiSquared -> FitMinimizer
  *
  * -- so a fit crosses into Python once per `run()` rather than once per
  * iteration.
@@ -240,7 +240,7 @@ IMPBFFEXPORT double fcs_mdf_g_raw(
  * contour and persistence lengths a model fits rather than the kernel's
  * dimensionless ratio.
  *
- * \see GraphExpression, ChiSquared, Minimizer, GraphNode
+ * \see GraphExpression, FitChiSquared, FitMinimizer, GraphNode
  */
 class IMPBFFEXPORT FcsMdfCurve : public GraphNode {
  public:
@@ -541,7 +541,7 @@ IMPBFF_BEGIN_NAMESPACE
     V0/Veff, before the 1/N normalisation and baseline the caller applies).
     The shape is published as the output port keyed by the node's name.
 
-    \see the FcsSaturation section above, GraphNode, GraphExpression, ChiSquared
+    \see the FcsSaturation section above, GraphNode, GraphExpression, FitChiSquared
 */
 class IMPBFFEXPORT FcsSaturationCurve : public GraphNode {
  public:

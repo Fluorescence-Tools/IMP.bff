@@ -29,7 +29,7 @@ IMPBFF_BEGIN_NAMESPACE
  * This compiles the same string once into reverse Polish form and evaluates
  * it over vectors, so the equation becomes an ordinary node in the model
  * graph: its free names are input ports, its curve is the output port, and
- * a `ChiSquared` node downstream turns it into a fit that never leaves C++.
+ * a `FitChiSquared` node downstream turns it into a fit that never leaves C++.
  *
  * Semantics follow numpy, because that is what the equations were written
  * against: scalars broadcast against vectors, ``**`` binds tighter than
@@ -53,7 +53,7 @@ IMPBFF_BEGIN_NAMESPACE
  * *wrongly*: ExprTk evaluated a multi-argument function at element 0 and
  * broadcast the result, so ``hypot(x,y)`` came back constant, silently.
  *
- * \see ChiSquared, GraphNode, Sampler
+ * \see FitChiSquared, GraphNode, Sampler
  */
 
 class IMPBFFEXPORT GraphExpression : public GraphNode {

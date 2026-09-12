@@ -1,5 +1,5 @@
 /**
- * \file IMP/bff/JointChiSquared.h
+ * \file IMP/bff/FitJointChiSquared.h
  * \brief One misfit over several datasets: the grouping, as a node.
  *
  * A fit of several datasets at once is two things, and bff already had one
@@ -19,7 +19,7 @@
  * residual output port is *linked* to one of this node's input ports, and
  * `GraphNode::update()` therefore evaluates the whole tree -- every member's
  * model, every member's misfit, then this -- from one call, with nothing
- * crossing into Python. A `Minimizer` pointed at this node optimises the
+ * crossing into Python. A `FitMinimizer` pointed at this node optimises the
  * group.
  *
  * **Not called a fit group**, and not shaped like one. ChiSurf's `FitGroup`
@@ -30,19 +30,19 @@
  * *is* -- the joint chi-square -- rather than which application assembles
  * it.
  *
- * The members do not have to be `ChiSquared` nodes. Anything presenting a
+ * The members do not have to be `FitChiSquared` nodes. Anything presenting a
  * residual vector on an output port qualifies, including a Python `GraphNode`
  * director wrapping a model this library cannot represent, so a group may
  * mix representable and unrepresentable members and still take one step.
  *
- * \see ChiSquared, Minimizer, GraphExpression, GraphPort
+ * \see FitChiSquared, FitMinimizer, GraphExpression, GraphPort
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_JOINTCHISQUARED_H
-#define IMPBFF_JOINTCHISQUARED_H
+#ifndef IMPBFF_FITJOINTCHISQUARED_H
+#define IMPBFF_FITJOINTCHISQUARED_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -56,9 +56,9 @@
 IMPBFF_BEGIN_NAMESPACE
 
 //! The misfit of several datasets at once: their residuals, end to end.
-class IMPBFFEXPORT JointChiSquared : public GraphNode {
+class IMPBFFEXPORT FitJointChiSquared : public GraphNode {
  public:
-  explicit JointChiSquared(const std::string& name = "joint");
+  explicit FitJointChiSquared(const std::string& name = "joint");
 
   //! Add a member, linking its residual port to a new input of this node.
   /**
@@ -95,7 +95,7 @@ class IMPBFFEXPORT JointChiSquared : public GraphNode {
   //! How long each member's residual block was in the last evaluation.
   /** Empty until the node has been evaluated. A block length can change
       between evaluations -- a member is free to truncate against a short
-      model curve, which `ChiSquared` does -- so this describes the last
+      model curve, which `FitChiSquared` does -- so this describes the last
       evaluation rather than a promise about the next. */
   std::vector<int> get_block_sizes() const { return block_sizes_; }
 
@@ -137,4 +137,4 @@ class IMPBFFEXPORT JointChiSquared : public GraphNode {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_JOINTCHISQUARED_H
+#endif  // IMPBFF_FITJOINTCHISQUARED_H

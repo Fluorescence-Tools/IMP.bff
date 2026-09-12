@@ -1,15 +1,15 @@
 /**
- * \file IMP/bff/ChiSquared.h
+ * \file IMP/bff/FitChiSquared.h
  * \brief The data misfit of a model curve, as a node in the model graph.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_CHISQUARED_H
-#define IMPBFF_CHISQUARED_H
+#ifndef IMPBFF_FITCHISQUARED_H
+#define IMPBFF_FITCHISQUARED_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Dataset.h>
+#include <IMP/bff/FitDataset.h>
 
 #include <string>
 #include <vector>
@@ -20,13 +20,13 @@
 IMPBFF_BEGIN_NAMESPACE
 
 //! How the residual between data and model is weighted.
-enum NoiseModel {
+enum FitNoiseModel {
   //! Weighted least squares, ``(data - model) / error``. ChiSurf's
   //! ``"default"`` noise model, i.e. Neyman chi-square.
-  NOISE_NEYMAN = 0,
+  FIT_NOISE_NEYMAN = 0,
   //! Signed Poisson deviance residuals, the maximum-likelihood estimator
   //! for low counts. ChiSurf's ``"poisson"`` noise model.
-  NOISE_POISSON = 1
+  FIT_NOISE_POISSON = 1
 };
 
 //! The chi-square of a model curve against measured data.
@@ -51,19 +51,19 @@ enum NoiseModel {
  *
  * \see Sampler, GraphNode
  */
-class IMPBFFEXPORT ChiSquared : public GraphNode {
+class IMPBFFEXPORT FitChiSquared : public GraphNode {
  public:
-  explicit ChiSquared(const std::string& name = "chi2");
+  explicit FitChiSquared(const std::string& name = "chi2");
 
   //! Set the measured curve and its per-point errors.
   /** \param y measured values
       \param ey per-point errors; only used by the Neyman noise model */
-  //! Score against a Dataset, which carries its own noise family.
+  //! Score against a FitDataset, which carries its own noise family.
   /*!
       The alternative to #set_noise_model, and the one that composes: the
       dataset says whether it is counts or a measurement with stored
       variances, and the residuals follow from that rather than from a
-      setting on the objective. A #JointChiSquared whose members carry
+      setting on the objective. A #FitJointChiSquared whose members carry
       datasets can hold a Poisson decay and a Gaussian correlation curve at
       once, which it cannot when each member is *told* its noise model by
       whoever built it.
@@ -79,13 +79,13 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
       chisurf plots today, so it is left alone rather than flipped underneath
       it. See PRD-140.
   */
-  void set_dataset(const Dataset& dataset);
+  void set_dataset(const FitDataset& dataset);
   //! Whether a dataset was given.
   bool get_has_dataset() const { return has_dataset_; }
   //! The dataset, if one was given.
-  const Dataset& get_dataset() const { return dataset_; }
+  const FitDataset& get_dataset() const { return dataset_; }
   //! Which residual the dataset path reports; the family's own by default.
-  void set_residual_kind(ResidualKind kind) { residual_kind_ = kind; has_residual_kind_ = true; }
+  void set_residual_kind(FitResidualKind kind) { residual_kind_ = kind; has_residual_kind_ = true; }
 
   void set_data(const std::vector<double>& y, const std::vector<double>& ey);
 
@@ -104,8 +104,8 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
   void set_mask(const std::vector<double>& mask);
   const std::vector<double>& get_mask() const { return mask_; }
 
-  void set_noise_model(NoiseModel model);
-  NoiseModel get_noise_model() const { return noise_model_; }
+  void set_noise_model(FitNoiseModel model);
+  FitNoiseModel get_noise_model() const { return noise_model_; }
 
   //! Set the noise model by ChiSurf's name: "default" or "poisson".
   void set_noise_model_name(const std::string& name);
@@ -118,8 +118,8 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
   //! The key of the output port the residual vector is written to.
   /** Written by `evaluate()` **only when the node has such a port**, so
       nothing changes for a graph that only wants chi-square. It exists
-      because `Minimizer` needs the residuals rather than their sum, and
-      needs them from *any* objective node -- a `ChiSquared`, or a Python
+      because `FitMinimizer` needs the residuals rather than their sum, and
+      needs them from *any* objective node -- a `FitChiSquared`, or a Python
       `GraphNode` director wrapping a model this library cannot represent. A
       port is the one thing both can present. */
   void set_residuals_port_key(const std::string& key) { residuals_key_ = key; }
@@ -194,9 +194,9 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
   std::string describe() const;
 
  private:
-  Dataset dataset_;
+  FitDataset dataset_;
   bool has_dataset_ = false;
-  ResidualKind residual_kind_ = RESIDUAL_PEARSON;
+  FitResidualKind residual_kind_ = RESIDUAL_PEARSON;
   bool has_residual_kind_ = false;
   std::vector<double> data_y_;
   std::vector<double> data_ey_;
@@ -207,7 +207,7 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
   double chi2_ = 0.0;
   int xmin_ = 0;
   int xmax_ = -1;  //!< -1 means "to the end of the data"
-  NoiseModel noise_model_ = NOISE_NEYMAN;
+  FitNoiseModel noise_model_ = FIT_NOISE_NEYMAN;
 
   //! The half-open window actually used, clamped to the data.
   void resolve_window(int* begin, int* end) const;
@@ -226,7 +226,7 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
     \param out_wres the residuals
     \param n_out_wres how many
 
-    **Stateless, and deliberately so.** The obvious design is a `ChiSquared`
+    **Stateless, and deliberately so.** The obvious design is a `FitChiSquared`
     holding the data and reused across iterations, but that copies the data
     into the node, and a caller editing its curve in place would then be
     served residuals against a stale copy. Reading every buffer where it lies
@@ -242,7 +242,7 @@ class IMPBFFEXPORT ChiSquared : public GraphNode {
     including that a model which stops early is truncated against rather than
     treated as an error.
  */
-IMPBFFEXPORT void weighted_residuals(
+IMPBFFEXPORT void fit_weighted_residuals(
     double* in_data_y, int n_data_y,
     double* in_data_ey, int n_data_ey,
     double* in_model_y, int n_model_y,
@@ -251,4 +251,4 @@ IMPBFFEXPORT void weighted_residuals(
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_CHISQUARED_H
+#endif  // IMPBFF_FITCHISQUARED_H

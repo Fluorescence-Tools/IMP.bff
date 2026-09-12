@@ -15,7 +15,7 @@ The three paths:
     exists to keep the parity tests honest and to keep this baseline
     meaningful.
 ``director``
-    ``IMP.bff.Minimizer`` driving the *same* Python residual through a
+    ``IMP.bff.FitMinimizer`` driving the *same* Python residual through a
     ``GraphNode`` director. **This is the fallback that ships**, for every model
     the graph cannot represent. It was rejected as the fallback when it
     measured 1.54 ms against scipy's 1.33; timing `minimize` alone on the
@@ -29,7 +29,7 @@ The three paths:
     while a director run differences the *director*, in Python. Read the
     ratios as a whole-fit comparison, not as an optimiser one.
 ``graph``
-    ``GraphExpression -> ChiSquared -> Minimizer``. The parameters are ports the
+    ``GraphExpression -> FitChiSquared -> FitMinimizer``. The parameters are ports the
     optimiser writes in C++, the curve is computed in C++, the data live in
     the node; nothing crosses the SWIG boundary per iteration.
 
@@ -42,7 +42,7 @@ existed a lifetime model simply fell back to scipy.
 A second table does the same for a ``FitGroup`` -- which is what the GUI
 actually builds, ``global_optimize_local_first`` shipping ``false`` so a
 group is exactly one optimisation over ``GlobalFitModel``. Its graph is one
-``GraphExpression -> ChiSquared`` per member under a ``JointChiSquared``, with the
+``GraphExpression -> FitChiSquared`` per member under a ``FitJointChiSquared``, with the
 shared parameter as a ``GraphPort`` link. There is no ``director`` row: before
 this existed a group simply fell back to scipy, so scipy *is* the before.
 
@@ -311,7 +311,7 @@ def make_polarised_fit(polarization="vv", rho=2.5, seed=13, **kwargs):
     """The same instrument, one node further upstream.
 
     A VV decay is `LifetimeSpectrumNode -> AnisotropySpectrum ->
-    TcspcDecay -> ChiSquared`: the polarisation is a *spectrum* transform
+    TcspcDecay -> FitChiSquared`: the polarisation is a *spectrum* transform
     (the product of two sums of exponentials is a sum of exponentials), so
     it costs one more node and no more crossings. Before it existed, a
     polarised model was refused outright and fell back to numpy, so scipy
@@ -375,7 +375,7 @@ def main_polarised(rounds=3, reps=3):
 def make_fret_fit(distance=45.0, sigma=6.0, x_donly=0.2, seed=17, **kwargs):
     """A Gaussian-distance FRET decay -- the chain, end to end.
 
-    `GaussianDistances -> FretSpectrum -> TcspcDecay -> ChiSquared`: three
+    `GaussianDistances -> FretSpectrum -> TcspcDecay -> FitChiSquared`: three
     producers and an instrument, and the caller crosses once. The numpy path
     rebuilds the whole of that per iteration -- a 96-point distance
     distribution, 96 transfer rates, their product with the donor spectrum

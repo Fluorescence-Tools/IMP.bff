@@ -1,6 +1,6 @@
-"""bff.Minimizer against the scipy-backed optimiser it was ported from.
+"""bff.FitMinimizer against the scipy-backed optimiser it was ported from.
 
-`Minimizer` is MINPACK's `lmdif` plus chisurf's bounds transform, so the bar
+`FitMinimizer` is MINPACK's `lmdif` plus chisurf's bounds transform, so the bar
 is not "it finds a minimum" -- any Levenberg-Marquardt does that -- but "it
 finds the *same* minimum, from the same start, in the same number of
 evaluations, and stops for the same reason". A fit that moved when the
@@ -102,7 +102,7 @@ def build_minimizer(func, start, bounds=None, **options):
     ports = node.ports_for()
     for port, v in zip(ports, start):
         port.value = float(v)
-    m = bff.Minimizer()
+    m = bff.FitMinimizer()
     m.set_parameter_ports(ports)
     m.set_objective(node, "residuals")
     if bounds is not None:
@@ -375,33 +375,33 @@ class MinimizerTests(unittest.TestCase):
             m.run()
 
     def test_no_objective_is_refused(self):
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_initial_values([1.0])
         with self.assertRaises(ValueError):
             m.run()
 
     def test_an_unknown_algorithm_is_refused(self):
         with self.assertRaises(ValueError):
-            bff.Minimizer("nelder-mead")
+            bff.FitMinimizer("nelder-mead")
 
     def test_a_fixed_port_cannot_be_optimised(self):
         port = bff.GraphPort(1.0)
         port.set_fixed(True)
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         with self.assertRaises(ValueError):
             m.set_parameter_ports([port])
 
     def test_an_objective_without_the_residual_port_is_refused(self):
         node = bff.GraphNode("plain")
         node.add_output_port("chi2", bff.GraphPort(0.0, False, True))
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         with self.assertRaises(ValueError):
             m.set_objective(node, "residuals")
 
 
 # ---------------------------------------------------------------- observer
 
-class Observer(bff.MinimizerObserver):
+class Observer(bff.FitMinimizerObserver):
     """Counts reports, and cancels after `stop_after` of them."""
 
     def __init__(self, stop_after=None):
@@ -483,7 +483,7 @@ class ObserverTests(unittest.TestCase):
 # ------------------------------------------------------------- whole graph
 
 class GraphObjectiveTests(unittest.TestCase):
-    """`GraphExpression -> ChiSquared -> Minimizer`: a fit that never re-enters
+    """`GraphExpression -> FitChiSquared -> FitMinimizer`: a fit that never re-enters
     the interpreter. This is the arrangement the port exists for -- the
     optimiser and the objective on the same side of the boundary, so a
     caller crosses once per `run()` rather than once per part per iteration.
@@ -499,7 +499,7 @@ class GraphObjectiveTests(unittest.TestCase):
         curve = bff.GraphPort([0.0], False, True)
         expression.add_output_port("model", curve)
 
-        chi2 = bff.ChiSquared("chi2")
+        chi2 = bff.FitChiSquared("chi2")
         chi2.set_data(list(map(float, data_y)), list(map(float, data_ey)))
         model_in = bff.GraphPort([0.0])
         model_in.link = curve
@@ -518,7 +518,7 @@ class GraphObjectiveTests(unittest.TestCase):
 
         ports = [expression.get_input_port(n) for n in names]
         ports[0].value, ports[1].value = 1.0, 1.0
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports(ports)
         m.set_objective(chi2, "residuals")
         info = m.run()
@@ -562,7 +562,7 @@ class GraphObjectiveTests(unittest.TestCase):
         expression, chi2, names = self._graph("sqrt(a-x)", y, np.ones_like(y), x)
         port = expression.get_input_port("a")
         port.value = 6.0
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports([port])
         m.set_objective(chi2, "residuals")
         info = m.run()
@@ -585,7 +585,7 @@ class GraphObjectiveTests(unittest.TestCase):
                          np.finfo(np.float64).max)
 
     def test_a_node_without_a_residual_port_keeps_working(self):
-        """`ChiSquared` writes the residuals only when asked; a graph built
+        """`FitChiSquared` writes the residuals only when asked; a graph built
         before this port existed evaluates exactly as it did."""
         x = np.linspace(0.1, 5.0, 20)
         y = 2.0 * np.exp(-x / 0.5)
@@ -632,7 +632,7 @@ class CovarianceTests(unittest.TestCase):
     **Every fixture here names its node and keeps the name.** A
     `ResidualNode` is a SWIG director and the C++ side holds only a weak
     reference to its Python proxy, so a node that falls out of scope while
-    its `Minimizer` is still in use is a use-after-free -- reliably a
+    its `FitMinimizer` is still in use is a use-after-free -- reliably a
     segfault, in `run()` exactly as much as in `compute_covariance`. Binding
     it to `_` is enough to lose it, because the next tuple unpacking rebinds
     `_`. See T-20260901-13.
@@ -761,7 +761,7 @@ class CovarianceTests(unittest.TestCase):
         f = residual_callable(x, y, ey)
         # Both nodes are kept named. A `ResidualNode` is a SWIG director and
         # the C++ side holds only a weak reference to its Python proxy, so
-        # letting the first one fall out of scope while its `Minimizer` is
+        # letting the first one fall out of scope while its `FitMinimizer` is
         # still in use is a use-after-free -- in `run()` as much as here.
         free, free_node = build_minimizer(f, [1.0, 0.5, 0.3, 2.0])
         free.run()

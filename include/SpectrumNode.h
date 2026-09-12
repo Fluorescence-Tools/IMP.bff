@@ -18,9 +18,9 @@
  * as a regression (`okf/log.md` 2026-09-01 (9)). A node per producer is the
  * third option and the only one that composes:
  *
- *     LifetimeSpectrumNode -> AnisotropySpectrum -> TcspcDecay -> ChiSquared
+ *     LifetimeSpectrumNode -> AnisotropySpectrum -> TcspcDecay -> FitChiSquared
  *
- * \see TcspcDecay, LifetimeSpectrum, ChiSquared, Minimizer, GraphNode
+ * \see TcspcDecay, LifetimeSpectrum, FitChiSquared, FitMinimizer, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -55,7 +55,7 @@ IMPBFF_BEGIN_NAMESPACE
  * | `a0`, `t0`, `a1`, `t1`, ... | amplitude and lifetime of each species |
  *
  * The spectrum is written to the output port keyed by the node's own name,
- * which is the protocol `TcspcDecay`, `ChiSquared` and `GraphExpression` use.
+ * which is the protocol `TcspcDecay`, `FitChiSquared` and `GraphExpression` use.
  */
 class IMPBFFEXPORT LifetimeSpectrumNode : public GraphNode {
  public:
@@ -199,7 +199,7 @@ class IMPBFFEXPORT AnisotropySpectrum : public GraphNode {
  * distribution and then a lifetime spectrum, so the whole chain from a
  * fitted mean distance to a model curve is
  *
- *     GaussianDistances -> FretSpectrum -> TcspcDecay -> ChiSquared
+ *     GaussianDistances -> FretSpectrum -> TcspcDecay -> FitChiSquared
  *
  * and nothing in it returns to the caller.
  *

@@ -1,7 +1,7 @@
 """ChiSurf's old bounded least-squares optimiser, kept **only** as a reference.
 
 Nothing in any product imports this. It is the implementation
-`IMP::bff::Minimizer` was transcribed from -- scipy's `leastsq` under
+`IMP::bff::FitMinimizer` was transcribed from -- scipy's `leastsq` under
 ChiSurf's bounds transform -- and it is here so that the parity tests in
 `test_minimizer.py` can still assert the port is 1:1: same answer, same
 number of function evaluations, same evaluation *points*, same covariance,
@@ -17,7 +17,7 @@ answer did not move, and it is how the permuted-covariance defect
 (`okf/log.md` 2026-09-01) was found. So the reference outlived the
 implementation, which is the right way round.
 
-Do not fix bugs in this file. If it disagrees with `Minimizer`, one of the
+Do not fix bugs in this file. If it disagrees with `FitMinimizer`, one of the
 two is wrong and the question is *which* -- that is the whole point of
 keeping it. Do not import it from `src/` or `pyext/` either; it is test
 scaffolding, and `AGENTS.md`'s language rule does not make an exception for

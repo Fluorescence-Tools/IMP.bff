@@ -22,9 +22,9 @@ G = 1.15
 
 
 def _counts(values, name):
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.asarray(values, dtype=float)))
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_POISSON)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_POISSON)
     d.set_as_source(name)
     return d
 
@@ -46,7 +46,7 @@ def test_the_constructed_magic_angle_is_not_poisson(channels):
     """The coefficient squares in the variance and a Poisson reading of the
     result does not know that."""
     vv, vh, dvv, dvh = channels
-    magic = IMP.bff.Dataset.add(dvv, IMP.bff.Dataset.affine(dvh, 2.0 * G))
+    magic = IMP.bff.FitDataset.add(dvv, IMP.bff.FitDataset.affine(dvh, 2.0 * G))
     np.testing.assert_allclose(np.asarray(magic.get_values()), vv + 2 * G * vh)
 
     got = np.asarray(magic.variance(list(magic.get_values())))
@@ -63,9 +63,9 @@ def test_a_ratio_of_the_same_channels_is_correlated(channels):
     """Anisotropy. Propagating over the operands as if they were independent
     is the standard mistake; tracing to VV and VH is right."""
     vv, vh, dvv, dvh = channels
-    num = IMP.bff.Dataset.subtract(dvv, IMP.bff.Dataset.affine(dvh, G))
-    den = IMP.bff.Dataset.add(dvv, IMP.bff.Dataset.affine(dvh, 2.0 * G))
-    r = IMP.bff.Dataset.divide(num, den)
+    num = IMP.bff.FitDataset.subtract(dvv, IMP.bff.FitDataset.affine(dvh, G))
+    den = IMP.bff.FitDataset.add(dvv, IMP.bff.FitDataset.affine(dvh, 2.0 * G))
+    r = IMP.bff.FitDataset.divide(num, den)
 
     N, D = vv - G * vh, vv + 2 * G * vh
     np.testing.assert_allclose(np.asarray(r.get_values()), N / D, rtol=1e-12)
@@ -87,8 +87,8 @@ def test_a_ratio_of_the_same_channels_is_correlated(channels):
 
 def test_both_sources_are_kept_once_not_twice(channels):
     _, _, dvv, dvh = channels
-    r = IMP.bff.Dataset.divide(IMP.bff.Dataset.subtract(dvv, dvh),
-                               IMP.bff.Dataset.add(dvv, dvh))
+    r = IMP.bff.FitDataset.divide(IMP.bff.FitDataset.subtract(dvv, dvh),
+                               IMP.bff.FitDataset.add(dvv, dvh))
     assert sorted(r.get_source_names()) == ["VH", "VV"], \
         "VV appears on both sides and must stay one source"
 
@@ -97,7 +97,7 @@ def test_a_difference_of_one_channel_with_itself_has_no_variance(channels):
     """The sharpest check that correlation is handled: x - x is exactly zero
     and exactly certain. Independent propagation would give it 2*Var(x)."""
     _, _, dvv, _ = channels
-    zero = IMP.bff.Dataset.subtract(dvv, dvv)
+    zero = IMP.bff.FitDataset.subtract(dvv, dvv)
     np.testing.assert_allclose(np.asarray(zero.get_values()), 0.0, atol=1e-12)
     np.testing.assert_allclose(
         np.asarray(zero.variance(list(zero.get_values()))), 0.0, atol=1e-12)
@@ -105,14 +105,14 @@ def test_a_difference_of_one_channel_with_itself_has_no_variance(channels):
 
 def test_products_and_a_general_transform(channels):
     vv, vh, dvv, dvh = channels
-    prod = IMP.bff.Dataset.multiply(dvv, dvh)
+    prod = IMP.bff.FitDataset.multiply(dvv, dvh)
     np.testing.assert_allclose(np.asarray(prod.get_values()), vv * vh)
     np.testing.assert_allclose(
         np.asarray(prod.variance(list(prod.get_values()))),
         vh ** 2 * vv + vv ** 2 * vh, rtol=1e-12)
 
     # sqrt, through the general escape: values and the derivative per point
-    root = IMP.bff.Dataset.transform(dvv, list(np.sqrt(vv)),
+    root = IMP.bff.FitDataset.transform(dvv, list(np.sqrt(vv)),
                                      list(0.5 / np.sqrt(vv)))
     np.testing.assert_allclose(
         np.asarray(root.variance(list(root.get_values()))),
@@ -123,16 +123,16 @@ def test_an_untracked_operand_is_refused():
     """Silence is the failure mode: an operand carrying no uncertainty would
     contribute none and the result would look more certain than it is."""
     a = _counts([10.0, 20.0], "A")
-    plain = IMP.bff.Dataset()
+    plain = IMP.bff.FitDataset()
     plain.set_values([1.0, 2.0])
     with pytest.raises(ValueError):
-        IMP.bff.Dataset.add(a, plain)
+        IMP.bff.FitDataset.add(a, plain)
 
 
 def test_a_propagated_dataset_scores_with_its_propagated_variance(channels):
     """And it reaches the objective, which is the point of carrying it."""
     vv, vh, dvv, dvh = channels
-    magic = IMP.bff.Dataset.add(dvv, IMP.bff.Dataset.affine(dvh, 2.0 * G))
+    magic = IMP.bff.FitDataset.add(dvv, IMP.bff.FitDataset.affine(dvh, 2.0 * G))
     y = np.asarray(magic.get_values())
     mu = y * 1.02
     var = vv + 4 * G * G * vh

@@ -1,4 +1,4 @@
-"""bff.ChiSquared against ChiSurf's own residual arithmetic.
+"""bff.FitChiSquared against ChiSurf's own residual arithmetic.
 
 The objective is the one number a sampler trusts, so it is checked against
 the Python it was ported from rather than against hand-written expectations.
@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - depends on the environment
 
 
 def make_chi2(y, ey, xmin=0, xmax=-1, noise="default", mask=None):
-    node = bff.ChiSquared("chi2")
+    node = bff.FitChiSquared("chi2")
     node.set_data(list(map(float, y)), list(map(float, ey)))
     node.set_fit_range(xmin, xmax)
     node.set_noise_model_name(noise)
@@ -78,12 +78,12 @@ class ChiSquaredArithmeticTests(unittest.TestCase):
         self.assertAlmostEqual(c.get_chi2r(2), 10.0 / (10 - 2 - 1))
 
     def test_unknown_noise_model_is_refused(self):
-        c = bff.ChiSquared("chi2")
+        c = bff.FitChiSquared("chi2")
         with self.assertRaises(ValueError):
             c.set_noise_model_name("student-t")
 
     def test_mismatched_errors_are_refused(self):
-        c = bff.ChiSquared("chi2")
+        c = bff.FitChiSquared("chi2")
         with self.assertRaises(ValueError):
             c.set_data([1.0, 2.0], [1.0])
 
@@ -195,7 +195,7 @@ class WholeFitInCppTests(unittest.TestCase):
     """A polynomial fit whose model *and* objective are bff nodes.
 
     This is the end of the chain the port exists for: Sampler drives
-    parameters, the graph computes the curve, ChiSquared scores it, and no
+    parameters, the graph computes the curve, FitChiSquared scores it, and no
     step of a move enters Python.
     """
 

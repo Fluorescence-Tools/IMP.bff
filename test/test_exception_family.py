@@ -29,9 +29,9 @@ class TestExceptionFamily(unittest.TestCase):
         self.assertTrue(issubclass(IMP.bff.Exception, Exception))
 
     def test_a_refused_value_is_a_value_exception(self):
-        # ChiSquared::set_data throws std::domain_error; IMP maps that to
+        # FitChiSquared::set_data throws std::domain_error; IMP maps that to
         # ValueException, and so does the standalone module.
-        c = IMP.bff.ChiSquared("chi2")
+        c = IMP.bff.FitChiSquared("chi2")
         with self.assertRaises(IMP.bff.ValueException):
             c.set_data([1.0, 2.0], [1.0])
         with self.assertRaises(ValueError):

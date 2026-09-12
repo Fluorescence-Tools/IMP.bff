@@ -1,4 +1,4 @@
-"""`Minimizer::compute_objective_batch`: many candidates, one crossing.
+"""`FitMinimizer::compute_objective_batch`: many candidates, one crossing.
 
 A chi-square surface, a support-plane interval, a population sampler and a
 random restart all ask one question of a great many points, and asked one at
@@ -36,7 +36,7 @@ def decay_fit(n=128):
     out = bff.GraphPort([0.0], False, True)
     curve.add_output_port("model", out)
 
-    chi2 = bff.ChiSquared("chi2")
+    chi2 = bff.FitChiSquared("chi2")
     chi2.set_data_arrays(np.ascontiguousarray(y), np.ones(n))
     model_in = bff.GraphPort([0.0])
     model_in.link = out
@@ -48,7 +48,7 @@ def decay_fit(n=128):
     free = [ports["a"], ports["t"]]
     for port, v in zip(free, (2.0, 3.0)):
         port.value = v
-    m = bff.Minimizer()
+    m = bff.FitMinimizer()
     m.set_parameter_ports(free)
     m.set_objective(chi2, "residuals")
     m._graph = (chi2, curve, ports)
@@ -117,7 +117,7 @@ class ObjectiveBatchTests(unittest.TestCase):
 
     def test_a_nan_that_does_reach_the_objective_scores_infinite(self):
         """With sanitising off the NaN travels, and then it must come back as
-        `+inf` -- `ChiSquared`'s convention, so a sampler rejects the
+        `+inf` -- `FitChiSquared`'s convention, so a sampler rejects the
         candidate instead of carrying a NaN into the posterior."""
         for port in self.free:
             port.set_sanitize(False)
@@ -153,7 +153,7 @@ class ObjectiveBatchTests(unittest.TestCase):
         self.assertLess(surface.min(), 1e-3)
 
     def test_a_batch_without_an_objective_is_refused(self):
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         with self.assertRaises(ValueError):
             m.compute_objective_batch(np.zeros((2, 2)))
 

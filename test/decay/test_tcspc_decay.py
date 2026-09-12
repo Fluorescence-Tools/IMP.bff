@@ -220,7 +220,7 @@ class NodeBehaviourTests(unittest.TestCase):
 
         The second spelling turns a NaN into a *zero*, which in a fit reads
         as a good fit near zero -- the same trap the port sanitiser sets. A
-        NaN has to reach `ChiSquared`, which is what makes the misfit
+        NaN has to reach `FitChiSquared`, which is what makes the misfit
         infinite and the step rejected.
 
         Getting one *into* the curve takes opting the parameter port out of
@@ -328,7 +328,7 @@ class AutoscaleTests(unittest.TestCase):
 
 
 class WholeFitTests(unittest.TestCase):
-    """`TcspcDecay -> ChiSquared -> Minimizer`: the point of the class."""
+    """`TcspcDecay -> FitChiSquared -> FitMinimizer`: the point of the class."""
 
     def test_a_lifetime_is_recovered_from_simulated_counts(self):
         irf = response()
@@ -345,7 +345,7 @@ class WholeFitTests(unittest.TestCase):
         node.set_autoscale(True)
         node.set_scale_range(0, len(y))
 
-        chi2 = bff.ChiSquared("chi2")
+        chi2 = bff.FitChiSquared("chi2")
         chi2.set_data_arrays(np.ascontiguousarray(y),
                              np.ascontiguousarray(ey))
         chi2.set_fit_range(0, len(y))
@@ -358,7 +358,7 @@ class WholeFitTests(unittest.TestCase):
         free = [node.get_input_port("t0"), node.get_input_port("background")]
         free[0].value = 1.0
         free[1].value = 0.0
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports(free)
         m.set_objective(chi2, "residuals")
         m._graph = (node, chi2, model_in)
@@ -372,7 +372,7 @@ class WholeFitTests(unittest.TestCase):
         """The claim the whole port rests on, stated as a test.
 
         Nothing in the graph is a Python object with an `evaluate`, so a
-        `Minimizer` step cannot re-enter the interpreter. If a future change
+        `FitMinimizer` step cannot re-enter the interpreter. If a future change
         introduces a director in this path it will show up here as a node
         that is not one of the C++ types.
         """

@@ -1,11 +1,11 @@
 """PRD-140: an objective that asks the data rather than being told.
 
-`ChiSquared` has always been *told* its noise model by whoever built it. That
+`FitChiSquared` has always been *told* its noise model by whoever built it. That
 is workable for one curve and breaks the moment a joint objective holds
 members that disagree -- a Poisson decay and a Gaussian correlation curve
 weight differently, and only each member knows how.
 
-So a ChiSquared may instead be given a `Dataset`, which carries its family
+So a FitChiSquared may instead be given a `FitDataset`, which carries its family
 with it. The old path is untouched: chisurf sets the noise model per fit and
 plots the residuals, so nothing there moves.
 """
@@ -19,22 +19,22 @@ import IMP.bff
 def _chi(name, dataset):
     """The arithmetic is driven directly, as test/chi2 does: compute_chi2 and
     compute_weighted_residuals take the model and need no wiring."""
-    c = IMP.bff.ChiSquared(name)
+    c = IMP.bff.FitChiSquared(name)
     c.set_dataset(dataset)
     return c
 
 
 def _poisson_dataset(y):
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.asarray(y, dtype=float)))
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_POISSON)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_POISSON)
     return d
 
 
 def _gaussian_dataset(y, variance):
-    d = IMP.bff.Dataset()
+    d = IMP.bff.FitDataset()
     d.set_values(list(np.asarray(y, dtype=float)))
-    d.set_noise_family(IMP.bff.NOISE_FAMILY_STORED)
+    d.set_noise_family(IMP.bff.FIT_NOISE_FAMILY_STORED)
     d.set_stored_variance(list(np.asarray(variance, dtype=float)))
     return d
 
@@ -60,7 +60,7 @@ def test_two_objectives_that_disagree_about_noise_each_weight_their_own_way():
     """The property a joint fit needs: one Poisson member and one Gaussian
     member, each weighted its own way, summing to the total.
 
-    It drives the arithmetic directly rather than through `JointChiSquared`,
+    It drives the arithmetic directly rather than through `FitJointChiSquared`,
     so on its own it does not prove that the *node* composes them. That is
     `test_joint_over_datasets.py`, which evaluates the graph and reads the
     ports; this one stays as the arithmetic underneath it."""
@@ -111,11 +111,11 @@ def test_a_dataset_and_an_index_window_together_are_refused():
 
 
 def test_the_two_paths_agree_about_the_sign():
-    """Told `"poisson"` or given a Poisson `Dataset`, one `ChiSquared` must
+    """Told `"poisson"` or given a Poisson `FitDataset`, one `FitChiSquared` must
     return the same residuals -- sign included.
 
     It did not until 2026-09-09. `deviance_residual` used `sign(mu - y)`
-    while the `"default"` path, every `Dataset` kind and chisurf's own
+    while the `"default"` path, every `FitDataset` kind and chisurf's own
     Gaussian residuals used `sign(y - mu)`, so the same object returned
     opposite-signed residuals for the same counts depending on how it had
     been configured, with chi-square identical to the bit. Nothing failed and
@@ -126,7 +126,7 @@ def test_the_two_paths_agree_about_the_sign():
     y = np.array([5.0, 10.0, 20.0])
     mu = np.array([6.0, 9.0, 25.0])
 
-    told = IMP.bff.ChiSquared("told")
+    told = IMP.bff.FitChiSquared("told")
     told.set_data(list(y), list(np.sqrt(y)))
     told.set_noise_model_name("poisson")
     asked = _chi("asked", _poisson_dataset(y))
@@ -136,7 +136,7 @@ def test_the_two_paths_agree_about_the_sign():
     np.testing.assert_allclose(r_told, r_asked, rtol=1e-12)
 
     # the standard convention, in every path this class offers
-    plain = IMP.bff.ChiSquared("plain")
+    plain = IMP.bff.FitChiSquared("plain")
     plain.set_data(list(y), list(np.sqrt(y)))
     plain.set_noise_model_name("default")
     r_plain = np.asarray(plain.compute_weighted_residuals(list(mu)))
@@ -152,11 +152,11 @@ def test_the_told_path_is_untouched():
     """Existing callers must see exactly what they saw."""
     y = np.array([5.0, 10.0, 20.0])
     mu = np.array([6.0, 9.0, 25.0])
-    c = IMP.bff.ChiSquared("old")
+    c = IMP.bff.FitChiSquared("old")
     c.set_data(list(y), [])
     c.set_noise_model_name("poisson")
     assert not c.get_has_dataset()
-    expected = np.asarray(IMP.bff.weighted_residuals(
+    expected = np.asarray(IMP.bff.fit_weighted_residuals(
         list(y), [], list(mu), 0, -1, "poisson"))
     np.testing.assert_allclose(np.asarray(c.compute_weighted_residuals(list(mu))),
                                expected, rtol=1e-12, atol=1e-12)

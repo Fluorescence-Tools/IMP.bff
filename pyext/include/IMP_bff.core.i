@@ -74,17 +74,17 @@ import numpy as np
    ports) live in chisurf's core/nodes.py, not here. Directors and
    %shared_ptr cooperate through SWIG's shared_ptr director support.
 
-   The director lifetime (T-20260901-13): a C++ Minimizer or Sampler holds
+   The director lifetime (T-20260901-13): a C++ FitMinimizer or Sampler holds
    a Python GraphNode subclass across the whole run through a shared_ptr, but
    the director keeps only a *weak* pointer back to the Python proxy -- a
    ResidualNode bound to `_` was collected when the next tuple unpacking
    rebound `_`, and Node_update then dispatched into a dead object.
-   MinimizerObserver's answer (IMP_SWIG_DIRECTOR) does NOT work here:
+   FitMinimizerObserver's answer (IMP_SWIG_DIRECTOR) does NOT work here:
    `_director_objects.register` silently refuses anything without IMP's
    `get_ref_count`, and GraphNode is a plain shared_ptr class, not an
    IMP::Object -- the macro would read as protection and protect nothing.
    The real fix mirrors the C++ ownership on the Python side: the
-   %pythonappend hooks below set_objective (Minimizer, Sampler) stash the
+   %pythonappend hooks below set_objective (FitMinimizer, Sampler) stash the
    node proxy on the wrapper that holds the shared_ptr, so the proxy lives
    exactly as long as the C++ reference does. */
 %feature("director") IMP::bff::GraphNode;
@@ -482,7 +482,7 @@ def get_session():
  * is the wrapped read of the same partition.
  */
 %shared_ptr(IMP::bff::Sampler);
-/* Same GraphNode-director lifetime fix as Minimizer::set_objective
+/* Same GraphNode-director lifetime fix as FitMinimizer::set_objective
    (T-20260901-13): the sampler holds the objective node by shared_ptr for
    its lifetime, so the Python proxy must live as long. */
 %pythonappend IMP::bff::Sampler::set_objective %{
@@ -507,7 +507,7 @@ def get_session():
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_mask_a, int n_mask_a)};
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_model_y, int n_model_y)};
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_wres, int* n_out_wres)};
-%shared_ptr(IMP::bff::ChiSquared);
+%shared_ptr(IMP::bff::FitChiSquared);
 /* A dataset of any rank, with its noise family. Its variance and residuals
    are managed views for the same reason the solver's are, and its setters
    take ndarrays because a curve's values change on every write. */
@@ -516,23 +516,23 @@ def get_session():
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_variance, int n_variance)};
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_mask, int n_mask)};
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_coordinate, int n_coordinate)};
-%include "IMP/bff/Dataset.h"
-%include "IMP_bff.dataset.i"
+%include "IMP/bff/FitDataset.h"
+%include "IMP_bff.fitdataset.i"
 
-%include "IMP/bff/ChiSquared.h"
+%include "IMP/bff/FitChiSquared.h"
 
 /*
  * The grouping: one misfit over several datasets. Sharing a parameter
  * between them is already `GraphPort::set_link`; this is the other half, the
- * joint objective, so a `Minimizer` pointed at it moves the shared
+ * joint objective, so a `FitMinimizer` pointed at it moves the shared
  * parameters using every dataset's curvature at once.
  *
  * Deliberately not called a fit group -- ChiSurf's FitGroup is a container
  * with a selection, a history and a run policy, and this is the arithmetic
  * underneath it.
  */
-%shared_ptr(IMP::bff::JointChiSquared);
-%include "IMP/bff/JointChiSquared.h"
+%shared_ptr(IMP::bff::FitJointChiSquared);
+%include "IMP/bff/FitJointChiSquared.h"
 
 /*
  * A TCSPC decay as a node: the multi-exponential model curve a
@@ -596,7 +596,7 @@ def get_session():
 /*
  * ChiSurf's bounded Levenberg-Marquardt, over the same GraphPort/GraphNode graph
  * `Sampler` walks. `fit.run()` becomes one crossing instead of one per
- * parameter per iteration; see Minimizer.h for why that, and not the
+ * parameter per iteration; see FitMinimizer.h for why that, and not the
  * optimiser's own arithmetic, is what the port is for.
  *
  * The observer is an IMP::Object director rather than a std::function, for
@@ -608,7 +608,7 @@ def get_session():
  * set_residual_function is not wrapped: a Python residual is a GraphNode
  * director, which is the same division Sampler makes.
  */
-IMP_SWIG_OBJECT(IMP::bff, MinimizerObserver, MinimizerObservers);
+IMP_SWIG_OBJECT(IMP::bff, FitMinimizerObserver, MinimizerObservers);
 /* IMP_SWIG_DIRECTOR, not a bare %feature("director"): the C++ side holds
    this object across the whole run, and SWIG's director keeps only a *weak*
    pointer back to the Python proxy. A progress dialog passed inline --
@@ -617,16 +617,16 @@ IMP_SWIG_OBJECT(IMP::bff, MinimizerObserver, MinimizerObservers);
    director instance in `_director_objects`, which is the module-wide answer
    to exactly this. (`RRTCollision` has a bare feature because it is a call
    argument and cannot outlive its caller's reference; this one can.) */
-IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
-%shared_ptr(IMP::bff::Minimizer);
-%ignore IMP::bff::Minimizer::set_residual_function;
+IMP_SWIG_DIRECTOR(IMP::bff, FitMinimizerObserver);
+%shared_ptr(IMP::bff::FitMinimizer);
+%ignore IMP::bff::FitMinimizer::set_residual_function;
 /* The GraphNode-director lifetime fix (T-20260901-13; rationale at the GraphNode
    director block above): the C++ side keeps a shared_ptr to the objective
    node for the minimiser's lifetime, so the Python proxy must live as
    long too -- a director whose proxy is collected dispatches into a dead
    object on the next update. Stashing it on the wrapper is the Python
    mirror of the C++ reference. */
-%pythonappend IMP::bff::Minimizer::set_objective %{
+%pythonappend IMP::bff::FitMinimizer::set_objective %{
         self.__dict__['_objective_node_keepalive'] = (
             args[0] if args else kwargs.get('node'))
 %}
@@ -634,7 +634,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
    column per free parameter, so a scan hands over its whole grid at once and
    pays one crossing rather than one per point. */
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* in_candidates, int n_rows, int n_cols)};
-%include "IMP/bff/Minimizer.h"
+%include "IMP/bff/FitMinimizer.h"
 
 %extend IMP::bff::Sampler {
     %pythoncode {
@@ -714,7 +714,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
  * No `#` comments below: inside `%pythoncode` SWIG reads a line starting
  * with `#` as one of its own preprocessor directives and stops.
  */
-%extend IMP::bff::Minimizer {
+%extend IMP::bff::FitMinimizer {
     %pythoncode {
         algorithm = property(lambda self: self.get_algorithm(),
                              lambda self, v: self.set_algorithm(v))
@@ -793,7 +793,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
 
             ``epsilon = 0`` means ``sqrt(machine eps)`` and ``floor = 0``
             means 1.0, i.e. chisurf's ``approx_grad`` step. See
-            Minimizer.h for why this is not the optimiser's ``epsfcn``.
+            FitMinimizer.h for why this is not the optimiser's ``epsfcn``.
             """
             c = np.asarray(self.compute_covariance(epsilon, floor))
             used = [int(k) for k in self.get_covariance_parameters()]

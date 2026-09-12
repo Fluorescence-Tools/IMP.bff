@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/Minimizer.h
+ *  \file IMP/bff/FitMinimizer.h
  *  \brief ChiSurf's bounded least-squares optimiser over a bff GraphPort/GraphNode model, in C++.
  *
  *  The deterministic counterpart of `Sampler.h`, and the last piece of a fit
@@ -22,7 +22,7 @@
  *  iteration.
  *
  *  So the point of the port is composition, not speed in isolation:
- *  `GraphExpression -> ChiSquared -> Minimizer` is a fit that never re-enters the
+ *  `GraphExpression -> FitChiSquared -> FitMinimizer` is a fit that never re-enters the
  *  interpreter. A model bff cannot represent still gains, but less: a Python
  *  `GraphNode` director costs one crossing per residual evaluation instead of the
  *  four or five the numpy path pays.
@@ -52,17 +52,17 @@
  *  Jacobian after every fit; here the Jacobian the optimiser already built is
  *  reused, correctly.
  *
- *  \see Sampler, ChiSquared, GraphExpression, GraphNode
+ *  \see Sampler, FitChiSquared, GraphExpression, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_MINIMIZER_H
-#define IMPBFF_MINIMIZER_H
+#ifndef IMPBFF_FITMINIMIZER_H
+#define IMPBFF_FITMINIMIZER_H
 
 #include <IMP/bff/bff_config.h>
-// IMP_OBJECT_METHODS, used by MinimizerObserver below. Base.h is what
+// IMP_OBJECT_METHODS, used by FitMinimizerObserver below. Base.h is what
 // resolves the IMP macros in *either* configuration -- IMP's own headers in
 // the module build, the standalone definitions otherwise -- so a header that
 // uses one has to include it rather than rely on a neighbour having done so.
@@ -89,9 +89,9 @@ class GraphNode;
     the contract chisurf's optimiser raises under -- the same choice
     `SamplerConfigurationError` and `GraphLinkCycleError` make.
 */
-class IMPBFFEXPORT MinimizerConfigurationError : public std::domain_error {
+class IMPBFFEXPORT FitMinimizerConfigurationError : public std::domain_error {
  public:
-  explicit MinimizerConfigurationError(const std::string& what_arg)
+  explicit FitMinimizerConfigurationError(const std::string& what_arg)
       : std::domain_error(what_arg) {}
 };
 
@@ -109,9 +109,9 @@ class IMPBFFEXPORT MinimizerConfigurationError : public std::domain_error {
     parameter vector -- not the trial point it was evaluating -- so a
     cancelled fit leaves the model somewhere it has actually been.
 */
-class IMPBFFEXPORT MinimizerObserver : public IMP::Object {
+class IMPBFFEXPORT FitMinimizerObserver : public IMP::Object {
  public:
-  explicit MinimizerObserver(std::string name = "MinimizerObserver%1%")
+  explicit FitMinimizerObserver(std::string name = "FitMinimizerObserver%1%")
       : IMP::Object(name) {}
 
   //! One residual evaluation happened; return false to cancel.
@@ -126,7 +126,7 @@ class IMPBFFEXPORT MinimizerObserver : public IMP::Object {
     return true;
   }
 
-  IMP_OBJECT_METHODS(MinimizerObserver);
+  IMP_OBJECT_METHODS(FitMinimizerObserver);
 };
 
 //! Levenberg-Marquardt iterations a well-posed fit typically needs.
@@ -151,7 +151,7 @@ IMPBFFEXPORT int minimizer_reported_total(int nfev, int expected);
 
 //! ChiSurf's bounded Levenberg-Marquardt over free-parameter ports and a
 //! node-graph objective.
-class IMPBFFEXPORT Minimizer {
+class IMPBFFEXPORT FitMinimizer {
  public:
   //! Configure the algorithm; everything else is set later.
   /*!
@@ -159,8 +159,8 @@ class IMPBFFEXPORT Minimizer {
                  bounds transform. The only algorithm today; the name is
                  taken now so that adding one later is not an API change.
   */
-  explicit Minimizer(const std::string& algorithm = "leastsq");
-  ~Minimizer();
+  explicit FitMinimizer(const std::string& algorithm = "leastsq");
+  ~FitMinimizer();
 
   // ------------------------------------------------------------ parameters
 
@@ -192,7 +192,7 @@ class IMPBFFEXPORT Minimizer {
 
   //! The node graph producing the residual vector.
   /*!
-      \param[in] node the node to evaluate; `ChiSquared` is the intended
+      \param[in] node the node to evaluate; `FitChiSquared` is the intended
                  one, but any node works -- including a Python `GraphNode`
                  director wrapping a model bff cannot represent
       \param[in] residual_key the node's output port carrying the residual
@@ -217,8 +217,8 @@ class IMPBFFEXPORT Minimizer {
 
   //! Where progress is reported and cancellation is asked for.
   /*! Null (the default) means neither. */
-  void set_observer(MinimizerObserver* observer);
-  MinimizerObserver* get_observer() const;
+  void set_observer(FitMinimizerObserver* observer);
+  FitMinimizerObserver* get_observer() const;
   //! Stop reporting; equivalent to `set_observer(nullptr)` from Python,
   //! where a null pointer is awkward to spell.
   void clear_observer();
@@ -279,7 +279,7 @@ class IMPBFFEXPORT Minimizer {
       The objective is the sum of the squared residuals -- the same number
       `get_chi2()` reports -- and a NaN becomes `+inf`, so a sampler rejects
       the candidate rather than propagating the NaN into a posterior. That is
-      `ChiSquared`'s convention and `JointChiSquared`'s.
+      `FitChiSquared`'s convention and `FitJointChiSquared`'s.
 
       **Why this exists.** A chi-square surface, a support-plane interval, a
       population sampler and a random restart all ask the same question of a
@@ -481,7 +481,7 @@ class IMPBFFEXPORT Minimizer {
       residual_function_;
   //! Owned, because it outlives the call that set it: a Python observer
   //! held only by a raw pointer would be collected between iterations.
-  IMP::Pointer<MinimizerObserver> observer_;
+  IMP::Pointer<FitMinimizerObserver> observer_;
 
   std::vector<double> initial_values_;
   std::vector<double> lower_;
@@ -514,4 +514,4 @@ class IMPBFFEXPORT Minimizer {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_MINIMIZER_H
+#endif  // IMPBFF_FITMINIMIZER_H

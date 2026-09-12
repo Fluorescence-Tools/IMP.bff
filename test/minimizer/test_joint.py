@@ -2,7 +2,7 @@
 
 A joint fit is two things. **Sharing a parameter** is `GraphPort::set_link`, which
 bff has had since the GraphPort runtime; **one objective over every dataset** is
-`JointChiSquared`. Together they make a group a graph a `Minimizer` can
+`FitJointChiSquared`. Together they make a group a graph a `FitMinimizer` can
 optimise without the caller crossing the SWIG boundary per iteration.
 
 The tests that matter are the ones separating a joint fit from N separate
@@ -20,7 +20,7 @@ from IMP import bff
 
 
 def make_member(equation, x, y, ey, name):
-    """One dataset: `GraphExpression -> ChiSquared`, residuals on a port."""
+    """One dataset: `GraphExpression -> FitChiSquared`, residuals on a port."""
     curve = bff.GraphExpression(name + "_model")
     curve.set_expression(equation)
     parameters = {}
@@ -36,7 +36,7 @@ def make_member(equation, x, y, ey, name):
     out = bff.GraphPort([0.0], False, True)
     curve.add_output_port(name + "_model", out)
 
-    chi2 = bff.ChiSquared(name)
+    chi2 = bff.FitChiSquared(name)
     chi2.set_data_arrays(np.ascontiguousarray(y, dtype=float),
                          np.ascontiguousarray(ey, dtype=float))
     model_in = bff.GraphPort([0.0])
@@ -68,7 +68,7 @@ def build_group(x, y1, y2, ey):
     # coupling, and it is a port link -- already on the C++ side.
     p2["t"].link = p1["t"]
 
-    joint = bff.JointChiSquared("joint")
+    joint = bff.FitJointChiSquared("joint")
     joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
     joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
     joint.add_member(m1, "residuals")
@@ -77,7 +77,7 @@ def build_group(x, y1, y2, ey):
     free = [p1["a"], p2["a"], p1["t"]]
     for port, v in zip(free, (1.0, 1.0, 1.0)):
         port.value = v
-    m = bff.Minimizer()
+    m = bff.FitMinimizer()
     m.set_parameter_ports(free)
     m.set_objective(joint, "residuals")
     m._graph = (m1, m2, joint, p1, p2)
@@ -151,7 +151,7 @@ class GroupingTests(unittest.TestCase):
             member.add_output_port("residuals_solo", bff.GraphPort([0.0], False, True))
             for port in p.values():
                 port.value = 1.0
-            one = bff.Minimizer()
+            one = bff.FitMinimizer()
             one.set_parameter_ports([p["a"], p["t"]])
             one.set_objective(member, "residuals")
             one._graph = member
@@ -181,13 +181,13 @@ class GroupingTests(unittest.TestCase):
     def test_one_member_is_a_plain_fit(self):
         x, y1, y2, ey = two_datasets()
         m1, p1 = make_member("a*exp(-x/t)", x, y1, ey, "only")
-        joint = bff.JointChiSquared("joint")
+        joint = bff.FitJointChiSquared("joint")
         joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
         joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
         for port in p1.values():
             port.value = 1.0
-        m = bff.Minimizer()
+        m = bff.FitMinimizer()
         m.set_parameter_ports([p1["a"], p1["t"]])
         m.set_objective(joint, "residuals")
         m._graph = (m1, joint, p1)
@@ -195,7 +195,7 @@ class GroupingTests(unittest.TestCase):
         self.assertAlmostEqual(m.x[1], 3.0, delta=0.02)
 
     def test_a_member_without_residuals_is_refused(self):
-        joint = bff.JointChiSquared("joint")
+        joint = bff.FitJointChiSquared("joint")
         plain = bff.GraphNode("plain")
         plain.add_output_port("chi2", bff.GraphPort(0.0, False, True))
         with self.assertRaises(ValueError):
@@ -204,7 +204,7 @@ class GroupingTests(unittest.TestCase):
     def test_a_node_without_its_own_output_port_is_refused(self):
         x, y1, y2, ey = two_datasets()
         m1, _ = make_member("a*exp(-x/t)", x, y1, ey, "d1")
-        joint = bff.JointChiSquared("joint")
+        joint = bff.FitJointChiSquared("joint")
         joint.add_member(m1, "residuals")
         with self.assertRaises(ValueError):
             joint.update()
@@ -234,7 +234,7 @@ class GroupingTests(unittest.TestCase):
         ey = np.ones(n)
         m1, p1 = make_member("sqrt(a-x)", x, np.ones(n), ey, "d1")
         m2, p2 = make_member("a*exp(-x/t)", x, np.ones(n), ey, "d2")
-        joint = bff.JointChiSquared("joint")
+        joint = bff.FitJointChiSquared("joint")
         joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
         joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
