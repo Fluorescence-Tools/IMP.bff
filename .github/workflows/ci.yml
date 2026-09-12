@@ -173,7 +173,7 @@ jobs:
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
           else
-            mamba run --no-capture-output -n test rattler-build build \
+            mamba run -n test --no-capture-output rattler-build build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
@@ -221,7 +221,7 @@ jobs:
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            mamba run --no-capture-output -n test rattler-build build \
+            mamba run -n test --no-capture-output rattler-build build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
