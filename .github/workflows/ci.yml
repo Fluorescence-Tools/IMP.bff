@@ -169,13 +169,15 @@ jobs:
             fi
           fi
           if [ "$RUNNER_OS" = "Windows" ]; then
-            RB="$RATTLER_BUILD_EXE"
+            "$RATTLER_BUILD_EXE" build --recipe conda-recipe/imp/recipe.yaml \
+                --env-isolation none \
+                --channel conda-forge --output-dir imp-bld
           else
-            RB="$CONDA/envs/test/bin/rattler-build"
+            mamba run -n test rattler-build build \
+                --recipe conda-recipe/imp/recipe.yaml \
+                --env-isolation none \
+                --channel conda-forge --output-dir imp-bld
           fi
-          "$RB" build --recipe conda-recipe/imp/recipe.yaml \
-                      --env-isolation none \
-                      --channel conda-forge --output-dir imp-bld
       - name: Save our imp package
         if: steps.imp-cache.outputs.cache-hit != 'true' && success()
         uses: actions/cache/save@v4
@@ -214,14 +216,17 @@ jobs:
         # tttrlib's effective behavior under conda-build.
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            RB="$RATTLER_BUILD_EXE"
+            "$RATTLER_BUILD_EXE" build --recipe conda-recipe/recipe.yaml \
+                --env-isolation none \
+                --channel ./imp-bld --channel conda-forge \
+                --output-dir conda-bld
           else
-            RB="$CONDA/envs/test/bin/rattler-build"
+            mamba run -n test rattler-build build \
+                --recipe conda-recipe/recipe.yaml \
+                --env-isolation none \
+                --channel ./imp-bld --channel conda-forge \
+                --output-dir conda-bld
           fi
-          "$RB" build --recipe conda-recipe/recipe.yaml \
-                      --env-isolation none \
-                      --channel ./imp-bld --channel conda-forge \
-                      --output-dir conda-bld
 
       - name: Compiler cache statistics
         if: always()
