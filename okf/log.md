@@ -2,6 +2,11 @@
 
 ## 2026-09-12
 
+- **Fail-fast CI mode (T-20260912-13):**
+  `imp_module` and `pip_wheel` matrices now use `fail-fast: true` so a failing
+  OS/arch lane stops the remaining queued/ongoing matrix lanes early. This keeps
+  CI from spending time on builds once a shared failure signal is already present.
+
 - **CI stability fix (T-20260912-12):**
   `IMP module (Ubuntu and macOS)` and `Build the conda package` now invoke
   `rattler-build` through `conda run` instead of `mamba run` in non-Windows

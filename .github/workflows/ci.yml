@@ -69,7 +69,9 @@ jobs:
     needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      # Stop the matrix early when one OS lane fails, so CI time is not
+      # spent on likely-redundant builds.
+      fail-fast: true
       matrix: ${{ fromJson(needs.setup.outputs.os_matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -310,7 +312,8 @@ jobs:
     needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      # Stop the wheel matrix early when one OS/arch lane fails.
+      fail-fast: true
       matrix: ${{ fromJson(needs.setup.outputs.wheel_matrix) }}
     # sccache, via the same GitHub Actions cache backend the conda builds
     # use; the compiler launchers that switch it on live in pyproject.toml's
