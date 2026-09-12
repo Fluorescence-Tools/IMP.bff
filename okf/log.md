@@ -2,6 +2,19 @@
 
 ## 2026-09-12
 
+- **Model-independent MCTS core (T-20260912-04)**: `ModelSearch` now owns
+  lazy tree expansion, PUCT traversal, seeded root Dirichlet noise,
+  ancestor-cycle refusal, canonical-collapse termination, cooperative atomic
+  cancellation, and best-state/visit-path bookkeeping.  Its problem contract
+  exposes only opaque state/action keys, rewards and priors; model state and
+  transition evaluation remain inside a C++ adapter, so a future adapter can
+  carry a single fit or heterogeneous global fits without callbacks or data
+  crossing into Python per simulation.  `TabularModelSearchProblem` is the
+  callback-free finite/pre-scored implementation and the binding contract
+  fixture.  The IMP arm64 library and SWIG extension built; 2 focused MCTS
+  tests and 68 public-API/base-header tests pass.  This milestone does not yet
+  provide live `FitMinimizer`/model-family adapters or replace ChiSurf's MCTS.
+
 - **PRD-141 complete under the owner's controlling taxonomy plan**
   ([evidence](validation/taxonomy-completion.md)): probe/sidechain libraries,
   ProbeRotamer/FRETRotamer/FPSRotamer, photophysics and five producer nodes,

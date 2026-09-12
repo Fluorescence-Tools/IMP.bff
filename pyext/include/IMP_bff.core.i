@@ -612,6 +612,23 @@ IMP_SWIG_DIRECTOR(IMP::bff, FitMinimizerObserver);
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* in_candidates, int n_rows, int n_cols)};
 %include "IMP/bff/FitMinimizer.h"
 
+/*
+ * Model-structure search over an opaque C++ problem.  There is deliberately
+ * no director on ModelSearchProblem: a Python override would put one
+ * language crossing back into every lazy state evaluation.  Concrete fitting
+ * adapters belong in C++; TabularModelSearchProblem is the callback-free,
+ * pre-scored implementation that makes the core contract usable today.
+ */
+IMP_SWIG_VALUE(IMP::bff, ModelSearchState, ModelSearchStates);
+IMP_SWIG_VALUE(IMP::bff, ModelSearchAction, ModelSearchActions);
+IMP_SWIG_VALUE(IMP::bff, ModelSearchConfig, ModelSearchConfigs);
+IMP_SWIG_VALUE(IMP::bff, ModelSearchResult, ModelSearchResults);
+%shared_ptr(IMP::bff::ModelSearchProblem);
+%shared_ptr(IMP::bff::TabularModelSearchProblem);
+%shared_ptr(IMP::bff::FittingModelSearchProblem);
+%shared_ptr(IMP::bff::ModelSearch);
+%include "IMP/bff/ModelSearch.h"
+
 %extend IMP::bff::MCMCSampler {
     %pythoncode {
         algorithm = property(lambda self: self.get_algorithm(),
