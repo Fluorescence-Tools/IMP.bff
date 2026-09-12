@@ -13,7 +13,7 @@
  *    JSON text, which is what the rest of this module's file layer speaks --
  *    a caller that wants dicts and `Path`s makes them.
  *  - The rotamer/protein interaction energy (the former `RotamerEnergy.h`),
- *    the kernel `Scoring.h` orchestrates.
+ *    the kernel `RotamerScoring.h` orchestrates.
  *  - `RotamerEnsemble`: `atoms`, `energies`, `partition`, `library`, `chain`
  *    and `residue` are part of the C++ value, not attributes hung on it, so
  *    an ensemble built in C++ is one and a consumer that wants the atoms need

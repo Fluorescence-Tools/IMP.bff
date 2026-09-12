@@ -4,9 +4,9 @@
  * integrator (`md` gets a Langevin thermostat, `bd` gets Einstein's
  * coefficient for each particle's own radius), `AttachedProbeDynamics` sets up
  * the dye's force field, its held anchor and the wall of protein spheres
- * around the site. The trajectory a run returns is `SimulationTrajectory`
- * (`IMP_bff.simulation.i`), and the array-facing simulation object built on
- * this class is `IMP_bff.dyedynamics.i`; both are wrapped before this.
+ * around the site. The trajectory a run returns is `ProbeSimulationTrajectory`
+ * (`IMP_bff.probesimulation.i`), and the array-facing simulation object built on
+ * this class is `IMP_bff.molecularprobesimulation.i`; both are wrapped before this.
  */
 
 %feature("kwargs") IMP::bff::make_langevin_simulator;

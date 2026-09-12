@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <sstream>
 #include <fstream>
-#include <IMP/bff/DataPaths.h>
+#include <IMP/bff/ProbeDataPaths.h>
 
 #include <cstring>
 #ifdef __ARM_NEON

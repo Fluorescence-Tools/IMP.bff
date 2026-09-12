@@ -230,7 +230,7 @@ IMPBFF_END_NAMESPACE
 #include <IMP/bff/ProbeSampling.h>
 #include <IMP/bff/internal/Text.h>
 
-#include <IMP/bff/Scoring.h>
+#include <IMP/bff/RotamerScoring.h>
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/internal/json.h>
 

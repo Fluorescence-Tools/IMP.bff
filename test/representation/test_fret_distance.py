@@ -5,13 +5,13 @@ import pytest
 
 import IMP.bff
 
-from IMP.bff import AccessibleVolume
+from IMP.bff import ProbeAccessibleVolume
 import IMP.bff as fdist
 
 
 def _point_av(xyz):
     pts = np.array([[xyz[0], xyz[1], xyz[2], 1.0]] * 4, dtype=np.float64)
-    return AccessibleVolume(
+    return ProbeAccessibleVolume(
         points=pts,
         density=np.zeros((1, 1, 1)),
         grid_origin=np.zeros(3),

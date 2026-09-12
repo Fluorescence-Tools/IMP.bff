@@ -19,8 +19,8 @@
  * templates below are what give Python `system.sites[0].mass` and
  * `system.bond_types["b1"]` -- each one is a container whose element type is
  * stated, so a bond's third slot is `length` by declaration rather than by
- * convention. It is wrapped here, early, because Mol2IO.h, Scoring.h and
- * ForceFieldCIF.h, all wrapped soon after, take the system.
+ * convention. It is wrapped here, early, because Mol2IO.h, RotamerScoring.h and
+ * ProbeForceFieldCIF.h, all wrapped soon after, take the system.
  */
 IMP_SWIG_VALUE(IMP::bff, Spectrum, Spectrums);
 IMP_SWIG_VALUE(IMP::bff, Probe, Probes);

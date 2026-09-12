@@ -1,5 +1,5 @@
 """Invariants of the model objects: ``LifetimeSpectrum``,
-``AccessibleVolume``/``ACV``, ``ProbeDiffusionSimulation``,
+``ProbeAccessibleVolume``/``ACV``, ``ProbeDiffusionSimulation``,
 ``GridDiffusionSolver`` and the kappa^2 sampler.
 
 Everything here is either a property that must hold on its own terms, or a
@@ -94,9 +94,9 @@ def _walk(ng=15):
 
 def test_one_seed_gives_one_walk_and_a_different_seed_a_different_one():
     a, b, c = _walk(), _walk(), _walk()
-    a.run(t_max=40.0, n_trajectories=1, random_seed=3)
-    b.run(t_max=40.0, n_trajectories=1, random_seed=3)
-    c.run(t_max=40.0, n_trajectories=1, random_seed=4)
+    a.simulate(t_max=40.0, n_trajectories=1, random_seed=3)
+    b.simulate(t_max=40.0, n_trajectories=1, random_seed=3)
+    c.simulate(t_max=40.0, n_trajectories=1, random_seed=4)
     np.testing.assert_array_equal(a.get_trajectory(), b.get_trajectory())
     assert not np.array_equal(a.get_trajectory(), c.get_trajectory())
 
@@ -108,7 +108,7 @@ def test_concatenated_walks_do_not_repeat_one_trajectory():
     them, which looks like n times the sampling and is none of it.
     """
     w = _walk()
-    w.run(t_max=40.0, n_trajectories=4, random_seed=11)
+    w.simulate(t_max=40.0, n_trajectories=4, random_seed=11)
     n = w.n_frames // 4
     traj = w.get_trajectory()
     first = traj[:n]
@@ -120,7 +120,7 @@ def test_replacing_the_volume_discards_the_trajectory():
     """It was a walk in the *old* volume; keeping it would let a caller read
     positions the new occupancy forbids."""
     w = _walk()
-    w.run(t_max=40.0, n_trajectories=1, random_seed=5)
+    w.simulate(t_max=40.0, n_trajectories=1, random_seed=5)
     assert w.n_frames > 0
     w.set_density(np.zeros(15 * 15 * 15, dtype=np.uint8))
     assert w.n_frames == 0
@@ -151,7 +151,7 @@ def test_sample_grid_uses_the_integer_centre_and_floors():
     assert IMP.bff.grid_center_index(15) == 7
     assert IMP.bff.grid_center_index(16) == 7          # not 7.5
     w = _walk()
-    w.run(t_max=40.0, n_trajectories=1, random_seed=5)
+    w.simulate(t_max=40.0, n_trajectories=1, random_seed=5)
     ramp = np.arange(15 ** 3, dtype=np.float64).reshape(15, 15, 15)
     got = w.sample_grid(ramp, 15)
     centre = IMP.bff.grid_center_index(15)
@@ -247,7 +247,7 @@ def test_a_spectrum_is_a_value_not_a_handle():
 def test_an_av_carries_no_grid_when_it_was_built_from_points():
     """``get_density()`` is empty, not an error: every consumer tests size."""
     pts = np.ascontiguousarray(np.random.default_rng(0).random((40, 4)))
-    av = IMP.bff.AccessibleVolume(points=pts, position_name="donor")
+    av = IMP.bff.ProbeAccessibleVolume(points=pts, position_name="donor")
     assert av.get_density().size == 0
     assert av.get_grid_origin().size == 0
     assert av.get_n_points() == 40

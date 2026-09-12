@@ -14,7 +14,7 @@
 #include <IMP/Particle.h>
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/VectorD.h>
-#include <IMP/bff/AVOccupancyMap.h>
+#include <IMP/bff/ProbeAccessibleVolumeOccupancyMap.h>
 #include <IMP/bff/PathMap.h>
 
 #include <array>
@@ -24,7 +24,7 @@
 
 IMPBFF_BEGIN_INTERNAL_NAMESPACE
 
-//! State the lattice path of AV::resample() carries between evaluations.
+//! State the lattice path of ProbeAccessibleVolumeDecorator::resample() carries between evaluations.
 /** Lives beside the path map on the AV handle (shared between copies of the
     handle) -- it is *not* particle state, so a fresh handle starts cold. */
 struct AVLatticeState {
@@ -43,7 +43,7 @@ struct AVLatticeState {
     IMP::algebra::Vector3D last_mean;
 
     // One warning per handle, not one per frame: the legacy anchoring cannot
-    // honour an accessible-contact-volume request (AV::resample_legacy) and a
+    // honour an accessible-contact-volume request (ProbeAccessibleVolumeDecorator::resample_legacy) and a
     // trajectory would otherwise say so thousands of times.
     bool warned_contact_volume = false;
     bool warned_radii_source = false;
@@ -70,9 +70,9 @@ struct AVLatticeState {
     bool registry_driven_externally = false;
 
     // Occupancy sources. `registry` set: shared maps; else private windows.
-    IMP::Pointer<AVOccupancyRegistry> registry;
-    IMP::Pointer<AVOccupancyMap> private1;
-    IMP::Pointer<AVOccupancyMap> private2;
+    IMP::Pointer<ProbeAccessibleVolumeOccupancyRegistry> registry;
+    IMP::Pointer<ProbeAccessibleVolumeOccupancyMap> private1;
+    IMP::Pointer<ProbeAccessibleVolumeOccupancyMap> private2;
 
     // Quadrature representation of the cloud (PRD-105 distances):
     // weighted block centroids plus per-block second central moments
@@ -83,7 +83,7 @@ struct AVLatticeState {
     unsigned long quad_generation = 0;
     bool quad_valid = false;
 
-    // A prepared-but-not-yet-computed evaluation (AV::resample_lattice is
+    // A prepared-but-not-yet-computed evaluation (ProbeAccessibleVolumeDecorator::resample_lattice is
     // split into a serial prepare phase that touches the Model and a compute
     // phase that only touches this AV's own map, so a restraint can run the
     // compute phases of its AVs on threads).
@@ -110,13 +110,13 @@ struct AVLatticeState {
     IMP::algebra::Vector3D pending_source;
     bool pending_set_origin = false;     // window moved: recompute voxel locations
     IMP::algebra::Vector3D pending_grid_origin;
-    AVOccupancyMap *pending_occ1 = nullptr;
-    AVOccupancyMap *pending_occ2 = nullptr;
+    ProbeAccessibleVolumeOccupancyMap *pending_occ1 = nullptr;
+    ProbeAccessibleVolumeOccupancyMap *pending_occ2 = nullptr;
     //! AV3: the extra dye-radius occupancy sources (`pending_occ2` is the
     //! first). Empty for AV1, so that path allocates and reads nothing new.
-    std::vector<AVOccupancyMap *> pending_occ_dye;
+    std::vector<ProbeAccessibleVolumeOccupancyMap *> pending_occ_dye;
     std::vector<int32_t> window_counts_dye;   //!< AV3 scratch, radii 2..n
-    std::vector<IMP::Pointer<AVOccupancyMap> > private_dye;
+    std::vector<IMP::Pointer<ProbeAccessibleVolumeOccupancyMap> > private_dye;
     unsigned long pending_gen1 = 0, pending_gen2 = 0;
 
     // Coarse search grid (search_grid_factor > 1): a small PathMap on the

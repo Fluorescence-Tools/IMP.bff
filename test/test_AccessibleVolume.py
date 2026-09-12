@@ -44,8 +44,8 @@ def get_av(
     sel.set_atom_type(IMP.atom.AtomType(atom_name))
     sel.set_residue_index(residue_index)        
     source = sel.get_selected_particles()[0]
-    IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
-    av = IMP.bff.AV(mdl, av_p)
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, av_p, source, **av_parameter)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, av_p)
     return av
 
 
@@ -67,8 +67,8 @@ class Tests(unittest.TestCase):
         sel.set_atom_type(IMP.atom.AtomType(atom_name))
         sel.set_residue_index(residue_index)        
         source = sel.get_selected_particles()[0]
-        IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
-        av = IMP.bff.AV(mdl, av_p)
+        IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, av_p, source, **av_parameter)
+        av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, av_p)
         np.testing.assert_almost_equal(av.get_source_coordinates(), (-11.589, 16.405, 17.556), decimal=3)
         # Lattice-anchored (PRD-105) value; the legacy source-anchored value
         # (-15.9244, 19.2183, 20.1207) is pinned in test_av_lattice.py.
@@ -78,13 +78,13 @@ class Tests(unittest.TestCase):
         # returned ~15 % less volume -- 26146 voxels against an analytic 33510
         # for an obstacle-free 20 A linker, where 74 gives 30682. The AV is
         # therefore both larger and differently shaped, and every quantity
-        # derived from it moves. See AV::get_search_stencil.
+        # derived from it moves. See ProbeAccessibleVolumeDecorator::get_search_stencil.
         # Moved 2026-08-31 by dropping the attachment atom from the
         # obstacle set, as FPS does (`av_routines.cpp:50`): an atom
         # cannot block the linker tied to it. Volumes grew ~1 %.
         # Olga's radii were the default for part of 2026-09-01 and this read
         # (-14.682480, 19.565946, 20.214719); the default is IMP's own again
-        # (AV::set_radii_source), so this is the pre-Olga number -- to 0.002 A,
+        # (ProbeAccessibleVolumeDecorator::set_radii_source), so this is the pre-Olga number -- to 0.002 A,
         # the rest being the 2026-08-31 move above, which is not reverted.
         np.testing.assert_almost_equal(av.get_mean_position(), (-15.048157, 19.668150, 20.226974), decimal=3)
         np.testing.assert_almost_equal(av.get_radii(), (3.5, 0, 0), decimal=3)
@@ -113,8 +113,8 @@ class Tests(unittest.TestCase):
         sel.set_atom_type(IMP.atom.AtomType("CB"))
         sel.set_residue_index(55)
         source = sel.get_selected_particles()[0]
-        IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
-        av = IMP.bff.AV(mdl, av_p)
+        IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, av_p, source, **av_parameter)
+        av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, av_p)
 
         av.set_radius1(5.0)
         av.set_radius2(4.5)
@@ -204,7 +204,7 @@ class Tests(unittest.TestCase):
         equals two unit steps, so the path lengths are the same.
 
         Not a default: 74's longest jump is ~2.45 voxels and tunnels through
-        thinner walls. See `AV::get_search_stencil`.
+        thinner walls. See `ProbeAccessibleVolumeDecorator::get_search_stencil`.
         """
         import numpy as np
 
@@ -225,11 +225,11 @@ class Tests(unittest.TestCase):
 
         def volume(stencil):
             ap = IMP.Particle(mdl)
-            IMP.bff.AV.do_setup_particle(
+            IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
                 mdl, ap, src, linker_length=L, linker_width=1.5,
                 radii=IMP.algebra.Vector3D(1.0, 0.0, 0.0),
                 allowed_sphere_radius=0.0, simulation_grid_resolution=H)
-            av = IMP.bff.AV(mdl, ap)
+            av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, ap)
             av.set_search_stencil(stencil)
             av.resample()
             pts = np.asarray(av.get_map().get_xyz_density(), dtype=float)
@@ -278,11 +278,11 @@ class Tests(unittest.TestCase):
 
         def volume(stencil, compensate):
             ap = IMP.Particle(mdl)
-            IMP.bff.AV.do_setup_particle(
+            IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
                 mdl, ap, src, linker_length=20.0, linker_width=1.5,
                 radii=IMP.algebra.Vector3D(1.0, 0.0, 0.0),
                 allowed_sphere_radius=0.0, simulation_grid_resolution=1.0)
-            av = IMP.bff.AV(mdl, ap)
+            av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, ap)
             av.set_search_stencil(stencil)
             av.set_compensate_stencil(compensate)
             av.resample()
@@ -316,7 +316,7 @@ class Tests(unittest.TestCase):
         # cannot block the linker tied to it. Volumes grew ~1 %.
         # Olga's radii were the default for part of 2026-09-01 and this read
         # (-0.333604, -24.499506, -4.603655); IMP's own are the default again
-        # (AV::set_radii_source), so this is the pre-Olga number, to 0.002 A.
+        # (ProbeAccessibleVolumeDecorator::set_radii_source), so this is the pre-Olga number, to 0.002 A.
         ref = (-0.322252, -25.204348, -3.821867)
         np.testing.assert_allclose(av_mp.get_coordinates(), ref, atol=1e-3)
 
@@ -408,7 +408,7 @@ class Tests(unittest.TestCase):
         av2 = get_av(hier, residue_index=55)
         distances = IMP.bff.av_random_distances(av1, av2, 500000)
         # Olga's radii shorten this to 55.6252; the default is IMP's own again
-        # (AV::set_radii_source), so the pre-Olga 55.8469 is restored.
+        # (ProbeAccessibleVolumeDecorator::set_radii_source), so the pre-Olga 55.8469 is restored.
         self.assertAlmostEqual(np.mean(distances), 55.8469, delta=0.15)
 
     def test_av_av_distance(self):
@@ -426,7 +426,7 @@ class Tests(unittest.TestCase):
         ]
         # lattice-anchored (PRD-105); MC with 500k samples
         # Olga's radii moved these to [54.6152, 55.6260, 52.5700, 0.4267];
-        # IMP's own are the default again (AV::set_radii_source), so the
+        # IMP's own are the default again (ProbeAccessibleVolumeDecorator::set_radii_source), so the
         # pre-Olga four are restored -- measured back to within 0.03 A, well
         # inside the MC delta below.
         refs_distances = [54.8151, 55.8598, 52.9990, 0.4211]
@@ -474,7 +474,7 @@ class Tests(unittest.TestCase):
         # Regenerated 2026-08-19 with the 74-stencil default (mean of 15 x 10k
         # runs, so the reference itself is not one noisy draw). The distribution
         # broadens and shifts out because the AV is larger under the reference
-        # metric; see AV::get_search_stencil.
+        # metric; see ProbeAccessibleVolumeDecorator::get_search_stencil.
         p_rda_ref = np.array(
             [   0.,    0.,    0.,    0.,    0.,    0.,    1.,    6.,   27.,
                58.,  124.,  220.,  357.,  547.,  778.,  991., 1176., 1319.,

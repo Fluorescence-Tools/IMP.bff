@@ -150,11 +150,11 @@ def main(pdb, chain, residue, atom, dye, av1, linker_length, linker_width,
             % (pdb, atom, chain or "*", residue))
 
     particle = IMP.Particle(model)
-    IMP.bff.AV.do_setup_particle(
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
         model, particle, chosen[0], linker_length=length, radii=tuple(r),
         linker_width=width, simulation_grid_resolution=float(grid),
         allowed_sphere_radius=(-1.0 if clearance is None else float(clearance)))
-    av = IMP.bff.AV(model, particle)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
     av.resample()
 
     # a numpy view: test its length, never its truth value

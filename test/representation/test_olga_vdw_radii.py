@@ -173,15 +173,15 @@ def _av(model, hierarchy, residue, atom, radii_source):
     selection.set_atom_type(IMP.atom.AtomType(atom))
     selection.set_residue_index(residue)
     source = selection.get_selected_particles()[0]
-    IMP.bff.AV.do_setup_particle(model, particle, source, **AV_PARAMETER)
-    av = IMP.bff.AV(model, particle)
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(model, particle, source, **AV_PARAMETER)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
     av.set_radii_source(radii_source)
     av.resample()
     return av
 
 
 def test_the_default_is_imps_own_radii():
-    """Stated in `AV::set_radii_source`, pinned here.
+    """Stated in `ProbeAccessibleVolumeDecorator::set_radii_source`, pinned here.
 
     The owner's decision (2026-09-01, reversing a one-day default of Olga's):
     the volume must use one radii set, and that set is the one already on the
@@ -195,10 +195,10 @@ def test_the_default_is_imps_own_radii():
     selection = IMP.atom.Selection(hierarchy)
     selection.set_atom_type(IMP.atom.AtomType("CB"))
     selection.set_residue_index(132)
-    IMP.bff.AV.do_setup_particle(model, particle,
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(model, particle,
                                  selection.get_selected_particles()[0],
                                  **AV_PARAMETER)
-    assert IMP.bff.AV(model, particle).get_radii_source() == "imp"
+    assert IMP.bff.ProbeAccessibleVolumeDecorator(model, particle).get_radii_source() == "imp"
 
 
 def test_an_unknown_radii_source_is_refused():
@@ -269,10 +269,10 @@ def test_the_source_is_a_per_position_fps_json_field():
     selection = IMP.atom.Selection(hierarchy)
     selection.set_atom_type(IMP.atom.AtomType("CB"))
     selection.set_residue_index(132)
-    IMP.bff.AV.do_setup_particle(model, particle,
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(model, particle,
                                  selection.get_selected_particles()[0],
                                  **AV_PARAMETER)
-    av = IMP.bff.AV(model, particle)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
     av.set_av_parameter(json.dumps({"radii_source": "olga"}))
     assert av.get_radii_source() == "olga"
     av.set_av_parameter(json.dumps({}))          # absent = the default
@@ -339,10 +339,10 @@ def test_a_shared_raster_refuses_two_radii_sets():
 
     The alternative is that whichever volume asked second gets the first one's
     atoms and still returns a plausible cloud. See
-    `AVOccupancyRegistry::adopt_obstacle_radii`.
+    `ProbeAccessibleVolumeOccupancyRegistry::adopt_obstacle_radii`.
     """
     model, hierarchy = _t4l()
-    registry = IMP.bff.AVOccupancyRegistry(IMP.atom.get_leaves(hierarchy))
+    registry = IMP.bff.ProbeAccessibleVolumeOccupancyRegistry(IMP.atom.get_leaves(hierarchy))
     # A registry hands its maps a shared coordinate snapshot and they read it
     # instead of the Model; it is empty until this is called, and a map that
     # indexes an empty snapshot segfaults. ProbeNetworkRestraint drives this

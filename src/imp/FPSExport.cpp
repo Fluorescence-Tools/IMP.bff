@@ -6,7 +6,7 @@
  */
 #include <IMP/bff/FPSExport.h>
 
-#include <IMP/bff/AV.h>
+#include <IMP/bff/ProbeAccessibleVolumeDecorator.h>
 #include <IMP/bff/FPS.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
@@ -306,9 +306,9 @@ FPSLabelPositions fps_label_positions(const DockingAssembly& assembly) {
     IMP::Model* model = assembly.get_model();
 
     std::map<std::string, IMP::algebra::Vector3D> coordinates;
-    IMP::bff::AVs avs = network->get_used_avs();
+    IMP::bff::ProbeAccessibleVolumeDecorators avs = network->get_used_avs();
     for (std::size_t i = 0; i < avs.size(); ++i) {
-        IMP::bff::AV av = avs[i];
+        IMP::bff::ProbeAccessibleVolumeDecorator av = avs[i];
         av.resample();
         coordinates.insert(std::make_pair(av.get_particle()->get_name(),
                                           IMP::core::XYZ(av).get_coordinates()));

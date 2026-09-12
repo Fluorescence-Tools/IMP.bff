@@ -46,6 +46,7 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
+#include <IMP/bff/States.h>
 #include <IMP/bff/bff_config.h>
 
 #include <IMP/bff/Base.h>
@@ -336,7 +337,7 @@ IMPBFFEXPORT std::string read_evaluators_json(const std::string& path);
 IMPBFFEXPORT void write_evaluators_json(const std::string& path,
                                         const std::string& evaluators_json);
 
-// -------- from AV.h (the pair-distance measurement record) --------
+// -------- from ProbeAccessibleVolumeDecorator.h (the pair-distance measurement record) --------
 // An fps.json distance entry as a C++ value: what a pair of positions was
 // measured to be, with its type and its error. It was declared beside the
 // AV decorator (the connection layer) but nothing in it is IMP's; the

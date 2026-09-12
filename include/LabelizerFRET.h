@@ -42,7 +42,7 @@
 #include <limits>
 
 #include <IMP/bff/LabelizerScore.h>
-#include <IMP/bff/AVModel.h>
+#include <IMP/bff/ProbeAccessibleVolume.h>
 #include <functional>
 
 IMPBFF_BEGIN_NAMESPACE
@@ -347,7 +347,7 @@ IMPBFFEXPORT int labelizer_cbeta_difference_map(const LabelizerStructure& s1,
 
 // -------- the accessible-volume door the site scores use --------
 //! How a labelling site's accessible volume is built from a structure file.
-/*! The core's road reads the PDB itself (AVBuilder.h: the records, the van
+/*! The core's road reads the PDB itself (ProbeAccessibleVolumeBuilder.h: the records, the van
     der Waals table, the attachment atom) and runs the array door, get_av().
     The connection layer installs IMP's road at load -- get_av_from_structure,
     which reads through IMP::atom and uses the radii IMP assigns -- so an IMP
@@ -355,7 +355,7 @@ IMPBFFEXPORT int labelizer_cbeta_difference_map(const LabelizerStructure& s1,
     give the obstacles; which table the module should stand on is an open
     decision (PRD-137, deferred), and until it is made the door says which
     road is in force. */
-typedef std::function<AccessibleVolume(
+typedef std::function<ProbeAccessibleVolume(
         const std::string& pdb_path, const std::string& chain, int resseq,
         const std::string& atom_name, double linker_length, double linker_width,
         double r1, double r2, double r3, double grid_resolution)> LabelizerAvDoor;

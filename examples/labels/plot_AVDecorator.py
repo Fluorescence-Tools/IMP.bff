@@ -55,8 +55,8 @@ av_parameter = {
     "contact_volume_trapped_fraction": -1,
     "simulation_grid_resolution": 0.5
 }
-IMP.bff.AV.do_setup_particle(m, av_p, source, **av_parameter)
-av1 = IMP.bff.AV(m, av_p)
+IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(m, av_p, source, **av_parameter)
+av1 = IMP.bff.ProbeAccessibleVolumeDecorator(m, av_p)
 
 # %%
 # The coordinates of an AV are the mean AV the density map. Thus, the position of the
@@ -132,8 +132,8 @@ sel.set_atom_type(IMP.atom.AtomType("CB"))
 sel.set_residue_index(residue_index)
 p = sel.get_selected_particles()[0]
 av_p2 = IMP.Particle(m)
-IMP.bff.AV.do_setup_particle(m, av_p2, p, **av_parameter)
-av2 = IMP.bff.AV(av_p2)
+IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(m, av_p2, p, **av_parameter)
+av2 = IMP.bff.ProbeAccessibleVolumeDecorator(av_p2)
 v = IMP.bff.av_distance(av1, av2)
 print(v)
 

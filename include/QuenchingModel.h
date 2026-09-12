@@ -37,8 +37,9 @@
 #define IMPBFF_QUENCHINGMODEL_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/AVModel.h>
+#include <IMP/bff/ProbeAccessibleVolume.h>
 #include <IMP/bff/ProbeSampling.h>
+#include <IMP/bff/ProbeDiffusionSimulation.h>
 #include <IMP/bff/GridDiffusionSolver.h>
 #include <IMP/bff/LifetimeSpectrum.h>
 #include <IMP/bff/Quenching.h>
@@ -79,7 +80,7 @@ IMP_VALUES(ObstacleAtoms, ObstacleAtomsList);
     kept: they are grid-sized, and none of them changes unless a parameter does.
 */
 class IMPBFFEXPORT DynamicAccessibleVolume {
-    AccessibleVolume av_;
+    ProbeAccessibleVolume av_;
     ObstacleAtoms atoms_;
     double tau0_, probe_radius_, free_diffusion_, contact_distance_, slow_factor_;
     std::string flux_form_;
@@ -104,7 +105,7 @@ public:
         \param[in] flux_form `"smoluchowski"` or `"ito"` — see
                    #IMP::bff::equilibrium_occupancy
         \throw ValueException for any other \p flux_form */
-    DynamicAccessibleVolume(const AccessibleVolume& av = AccessibleVolume(),
+    DynamicAccessibleVolume(const ProbeAccessibleVolume& av = ProbeAccessibleVolume(),
                             const ObstacleAtoms& atoms = ObstacleAtoms(),
                             double tau0 = 4.0, double probe_radius = 3.5,
                             double free_diffusion = 8.0,
@@ -196,7 +197,7 @@ IMP_VALUES(DynamicAccessibleVolume, DynamicAccessibleVolumes);
     quenching rate read along it, and photons raced against that rate.
 */
 class IMPBFFEXPORT QuenchedDonorDecay {
-    AccessibleVolume av_;
+    ProbeAccessibleVolume av_;
     ObstacleAtoms atoms_;
     double tau0_, critical_distance_, slow_radius_, probe_radius_;
     double diffusion_coefficient_, slow_fact_, t_step_, t_max_;
@@ -232,7 +233,7 @@ public:
                    #IMP::bff::default_trajectory_count
         \param[in] random_seed negative draws freely */
     QuenchedDonorDecay(
-            const AccessibleVolume& av = AccessibleVolume(),
+            const ProbeAccessibleVolume& av = ProbeAccessibleVolume(),
             const ObstacleAtoms& atoms = ObstacleAtoms(), double tau0 = 4.0,
             const std::map<std::string, ResidueQuenching>& quenching_table =
                     std::map<std::string, ResidueQuenching>(),

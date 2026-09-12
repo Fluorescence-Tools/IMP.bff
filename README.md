@@ -112,6 +112,21 @@ Attaching a dye onto a structure and running Langevin dynamics on it
 `imp.bff`: those use IMP's integrators and hierarchies rather than
 reimplementing them.
 
+`ProbeSimulation` is the common interface: `get_positions`/`set_positions`,
+`minimize`, `step` and `run`. `MolecularProbeSimulation` implements it using
+IMP, while `ProbeDiffusionSimulation` implements a grid walk. A recorded run
+returns `ProbeSimulationTrajectory`. The grid-specific `simulate(...)` method
+retains its duration/diffusion arguments; `run(...)` takes a step count.
+
+For C++ callers, include the matching `ProbeSimulation.h`,
+`MolecularProbeSimulation.h` or `ProbeDiffusionSimulation.h`. The standalone
+volume is `ProbeAccessibleVolume` in `ProbeAccessibleVolume.h`; IMP particles
+use `ProbeAccessibleVolumeDecorator`. Probe templates, topology, force-field
+CIF, potential tables and data locations live in the corresponding
+`ProbeComponentTemplate`, `ProbeTopology`, `ProbeForceFieldCIF`,
+`ProbePotentialTables` and `ProbeDataPaths` headers. Rotamer scoring helpers
+are in `RotamerScoring.h`.
+
 
 ## Inter-label distance score usage:
 

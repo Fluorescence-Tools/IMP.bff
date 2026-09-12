@@ -13,7 +13,7 @@
  * views whose shape is part of their contract. All bindings are the standard
  * numpy.i suites -- no Python wrapper states a shape a second time, and no
  * custom typemap re-implements one. They used to be wrapped early, before
- * AV.h, whose defaults name this header's distance enum; a default argument
+ * ProbeAccessibleVolumeDecorator.h, whose defaults name this header's distance enum; a default argument
  * is filled in by the C++ compiler, not by SWIG, so the early position was
  * never load-bearing.
  *

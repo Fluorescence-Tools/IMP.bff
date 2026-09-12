@@ -34,7 +34,7 @@ operation you call; the Python API remains flat under `IMP.bff`.
 | `fret_score.py` | 978 | `LabelizerFRET.h` in full | the biggest module |
 | `measurement_score.py` | 196 | `LabelizerPairScore`, `labelizer_pair_scores*` | the CSV base class is gone |
 | `fluorophore.py` | 218 | **not ported** — `ProbeLibrary.h` already had it | see *Not ported*, below |
-| `label_lib_functions.py` | 148 | **not ported** — `AVBuilder.h` / `StatesDistance.h` | LabelLib is banned here |
+| `label_lib_functions.py` | 148 | **not ported** — `ProbeAccessibleVolumeBuilder.h` / `StatesDistance.h` | LabelLib is banned here |
 | `pdbhelper.py` | 108 | `labelizer_read_structure` | over `read_pdb_records` |
 | `auxiliary_functions.py` | 82 | **not ported** | MSMS binary discovery, plus dead code |
 | `config.py` | 147 | `LabelizerOptions`, `LabelizerFRETOptions` | constants become defaults on a struct |
@@ -69,10 +69,10 @@ operation you call; the Python API remains flat under `IMP.bff`.
 | `FRETScore._calc_heat_map(...)` (`:920`) | `labelizer_cbeta_difference_map` |
 | `Fluorophore.calc_foerster_radius(a)` (`fluorophore.py:130`) | `IMP::bff::forster_radius` — already existed, derived not supplied |
 | `llf.effDistance(av1, av2, R0, n)` (`label_lib_functions.py:138`) | `model_distance(s1, s2, "RDAMeanE")` |
-| `llf.meanAV(av)` (`:122`) | `AccessibleVolume::get_mean_position` |
+| `llf.meanAV(av)` (`:122`) | `ProbeAccessibleVolume::get_mean_position` |
 | `pdbhelper.remove_hetatoms(model)` (`pdbhelper.py:16`) | the `protein_only` argument of `labelizer_read_structure` |
 | `ChargeEnvironment.calc_global_charge()` (`charge_environment.py:160`) | `labelizer_global_charge` — net, positive and negative formal charge. Offered by the reference and consumed by nothing there. Its PQR variant, which reads a partial charge out of the **occupancy** column, is not ported: see the header. |
-| `llf.saveXYZ/savePqr/saveAV/loadAV` (`label_lib_functions.py`) | `write_path_map` and `AccessibleVolume::get_points` / `PathMap::get_xyz_density`, plus IMP.em's map writers — the capability is here and is not a text format of our own |
+| `llf.saveXYZ/savePqr/saveAV/loadAV` (`label_lib_functions.py`) | `write_path_map` and `ProbeAccessibleVolume::get_points` / `PathMap::get_xyz_density`, plus IMP.em's map writers — the capability is here and is not a text format of our own |
 
 ## Constants
 

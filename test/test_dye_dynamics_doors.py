@@ -1,7 +1,7 @@
 """A dye on a structure, as an ordinary simulation object.
 
 Placing a dye on a residue and integrating its motion is built on IMP --
-its hierarchies, its decorators, its integrators. `DyeSimulation` is that
+its hierarchies, its decorators, its integrators. `MolecularProbeSimulation` is that
 computation behind arrays and `IMP::bff::ProbeSimulation`, which is what
 lets it be wrapped without IMP's own SWIG interfaces and reached from a
 build that carries IMP as a private library and has no IMP in Python at all
@@ -28,7 +28,7 @@ import numpy as np
 
 import IMP.bff
 
-_HAS_DOORS = hasattr(IMP.bff, "DyeSimulation")
+_HAS_DOORS = hasattr(IMP.bff, "MolecularProbeSimulation")
 
 
 def _inputs():
@@ -43,7 +43,7 @@ def _inputs():
 def _simulation(**parameters):
     protein, dye, mol2 = _inputs()
     parameters.setdefault("seed", 1)
-    return IMP.bff.DyeSimulation(protein, dye, mol2, "A", 481,
+    return IMP.bff.MolecularProbeSimulation(protein, dye, mol2, "A", 481,
                                  json.dumps(parameters))
 
 
@@ -68,7 +68,7 @@ class TestSetup(unittest.TestCase):
     def test_a_site_that_is_not_there_is_refused(self):
         protein, dye, mol2 = _inputs()
         with self.assertRaises(Exception):
-            IMP.bff.DyeSimulation(protein, dye, mol2, "Z", 99999)
+            IMP.bff.MolecularProbeSimulation(protein, dye, mol2, "Z", 99999)
 
 
 @unittest.skipUnless(_HAS_DOORS, "this build has no connection layer")
@@ -90,13 +90,13 @@ class TestTheSharedShape(unittest.TestCase):
     def test_a_parameter_it_does_not_have_is_refused(self):
         protein, dye, mol2 = _inputs()
         with self.assertRaises(Exception):
-            IMP.bff.DyeSimulation(protein, dye, mol2, "A", 481,
+            IMP.bff.MolecularProbeSimulation(protein, dye, mol2, "A", 481,
                                   json.dumps({"viscosity": 1.0}))
 
     def test_an_unknown_integrator_is_refused(self):
         protein, dye, mol2 = _inputs()
         with self.assertRaises(Exception):
-            IMP.bff.DyeSimulation(protein, dye, mol2, "A", 481,
+            IMP.bff.MolecularProbeSimulation(protein, dye, mol2, "A", 481,
                                   json.dumps({"integrator": "verlet-ish"}))
 
     def test_parameters_are_fixed_once_it_is_built(self):
@@ -169,7 +169,7 @@ class TestNoImpInPython(unittest.TestCase):
             "d = IMP.bff.load_protein_frames("
             "str(IMP.bff.get_structure_dir('alexa488_r48.pdb')))[0]\n"
             "m = str(IMP.bff.get_structure_dir('alexa488_r48.mol2'))\n"
-            "IMP.bff.DyeSimulation(p, d, m, 'A', 481).run(20, 10)\n"
+            "IMP.bff.MolecularProbeSimulation(p, d, m, 'A', 481).run(20, 10)\n"
             # marked, because the C++ side writes progress to stdout too
             "print('MODULES=' + repr(sorted(n for n in sys.modules"
             " if n.split('.')[0] == 'IMP')))\n")

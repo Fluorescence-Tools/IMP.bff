@@ -13,7 +13,7 @@ IMP_SWIG_OBJECT(IMP::bff, PathMap, PathMaps);
 // PathMapHeader is a value, and a value may be returned by value or const
 // reference only -- never as a mutable reference, which would let Python edit
 // the map's header behind its back. get_path_map_header_writable() stays in
-// C++ (AV.cpp sets the path origin through it) but is not wrapped; from Python
+// C++ (ProbeAccessibleVolumeDecorator.cpp sets the path origin through it) but is not wrapped; from Python
 // the value-correct pair is get_path_map_header() and set_path_map_header().
 %ignore IMP::bff::PathMap::get_path_map_header_writable;
 

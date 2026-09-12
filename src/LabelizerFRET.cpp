@@ -12,8 +12,8 @@
 #include <cstdlib>
 #include <map>
 #include <set>
-#include <IMP/bff/AVBuilder.h>
-#include <IMP/bff/AVModel.h>
+#include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
+#include <IMP/bff/ProbeAccessibleVolume.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <limits>
@@ -45,7 +45,7 @@ struct LfSite {
     std::string key;
     LfPoint mean;
     bool placed;
-    //! `States` rather than `AccessibleVolume`: the pair distance needs only
+    //! `States` rather than `ProbeAccessibleVolume`: the pair distance needs only
     //! the cloud, and the density grid an AV also carries is a large thing to
     //! copy per site.
     States av;
@@ -175,11 +175,11 @@ void labelizer_alpha_cone_mean_position(const LabelizerStructure& s, int residue
 // -------- the accessible-volume door --------
 namespace {
 
-AccessibleVolume core_av_door(const std::string& pdb_path, const std::string& chain,
+ProbeAccessibleVolume core_av_door(const std::string& pdb_path, const std::string& chain,
                               int resseq, const std::string& atom_name,
                               double linker_length, double linker_width,
                               double r1, double r2, double r3, double grid_resolution) {
-    // the core's file door (AVBuilder.h), which is this road made public
+    // the core's file door (ProbeAccessibleVolumeBuilder.h), which is this road made public
     return get_av_from_pdb(pdb_path, chain, resseq, atom_name, linker_length, linker_width,
                            r1, r2, r3, grid_resolution, -1.0, 0);
 }
@@ -224,7 +224,7 @@ void labelizer_probe_mean_position(const LabelizerStructure& s, const std::strin
     // here an empty cloud says the same thing without a magic count.
     const LabelizerResidue& r = s.residues[residue];
     const std::string atom = r.cb >= 0 ? "CB" : "CA";
-    AccessibleVolume av = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
+    ProbeAccessibleVolume av = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
             pdb_path, r.chain, r.seq_id, atom, options.linker_length,
             options.linker_width, options.r1, options.r2, options.r3,
             options.grid_resolution);
@@ -272,7 +272,7 @@ std::vector<LfSite> lf_place_sites(
             // Keep the cloud: the pair distance is a property of the two
             // distributions, not of their two mean positions.
             const std::string atom = r.cb >= 0 ? "CB" : "CA";
-            const AccessibleVolume built = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
+            const ProbeAccessibleVolume built = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
                     pdb_path, r.chain, r.seq_id, atom, options.linker_length,
                     options.linker_width, options.r1, options.r2, options.r3,
                     options.grid_resolution);

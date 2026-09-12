@@ -171,7 +171,7 @@ def test_scoring_an_assembly_agrees_with_the_restraint_it_is_built_on(tmp_path):
     (PRD-106) and 22.527697710399956 until the accessible contact volume they
     all ask for stopped being ignored (2026-09-01, PRD-121 G9). Olga's
     name-keyed radii were briefly the default the same day and gave
-    11.286617190950983; IMP's own are the default again (AV::set_radii_source)
+    11.286617190950983; IMP's own are the default again (ProbeAccessibleVolumeDecorator::set_radii_source)
     -- and that both paths moved together each time, and back together, is the
     point of pinning them against each other.
     """
@@ -317,7 +317,7 @@ def test_the_two_bodies_together_do_carry_every_site():
     # 2026-09-01: this fixture's DNA uses the old `C1*`/`O1P` spellings, which
     # that name-keyed table does not carry, so those atoms took its 1.50 A
     # unknown-name fallback. IMP's own radii are the default again
-    # (AV::set_radii_source) and 59.0404 returns exactly.
+    # (ProbeAccessibleVolumeDecorator::set_radii_source) and 59.0404 returns exactly.
     assert result.score == pytest.approx(59.040389, abs=1e-3)
 
 

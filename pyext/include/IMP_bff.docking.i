@@ -16,7 +16,7 @@
  *    results, the first drives IMP.pmi (Python-only, and not a dependency of
  *    this module) and the second forks workers. Those are programs.
  *  - The derivative-enabled mean-distance restraint the minimiser uses is
- *    `AVMeanDistanceRestraint`, which has the gradient in C++. There is one.
+ *    `ProbeAccessibleVolumeMeanDistanceRestraint`, which has the gradient in C++. There is one.
  */
 
 /* A trap worth knowing about, measured 2026-08-31 and **not** fixed here.

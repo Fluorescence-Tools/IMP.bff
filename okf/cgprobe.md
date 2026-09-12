@@ -4,6 +4,24 @@ okf_version: "0.2"
 
 # cgprobe — the explicit-dye layer of imp.bff
 
+## Current public files and resume point
+
+The library's Python surface is flat under `IMP.bff`. The current file map
+is documented in the [README](../README.md): `ProbeSimulation` and its shared
+`ProbeSimulationTrajectory`, `MolecularProbeSimulation`,
+`ProbeDiffusionSimulation`, and the `ProbeAccessibleVolume*` representations.
+Sampling/library helpers remain in `ProbeSampling`; the diffusion object has
+its own header and source. Template, force-field, topology and potential
+files use `Probe*` names; scoring orchestration is `RotamerScoring`.
+`get_probe_data_dir()` still resolves the same shipped `data/cgprobe` data.
+
+The historical discussion below includes retired package paths. Remaining
+library taxonomy work is tracked in [PRD-141](prds/prd-141.md): probe rotamers
+and protein side-chain libraries still need separation after the shared
+rotamer-reader work is released. The current continuation preserves the
+recorded potential-table decoding and molecular Mass-setup failures; those
+are separate behavior fixes, not part of the file/API migration.
+
 **What it is.** `IMP.bff.cgprobe` models a fluorescent label as an atomistic dye
 + linker: labelling a residue in its backbone frame (`attach_dyes`,
 `resolve_dye_site`, side chain stripped through the shared strip engine

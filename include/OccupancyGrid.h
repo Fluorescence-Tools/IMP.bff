@@ -4,7 +4,7 @@
  *
  * The raster the accessible-volume search reads its obstacles from, over a
  * plain list of spheres -- (x, y, z, radius) -- and nothing else. This is
- * the core of what was `AVOccupancyMap` (PRD-105); that class is now the
+ * the core of what was `ProbeAccessibleVolumeOccupancyMap` (PRD-105); that class is now the
  * connection layer's view of it, adding only the reading of the spheres
  * from IMP particles. Everything below -- the global lattice indexing, the
  * subtract-old / add-new deltas, the windows, the change history -- is
@@ -58,7 +58,7 @@ class IMPBFFEXPORT OccupancyGrid : public IMP::Object {
     double extra_radius_;
 
     // Optional coordinate snapshot (x, y, z, r per particle) maintained by
-    // the owner (AVOccupancyRegistry::refresh_snapshot): the four class maps
+    // the owner (ProbeAccessibleVolumeOccupancyRegistry::refresh_snapshot): the four class maps
     // of a registry then read the Model once per frame instead of once each.
     std::shared_ptr<const std::vector<IMP::algebra::Vector4D> > snapshot_;
     IMP::algebra::Vector3D coord(size_t i) const {

@@ -120,8 +120,8 @@ IMPBFF_END_NAMESPACE
 
 #include <IMP/bff/Clustering.h>
 #include <IMP/bff/MolecularGraph.h>
-#include <IMP/bff/Scoring.h>
-#include <IMP/bff/TopologyBuild.h>
+#include <IMP/bff/RotamerScoring.h>
+#include <IMP/bff/ProbeTopology.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/bff/Base.h>

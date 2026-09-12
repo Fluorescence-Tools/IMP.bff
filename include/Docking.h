@@ -300,7 +300,7 @@ struct IMPBFFEXPORT DockingParameters {
         carries implicit hydrogens; `"olga"` is the name-keyed Bondi-scale
         table (#IMP::bff::olga_vdw_radius), which is the set FPS's
         #clash_tolerance was calibrated against. Same spellings and same
-        machinery as #IMP::bff::AV::set_radii_source, deliberately: "how big is
+        machinery as #IMP::bff::ProbeAccessibleVolumeDecorator::set_radii_source, deliberately: "how big is
         an atom" must have one answer per run even though the volume and the
         clash term ask it separately.
 
@@ -489,7 +489,7 @@ public:
     it always has. Under any other choice each atom gets a **shadow sphere**:
     a new particle at the same coordinate, added to the same rigid body, whose
     only content is the radius the clash term should measure by. The atoms keep
-    theirs. That matters because #IMP::bff::AV under `AV_RADII_IMP` inflates
+    theirs. That matters because #IMP::bff::ProbeAccessibleVolumeDecorator under `AV_RADII_IMP` inflates
     its obstacles by exactly those radii and #IMP::bff::dock_minimize resamples
     volumes between minimisations (`refine_av_cycles`): rewriting the radii
     here would silently resize every volume computed afterwards. It is also
@@ -842,7 +842,7 @@ IMPBFFEXPORT DockingResult score_structures(
     The deterministic alternative to the Monte-Carlo sampler (`imp_bff dock`),
     and the FPS approach: each volume's mean position rides on its rigid body
     as a plain point-member *proxy*, the proxies are pulled toward the
-    experimental distances by #IMP::bff::AVMeanDistanceRestraint, and a coarse
+    experimental distances by #IMP::bff::ProbeAccessibleVolumeMeanDistanceRestraint, and a coarse
     excluded-volume term keeps the bodies apart.
 
     \note The proxies exist for a reason worth keeping written down. Attaching

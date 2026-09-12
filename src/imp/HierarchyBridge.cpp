@@ -11,7 +11,7 @@
 #include <IMP/bff/HierarchyBridge.h>
 #include <utility>
 #include <IMP/atom/element.h>
-#include <IMP/bff/AVBuilder.h>
+#include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>

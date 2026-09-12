@@ -1,6 +1,6 @@
 /**
  * ile OccupancyGrid.cpp
- * rief The inflated-sphere raster on a global cubic lattice (formerly AVOccupancyMap.cpp).
+ * rief The inflated-sphere raster on a global cubic lattice (formerly ProbeAccessibleVolumeOccupancyMap.cpp).
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */

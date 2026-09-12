@@ -10,7 +10,7 @@ protein-DNA interface at k = 8, IMP's radii give **268 overlapping atom pairs /
 **30 / 7.59 / 11.11** -- a factor of 17.9.
 
 So `clash_container` has a radii source and a radii scale, spelled and validated
-exactly as `AV::set_radii_source` is. Two things about them are decisions:
+exactly as `ProbeAccessibleVolumeDecorator::set_radii_source` is. Two things about them are decisions:
 
 **Nothing is written on the structure's own radii.** A substituted radii set is
 carried by *shadow spheres* -- new particles at the atoms' coordinates, added to

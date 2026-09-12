@@ -196,7 +196,7 @@ def test_a_volume_overlaps_its_own_site_and_not_the_far_side(tmp_path):
     src = IMP.atom.Selection(h, chain_id="A", residue_index=132,
                              atom_type=IMP.atom.AtomType("CB")
                              ).get_selected_particles()[0]
-    av = IMP.bff.AV.setup_particle(m, IMP.Particle(m), src)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(m, IMP.Particle(m), src)
     av.set_av_parameter('{"linker_length": 20.5, "linker_width": 1.5,'
                         ' "radius1": 3.5, "simulation_grid_resolution": 1.5}')
     av.resample()
@@ -219,7 +219,7 @@ def test_a_volume_overlaps_its_own_site_and_not_the_far_side(tmp_path):
     # obstacle set plus the dye radius, because the carve inflates every
     # obstacle by the dye radius and the closest a voxel can sit to an atom
     # centre is that sum. Under the default radii -- IMP's, united-atom
-    # (AV::set_radii_source) -- that is oxygen 1.70 + 3.5 = **5.20 A**:
+    # (ProbeAccessibleVolumeDecorator::set_radii_source) -- that is oxygen 1.70 + 3.5 = **5.20 A**:
     # measured 0.0 at 5.20 and 0.000366 at 5.21. Under Olga's, which were the
     # default for part of 2026-09-01, it is 1.49 + 3.5 = 4.99. Pinned from
     # both sides so a change of radii set shows up here as a moved edge
@@ -284,7 +284,7 @@ def test_chain_weighting_is_read_from_the_fps_json_field():
                              ).get_selected_particles()[0]
 
     def build(flag):
-        av = IMP.bff.AV.setup_particle(m, IMP.Particle(m), src)
+        av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(m, IMP.Particle(m), src)
         av.set_av_parameter(
             '{"linker_length": 20.5, "linker_width": 1.5, "radius1": 3.5,'
             ' "simulation_grid_resolution": 1.5, "chain_weighting": %s}'
@@ -369,7 +369,7 @@ def two_avs():
         src = IMP.atom.Selection(h, chain_id="A", residue_index=residue,
                                  atom_type=IMP.atom.AtomType("CB")
                                  ).get_selected_particles()[0]
-        av = IMP.bff.AV.setup_particle(m, IMP.Particle(m), src)
+        av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(m, IMP.Particle(m), src)
         av.set_av_parameter(
             '{"linker_length": 20.5, "linker_width": 1.5, "radius1": 3.5,'
             ' "simulation_grid_resolution": 1.5, "chain_weighting": %s}'

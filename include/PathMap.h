@@ -37,7 +37,7 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class AV;  // the decorator (connection layer) is a friend; a name is all a friend needs
+class ProbeAccessibleVolumeDecorator;  // the decorator (connection layer) is a friend; a name is all a friend needs
 
 
 class PathMap;
@@ -585,7 +585,7 @@ IMPBFFEXPORT LinkerWeighting linker_weighting(double linker_length);
 class IMPBFFEXPORT PathMap : public DensityGrid {
 
 friend class PathMapTile;
-friend class AV;
+friend class ProbeAccessibleVolumeDecorator;
 
 private:
 
@@ -1020,7 +1020,7 @@ public:
      * it passes to be free (no corner cutting) -- and its cost is the exact
      * Euclidean distance to the source. Tiles in the shadow of the protein
      * are not reached: the linker is modelled as straight. Off by default;
-     * AV::set_search_mode("euclidean") turns it on.
+     * ProbeAccessibleVolumeDecorator::set_search_mode("euclidean") turns it on.
      */
     void set_euclidean_search(bool tf) { euclidean_search_ = tf; }
     bool get_euclidean_search() const { return euclidean_search_; }
@@ -1298,7 +1298,7 @@ void write_map_feature(
 
 // -------- the lattice window and the attachment-atom subtraction --------
 // Both were statics of the AV decorator's source; the Model-free get_av in
-// AVBuilder.cpp needs them too, so they live with the lattice.
+// ProbeAccessibleVolumeBuilder.cpp needs them too, so they live with the lattice.
 
 //! The cubic window of the global lattice a search from `source` can reach.
 /*! `n` is odd and centred on the voxel nearest the source; `k0` is the
@@ -1357,7 +1357,7 @@ inline void drop_source_obstruction(T *counts, const IMP::algebra::Vector3D &ori
             const long row = (long) iz * nxy + (long) iy * n;
             for (int ix = 0; ix < n; ix++) {
                 const double dx = origin[0] + ix * spacing - c[0];
-                // strict `<`, as AVOccupancyMap::add_sphere tests
+                // strict `<`, as ProbeAccessibleVolumeOccupancyMap::add_sphere tests
                 if (dyz2 + dx * dx < r2) {
                     T &v = counts[row + ix];
                     if (v > 0) v -= 1;

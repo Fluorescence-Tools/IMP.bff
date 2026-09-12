@@ -1,4 +1,4 @@
-"""One CHARMM36 table, one LJ kernel: every scorer derives from Scoring.h.
+"""One CHARMM36 table, one LJ kernel: every scorer derives from RotamerScoring.h.
 
 Two tables used to live side by side (``rmin_half``/``epsilon`` in
 topology.dye and ``p_Rmin2``/``eps`` in rotamer.scoring); the numbers were

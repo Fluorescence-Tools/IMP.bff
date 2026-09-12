@@ -22,7 +22,7 @@
 #define IMPBFF_PROBEDYNAMICS_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/DyeDynamics.h>
+#include <IMP/bff/MolecularProbeSimulation.h>
 #include <IMP/bff/ProbeLibrary.h>
 
 #include <IMP/Pointer.h>
@@ -134,7 +134,7 @@ public:
     //! Integrate, keeping a frame every \p write_every steps.
     /*! \param[in] n_steps how far to integrate
         \param[in] write_every how often to keep a frame */
-    LangevinTrajectory run(int n_steps, int write_every = 10);
+    ProbeSimulationTrajectory run(int n_steps, int write_every = 10);
 
     //! T from the kinetic energy of the mobile atoms: \f$2E/(3Nk_B)\f$.
     double kinetic_temperature(double kinetic_energy) const;

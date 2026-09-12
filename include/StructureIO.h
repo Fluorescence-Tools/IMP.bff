@@ -22,7 +22,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/ZMatrix.h>
 
-#include <IMP/bff/AVBuilder.h>
+#include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 
 #include <IMP/bff/Base.h>
 
@@ -49,7 +49,7 @@ struct IMPBFFEXPORT AtomBond {
 IMP_VALUES(AtomBond, AtomBonds);
 
 // The ATOM/HETATM records of a PDB are #IMP::bff::read_pdb_records, in
-// `AVBuilder.h`. It is cached on (path, mtime, size), which the reader this
+// `ProbeAccessibleVolumeBuilder.h`. It is cached on (path, mtime, size), which the reader this
 // replaced was not, and it now carries the serial, the residue name and the
 // element that reader carried -- there were two records and two parsers for one
 // file format until 2026-08-20.

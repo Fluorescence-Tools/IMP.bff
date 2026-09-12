@@ -8,7 +8,7 @@
  * takes a type from here. The standalone build does not include this file.
  */
 
-%include "IMP_bff.av.i"
+%include "IMP_bff.probeaccessiblevolumedecorator.i"
 
 /* Where a probe sits on a structure and how it gets there, over IMP::atom
    hierarchies (formerly part of label.i). */
@@ -21,7 +21,7 @@
 
 /* The dynamics of an explicit probe: IMP::atom::Simulator over IMP particles
    (formerly part of sampling.i). */
-%include "IMP_bff.dyedynamics.i"
+%include "IMP_bff.molecularprobesimulation.i"
 %include "IMP_bff.probedynamics.i"
 
 /* The FRET-restrained docking engine. */
@@ -45,11 +45,11 @@
 
 /* The mean-position FRET restraint, and what repeated docking says about a
    model's precision. */
-%include "IMP_bff.avmeandistance.i"
+%include "IMP_bff.probeaccessiblevolumemeandistancerestraint.i"
 
 /* The coarse-grained protein potentials: contacts, sterics, solvation. After
    the accessible-surface kernels it composes and the residue types it reads. */
-%include "IMP_bff.potentials.i"
+%include "IMP_bff.probepotentialrestraints.i"
 
 /* The connection layer's Hierarchy and Particle overloads of core functions,
    last: they return the core's values and take the core's lattice. */

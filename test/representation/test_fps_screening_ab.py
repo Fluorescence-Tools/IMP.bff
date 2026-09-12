@@ -25,7 +25,7 @@ because FPS has none.
 Every number here depends on which van der Waals radii the volumes inflate
 their obstacles by, so every one of them is labelled with a radii source. The
 default is **IMP's** -- the radii on the particles, which is what a docking
-score's clash term reads (`AV::set_radii_source`). Olga's table is selectable
+score's clash term reads (`ProbeAccessibleVolumeDecorator::set_radii_source`). Olga's table is selectable
 and reproduces the published numbers better; what that trade costs is measured
 here rather than argued about.
 
@@ -168,7 +168,7 @@ def test_rda_agrees_with_fps_itself():
 
     So the default is **not** the more accurate radii set, and that is
     asserted here rather than left implicit: it is the set the clash term of a
-    docking score reads (`AV::set_radii_source`), and internal consistency was
+    docking score reads (`ProbeAccessibleVolumeDecorator::set_radii_source`), and internal consistency was
     judged worth more than the fit. Both halves are pinned so neither can be
     quoted without the other.
     """
@@ -325,13 +325,13 @@ def test_the_contact_volume_moves_the_cloud():
         selection.set_atom_type(IMP.atom.AtomType("CB"))
         selection.set_residue_index(132)
         particle = IMP.Particle(model)
-        IMP.bff.AV.do_setup_particle(
+        IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
             model, particle, selection.get_selected_particles()[0],
             linker_length=22.0, radii=(3.5, 0.0, 0.0), linker_width=1.5,
             simulation_grid_resolution=0.7,
             contact_volume_thickness=thickness,
             contact_volume_trapped_fraction=trapped)
-        av = IMP.bff.AV(model, particle)
+        av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
         av.resample()
         return np.asarray(av.get_map().get_xyz_density(), dtype=float)
 
@@ -408,12 +408,12 @@ def test_the_contact_volume_explains_the_offset_against_the_published_table():
     FPS, which has no contact volume, but by an ACV-capable program reading
     this file.
 
-    That program was Olga, and asking for Olga's radii (`AV::set_radii_source`)
+    That program was Olga, and asking for Olga's radii (`ProbeAccessibleVolumeDecorator::set_radii_source`)
     improves it again and widens it: **-0.02 A bias, 0.71 A rmsd, r = 0.9954
     over all 33 published pairs**, where under the default nine of them have no
     model value at all. Over the same 24 it is -0.23 A / 0.72 A / 0.9966.
 
-    That is *not* the default, and the reason is in `AV::set_radii_source`:
+    That is *not* the default, and the reason is in `ProbeAccessibleVolumeDecorator::set_radii_source`:
     the clash term of a docking score reads the particles' radii, so the volume
     must too. What the default costs against this reference is exactly the gap
     asserted below, and `okf/validation/fps_screening_ab.md` states it as a

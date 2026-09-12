@@ -21,7 +21,7 @@ import numpy as np
 %include "IMP_bff.types.i"
 
 /* Where the shipped cgprobe data lives. */
-%include "IMP/bff/DataPaths.h"
+%include "IMP/bff/ProbeDataPaths.h"
 
 /*
  * The factor structure of a model's posterior: variables (free parameters),
@@ -837,7 +837,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, FitMinimizerObserver);
  * .i file per header earns its place only when it carries real content:
  * IMP_SWIG_OBJECT/DECORATOR declarations for reference-counted types, %ignore
  * for a method that will not marshal, a %feature("shadow"). Two do
- * (IMP_bff.av.i, IMP_bff.pathmap.i, IMP_bff.observables.i); the fourteen
+ * (IMP_bff.probeaccessiblevolumedecorator.i, IMP_bff.pathmap.i, IMP_bff.observables.i); the fourteen
  * one-line wrappers that used
  * to sit beside them did not, and are gone.
  */
@@ -869,7 +869,7 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
 
 %include "IMP_bff.pathmap.i"
 /* Olga's name-keyed van der Waals radii and the AV's choice of radii set.
-   Wrapped before av.i for the same reason: AV.h names AVRadiiSource. The
+   Wrapped before av.i for the same reason: ProbeAccessibleVolumeDecorator.h names AVRadiiSource. The
    `std::map` accessor and the per-particle vector stay C++-only (`#ifndef
    SWIG` in the header) -- `MapStringDouble` is not declared until
    IMP_bff.probe.i, below, and this module cannot name
@@ -886,7 +886,7 @@ IMP_SWIG_OBJECT(IMP::bff, DensityGrid, DensityGrids);
 
 /* The accessible volume: one representation of `States`, and the label
    distributions that produce one on demand. */
-%include "IMP_bff.avmodel.i"
+%include "IMP_bff.probeaccessiblevolume.i"
 
 /* The inflated-sphere raster, core; the layer's particle view derives from it. */
 %include "IMP_bff.occupancy.i"
@@ -952,7 +952,7 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP/bff/PhotonSimulation.h"
 
 /* Scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, rotamer score. */
-%include "IMP_bff.scoring.i"
+%include "IMP_bff.rotamerscoring.i"
 
 /* Greedy Olga: which pair to measure next. */
 %include "IMP_bff.probepairselection.i"
@@ -993,7 +993,7 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %template(VectorVector3D) std::vector<IMP::algebra::Vector3D>;
 
 /* The force-field system in, through the ihm C reader IMP vendors. */
-%include "IMP/bff/ForceFieldCIF.h"
+%include "IMP/bff/ProbeForceFieldCIF.h"
 
 /* The force-field system out, template CIF, and rotamer library IO. */
 // The rotamer library value -- an ensemble of conformers with a weight
@@ -1029,7 +1029,7 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 %attribute_np(IMP::bff::RotamerLibrary, std::vector<double>, weights,
               get_weights, set_weights);
 
-%include "IMP_bff.componenttemplate.i"
+%include "IMP_bff.probecomponenttemplate.i"
 
 /* The system layer: Label, Quencher, attachment, backbone frame, strip. */
 /* The selection language, before anything that takes a mask. */
@@ -1038,21 +1038,21 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 %include "IMP_bff.label.i"
 
 /* The cgprobe topology builder: force-field system assembly, graph helpers. */
-%include "IMP_bff.topology.i"
+%include "IMP_bff.probetopology.i"
 
 /* The cgprobe samplers: linker Metropolis, rotamer libraries, RRT, kinetics. */
 /* where a kernel runs, and how an accelerator is found */
 %include "IMP_bff.compute.i"
 
 /* the shape every simulation shares (PRD-139) */
-%include "IMP_bff.simulation.i"
+%include "IMP_bff.probesimulation.i"
 %include "IMP_bff.sampling.i"
 
 /* The cgprobe MD runner: IMP MD/MC driver. */
 %include "IMP_bff.sim.i"
 
 /* Building an accessible volume: the two doors, the PDB read and the strip. */
-%include "IMP_bff.avbuilder.i"
+%include "IMP_bff.probeaccessiblevolumebuilder.i"
 
 /* The native Labelizer: per-residue label-site scores and the FRET pair score.
    After `avbuilder.i`, whose `PDBAtomRecord` reader it groups into residues,
@@ -1093,6 +1093,7 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* The particle picture of a tethered dye: the walk, the photons, the
    equilibrium, as kernels and as an object. */
+%include "IMP_bff.probediffusionsimulation.i"
 %include "IMP_bff.probesampling.i"
 
 /* ...and the field picture. */
@@ -1114,7 +1115,7 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* The parameter tables the coarse-grained potentials read; the potentials
    themselves are IMP restraints, in layer.i. */
-%include "IMP_bff.potentialtables.i"
+%include "IMP_bff.probepotentialtables.i"
 
 /*
  * The flat user-facing surface: every public name is an attribute of `IMP.bff`

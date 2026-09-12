@@ -342,7 +342,7 @@ std::vector<FPSField> fps_position_fields() {
                       NETWORK_FLAT));
     // --- accessible-contact-volume extensions (imp.bff dialect) -----------
     // Negative means *derive it* from linker_width and the grid (see
-    // IMP::bff::AV::get_effective_allowed_sphere_radius), and that is what an
+    // IMP::bff::ProbeAccessibleVolumeDecorator::get_effective_allowed_sphere_radius), and that is what an
     // absent key has always done. The "1.5" declared here before was never the
     // value an omitted key took, so the schema described a behaviour nothing
     // had. It cannot be spelled as "no default" -- that makes the key
@@ -391,7 +391,7 @@ std::vector<FPSField> fps_position_fields() {
     // anything against the obstacle set it was fitted over.
     // 1.6: "model" respelled "imp" and made the default, because the clash
     // term of a docking score reads the particles' radii and the volume must
-    // agree with it. See AV::set_radii_source.
+    // agree with it. See ProbeAccessibleVolumeDecorator::set_radii_source.
     f.push_back(field("radii_source", FPS_STRING, "\"imp\"", "",
                       "Van der Waals radii the accessible volume inflates "
                       "obstacles by. 'imp' (the default) is the radius each "

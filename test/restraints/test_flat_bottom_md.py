@@ -1,6 +1,6 @@
 """Flat-bottom FRET restraints, and the pieces an MD run needs under them.
 
-`AVMeanDistanceRestraint` scores a chi-squared: it pulls at every separation and
+`ProbeAccessibleVolumeMeanDistanceRestraint` scores a chi-squared: it pulls at every separation and
 never stops, which is a scoring function, not a potential to integrate. A
 flat-bottom well is zero inside the experimental error bars and only pushes back
 outside them, and past the error bars again it goes **linear** so the force is

@@ -1,6 +1,6 @@
 """RotamerEnsemble (fps R1): a screened library, and a sibling of the AV.
 
-It *was* a subclass of :class:`AccessibleVolume` (PRD-108 stage 0), which is why
+It *was* a subclass of :class:`ProbeAccessibleVolume` (PRD-108 stage 0), which is why
 distance code worked for rotamers: by inheritance rather than by design. It then
 had to carry a grid it does not have, filling ``density``, ``grid_step`` and
 ``grid_shape`` with empty placeholders that no consumer ever read.
@@ -23,7 +23,7 @@ import pytest
 
 from IMP.bff import RotamerEnsemble, RotamerSiteOptions, rotamer_ensembles_from_fps
 from IMP.bff import RotamerFRET
-from IMP.bff import AccessibleVolume, States
+from IMP.bff import ProbeAccessibleVolume, States
 from IMP.bff import av_pair_statistics, histogram_rda
 from IMP.bff import states_mean_fret_distance as mean_fret_distance
 
@@ -57,7 +57,7 @@ def test_is_a_sibling_of_the_av_not_a_subclass(pair):
     """The shared surface is States; the grid is not part of it."""
     d, a = pair
     assert isinstance(d, States)
-    assert not isinstance(d, AccessibleVolume), (
+    assert not isinstance(d, ProbeAccessibleVolume), (
         "a rotamer library is not an accessible volume: it has no grid, and "
         "inheriting one forced it to fake density, grid_step and grid_shape")
     for grid_field in ("density", "grid_step", "grid_shape", "grid_origin"):
@@ -129,7 +129,7 @@ def test_pair_distribution_is_the_full_matrix(pair):
     assert out.weight.sum() == pytest.approx(1.0)
     np.testing.assert_allclose(np.outer(d.weights, a.weights), out.weight, atol=1e-12)
     # kappa2 against a plain AV is isotropic
-    plain = AccessibleVolume(points=a.points.copy(),
+    plain = ProbeAccessibleVolume(points=a.points.copy(),
                              grid_origin=a.attachment_point, grid_step=0.0,
                              attachment_point=a.attachment_point)
     assert np.all(d.pair_geometry(plain).kappa2 == 2.0 / 3.0)

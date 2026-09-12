@@ -17,7 +17,7 @@
  * only where IMP is linked -- but it names no IMP type, which is what lets it
  * be wrapped without IMP's own SWIG interfaces and offered by a package that
  * carries IMP as a private library (PRD-139), the same rule
- * #IMP::bff::DyeSimulation is built on.
+ * #IMP::bff::MolecularProbeSimulation is built on.
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.

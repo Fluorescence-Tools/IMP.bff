@@ -76,17 +76,17 @@ def _structure(hydrogens):
 
 def _volume(model, serials, pin):
     particle = IMP.Particle(model)
-    IMP.bff.AV.do_setup_particle(
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
         model, particle, serials[pin["atom_serial"]],
         linker_length=pin["linker_length"], linker_width=pin["linker_width"],
         radii=tuple(pin["radii"]),
         simulation_grid_resolution=pin["grid"],
         contact_volume_thickness=0.0, contact_volume_trapped_fraction=-1)
-    av = IMP.bff.AV(model, particle)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
     # FPS's radii. `_structure()` writes Bondi onto every particle above, and
     # this says out loud that the volume must read *those* -- the particles' --
     # rather than a table of its own. It is the default again since 2026-09-01
-    # (`AV::set_radii_source`, spelled `"imp"`), so the call is currently
+    # (`ProbeAccessibleVolumeDecorator::set_radii_source`, spelled `"imp"`), so the call is currently
     # redundant; it is kept because it is the whole premise of this A/B. For
     # one day the default was `"olga"`, which made the Bondi substitution dead
     # code and silently turned this into a comparison against a radii set FPS

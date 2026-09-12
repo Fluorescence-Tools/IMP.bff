@@ -12,7 +12,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <utility>
-#include <IMP/bff/DataPaths.h>
+#include <IMP/bff/ProbeDataPaths.h>
 #include <IMP/bff/internal/json.h>
 
 #include <map>

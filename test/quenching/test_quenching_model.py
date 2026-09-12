@@ -12,7 +12,7 @@ import IMP.test
 import IMP.bff as sites
 from IMP.bff import grid_center_index, quenching_rate_grid
 from IMP.bff import (
-    AccessibleVolume,
+    ProbeAccessibleVolume,
     ProbeDiffusionSimulation,
     ObstacleAtoms,
     QuenchedDonorDecay,
@@ -253,7 +253,7 @@ class DonorModelFixture:
     def setUp(self):
         super().setUp()
         self.x0 = np.zeros(3)
-        self.av = AccessibleVolume(
+        self.av = ProbeAccessibleVolume(
             density=sphere_density(41, 15).astype(np.float64), grid_step=1.0,
             attachment_point=self.x0)
         # One tryptophan sitting inside the volume, and an inert alanine.

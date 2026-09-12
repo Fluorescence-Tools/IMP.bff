@@ -331,8 +331,8 @@ def test_the_mean_distance_restraint_honours_max_force():
     e.distance_type = IMP.bff.PROBE_PAIR_DISTANCE_MP
 
     f = 20.0                       # knee at 20 * 1 / 2 = 10 A
-    capped = IMP.bff.AVMeanDistanceRestraint(m, p1, p2, e, 6.0, 1.0, f)
-    plain = IMP.bff.AVMeanDistanceRestraint(m, p1, p2, e, 6.0, 1.0, 0.0)
+    capped = IMP.bff.ProbeAccessibleVolumeMeanDistanceRestraint(m, p1, p2, e, 6.0, 1.0, f)
+    plain = IMP.bff.ProbeAccessibleVolumeMeanDistanceRestraint(m, p1, p2, e, 6.0, 1.0, 0.0)
     assert capped.get_max_force() == pytest.approx(f)
 
     # inside the knee the two agree
@@ -402,7 +402,7 @@ def test_the_default_scoring_door_keeps_imps_own_constant():
     # 2026-09-01 (this fixture's DNA carries the old `C1*`/`O1P` spellings,
     # which that name-keyed table does not have, so those 85 atoms took its
     # 1.50 A unknown-name fallback). IMP's own radii are the default again
-    # (AV::set_radii_source) and 59.0404 returns exactly.
+    # (ProbeAccessibleVolumeDecorator::set_radii_source) and 59.0404 returns exactly.
     assert result.score == pytest.approx(59.040389, abs=1e-3)
 
 

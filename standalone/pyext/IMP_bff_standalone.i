@@ -113,9 +113,9 @@ _IMP_BFF_WITH_IMP = False
 
 /* The dye roads by file path, where this build links IMP (PRD-139). Their
    signatures name no IMP type, so they need none of IMP's own interfaces --
-   see IMP_bff.dyedynamics.i. */
+   see IMP_bff.molecularprobesimulation.i. */
 #ifdef IMPBFF_WITH_IMP
-%include "include/IMP_bff.dyedynamics.i"
+%include "include/IMP_bff.molecularprobesimulation.i"
 /* IMP's PDB and mmCIF readers filling the core's structure table -- the
    radius a docking score measures clashes against, and the one format the
    core cannot parse at all. Names no IMP type, so it needs none of IMP's

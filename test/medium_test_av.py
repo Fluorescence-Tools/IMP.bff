@@ -15,7 +15,7 @@ import IMP.bff
 
 from IMP.bff import (
     ACV,
-    AccessibleVolume,
+    ProbeAccessibleVolume,
     average_distance,
     get_av,
     density_to_points,
@@ -31,7 +31,7 @@ class TestAccessibleVolumeCloud:
 
     def test_create_empty(self):
         """An AV with no points is valid but empty."""
-        av = AccessibleVolume(position_name="empty")
+        av = ProbeAccessibleVolume(position_name="empty")
         assert av.n_points == 0
         assert av.points.shape == (0, 4)
 
@@ -40,7 +40,7 @@ class TestAccessibleVolumeCloud:
         n = 100
         pts = np.random.RandomState(0).randn(n, 4).astype(np.float64)
         pts[:, 3] = np.abs(pts[:, 3]) + 0.01  # positive weights
-        av = AccessibleVolume(points=pts, position_name="test")
+        av = ProbeAccessibleVolume(points=pts, position_name="test")
         assert av.n_points == n
         assert av.position_name == "test"
 
@@ -50,22 +50,22 @@ class TestAccessibleVolumeCloud:
             [0.0, 0.0, 0.0, 1.0],
             [2.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av = AccessibleVolume(points=pts)
+        av = ProbeAccessibleVolume(points=pts)
         mp = av.mean_position
         np.testing.assert_allclose(mp, [1.0, 0.0, 0.0], atol=1e-12)
 
     def test_mean_position_single_point(self):
         """Single point has that point as mean."""
         pts = np.array([[1.5, 2.5, 3.5, 1.0]], dtype=np.float64)
-        av = AccessibleVolume(points=pts)
+        av = ProbeAccessibleVolume(points=pts)
         np.testing.assert_allclose(av.mean_position, [1.5, 2.5, 3.5], atol=1e-12)
 
     def test_dRmp(self):
         """Distance between mean positions is correct."""
         pts1 = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
         pts2 = np.array([[3.0, 4.0, 0.0, 1.0]], dtype=np.float64)
-        av1 = AccessibleVolume(points=pts1)
-        av2 = AccessibleVolume(points=pts2)
+        av1 = ProbeAccessibleVolume(points=pts1)
+        av2 = ProbeAccessibleVolume(points=pts2)
         assert av1.dRmp(av2) == pytest.approx(5.0, abs=1e-10)
 
     def test_dRDA(self):
@@ -74,16 +74,16 @@ class TestAccessibleVolumeCloud:
             [0.0, 0.0, 0.0, 1.0],
             [1.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av1 = AccessibleVolume(points=pts)
-        av2 = AccessibleVolume(points=pts)
+        av1 = ProbeAccessibleVolume(points=pts)
+        av2 = ProbeAccessibleVolume(points=pts)
         d = av1.dRDA(av2, n_samples=20000)
         assert d > 0.0
 
     def test_dRDAE(self):
         """FRET-averaged distance from identical pts gives < 1 Å."""
         pts = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
-        av1 = AccessibleVolume(points=pts)
-        av2 = AccessibleVolume(points=pts)
+        av1 = ProbeAccessibleVolume(points=pts)
+        av2 = ProbeAccessibleVolume(points=pts)
         r = av1.dRDAE(av2, forster_radius=52.0, n_samples=10000)
         assert r >= 0.0
 
@@ -93,8 +93,8 @@ class TestAccessibleVolumeCloud:
             [0.0, 0.0, 0.0, 1.0],
             [10.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
-        av1 = AccessibleVolume(points=pts)
-        av2 = AccessibleVolume(points=pts)
+        av1 = ProbeAccessibleVolume(points=pts)
+        av2 = ProbeAccessibleVolume(points=pts)
         y, x = av1.pRDA(av2, n_samples=10000)
         assert y.ndim == 1
         assert x.ndim == 1
@@ -137,7 +137,7 @@ class TestAccessibleVolumeStates:
     """The states half: the grid is derived, and an empty cloud has a position."""
 
     def test_empty(self):
-        av = AccessibleVolume(
+        av = ProbeAccessibleVolume(
             points=np.empty((0, 4)),
             density=np.zeros((3, 3, 3)),
             grid_origin=np.zeros(3),
@@ -152,7 +152,7 @@ class TestAccessibleVolumeStates:
 
     def test_non_empty(self):
         pts = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
-        av = AccessibleVolume(
+        av = ProbeAccessibleVolume(
             points=pts,
             density=np.zeros((3, 3, 3)),
             grid_origin=np.zeros(3),
@@ -164,13 +164,13 @@ class TestAccessibleVolumeStates:
 
     def test_the_grid_shape_is_derived_from_the_density(self):
         """It was a constructor argument that had to agree with the array."""
-        av = AccessibleVolume(density=np.zeros((3, 3, 3)), grid_origin=np.zeros(3))
+        av = ProbeAccessibleVolume(density=np.zeros((3, 3, 3)), grid_origin=np.zeros(3))
         assert av.grid_shape == (3, 3, 3)
-        assert AccessibleVolume().grid_shape == (0, 0, 0)
+        assert ProbeAccessibleVolume().grid_shape == (0, 0, 0)
 
     def test_a_non_cubic_grid_is_refused(self):
         with pytest.raises(ValueError):
-            AccessibleVolume(density=np.zeros((2, 3, 4)), grid_origin=np.zeros(3))
+            ProbeAccessibleVolume(density=np.zeros((2, 3, 4)), grid_origin=np.zeros(3))
 
 
 class TestSplitContactVolume:
@@ -206,7 +206,7 @@ class TestACV:
     def test_from_accessible_volume_with_slow_centers(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         origin = np.array([0.0, 0.0, 0.0])
-        av = AccessibleVolume(
+        av = ProbeAccessibleVolume(
             density=density,
             grid_origin=origin,
             grid_step=1.0,
@@ -219,7 +219,7 @@ class TestACV:
     def test_slow_radius_broadcast(self):
         density = np.ones((5, 5, 5), dtype=np.float64)
         origin = np.array([0.0, 0.0, 0.0])
-        av = AccessibleVolume(
+        av = ProbeAccessibleVolume(
             density=density,
             grid_origin=origin,
             grid_step=1.0,
@@ -270,7 +270,7 @@ class TestComputeAvBackends:
         rather than skipped, which also applies the owner's 2026-08-11 rule that
         IMP.bff's AV is the only backend.
         """
-        return ["imp_bff"] if hasattr(IMP.bff, "AV") else []
+        return ["imp_bff"] if hasattr(IMP.bff, "ProbeAccessibleVolumeDecorator") else []
 
     def test_it_returns_a_volume(self):
         if not self._available():

@@ -32,7 +32,7 @@
 // -- the system dies as the expression unwinds and the map proxy is left
 // pointing at freed memory, which returns a string of zero bytes on a good
 // day and segfaults on a bad one. The accessors cannot return by value: they
-// are called inside C++ loops (`Scoring.cpp` walks `get_bonds()` per
+// are called inside C++ loops (`RotamerScoring.cpp` walks `get_bonds()` per
 // iteration), and a copy per iteration is quadratic.
 //
 // So the copy is made **at the boundary**, where the cost is one copy per

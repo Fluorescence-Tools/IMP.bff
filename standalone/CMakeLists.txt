@@ -164,6 +164,14 @@ endif()
 set(IMPBFF_GEN_INCLUDE "${CMAKE_BINARY_DIR}/include")
 file(GLOB _public_headers "${IMPBFF_ROOT}/include/*.h")
 file(GLOB _internal_headers "${IMPBFF_ROOT}/include/internal/*.h")
+# Renamed headers must not survive in the generated include tree or its install.
+file(GLOB _generated_headers "${IMPBFF_GEN_INCLUDE}/IMP/bff/*.h")
+foreach(h ${_generated_headers})
+  get_filename_component(n "${h}" NAME)
+  if(NOT n STREQUAL "bff_config.h" AND NOT EXISTS "${IMPBFF_ROOT}/include/${n}")
+    file(REMOVE "${h}")
+  endif()
+endforeach()
 foreach(h ${_public_headers})
   get_filename_component(n "${h}" NAME)
   configure_file("${h}" "${IMPBFF_GEN_INCLUDE}/IMP/bff/${n}" COPYONLY)
@@ -310,7 +318,7 @@ if(IMPBFF_PYTHON)
   # that carries IMP as a private C++ library and has no IMP in Python
   # (PRD-139). A header added here must keep that property, or SWIG needs
   # IMP's own .i files and the extension imports _IMP_kernel at load.
-  set(_layer_array_doors "DyeDynamics.h" "StructureReader.h")
+  set(_layer_array_doors "MolecularProbeSimulation.h" "StructureReader.h")
   set(_agg_content "// generated: every public core header\n")
   foreach(h ${_public_headers})
     get_filename_component(n "${h}" NAME)

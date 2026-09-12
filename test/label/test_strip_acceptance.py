@@ -153,7 +153,7 @@ def test_av_parity_between_the_mask_and_a_pre_stripped_structure():
     site1 = IMP.atom.Selection(h1, residue_index=132,
                                atom_type=IMP.atom.AT_CB
                                ).get_selected_particles()[0]
-    av1 = IMP.bff.AV.setup_particle(IMP.Particle(m1), site1.get_index())
+    av1 = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m1), site1.get_index())
     av1.set_av_parameter(json.dumps({"linker_length": 20.0, "radius1": 3.5,
                                      "linker_width": 0.5,
                                      "allowed_sphere_radius": 1.5,
@@ -167,7 +167,7 @@ def test_av_parity_between_the_mask_and_a_pre_stripped_structure():
     site2 = IMP.atom.Selection(h2, residue_index=132,
                                atom_type=IMP.atom.AT_CB
                                ).get_selected_particles()[0]
-    av2 = IMP.bff.AV.setup_particle(IMP.Particle(m2), site2.get_index())
+    av2 = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m2), site2.get_index())
     av2.set_av_parameter(json.dumps({"linker_length": 20.0, "radius1": 3.5,
                                      "linker_width": 0.5,
                                      "allowed_sphere_radius": 1.5,
@@ -196,7 +196,7 @@ def test_ignoring_the_mask_would_give_a_different_volume():
         site = IMP.atom.Selection(h, residue_index=132,
                                   atom_type=IMP.atom.AT_CB
                                   ).get_selected_particles()[0]
-        av = IMP.bff.AV.setup_particle(IMP.Particle(m), site.get_index())
+        av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m), site.get_index())
         params = {"linker_length": 20.0, "radius1": 3.5, "linker_width": 0.5,
                   "allowed_sphere_radius": 1.5,
                   "simulation_grid_resolution": 1.5}
@@ -398,7 +398,7 @@ def test_a_stripped_atom_keeps_its_place_and_loses_its_size():
     site = IMP.atom.Selection(h, residue_index=132,
                               atom_type=IMP.atom.AT_CB
                               ).get_selected_particles()[0]
-    av = IMP.bff.AV.setup_particle(IMP.Particle(m), site.get_index())
+    av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m), site.get_index())
     av.set_av_parameter(json.dumps(
         {"linker_length": 20.0, "radius1": 3.5, "linker_width": 0.5,
          "allowed_sphere_radius": 1.5, "simulation_grid_resolution": 1.5,
@@ -426,7 +426,7 @@ def test_an_unmasked_volume_carries_no_override():
     empty vector is the "nothing to say" state and must stay reachable.
 
     Since 2026-09-01 the radii set is the other thing that vector carries
-    (AV::set_radii_source): asking for Olga's table fills it with 128 named
+    (ProbeAccessibleVolumeDecorator::set_radii_source): asking for Olga's table fills it with 128 named
     radii whatever the mask says, so the empty state is `radii_source = "imp"`
     -- the default -- *and* no mask. Both halves are asserted, and the default
     is written out rather than relied on, because "the override is empty"
@@ -440,7 +440,7 @@ def test_an_unmasked_volume_carries_no_override():
         {"linker_length": 20.0, "radius1": 3.5, "linker_width": 0.5,
          "allowed_sphere_radius": 1.5, "simulation_grid_resolution": 1.5})
 
-    av = IMP.bff.AV.setup_particle(IMP.Particle(m), site.get_index())
+    av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m), site.get_index())
     av.set_av_parameter(parameter)
     av.set_radii_source("imp")
     av.resample()
@@ -448,7 +448,7 @@ def test_an_unmasked_volume_carries_no_override():
 
     # ...and Olga's table, which has to be asked for, is an override of exactly
     # one radius per leaf, none of them zero (nothing is stripped).
-    olga = IMP.bff.AV.setup_particle(IMP.Particle(m), site.get_index())
+    olga = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(IMP.Particle(m), site.get_index())
     olga.set_av_parameter(parameter)
     olga.set_radii_source("olga")
     olga.resample()

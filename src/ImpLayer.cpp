@@ -17,17 +17,17 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#include "imp/AV.cpp"
+#include "imp/ProbeAccessibleVolumeDecorator.cpp"
 #include "imp/AlgebraBridge.cpp"
-#include "imp/AVMeanDistanceRestraint.cpp"
-#include "imp/AVOccupancyMap.cpp"
+#include "imp/ProbeAccessibleVolumeMeanDistanceRestraint.cpp"
+#include "imp/ProbeAccessibleVolumeOccupancyMap.cpp"
 #include "imp/Docking.cpp"
-#include "imp/DyeDynamics.cpp"
+#include "imp/MolecularProbeSimulation.cpp"
 #include "imp/EmBridge.cpp"
 #include "imp/FPSExport.cpp"
 #include "imp/FPSProject.cpp"
 #include "imp/HierarchyBridge.cpp"
-#include "imp/Potentials.cpp"
+#include "imp/ProbePotentialRestraints.cpp"
 #include "imp/ProbeAttachment.cpp"
 #include "imp/ProbeDynamics.cpp"
 #include "imp/ProbeNetworkRestraint.cpp"

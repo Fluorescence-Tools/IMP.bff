@@ -9,7 +9,7 @@
 #include <IMP/bff/HierarchyBridge.h>
 
 #include <IMP/bff/States.h>
-#include <IMP/bff/AVMeanDistanceRestraint.h>
+#include <IMP/bff/ProbeAccessibleVolumeMeanDistanceRestraint.h>
 #include <IMP/bff/FPS.h>
 #include <IMP/bff/internal/json.h>
 
@@ -496,14 +496,14 @@ DockingAssembly create_docking_assembly(
     }
 
     IMP_NEW(IMP::RestraintSet, restraints, (model, "docking"));
-    const IMP::bff::AVs used_avs = network->get_used_avs();
+    const IMP::bff::ProbeAccessibleVolumeDecorators used_avs = network->get_used_avs();
     if (mean_position_restraint) {
         // The volumes are sampled once and carried by the rigid body of the
         // atom they hang off, so a move takes them with it. The position an
         // AV is *added at* is the one the body will carry it by, which is why
         // it is resampled first.
         for (std::size_t i = 0; i < used_avs.size(); ++i) {
-            IMP::bff::AV av = used_avs[i];
+            IMP::bff::ProbeAccessibleVolumeDecorator av = used_avs[i];
             av.resample();
             IMP::Particle* source = av.get_source();
             if (IMP::core::RigidBodyMember::get_is_setup(source)) {
@@ -528,7 +528,7 @@ DockingAssembly create_docking_assembly(
             if (p1 == IMP::ParticleIndex() || p2 == IMP::ParticleIndex()) {
                 continue;
             }
-            restraints->add_restraint(new AVMeanDistanceRestraint(
+            restraints->add_restraint(new ProbeAccessibleVolumeMeanDistanceRestraint(
                     model, p1, p2, it->second, sigma_da, 1.0, max_force));
         }
     } else {
@@ -538,7 +538,7 @@ DockingAssembly create_docking_assembly(
     // A volume occupies space: give each one a radius and a mass so the clash
     // term sees it.
     for (std::size_t i = 0; i < used_avs.size(); ++i) {
-        IMP::bff::AV av = used_avs[i];
+        IMP::bff::ProbeAccessibleVolumeDecorator av = used_avs[i];
         const IMP::algebra::Vector3D radii = av.get_radii();
         double r_mean = 0.0;
         for (unsigned int k = 0; k < 3; ++k) {
@@ -1038,7 +1038,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
     }
 
     ProbeNetworkRestraint* network = assembly.get_network();
-    const IMP::bff::AVs used_avs = network->get_used_avs();
+    const IMP::bff::ProbeAccessibleVolumeDecorators used_avs = network->get_used_avs();
     // The point rule (an `XYZ`/`ATOM` end forces `Rmp`) applied once, here, so
     // the springs and the table below cannot disagree about it.
     const std::map<std::string, AVPairDistanceMeasurement> used =
@@ -1050,7 +1050,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
     IMP::ParticleIndexes proxy_particles;
     std::map<std::string, IMP::ParticleIndex> proxy_of;
     for (std::size_t i = 0; i < used_avs.size(); ++i) {
-        IMP::bff::AV av = used_avs[i];
+        IMP::bff::ProbeAccessibleVolumeDecorator av = used_avs[i];
         av.resample();
         const std::string name = av.get_particle()->get_name();
         IMP::Particle* q = new IMP::Particle(model, "avproxy_" + name);
@@ -1097,7 +1097,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
         std::map<std::string, IMP::ParticleIndex>::const_iterator q2 =
                 proxy_of.find(it->second.position_2);
         if (q1 == proxy_of.end() || q2 == proxy_of.end()) continue;
-        IMP::Restraint* r = new AVMeanDistanceRestraint(
+        IMP::Restraint* r = new ProbeAccessibleVolumeMeanDistanceRestraint(
                 model, q1->second, q2->second, it->second, params.sigma_da, 1.0,
                 params.max_force);
         const bool is_selected = selected.empty() || selected.count(it->first);
@@ -1169,7 +1169,7 @@ DockingResult dock_minimize(const std::vector<std::string>& pdb_paths,
     // The volumes are recomputed once per cycle, not once per step.
     for (int cycle = 0; cycle < params.refine_av_cycles && !stopped; ++cycle) {
         for (std::size_t i = 0; i < used_avs.size(); ++i) {
-            IMP::bff::AV av = used_avs[i];
+            IMP::bff::ProbeAccessibleVolumeDecorator av = used_avs[i];
             av.resample();
             std::map<std::string, IMP::ParticleIndex>::const_iterator q =
                     proxy_of.find(av.get_particle()->get_name());
@@ -2348,9 +2348,9 @@ BootstrapResult fps_bootstrap(const std::vector<std::string>& pdb_paths,
             params.clash_radii_source, params.clash_radii_scale);
     apply_poses(reference, poses);
     {
-        const IMP::bff::AVs avs = reference.get_network()->get_used_avs();
+        const IMP::bff::ProbeAccessibleVolumeDecorators avs = reference.get_network()->get_used_avs();
         for (std::size_t i = 0; i < avs.size(); ++i) {
-            IMP::bff::AV(avs[i]).resample();
+            IMP::bff::ProbeAccessibleVolumeDecorator(avs[i]).resample();
         }
         reference.get_model()->update();
     }

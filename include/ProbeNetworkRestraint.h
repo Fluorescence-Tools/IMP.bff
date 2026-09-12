@@ -29,7 +29,7 @@
 #include <cereal/types/vector.hpp>
 #include <IMP/UnaryFunction.h>
 
-#include <IMP/bff/AV.h>
+#include <IMP/bff/ProbeAccessibleVolumeDecorator.h>
 #include <IMP/bff/internal/ThreadPool.h>
 #include <IMP/bff/internal/FPSReaderWriter.h>
 #include <IMP/bff/internal/json.h>
@@ -81,7 +81,7 @@ class IMPBFFEXPORT ProbeNetworkRestraint : public IMP::Restraint {
         if (std::is_base_of<cereal::detail::InputArchiveBase, Archive>::value) {
             avs_.clear();
             for (const auto &kv : av_index) {
-                avs_[kv.first].reset(new IMP::bff::AV(get_model(), kv.second));
+                avs_[kv.first].reset(new IMP::bff::ProbeAccessibleVolumeDecorator(get_model(), kv.second));
             }
             registry_ = nullptr;
             configure_avs();
@@ -105,12 +105,12 @@ private:
     bool shared_map_ = true;       //!< one occupancy raster per (spacing, extra) class
     std::string distance_ = "quad";//!< "quad" (lattice quadrature) or "mc"
     int quad_k_ = 50;              //!< representative points per cloud
-    int search_grid_factor_ = 1;   //!< AV::set_search_grid_factor for every AV
-    int search_stencil_ = 26;      //!< AV::set_search_stencil for every AV
-    std::string search_mode_ = "dijkstra";  //!< AV::set_search_mode for every AV
+    int search_grid_factor_ = 1;   //!< ProbeAccessibleVolumeDecorator::set_search_grid_factor for every AV
+    int search_stencil_ = 26;      //!< ProbeAccessibleVolumeDecorator::set_search_stencil for every AV
+    std::string search_mode_ = "dijkstra";  //!< ProbeAccessibleVolumeDecorator::set_search_mode for every AV
 
     //! Shared occupancy rasters (only under space_fixed && shared_map)
-    IMP::Pointer<AVOccupancyRegistry> registry_;
+    IMP::Pointer<ProbeAccessibleVolumeOccupancyRegistry> registry_;
 
     //! Number of unprotected_evaluate() calls
     mutable long n_evaluations_ = 0;
@@ -142,7 +142,7 @@ private:
      */
     /* Owned. A bare `new AV(...)` with no destructor on this class leaks one
        decorator per labelled position for the lifetime of the process. */
-    std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs_{};
+    std::map<std::string, std::unique_ptr<IMP::bff::ProbeAccessibleVolumeDecorator> > avs_{};
 
     /**
      * @brief Positions the network carries as a **point**, not a volume.
@@ -175,7 +175,7 @@ private:
     //! The volume of a position, or `nullptr` when it has none. Silent.
     /*! #get_av warns, which is right for a name that should have resolved and
         wrong for a position that is deliberately a point. */
-    IMP::bff::AV* find_av(const std::string &name) const;
+    IMP::bff::ProbeAccessibleVolumeDecorator* find_av(const std::string &name) const;
 
     //! Where a position is right now: an AV's mean position, or a point.
     IMP::algebra::Vector3D get_position_coordinates(const std::string &name) const;
@@ -212,7 +212,7 @@ private:
      *  or atom, so the selection matched the whole structure and
      *  IMP::bff::search_labeling_site threw *ambiguous labelling site*.
      */
-    std::map<std::string, std::unique_ptr<IMP::bff::AV> > create_av_decorated_particles(
+    std::map<std::string, std::unique_ptr<IMP::bff::ProbeAccessibleVolumeDecorator> > create_av_decorated_particles(
             nlohmann::json used_positions,
             const IMP::core::Hierarchy &hier);
 
@@ -221,7 +221,7 @@ private:
      * @param name The name of the labeled particle.
      * @return The AV associated with the labeled particle.
      */
-    IMP::bff::AV* get_av(std::string name) const;
+    IMP::bff::ProbeAccessibleVolumeDecorator* get_av(std::string name) const;
 
 public:
 
@@ -230,7 +230,7 @@ public:
      * path map and lattice state (a copy of the handle, not a fresh one).
      * @param name The name of the labeled position (fps.json key)
      */
-    IMP::bff::AV get_used_av(std::string name) const;
+    IMP::bff::ProbeAccessibleVolumeDecorator get_used_av(std::string name) const;
 
     /**
      * @brief Constructs an ProbeNetworkRestraint object.
@@ -249,11 +249,11 @@ public:
      *   or `"mc"` (random sampling, order-dependent).
      * @param[in] quad_k Representative points per cloud for `"quad"`.
      * @param[in] search_grid_factor Coarsening of the path search
-     *   (AV::set_search_grid_factor); 1 = exact on the AV grid.
+     *   (ProbeAccessibleVolumeDecorator::set_search_grid_factor); 1 = exact on the AV grid.
      * @param[in] search_stencil 26 (symmetric, default) or 30 (historical,
-     *   asymmetric); see AV::set_search_stencil.
+     *   asymmetric); see ProbeAccessibleVolumeDecorator::set_search_stencil.
      * @param[in] search_mode "dijkstra" (default, path search) or
-     *   "euclidean" (straight linker, visibility only); see AV::set_search_mode.
+     *   "euclidean" (straight linker, visibility only); see ProbeAccessibleVolumeDecorator::set_search_mode.
      */
     ProbeNetworkRestraint(
         const IMP::core::Hierarchy &hier,
@@ -280,7 +280,7 @@ public:
     int get_n_samples() const { return n_samples; }
 
     //! The shared occupancy registry (nullptr unless shared_map)
-    AVOccupancyRegistry *get_occupancy_registry() const { return registry_; }
+    ProbeAccessibleVolumeOccupancyRegistry *get_occupancy_registry() const { return registry_; }
 
     /**
      * @brief Threads used for the AVs' searches under `space_fixed`.
@@ -345,7 +345,7 @@ public:
      * @brief Returns the used Atom::AVs.
      * @return The used Atom::AVs.
      */
-    const IMP::bff::AVs get_used_avs();
+    const IMP::bff::ProbeAccessibleVolumeDecorators get_used_avs();
 
     /**
      * @brief Returns the used experimental distances.

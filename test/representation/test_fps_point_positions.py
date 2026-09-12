@@ -171,7 +171,7 @@ def test_a_distance_touching_a_fixed_position_enters_chi2(tmp_path, structure):
     # 2026-09-01 once it was honoured (PRD-121 G9): the cloud is weighted
     # towards the surface, its mean moves, and R_mp shortens to 22.8273 A.
     # Olga's radii were the default for part of that day and gave 13.2917;
-    # IMP's own are the default again (AV::set_radii_source) and 12.8620
+    # IMP's own are the default again (ProbeAccessibleVolumeDecorator::set_radii_source) and 12.8620
     # returns exactly.
     assert pair.chi2 == pytest.approx(12.861951, abs=1e-3)
     # the score is half a chi-square per distance plus a clash term, and one

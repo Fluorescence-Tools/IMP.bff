@@ -40,8 +40,8 @@ def _av(mdl, hier, residue_index=132, atom_name="CB", **par):
     sel.set_residue_index(residue_index)
     source = sel.get_selected_particles()[0]
     p = IMP.Particle(mdl)
-    IMP.bff.AV.do_setup_particle(mdl, p, source, **par)
-    return IMP.bff.AV(mdl, p)
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, p, source, **par)
+    return IMP.bff.ProbeAccessibleVolumeDecorator(mdl, p)
 
 
 def _n_points(av):

@@ -11,7 +11,7 @@ unwinds, and the map proxy outlives it. It returned a path of twelve zero
 bytes on a good day and a segmentation fault on a bad one -- and *silently*,
 which is worse than the crash.
 
-The accessors cannot simply return by value: `Scoring.cpp` calls
+The accessors cannot simply return by value: `RotamerScoring.cpp` calls
 `system.get_bonds()` in the condition of a loop over the bonds, and a copy per
 iteration is quadratic. The copy is made at the language boundary instead --
 `%owned_container_out` in `IMP_bff.types.i` -- so it costs one copy per Python

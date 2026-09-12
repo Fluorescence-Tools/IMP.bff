@@ -8,7 +8,7 @@
  */
 
 #include <IMP/bff/LabelizerFeatures.h>
-#include <IMP/bff/AVBuilder.h>
+#include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 #include <IMP/bff/SolventAccessibleSurface.h>
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/internal/OutputView.h>

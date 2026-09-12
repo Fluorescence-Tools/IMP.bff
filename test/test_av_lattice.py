@@ -166,8 +166,8 @@ def make_av(mdl, hier, residue_index, av_parameter=AV_PARAMETER,
     sel.set_atom_type(IMP.atom.AtomType("CB"))
     sel.set_residue_index(residue_index)
     source = sel.get_selected_particles()[0]
-    IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
-    av = IMP.bff.AV(mdl, av_p)
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, av_p, source, **av_parameter)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, av_p)
     if not space_fixed:
         av.set_space_fixed(False)
     return av
@@ -240,7 +240,7 @@ class TestModeMatrix(unittest.TestCase):
 
     def test_av_registry_requires_space_fixed(self):
         av = make_av(self.mdl, self.hier, 55, space_fixed=False)
-        reg = IMP.bff.AVOccupancyRegistry(IMP.atom.get_leaves(self.hier))
+        reg = IMP.bff.ProbeAccessibleVolumeOccupancyRegistry(IMP.atom.get_leaves(self.hier))
         with self.assertRaises(Exception):
             av.set_occupancy_registry(reg)
 
@@ -705,10 +705,10 @@ class TestOccupancyMap(unittest.TestCase):
 
     def test_shared_read_equals_private_window(self):
         m, ps = self._system()
-        shared = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        shared = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
         shared.request_window(-6, -5, -4, 11, 11, 11)
         shared.update()
-        priv = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        priv = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
         priv.set_window(-6, -5, -4, 11, 11, 11)
         priv.update()
         a = np.array(shared.get_window(-6, -5, -4, 11, 11, 11))
@@ -725,7 +725,7 @@ class TestOccupancyMap(unittest.TestCase):
 
     def test_local_delta_equals_full_raster(self):
         m, ps = self._system()
-        occ = IMP.bff.AVOccupancyMap(1.0, 1.75, ps)
+        occ = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.75, ps)
         occ.set_window(-6, -6, -6, 13, 13, 13)
         occ.update()
         self.assertEqual(occ.get_number_of_full_updates(), 1)
@@ -740,7 +740,7 @@ class TestOccupancyMap(unittest.TestCase):
         self.assertEqual(occ.get_number_of_local_updates(), 1)
         self.assertEqual(occ.get_number_of_moved_last(), 3)
         a = np.array(occ.get_window(-6, -6, -6, 13, 13, 13))
-        ref = IMP.bff.AVOccupancyMap(1.0, 1.75, ps)
+        ref = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.75, ps)
         ref.set_window(-6, -6, -6, 13, 13, 13)
         ref.update()
         b = np.array(ref.get_window(-6, -6, -6, 13, 13, 13))
@@ -758,7 +758,7 @@ class TestOccupancyMap(unittest.TestCase):
 
     def test_roll_slab_plus_delta_equals_full_raster(self):
         m, ps = self._system(60, 2)
-        occ = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        occ = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
         occ.set_window(-6, -6, -6, 13, 13, 13)
         occ.update()
         for shift in ((1, 0, 0), (0, -2, 1), (3, 3, -3), (-1, 1, 0)):
@@ -769,7 +769,7 @@ class TestOccupancyMap(unittest.TestCase):
             k = np.array(occ.get_extent()[:3]) + np.array(shift)
             occ.set_window(int(k[0]), int(k[1]), int(k[2]), 13, 13, 13)
             occ.update()
-            ref = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+            ref = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
             ref.set_window(int(k[0]), int(k[1]), int(k[2]), 13, 13, 13)
             ref.update()
             a = np.array(occ.get_window(int(k[0]), int(k[1]), int(k[2]), 13, 13, 13))
@@ -781,7 +781,7 @@ class TestOccupancyMap(unittest.TestCase):
 
     def test_extent_follows_the_atoms(self):
         m, ps = self._system()
-        occ = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        occ = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
         occ.update()
         e0 = occ.get_extent()
         self.assertEqual(occ.get_number_of_grows(), 1)
@@ -802,7 +802,7 @@ class TestOccupancyMap(unittest.TestCase):
         self.assertEqual(occ.get_number_of_grows(), 2)
         self.assertGreater(e1[0], e0[0] + 20)
         self.assertLessEqual(e1[3], e0[3] + 2)
-        ref = IMP.bff.AVOccupancyMap(1.0, 1.25, ps)
+        ref = IMP.bff.ProbeAccessibleVolumeOccupancyMap(1.0, 1.25, ps)
         ref.update()
         k = e1[:3]
         self.assertTrue(np.array_equal(
@@ -822,7 +822,7 @@ class TestAVHandle(unittest.TestCase):
         av = make_av(self.mdl, self.hier, 55)
         self.assertTrue(av.get_space_fixed())
         av.set_space_fixed(False)
-        self.assertFalse(IMP.bff.AV(self.mdl, av.get_particle()).get_space_fixed())
+        self.assertFalse(IMP.bff.ProbeAccessibleVolumeDecorator(self.mdl, av.get_particle()).get_space_fixed())
         av.set_space_fixed(True)
         self.assertTrue(av.get_space_fixed())
 
@@ -839,7 +839,7 @@ class TestAVHandle(unittest.TestCase):
         self.assertEqual(av.get_result_generation(), g + 1)
         self.assertTrue(np.array_equal(d0, np.array(av.get_map().get_xyz_density())))
         # a fresh handle on the same particle rebuilds and agrees
-        av2 = IMP.bff.AV(self.mdl, av.get_particle())
+        av2 = IMP.bff.ProbeAccessibleVolumeDecorator(self.mdl, av.get_particle())
         self.assertTrue(np.array_equal(d0, np.array(av2.get_map().get_xyz_density())))
 
     def test_exact_search_matches_legacy_search(self):
@@ -881,7 +881,7 @@ class TestAVHandle(unittest.TestCase):
         # <R_DA> shorten by 3.04 A, and the chi-square halves.
         # Olga's radii were the default for part of 2026-09-01 and gave
         # 11.010342418210929; IMP's own are the default again
-        # (AV::set_radii_source), so the pre-Olga 10.9834 returns exactly.
+        # (ProbeAccessibleVolumeDecorator::set_radii_source), so the pre-Olga 10.9834 returns exactly.
         self.assertAlmostEqual(r30.unprotected_evaluate(None), 10.983394087144049, places=6)
         r26 = IMP.bff.ProbeNetworkRestraint(self.hier, FPS_JSON, score_set="chi2_C2_33p",
                                          quad_k=100)

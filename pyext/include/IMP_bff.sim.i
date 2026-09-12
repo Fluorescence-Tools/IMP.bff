@@ -5,7 +5,7 @@
  *
  * What it *computes* does not. The restraint builders
  * (`create_probe_restraints`, `create_steric_restraint`, `create_go_restraints`)
- * and the placement search (`place_guest_by_score`) are C++ in `Scoring.h`,
+ * and the placement search (`place_guest_by_score`) are C++ in `RotamerScoring.h`,
  * because those are kernels rather than orchestration -- and because a runner
  * with its own copy of the restraint builder disagrees with the shared one
  * about what to do when a bond carries no equilibrium length and about how to

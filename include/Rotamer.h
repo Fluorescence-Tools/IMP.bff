@@ -250,7 +250,7 @@ IMPBFFEXPORT std::vector<int> selector_atom_indices(
         const std::vector<std::string>& selectors,
         const std::vector<std::string>& resnames = std::vector<std::string>());
 
-// `selector_resnames(selectors)` lives in Scoring.h beside the rest of the
+// `selector_resnames(selectors)` lives in RotamerScoring.h beside the rest of the
 // selector mini-language.
 
 // --------------------------------------------------------------------------
@@ -364,7 +364,7 @@ IMPBFF_END_NAMESPACE
  * labels needs (\f$R_{ij}\f$, \f$\kappa^2_{ij}\f$, \f$w_i w_j\f$), and not
  * just a mean position.
  *
- * A **sibling** of #IMP::bff::AccessibleVolume, not a subclass: both are
+ * A **sibling** of #IMP::bff::ProbeAccessibleVolume, not a subclass: both are
  * #IMP::bff::States, so every distance and FRET helper takes either, while an
  * ensemble is spared the grid an AV has and it does not.
  *

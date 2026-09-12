@@ -7,17 +7,17 @@
  *         over it, and the distances between two.
  *
  * Representation-neutral. A label's configuration space is a weighted point
- * cloud (#IMP::bff::States); an accessible volume (AVModel.h) and a rotamer
+ * cloud (#IMP::bff::States); an accessible volume (ProbeAccessibleVolume.h) and a rotamer
  * ensemble (Rotamer.h) are two ways of enumerating one, and everything here
  * treats them identically. Three sections:
  *
  * 1. **Kernels** (formerly `AVDistance.h`) -- distances and reductions over
  *    point clouds, and the fps.json distance vocabulary.
- * 2. **States** (formerly the base class in `AVModel.h`) -- the cloud as a
+ * 2. **States** (formerly the base class in `ProbeAccessibleVolume.h`) -- the cloud as a
  *    C++ value, with the three distances that are functions of it alone.
  * 3. **Distances between two labels** (formerly `StatesDistance.h`, less the
  *    accessible-volume-backed #IMP::bff::LabelDistribution, which is in
- *    AVModel.h with the representation it wraps) -- the pair statistics,
+ *    ProbeAccessibleVolume.h with the representation it wraps) -- the pair statistics,
  *    the FRET distance converter, the transfer polynomials.
  *
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -29,7 +29,7 @@
  *  \brief Distances and reductions over accessible-volume point clouds.
  *
  * These take **point arrays** rather than the ``AV`` decorators the
- * `av_distance` family in AV.h takes, so they serve a rotamer library, a
+ * `av_distance` family in ProbeAccessibleVolumeDecorator.h takes, so they serve a rotamer library, a
  * coarse-grained ensemble or an MD trajectory as readily as an accessible
  * volume -- anything that supplies states.
  *
@@ -198,7 +198,7 @@ IMPBFFEXPORT double cloud_overlap(const std::vector<double>& points,
 /*!
     One dispatch for the point-cloud forms of the #IMP::bff::ProbePairMeasures
     conventions, so a caller that has two clouds rather than two
-    #IMP::bff::AV decorators does not have to pick the right reduction itself.
+    #IMP::bff::ProbeAccessibleVolumeDecorator decorators does not have to pick the right reduction itself.
 
     \param[in] p1,p2 flat clouds, four per point
     \param[in] distance_type a #IMP::bff::ProbePairMeasures value
@@ -423,7 +423,7 @@ IMPBFFEXPORT void split_contact_volume_masks(
 
 IMPBFF_END_NAMESPACE
 
-// -------- from AVModel.h (the States base class) --------
+// -------- from ProbeAccessibleVolume.h (the States base class) --------
 
 #include <IMP/bff/Base.h>
 
@@ -437,7 +437,7 @@ IMPBFF_BEGIN_NAMESPACE
     The states are `(x, y, z, weight)` per point, flat. Everything a
     representation has to supply is here and nothing else is: the grid an
     accessible volume was enumerated on belongs to
-    #IMP::bff::AccessibleVolume, and the conformers a rotamer library carries
+    #IMP::bff::ProbeAccessibleVolume, and the conformers a rotamer library carries
     belong to the rotamer ensemble. Neither is part of what a distance or a
     rate needs.
 

@@ -7,7 +7,7 @@
 
 #include <IMP/bff/ProbeRestraints.h>
 
-#include <IMP/bff/AVModel.h>
+#include <IMP/bff/ProbeAccessibleVolume.h>
 #include <IMP/bff/Base.h>
 
 #include <cmath>
@@ -30,8 +30,8 @@ ProbeSite::ProbeSite(int residue_seq_number, std::string atom_name,
       forster_radius(forster_radius) {}
 
 double SimpleProbeNetworkRestraint::model_distance(const AVMeasurement& m) const {
-    std::map<std::string, AccessibleVolume>::const_iterator a1 = avs_.find(m.av1_name);
-    std::map<std::string, AccessibleVolume>::const_iterator a2 = avs_.find(m.av2_name);
+    std::map<std::string, ProbeAccessibleVolume>::const_iterator a1 = avs_.find(m.av1_name);
+    std::map<std::string, ProbeAccessibleVolume>::const_iterator a2 = avs_.find(m.av2_name);
     if (a1 == avs_.end() || a2 == avs_.end()) {
         IMP_THROW("no accessible volume registered as '"
                       << (a1 == avs_.end() ? m.av1_name : m.av2_name) << "'",

@@ -45,8 +45,8 @@ def get_av(
     sel.set_atom_type(IMP.atom.AtomType(atom_name))
     sel.set_residue_index(residue_index)        
     source = sel.get_selected_particles()[0]
-    IMP.bff.AV.do_setup_particle(mdl, av_p, source, **av_parameter)
-    av = IMP.bff.AV(mdl, av_p)
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(mdl, av_p, source, **av_parameter)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(mdl, av_p)
     return av
 
 
@@ -97,7 +97,7 @@ class Tests(unittest.TestCase):
         # 11.286617190950983 here (the 33 <R_DA> a further 0.40 A shorter,
         # 43.88 -> 43.48, and a better +0.44 A / 3.91 A against the file's own
         # experimental distances). IMP's own radii are the default again
-        # (AV::set_radii_source) and this returns exactly to what it was
+        # (ProbeAccessibleVolumeDecorator::set_radii_source) and this returns exactly to what it was
         # before that day -- the flip moved no other input.
         self.assertAlmostEqual(11.326777201821047, v, places=6)
         self.assertEqual(v, fret_restraint.unprotected_evaluate(None))
@@ -230,7 +230,7 @@ class TestProbeNetworkRestraintSet(unittest.TestCase):
                                direct.unprotected_evaluate(None), places=6)
 
     def test_mean_position_branch_is_one_restraint_per_distance(self):
-        """With it, the set holds an `AVMeanDistanceRestraint` per distance --
+        """With it, the set holds an `ProbeAccessibleVolumeMeanDistanceRestraint` per distance --
         an approximation, so it is a different number, not the same one."""
         m, h = self._hierarchy()
         n_distances = len(

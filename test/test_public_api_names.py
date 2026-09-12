@@ -46,15 +46,23 @@ FLAT_NAMES = [
     "LabelizerFRETOptions",        # FRET pair-score settings
     "labelizer_score_structure",   # Labelizer entry point
     "labelizer_fret_pair_scores",  # FRET pair-score entry point
+    "get_probe_data_dir",           # shipped probe data
+    "MolecularProbeSimulation",     # molecular implementation (IMP)
+    "ProbeAccessibleVolumeDecorator",  # IMP particle representation
+    "ProbeAccessibleVolumeOccupancyMap",  # IMP occupancy view
+    "ProbeAccessibleVolumeMeanDistanceRestraint",
+    "ProbeSimulation",              # common simulation interface
+    "ProbeSimulationTrajectory",    # shared trajectory value
+    "ProbeDiffusionSimulation",     # grid diffusion object
     "get_av",                    # avbuilder
-    "AccessibleVolume",              # avmodel
+    "ProbeAccessibleVolume",              # avmodel
     "read_fps_json",                 # fps
     "read_component_template_cif",   # cif
     "forcefield_system_from_json",   # forcefield / ProbeForceField
     "get_rotamer_score",         # scoring (pythoncode, flat)
     "attach_probes",                   # label (pythoncode, flat)
-    "create_probe_protein_system",      # topology (C++, TopologyBuild.h)
-    "probe_forcefield_system",         # topology (C++, TopologyBuild.h)
+    "create_probe_protein_system",      # topology (C++, ProbeTopology.h)
+    "probe_forcefield_system",         # topology (C++, ProbeTopology.h)
     "AttachedProbeDynamics",            # sampling (pythoncode, flat)
     "RotamerEnsemble",               # rotamer_ensemble (C++, Rotamer.h)
     "RotamerFRET",                   # rotamer_ensemble (C++, Rotamer.h)
@@ -64,7 +72,7 @@ FLAT_NAMES = [
     # in `bin/imp_bff` with the command, not in the library. What the library
     # offers is `create_forcefield_system`, which takes `FFComponentSpec`
     # values rather than the CLI's `name=X,mol2=Y` strings.
-    "create_forcefield_system",       # topology (C++, TopologyBuild.h)
+    "create_forcefield_system",       # topology (C++, ProbeTopology.h)
     "simulate_probe_diffusion",        # probesampling
     "fret_rate_trace",               # quenching / FRETRateTrace
 ]
@@ -118,6 +126,9 @@ def test_no_retired_names_survive():
         "FactorGraph", "PRIOR", "LIKELIHOOD", "HYPER",
         "Sampler", "SamplerConfigurationError",
         "select_informative_pairs", "select_informative_sites",
+        "SimulationTrajectory", "DyeSimulation", "LangevinTrajectory",
+        "AccessibleVolume", "AV", "AVMeanDistanceRestraint",
+        "AVOccupancyMap", "AVOccupancyRegistry", "get_cgprobe_data_dir",
         "System", "read_ff_system", "write_ff_system", "read_cgprobe_template",
         "write_cgprobe_template", "resolve_site", "apply_rotamer_coords",
         "generate_rotamers", "compute_exact_efficiency", "calculate_fret_exact",
@@ -209,6 +220,28 @@ def test_probe_pair_selection_has_a_generic_public_home():
     headers = Path(__file__).resolve().parents[1] / "include"
     assert not (headers / "GreedyOlga.h").exists()
     assert (headers / "ProbePairSelection.h").is_file()
+
+
+@pytest.mark.parametrize("old,new", [
+    ("Simulation", "ProbeSimulation"),
+    ("DyeDynamics", "MolecularProbeSimulation"),
+    ("AV", "ProbeAccessibleVolumeDecorator"),
+    ("AVModel", "ProbeAccessibleVolume"),
+    ("AVBuilder", "ProbeAccessibleVolumeBuilder"),
+    ("AVMeanDistanceRestraint", "ProbeAccessibleVolumeMeanDistanceRestraint"),
+    ("AVOccupancyMap", "ProbeAccessibleVolumeOccupancyMap"),
+    ("ComponentTemplate", "ProbeComponentTemplate"),
+    ("ForceFieldCIF", "ProbeForceFieldCIF"),
+    ("TopologyBuild", "ProbeTopology"),
+    ("Scoring", "RotamerScoring"),
+    ("Potentials", "ProbePotentialRestraints"),
+    ("PotentialTables", "ProbePotentialTables"),
+    ("DataPaths", "ProbeDataPaths"),
+])
+def test_probe_headers_have_domain_names(old, new):
+    headers = Path(__file__).resolve().parents[1] / "include"
+    assert not (headers / f"{old}.h").exists()
+    assert (headers / f"{new}.h").is_file()
 
 
 if __name__ == "__main__":

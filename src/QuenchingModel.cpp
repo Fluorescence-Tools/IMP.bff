@@ -34,7 +34,7 @@ std::vector<double> drained(double* buffer, int n) {
 }
 
 //! The grid anchor of a volume, as a vector.
-std::vector<double> anchor(const AccessibleVolume& av) {
+std::vector<double> anchor(const ProbeAccessibleVolume& av) {
     double* p = NULL;
     int n = 0;
     av.get_attachment_point(&p, &n);
@@ -42,7 +42,7 @@ std::vector<double> anchor(const AccessibleVolume& av) {
 }
 
 //! The density of a volume, as a vector.
-std::vector<double> density_of(const AccessibleVolume& av) {
+std::vector<double> density_of(const ProbeAccessibleVolume& av) {
     double* p = NULL;
     int n = 0;
     av.get_density(&p, &n);
@@ -64,7 +64,7 @@ void ObstacleAtoms::get_coords(double** out_view, int* n_out_view) const {
 // --------------------------------------------------------------------------
 
 DynamicAccessibleVolume::DynamicAccessibleVolume(
-        const AccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
+        const ProbeAccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
         double probe_radius, double free_diffusion, double contact_distance,
         double slow_factor, const std::string& flux_form)
     : av_(av), atoms_(atoms), tau0_(tau0), probe_radius_(probe_radius),
@@ -276,7 +276,7 @@ GridDiffusionResult DynamicAccessibleVolume::donor_decay(
 // --------------------------------------------------------------------------
 
 QuenchedDonorDecay::QuenchedDonorDecay(
-        const AccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
+        const ProbeAccessibleVolume& av, const ObstacleAtoms& atoms, double tau0,
         const std::map<std::string, ResidueQuenching>& quenching_table,
         double critical_distance, double slow_radius, double probe_radius,
         double diffusion_coefficient, double slow_fact, double t_step,

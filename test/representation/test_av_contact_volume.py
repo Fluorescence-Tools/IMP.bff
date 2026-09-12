@@ -49,14 +49,14 @@ def _cloud(model, hierarchy, residue, thickness, trapped, step=1.0,
     selection.set_atom_type(IMP.atom.AtomType(atom))
     selection.set_residue_index(residue)
     particle = IMP.Particle(model)
-    IMP.bff.AV.do_setup_particle(
+    IMP.bff.ProbeAccessibleVolumeDecorator.do_setup_particle(
         model, particle, selection.get_selected_particles()[0],
         linker_length=20.0, radii=(3.5, 0.0, 0.0), linker_width=width,
         allowed_sphere_radius=clearance,
         simulation_grid_resolution=step,
         contact_volume_thickness=thickness,
         contact_volume_trapped_fraction=trapped)
-    av = IMP.bff.AV(model, particle)
+    av = IMP.bff.ProbeAccessibleVolumeDecorator(model, particle)
     av.set_space_fixed(space_fixed)
     av.resample()
     return np.asarray(av.get_map().get_xyz_density(), dtype=float)

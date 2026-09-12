@@ -17,7 +17,7 @@
 
 #include <IMP/bff/Base.h>
 
-// Vendored with IMP and exported by libimp_atom; ForceFieldCIF.cpp reads its
+// Vendored with IMP and exported by libimp_atom; ProbeForceFieldCIF.cpp reads its
 // eighteen `_ff_*` categories through the same parser, in the same text mode.
 #include <IMP/bff/internal/Cif.h>
 
@@ -64,7 +64,7 @@ const double DEFAULT_REFRACTIVE_INDEX = 1.4;
 const char* const PROBE_LIBRARY_CIF = "probe_library.cif";
 
 // IMP compiles the module as one translation unit (`bff_all.cpp`), so an
-// anonymous namespace is shared with every other .cpp -- and `ForceFieldCIF.cpp`
+// anonymous namespace is shared with every other .cpp -- and `ProbeForceFieldCIF.cpp`
 // reads the same parser with helpers of the same obvious names. The named inner
 // namespace is what keeps `has`, `txt` and `Ctx` from colliding.
 namespace probe_cif {
@@ -322,7 +322,7 @@ std::map<std::string, Probe> read_probe_library(std::string path) {
         key.mtime_ns = (long long) info.st_mtimespec.tv_sec * 1000000000LL +
                        info.st_mtimespec.tv_nsec;
 #elif defined(_WIN32)
-        // MSVC's stat carries seconds only; see AVBuilder.cpp's stat_key.
+        // MSVC's stat carries seconds only; see ProbeAccessibleVolumeBuilder.cpp's stat_key.
         key.mtime_ns = (long long) info.st_mtime * 1000000000LL;
 #else
         key.mtime_ns = (long long) info.st_mtim.tv_sec * 1000000000LL +

@@ -7,7 +7,7 @@
 
 #include <IMP/bff/SequenceAlignment.h>
 
-#include <IMP/bff/DataPaths.h>
+#include <IMP/bff/ProbeDataPaths.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
 
@@ -157,7 +157,7 @@ void align_best_window(const std::string& query, const std::string& templ,
 }  // namespace
 
 std::string fp_library_json() {
-    const std::string path = get_cgprobe_data_dir() + "/fp_library.json";
+    const std::string path = get_probe_data_dir() + "/fp_library.json";
     std::ifstream in(path.c_str());
     if (!in) IMP_THROW("cannot read the FP library " << path, IOException);
     std::ostringstream buffer;

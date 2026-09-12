@@ -19,11 +19,11 @@ tree, so a public subdirectory is not an option -- and are named in
 
 | header | source | is |
 |---|---|---|
-| `AV.h` | `AV.cpp` | the accessible-volume **decorator** on a labelled particle, the sampler over `IMP::Model`, and the doors that read a PDB with `IMP::atom` (`resample_av`, `get_av_from_structure`, `get_avs_for_structure`); the array door `get_av` is core |
-| `AVOccupancyMap.h` | `AVOccupancyMap.cpp` | the particle view of the core's `OccupancyGrid` raster, and the registry that shares one raster between volumes over the same particles |
+| `ProbeAccessibleVolumeDecorator.h` | `ProbeAccessibleVolumeDecorator.cpp` | the accessible-volume **decorator** on a labelled particle, the sampler over `IMP::Model`, and the doors that read a PDB with `IMP::atom` (`resample_av`, `get_av_from_structure`, `get_avs_for_structure`); the array door `get_av` is core |
+| `ProbeAccessibleVolumeOccupancyMap.h` | `ProbeAccessibleVolumeOccupancyMap.cpp` | the particle view of the core's `OccupancyGrid` raster, and the registry that shares one raster between volumes over the same particles |
 | `ProbeNetworkRestraint.h` | `ProbeNetworkRestraint.cpp` | an `IMP::Restraint` over a network of AVs |
-| `AVMeanDistanceRestraint.h` | `AVMeanDistanceRestraint.cpp` | an `IMP::Restraint` on the mean AV distance |
-| `Potentials.h` | `Potentials.cpp` | `IMP::Restraint` factories for coarse-grained potentials, and the restraint factories over a typed dye system (formerly the IMP half of `Scoring.h`) |
+| `ProbeAccessibleVolumeMeanDistanceRestraint.h` | `ProbeAccessibleVolumeMeanDistanceRestraint.cpp` | an `IMP::Restraint` on the mean AV distance |
+| `ProbePotentialRestraints.h` | `ProbePotentialRestraints.cpp` | `IMP::Restraint` factories for coarse-grained potentials, and the restraint factories over a typed dye system (formerly the IMP half of `RotamerScoring.h`) |
 | `Docking.h` | `Docking.cpp` | rigid-body docking assemblies over `IMP::atom::Hierarchy` |
 | `ProbeDynamics.h` | `ProbeDynamics.cpp` | `IMP::atom::Simulator` (Langevin / Brownian) for an attached probe |
 | `FPSProject.h`, `FPSExport.h` | `FPSProject.cpp`, `FPSExport.cpp` | the fps.json project and its exports, which drive `Docking.h` |
@@ -32,7 +32,7 @@ tree, so a public subdirectory is not an option -- and are named in
 | `EmBridge.h` | `EmBridge.cpp` | the lattice copied into an `IMP::em::DensityMap` (`create_density_map`), the module's one remaining word of `IMP::em`; the core writes MRC itself |
 | `HierarchyBridge.h` | `HierarchyBridge.cpp` | the `IMP::atom::Hierarchy` / `IMP::Particle` overloads of core functions -- a `ProteinFrame` from a hierarchy, a PDB into a Model, a selection expression on a hierarchy, the strip mask, coordinates written back, Olga's radii per particle, a `PathMap`'s spheres from particles |
 
-The SWIG topic files that wrap these -- `IMP_bff.av.i`, `avmeandistance.i`,
+The SWIG topic files that wrap these -- `IMP_bff.probeaccessiblevolumedecorator.i`, `avmeandistance.i`,
 `potentials.i`, `scoring.i`, `docking.i`, `sampling.i` (its `ProbeDynamics`
 part), `fpsexport.i`, `fpsproject.i` -- are the layer's Python surface and
 stay in `pyext/` at the positions SWIG's ordering needs.
@@ -50,4 +50,4 @@ the PDB branch of the trajectory loader (ProbeSampling.cpp), and
 SelectionExpression.cpp because it compiles the parser's private AST against
 a hierarchy. Each is marked `PRD-137 step 5c residue` at its definition. The
 replacement for the readers is the core's own `read_pdb_records`
-(AVBuilder.h); the selection needs its AST in an internal header.
+(ProbeAccessibleVolumeBuilder.h); the selection needs its AST in an internal header.

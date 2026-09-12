@@ -10,12 +10,12 @@
 // atom_name
 #include <IMP/bff/HierarchyBridge.h>
 // create_probe_restraints
-#include <IMP/bff/Potentials.h>
+#include <IMP/bff/ProbePotentialRestraints.h>
 
-#include <IMP/bff/AVBuilder.h>
+#include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/Scoring.h>
-#include <IMP/bff/TopologyBuild.h>
+#include <IMP/bff/RotamerScoring.h>
+#include <IMP/bff/ProbeTopology.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/internal/Text.h>
@@ -127,7 +127,7 @@ IMP::atom::Simulator* make_langevin_simulator(
 }
 
 // The trajectory's array views live with the record itself, in
-// src/Simulation.cpp: SimulationTrajectory is the module's one
+// src/ProbeSimulation.cpp: ProbeSimulationTrajectory is the module's one
 // trajectory type, shared by every simulation.
 
 namespace {
@@ -324,10 +324,10 @@ double AttachedProbeDynamics::minimize(int n_steps) {
     return cg->optimize(std::max(0, n_steps));
 }
 
-LangevinTrajectory AttachedProbeDynamics::run(int n_steps, int write_every) {
+ProbeSimulationTrajectory AttachedProbeDynamics::run(int n_steps, int write_every) {
     const int stride = std::max(1, write_every);
     const int n_frames = std::max(1, n_steps / stride);
-    LangevinTrajectory out;
+    ProbeSimulationTrajectory out;
     out.n_frames = n_frames;
     out.n_atoms = static_cast<int>(label_particles_.size());
     out.atom_names = atom_names_;

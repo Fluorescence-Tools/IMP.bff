@@ -466,7 +466,7 @@ def test_the_clash_term_can_pin_the_replicas_and_the_result_says_so(tmp_path):
     1.935 +- 1.133 A. This runs the two ends of that table cheaply.
 
     **Switching the accessible volume to Olga's radii (2026-09-01,
-    `AV::set_radii_source`) does not fix this**, and it was worth checking
+    `ProbeAccessibleVolumeDecorator::set_radii_source`) does not fix this**, and it was worth checking
     rather than assuming: the radii set is the *volume's*, and the clash term
     is `clash_container`, which reads `IMP::core::XYZR` -- the radii the
     particles carry -- so it never saw the change. Measured on the cheap

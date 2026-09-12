@@ -104,11 +104,11 @@ void ProbeNetworkRestraint::configure_avs(){
     if(space_fixed_ && shared_map_ && !registry_ && !avs_.empty()){
         // The obstacle set every AV rasterises: all leaves of the root of
         // the first source (identical for every AV of one hierarchy).
-        IMP::bff::AV *first = avs_.begin()->second.get();
+        IMP::bff::ProbeAccessibleVolumeDecorator *first = avs_.begin()->second.get();
         IMP::Particle* parent = first->get_source();
         auto h = IMP::atom::Hierarchy(get_model(), parent->get_index());
         auto root = IMP::atom::get_root(h);
-        registry_ = new AVOccupancyRegistry(IMP::atom::get_leaves(root));
+        registry_ = new ProbeAccessibleVolumeOccupancyRegistry(IMP::atom::get_leaves(root));
         registry_->set_was_used(true);
     }
     for(auto &av: avs_){
@@ -121,8 +121,8 @@ void ProbeNetworkRestraint::configure_avs(){
     }
 }
 
-const IMP::bff::AVs ProbeNetworkRestraint::get_used_avs(){
-    IMP::bff::AVs out;
+const IMP::bff::ProbeAccessibleVolumeDecorators ProbeNetworkRestraint::get_used_avs(){
+    IMP::bff::ProbeAccessibleVolumeDecorators out;
     for(IMP::ParticleIndex pi: av_pi_){
         out.emplace_back(get_model(), pi);
     }
@@ -137,12 +137,12 @@ IMP::ModelObjectsTemp ProbeNetworkRestraint::do_get_inputs() const {
     return ret;
 }
 
-std::map<std::string, std::unique_ptr<IMP::bff::AV> > ProbeNetworkRestraint::create_av_decorated_particles(
+std::map<std::string, std::unique_ptr<IMP::bff::ProbeAccessibleVolumeDecorator> > ProbeNetworkRestraint::create_av_decorated_particles(
         nlohmann::json used_positions,
         const IMP::core::Hierarchy &hier
 ){
     IMP::Model* model = get_model();
-    std::map<std::string, std::unique_ptr<IMP::bff::AV> > avs{};
+    std::map<std::string, std::unique_ptr<IMP::bff::ProbeAccessibleVolumeDecorator> > avs{};
 
     for(nlohmann::json::iterator it = used_positions.begin();
             it != used_positions.end(); ++it){
@@ -206,8 +206,8 @@ std::map<std::string, std::unique_ptr<IMP::bff::AV> > ProbeNetworkRestraint::cre
         IMP::ParticleIndex av_index = av_particle->get_index();
 
         // Decorate AV particle
-        IMP::bff::AV::do_setup_particle(model, av_index, parent_particle_idx);
-        auto av = new IMP::bff::AV(av_particle);  // ownership passes to avs below
+        IMP::bff::ProbeAccessibleVolumeDecorator::do_setup_particle(model, av_index, parent_particle_idx);
+        auto av = new IMP::bff::ProbeAccessibleVolumeDecorator(av_particle);  // ownership passes to avs below
         av->set_av_parameter(position.dump());
 
         avs[position_name].reset(av);
@@ -215,19 +215,19 @@ std::map<std::string, std::unique_ptr<IMP::bff::AV> > ProbeNetworkRestraint::cre
     return avs;
 }
 
-IMP::bff::AV ProbeNetworkRestraint::get_used_av(std::string name) const{
-    IMP::bff::AV* av = get_av(name);
+IMP::bff::ProbeAccessibleVolumeDecorator ProbeNetworkRestraint::get_used_av(std::string name) const{
+    IMP::bff::ProbeAccessibleVolumeDecorator* av = get_av(name);
     IMP_USAGE_CHECK(av != nullptr, "ProbeNetworkRestraint: no AV named " << name);
     return *av;
 }
 
-IMP::bff::AV* ProbeNetworkRestraint::find_av(const std::string &name) const{
+IMP::bff::ProbeAccessibleVolumeDecorator* ProbeNetworkRestraint::find_av(const std::string &name) const{
     auto it = avs_.find(name);
     return it == avs_.end() ? nullptr : it->second.get();
 }
 
-IMP::bff::AV* ProbeNetworkRestraint::get_av(std::string name) const{
-    IMP::bff::AV* av = find_av(name);
+IMP::bff::ProbeAccessibleVolumeDecorator* ProbeNetworkRestraint::get_av(std::string name) const{
+    IMP::bff::ProbeAccessibleVolumeDecorator* av = find_av(name);
     if(av == nullptr){
         IMP_WARN("AV not found in ProbeNetworkRestraint");
     }
@@ -238,7 +238,7 @@ IMP::ParticleIndex ProbeNetworkRestraint::get_position_particle_index(
         std::string name) const{
     auto p = points_.find(name);
     if(p != points_.end()) return p->second;
-    IMP::bff::AV* av = find_av(name);
+    IMP::bff::ProbeAccessibleVolumeDecorator* av = find_av(name);
     return av == nullptr ? IMP::ParticleIndex() : av->get_particle_index();
 }
 
@@ -248,7 +248,7 @@ IMP::algebra::Vector3D ProbeNetworkRestraint::get_position_coordinates(
     if(p != points_.end()){
         return IMP::core::XYZ(get_model(), p->second).get_coordinates();
     }
-    IMP::bff::AV* av = find_av(name);
+    IMP::bff::ProbeAccessibleVolumeDecorator* av = find_av(name);
     IMP_USAGE_CHECK(av != nullptr,
                     "ProbeNetworkRestraint: no position named " << name);
     return av->get_mean_position();
@@ -274,10 +274,10 @@ std::vector<std::string> ProbeNetworkRestraint::get_bond_names() const{
 
 namespace internal {
 struct AVEvalJob {
-    struct RasterTask { AVOccupancyMap *m; int z_lo, z_hi; bool local; };
+    struct RasterTask { ProbeAccessibleVolumeOccupancyMap *m; int z_lo, z_hi; bool local; };
     std::vector<RasterTask> rtasks;
-    AVOccupancyMaps maps;
-    std::vector<IMP::bff::AV*> all;
+    ProbeAccessibleVolumeOccupancyMaps maps;
+    std::vector<IMP::bff::ProbeAccessibleVolumeDecorator*> all;
     std::vector<const AVPairDistanceMeasurement*> pairs;
     std::vector<double> model;
     std::vector<std::pair<size_t, size_t> > pair_slots;
@@ -347,7 +347,7 @@ std::shared_ptr<internal::AVEvalJob> ProbeNetworkRestraint::begin_evaluation() c
         job->all.push_back(av.second.get());
     }
     job->t_prepare = lap(t);
-    std::stable_sort(job->all.begin(), job->all.end(), [](const IMP::bff::AV *a, const IMP::bff::AV *b){
+    std::stable_sort(job->all.begin(), job->all.end(), [](const IMP::bff::ProbeAccessibleVolumeDecorator *a, const IMP::bff::ProbeAccessibleVolumeDecorator *b){
         bool pa = a->get_has_pending_compute(), pb = b->get_has_pending_compute();
         if(pa != pb) return pa;
         return a->get_last_compute_seconds() > b->get_last_compute_seconds();
@@ -363,12 +363,12 @@ std::shared_ptr<internal::AVEvalJob> ProbeNetworkRestraint::begin_evaluation() c
         }
     }
     job->model.assign(job->pairs.size(), 0.0);
-    std::map<const IMP::bff::AV*, size_t> av_slot;
+    std::map<const IMP::bff::ProbeAccessibleVolumeDecorator*, size_t> av_slot;
     for(size_t i = 0; i < job->all.size(); i++) av_slot[job->all[i]] = i;
     job->pair_slots.resize(job->pairs.size());
     for(size_t j = 0; j < job->pairs.size(); j++){
-        const IMP::bff::AV *a = find_av(job->pairs[j]->position_1);
-        const IMP::bff::AV *b = find_av(job->pairs[j]->position_2);
+        const IMP::bff::ProbeAccessibleVolumeDecorator *a = find_av(job->pairs[j]->position_1);
+        const IMP::bff::ProbeAccessibleVolumeDecorator *b = find_av(job->pairs[j]->position_2);
         if(a == nullptr || b == nullptr){
             // A point end. There is no volume to wait for, so this pair is not
             // a pool task at all -- and giving it a made-up slot would index
@@ -590,7 +590,7 @@ std::string ProbeNetworkRestraint::get_diagnostics_json() const{
     nlohmann::json avs = nlohmann::json::object();
     long skip = 0, local = 0, full = 0, rolls = 0;
     for(const auto &kv : avs_){
-        const IMP::bff::AV &av = *kv.second;
+        const IMP::bff::ProbeAccessibleVolumeDecorator &av = *kv.second;
         nlohmann::json a;
         a["skip"] = av.get_number_of_skips();
         a["local"] = av.get_number_of_local_updates();
@@ -606,7 +606,7 @@ std::string ProbeNetworkRestraint::get_diagnostics_json() const{
     j["avs"] = avs;
     j["av_totals"] = {{"skip", skip}, {"local", local}, {"full", full}, {"rolls", rolls}};
     nlohmann::json maps = nlohmann::json::array();
-    auto add_map = [&](const AVOccupancyMap *m){
+    auto add_map = [&](const ProbeAccessibleVolumeOccupancyMap *m){
         nlohmann::json o;
         o["spacing"] = m->get_spacing();
         o["extra_radius"] = m->get_extra_radius();

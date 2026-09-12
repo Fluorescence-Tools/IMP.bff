@@ -23,7 +23,7 @@ import time
 import numpy as np
 import pytest
 
-from IMP.bff import AccessibleVolume, ObstacleAtoms, QuenchedDonorDecay
+from IMP.bff import ProbeAccessibleVolume, ObstacleAtoms, QuenchedDonorDecay
 from IMP.bff import amino_acid_quenching_defaults
 
 
@@ -52,7 +52,7 @@ def _atoms():
 
 def _av(density=None):
     d = _sphere() if density is None else density
-    return AccessibleVolume(density=np.asarray(d, dtype=np.float64),
+    return ProbeAccessibleVolume(density=np.asarray(d, dtype=np.float64),
                             grid_step=1.0, attachment_point=np.zeros(3))
 
 

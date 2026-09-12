@@ -442,7 +442,7 @@ def test_shipped_hiv_rt_project_runs_and_scores_what_the_flags_do():
     # 2026-09-01 (this fixture's DNA carries the old `C1*`/`O1P` spellings,
     # which that name-keyed table does not have, so those 85 atoms took its
     # 1.50 A unknown-name fallback). IMP's own radii are the default again
-    # (AV::set_radii_source) and 59.0404 returns exactly.
+    # (ProbeAccessibleVolumeDecorator::set_radii_source) and 59.0404 returns exactly.
     assert from_project.score == pytest.approx(59.040389, abs=1e-3)
     assert from_project.n_distances == from_flags.n_distances == 18
 

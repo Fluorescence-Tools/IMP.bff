@@ -3,7 +3,7 @@
  *
  * Both restraints were Python classes holding a list and a dict and calling
  * `chi2_score` -- which was itself Python, four lines of scalar arithmetic in a
- * module of distance conventions. `AccessibleVolume` is a C++ value, so the
+ * module of distance conventions. `ProbeAccessibleVolume` is a C++ value, so the
  * network restraint holds the volumes themselves rather than proxies for them,
  * and the distance it scores never crosses the boundary.
  */
@@ -24,6 +24,6 @@ IMP_SWIG_VALUE(IMP::bff, DirectProbeRestraint, DirectProbeRestraints);
 
 %include "IMP/bff/ProbeRestraints.h"
 
-%template(MapStringAccessibleVolume) std::map<std::string, IMP::bff::AccessibleVolume>;
+%template(MapStringProbeAccessibleVolume) std::map<std::string, IMP::bff::ProbeAccessibleVolume>;
 %template(AVMeasurementVector) std::vector<IMP::bff::AVMeasurement>;
 %template(ProbeSiteVector) std::vector<IMP::bff::ProbeSite>;

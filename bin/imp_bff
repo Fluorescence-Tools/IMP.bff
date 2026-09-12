@@ -51,7 +51,7 @@ from IMP.bff import get_template_dir, get_structure_dir, ensure_dir
 from IMP.bff import forster_radius_from_spectra
 from IMP.bff import (
     read_component_template_cif, read_forcefield_cif, region_features)
-from IMP.bff import AccessibleVolume, get_av_from_structure
+from IMP.bff import ProbeAccessibleVolume, get_av_from_structure
 from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
 from IMP.bff import RotamerEnsemble
@@ -669,7 +669,7 @@ def av_export(pdb, chain, residue, atom, output_path, linker_length,
         raise click.ClickException(
             f"{pdb} has no atom {atom} in residue {chain}{residue}")
 
-    av = IMP.bff.AV.setup_particle(model, IMP.Particle(model), chosen[0])
+    av = IMP.bff.ProbeAccessibleVolumeDecorator.setup_particle(model, IMP.Particle(model), chosen[0])
     av.set_av_parameter(json.dumps({
         "linker_length": linker_length, "linker_width": linker_width,
         "radius1": radius1, "simulation_grid_resolution": grid_resolution,
@@ -1516,7 +1516,7 @@ def _av_position(pos: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = None) -> AccessibleVolume:
+def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = None) -> ProbeAccessibleVolume:
     """The accessible volume of one fps.json position on ``pdb``."""
     p = _av_position(pos)
     ds = float(disc_step or p.get("simulation_grid_resolution", 1.5))
@@ -1533,7 +1533,7 @@ def ensemble_for_position(pdb: str, pos: Dict[str, Any], library: str,
         position_name)
 
 
-def ensemble_pair_statistics(e1: AccessibleVolume, e2: AccessibleVolume, forster_radius: float) -> Tuple[float, float, float, float, float]:
+def ensemble_pair_statistics(e1: ProbeAccessibleVolume, e2: ProbeAccessibleVolume, forster_radius: float) -> Tuple[float, float, float, float, float]:
     """(R_mp, ⟨R_DA⟩, ⟨R_DA⟩_E, σ_R, ⟨κ²⟩) from the full pair matrix (no sampling).
 
     ⟨R_DA⟩_E is taken with κ² = 2/3 for every pair -- the AV convention -- so
@@ -1611,7 +1611,7 @@ def compare_av_and_rotamer_positions(
             pdb, pos, libraries[name],
             IMP.bff.RotamerSiteOptions(temperature=temperature), name)
         w_clash, d_min = _interpenetration_weight(ens)
-        def _extent(cloud: AccessibleVolume) -> float:
+        def _extent(cloud: ProbeAccessibleVolume) -> float:
             if cloud.n_points == 0:
                 return float("nan")
             w = cloud.points[:, 3] / cloud.points[:, 3].sum()
@@ -2681,7 +2681,7 @@ def simulate(system_cif, systems_dir, output_root, md_steps, write_every, sampli
 #
 # Its kernels did not come with it. The restraint builders
 # (`create_probe_restraints`, `create_steric_restraint`, `create_go_restraints`)
-# and the placement search (`place_guest_by_score`) are C++ in `Scoring.h`,
+# and the placement search (`place_guest_by_score`) are C++ in `RotamerScoring.h`,
 # because they are what the runner *computes* rather than what it *drives*.
 
 from IMP.bff import (
@@ -2933,7 +2933,7 @@ def _load_hierarchies(model, system, system_cif, only_components=None):
 def _build_restraints(model, system, site_particles):
     """The system's restraints, and the steric subset a rigid move feels.
 
-    Both come from C++ (`Scoring.h`): the bonded terms from
+    Both come from C++ (`RotamerScoring.h`): the bonded terms from
     `create_probe_restraints`, the sterics from `create_steric_restraint` -- one
     `PairsRestraint` over every non-excluded pair rather than one restraint
     per pair. The exclusions are the system's own, so the two cannot disagree
@@ -3016,7 +3016,7 @@ def _build_go_restraints(
     go_fixed_k,
     cutoff,
 ):
-    """Native-contact restraints for both components (C++, `Scoring.h`).
+    """Native-contact restraints for both components (C++, `RotamerScoring.h`).
 
     The mobile component is held in its own shape throughout; the fixed one
     only where `fixed_flex_mode` has released atoms, so a mostly-rigid partner

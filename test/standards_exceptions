@@ -23,8 +23,8 @@ spelling_exceptions=[
 ]
 # Names that do not begin with one of IMP's approved verbs.
 function_name_exceptions=[
-    'AV.init_path_map', 'AV.normalize_rotation', 'AV.pull_back_body_member_adjoints',
-    'AV.pull_back_member_adjoints', 'AV.pull_back_members_adjoints', 'AV.resample',
+    'ProbeAccessibleVolumeDecorator.init_path_map', 'ProbeAccessibleVolumeDecorator.normalize_rotation', 'ProbeAccessibleVolumeDecorator.pull_back_body_member_adjoints',
+    'ProbeAccessibleVolumeDecorator.pull_back_member_adjoints', 'ProbeAccessibleVolumeDecorator.pull_back_members_adjoints', 'ProbeAccessibleVolumeDecorator.resample',
     'ProbeNetworkRestraint.get_used_avs', 'AVPairDistanceMeasurement.get_json', 'AVPairDistanceMeasurement.score_model',
     'MapStringAVPairDistanceMeasurement.asdict', 'MapStringAVPairDistanceMeasurement.begin',
     'MapStringAVPairDistanceMeasurement.count', 'MapStringAVPairDistanceMeasurement.empty', 'MapStringAVPairDistanceMeasurement.end',

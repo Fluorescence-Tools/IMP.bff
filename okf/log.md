@@ -2,6 +2,22 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 3a — probe representations and simulations have their own files**
+  ([PRD-141](prds/prd-141.md), [verification](validation/taxonomy-stage3.md)):
+  common `ProbeSimulation` / `ProbeSimulationTrajectory`, molecular and grid
+  diffusion implementations, `ProbeAccessibleVolume*`, and the probe
+  template/force-field/topology/potential/data headers now use the approved
+  names. Grid simulation is extracted from sampling helpers; redundant
+  Langevin aliases are gone. `RotamerScoring` names the orchestration.
+  Numerical bodies and serialized strings are preserved; direct include
+  dependencies and obsolete generated headers are repaired. Both builds
+  complete. IMP: 643 pass + 30 subtests, with the same 16 failures/11 errors
+  from existing potential-reader and molecular-setup defects; standalone:
+  242 pass, 6 skip. Four stale duration-based test calls now use `simulate`.
+  Sibling AV examples/references follow the new names. Remaining rotamer
+  library work is blocked on T-20260910-01; unrelated reader/data edits are
+  preserved.
+
 - **PRD-141 stage 2b — separate Labelizer concepts and generic probe selection**
   ([PRD-141](prds/prd-141.md)): `LabelizerFeatures`, `LabelizerScore`,
   `LabelizerFRET` and `LabelizerIO` now have independent headers/sources; the

@@ -599,7 +599,7 @@ double distance_from_fret_efficiency(double efficiency, double forster_radius) {
 
 IMPBFF_END_NAMESPACE
 
-// -------- from AVModel.cpp (the States base class) --------
+// -------- from ProbeAccessibleVolume.cpp (the States base class) --------
 #include <IMP/bff/StructureIO.h>
 #include <IMP/bff/internal/GridShape.h>
 
