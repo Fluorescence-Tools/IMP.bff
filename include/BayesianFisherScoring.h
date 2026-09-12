@@ -1,12 +1,12 @@
 /**
- * \file IMP/bff/FisherScoring.h
+ * \file IMP/bff/BayesianFisherScoring.h
  * \brief The gradient and the information matrix of a Poisson count model.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_FISHERSCORING_H
-#define IMPBFF_FISHERSCORING_H
+#ifndef IMPBFF_BAYESIANFISHERSCORING_H
+#define IMPBFF_BAYESIANFISHERSCORING_H
 
 #include <cmath>
 #include <cstddef>
@@ -19,9 +19,9 @@ IMPBFF_BEGIN_NAMESPACE
 //! @{
 
 //! Which information matrix to build.
-enum InformationKind {
-  INFORMATION_EXPECTED = 0,  //!< Fisher scoring: `J' diag(w/m) J`
-  INFORMATION_OBSERVED       //!< Newton-Raphson: `J' diag(w y / m^2) J`
+enum BayesianInformationKind {
+  BAYESIAN_INFORMATION_EXPECTED = 0,  //!< Fisher scoring: `J' diag(w/m) J`
+  BAYESIAN_INFORMATION_OBSERVED       //!< Newton-Raphson: `J' diag(w y / m^2) J`
 };
 
 /**
@@ -48,16 +48,16 @@ enum InformationKind {
  * \param grad `n_par` out
  * \param A `n_par x n_par` row-major out, the information matrix
  */
-inline void poisson_score(const double* y, const double* m, const double* J,
+inline void bayesian_poisson_score(const double* y, const double* m, const double* J,
                           const double* w, std::size_t n_bin, std::size_t n_par,
-                          InformationKind kind, double* grad, double* A,
+                          BayesianInformationKind kind, double* grad, double* A,
                           double floor = 1e-12, std::size_t n_threads = 1) {
   std::vector<double> u(n_bin), Wd(n_bin);
   for (std::size_t b = 0; b < n_bin; ++b) {
     const double mb = m[b] > floor ? m[b] : floor;
     const double wb = w ? w[b] : 1.0;
     u[b] = wb * (y[b] / mb - 1.0);
-    Wd[b] = (kind == INFORMATION_EXPECTED) ? wb / mb : wb * y[b] / (mb * mb);
+    Wd[b] = (kind == BAYESIAN_INFORMATION_EXPECTED) ? wb / mb : wb * y[b] / (mb * mb);
   }
   for (std::size_t p = 0; p < n_par; ++p) {
     double s = 0.0;
@@ -123,13 +123,13 @@ inline void poisson_score(const double* y, const double* m, const double* J,
  * zero. Its derivative is `sigmoid(x/s)`, which the chain rule needs and which
  * is why the floor has to be smooth rather than clamped.
  */
-inline double soft_positive(double x, double s = 0.05) {
+inline double bayesian_soft_positive(double x, double s = 0.05) {
   const double z = x / s;
   return s * (z > 0.0 ? z + std::log1p(std::exp(-z)) : std::log1p(std::exp(z)));
 }
 
-//! `d soft_positive / dx`.
-inline double soft_positive_derivative(double x, double s = 0.05) {
+//! `d bayesian_soft_positive / dx`.
+inline double bayesian_soft_positive_derivative(double x, double s = 0.05) {
   const double z = x / s;
   return z > 0.0 ? 1.0 / (1.0 + std::exp(-z)) : std::exp(z) / (1.0 + std::exp(z));
 }
@@ -138,4 +138,4 @@ inline double soft_positive_derivative(double x, double s = 0.05) {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_FISHERSCORING_H
+#endif  // IMPBFF_BAYESIANFISHERSCORING_H

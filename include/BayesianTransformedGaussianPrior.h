@@ -1,20 +1,20 @@
 /**
- * \file IMP/bff/TransformedGaussianPrior.h
+ * \file IMP/bff/BayesianTransformedGaussianPrior.h
  * \brief Many small transformed priors, recognised as one Gaussian in the
  *        coordinate the optimiser moves.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_TRANSFORMEDGAUSSIANPRIOR_H
-#define IMPBFF_TRANSFORMEDGAUSSIANPRIOR_H
+#ifndef IMPBFF_BAYESIANTRANSFORMEDGAUSSIANPRIOR_H
+#define IMPBFF_BAYESIANTRANSFORMEDGAUSSIANPRIOR_H
 
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
 
-#include <IMP/bff/Transforms.h>
+#include <IMP/bff/BayesianTransforms.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -22,19 +22,19 @@ IMPBFF_BEGIN_NAMESPACE
 //! @{
 
 //! The prior families this recognises.
-enum PriorFamily {
-  PRIOR_GAUSSIAN = 0,     //!< on the constrained value
-  PRIOR_LOGNORMAL,        //!< median and the sd of the natural log
-  PRIOR_UNIFORM,          //!< flat between two bounds
-  PRIOR_GAUSSIAN_ON_Z     //!< already stated on the unconstrained coordinate
+enum BayesianPriorFamily {
+  BAYESIAN_PRIOR_GAUSSIAN = 0,     //!< on the constrained value
+  BAYESIAN_PRIOR_LOGNORMAL,        //!< median and the sd of the natural log
+  BAYESIAN_PRIOR_UNIFORM,          //!< flat between two bounds
+  BAYESIAN_PRIOR_GAUSSIAN_ON_Z     //!< already stated on the unconstrained coordinate
 };
 
 //! The transforms this recognises.
-enum TransformKind {
-  TRANSFORM_IDENTITY = 0,
-  TRANSFORM_LOG,
-  TRANSFORM_LOGIT,
-  TRANSFORM_OTHER         //!< anything else: not reducible, the caller keeps it
+enum BayesianTransformKind {
+  BAYESIAN_TRANSFORM_IDENTITY = 0,
+  BAYESIAN_TRANSFORM_LOG,
+  BAYESIAN_TRANSFORM_LOGIT,
+  BAYESIAN_TRANSFORM_OTHER         //!< anything else: not reducible, the caller keeps it
 };
 
 /**
@@ -77,7 +77,7 @@ enum TransformKind {
  * itself. A new prior family costs speed, never correctness.
  */
 template <typename T = double>
-class TransformedGaussianPrior {
+class BayesianTransformedGaussianPrior {
  public:
   /**
    * \brief Declare one variable's prior.
@@ -90,15 +90,15 @@ class TransformedGaussianPrior {
    * \param b family parameter: sd (Gaussian, lognormal), upper bound (uniform)
    * \return true if it was reduced; false if the caller must keep it
    */
-  bool add(std::size_t offset, std::size_t size, PriorFamily family,
-           TransformKind transform, double a, double b) {
+  bool add(std::size_t offset, std::size_t size, BayesianPriorFamily family,
+           BayesianTransformKind transform, double a, double b) {
     const bool gaussian_in_z =
-        (family == PRIOR_GAUSSIAN_ON_Z) ||
-        (family == PRIOR_GAUSSIAN && transform == TRANSFORM_IDENTITY) ||
-        (family == PRIOR_LOGNORMAL && transform == TRANSFORM_LOG);
+        (family == BAYESIAN_PRIOR_GAUSSIAN_ON_Z) ||
+        (family == BAYESIAN_PRIOR_GAUSSIAN && transform == BAYESIAN_TRANSFORM_IDENTITY) ||
+        (family == BAYESIAN_PRIOR_LOGNORMAL && transform == BAYESIAN_TRANSFORM_LOG);
     if (gaussian_in_z) {
-      if (!(b > 0.0)) throw std::invalid_argument("TransformedGaussianPrior: sd must be positive");
-      const double mu = (family == PRIOR_LOGNORMAL) ? std::log(a) : a;
+      if (!(b > 0.0)) throw std::invalid_argument("BayesianTransformedGaussianPrior: sd must be positive");
+      const double mu = (family == BAYESIAN_PRIOR_LOGNORMAL) ? std::log(a) : a;
       for (std::size_t i = 0; i < size; ++i) {
         idx_.push_back(offset + i);
         mu_.push_back(mu);
@@ -106,14 +106,14 @@ class TransformedGaussianPrior {
       }
       return true;
     }
-    if (family == PRIOR_UNIFORM && transform == TRANSFORM_LOGIT) {
+    if (family == BAYESIAN_PRIOR_UNIFORM && transform == BAYESIAN_TRANSFORM_LOGIT) {
       //  The flat density contributes -log(hi - lo) per element and the
       //  logit's Jacobian contributes +log(hi - lo) per element, so when the
       //  transform's bounds ARE the prior's bounds -- which is the only case
       //  this overload describes, since it takes one pair -- the two cancel
       //  exactly and what survives is the shape term alone. Adding either one
       //  without the other is the mistake this comment exists to prevent.
-      if (!(b > a)) throw std::invalid_argument("TransformedGaussianPrior: need hi > lo");
+      if (!(b > a)) throw std::invalid_argument("BayesianTransformedGaussianPrior: need hi > lo");
       for (std::size_t i = 0; i < size; ++i) logit_.push_back(offset + i);
       return true;
     }
@@ -134,17 +134,17 @@ class TransformedGaussianPrior {
    * \param a per-element mean (Gaussian, Gaussian-on-z) or median (lognormal)
    * \param b per-element standard deviation
    */
-  bool add_vector(std::size_t offset, std::size_t size, PriorFamily family,
-                  TransformKind transform, const double* a, const double* b) {
+  bool add_vector(std::size_t offset, std::size_t size, BayesianPriorFamily family,
+                  BayesianTransformKind transform, const double* a, const double* b) {
     const bool gaussian_in_z =
-        (family == PRIOR_GAUSSIAN_ON_Z) ||
-        (family == PRIOR_GAUSSIAN && transform == TRANSFORM_IDENTITY) ||
-        (family == PRIOR_LOGNORMAL && transform == TRANSFORM_LOG);
+        (family == BAYESIAN_PRIOR_GAUSSIAN_ON_Z) ||
+        (family == BAYESIAN_PRIOR_GAUSSIAN && transform == BAYESIAN_TRANSFORM_IDENTITY) ||
+        (family == BAYESIAN_PRIOR_LOGNORMAL && transform == BAYESIAN_TRANSFORM_LOG);
     if (!gaussian_in_z) return false;
     for (std::size_t i = 0; i < size; ++i) {
-      if (!(b[i] > 0.0)) throw std::invalid_argument("TransformedGaussianPrior: sd must be positive");
+      if (!(b[i] > 0.0)) throw std::invalid_argument("BayesianTransformedGaussianPrior: sd must be positive");
       idx_.push_back(offset + i);
-      mu_.push_back((family == PRIOR_LOGNORMAL) ? std::log(a[i]) : a[i]);
+      mu_.push_back((family == BAYESIAN_PRIOR_LOGNORMAL) ? std::log(a[i]) : a[i]);
       sd_.push_back(b[i]);
     }
     return true;
@@ -164,7 +164,7 @@ class TransformedGaussianPrior {
     }
     for (std::size_t k = 0; k < logit_.size(); ++k) {
       const T& zz = z[logit_[k]];
-      s += LogitTransform<T>::log_sigmoid(zz) + LogitTransform<T>::log_sigmoid(-zz);
+      s += BayesianLogitTransform<T>::log_sigmoid(zz) + BayesianLogitTransform<T>::log_sigmoid(-zz);
     }
     return s + T(normaliser());
   }
@@ -217,4 +217,4 @@ class TransformedGaussianPrior {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_TRANSFORMEDGAUSSIANPRIOR_H
+#endif  // IMPBFF_BAYESIANTRANSFORMEDGAUSSIANPRIOR_H

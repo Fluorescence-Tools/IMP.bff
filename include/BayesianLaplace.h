@@ -1,13 +1,13 @@
 /**
- * \file IMP/bff/Laplace.h
+ * \file IMP/bff/BayesianLaplace.h
  * \brief The Gaussian approximation at a posterior mode, its evidence, and a
  *        grid of them mixed by that evidence.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_LAPLACE_H
-#define IMPBFF_LAPLACE_H
+#ifndef IMPBFF_BAYESIANLAPLACE_H
+#define IMPBFF_BAYESIANLAPLACE_H
 
 #include <cmath>
 #include <cstddef>
@@ -28,7 +28,7 @@ IMPBFF_BEGIN_NAMESPACE
  * hundred-dimensional information matrix overflows a double long before its
  * logarithm is large.
  */
-inline bool log_det_spd(const double* A, std::size_t n, double* out) {
+inline bool bayesian_log_det_spd(const double* A, std::size_t n, double* out) {
   std::vector<double> L(n * n, 0.0);
   double s_log = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
@@ -65,10 +65,10 @@ inline bool log_det_spd(const double* A, std::size_t n, double* out) {
  * \param log_post_at_mode `log p(y, theta_hat)`, unnormalised in `theta`
  * \param A minus the curvature at the mode, `n x n` row-major
  */
-inline bool laplace_log_evidence(double log_post_at_mode, const double* A,
+inline bool bayesian_laplace_log_evidence(double log_post_at_mode, const double* A,
                                  std::size_t n, double* out) {
   double ld = 0.0;
-  if (!log_det_spd(A, n, &ld)) return false;
+  if (!bayesian_log_det_spd(A, n, &ld)) return false;
   *out = log_post_at_mode + 0.5 * double(n) * std::log(2.0 * M_PI) - 0.5 * ld;
   return true;
 }
@@ -105,7 +105,7 @@ inline bool laplace_log_evidence(double log_post_at_mode, const double* A,
  * exponentiating, because these are log evidences of real data sets and
  * differences of tens of thousands of nats are ordinary.
  */
-class EvidenceMixture {
+class BayesianEvidenceMixture {
  public:
   //! Add one node: its log evidence and a summary's mean and variance there.
   void add(double log_evidence, double mean, double variance) {
@@ -174,4 +174,4 @@ class EvidenceMixture {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_LAPLACE_H
+#endif  // IMPBFF_BAYESIANLAPLACE_H

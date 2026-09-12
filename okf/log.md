@@ -2,6 +2,12 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 1e — posterior machinery is visibly Bayesian**
+  ([PRD-141](prds/prd-141.md)): P-spline, transforms, transformed prior,
+  Fisher scoring, Laplace evidence and delta-method headers now use the
+  `Bayesian*` family. Generated public all-header and explicit helper/template
+  instantiation compile against the IMP build.
+
 - **PRD-141 stage 1d — the Markov engine is MCMC, not a generic Sampler**
   ([PRD-141](prds/prd-141.md)): `Sampler` / `SamplerConfigurationError` are
   now `MCMCSampler` / `MCMCSamplerConfigurationError` across headers, sources,

@@ -1,13 +1,13 @@
 /**
- * \file IMP/bff/Transforms.h
+ * \file IMP/bff/BayesianTransforms.h
  * \brief Bijections from a constrained parameter to the coordinate an
  *        optimiser or a sampler should actually move, with their Jacobians.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_TRANSFORMS_H
-#define IMPBFF_TRANSFORMS_H
+#ifndef IMPBFF_BAYESIANTRANSFORMS_H
+#define IMPBFF_BAYESIANTRANSFORMS_H
 
 #include <cmath>
 #include <cstddef>
@@ -39,7 +39,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 //! `x = z`. The base case, so a caller can be generic.
 template <typename T = double>
-struct IdentityTransform {
+struct BayesianIdentityTransform {
   void to_constrained(const T* z, std::size_t n, T* x) const {
     for (std::size_t i = 0; i < n; ++i) x[i] = z[i];
   }
@@ -51,7 +51,7 @@ struct IdentityTransform {
 
 //! Positive quantities: `x = exp(z)`, `log|dx/dz| = sum z`.
 template <typename T = double>
-struct LogTransform {
+struct BayesianLogTransform {
   void to_constrained(const T* z, std::size_t n, T* x) const {
     using std::exp;
     for (std::size_t i = 0; i < n; ++i) x[i] = exp(z[i]);
@@ -77,11 +77,11 @@ struct LogTransform {
  * `z - log1p(exp(z))` for negative.
  */
 template <typename T = double>
-struct LogitTransform {
+struct BayesianLogitTransform {
   double lo = 0.0, hi = 1.0;
-  LogitTransform() = default;
-  LogitTransform(double lo_, double hi_) : lo(lo_), hi(hi_) {
-    if (!(hi_ > lo_)) throw std::invalid_argument("LogitTransform: hi must exceed lo");
+  BayesianLogitTransform() = default;
+  BayesianLogitTransform(double lo_, double hi_) : lo(lo_), hi(hi_) {
+    if (!(hi_ > lo_)) throw std::invalid_argument("BayesianLogitTransform: hi must exceed lo");
   }
   static T log_sigmoid(const T& z) {
     using std::exp; using std::log1p;
@@ -122,11 +122,11 @@ struct LogitTransform {
  * who instead states a density on the simplex must supply the Jacobian.
  */
 template <typename T = double>
-struct ALRTransform {
+struct BayesianALRTransform {
   std::size_t n = 0;                       //!< number of weights (z has n - 1)
-  ALRTransform() = default;
-  explicit ALRTransform(std::size_t n_) : n(n_) {
-    if (n_ < 2) throw std::invalid_argument("ALRTransform: need at least two weights");
+  BayesianALRTransform() = default;
+  explicit BayesianALRTransform(std::size_t n_) : n(n_) {
+    if (n_ < 2) throw std::invalid_argument("BayesianALRTransform: need at least two weights");
   }
   //! `x` has `n` entries, `z` has `n - 1`.
   void to_constrained(const T* z, std::size_t, T* x) const {
@@ -166,11 +166,11 @@ struct ALRTransform {
  * `|det|` on the subspace is one, so `log_abs_det` is zero.
  */
 template <typename T = double>
-struct SumToZeroTransform {
+struct BayesianSumToZeroTransform {
   std::size_t n = 0;                       //!< length of the constrained vector
   std::vector<double> Q;                   //!< n x (n - 1), row-major
-  SumToZeroTransform() = default;
-  explicit SumToZeroTransform(std::size_t n_) : n(n_), Q(helmert_basis(n_)) {}
+  BayesianSumToZeroTransform() = default;
+  explicit BayesianSumToZeroTransform(std::size_t n_) : n(n_), Q(helmert_basis(n_)) {}
 
   //! The Helmert contrasts, `n x (n - 1)` row-major.
   static std::vector<double> helmert_basis(std::size_t n) {
@@ -205,4 +205,4 @@ struct SumToZeroTransform {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_TRANSFORMS_H
+#endif  // IMPBFF_BAYESIANTRANSFORMS_H

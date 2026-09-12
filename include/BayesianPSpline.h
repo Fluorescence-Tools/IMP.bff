@@ -1,13 +1,13 @@
 /**
- * \file IMP/bff/PSpline.h
+ * \file IMP/bff/BayesianPSpline.h
  * \brief The Bayesian P-spline prior: a difference penalty on spline
  *        coefficients, read as a density.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_PSPLINE_H
-#define IMPBFF_PSPLINE_H
+#ifndef IMPBFF_BAYESIANPSPLINE_H
+#define IMPBFF_BAYESIANPSPLINE_H
 
 #include <cmath>
 #include <cstddef>
@@ -72,7 +72,7 @@ IMPBFF_BEGIN_NAMESPACE
  * they differentiate, in C++, with nothing else in the loop.
  */
 template <typename T = double>
-class PSplinePrior {
+class BayesianPSplinePrior {
  public:
   /**
    * \param n number of spline coefficients
@@ -82,12 +82,12 @@ class PSplinePrior {
    * \param student Student-t rather than Gaussian on the differences
    * \param nu degrees of freedom of the Student-t
    */
-  PSplinePrior(std::size_t n, int order = 2, double tilt_sd = 3.0,
+  BayesianPSplinePrior(std::size_t n, int order = 2, double tilt_sd = 3.0,
                double quad_sd = 30.0, bool student = false, double nu = 3.0)
       : n_(n), order_(order), tilt_sd_(tilt_sd), quad_sd_(quad_sd),
         student_(student), nu_(nu) {
-    if (order < 1 || order > 3) throw std::invalid_argument("PSplinePrior: order must be 1, 2 or 3");
-    if (n <= static_cast<std::size_t>(order)) throw std::invalid_argument("PSplinePrior: n must exceed the order");
+    if (order < 1 || order > 3) throw std::invalid_argument("BayesianPSplinePrior: order must be 1, 2 or 3");
+    if (n <= static_cast<std::size_t>(order)) throw std::invalid_argument("BayesianPSplinePrior: n must exceed the order");
     build_difference();
     build_null_space();
     rank_ = static_cast<int>(n_) - order_;
@@ -268,4 +268,4 @@ class PSplinePrior {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_PSPLINE_H
+#endif  // IMPBFF_BAYESIANPSPLINE_H

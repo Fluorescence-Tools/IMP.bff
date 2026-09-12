@@ -1,12 +1,12 @@
 /**
- * \file IMP/bff/DeltaMethod.h
+ * \file IMP/bff/BayesianDeltaMethod.h
  * \brief The variance of a function of parameters, from the parameters' own.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_DELTAMETHOD_H
-#define IMPBFF_DELTAMETHOD_H
+#ifndef IMPBFF_BAYESIANDELTAMETHOD_H
+#define IMPBFF_BAYESIANDELTAMETHOD_H
 
 #include <cmath>
 #include <cstddef>
@@ -38,7 +38,7 @@ IMPBFF_BEGIN_NAMESPACE
  * \param Sigma `(n, n)` row-major, the parameters' covariance
  * \param out `m` variances
  */
-inline void delta_variance(const double* J, const double* Sigma,
+inline void bayesian_delta_variance(const double* J, const double* Sigma,
                            std::size_t m, std::size_t n, double* out) {
   for (std::size_t i = 0; i < m; ++i) {
     const double* Ji = &J[i * n];
@@ -57,4 +57,4 @@ inline void delta_variance(const double* J, const double* Sigma,
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_DELTAMETHOD_H
+#endif  // IMPBFF_BAYESIANDELTAMETHOD_H
