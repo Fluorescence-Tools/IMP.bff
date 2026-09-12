@@ -53,8 +53,8 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -194,12 +194,12 @@ IMPBFFEXPORT double fcs_mdf_g_raw(
 /**
  * The `"mdf"` diffusion mode of an FCS model is a *numerical kernel*, not a
  * formula, so unlike the 3-D-Gaussian modes it cannot be handed to
- * `Expression` as a string. This is the third option, and the same one the
+ * `GraphExpression` as a string. This is the third option, and the same one the
  * decay path takes for its photophysics (\see SpectrumNode.h): a producer
- * node that publishes the shape, with an `Expression` downstream
+ * node that publishes the shape, with an `GraphExpression` downstream
  * multiplying the terms that *are* formulas onto it --
  *
- *     FcsMdfCurve -> Expression -> ChiSquared -> Minimizer
+ *     FcsMdfCurve -> GraphExpression -> ChiSquared -> Minimizer
  *
  * -- so a fit crosses into Python once per `run()` rather than once per
  * iteration.
@@ -240,14 +240,14 @@ IMPBFFEXPORT double fcs_mdf_g_raw(
  * contour and persistence lengths a model fits rather than the kernel's
  * dimensionless ratio.
  *
- * \see Expression, ChiSquared, Minimizer, Node
+ * \see GraphExpression, ChiSquared, Minimizer, GraphNode
  */
-class IMPBFFEXPORT FcsMdfCurve : public Node {
+class IMPBFFEXPORT FcsMdfCurve : public GraphNode {
  public:
   explicit FcsMdfCurve(const std::string& name = "fcs_mdf");
 
   //! Build the `w0`, `wem`, `D` and `diam` ports. Not in the constructor.
-  /** A `Node` that owns ports must already be held by a `shared_ptr`, and a
+  /** A `GraphNode` that owns ports must already be held by a `shared_ptr`, and a
       Python-wrapped node is constructed before it is owned -- the same
       reason `FretSpectrum::build_ports()` exists. */
   void build_ports();
@@ -304,10 +304,10 @@ class IMPBFFEXPORT FcsMdfCurve : public Node {
   std::vector<double> tau_;
   std::vector<double> curve_;
 
-  Port* w0_port_ = nullptr;
-  Port* wem_port_ = nullptr;
-  Port* d_port_ = nullptr;
-  Port* diam_port_ = nullptr;
+  GraphPort* w0_port_ = nullptr;
+  GraphPort* wem_port_ = nullptr;
+  GraphPort* d_port_ = nullptr;
+  GraphPort* diam_port_ = nullptr;
 
   double excitation_wavelength_ = 0.485;
   double emission_wavelength_ = 0.520;
@@ -487,7 +487,7 @@ IMPBFF_END_NAMESPACE
  *  \brief Saturated FCS forward model as a graph node.
  *
  *  The saturated FCS diffusion shape (the section above) wrapped as a
- *  `Node`, so an FCS kinetics model in "full" mode joins the graph the way
+ *  `GraphNode`, so an FCS kinetics model in "full" mode joins the graph the way
  *  `FcsMdfCurve` does for the MDF mode.  The ports carry the quantities a
  *  fit varies (power, extinction, beam waists, diffusion, N, baseline b,
  *  background bg); the photokinetic scheme (dark matrix, excitation matrix,
@@ -541,9 +541,9 @@ IMPBFF_BEGIN_NAMESPACE
     V0/Veff, before the 1/N normalisation and baseline the caller applies).
     The shape is published as the output port keyed by the node's name.
 
-    \see the FcsSaturation section above, Node, Expression, ChiSquared
+    \see the FcsSaturation section above, GraphNode, GraphExpression, ChiSquared
 */
-class IMPBFFEXPORT FcsSaturationCurve : public Node {
+class IMPBFFEXPORT FcsSaturationCurve : public GraphNode {
  public:
   explicit FcsSaturationCurve(const std::string& name = "fcs_saturation");
 
@@ -587,14 +587,14 @@ class IMPBFFEXPORT FcsSaturationCurve : public Node {
   std::vector<double> tau_;
   std::vector<double> curve_;
 
-  Port* power_port_ = nullptr;
-  Port* extinction_port_ = nullptr;
-  Port* w0_port_ = nullptr;
-  Port* z0_port_ = nullptr;
-  Port* d_port_ = nullptr;
-  Port* n_port_ = nullptr;
-  Port* b_port_ = nullptr;
-  Port* bg_port_ = nullptr;
+  GraphPort* power_port_ = nullptr;
+  GraphPort* extinction_port_ = nullptr;
+  GraphPort* w0_port_ = nullptr;
+  GraphPort* z0_port_ = nullptr;
+  GraphPort* d_port_ = nullptr;
+  GraphPort* n_port_ = nullptr;
+  GraphPort* b_port_ = nullptr;
+  GraphPort* bg_port_ = nullptr;
 
   // Fixed configuration (set once, not ports).
   std::vector<double> dark_matrix_;

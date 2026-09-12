@@ -27,7 +27,7 @@ def _decay(amplitudes, lifetimes, n=64, emit=True):
     d = IMP.bff.TcspcDecay("decay")
     d.set_number_of_lifetimes(len(lifetimes))
     # the curve goes to the port keyed by the node's own name
-    d.add_output_port("decay", IMP.bff.Port([0.0]))
+    d.add_output_port("decay", IMP.bff.GraphPort([0.0]))
     d.set_emit_basis(emit)
     # a narrow response, one bin wide, so the convolution is easy to reason about
     irf = np.zeros(n)
@@ -105,7 +105,7 @@ def test_the_curve_is_unchanged_by_asking_for_the_basis():
 def test_the_port_is_absent_until_it_is_asked_for():
     d = IMP.bff.TcspcDecay("decay")
     d.set_number_of_lifetimes(2)
-    d.add_output_port("decay", IMP.bff.Port([0.0]))
+    d.add_output_port("decay", IMP.bff.GraphPort([0.0]))
     assert not d.get_emit_basis()
     assert d.get_output_port(IMP.bff.TcspcDecay.basis_port_key()) is None
     d.set_emit_basis(True)

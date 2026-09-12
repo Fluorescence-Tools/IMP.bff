@@ -11,7 +11,7 @@ whose `evaluate()` is overridden in Python**, which is the only kind a
 consumer supplying its own physics can use, and that is what these tests
 pin:
 
-* `Node::evaluate()` sets the validity flag as its last statement, so an
+* `GraphNode::evaluate()` sets the validity flag as its last statement, so an
   override -- which replaces the method wholesale -- left the node permanently
   invalid and `update()` re-ran it on every pass;
 * `update()` copies each linked input from its source before evaluating, and
@@ -29,11 +29,11 @@ import pytest
 import IMP.bff
 
 
-class Doubler(IMP.bff.Node):
+class Doubler(IMP.bff.GraphNode):
     """y = 2x, and a tally of how often it actually ran."""
 
     def __init__(self, name):
-        IMP.bff.Node.__init__(self, name)
+        IMP.bff.GraphNode.__init__(self, name)
         self.calls = 0
 
     def evaluate(self):
@@ -47,8 +47,8 @@ def _chain(n):
     nodes = []
     for i in range(n):
         node = Doubler("n%d" % i)
-        node.add_input_port("x", IMP.bff.Port([0.0]))
-        node.add_output_port("y", IMP.bff.Port([0.0]))
+        node.add_input_port("x", IMP.bff.GraphPort([0.0]))
+        node.add_output_port("y", IMP.bff.GraphPort([0.0]))
         if nodes:
             node.get_input_port("x").set_link(nodes[-1].get_output_port("y"))
         nodes.append(node)
@@ -108,7 +108,7 @@ def test_only_what_is_downstream_of_the_change_recomputes():
 def test_a_node_with_nothing_to_do_stays_invalid():
     """chinet's rule, and the reason `update()` asks whether anything came out
     rather than whether a callback exists: a bare node writes nothing."""
-    bare = IMP.bff.Node("bare")
+    bare = IMP.bff.GraphNode("bare")
     bare.update()
     assert not bare.get_node_valid()
 
@@ -118,7 +118,7 @@ def test_a_vector_port_needs_get_value_view():
     vector port -- quietly, which is how a graph comes to compute one number
     where it should compute an array. Pinned because the consumer will meet
     it."""
-    p = IMP.bff.Port([0.0])
+    p = IMP.bff.GraphPort([0.0])
     p.set_value_vector([1.0, 2.0, 3.0])
     assert p.current_size() == 3
     assert p.get_value() == 1.0

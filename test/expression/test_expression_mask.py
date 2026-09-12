@@ -1,4 +1,4 @@
-"""``Expression.compute_mask`` -- a gate answered in bytes, not doubles.
+"""``GraphExpression.compute_mask`` -- a gate answered in bytes, not doubles.
 
 A selection asks a yes/no question of every row, and the answer to it is
 one bit. Returning that as an array of doubles costs eight bytes a row to
@@ -20,7 +20,7 @@ from IMP import bff
 
 def mask_of(expression, columns):
     """Compile ``expression`` and gate ``columns`` (a name -> array dict)."""
-    ex = bff.Expression("gate")
+    ex = bff.GraphExpression("gate")
     ex.set_expression(expression)
     names = list(columns)
     block = np.ascontiguousarray(
@@ -126,21 +126,21 @@ class TestComparisonUsedAsANumber(unittest.TestCase):
     """A mask flowing back into arithmetic, which numpy allows as 0 or 1."""
 
     def test_a_comparison_times_a_number(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("(x > 2)*3")
         x = np.linspace(0, 5, 1000)
         got = np.asarray(ex.compute(["x"], [list(x)]))
         np.testing.assert_allclose(got, (x > 2) * 3.0)
 
     def test_a_comparison_added_to_a_column(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("(x > 2) + x")
         x = np.linspace(0, 5, 1000)
         got = np.asarray(ex.compute(["x"], [list(x)]))
         np.testing.assert_allclose(got, (x > 2) + x)
 
     def test_a_comparison_under_a_function(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("sqrt(x > 2)")
         x = np.linspace(0, 5, 1000)
         got = np.asarray(ex.compute(["x"], [list(x)]))
@@ -151,7 +151,7 @@ class TestMaskRefusals(unittest.TestCase):
     """What the mask path says no to, rather than answering wrongly."""
 
     def test_an_unnamed_variable(self):
-        ex = bff.Expression("gate")
+        ex = bff.GraphExpression("gate")
         ex.set_expression("x > 0 and w < 1")
         block = np.ascontiguousarray(np.vstack([np.arange(4, dtype=float)]))
         with self.assertRaises(ValueError):
@@ -179,7 +179,7 @@ class TestMaskAgreesWithTheDoublePath(unittest.TestCase):
             "a*b",
         ]:
             with self.subTest(text):
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression(text)
                 names = list(cols)
                 doubles = np.asarray(

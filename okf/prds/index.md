@@ -21,6 +21,7 @@ move of each.
 
 | PRD | what | status | next |
 |---|---|---|---|
+| [141](prd-141.md) | one precise flat vocabulary for IMP.bff | active (2026-09-11) | Stage 0: baseline the Graph/Fit/Inference slice. |
 | [138](prd-138.md) | flat consolidation, then the interface pass | active (2026-09-07) | merge table in the PRD; Faspr first. |
 | [136](prd-136.md) | dye-timewarp — a site-conditioned, time-coarsened generative model of dye+linker dynamics learned from MD | active (2026-09-07): stage 1 passed on 65 runs / 12.9 µs; `free_v1` training on heinzehub | G1–G3 on the first checkpoints, PRD-116 parity, then the arm B site builder. |
 | [135](prd-135.md) | av.pinn — a forward PINN replacing the quenching solver, usable in reverse | active (2026-09-06): forward + reverse acceptance met on `pinn_300k.pt` | More measured sites (~45 with both observables for the chemistry); steady-state anisotropy as a third functional. |

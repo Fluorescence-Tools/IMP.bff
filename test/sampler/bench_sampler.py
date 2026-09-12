@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-from IMP.bff import Node, Port, Sampler
+from IMP.bff import GraphNode, GraphPort, Sampler
 
 MU = np.array([1.0, -0.5])
 SIGMA = np.array([[1.0, 0.8], [0.8, 2.0]])
@@ -38,11 +38,11 @@ N_WALKERS = 16
 
 
 def const_port(value):
-    return Port(float(value))
+    return GraphPort(float(value))
 
 
 def linked_port(source):
-    p = Port(0.0)
+    p = GraphPort(0.0)
     p.set_link(source)
     return p
 
@@ -55,17 +55,17 @@ _KEEP_ALIVE = []
 
 
 def operator_node(name, a, b, op):
-    node = Node(name)
+    node = GraphNode(name)
     node.add_input_port("a", a)
     node.add_input_port("b", b)
-    node.add_output_port(name, Port(0.0, False, True))
+    node.add_output_port(name, GraphPort(0.0, False, True))
     node.set_callback(op, "C")
     _KEEP_ALIVE.append(node)
     return node
 
 
 def gaussian_graph():
-    x1, x2 = Port(0.0, name="x1"), Port(0.0, name="x2")
+    x1, x2 = GraphPort(0.0, name="x1"), GraphPort(0.0, name="x2")
     d1 = operator_node("d1", x1, const_port(-MU[0]), "addition_double")
     d2 = operator_node("d2", x2, const_port(-MU[1]), "addition_double")
     s11 = operator_node("s11", linked_port(d1.get_output_port("d1")),

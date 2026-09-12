@@ -54,10 +54,10 @@ def fuzz_structural(rng, cases, verbose=False):
     for _ in range(cases):
         text = "".join(rng.choice(ALPHA) for _ in range(rng.randint(0, 60)))
         try:
-            if not bff.Expression.is_supported(text):
+            if not bff.GraphExpression.is_supported(text):
                 refused += 1
                 continue
-            ex = bff.Expression("m")
+            ex = bff.GraphExpression("m")
             ex.set_expression(text)
             names = list(ex.get_variable_names())
             if len(names) > 5:
@@ -265,7 +265,7 @@ def fuzz_grammar(rng, cases, n_rows=257, verbose=False):
         if expected.ndim == 0:
             expected = np.full(n_rows, expected)
 
-        ex = bff.Expression("fuzz")
+        ex = bff.GraphExpression("fuzz")
         try:
             ex.set_expression(text)
         except Exception:

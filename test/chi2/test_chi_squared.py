@@ -70,8 +70,8 @@ class ChiSquaredArithmeticTests(unittest.TestCase):
 
     def test_reduced_chi2_uses_the_free_parameter_count(self):
         c = make_chi2([1.0] * 10, [1.0] * 10)
-        node_out = bff.Port(0.0, name="chi2")
-        c.add_input_port("model", bff.Port([0.0] * 10))
+        node_out = bff.GraphPort(0.0, name="chi2")
+        c.add_input_port("model", bff.GraphPort([0.0] * 10))
         c.add_output_port("chi2", node_out)
         c.evaluate()
         self.assertEqual(c.get_chi2(), 10.0)
@@ -91,8 +91,8 @@ class ChiSquaredArithmeticTests(unittest.TestCase):
 class ChiSquaredAsANodeTests(unittest.TestCase):
     def _graph(self, y, ey, model):
         node = make_chi2(y, ey)
-        node.add_input_port("model", bff.Port(list(model)))
-        node.add_output_port("chi2", bff.Port(0.0, name="chi2"))
+        node.add_input_port("model", bff.GraphPort(list(model)))
+        node.add_output_port("chi2", bff.GraphPort(0.0, name="chi2"))
         return node
 
     def test_evaluating_the_node_writes_chi2_to_its_output(self):
@@ -109,13 +109,13 @@ class ChiSquaredAsANodeTests(unittest.TestCase):
 
     def test_a_missing_output_port_is_refused(self):
         node = make_chi2([1.0], [1.0])
-        node.add_input_port("model", bff.Port([0.0]))
+        node.add_input_port("model", bff.GraphPort([0.0]))
         with self.assertRaises(ValueError):
             node.evaluate()
 
     def test_a_missing_model_port_is_refused(self):
         node = make_chi2([1.0], [1.0])
-        node.add_output_port("chi2", bff.Port(0.0, name="chi2"))
+        node.add_output_port("chi2", bff.GraphPort(0.0, name="chi2"))
         with self.assertRaises(ValueError):
             node.evaluate()
 

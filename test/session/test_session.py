@@ -1,13 +1,13 @@
-"""Session persistence: chinet's JSONL format, in bff.
+"""GraphSession persistence: chinet's JSONL format, in bff.
 
 Ported from chinet's chinet/session.py (phase 2 of removing chinet from
-chisurf). A Session saves the graph it holds -- nodes with their ports,
+chisurf). A GraphSession saves the graph it holds -- nodes with their ports,
 plus the free-floating ports chisurf's fit parameters are -- in chinet's
 exact on-disk format, so existing .csp projects load with no importer;
 loading resolves the cross-references (session.nodes, node.ports,
 port.link) by _id and rebuilds live objects.
 
-What is deliberately not here (see include/Session.h):
+What is deliberately not here (see include/GraphSession.h):
 
 - chinet's DB registry: a node or port reaches a file only through
   add_node()/add_port(), never by construction alone.
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from IMP.bff import Node, Port, Session, get_session
+from IMP.bff import GraphNode, GraphPort, GraphSession, get_session
 
 FIXTURE = Path(__file__).parent / "chinet_fixture.jsonl"
 
@@ -39,7 +39,7 @@ RATE_UID = "61295c1b-0c25-4341-92df-2c8e3f630428"
 OUT_UID = "46ed8ddd-29ec-4b07-80e5-da9812528eb3"
 KAPPA2_UID = "a705e6a7-34b3-4052-ad11-25693e9afbc9"
 
-PORT_KEYS = ["_id", "name", "type", "precursor", "death", "fixed",
+GRAPH_PORT_KEYS = ["_id", "name", "type", "precursor", "death", "fixed",
              "is_output", "is_reactive", "is_bounded", "value", "bounds",
              "link", "value_type", "prior"]
 NODE_KEYS = ["_id", "name", "type", "precursor", "death", "callback",
@@ -50,42 +50,42 @@ SESSION_KEYS = ["_id", "name", "type", "precursor", "death", "nodes"]
 def build_session():
     """A graph shaped like the fixture, plus what the fixture does not
     cover: vectors, int ports, a reactive input, a prior, a free port."""
-    s = Session()
+    s = GraphSession()
 
-    fit = Node("fit_0")
-    x = Port(0.7)
+    fit = GraphNode("fit_0")
+    x = GraphPort(0.7)
     x.name = "x"
     x.fixed = True
-    rate = Port(2.5, False, False, False, True, 0.0, 5.0)
+    rate = GraphPort(2.5, False, False, False, True, 0.0, 5.0)
     rate.name = "rate"
-    out = Port(0.4, False, True)
+    out = GraphPort(0.4, False, True)
     out.name = "out_00"
     fit.add_input_port("x", x)
     fit.add_input_port("rate", rate)
     fit.add_output_port("out_00", out)
     fit.set_callback("pass_on", "C")
 
-    glob = Node("global_0")
-    kappa2 = Port(0.4)
+    glob = GraphNode("global_0")
+    kappa2 = GraphPort(0.4)
     kappa2.name = "kappa2"
     kappa2.prior = {"kind": "gaussian", "mu": 0.4, "sigma": 0.1}
     glob.add_input_port("kappa2", kappa2)
     glob.set_valid(True)
 
-    extra = Node("extra_0")
-    series = Port()
+    extra = GraphNode("extra_0")
+    series = GraphPort()
     series.name = "series"
     series.value = [1.5, 2.5, 3.5]
-    count = Port(3)
+    count = GraphPort(3)
     count.name = "count"
-    trigger = Port(1.0)
+    trigger = GraphPort(1.0)
     trigger.name = "trigger"
     trigger.reactive = True
     extra.add_input_port("series", series)
     extra.add_input_port("count", count)
     extra.add_input_port("trigger", trigger)
 
-    free = Port(9.9, True)
+    free = GraphPort(9.9, True)
     free.name = "free_param"
 
     out.link = kappa2  # out_00 follows kappa2 (glob stays valid)
@@ -117,7 +117,7 @@ def test_round_trip_restores_every_port_field(tmp_path):
     s = build_session()
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
     assert loaded is not None
 
     fit = loaded.get_node("fit_0")
@@ -143,7 +143,7 @@ def test_round_trip_resolves_links(tmp_path):
     s = build_session()
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
 
     out = loaded.get_node("fit_0").get_port("out_00")
     kappa2 = loaded.get_node("global_0").get_port("kappa2")
@@ -158,7 +158,7 @@ def test_round_trip_restores_vector_int_and_free_ports(tmp_path):
     s = build_session()
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
 
     series = loaded.get_node("extra_0").get_port("series")
     assert series.get_is_vector() is True
@@ -185,7 +185,7 @@ def test_round_trip_restores_node_state_and_keys(tmp_path):
     s = build_session()
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
 
     assert set(loaded.get_nodes().keys()) == {"fit_0", "global_0", "extra_0"}
     assert loaded.get_number_of_nodes() == 3
@@ -207,7 +207,7 @@ def test_round_trip_preserves_prior(tmp_path):
     s = build_session()
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
     kappa2 = loaded.get_node("global_0").get_port("kappa2")
     assert kappa2.prior == {"kind": "gaussian", "mu": 0.4, "sigma": 0.1}
 
@@ -226,7 +226,7 @@ def test_round_trip_preserves_ids_and_precursors(tmp_path):
 
     path = str(tmp_path / "graph.jsonl")
     s.save(path)
-    loaded = Session.load(path)
+    loaded = GraphSession.load(path)
 
     assert (loaded.uid, loaded.precursor) == ids["session"]
     assert loaded.death == 0
@@ -246,8 +246,8 @@ def test_save_load_save_is_identical_per_id(tmp_path):
     p2 = str(tmp_path / "two.jsonl")
     p3 = str(tmp_path / "three.jsonl")
     s.save(p1)
-    Session.load(p1).save(p2)
-    Session.load(p2).save(p3)
+    GraphSession.load(p1).save(p2)
+    GraphSession.load(p2).save(p3)
     assert docs_by_id(p2) == docs_by_id(p1)
     assert docs_by_id(p3) == docs_by_id(p1)
 
@@ -270,7 +270,7 @@ def test_saved_field_order_matches_chinet(tmp_path):
     for d in node_lines:
         assert list(d.keys()) == NODE_KEYS
     for d in port_lines:
-        assert list(d.keys()) == PORT_KEYS
+        assert list(d.keys()) == GRAPH_PORT_KEYS
 
     fit_doc = next(d for d in node_lines if d["name"] == "fit_0")
     # the node's ports in the order they were added, chinet's dict order
@@ -284,7 +284,7 @@ def test_saved_field_order_matches_chinet(tmp_path):
 
 
 def test_load_chinet_fixture():
-    s = Session.load(str(FIXTURE))
+    s = GraphSession.load(str(FIXTURE))
     assert s is not None
     assert s.get_number_of_nodes() == 2
     # 4 ports in the fixture: x, rate, out_00 and kappa2 (the phase brief
@@ -336,8 +336,8 @@ def test_fixture_resaves_identically(tmp_path):
     must come back exactly as chinet wrote it."""
     p1 = str(tmp_path / "resave1.jsonl")
     p2 = str(tmp_path / "resave2.jsonl")
-    Session.load(str(FIXTURE)).save(p1)
-    Session.load(p1).save(p2)
+    GraphSession.load(str(FIXTURE)).save(p1)
+    GraphSession.load(p1).save(p2)
     original = docs_by_id(FIXTURE)
     assert docs_by_id(p1) == original
     assert docs_by_id(p2) == original
@@ -357,7 +357,7 @@ def monolithic_text(indent=None):
 def test_load_legacy_monolithic(tmp_path):
     path = tmp_path / "legacy.jsonl"
     path.write_text(monolithic_text())
-    s = Session.load(str(path))
+    s = GraphSession.load(str(path))
     assert s is not None
     assert s.get_number_of_nodes() == 2
     assert s.get_number_of_ports() == 4  # as the fixture: x, rate, out_00, kappa2
@@ -375,7 +375,7 @@ def test_load_legacy_monolithic_pretty_printed(tmp_path):
     line does not parse as an object, which is how it is recognised."""
     path = tmp_path / "legacy_pretty.json"
     path.write_text(monolithic_text(indent=2))
-    s = Session.load(str(path))
+    s = GraphSession.load(str(path))
     assert s is not None
     assert s.get_number_of_nodes() == 2
     assert s.get_node("fit_0").get_port("rate").bounded is True
@@ -406,7 +406,7 @@ def test_int_type_codes_round_trip(tmp_path):
     path.write_text(json.dumps({"session": session,
                                 "objects": [node, int_vector, int_scalar]}))
 
-    s = Session.load(str(path))
+    s = GraphSession.load(str(path))
     n = s.get_node("n")
     vec, cnt = n.get_port("v"), n.get_port("c")
     assert vec.get_value_type() == 2 and vec.get_is_vector() is True
@@ -421,7 +421,7 @@ def test_int_type_codes_round_trip(tmp_path):
     assert saved["vec"]["value_type"] == 2
     assert saved["cnt"]["value"] == 7
     assert saved["cnt"]["value_type"] == 0
-    assert Session.load(out).get_node("n").get_port("v").get_value_type() == 2
+    assert GraphSession.load(out).get_node("n").get_port("v").get_value_type() == 2
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +430,7 @@ def test_int_type_codes_round_trip(tmp_path):
 
 
 def test_empty_session_round_trip(tmp_path):
-    s = Session()
+    s = GraphSession()
     assert s.get_number_of_nodes() == 0
     assert s.get_number_of_ports() == 0
     path = tmp_path / "empty.jsonl"
@@ -441,7 +441,7 @@ def test_empty_session_round_trip(tmp_path):
         '{"_id": "%s", "name": "session", "type": "session", '
         '"precursor": "%s", "death": 0, "nodes": {}}\n' % (s.uid, s.uid))
 
-    loaded = Session.load(str(path))
+    loaded = GraphSession.load(str(path))
     assert loaded is not None
     assert loaded.get_number_of_nodes() == 0
     assert loaded.get_number_of_ports() == 0
@@ -453,7 +453,7 @@ def test_empty_session_round_trip(tmp_path):
 def test_load_empty_file_is_none(tmp_path):
     path = tmp_path / "nothing.jsonl"
     path.write_text("")
-    assert Session.load(str(path)) is None
+    assert GraphSession.load(str(path)) is None
 
 
 def test_jsonl_without_session_line_is_none(tmp_path):
@@ -462,18 +462,18 @@ def test_jsonl_without_session_line_is_none(tmp_path):
             if line.strip()]
     path = tmp_path / "headless.jsonl"
     path.write_text("\n".join(json.dumps(d) for d in docs[1:]) + "\n")
-    assert Session.load(str(path)) is None
+    assert GraphSession.load(str(path)) is None
 
 
 def test_bad_files_raise(tmp_path):
     garbage = tmp_path / "garbage.jsonl"
     garbage.write_text("{not json\n")
     with pytest.raises(RuntimeError):
-        Session.load(str(garbage))
+        GraphSession.load(str(garbage))
     with pytest.raises(RuntimeError):
-        Session.load(str(tmp_path / "missing.jsonl"))
+        GraphSession.load(str(tmp_path / "missing.jsonl"))
     with pytest.raises(RuntimeError):
-        Session().save(str(tmp_path / "no" / "such" / "dir" / "f.jsonl"))
+        GraphSession().save(str(tmp_path / "no" / "such" / "dir" / "f.jsonl"))
 
 
 def test_clear_lets_go_of_everything(tmp_path):
@@ -494,27 +494,27 @@ def test_clear_lets_go_of_everything(tmp_path):
 
 def test_get_session_is_a_lazy_singleton():
     assert get_session() is get_session()
-    assert isinstance(get_session(), Session)
+    assert isinstance(get_session(), GraphSession)
     assert get_session().name == "session"
 
 
 def test_no_silent_registration():
     """Ports and nodes exist only where they are held: constructing them
     puts nothing in a session (chinet's DB registered everything)."""
-    stray = Port(1.0)
+    stray = GraphPort(1.0)
     stray.name = "stray"
-    Node("stray")
-    assert Session().get_number_of_ports() == 0
-    assert Session().get_number_of_nodes() == 0
+    GraphNode("stray")
+    assert GraphSession().get_number_of_ports() == 0
+    assert GraphSession().get_number_of_nodes() == 0
     # the default session starts empty too, whenever it is first made
-    assert isinstance(get_session(), Session)
+    assert isinstance(get_session(), GraphSession)
 
 
 def test_fresh_uids_are_uuid_shaped():
-    for obj in (Session(), Port(1.0), Node("n")):
+    for obj in (GraphSession(), GraphPort(1.0), GraphNode("n")):
         parsed = uuid.UUID(obj.uid)
         assert str(parsed) == obj.uid  # canonical dashed hex, 8-4-4-4-12
-    s = Session()
+    s = GraphSession()
     assert s.precursor == s.uid  # chinet: precursor defaults to the oid
 
 

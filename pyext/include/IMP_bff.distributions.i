@@ -47,7 +47,7 @@
 %ignore IMP::bff::fcs_mdf_g_raw;
 // The MDF diffusion shape as a graph node, so the `"mdf"` FCS mode joins the
 // closed-form ones on the graph instead of returning to Python per iteration.
-// Both curves are `Node` subclasses, so they need the same shared_ptr holder
+// Both curves are `GraphNode` subclasses, so they need the same shared_ptr holder
 // their base has -- declared before the header that defines them.
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_axis, int n_axis)};
 %shared_ptr(IMP::bff::FcsMdfCurve);

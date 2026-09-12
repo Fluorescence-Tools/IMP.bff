@@ -1,5 +1,5 @@
 /**
- * \file Expression.cpp
+ * \file GraphExpression.cpp
  * \brief A model equation as a node, evaluated by ptolib's engine.
  *
  * This file used to be ~1900 lines: a tokeniser, a shunting-yard parser, an
@@ -7,7 +7,7 @@
  * block-vectorised evaluator with NEON kernels, and a vendored 1.6 MB copy of
  * ExprTk behind it as a fallback. All of that now lives in
  * `pto::ExpressionEngine` (ptolib), and what remains here is the part that is
- * genuinely imp.bff's: presenting it as a `Node` with ports, and the
+ * genuinely imp.bff's: presenting it as a `GraphNode` with ports, and the
  * numpy-facing entry points SWIG wraps.
  *
  * Why the engine moved rather than being shared some other way: `DataStore`
@@ -18,7 +18,7 @@
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/Expression.h>
+#include <IMP/bff/GraphExpression.h>
 
 // The engine is ptolib's (https://github.com/tpeulen/ptolib), carried here as
 // the verbatim copy `include/internal/ptolib.h` and compiled once in
@@ -40,7 +40,7 @@ using pto::ExprColumn;
 using pto::ExprScalarType;
 
 //! The compiled engine, kept out of the header.
-struct Expression::Impl {
+struct GraphExpression::Impl {
   pto::ExpressionEngine engine;
   //! Counts trips to the parser, so a fit that re-parsed per step is visible.
   unsigned int compilations = 0;
@@ -63,7 +63,7 @@ struct Expression::Impl {
 };
 
 // C++14: a constexpr static member that is ODR-used needs this definition.
-constexpr int Expression::Impl::kAxisSlot;
+constexpr int GraphExpression::Impl::kAxisSlot;
 
 namespace {
 
@@ -102,10 +102,10 @@ std::vector<T> bind_by_name(const std::vector<std::string>& engine_vars,
 
 }  // namespace
 
-Expression::Expression(const std::string& name)
-    : Node(name), impl_(std::make_shared<Impl>()) {}
+GraphExpression::GraphExpression(const std::string& name)
+    : GraphNode(name), impl_(std::make_shared<Impl>()) {}
 
-void Expression::compile(const std::string& expression) {
+void GraphExpression::compile(const std::string& expression) {
   // Compiled into a probe first, and only committed once it succeeds. A
   // failed `set_expression` must leave the node exactly as it was -- an
   // equation typed wrongly in a GUI should not destroy the fit that was
@@ -116,7 +116,7 @@ void Expression::compile(const std::string& expression) {
     // Refused, not approximated. There is no second evaluator behind this
     // one, deliberately: the one that used to be there answered
     // multi-argument functions wrongly rather than declining them.
-    throw std::domain_error("Expression: cannot compile '" + expression +
+    throw std::domain_error("GraphExpression: cannot compile '" + expression +
                             "'");
   }
   Impl& impl = *impl_;
@@ -135,12 +135,12 @@ void Expression::compile(const std::string& expression) {
   variables_ = impl.engine.variables();
 }
 
-void Expression::set_expression(const std::string& expression) {
+void GraphExpression::set_expression(const std::string& expression) {
   compile(expression);
   set_valid(false);
 }
 
-bool Expression::is_supported(const std::string& expression) {
+bool GraphExpression::is_supported(const std::string& expression) {
   // Never throws: callers use this to decide whether to offer an equation at
   // all, and an exception escaping a predicate is its own bug.
   try {
@@ -151,24 +151,24 @@ bool Expression::is_supported(const std::string& expression) {
   }
 }
 
-bool Expression::has_compiled_plan() const { return impl_->engine.ready(); }
+bool GraphExpression::has_compiled_plan() const { return impl_->engine.ready(); }
 
-unsigned int Expression::get_number_of_compilations() const {
+unsigned int GraphExpression::get_number_of_compilations() const {
   return impl_->compilations;
 }
 
-std::vector<double> Expression::compute(
+std::vector<double> GraphExpression::compute(
     const std::vector<std::string>& names,
     const std::vector<std::vector<double> >& values) const {
   if (names.size() != values.size()) {
-    throw std::domain_error("Expression::compute: one value list per name");
+    throw std::domain_error("GraphExpression::compute: one value list per name");
   }
   std::vector<const std::vector<double>*> supplied;
   supplied.reserve(values.size());
   for (const std::vector<double>& v : values) supplied.push_back(&v);
 
   const std::vector<const std::vector<double>*> bound =
-      bind_by_name(variables_, names, supplied, "Expression");
+      bind_by_name(variables_, names, supplied, "GraphExpression");
 
   // numpy broadcasting: the result is as long as the longest operand and
   // every scalar repeats along it. An empty column means an empty answer, as
@@ -181,7 +181,7 @@ std::vector<double> Expression::compute(
   for (const std::vector<double>* v : bound) n = std::max(n, v->size());
   for (const std::vector<double>* v : bound) {
     if (v->size() != 1 && v->size() != n) {
-      throw std::domain_error("Expression: operands of incompatible lengths");
+      throw std::domain_error("GraphExpression: operands of incompatible lengths");
     }
   }
 
@@ -195,7 +195,7 @@ std::vector<double> Expression::compute(
   return result;
 }
 
-std::vector<double> Expression::compute_batch(
+std::vector<double> GraphExpression::compute_batch(
     const std::vector<std::string>& names,
     const std::vector<std::vector<double> >& rows) const {
   std::vector<double> out;
@@ -204,7 +204,7 @@ std::vector<double> Expression::compute_batch(
   for (const std::vector<double>& row : rows) {
     if (row.size() != names.size()) {
       throw std::domain_error(
-          "Expression::compute_batch: every row needs one value per name");
+          "GraphExpression::compute_batch: every row needs one value per name");
     }
     for (std::size_t i = 0; i < names.size(); ++i) one[i].assign(1, row[i]);
     const std::vector<double> r = compute(names, one);
@@ -226,20 +226,20 @@ static std::vector<const double*> bind_block(
   return bind_by_name(variables, names, supplied, where);
 }
 
-void Expression::compute_columns(const std::vector<std::string>& names,
+void GraphExpression::compute_columns(const std::vector<std::string>& names,
                                  double* in_columns, int n_vars, int n_rows,
                                  double** out_values,
                                  int* n_out_values) const {
   if (static_cast<int>(names.size()) != n_vars) {
     throw std::domain_error(
-        "Expression::compute_columns: one name per supplied column");
+        "GraphExpression::compute_columns: one name per supplied column");
   }
   if (n_rows < 0) {
-    throw std::domain_error("Expression::compute_columns: negative length");
+    throw std::domain_error("GraphExpression::compute_columns: negative length");
   }
   const std::size_t n = static_cast<std::size_t>(n_rows);
   const std::vector<const double*> bound =
-      bind_block(variables_, names, in_columns, n, "Expression");
+      bind_block(variables_, names, in_columns, n, "GraphExpression");
 
   double* out = static_cast<double*>(
       std::malloc(std::max<std::size_t>(n, 1) * sizeof(double)));
@@ -258,7 +258,7 @@ void Expression::compute_columns(const std::vector<std::string>& names,
   *n_out_values = static_cast<int>(n);
 }
 
-void Expression::bind_parameters(
+void GraphExpression::bind_parameters(
     const std::vector<std::string>& parameter_names,
     const std::string& axis_name) {
   Impl& impl = *impl_;
@@ -273,7 +273,7 @@ void Expression::bind_parameters(
         std::find(parameter_names.begin(), parameter_names.end(), want);
     if (it == parameter_names.end()) {
       throw std::domain_error(
-          "Expression::bind_parameters: no parameter or axis named '" + want +
+          "GraphExpression::bind_parameters: no parameter or axis named '" + want +
           "'");
     }
     resolved.push_back(static_cast<int>(it - parameter_names.begin()));
@@ -282,31 +282,31 @@ void Expression::bind_parameters(
   impl.bound_parameters = parameter_names.size();
 }
 
-bool Expression::has_parameter_binding() const {
+bool GraphExpression::has_parameter_binding() const {
   return !impl_->binding.empty() || variables_.empty();
 }
 
-void Expression::compute_curve_bound(double* in_parameters, int n_parameters,
+void GraphExpression::compute_curve_bound(double* in_parameters, int n_parameters,
                                      double* in_axis, int n_axis,
                                      double** out_values,
                                      int* n_out_values) const {
   const Impl& impl = *impl_;
   if (impl.binding.size() != variables_.size()) {
     throw std::domain_error(
-        "Expression::compute_curve_bound: bind_parameters() has not been "
+        "GraphExpression::compute_curve_bound: bind_parameters() has not been "
         "called for this equation");
   }
   if (static_cast<std::size_t>(n_parameters) != impl.bound_parameters) {
     // Refused rather than truncated: a binding that no longer matches the
     // caller's array would read the right equation from the wrong slots.
     throw std::domain_error(
-        "Expression::compute_curve_bound: bound to " +
+        "GraphExpression::compute_curve_bound: bound to " +
         std::to_string(impl.bound_parameters) + " parameters but given " +
         std::to_string(n_parameters));
   }
   if (n_axis < 0) {
     throw std::domain_error(
-        "Expression::compute_curve_bound: negative axis length");
+        "GraphExpression::compute_curve_bound: negative axis length");
   }
   const std::size_t n = static_cast<std::size_t>(n_axis);
 
@@ -333,16 +333,16 @@ void Expression::compute_curve_bound(double* in_parameters, int n_parameters,
   *n_out_values = static_cast<int>(n);
 }
 
-void Expression::compute_curve(
+void GraphExpression::compute_curve(
     const std::vector<std::string>& parameter_names, double* in_parameters,
     int n_parameters, const std::string& axis_name, double* in_axis,
     int n_axis, double** out_values, int* n_out_values) const {
   if (static_cast<int>(parameter_names.size()) != n_parameters) {
     throw std::domain_error(
-        "Expression::compute_curve: one name per parameter value");
+        "GraphExpression::compute_curve: one name per parameter value");
   }
   if (n_axis < 0) {
-    throw std::domain_error("Expression::compute_curve: negative axis length");
+    throw std::domain_error("GraphExpression::compute_curve: negative axis length");
   }
   const std::size_t n = static_cast<std::size_t>(n_axis);
 
@@ -360,7 +360,7 @@ void Expression::compute_curve(
         std::find(parameter_names.begin(), parameter_names.end(), want);
     if (it == parameter_names.end()) {
       throw std::domain_error(
-          "Expression::compute_curve: no parameter or axis named '" + want +
+          "GraphExpression::compute_curve: no parameter or axis named '" + want +
           "'");
     }
     columns.push_back(column_of(
@@ -380,16 +380,16 @@ void Expression::compute_curve(
   *n_out_values = static_cast<int>(n);
 }
 
-void Expression::compute_mask(const std::vector<std::string>& names,
+void GraphExpression::compute_mask(const std::vector<std::string>& names,
                               double* in_columns, int n_vars, int n_rows,
                               unsigned char** out_mask,
                               int* n_out_mask) const {
   if (static_cast<int>(names.size()) != n_vars || n_rows < 0) {
-    throw std::domain_error("Expression::compute_mask: one name per column");
+    throw std::domain_error("GraphExpression::compute_mask: one name per column");
   }
   const std::size_t n = static_cast<std::size_t>(n_rows);
   const std::vector<const double*> bound =
-      bind_block(variables_, names, in_columns, n, "Expression");
+      bind_block(variables_, names, in_columns, n, "GraphExpression");
 
   unsigned char* out = static_cast<unsigned char*>(
       std::malloc(std::max<std::size_t>(n, 1)));
@@ -418,7 +418,7 @@ void Expression::compute_mask(const std::vector<std::string>& names,
   *n_out_mask = static_cast<int>(n);
 }
 
-void Expression::evaluate() {
+void GraphExpression::evaluate() {
   // The inner loop of a fit that lives entirely in C++, so it reads the
   // ports **where they lie**. The obvious spelling --
   // `values.push_back(p->get_value_vector())` and then `compute(names,
@@ -432,9 +432,9 @@ void Expression::evaluate() {
   impl.columns.reserve(variables_.size());
   std::size_t n = 1;
   for (const std::string& name : variables_) {
-    const std::shared_ptr<Port> p = get_input_port(name);
+    const std::shared_ptr<GraphPort> p = get_input_port(name);
     if (!p) {
-      throw std::domain_error("Expression '" + get_name() +
+      throw std::domain_error("GraphExpression '" + get_name() +
                               "': no input port for variable '" + name + "'");
     }
     const std::vector<double>& v = p->get_values_ref();
@@ -448,10 +448,10 @@ void Expression::evaluate() {
 
   // The curve goes to the output port keyed by the node's *own* name, which
   // is the graph's convention here rather than a fixed "value".
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
-        "Expression '" + get_name() +
+        "GraphExpression '" + get_name() +
         "' writes its curve to the output port keyed by its own name, "
         "which this node does not have");
   }
@@ -462,8 +462,8 @@ void Expression::evaluate() {
   set_valid(true);
 }
 
-std::string Expression::describe() const {
-  std::string s = "Expression '" + get_name() + "'\n";
+std::string GraphExpression::describe() const {
+  std::string s = "GraphExpression '" + get_name() + "'\n";
   s += "  equation:  " + expression_ + "\n";
   s += "  evaluated: pto::ExpressionEngine\n";
   s += "  variables: ";

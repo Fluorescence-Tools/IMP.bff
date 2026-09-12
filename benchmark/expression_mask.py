@@ -80,7 +80,7 @@ def main():
         frame = pd.DataFrame(cols) if pd is not None else None
 
         for label, text, twin in GATES:
-            ex = bff.Expression("gate")
+            ex = bff.GraphExpression("gate")
             ex.set_expression(text)
 
             # Agreement first: a benchmark of a wrong answer is worthless.

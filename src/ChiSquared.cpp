@@ -49,7 +49,7 @@ double deviance_residual(double y, double mu) {
 
 }  // namespace
 
-ChiSquared::ChiSquared(const std::string& name) : Node(name) {}
+ChiSquared::ChiSquared(const std::string& name) : GraphNode(name) {}
 
 void ChiSquared::set_data(const std::vector<double>& y,
                           const std::vector<double>& ey) {
@@ -257,15 +257,15 @@ double ChiSquared::get_chi2r(int n_free) const {
 }
 
 void ChiSquared::update() {
-  const std::shared_ptr<Port> model_port = get_input_port(model_key_);
+  const std::shared_ptr<GraphPort> model_port = get_input_port(model_key_);
   if (model_port) model_port->set_sanitize(false);
-  const std::shared_ptr<Port> res = get_output_port(residuals_key_);
+  const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
   if (res) res->set_sanitize(false);
-  Node::update();
+  GraphNode::update();
 }
 
 void ChiSquared::evaluate() {
-  const std::shared_ptr<Port> model_port = get_input_port(model_key_);
+  const std::shared_ptr<GraphPort> model_port = get_input_port(model_key_);
   if (!model_port) {
     throw std::domain_error(
         "ChiSquared '" + get_name() + "': no input port '" + model_key_ +
@@ -276,7 +276,7 @@ void ChiSquared::evaluate() {
   for (double r : wres_) chi2_ += r * r;
   if (std::isnan(chi2_)) chi2_ = std::numeric_limits<double>::infinity();
 
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
         "ChiSquared '" + get_name() +
@@ -287,7 +287,7 @@ void ChiSquared::evaluate() {
   // The residuals themselves, when the graph asked for them. Absent by
   // default: a `Sampler` wants the scalar and would otherwise pay for a
   // copy of the whole residual vector on every move.
-  const std::shared_ptr<Port> res = get_output_port(residuals_key_);
+  const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
   if (res) res->set_value_vector(wres_);
   set_valid(true);
 }

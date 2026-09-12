@@ -14,28 +14,28 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-JointChiSquared::JointChiSquared(const std::string& name) : Node(name) {}
+JointChiSquared::JointChiSquared(const std::string& name) : GraphNode(name) {}
 
-int JointChiSquared::add_member(std::shared_ptr<Node> member,
+int JointChiSquared::add_member(std::shared_ptr<GraphNode> member,
                                 const std::string& residual_key) {
   if (!member) {
     throw std::domain_error(
         "JointChiSquared::add_member: the member is a null pointer");
   }
-  const std::shared_ptr<Port> source = member->get_output_port(residual_key);
+  const std::shared_ptr<GraphPort> source = member->get_output_port(residual_key);
   if (!source) {
     throw std::domain_error(
         "JointChiSquared::add_member: member '" + member->get_name() +
         "' has no output port '" + residual_key + "' carrying its residuals");
   }
 
-  // The block is an ordinary linked input, so `Node::update()` is what walks
+  // The block is an ordinary linked input, so `GraphNode::update()` is what walks
   // the group: it evaluates each member whose node is out of date, copies the
   // residuals in, and only then evaluates this node. Nothing here has to know
   // how deep a member's own graph goes.
   std::ostringstream key;
   key << "block_" << members_.size();
-  std::shared_ptr<Port> block(new Port(std::vector<double>(1, 0.0)));
+  std::shared_ptr<GraphPort> block(new GraphPort(std::vector<double>(1, 0.0)));
   // A member's residuals are fit transport: a NaN must survive the copy.
   block->set_sanitize(false);
   source->set_sanitize(false);
@@ -47,7 +47,7 @@ int JointChiSquared::add_member(std::shared_ptr<Node> member,
   return static_cast<int>(members_.size()) - 1;
 }
 
-std::shared_ptr<Node> JointChiSquared::get_member(int index) const {
+std::shared_ptr<GraphNode> JointChiSquared::get_member(int index) const {
   if (index < 0 || static_cast<std::size_t>(index) >= members_.size()) {
     std::ostringstream m;
     m << "JointChiSquared::get_member: index " << index << " of "
@@ -60,7 +60,7 @@ std::shared_ptr<Node> JointChiSquared::get_member(int index) const {
 std::vector<std::string> JointChiSquared::get_member_names() const {
   std::vector<std::string> names;
   names.reserve(members_.size());
-  for (const std::shared_ptr<Node>& m : members_) names.push_back(m->get_name());
+  for (const std::shared_ptr<GraphNode>& m : members_) names.push_back(m->get_name());
   return names;
 }
 
@@ -85,7 +85,7 @@ void JointChiSquared::evaluate() {
   block_sizes_.clear();
   block_sizes_.reserve(blocks_.size());
   std::size_t total = 0;
-  for (const std::shared_ptr<Port>& block : blocks_) {
+  for (const std::shared_ptr<GraphPort>& block : blocks_) {
     const std::size_t n = block->get_values_ref().size();
     block_sizes_.push_back(static_cast<int>(n));
     total += n;
@@ -93,7 +93,7 @@ void JointChiSquared::evaluate() {
 
   wres_.clear();
   wres_.reserve(total);
-  for (const std::shared_ptr<Port>& block : blocks_) {
+  for (const std::shared_ptr<GraphPort>& block : blocks_) {
     const std::vector<double>& v = block->get_values_ref();
     wres_.insert(wres_.end(), v.begin(), v.end());
   }
@@ -105,7 +105,7 @@ void JointChiSquared::evaluate() {
   // propagate the NaN into the posterior.
   if (std::isnan(chi2_)) chi2_ = std::numeric_limits<double>::infinity();
 
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
         "JointChiSquared '" + get_name() +
@@ -117,7 +117,7 @@ void JointChiSquared::evaluate() {
   // The concatenated residuals, when the graph asked for them. Absent by
   // default, exactly as in `ChiSquared`: a sampler wants the scalar and
   // would otherwise pay for a copy of every dataset's residuals per move.
-  const std::shared_ptr<Port> res = get_output_port(residuals_key_);
+  const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
   if (res) {
     res->set_sanitize(false);
     res->set_value_vector(wres_);

@@ -27,8 +27,8 @@ import mymodel  # noqa: E402
 
 def _run(cls, values):
     n = cls()
-    n.add_input_port("x", IMP.bff.Port([0.0]))
-    n.add_output_port("y", IMP.bff.Port([0.0]))
+    n.add_input_port("x", IMP.bff.GraphPort([0.0]))
+    n.add_output_port("y", IMP.bff.GraphPort([0.0]))
     n.get_input_port("x").set_value_vector(list(values))
     n.update()
     return np.asarray(n.get_output_port("y").get_value_view())
@@ -75,7 +75,7 @@ def test_a_class_with_no_readable_source_can_supply_its_own():
     """A node written in a notebook cell has no source to introspect;
     passing it explicitly is the way through."""
     ns = {"bff": IMP.bff}
-    src = ("class Cell(bff.Node):\n"
+    src = ("class Cell(bff.GraphNode):\n"
            "    def evaluate(self):\n"
            "        self.get_output_port('y').set_value_vector([7.0])\n")
     exec(src, ns)
@@ -87,17 +87,17 @@ def test_a_class_with_no_readable_source_can_supply_its_own():
                              imports=["import IMP.bff as bff"])
     rebuilt = IMP.bff.rebuild_node_class(code, trusted=True)
     n = rebuilt()
-    n.add_output_port("y", IMP.bff.Port([0.0]))
+    n.add_output_port("y", IMP.bff.GraphPort([0.0]))
     n.update()
     np.testing.assert_allclose(np.asarray(n.get_output_port("y").get_value_view()), [7.0])
 
 
 def test_a_whole_graph_document_carries_its_nodes():
     a = mymodel.Scaled()
-    a.add_input_port("x", IMP.bff.Port([0.0]))
-    a.add_output_port("y", IMP.bff.Port([0.0]))
+    a.add_input_port("x", IMP.bff.GraphPort([0.0]))
+    a.add_output_port("y", IMP.bff.GraphPort([0.0]))
     a.set_name("a")
-    g = IMP.bff.EvaluationGraph()
+    g = IMP.bff.GraphEvaluation()
     g.add_output("out", a, "y")
     doc = IMP.bff.graph_code(g, {"a": a})
     assert "Scaled" in doc

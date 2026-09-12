@@ -1,4 +1,4 @@
-"""A Python Node held only by its Minimizer/Sampler must survive (T-20260901-13).
+"""A Python GraphNode held only by its Minimizer/Sampler must survive (T-20260901-13).
 
 The C++ side keeps a shared_ptr to the objective node, but a SWIG director
 keeps only a weak pointer back to the Python proxy: before the fix, a
@@ -9,7 +9,7 @@ segfault on the fallback path every graph-less chisurf fit takes.
 The fix is a %pythonappend on set_objective stashing the proxy on the
 wrapper that holds the C++ reference (IMP_SWIG_DIRECTOR does not work here:
 its registry silently refuses anything without IMP's get_ref_count, and
-Node is a plain shared_ptr class).
+GraphNode is a plain shared_ptr class).
 """
 import gc
 import unittest
@@ -19,13 +19,13 @@ import numpy as np
 import IMP.bff as bff
 
 
-class Residual(bff.Node):
+class Residual(bff.GraphNode):
     def __init__(self):
         super().__init__("resid")
-        self._p = [bff.Port(1.0), bff.Port(2.0)]
+        self._p = [bff.GraphPort(1.0), bff.GraphPort(2.0)]
         for i, p in enumerate(self._p):
             self.add_input_port("x%d" % i, p)
-        self.add_output_port("residuals", bff.Port([0.0], False, True))
+        self.add_output_port("residuals", bff.GraphPort([0.0], False, True))
 
     def evaluate(self):
         x = [self.get_input_port("x%d" % i).value for i in range(2)]

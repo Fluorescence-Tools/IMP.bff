@@ -1,11 +1,11 @@
-"""Python callbacks on Node, through the SWIG director.
+"""Python callbacks on GraphNode, through the SWIG director.
 
 chinet's nodes accept Python callables: set_python_callback_function wraps a
 function into a node's ports and evaluate() calls it with the input-port
-values. bff's Node is a director, so a Python subclass overrides evaluate()
+values. bff's GraphNode is a director, so a Python subclass overrides evaluate()
 (or update()) and the C++ machinery drives it: a reactive port write, a
 linked follower's update(), a session-registered node -- every path that
-calls Node::evaluate() from C++ crosses into the Python override.
+calls GraphNode::evaluate() from C++ crosses into the Python override.
 
 The set_python_callback_function ergonomics themselves (inspect the
 signature, auto-create input ports from the parameters and output ports from
@@ -14,11 +14,11 @@ tests cover the director mechanics it is built on.
 """
 import pytest
 
-from IMP.bff import Node, Port, get_session
+from IMP.bff import GraphNode, GraphPort, get_session
 
 
-class CallbackNode(Node):
-    """A director Node running ``func`` over its input-port values.
+class CallbackNode(GraphNode):
+    """A director GraphNode running ``func`` over its input-port values.
 
     The evaluate() body mirrors chinet's: kwargs from the inputs, a dict
     return written port by port, a tuple/list return to out_00.., anything
@@ -63,10 +63,10 @@ def two_outputs(a=0.0, b=0.0):
 
 def test_director_subclass_reads_inputs_and_writes_outputs():
     node = CallbackNode(two_outputs, "fn")
-    node.add_input_port("a", Port(3.0))
-    node.add_input_port("b", Port(4.0))
-    node.add_output_port("sum", Port(0.0, False, True))
-    node.add_output_port("prod", Port(0.0, False, True))
+    node.add_input_port("a", GraphPort(3.0))
+    node.add_input_port("b", GraphPort(4.0))
+    node.add_output_port("sum", GraphPort(0.0, False, True))
+    node.add_output_port("prod", GraphPort(0.0, False, True))
     assert not node.is_valid()
     node.evaluate()
     assert node.outputs["sum"].value == pytest.approx(7.0)
@@ -81,14 +81,14 @@ def test_cpp_update_dispatches_into_python_evaluate():
     pulls from the Python node's output, evaluating the director upstream.
     """
     py = CallbackNode(lambda x=1.0: {"y": 2.0 * x}, "doubler")
-    py.add_input_port("x", Port(1.0))
-    py.add_output_port("y", Port(0.0, False, True))
+    py.add_input_port("x", GraphPort(1.0))
+    py.add_output_port("y", GraphPort(0.0, False, True))
 
-    follower = Node("follower")
-    follower.add_input_port("x", Port(0.0))
+    follower = GraphNode("follower")
+    follower.add_input_port("x", GraphPort(0.0))
     follower.inputs["x"].link = py.outputs["y"]
-    follower.add_input_port("one", Port(1.0))
-    follower.add_output_port("follower", Port(0.0, False, True))
+    follower.add_input_port("one", GraphPort(1.0))
+    follower.add_output_port("follower", GraphPort(0.0, False, True))
     follower.set_callback("multiply_double", "C")
 
     py.inputs["x"].value = 5.0
@@ -99,8 +99,8 @@ def test_cpp_update_dispatches_into_python_evaluate():
 
 def test_reactive_port_write_evaluates_python_node_from_cpp():
     node = CallbackNode(lambda x=1.0: {"y": 3.0 * x}, "reactor")
-    node.add_input_port("x", Port(2.0, fixed=False, is_reactive=True))
-    node.add_output_port("y", Port(0.0, False, True, True))
+    node.add_input_port("x", GraphPort(2.0, fixed=False, is_reactive=True))
+    node.add_output_port("y", GraphPort(0.0, False, True, True))
     node.inputs["x"].value = 7.0
     assert node.outputs["y"].value == pytest.approx(21.0)
     assert node.is_valid()
@@ -109,10 +109,10 @@ def test_reactive_port_write_evaluates_python_node_from_cpp():
 def test_director_registered_with_session_stays_driven():
     """A session-registered director keeps evaluating from C++ calls."""
     node = CallbackNode(two_outputs, "adder")
-    node.add_input_port("a", Port(1.0))
-    node.add_input_port("b", Port(1.0))
-    node.add_output_port("sum", Port(0.0, False, True))
-    node.add_output_port("prod", Port(0.0, False, True))
+    node.add_input_port("a", GraphPort(1.0))
+    node.add_input_port("b", GraphPort(1.0))
+    node.add_output_port("sum", GraphPort(0.0, False, True))
+    node.add_output_port("prod", GraphPort(0.0, False, True))
     get_session().add_node("director_adder", node)
     node.inputs["a"].value = 10.0
     node.update()
@@ -130,8 +130,8 @@ def test_update_override_is_dispatched():
             super().update()
 
     node = UpdateSpy(lambda x=0.0: {"y": x + 1.0}, "spy")
-    node.add_input_port("x", Port(4.0))
-    node.add_output_port("y", Port(0.0, False, True))
+    node.add_input_port("x", GraphPort(4.0))
+    node.add_output_port("y", GraphPort(0.0, False, True))
     node.update()
     assert calls == ["update"]
     assert node.outputs["y"].value == pytest.approx(5.0)
@@ -146,8 +146,8 @@ def test_type_error_falls_back_to_ports_maps_convention():
         outputs["out_00"].value = 42.0
 
     node = CallbackNode(maps_cb, "maps")
-    node.add_input_port("a", Port(1.0))
-    node.add_output_port("out_00", Port(0.0, False, True))
+    node.add_input_port("a", GraphPort(1.0))
+    node.add_output_port("out_00", GraphPort(0.0, False, True))
     node.evaluate()
     assert seen["keys"] == ["a"]
     assert node.outputs["out_00"].value == pytest.approx(42.0)
@@ -161,13 +161,13 @@ def test_director_node_sharing_an_output_port_is_invalidated():
     invalid while the director itself becomes valid.
     """
     producer = CallbackNode(lambda x=0.0: {"out": x}, "producer")
-    producer.add_input_port("x", Port(1.0))
-    producer.add_output_port("out", Port(0.0, False, True))
+    producer.add_input_port("x", GraphPort(1.0))
+    producer.add_output_port("out", GraphPort(0.0, False, True))
 
-    reader = Node("reader")
+    reader = GraphNode("reader")
     # An input, so is_valid() consults node_valid_ (an input-less node is
     # trivially valid in both chinet and bff and the flag is unobservable).
-    reader.add_input_port("seed", Port(0.0))
+    reader.add_input_port("seed", GraphPort(0.0))
     reader.add_output_port("out", producer.outputs["out"])
 
     producer.evaluate()

@@ -1,12 +1,12 @@
 /**
- * \file IMP/bff/Expression.h
+ * \file IMP/bff/GraphExpression.h
  * \brief A vectorised arithmetic expression, compiled once and evaluated as a node.
  *
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_EXPRESSION_H
-#define IMPBFF_EXPRESSION_H
+#ifndef IMPBFF_GRAPHEXPRESSION_H
+#define IMPBFF_GRAPHEXPRESSION_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -14,8 +14,8 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -38,7 +38,7 @@ IMPBFF_BEGIN_NAMESPACE
  *
  * The evaluator itself is **not here**. It is ``pto::ExpressionEngine``
  * from ptolib (https://github.com/tpeulen/ptolib), vendored verbatim as
- * ``include/internal/ptolib.h``, and this class is a `Node` wrapper over
+ * ``include/internal/ptolib.h``, and this class is a `GraphNode` wrapper over
  * it. That is not an accident of history: tttrlib's `DataStore` gates burst
  * columns with the same evaluator, neither library may depend on the other,
  * so the one implementation lives in the header both carry. imp.bff had
@@ -53,12 +53,12 @@ IMPBFF_BEGIN_NAMESPACE
  * *wrongly*: ExprTk evaluated a multi-argument function at element 0 and
  * broadcast the result, so ``hypot(x,y)`` came back constant, silently.
  *
- * \see ChiSquared, Node, Sampler
+ * \see ChiSquared, GraphNode, Sampler
  */
 
-class IMPBFFEXPORT Expression : public Node {
+class IMPBFFEXPORT GraphExpression : public GraphNode {
  public:
-  explicit Expression(const std::string& name = "expression");
+  explicit GraphExpression(const std::string& name = "expression");
 
   //! Compile an equation string; throws if it cannot be represented.
   void set_expression(const std::string& expression);
@@ -229,4 +229,4 @@ class IMPBFFEXPORT Expression : public Node {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_EXPRESSION_H
+#endif  // IMPBFF_GRAPHEXPRESSION_H

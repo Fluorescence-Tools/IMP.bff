@@ -31,6 +31,7 @@ RMF_NAMES = [
 
 #: A sample of the always-defined flat surface, one per source `.i` group.
 FLAT_NAMES = [
+    "GraphNode",                  # graph runtime
     "get_av",                    # avbuilder
     "AccessibleVolume",              # avmodel
     "read_fps_json",                 # fps
@@ -96,6 +97,8 @@ def test_there_is_no_lazy_machinery():
 
 def test_no_retired_names_survive():
     retired = [
+        # The graph runtime moved out of chinet's generic vocabulary.
+        "Node", "Port", "Session", "EvaluationGraph", "Expression",
         "System", "read_ff_system", "write_ff_system", "read_cgprobe_template",
         "write_cgprobe_template", "resolve_site", "apply_rotamer_coords",
         "generate_rotamers", "compute_exact_efficiency", "calculate_fret_exact",

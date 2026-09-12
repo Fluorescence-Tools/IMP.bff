@@ -57,7 +57,7 @@ def build(n_lifetimes=1, irf=None, name="decay"):
         irf = response()
     node = bff.TcspcDecay(name)
     node.set_number_of_lifetimes(n_lifetimes)
-    node.add_output_port(name, bff.Port([0.0], False, True))
+    node.add_output_port(name, bff.GraphPort([0.0], False, True))
     node.set_response_array(np.ascontiguousarray(irf, dtype=float))
     node.set_timing(DT, PERIOD)
     node.set_convolution_range(len(irf), len(irf))
@@ -251,14 +251,14 @@ class NodeBehaviourTests(unittest.TestCase):
     def test_a_node_without_a_response_refuses_to_evaluate(self):
         node = bff.TcspcDecay("decay")
         node.set_number_of_lifetimes(1)
-        node.add_output_port("decay", bff.Port([0.0], False, True))
+        node.add_output_port("decay", bff.GraphPort([0.0], False, True))
         with self.assertRaises(ValueError):
             node.update()
 
     def test_a_node_without_components_refuses_to_evaluate(self):
         node = bff.TcspcDecay("decay")
         node.set_number_of_lifetimes(0)
-        node.add_output_port("decay", bff.Port([0.0], False, True))
+        node.add_output_port("decay", bff.GraphPort([0.0], False, True))
         node.set_response_array(np.ascontiguousarray(response()))
         with self.assertRaises(ValueError):
             node.update()
@@ -349,11 +349,11 @@ class WholeFitTests(unittest.TestCase):
         chi2.set_data_arrays(np.ascontiguousarray(y),
                              np.ascontiguousarray(ey))
         chi2.set_fit_range(0, len(y))
-        model_in = bff.Port([0.0])
+        model_in = bff.GraphPort([0.0])
         model_in.link = node.get_output_port("decay")
         chi2.add_input_port("model", model_in)
-        chi2.add_output_port("chi2", bff.Port(0.0, False, True))
-        chi2.add_output_port("residuals", bff.Port([0.0], False, True))
+        chi2.add_output_port("chi2", bff.GraphPort(0.0, False, True))
+        chi2.add_output_port("residuals", bff.GraphPort([0.0], False, True))
 
         free = [node.get_input_port("t0"), node.get_input_port("background")]
         free[0].value = 1.0
@@ -377,7 +377,7 @@ class WholeFitTests(unittest.TestCase):
         that is not one of the C++ types.
         """
         node = build(1)
-        self.assertIsInstance(node, bff.Node)
+        self.assertIsInstance(node, bff.GraphNode)
         self.assertNotIn("director", type(node).__name__.lower())
 
 
@@ -485,7 +485,7 @@ class SpectrumPortTests(unittest.TestCase):
         irf = response()
         node = build(4, irf)
         node.add_output_port(bff.TcspcDecay.basis_port_key(),
-                             bff.Port([0.0], False, True))
+                             bff.GraphPort([0.0], False, True))
         node.set_emit_basis(True)
         node.set_spectrum_from_port(True)
         if options.get("normalize"):
@@ -555,20 +555,20 @@ class SpectrumPortTests(unittest.TestCase):
     def test_an_upstream_node_can_drive_it(self):
         """The arrangement, end to end: a node computes the spectrum.
 
-        `Expression` stands in here for whatever a real model would be -- a
+        `GraphExpression` stands in here for whatever a real model would be -- a
         FRET rate, a distance distribution -- because what is being checked
         is the *wiring*, not the photophysics: a linked vector port, and
-        `Node::update()` walking from one call.
+        `GraphNode::update()` walking from one call.
         """
         irf = response()
-        maker = bff.Expression("spectrum")
+        maker = bff.GraphExpression("spectrum")
         # An amplitude and a lifetime derived from one parameter, which is
         # the shape every derived spectrum has.
         maker.set_expression("x*0 + 1")
-        axis = bff.Port([0.0, 0.0])
+        axis = bff.GraphPort([0.0, 0.0])
         axis.set_values_array(np.ascontiguousarray([1.0, 3.5]))
         maker.add_input_port("x", axis)
-        out = bff.Port([0.0], False, True)
+        out = bff.GraphPort([0.0], False, True)
         out.set_sanitize(False)
         maker.add_output_port("spectrum", out)
 

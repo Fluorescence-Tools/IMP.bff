@@ -1,4 +1,4 @@
-"""`Node::set_memoize`: skip the work when no input actually moved.
+"""`GraphNode::set_memoize`: skip the work when no input actually moved.
 
 The invalidation contract is about *reachability* -- a port write invalidates
 every node the change can reach -- and that is the right default, because it
@@ -26,32 +26,32 @@ from IMP import bff
 
 
 def decay_graph(n=512):
-    """`Expression -> ChiSquared`, the shape a fit actually runs."""
+    """`GraphExpression -> ChiSquared`, the shape a fit actually runs."""
     x = np.linspace(0.1, 15.0, n)
     y = 2.0 * np.exp(-x / 3.0)
 
-    curve = bff.Expression("model")
+    curve = bff.GraphExpression("model")
     curve.set_expression("a*exp(-x/t)")
     ports = {}
     for v in curve.get_variable_names():
         if v == "x":
             continue
-        p = bff.Port(1.0)
+        p = bff.GraphPort(1.0)
         curve.add_input_port(v, p)
         ports[v] = p
-    axis = bff.Port([0.0])
+    axis = bff.GraphPort([0.0])
     axis.set_values_array(np.ascontiguousarray(x))
     curve.add_input_port("x", axis)
-    out = bff.Port([0.0], False, True)
+    out = bff.GraphPort([0.0], False, True)
     curve.add_output_port("model", out)
 
     chi2 = bff.ChiSquared("chi2")
     chi2.set_data_arrays(np.ascontiguousarray(y), np.ones(n))
-    model_in = bff.Port([0.0])
+    model_in = bff.GraphPort([0.0])
     model_in.link = out
     chi2.add_input_port("model", model_in)
-    chi2.add_output_port("chi2", bff.Port(0.0, False, True))
-    chi2.add_output_port("residuals", bff.Port([0.0], False, True))
+    chi2.add_output_port("chi2", bff.GraphPort(0.0, False, True))
+    chi2.add_output_port("residuals", bff.GraphPort([0.0], False, True))
     chi2._graph = (curve, out, model_in, axis)
     return chi2, curve, ports
 

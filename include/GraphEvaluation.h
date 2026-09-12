@@ -1,8 +1,8 @@
 /**
- *  \file IMP/bff/EvaluationGraph.h
+ *  \file IMP/bff/GraphEvaluation.h
  *  \brief A graph of nodes that is assembled, then run on demand.
  *
- *  `Node` already evaluates lazily: assembling computes nothing, `update()`
+ *  `GraphNode` already evaluates lazily: assembling computes nothing, `update()`
  *  pulls what a node needs, and a node that is still valid is not run again.
  *  What it does not have is a handle for the *graph* -- somewhere to say what
  *  the interesting results are called and to ask for them by name.
@@ -26,12 +26,12 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_EVALUATIONGRAPH_H
-#define IMPBFF_EVALUATIONGRAPH_H
+#ifndef IMPBFF_GRAPHEVALUATION_H
+#define IMPBFF_GRAPHEVALUATION_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 #include <map>
 #include <memory>
@@ -41,7 +41,7 @@
 IMPBFF_BEGIN_NAMESPACE
 
 //! What a run did. Not what it produced -- the values stay on the ports.
-struct IMPBFFEXPORT RunReport {
+struct IMPBFFEXPORT GraphRunReport {
   //! Nodes upstream of what was asked for, this one included.
   int nodes_visited = 0;
   //! Of those, the ones that actually evaluated.
@@ -52,9 +52,9 @@ struct IMPBFFEXPORT RunReport {
 };
 
 //! A graph of nodes with named outputs, evaluated on demand.
-class IMPBFFEXPORT EvaluationGraph {
+class IMPBFFEXPORT GraphEvaluation {
  public:
-  EvaluationGraph();
+  GraphEvaluation();
 
   //! Name a port so a run can ask for it.
   /*!
@@ -71,7 +71,7 @@ class IMPBFFEXPORT EvaluationGraph {
               is already taken -- silently rebinding a label is how a saved
               settings file comes to mean something else.
   */
-  void add_output(const std::string& label, std::shared_ptr<Node> node,
+  void add_output(const std::string& label, std::shared_ptr<GraphNode> node,
                   const std::string& port_name,
                   const std::string& provenance = "");
 
@@ -82,16 +82,16 @@ class IMPBFFEXPORT EvaluationGraph {
   std::vector<std::string> get_output_labels() const;
 
   //! The port a label names, or null if there is no such label.
-  std::shared_ptr<Port> get_output_port(const std::string& label) const;
+  std::shared_ptr<GraphPort> get_output_port(const std::string& label) const;
 
   //! The node a label names, or null.
-  std::shared_ptr<Node> get_output_node(const std::string& label) const;
+  std::shared_ptr<GraphNode> get_output_node(const std::string& label) const;
 
   //! The provenance recorded with a label; empty if none or no such label.
   std::string get_output_provenance(const std::string& label) const;
 
   //! Evaluate what every registered label needs.
-  RunReport run();
+  GraphRunReport run();
 
   //! Evaluate what these labels need, and no more.
   /*!
@@ -102,7 +102,7 @@ class IMPBFFEXPORT EvaluationGraph {
       \throws IMP::ValueException if a label is not registered -- a
               misspelling that quietly produced nothing would be worse.
   */
-  RunReport run(const std::vector<std::string>& outputs);
+  GraphRunReport run(const std::vector<std::string>& outputs);
 
   //! The nodes a label depends on, itself included, upstream first.
   std::vector<std::string> get_dependencies(const std::string& label) const;
@@ -139,7 +139,7 @@ class IMPBFFEXPORT EvaluationGraph {
               among \p nodes, or a port that node does not have.
   */
   void from_json(const std::string& json,
-                 const std::map<std::string, std::shared_ptr<Node> >& nodes);
+                 const std::map<std::string, std::shared_ptr<GraphNode> >& nodes);
 
   //! How many labels are registered.
   unsigned int get_number_of_outputs() const;
@@ -147,7 +147,7 @@ class IMPBFFEXPORT EvaluationGraph {
  private:
   struct Output {
     std::string label;
-    std::shared_ptr<Node> node;
+    std::shared_ptr<GraphNode> node;
     std::string port_name;
     std::string provenance;
   };
@@ -155,9 +155,9 @@ class IMPBFFEXPORT EvaluationGraph {
   std::map<std::string, int> index_of_;
 
   const Output* find(const std::string& label) const;
-  RunReport run_nodes(const std::vector<std::shared_ptr<Node> >& roots);
+  GraphRunReport run_nodes(const std::vector<std::shared_ptr<GraphNode> >& roots);
 };
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_EVALUATIONGRAPH_H
+#endif  // IMPBFF_GRAPHEVALUATION_H

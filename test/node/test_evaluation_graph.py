@@ -25,15 +25,15 @@ import pytest
 import IMP.bff
 
 
-class Add(IMP.bff.Node):
+class Add(IMP.bff.GraphNode):
     """out = sum of every input port, elementwise, with a tally."""
 
     def __init__(self, name, inputs=("x",)):
-        IMP.bff.Node.__init__(self, name)
+        IMP.bff.GraphNode.__init__(self, name)
         self.calls = 0
         for i in inputs:
-            self.add_input_port(i, IMP.bff.Port([0.0]))
-        self.add_output_port("out", IMP.bff.Port([0.0]))
+            self.add_input_port(i, IMP.bff.GraphPort([0.0]))
+        self.add_output_port("out", IMP.bff.GraphPort([0.0]))
         self._inputs = inputs
 
     def evaluate(self):
@@ -60,7 +60,7 @@ def graph():
     total.get_input_port("b").set_link(right.get_output_port("out"))
     source.get_input_port("x").set_value_vector([1.0, 2.0])
 
-    g = IMP.bff.EvaluationGraph()
+    g = IMP.bff.GraphEvaluation()
     g.add_output("basis", basis, "out")
     g.add_output("left", left, "out")
     g.add_output("right", right, "out")
@@ -175,7 +175,7 @@ def test_the_labels_round_trip_onto_rebuilt_nodes(graph):
     g, nodes = graph
     text = g.to_json()
     assert '"label": "total"' in text and '"port": "out"' in text
-    back = IMP.bff.EvaluationGraph()
+    back = IMP.bff.GraphEvaluation()
     back.from_json(text, nodes)
     assert list(back.get_output_labels()) == list(g.get_output_labels())
     for label in g.get_output_labels():
@@ -186,7 +186,7 @@ def test_the_labels_round_trip_onto_rebuilt_nodes(graph):
 def test_loading_against_nodes_that_are_missing_says_so(graph):
     g, nodes = graph
     text = g.to_json()
-    back = IMP.bff.EvaluationGraph()
+    back = IMP.bff.GraphEvaluation()
     with pytest.raises(ValueError):
         back.from_json(text, {"source": nodes["source"]})
 
@@ -230,11 +230,11 @@ def test_a_graph_round_trips_its_provenance(graph):
     g, nodes = graph
     by_label = {"basis": nodes["basis"], "left": nodes["left"],
                 "right": nodes["right"], "total": nodes["total"]}
-    g2 = IMP.bff.EvaluationGraph()
+    g2 = IMP.bff.GraphEvaluation()
     for label, node in by_label.items():
         IMP.bff.add_output_with_provenance(g2, label, node, "out")
     assert g2.get_output_provenance("total")
-    back = IMP.bff.EvaluationGraph()
+    back = IMP.bff.GraphEvaluation()
     back.from_json(g2.to_json(), nodes)
     assert back.get_output_provenance("total") == g2.get_output_provenance("total")
     assert not IMP.bff.check_provenance(back, by_label)
@@ -242,14 +242,14 @@ def test_a_graph_round_trips_its_provenance(graph):
 
 def test_a_node_fetched_from_the_graph_is_not_your_python_object(graph):
     """Same C++ node, same uid, and the Python override still runs when the
-    graph evaluates it -- but the wrapper handed back is a plain `Node`,
+    graph evaluates it -- but the wrapper handed back is a plain `GraphNode`,
     because a director's Python identity is not carried out through the
     binding. It is why `check_provenance` asks for your objects."""
     g, nodes = graph
     back = g.get_output_node("total")
     assert back.get_uid() == nodes["total"].get_uid()
     assert back is not nodes["total"]
-    assert type(back).__name__ == "Node"
+    assert type(back).__name__ == "GraphNode"
     g.run()
     assert nodes["total"].calls == 1, "the override still ran"
 
@@ -258,12 +258,12 @@ def test_loading_against_changed_code_is_reported_not_hidden(graph):
     """The whole point: a graph saved with one callback and reloaded against
     another must say so, rather than compute something else in silence."""
     g, nodes = graph
-    g2 = IMP.bff.EvaluationGraph()
+    g2 = IMP.bff.GraphEvaluation()
     IMP.bff.add_output_with_provenance(g2, "left", nodes["left"], "out")
     text = g2.to_json()
 
     swapped = Other("left")
-    back = IMP.bff.EvaluationGraph()
+    back = IMP.bff.GraphEvaluation()
     back.from_json(text, {"left": swapped})
     bad = IMP.bff.check_provenance(back, {"left": swapped})
     assert set(bad) == {"left"}

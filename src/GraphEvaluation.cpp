@@ -1,10 +1,10 @@
 /**
- * \file EvaluationGraph.cpp
+ * \file GraphEvaluation.cpp
  * \brief A graph of nodes that is assembled, then run on demand.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#include <IMP/bff/EvaluationGraph.h>
+#include <IMP/bff/GraphEvaluation.h>
 
 #include <IMP/bff/internal/json.h>
 
@@ -22,17 +22,17 @@ namespace {
     a run there: nothing downstream is reachable this way, so nothing
     downstream is asked to evaluate.
 */
-void collect_upstream(const std::shared_ptr<Node>& n,
-                      std::set<const Node*>& seen,
-                      std::vector<std::shared_ptr<Node> >& out) {
+void collect_upstream(const std::shared_ptr<GraphNode>& n,
+                      std::set<const GraphNode*>& seen,
+                      std::vector<std::shared_ptr<GraphNode> >& out) {
     if (!n || seen.count(n.get())) return;
     seen.insert(n.get());
     for (const auto& kv : n->get_input_ports()) {
-        const std::shared_ptr<Port>& p = kv.second;
+        const std::shared_ptr<GraphPort>& p = kv.second;
         if (!p) continue;
-        const std::shared_ptr<Port>& src = p->get_link_ref();
+        const std::shared_ptr<GraphPort>& src = p->get_link_ref();
         if (!src) continue;
-        const std::shared_ptr<Node> up = src->get_node();
+        const std::shared_ptr<GraphNode> up = src->get_node();
         // A port linked to another port of the *same* node is a shared
         // parameter, not a dependency; recursing would not terminate.
         if (up && up.get() != n.get()) collect_upstream(up, seen, out);
@@ -42,23 +42,23 @@ void collect_upstream(const std::shared_ptr<Node>& n,
 
 }  // namespace
 
-std::string RunReport::describe() const {
+std::string GraphRunReport::describe() const {
     std::ostringstream s;
     s << nodes_evaluated << " of " << nodes_visited << " nodes evaluated in "
       << seconds << " s";
     return s.str();
 }
 
-EvaluationGraph::EvaluationGraph() {}
+GraphEvaluation::GraphEvaluation() {}
 
-const EvaluationGraph::Output* EvaluationGraph::find(
+const GraphEvaluation::Output* GraphEvaluation::find(
         const std::string& label) const {
     auto it = index_of_.find(label);
     return it == index_of_.end() ? nullptr : &outputs_[it->second];
 }
 
-void EvaluationGraph::add_output(const std::string& label,
-                                 std::shared_ptr<Node> node,
+void GraphEvaluation::add_output(const std::string& label,
+                                 std::shared_ptr<GraphNode> node,
                                  const std::string& port_name,
                                  const std::string& provenance) {
     if (label.empty()) {
@@ -85,7 +85,7 @@ void EvaluationGraph::add_output(const std::string& label,
     index_of_[label] = static_cast<int>(outputs_.size()) - 1;
 }
 
-void EvaluationGraph::remove_output(const std::string& label) {
+void GraphEvaluation::remove_output(const std::string& label) {
     auto it = index_of_.find(label);
     if (it == index_of_.end()) return;
     outputs_.erase(outputs_.begin() + it->second);
@@ -95,43 +95,43 @@ void EvaluationGraph::remove_output(const std::string& label) {
     }
 }
 
-std::vector<std::string> EvaluationGraph::get_output_labels() const {
+std::vector<std::string> GraphEvaluation::get_output_labels() const {
     std::vector<std::string> out;
     out.reserve(outputs_.size());
     for (const auto& o : outputs_) out.push_back(o.label);
     return out;
 }
 
-std::shared_ptr<Port> EvaluationGraph::get_output_port(
+std::shared_ptr<GraphPort> GraphEvaluation::get_output_port(
         const std::string& label) const {
     const Output* o = find(label);
-    return o ? o->node->get_port(o->port_name) : std::shared_ptr<Port>();
+    return o ? o->node->get_port(o->port_name) : std::shared_ptr<GraphPort>();
 }
 
-std::shared_ptr<Node> EvaluationGraph::get_output_node(
+std::shared_ptr<GraphNode> GraphEvaluation::get_output_node(
         const std::string& label) const {
     const Output* o = find(label);
-    return o ? o->node : std::shared_ptr<Node>();
+    return o ? o->node : std::shared_ptr<GraphNode>();
 }
 
-std::string EvaluationGraph::get_output_provenance(
+std::string GraphEvaluation::get_output_provenance(
         const std::string& label) const {
     const Output* o = find(label);
     return o ? o->provenance : std::string();
 }
 
-unsigned int EvaluationGraph::get_number_of_outputs() const {
+unsigned int GraphEvaluation::get_number_of_outputs() const {
     return static_cast<unsigned int>(outputs_.size());
 }
 
-std::vector<std::string> EvaluationGraph::get_dependencies(
+std::vector<std::string> GraphEvaluation::get_dependencies(
         const std::string& label) const {
     const Output* o = find(label);
     if (!o) {
         IMP_THROW("no output labelled '" << label << "'", IMP::ValueException);
     }
-    std::set<const Node*> seen;
-    std::vector<std::shared_ptr<Node> > order;
+    std::set<const GraphNode*> seen;
+    std::vector<std::shared_ptr<GraphNode> > order;
     collect_upstream(o->node, seen, order);
     std::vector<std::string> names;
     names.reserve(order.size());
@@ -139,13 +139,13 @@ std::vector<std::string> EvaluationGraph::get_dependencies(
     return names;
 }
 
-RunReport EvaluationGraph::run_nodes(
-        const std::vector<std::shared_ptr<Node> >& roots) {
+GraphRunReport GraphEvaluation::run_nodes(
+        const std::vector<std::shared_ptr<GraphNode> >& roots) {
     // Everything the roots depend on, gathered first so that the report can
     // say how much was in play and how much of it actually ran. Gathering is
     // cheap next to evaluating and it is the only way to answer honestly.
-    std::set<const Node*> seen;
-    std::vector<std::shared_ptr<Node> > order;
+    std::set<const GraphNode*> seen;
+    std::vector<std::shared_ptr<GraphNode> > order;
     for (const auto& r : roots) collect_upstream(r, seen, order);
 
     std::vector<unsigned long long> before;
@@ -160,7 +160,7 @@ RunReport EvaluationGraph::run_nodes(
     for (const auto& r : roots) r->update();
     const auto t1 = std::chrono::steady_clock::now();
 
-    RunReport rep;
+    GraphRunReport rep;
     rep.nodes_visited = static_cast<int>(order.size());
     for (std::size_t i = 0; i < order.size(); ++i) {
         if (order[i]->get_evaluation_count() != before[i]) ++rep.nodes_evaluated;
@@ -169,15 +169,15 @@ RunReport EvaluationGraph::run_nodes(
     return rep;
 }
 
-RunReport EvaluationGraph::run() {
-    std::vector<std::shared_ptr<Node> > roots;
+GraphRunReport GraphEvaluation::run() {
+    std::vector<std::shared_ptr<GraphNode> > roots;
     roots.reserve(outputs_.size());
     for (const auto& o : outputs_) roots.push_back(o.node);
     return run_nodes(roots);
 }
 
-RunReport EvaluationGraph::run(const std::vector<std::string>& outputs) {
-    std::vector<std::shared_ptr<Node> > roots;
+GraphRunReport GraphEvaluation::run(const std::vector<std::string>& outputs) {
+    std::vector<std::shared_ptr<GraphNode> > roots;
     roots.reserve(outputs.size());
     for (const auto& label : outputs) {
         const Output* o = find(label);
@@ -192,7 +192,7 @@ RunReport EvaluationGraph::run(const std::vector<std::string>& outputs) {
     return run_nodes(roots);
 }
 
-std::string EvaluationGraph::to_json() const {
+std::string GraphEvaluation::to_json() const {
     nlohmann::json j;
     j["format"] = "imp.bff.evaluationgraph";
     j["version"] = 1;
@@ -209,24 +209,24 @@ std::string EvaluationGraph::to_json() const {
     return j.dump(2);
 }
 
-void EvaluationGraph::from_json(
+void GraphEvaluation::from_json(
         const std::string& json,
-        const std::map<std::string, std::shared_ptr<Node> >& nodes) {
+        const std::map<std::string, std::shared_ptr<GraphNode> >& nodes) {
     nlohmann::json j = nlohmann::json::parse(json, nullptr, false);
     if (j.is_discarded()) {
-        IMP_THROW("EvaluationGraph::from_json: not JSON", IMP::ValueException);
+        IMP_THROW("GraphEvaluation::from_json: not JSON", IMP::ValueException);
     }
     if (j.contains("format") &&
         j.at("format").get<std::string>() != "imp.bff.evaluationgraph") {
-        IMP_THROW("EvaluationGraph::from_json: unexpected format '"
+        IMP_THROW("GraphEvaluation::from_json: unexpected format '"
                   << j.at("format").get<std::string>() << "'",
                   IMP::ValueException);
     }
     if (!j.contains("outputs")) {
-        IMP_THROW("EvaluationGraph::from_json: the document needs 'outputs'",
+        IMP_THROW("GraphEvaluation::from_json: the document needs 'outputs'",
                   IMP::ValueException);
     }
-    EvaluationGraph fresh;
+    GraphEvaluation fresh;
     for (const auto& e : j.at("outputs")) {
         const std::string node_name = e.at("node").get<std::string>();
         auto it = nodes.find(node_name);

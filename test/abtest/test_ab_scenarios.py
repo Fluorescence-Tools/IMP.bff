@@ -124,7 +124,7 @@ class ABScenarioTests(unittest.TestCase):
         self.pair.compare("bounded follower on out-of-range upstream")
 
     def test_nodes_with_ports(self):
-        self.pair.both("make_node", "fit")
+        self.pair.both("make_graph_node", "fit")
         self.pair.both("make_port", "x", 3.0)
         self.pair.both("make_port", "out", 0.0)
         self.pair.both("@fit.add_input_port", "x", "@x")

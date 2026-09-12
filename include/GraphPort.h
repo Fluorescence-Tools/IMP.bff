@@ -1,22 +1,22 @@
 /**
- *  \file IMP/bff/Port.h
- *  \brief A reactive value cell: chinet's Port, standalone.
+ *  \file IMP/bff/GraphPort.h
+ *  \brief A reactive value cell: chinet's GraphPort, standalone.
  *
- *  A Port is the unit of state in the chinet computation model chisurf is
+ *  A GraphPort is the unit of state in the chinet computation model chisurf is
  *  built on: a scalar or an array, a fixed flag, optional hard bounds, an
  *  optional prior specification, and a link to another port it follows.
  *  Writing a value marks the port's node invalid and, when the port is
  *  reactive, re-evaluates it; the write also propagates to every port that
  *  follows this one through a link. The link graph must stay acyclic --
  *  linking is the only operation that adds dependency edges, so the DAG
- *  invariant is enforced there, with Kahn's algorithm (LinkCycleError).
+ *  invariant is enforced there, with Kahn's algorithm (GraphLinkCycleError).
  *
  *  Ported from chinet's chinet/port.py (phase 1 of removing chinet from
  *  chisurf: bff absorbs the parameter/node runtime). This layer is
  *  deliberately standalone, like FactorGraph: no IMP particles, restraints
- *  or decorators take part. Persistence is phase 2: Session.h reads and
+ *  or decorators take part. Persistence is phase 2: GraphSession.h reads and
  *  writes the chinet document from this state (the document dict itself,
- *  chinet's schema.py and db.py/MMFDB backend are not ported; BaseObject
+ *  chinet's schema.py and db.py/MMFDB backend are not ported; GraphObject
  *  carries the precursor/death document fields so identity follows the
  *  object, as chinet's document did).
  *
@@ -25,16 +25,16 @@
  *
  *  - value data is stored as double. chinet stores float64 or int64 numpy
  *    arrays and infers the dtype from every write; here the type code
- *    (get_value_type(), a PortValueType) carries the element type and
+ *    (get_value_type(), a GraphPortValueType) carries the element type and
  *    integral ports round integral values. An int vector keeps its type
  *    through set_value_vector_int(). The int and bool element types are
  *    stored exactly, in an int64 vector, and `data_` is a double mirror kept
  *    for the zero-copy readers -- so an integer port round-trips to
  *    INT64_MAX, not only to 2^53.
- *  - bool is bff's, not chinet's: PORT_BOOL and PORT_BOOL_VECTOR are codes
+ *  - bool is bff's, not chinet's: GRAPH_PORT_BOOL and GRAPH_PORT_BOOL_VECTOR are codes
  *    4 and 5, so a chinet document (which only ever holds 0-3) still reads
  *    and writes unchanged. Unlike int/float, bool does not promote -- see
- *    PortValueType for why a declared type must not be inferred away.
+ *    GraphPortValueType for why a declared type must not be inferred away.
  *  - bounds report (nan, nan) when enforcement is off, standing in for
  *    chinet's (None, None).
  *
@@ -42,8 +42,8 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_PORT_H
-#define IMPBFF_PORT_H
+#ifndef IMPBFF_GRAPHPORT_H
+#define IMPBFF_GRAPHPORT_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -54,7 +54,7 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class Node;
+class GraphNode;
 
 //! Raised when linking two ports would create a cycle in the link graph.
 /*!
@@ -62,28 +62,28 @@ class Node;
     depend on nodes that do not transitively depend on it. Subclasses
     std::domain_error -- not std::runtime_error -- because IMP's wrapper
     exception handler maps domain_error to IMP.ValueException (a Python
-    ValueError), preserving chinet's LinkCycleError(ValueError) catch
+    ValueError), preserving chinet's GraphLinkCycleError(ValueError) catch
     contract; runtime_error would cross as a plain RuntimeError.
 */
-class IMPBFFEXPORT LinkCycleError : public std::domain_error {
+class IMPBFFEXPORT GraphLinkCycleError : public std::domain_error {
  public:
-  explicit LinkCycleError(const std::string& what_arg)
+  explicit GraphLinkCycleError(const std::string& what_arg)
       : std::domain_error(what_arg) {}
 };
 
-//! The identity half of chinet's BaseObject: a name and a uid.
+//! The identity half of chinet's GraphObject: a name and a uid.
 /*!
-    chinet's BaseObject also carries a document dict and database
-    registration; those are not ported -- Session writes documents from
+    chinet's GraphObject also carries a document dict and database
+    registration; those are not ported -- GraphSession writes documents from
     the objects' own state, and there is no registry. What persistence
     needs beyond the runtime's name and uid is the precursor and death
     document fields, which live here so they follow the object across
     sessions exactly as chinet's document did.
 */
-class IMPBFFEXPORT BaseObject {
+class IMPBFFEXPORT GraphObject {
  public:
-  explicit BaseObject(const std::string& name = "");
-  virtual ~BaseObject();
+  explicit GraphObject(const std::string& name = "");
+  virtual ~GraphObject();
 
   //! Human-readable name (ports take the key they are added under).
   const std::string& get_name() const;
@@ -112,16 +112,16 @@ class IMPBFFEXPORT BaseObject {
   int death_ = 0;
 };
 
-//! The type of the values a Port holds: element type, plus vector-ness.
+//! The type of the values a GraphPort holds: element type, plus vector-ness.
 /*!
-    The numbers are **not** free to change: Session.h writes the code into the
+    The numbers are **not** free to change: GraphSession.h writes the code into the
     chinet document verbatim and `test/session/chinet_fixture.jsonl` pins it, so
     0-3 mean what chinet meant by them. Bool is a bff extension and takes fresh
     codes rather than renumbering.
 
     Element type and vector-ness are tangled in one code because chinet tangled
-    them; use port_value_type_is_vector() and port_value_type_element() rather
-    than comparing codes by hand, and port_value_type_of() to build one.
+    them; use graph_port_value_type_is_vector() and graph_port_value_type_element() rather
+    than comparing codes by hand, and graph_port_value_type_of() to build one.
 
     **The element type is declared once and never changes.** It is set by the
     constructor, or by set_value_type(), and nothing else moves it -- a write
@@ -142,30 +142,30 @@ class IMPBFFEXPORT BaseObject {
     the same element type.
 
 */
-enum PortValueType {
-  PORT_INT = 0,           //!< scalar integer (chinet int64)
-  PORT_FLOAT = 1,         //!< scalar double (chinet float64)
-  PORT_INT_VECTOR = 2,    //!< integer array
-  PORT_FLOAT_VECTOR = 3,  //!< double array
-  PORT_BOOL = 4,          //!< scalar boolean; stored as 0.0 / 1.0
-  PORT_BOOL_VECTOR = 5    //!< boolean array; stored as 0.0 / 1.0
+enum GraphPortValueType {
+  GRAPH_PORT_INT = 0,           //!< scalar integer (chinet int64)
+  GRAPH_PORT_FLOAT = 1,         //!< scalar double (chinet float64)
+  GRAPH_PORT_INT_VECTOR = 2,    //!< integer array
+  GRAPH_PORT_FLOAT_VECTOR = 3,  //!< double array
+  GRAPH_PORT_BOOL = 4,          //!< scalar boolean; stored as 0.0 / 1.0
+  GRAPH_PORT_BOOL_VECTOR = 5    //!< boolean array; stored as 0.0 / 1.0
 };
 
 //! The element type a code carries, as the scalar code for it.
-/*! PORT_INT, PORT_FLOAT or PORT_BOOL, whether or not \p t is a vector code. */
-IMPBFFEXPORT int port_value_type_element(int t);
+/*! GRAPH_PORT_INT, GRAPH_PORT_FLOAT or GRAPH_PORT_BOOL, whether or not \p t is a vector code. */
+IMPBFFEXPORT int graph_port_value_type_element(int t);
 //! Whether a code is one of the vector codes.
-IMPBFFEXPORT bool port_value_type_is_vector(int t);
+IMPBFFEXPORT bool graph_port_value_type_is_vector(int t);
 //! The code for an element type at a given vector-ness.
-/*! \param[in] element PORT_INT, PORT_FLOAT or PORT_BOOL
+/*! \param[in] element GRAPH_PORT_INT, GRAPH_PORT_FLOAT or GRAPH_PORT_BOOL
     \param[in] is_vector whether the array form is wanted */
-IMPBFFEXPORT int port_value_type_of(int element, bool is_vector);
+IMPBFFEXPORT int graph_port_value_type_of(int element, bool is_vector);
 //! A readable name for a code ("int", "float[]", ...), for messages and repr.
-IMPBFFEXPORT std::string port_value_type_name(int t);
+IMPBFFEXPORT std::string graph_port_value_type_name(int t);
 
 //! A value cell with links, bounds and invalidation-driven evaluation.
 /*!
-    Ports are shared_ptr-owned: a Node holds its ports, a follower holds the
+    Ports are shared_ptr-owned: a GraphNode holds its ports, a follower holds the
     port it follows, and SWIG hands Python a shared_ptr from every
     constructor. A port that takes part in a link must be shared_ptr-owned
     (std::enable_shared_from_this); a stack port can hold and read a value
@@ -175,11 +175,11 @@ IMPBFFEXPORT std::string port_value_type_name(int t);
     output); a standalone port linked to itself is a degenerate cycle and is
     rejected.
 */
-class IMPBFFEXPORT Port : public BaseObject,
-                          public std::enable_shared_from_this<Port> {
+class IMPBFFEXPORT GraphPort : public GraphObject,
+                          public std::enable_shared_from_this<GraphPort> {
  public:
-  //! An empty scalar integer port with value 0 (chinet's Port()).
-  Port();
+  //! An empty scalar integer port with value 0 (chinet's GraphPort()).
+  GraphPort();
   //! A scalar port; value_type 0 by default, promoted to 1 for a double.
   /*!
       \param[in] value initial scalar value
@@ -192,24 +192,24 @@ class IMPBFFEXPORT Port : public BaseObject,
       \param[in] value_type 0 int, 1 float, 2 int vector, 3 float vector
       \param[in] name port name
   */
-  Port(double value, bool fixed = false, bool is_output = false,
+  GraphPort(double value, bool fixed = false, bool is_output = false,
        bool is_reactive = false, bool is_bounded = false, double lb = 0.0,
        double ub = 0.0, int value_type = 0, const std::string& name = "");
   //! The int twin of the scalar constructor: keeps the integer type code.
   /*! `long long`, not `int`: a Python integer wider than 32 bits does not
       convert to `int`, so SWIG fell through to the `double` overload and the
       port came back **typed float, with the value rounded** --
-      `Port(value=2**53+1)` reported `float` and lost a digit. */
-  Port(long long value, bool fixed = false, bool is_output = false,
+      `GraphPort(value=2**53+1)` reported `float` and lost a digit. */
+  GraphPort(long long value, bool fixed = false, bool is_output = false,
        bool is_reactive = false, bool is_bounded = false, double lb = 0.0,
        double ub = 0.0, int value_type = 0, const std::string& name = "");
   //! The bool twin of the scalar constructor: a declared flag port.
-  /*! The value is stored as 0.0 or 1.0 and the port is PORT_BOOL. Note that
+  /*! The value is stored as 0.0 or 1.0 and the port is GRAPH_PORT_BOOL. Note that
       in Python `True` is an `int`, so the binding dispatches on
       `isinstance(v, bool)` before it looks for an integer. */
-  Port(bool value, bool fixed = false, bool is_output = false,
+  GraphPort(bool value, bool fixed = false, bool is_output = false,
        bool is_reactive = false, bool is_bounded = false, double lb = 0.0,
-       double ub = 0.0, int value_type = PORT_BOOL,
+       double ub = 0.0, int value_type = GRAPH_PORT_BOOL,
        const std::string& name = "");
 
   //! A vector port (float-typed; set_value_vector_int() keeps int).
@@ -217,14 +217,14 @@ class IMPBFFEXPORT Port : public BaseObject,
       A Python list of floats converts to `std::vector<int>` as happily as to
       `std::vector<double>` -- lossily, by truncation -- so an overload here
       makes SWIG's dispatch decide the element type, and it decided wrong:
-      `Port(value=[1.5, 2.5])` came back as `[1, 2]`. The `value_type`
+      `GraphPort(value=[1.5, 2.5])` came back as `[1, 2]`. The `value_type`
       argument already says what the caller means, so the overload bought
       nothing and cost that. */
-  Port(const std::vector<double>& values, bool fixed = false,
+  GraphPort(const std::vector<double>& values, bool fixed = false,
        bool is_output = false, bool is_reactive = false,
        bool is_bounded = false, double lb = 0.0, double ub = 0.0,
        int value_type = 0, const std::string& name = "");
-  virtual ~Port();
+  virtual ~GraphPort();
 
   //! Scalar value; follows the link if linked (chinet's .value).
   /*!
@@ -242,7 +242,7 @@ class IMPBFFEXPORT Port : public BaseObject,
   void set_value(long long v);
   //! The scalar value as an exact integer (the int64 store, when there is one).
   long long get_value_int() const;
-  //! Write a scalar bool value: makes the port PORT_BOOL and stores 0.0/1.0.
+  //! Write a scalar bool value: makes the port GRAPH_PORT_BOOL and stores 0.0/1.0.
   void set_value_bool(bool v);
   //! Read the scalar value as a truth value (`!= 0`), whatever the type.
   bool get_value_bool() const;
@@ -252,7 +252,7 @@ class IMPBFFEXPORT Port : public BaseObject,
   //! The values where they lie, with no copy. **Not SWIG-wrapped.**
   /*!
       `get_value_vector()` returns by value, which is right for a Python
-      caller and wrong for the inside of a fit: an `Expression` reading its
+      caller and wrong for the inside of a fit: an `GraphExpression` reading its
       axis, a `ChiSquared` reading the model curve and a `Minimizer` reading
       the residuals each copied a full-length vector on **every** residual
       evaluation. At 512 points that was several kilobytes of memcpy per
@@ -275,7 +275,7 @@ class IMPBFFEXPORT Port : public BaseObject,
       `ChiSquared` as chi2 = 14 rather than infinity, where the numpy path
       returns NaN and MINPACK rejects the step.
 
-      So the fit's own ports -- an `Expression`'s curve, a `ChiSquared`'s
+      So the fit's own ports -- an `GraphExpression`'s curve, a `ChiSquared`'s
       model input and residual output, a `JointChiSquared`'s blocks -- turn
       it off. Everything else keeps chinet's behaviour, which is what a
       saved document still needs.
@@ -288,7 +288,7 @@ class IMPBFFEXPORT Port : public BaseObject,
 #ifndef SWIG
   //! Take a linked source's value without invalidating this port's node.
   /*!
-      `Node::update()` copies every linked input from its source before
+      `GraphNode::update()` copies every linked input from its source before
       evaluating. That copy is the node's own bookkeeping, not a change from
       outside, and counting it as a write invalidated the node on every pass
       -- so a terminal node re-evaluated on each run() even when nothing had
@@ -298,10 +298,10 @@ class IMPBFFEXPORT Port : public BaseObject,
       invalidates its followers when *it* is written
       (`propagate_to_followers`), which is the edge that carries the news.
   */
-  void copy_from_link(const Port& source);
+  void copy_from_link(const GraphPort& source);
 #endif
 
-  //! Write an integer vector: the port becomes PORT_INT_VECTOR, not float.
+  //! Write an integer vector: the port becomes GRAPH_PORT_INT_VECTOR, not float.
   /*! Named rather than overloaded, for the dispatch reason on the vector
       constructor above. This is what closes the int-vector divergence from
       chinet the file comment records, and the values are stored exactly. */
@@ -331,15 +331,15 @@ class IMPBFFEXPORT Port : public BaseObject,
   */
   void get_value_view(double** out_values, int* n_out_values) const;
 
-  //! Type code; a PortValueType.
+  //! Type code; a GraphPortValueType.
   int get_value_type() const;
   //! Set the type code, converting the stored data to match.
   /*! int codes truncate (numpy's `astype(int64)`), bool codes take `!= 0`,
       float codes leave the data alone. This is the only way out of a bool
-      port -- see PortValueType on why writing does not do it. */
+      port -- see GraphPortValueType on why writing does not do it. */
   void set_value_type(int t);
-  //! The element type: PORT_INT, PORT_FLOAT or PORT_BOOL.
-  int get_element_type() const { return port_value_type_element(get_value_type()); }
+  //! The element type: GRAPH_PORT_INT, GRAPH_PORT_FLOAT or GRAPH_PORT_BOOL.
+  int get_element_type() const { return graph_port_value_type_element(get_value_type()); }
   //! Whether the port reads as a vector (follows writes, as in chinet).
   bool get_is_vector() const;
   //! Number of stored elements.
@@ -383,23 +383,23 @@ class IMPBFFEXPORT Port : public BaseObject,
   void set_prior(const std::string& json);
 
   //! The port this one follows, or a null pointer.
-  std::shared_ptr<Port> get_link() const;
+  std::shared_ptr<GraphPort> get_link() const;
 
   //! The link without a refcount bump, for the evaluation hot path.
-  const std::shared_ptr<Port>& get_link_ref() const { return link_; }
-  //! Follow v, or unlink when v is null. Throws LinkCycleError on a cycle.
-  void set_link(std::shared_ptr<Port> v);
+  const std::shared_ptr<GraphPort>& get_link_ref() const { return link_; }
+  //! Follow v, or unlink when v is null. Throws GraphLinkCycleError on a cycle.
+  void set_link(std::shared_ptr<GraphPort> v);
   //! Break the link; marks the attached node invalid. Always true.
   bool unlink();
   //! Whether this port follows another.
   bool is_linked() const;
   //! Whether set_link(v) would break the DAG invariant (side-effect free).
-  bool would_create_cycle(const std::shared_ptr<Port>& v);
+  bool would_create_cycle(const std::shared_ptr<GraphPort>& v);
 
   //! The node this port belongs to, or a null pointer.
-  std::shared_ptr<Node> get_node() const;
+  std::shared_ptr<GraphNode> get_node() const;
   //! Attach the port to a node (nodes call this; shared_ptr-owned).
-  void set_node(std::shared_ptr<Node> n);
+  void set_node(std::shared_ptr<GraphNode> n);
 
   //! Mark the attached node invalid; evaluate it if this port is reactive.
   void update_attached_node();
@@ -465,14 +465,14 @@ class IMPBFFEXPORT Port : public BaseObject,
   double lb_ = 0.0;
   double ub_ = 0.0;
   std::string prior_;
-  std::shared_ptr<Port> link_;
+  std::shared_ptr<GraphPort> link_;
   //! Ports following this one; weak, so a follower that dies just drops out
   //! (chinet's strong list keeps the follower alive instead -- a reference
   //! cycle only Python's GC could break).
-  std::vector<std::weak_ptr<Port> > linked_to_;
-  std::weak_ptr<Node> node_;
+  std::vector<std::weak_ptr<GraphPort> > linked_to_;
+  std::weak_ptr<GraphNode> node_;
 };
 
 IMPBFF_END_NAMESPACE
 
-#endif // IMPBFF_PORT_H
+#endif // IMPBFF_GRAPHPORT_H

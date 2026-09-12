@@ -6,15 +6,15 @@
  * pairs, with nothing an instrument adds. This is the other half -- what a
  * TCSPC setup makes of such a spectrum: convolved with a measured response,
  * shifted against it, scaled to the data, plus scatter and a constant
- * background. As a `Node`, so a whole fit is one C++ graph:
+ * background. As a `GraphNode`, so a whole fit is one C++ graph:
  * `TcspcDecay -> ChiSquared -> Minimizer`, exactly the arrangement
- * `Expression` gives a parse model.
+ * `GraphExpression` gives a parse model.
  *
  * \par The arithmetic is not here either
  * The periodic convolution is tttrlib's `fconv_per_cs_ad<double>` and the
  * timeshift is its `shift_lamp_ad<double>`, both taken from the vendored
  * copy of `DecayConvolution.h`. That is deliberate and it is the same
- * decision `Expression` records about the expression engine: a decay is a
+ * decision `GraphExpression` records about the expression engine: a decay is a
  * *curve*, `AGENTS.md` puts curves in tttrlib, and a second implementation
  * of a convolution is how two libraries end up disagreeing about what a
  * lifetime is. What this class contributes is the graph -- ports, ordering,
@@ -38,7 +38,7 @@
  * response as given, followed by the unit-sum normalisation, which is the
  * order ChiSurf uses and is not interchangeable with the other one.
  *
- * \see LifetimeSpectrum, ChiSquared, Expression, Minimizer, Node
+ * \see LifetimeSpectrum, ChiSquared, GraphExpression, Minimizer, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -52,8 +52,8 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -70,7 +70,7 @@ IMPBFF_BEGIN_NAMESPACE
  * | `timeshift` | shift of the response against the data, in samples |
  *
  * The curve is written to the output port keyed by the node's own name,
- * which is the protocol `ChiSquared` and `Expression` already use.
+ * which is the protocol `ChiSquared` and `GraphExpression` already use.
  *
  * **A spectrum of any size should arrive on the `lifetime_spectrum` port,
  * not on the `a{i}`/`t{i}` scalars.** The scalars are the obvious thing to
@@ -78,14 +78,14 @@ IMPBFF_BEGIN_NAMESPACE
  * writes cost more than the convolution they feed. See
  * #set_spectrum_from_port for the measurement.
  */
-class IMPBFFEXPORT TcspcDecay : public Node {
+class IMPBFFEXPORT TcspcDecay : public GraphNode {
  public:
   explicit TcspcDecay(const std::string& name = "decay");
 
   //! Build the node's ports: `2 * n` lifetime ports named `a0`, `t0`,
   //! `a1`, `t1`, ..., plus the four scalars, the first time it is called.
   /** **This is the call that makes the node usable**, and it cannot be done
-      in the constructor: a `Node` that owns ports must already be owned by a
+      in the constructor: a `GraphNode` that owns ports must already be owned by a
       `shared_ptr` (`add_port` reaches for `shared_from_this()`), and a
       Python-wrapped node is constructed before it is owned. */
   void set_number_of_lifetimes(int n);
@@ -251,7 +251,7 @@ class IMPBFFEXPORT TcspcDecay : public Node {
       pushes the spectrum on every evaluation -- the natural shape when the
       *other* parameters are what a Jacobian column is perturbing --
       invalidates this node each time and pays the full reconvolution for a
-      curve it already had. `Node::set_memoize(true)` turns that into a
+      curve it already had. `GraphNode::set_memoize(true)` turns that into a
       comparison: 0.042 ms to 0.0007 ms on the same fixture, a factor of 62,
       with the curve unchanged. It is sound here because this node is a
       function of its inputs.
@@ -375,8 +375,8 @@ class IMPBFFEXPORT TcspcDecay : public Node {
   std::vector<double> spectrum_;
   std::vector<double> curve_;
   //! The lifetime ports, in the order the spectrum interleaves them.
-  std::vector<Port*> lifetime_ports_;
-  Port* spectrum_port_ = nullptr;
+  std::vector<GraphPort*> lifetime_ports_;
+  GraphPort* spectrum_port_ = nullptr;
   bool emit_basis_ = false;
   //! Did the last build_spectrum see a negative amplitude *before* `fabs`?
   /*! The sign is gone from `spectrum_` by the time anyone can ask -- the
@@ -396,10 +396,10 @@ class IMPBFFEXPORT TcspcDecay : public Node {
       the last -- a different cache line each time. So the columns are filled
       contiguously here and transposed once. */
   std::vector<double> basis_columns_;
-  Port* scatter_port_ = nullptr;
-  Port* background_port_ = nullptr;
-  Port* n0_port_ = nullptr;
-  Port* timeshift_port_ = nullptr;
+  GraphPort* scatter_port_ = nullptr;
+  GraphPort* background_port_ = nullptr;
+  GraphPort* n0_port_ = nullptr;
+  GraphPort* timeshift_port_ = nullptr;
 
   int n_lifetimes_ = 0;
   double dt_ = 1.0;
@@ -424,7 +424,7 @@ class IMPBFFEXPORT TcspcDecay : public Node {
       zero amplitude disappear permanently rather than for one curve. */
   int n_active_ = 0;
 
-  void add_scalar_port(const std::string& key, double value, Port** slot);
+  void add_scalar_port(const std::string& key, double value, GraphPort** slot);
   void build_spectrum();
 };
 

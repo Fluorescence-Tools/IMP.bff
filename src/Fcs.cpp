@@ -248,16 +248,16 @@ void fcs_mdf_g_diff(const std::vector<double>& tau, double w0, double r0,
 
 // Empty for the reason `FretSpectrum`'s is: `add_port` reaches for
 // `shared_from_this()`, so a node cannot own ports until something owns it.
-FcsMdfCurve::FcsMdfCurve(const std::string& name) : Node(name) {}
+FcsMdfCurve::FcsMdfCurve(const std::string& name) : GraphNode(name) {}
 
 namespace {
 
 //! A scalar input port, remembered by raw pointer (the node owns it).
 /*! Named for this file: the library builds as one translation unit, so an
     anonymous namespace does not keep two helpers of the same name apart. */
-void add_mdf_port(Node* node, const std::string& key, double value,
-                  Port** slot) {
-  std::shared_ptr<Port> port(new Port(value));
+void add_mdf_port(GraphNode* node, const std::string& key, double value,
+                  GraphPort** slot) {
+  std::shared_ptr<GraphPort> port(new GraphPort(value));
   node->add_input_port(key, port);
   *slot = port.get();
 }
@@ -357,7 +357,7 @@ void FcsMdfCurve::evaluate() {
         "FcsMdfCurve::evaluate: build_ports() has not been called, so the "
         "node has no waists to integrate over");
   }
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
         "'" + get_name() +
@@ -857,14 +857,14 @@ IMPBFF_END_NAMESPACE
 IMPBFF_BEGIN_NAMESPACE
 
 FcsSaturationCurve::FcsSaturationCurve(const std::string& name)
-    : Node(name) {}
+    : GraphNode(name) {}
 
 namespace {
 
 //! A scalar input port, remembered by raw pointer (the node owns it).
-void add_sat_port(Node* node, const std::string& key, double value,
-                  Port** slot) {
-  std::shared_ptr<Port> port(new Port(value));
+void add_sat_port(GraphNode* node, const std::string& key, double value,
+                  GraphPort** slot) {
+  std::shared_ptr<GraphPort> port(new GraphPort(value));
   node->add_input_port(key, port);
   *slot = port.get();
 }
@@ -935,7 +935,7 @@ void FcsSaturationCurve::evaluate() {
         "FcsSaturationCurve::evaluate: build_ports() has not been called, "
         "so the node has no ports to read");
   }
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
         "'" + get_name() +

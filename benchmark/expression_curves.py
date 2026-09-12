@@ -1,4 +1,4 @@
-"""bff.Expression against numpy, at the curve lengths that actually occur.
+"""bff.GraphExpression against numpy, at the curve lengths that actually occur.
 
 The engine exists to replace a Python ``eval`` in ChiSurf's parse models,
 evaluated once per fit iteration over a curve of 100-4096 points. That is a
@@ -66,7 +66,7 @@ def main():
         for n in LENGTHS:
             x = np.linspace(0.01, 10.0, n)
             block = np.ascontiguousarray(x.reshape(1, n))
-            ex = bff.Expression("model")
+            ex = bff.GraphExpression("model")
             ex.set_expression(text)
 
             got = ex.compute_columns(["x"], block)

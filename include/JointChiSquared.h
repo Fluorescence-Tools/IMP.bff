@@ -3,10 +3,10 @@
  * \brief One misfit over several datasets: the grouping, as a node.
  *
  * A fit of several datasets at once is two things, and bff already had one
- * of them. **Sharing a parameter** between datasets is `Port::set_link` --
+ * of them. **Sharing a parameter** between datasets is `GraphPort::set_link` --
  * the member models' ports follow one master port, and the link graph is
  * enforced acyclic -- so the coupling that makes a joint fit *joint* has
- * been on this side of the boundary since the Port runtime landed. What was
+ * been on this side of the boundary since the GraphPort runtime landed. What was
  * missing is the other half: **one objective over all of them.**
  *
  * That is all this class is. Its residual is the members' residuals laid end
@@ -15,9 +15,9 @@
  * parameters using the curvature of every dataset at once, rather than each
  * dataset in turn hoping they agree.
  *
- * It is a `Node`, so the members are reached the ordinary way: each member's
+ * It is a `GraphNode`, so the members are reached the ordinary way: each member's
  * residual output port is *linked* to one of this node's input ports, and
- * `Node::update()` therefore evaluates the whole tree -- every member's
+ * `GraphNode::update()` therefore evaluates the whole tree -- every member's
  * model, every member's misfit, then this -- from one call, with nothing
  * crossing into Python. A `Minimizer` pointed at this node optimises the
  * group.
@@ -31,11 +31,11 @@
  * it.
  *
  * The members do not have to be `ChiSquared` nodes. Anything presenting a
- * residual vector on an output port qualifies, including a Python `Node`
+ * residual vector on an output port qualifies, including a Python `GraphNode`
  * director wrapping a model this library cannot represent, so a group may
  * mix representable and unrepresentable members and still take one step.
  *
- * \see ChiSquared, Minimizer, Expression, Port
+ * \see ChiSquared, Minimizer, GraphExpression, GraphPort
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -50,13 +50,13 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
 //! The misfit of several datasets at once: their residuals, end to end.
-class IMPBFFEXPORT JointChiSquared : public Node {
+class IMPBFFEXPORT JointChiSquared : public GraphNode {
  public:
   explicit JointChiSquared(const std::string& name = "joint");
 
@@ -75,7 +75,7 @@ class IMPBFFEXPORT JointChiSquared : public Node {
       residual is in that order, so a caller can map a block back to the
       dataset that produced it.
    */
-  int add_member(std::shared_ptr<Node> member,
+  int add_member(std::shared_ptr<GraphNode> member,
                  const std::string& residual_key = "residuals");
 
   //! How many members the group holds.
@@ -84,10 +84,10 @@ class IMPBFFEXPORT JointChiSquared : public Node {
   }
 
   //! One member, by the index `add_member` returned.
-  /** Reached one at a time because `std::vector<std::shared_ptr<Node> >` is
+  /** Reached one at a time because `std::vector<std::shared_ptr<GraphNode> >` is
       not a template this module may name (see `IMP_bff.types.i`), and
       wrapping it anyway leaks -- SWIG finds no destructor for it. */
-  std::shared_ptr<Node> get_member(int index) const;
+  std::shared_ptr<GraphNode> get_member(int index) const;
 
   //! The members' names, in the order they were added.
   std::vector<std::string> get_member_names() const;
@@ -126,9 +126,9 @@ class IMPBFFEXPORT JointChiSquared : public Node {
   std::string describe() const;
 
  private:
-  std::vector<std::shared_ptr<Node> > members_;
+  std::vector<std::shared_ptr<GraphNode> > members_;
   //! This node's input ports, one per member, in member order.
-  std::vector<std::shared_ptr<Port> > blocks_;
+  std::vector<std::shared_ptr<GraphPort> > blocks_;
   std::vector<int> block_sizes_;
   std::vector<double> wres_;
   std::string residuals_key_ = "residuals";

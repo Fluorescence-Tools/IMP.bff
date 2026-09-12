@@ -33,7 +33,7 @@ import numpy as np
  */
 %template(VectorString) std::vector<std::string >;
 %template(VectorInt) std::vector<int >;
-/* Port's exact integer store: a Python int is arbitrary precision and a
+/* GraphPort's exact integer store: a Python int is arbitrary precision and a
    C++ `int` is 32 bits, so an integer port has to speak int64 or large
    values fall through to the double overload and come back rounded. */
 %template(VectorInt64) std::vector<long long >;
@@ -41,12 +41,12 @@ import numpy as np
 %template(VectorJunctionTreeEdge) std::vector<IMP::bff::JunctionTreeEdge>;
 
 /*
- * The reactive Port/Node runtime ported from chinet (phase 1 of removing
+ * The reactive GraphPort/GraphNode runtime ported from chinet (phase 1 of removing
  * chinet from chisurf): value cells with links, bounds and invalidation-
  * driven evaluation, and nodes computing outputs from inputs over those
  * ports. Deliberately standalone, like the factor graph above -- no IMP
  * particles, restraints or decorators take part. Persistence is phase 2:
- * Session (below) reads and writes chinet's session format; chinet's
+ * GraphSession (below) reads and writes chinet's session format; chinet's
  * schema.py and db.py/MMFDB backend stay out of bff entirely.
  *
  * Ports and nodes are shared_ptr-owned: a node holds its ports, a follower
@@ -60,14 +60,14 @@ import numpy as np
  * (signature introspection, auto ports) are a chisurf-side helper
  * (chisurf/core/nodes.py) -- bff stays C++-minimal.
  */
-/* LinkCycleError crosses to Python as IMP.ValueException (a ValueError):
+/* GraphLinkCycleError crosses to Python as IMP.ValueException (a ValueError):
    IMP's handle_imp_exception maps std::domain_error there, which is why
    the C++ class derives domain_error and not runtime_error -- chinet's
    error subclasses ValueError and its callers catch it as one. */
 
-%shared_ptr(IMP::bff::BaseObject);
-%shared_ptr(IMP::bff::Port);
-%shared_ptr(IMP::bff::Node);
+%shared_ptr(IMP::bff::GraphObject);
+%shared_ptr(IMP::bff::GraphPort);
+%shared_ptr(IMP::bff::GraphNode);
 /* A Python subclass overrides evaluate()/update() to run a Python callable
    over the port maps -- chinet's callback_class. The chinet ergonomics of
    set_python_callback_function (inspect the signature, auto-create the
@@ -75,30 +75,30 @@ import numpy as np
    %shared_ptr cooperate through SWIG's shared_ptr director support.
 
    The director lifetime (T-20260901-13): a C++ Minimizer or Sampler holds
-   a Python Node subclass across the whole run through a shared_ptr, but
+   a Python GraphNode subclass across the whole run through a shared_ptr, but
    the director keeps only a *weak* pointer back to the Python proxy -- a
    ResidualNode bound to `_` was collected when the next tuple unpacking
    rebound `_`, and Node_update then dispatched into a dead object.
    MinimizerObserver's answer (IMP_SWIG_DIRECTOR) does NOT work here:
    `_director_objects.register` silently refuses anything without IMP's
-   `get_ref_count`, and Node is a plain shared_ptr class, not an
+   `get_ref_count`, and GraphNode is a plain shared_ptr class, not an
    IMP::Object -- the macro would read as protection and protect nothing.
    The real fix mirrors the C++ ownership on the Python side: the
    %pythonappend hooks below set_objective (Minimizer, Sampler) stash the
    node proxy on the wrapper that holds the shared_ptr, so the proxy lives
    exactly as long as the C++ reference does. */
-%feature("director") IMP::bff::Node;
+%feature("director") IMP::bff::GraphNode;
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_values, int* n_out_values)};
-%ignore IMP::bff::Port::get_value_vector;
-%ignore IMP::bff::Node::set_callback_function;
+%ignore IMP::bff::GraphPort::get_value_vector;
+%ignore IMP::bff::GraphNode::set_callback_function;
 /* Zero-copy in for a port's vector value: a Python objective writes its
    residual here once per iteration, and a std::vector<double> conversion
    would build a list of every point first. */
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_values, int n_values)};
-%ignore IMP::bff::Port::get_values_ref;
-%include "IMP/bff/Port.h"
-%include "IMP/bff/Node.h"
-%template(MapStringPort) std::map<std::string, std::shared_ptr<IMP::bff::Port> >;
+%ignore IMP::bff::GraphPort::get_values_ref;
+%include "IMP/bff/GraphPort.h"
+%include "IMP/bff/GraphNode.h"
+%template(MapStringPort) std::map<std::string, std::shared_ptr<IMP::bff::GraphPort> >;
 
 /* The chinet surface on top of the accessors: scalar-or-array values that
    follow the port's vectorness flag, dict priors, tuple bounds with NaN
@@ -109,7 +109,7 @@ import numpy as np
    method definitions, so a bare name is a NameError at class-creation time
    (and no line inside %pythoncode may start with '#' -- SWIG's preprocessor
    reads it as a directive). */
-%extend IMP::bff::Port {
+%extend IMP::bff::GraphPort {
     %pythoncode {
         def _set_value(self, v):
             """Write, dispatching on the value's type and the port's.
@@ -117,14 +117,14 @@ import numpy as np
             `isinstance(v, bool)` is tested FIRST because in Python `bool` is
             a subclass of `int`: `hasattr(True, '__index__')` is true, so the
             integer branch would swallow every flag. A bool port also keeps
-            its type when it is handed a number -- see PortValueType -- so
+            its type when it is handed a number -- see GraphPortValueType -- so
             the int/float branches below are safe on one.
             """
             if isinstance(v, (bool, np.bool_)):
                 self.set_value_bool(bool(v))
             elif hasattr(v, '__len__') and not isinstance(v, (str, bytes)):
                 arr = np.asarray(v).ravel()
-                if arr.dtype.kind in 'iub' and self.get_element_type() != PORT_FLOAT:
+                if arr.dtype.kind in 'iub' and self.get_element_type() != GRAPH_PORT_FLOAT:
                     self.set_value_vector_int([int(x) for x in arr])
                 else:
                     self.set_value_vector(arr.astype(np.float64))
@@ -137,25 +137,25 @@ import numpy as np
             """Read back in the port's own type, not always as float.
 
             A typed port that answers every read as a double is only half a
-            type: `Port(value=True).value` used to be `1.0`. Scalars come back
+            type: `GraphPort(value=True).value` used to be `1.0`. Scalars come back
             as `bool`/`int`/`float` and arrays with the matching dtype.
             """
             t = self.get_value_type()
             element = self.get_element_type()
             if not self.get_is_vector() and len(self.get_value_view()) == 1:
-                if element == PORT_BOOL:
+                if element == GRAPH_PORT_BOOL:
                     return self.get_value_bool()
-                if element == PORT_INT:
+                if element == GRAPH_PORT_INT:
                     return self.get_value_int()
                 return self.get_value()
             values = self.get_value_view()
-            if element == PORT_BOOL:
+            if element == GRAPH_PORT_BOOL:
                 return values.astype(bool)
-            if element == PORT_INT:
+            if element == GRAPH_PORT_INT:
                 return np.asarray(self.get_value_vector_int(), dtype=np.int64)
             return values
         value = property(_get_value, _set_value)
-        """The bare `PORT_*` names above resolve at CALL time, in the module
+        """The bare `GRAPH_PORT_*` names above resolve at CALL time, in the module
         globals SWIG emits the enum into -- which is why they are allowed here
         while the note at the top of this block forbids bare names in the
         class-body expressions (those run at class-creation time, before the
@@ -163,7 +163,7 @@ import numpy as np
         value_type = property(lambda self: self.get_value_type(),
                               lambda self, v: self.set_value_type(int(v)))
         element_type = property(lambda self: self.get_element_type())
-        type_name = property(lambda self: port_value_type_name(
+        type_name = property(lambda self: graph_port_value_type_name(
             self.get_value_type()))
         fixed = property(lambda self: self.get_fixed(),
                          lambda self, v: self.set_fixed(v))
@@ -200,14 +200,14 @@ import numpy as np
             if isinstance(v, np.ndarray):
                 v = v.tolist()
             element = self.get_element_type()
-            if element == PORT_BOOL:
+            if element == GRAPH_PORT_BOOL:
                 v = [bool(x) for x in v] if isinstance(v, list) else bool(v)
-            elif element == PORT_INT:
+            elif element == GRAPH_PORT_INT:
                 v = [int(x) for x in v] if isinstance(v, list) else int(v)
             return v
 
         def get_json(self, indent=0):
-            """The port's document as JSON, chinet's Port.get_json.
+            """The port's document as JSON, chinet's GraphPort.get_json.
 
             The fields chinet's _update_doc_from_data wrote (value,
             value_type, bounds, the flags, the prior, the link target), so
@@ -235,7 +235,7 @@ import numpy as np
 
         def read_json(self, s):
             """Restore the port from a get_json document, chinet's
-            Port.read_json (its set_document).
+            GraphPort.read_json (its set_document).
 
             Field order mirrors the session loader: value_type FIRST (so the
             value coerces to the right element type), then the value, then
@@ -296,7 +296,7 @@ import numpy as np
  * chinet's Python constructor surface, which chisurf's Parameter builds its
  * ports through:
  *
- *     Port(value=..., fixed=..., is_output=..., is_reactive=...,
+ *     GraphPort(value=..., fixed=..., is_output=..., is_reactive=...,
  *          is_bounded=..., lb=..., ub=..., value_type=..., name=...,
  *          prior={...})
  *
@@ -315,7 +315,7 @@ import numpy as np
  * code conventions -- unless the caller says otherwise.
  */
 %pythoncode %{
-_Port_init_positional = Port.__init__
+_Port_init_positional = GraphPort.__init__
 
 def _Port_kwargs_init(self, *args, **kwargs):
     if not kwargs:
@@ -326,17 +326,17 @@ def _Port_kwargs_init(self, *args, **kwargs):
     unknown = set(kwargs) - set(names)
     if unknown:
         raise TypeError(
-            "Port() got an unexpected keyword argument '"
+            "GraphPort() got an unexpected keyword argument '"
             + "', '".join(sorted(unknown))
             + "'. Accepted: " + ", ".join(names))
     if len(args) > len(names):
-        raise TypeError("Port() takes at most " + str(len(names))
+        raise TypeError("GraphPort() takes at most " + str(len(names))
                         + " positional arguments")
     for position, argument in enumerate(args):
         key = names[position]
         if key in kwargs:
             raise TypeError(
-                "Port() got multiple values for argument '" + key + "'")
+                "GraphPort() got multiple values for argument '" + key + "'")
         kwargs[key] = argument
     value = kwargs.get("value", 0)
     fixed = bool(kwargs.get("fixed", False))
@@ -387,15 +387,15 @@ def _Port_kwargs_init(self, *args, **kwargs):
     prior = kwargs.get("prior", None)
     if prior is not None:
         if not isinstance(prior, dict):
-            raise TypeError("Port(prior=...) takes a dict or None")
+            raise TypeError("GraphPort(prior=...) takes a dict or None")
         self.set_prior(json.dumps(prior))
     if kwargs.get("oid", None) is not None:
         self.set_uid(str(kwargs["oid"]))
 
-Port.__init__ = _Port_kwargs_init
+GraphPort.__init__ = _Port_kwargs_init
 %}
 
-%extend IMP::bff::Node {
+%extend IMP::bff::GraphNode {
     %pythoncode {
         name = property(lambda self: self.get_name(),
                         lambda self, v: self.set_name(v))
@@ -410,7 +410,7 @@ Port.__init__ = _Port_kwargs_init
 }
 
 /*
- * Session persistence (phase 2): the chinet JSONL session format, field
+ * GraphSession persistence (phase 2): the chinet JSONL session format, field
  * for field, so existing chisurf .csp projects load with no importer and
  * a re-saved file lines up against a chinet-written one. The session is
  * the registry -- there is no hidden global database behind the wrapper,
@@ -419,16 +419,16 @@ Port.__init__ = _Port_kwargs_init
  * MMFDB backend are not ported; the legacy monolithic
  * {"session": ..., "objects": [...]} format is read, not written.
  */
-%shared_ptr(IMP::bff::Session);
-%include "IMP/bff/Session.h"
-%template(MapStringNode) std::map<std::string, std::shared_ptr<IMP::bff::Node> >;
-%template(VectorPort) std::vector<std::shared_ptr<IMP::bff::Port> >;
+%shared_ptr(IMP::bff::GraphSession);
+%include "IMP/bff/GraphSession.h"
+%template(MapStringNode) std::map<std::string, std::shared_ptr<IMP::bff::GraphNode> >;
+%template(VectorPort) std::vector<std::shared_ptr<IMP::bff::GraphPort> >;
 
 /* The chinet surface on top of the accessors: dict-of-nodes reads, and
    the document-identity fields as attributes. Properties name their
    accessors through self, as above -- a bare name is a NameError at
    class-creation time. */
-%extend IMP::bff::Session {
+%extend IMP::bff::GraphSession {
     %pythoncode {
         nodes = property(lambda self: self.get_nodes())
         name = property(lambda self: self.get_name(),
@@ -454,7 +454,7 @@ def get_session():
     """The process's default bff session, made on first call."""
     global _session
     if _session is None:
-        _session = Session()
+        _session = GraphSession()
     return _session
 %}
 
@@ -475,14 +475,14 @@ def get_session():
  * priors from the ports' JSON prior specifications, exactly the contract
  * chisurf's lnprior/lnprob_parts implement. The C++ std::function objective
  * and the C++ progress observer are not wrapped: this SWIG carries no
- * std_function.i, and a Python callable is a Node director anyway.
+ * std_function.i, and a Python callable is a GraphNode director anyway.
  *
  * get_blocks() is ignored because std::vector<std::vector<int>> is not a
  * template this module may name (see IMP_bff.types.i); get_block_sizes()
  * is the wrapped read of the same partition.
  */
 %shared_ptr(IMP::bff::Sampler);
-/* Same Node-director lifetime fix as Minimizer::set_objective
+/* Same GraphNode-director lifetime fix as Minimizer::set_objective
    (T-20260901-13): the sampler holds the objective node by shared_ptr for
    its lifetime, so the Python proxy must live as long. */
 %pythonappend IMP::bff::Sampler::set_objective %{
@@ -523,7 +523,7 @@ def get_session():
 
 /*
  * The grouping: one misfit over several datasets. Sharing a parameter
- * between them is already `Port::set_link`; this is the other half, the
+ * between them is already `GraphPort::set_link`; this is the other half, the
  * joint objective, so a `Minimizer` pointed at it moves the shared
  * parameters using every dataset's curvature at once.
  *
@@ -541,7 +541,7 @@ def get_session():
  *
  * The kernels are tttrlib's, taken header-only from the vendored copy of
  * DecayConvolution.h; this class is the graph around them, exactly as
- * Expression is the graph around tttrlib's expression engine.
+ * GraphExpression is the graph around tttrlib's expression engine.
  */
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_response, int n_response)};
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_data_y, int n_data_y)};
@@ -580,8 +580,8 @@ def get_session():
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_parameters, int n_parameters)};
 %apply(double* IN_ARRAY1, int DIM1) {(double* in_axis, int n_axis)};
 
-%shared_ptr(IMP::bff::Expression);
-%include "IMP/bff/Expression.h"
+%shared_ptr(IMP::bff::GraphExpression);
+%include "IMP/bff/GraphExpression.h"
 
 /*
  * The excitation and emission crosstalk matrices a FRET correction is stated
@@ -594,7 +594,7 @@ def get_session():
 %include "IMP_bff.crosstalk.i"
 
 /*
- * ChiSurf's bounded Levenberg-Marquardt, over the same Port/Node graph
+ * ChiSurf's bounded Levenberg-Marquardt, over the same GraphPort/GraphNode graph
  * `Sampler` walks. `fit.run()` becomes one crossing instead of one per
  * parameter per iteration; see Minimizer.h for why that, and not the
  * optimiser's own arithmetic, is what the port is for.
@@ -605,7 +605,7 @@ def get_session():
  * an IMP::Pointer because it outlives the call that set it -- a progress
  * dialog held only by a raw pointer would be collected mid-fit.
  *
- * set_residual_function is not wrapped: a Python residual is a Node
+ * set_residual_function is not wrapped: a Python residual is a GraphNode
  * director, which is the same division Sampler makes.
  */
 IMP_SWIG_OBJECT(IMP::bff, MinimizerObserver, MinimizerObservers);
@@ -620,7 +620,7 @@ IMP_SWIG_OBJECT(IMP::bff, MinimizerObserver, MinimizerObservers);
 IMP_SWIG_DIRECTOR(IMP::bff, MinimizerObserver);
 %shared_ptr(IMP::bff::Minimizer);
 %ignore IMP::bff::Minimizer::set_residual_function;
-/* The Node-director lifetime fix (T-20260901-13; rationale at the Node
+/* The GraphNode-director lifetime fix (T-20260901-13; rationale at the GraphNode
    director block above): the C++ side keeps a shared_ptr to the objective
    node for the minimiser's lifetime, so the Python proxy must live as
    long too -- a director whose proxy is collected dispatches into a dead
@@ -938,11 +938,11 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    are: a walked SWIG proxy costs ~340 ns an element. */
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
 %include "IMP/bff/NeuralNet.h"
-/* The evaluation graph: labels naming ports, run on demand. Node is a
+/* The evaluation graph: labels naming ports, run on demand. GraphNode is a
    director, so a graph of Python-subclassed nodes works here too. The
    provenance helpers that go with it are Python, so they live in their own
    interface file. */
-%include "IMP_bff.evaluationgraph.i"
+%include "IMP_bff.graphevaluation.i"
 /* The photon trace returns delay and emitted-flag views, and the decay curve
    accumulates in place into the caller's histogram. The %apply has to sit
    here, before the header that declares them. */

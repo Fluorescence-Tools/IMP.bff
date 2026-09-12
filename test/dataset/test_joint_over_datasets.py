@@ -4,7 +4,7 @@
 and a Gaussian member each weight their own way and sum to the total -- but
 it drives `compute_chi2` directly, so it says nothing about whether the
 *node* composes them. That is the part a joint fit actually runs: nobody
-calls `compute_chi2` per member during a minimisation, `Node::update()` walks
+calls `compute_chi2` per member during a minimisation, `GraphNode::update()` walks
 the group and every crossing into Python is one that a sampler pays for
 thousands of times.
 
@@ -35,33 +35,33 @@ def gaussian_dataset(y, variance):
 
 
 def make_member(equation, x, dataset, name):
-    """One dataset as a node: `Expression -> ChiSquared`, residuals on a port.
+    """One dataset as a node: `GraphExpression -> ChiSquared`, residuals on a port.
 
     The same shape as `test/minimizer/test_joint.py`'s member, except the
     misfit is *given the dataset* rather than told a noise model name.
     """
-    curve = bff.Expression(name + "_model")
+    curve = bff.GraphExpression(name + "_model")
     curve.set_expression(equation)
     parameters = {}
     for v in curve.get_variable_names():
         if v == "x":
             continue
-        port = bff.Port(1.0)
+        port = bff.GraphPort(1.0)
         curve.add_input_port(v, port)
         parameters[v] = port
-    axis = bff.Port([0.0])
+    axis = bff.GraphPort([0.0])
     axis.set_values_array(np.ascontiguousarray(x, dtype=float))
     curve.add_input_port("x", axis)
-    out = bff.Port([0.0], False, True)
+    out = bff.GraphPort([0.0], False, True)
     curve.add_output_port(name + "_model", out)
 
     chi2 = bff.ChiSquared(name)
     chi2.set_dataset(dataset)
-    model_in = bff.Port([0.0])
+    model_in = bff.GraphPort([0.0])
     model_in.link = out
     chi2.add_input_port("model", model_in)
-    chi2.add_output_port(name, bff.Port(0.0, False, True))
-    chi2.add_output_port("residuals", bff.Port([0.0], False, True))
+    chi2.add_output_port(name, bff.GraphPort(0.0, False, True))
+    chi2.add_output_port("residuals", bff.GraphPort([0.0], False, True))
     # The Python proxies have to outlive this function or the C++ graph is
     # left holding nodes whose directors have been collected.
     chi2._graph = (curve, out, model_in, axis)
@@ -92,8 +92,8 @@ class HeterogeneousGroupTests(unittest.TestCase):
         p2["t"].link = p1["t"]
 
         joint = bff.JointChiSquared("joint")
-        joint.add_output_port("joint", bff.Port(0.0, False, True))
-        joint.add_output_port("residuals", bff.Port([0.0], False, True))
+        joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
+        joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
         joint.add_member(m2, "residuals")
         joint._graph = (m1, m2, p1, p2)

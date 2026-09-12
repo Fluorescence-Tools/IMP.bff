@@ -17,7 +17,7 @@
 // `modules/spectroscopy/decay/include/DecayConvolution.h`, kept in step by
 // `test/decay/test_decay_convolution_copy_is_identical.py` -- the same
 // arrangement, and for the same reasons, as the expression engine (see
-// `src/standalone/Expression.cpp`). Only the header-only pieces are used;
+// `src/standalone/GraphExpression.cpp`). Only the header-only pieces are used;
 // nothing here links tttrlib.
 #include <IMP/bff/internal/DecayConvolution.h>
 
@@ -62,16 +62,16 @@ double rescale_factor(const std::vector<double>& model,
 
 }  // namespace
 
-// Deliberately empty. A `Node` that owns ports has to be owned by a
+// Deliberately empty. A `GraphNode` that owns ports has to be owned by a
 // `shared_ptr` first -- `add_port` reaches for `shared_from_this()` -- so a
 // constructor cannot create any, and every Python-wrapped node is
 // constructed before it is owned. The ports are therefore made by
 // set_number_of_lifetimes(), which is the one call a caller cannot skip.
-TcspcDecay::TcspcDecay(const std::string& name) : Node(name) {}
+TcspcDecay::TcspcDecay(const std::string& name) : GraphNode(name) {}
 
 void TcspcDecay::add_scalar_port(const std::string& key, double value,
-                                 Port** slot) {
-  std::shared_ptr<Port> port(new Port(value));
+                                 GraphPort** slot) {
+  std::shared_ptr<GraphPort> port(new GraphPort(value));
   add_input_port(key, port);
   *slot = port.get();
 }
@@ -90,7 +90,7 @@ void TcspcDecay::set_number_of_lifetimes(int n) {
     // vector port, and one that does *not* sanitise: it is fit transport,
     // and a NaN lifetime has to reach `ChiSquared` and make the misfit
     // infinite rather than be floored to `tiny` and read as a good fit.
-    std::shared_ptr<Port> spectrum(new Port(std::vector<double>(1, 0.0)));
+    std::shared_ptr<GraphPort> spectrum(new GraphPort(std::vector<double>(1, 0.0)));
     spectrum->set_sanitize(false);
     add_input_port(spectrum_port_key(), spectrum);
     spectrum_port_ = spectrum.get();
@@ -106,8 +106,8 @@ void TcspcDecay::set_number_of_lifetimes(int n) {
     std::ostringstream a, t;
     a << "a" << i;
     t << "t" << i;
-    Port* amplitude = nullptr;
-    Port* lifetime = nullptr;
+    GraphPort* amplitude = nullptr;
+    GraphPort* lifetime = nullptr;
     add_scalar_port(a.str(), 1.0, &amplitude);
     add_scalar_port(t.str(), 1.0, &lifetime);
     lifetime_ports_.push_back(amplitude);
@@ -323,7 +323,7 @@ void TcspcDecay::set_emit_basis(bool on) {
   if (on == emit_basis_) return;
   emit_basis_ = on;
   if (on && !get_output_port(basis_port_key())) {
-    add_output_port(basis_port_key(), std::make_shared<Port>(
+    add_output_port(basis_port_key(), std::make_shared<GraphPort>(
                         std::vector<double>{0.0}));
   }
   set_valid(false);
@@ -464,7 +464,7 @@ void TcspcDecay::evaluate() {
         }
       }
     }
-    const std::shared_ptr<Port> bp = get_output_port(basis_port_key());
+    const std::shared_ptr<GraphPort> bp = get_output_port(basis_port_key());
     if (!bp) {
       throw std::domain_error(
           "TcspcDecay '" + get_name() +
@@ -552,7 +552,7 @@ void TcspcDecay::evaluate() {
     if (v < 0.0) v = 0.0;
   }
 
-  const std::shared_ptr<Port> out = get_output_port(get_name());
+  const std::shared_ptr<GraphPort> out = get_output_port(get_name());
   if (!out) {
     throw std::domain_error(
         "TcspcDecay '" + get_name() +

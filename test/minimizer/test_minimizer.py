@@ -66,13 +66,13 @@ def residual_callable(x, y, ey):
     return f
 
 
-class ResidualNode(bff.Node):
+class ResidualNode(bff.GraphNode):
     """A Python objective, the way a model bff cannot represent reaches it.
 
     One crossing per residual evaluation instead of the four or five a
     numpy-driven loop pays -- the fallback path the port is measured against,
     and the reason `set_residual_function` is not wrapped: a Python residual
-    is a `Node` director.
+    is a `GraphNode` director.
     """
 
     def __init__(self, func, names, name="residuals"):
@@ -80,8 +80,8 @@ class ResidualNode(bff.Node):
         self._func = func
         self._names = list(names)
         for n in self._names:
-            self.add_input_port(n, bff.Port(0.0))
-        self.add_output_port("residuals", bff.Port([0.0], False, True))
+            self.add_input_port(n, bff.GraphPort(0.0))
+        self.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         self.calls = 0
         self.visited = []
 
@@ -180,7 +180,7 @@ class LeastsqboundParityTests(unittest.TestCase):
         m, info, reference, ier, seen, node = self._run_both([(None, None)] * 4)
         trajectory = seen[_lmdif_offset(seen, self.START):]
         self.assertEqual(len(trajectory), m.n_evaluations)
-        # `node`, not `m.get_objective()`: SWIG hands back the `Node` proxy,
+        # `node`, not `m.get_objective()`: SWIG hands back the `GraphNode` proxy,
         # not the Python subclass, so the director's own attributes are only
         # reachable through the reference the caller kept.
         mine = node.visited
@@ -385,15 +385,15 @@ class MinimizerTests(unittest.TestCase):
             bff.Minimizer("nelder-mead")
 
     def test_a_fixed_port_cannot_be_optimised(self):
-        port = bff.Port(1.0)
+        port = bff.GraphPort(1.0)
         port.set_fixed(True)
         m = bff.Minimizer()
         with self.assertRaises(ValueError):
             m.set_parameter_ports([port])
 
     def test_an_objective_without_the_residual_port_is_refused(self):
-        node = bff.Node("plain")
-        node.add_output_port("chi2", bff.Port(0.0, False, True))
+        node = bff.GraphNode("plain")
+        node.add_output_port("chi2", bff.GraphPort(0.0, False, True))
         m = bff.Minimizer()
         with self.assertRaises(ValueError):
             m.set_objective(node, "residuals")
@@ -483,29 +483,29 @@ class ObserverTests(unittest.TestCase):
 # ------------------------------------------------------------- whole graph
 
 class GraphObjectiveTests(unittest.TestCase):
-    """`Expression -> ChiSquared -> Minimizer`: a fit that never re-enters
+    """`GraphExpression -> ChiSquared -> Minimizer`: a fit that never re-enters
     the interpreter. This is the arrangement the port exists for -- the
     optimiser and the objective on the same side of the boundary, so a
     caller crosses once per `run()` rather than once per part per iteration.
     """
 
     def _graph(self, equation, data_y, data_ey, axis):
-        expression = bff.Expression("model")
+        expression = bff.GraphExpression("model")
         expression.set_expression(equation)
         names = [n for n in expression.get_variable_names() if n != "x"]
         for n in names:
-            expression.add_input_port(n, bff.Port(1.0))
-        expression.add_input_port("x", bff.Port(list(map(float, axis))))
-        curve = bff.Port([0.0], False, True)
+            expression.add_input_port(n, bff.GraphPort(1.0))
+        expression.add_input_port("x", bff.GraphPort(list(map(float, axis))))
+        curve = bff.GraphPort([0.0], False, True)
         expression.add_output_port("model", curve)
 
         chi2 = bff.ChiSquared("chi2")
         chi2.set_data(list(map(float, data_y)), list(map(float, data_ey)))
-        model_in = bff.Port([0.0])
+        model_in = bff.GraphPort([0.0])
         model_in.link = curve
         chi2.add_input_port("model", model_in)
-        chi2.add_output_port("chi2", bff.Port(0.0, False, True))
-        chi2.add_output_port("residuals", bff.Port([0.0], False, True))
+        chi2.add_output_port("chi2", bff.GraphPort(0.0, False, True))
+        chi2.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         return expression, chi2, names
 
     def test_a_whole_fit_in_cplusplus(self):
@@ -591,7 +591,7 @@ class GraphObjectiveTests(unittest.TestCase):
         y = 2.0 * np.exp(-x / 0.5)
         expression, chi2, _ = self._graph("a*exp(-x/t)", y, np.ones_like(y), x)
         # Drop the residual port the fixture adds.
-        chi2.add_output_port("residuals", bff.Port(0.0, False, True))
+        chi2.add_output_port("residuals", bff.GraphPort(0.0, False, True))
         chi2.set_residuals_port_key("not_a_port")
         chi2.update()
         self.assertGreaterEqual(chi2.get_output_port("chi2").value, 0.0)

@@ -1,13 +1,13 @@
 /**
- *  \file Node.cpp
- *  \brief The lazily-evaluated function over ports (see Node.h).
+ *  \file GraphNode.cpp
+ *  \brief The lazily-evaluated function over ports (see GraphNode.h).
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
 
-#include <IMP/bff/Node.h>
+#include <IMP/bff/GraphNode.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -27,7 +27,7 @@ std::string to_upper(std::string s) {
 
 //! Elementwise a+b with numpy's scalar broadcasting; mismatched vector
 //! sizes are an error there and here.
-std::vector<double> broadcast_add(Port* a, Port* b) {
+std::vector<double> broadcast_add(GraphPort* a, GraphPort* b) {
   const bool av = a->get_is_vector();
   const bool bv = b->get_is_vector();
   if (!av && !bv) return std::vector<double>(1, a->get_value() + b->get_value());
@@ -54,7 +54,7 @@ std::vector<double> broadcast_add(Port* a, Port* b) {
 }
 
 //! Elementwise a*b with the same broadcasting rules.
-std::vector<double> broadcast_mul(Port* a, Port* b) {
+std::vector<double> broadcast_mul(GraphPort* a, GraphPort* b) {
   const bool av = a->get_is_vector();
   const bool bv = b->get_is_vector();
   if (!av && !bv) return std::vector<double>(1, a->get_value() * b->get_value());
@@ -85,7 +85,7 @@ std::vector<double> broadcast_mul(Port* a, Port* b) {
 //! through the scalar write, anything else through the vector write. The
 //! int operators compute int(v1 op v2), which numpy refuses over vectors
 //! longer than one; so does this.
-void write_result(Port* out, const std::vector<double>& result, bool as_int,
+void write_result(GraphPort* out, const std::vector<double>& result, bool as_int,
                   bool result_is_scalar) {
   if (result_is_scalar) {
     if (as_int) {
@@ -106,18 +106,18 @@ void write_result(Port* out, const std::vector<double>& result, bool as_int,
 
 }  // namespace
 
-Node::Node(const std::string& name) : BaseObject(name) {}
+GraphNode::GraphNode(const std::string& name) : GraphObject(name) {}
 
-Node::~Node() = default;
+GraphNode::~GraphNode() = default;
 
-std::shared_ptr<Node> Node::make_node(const std::string& name,
-                                      const PortMap& ports) {
-  std::shared_ptr<Node> n = std::make_shared<Node>(name);
+std::shared_ptr<GraphNode> GraphNode::make_graph_node(const std::string& name,
+                                      const GraphPortMap& ports) {
+  std::shared_ptr<GraphNode> n = std::make_shared<GraphNode>(name);
   n->set_ports(ports);
   return n;
 }
 
-void Node::set_ports(const PortMap& ports) {
+void GraphNode::set_ports(const GraphPortMap& ports) {
   touch_structure();
   for (const auto& kv : ports) {
     kv.second->set_name(kv.first);
@@ -126,7 +126,7 @@ void Node::set_ports(const PortMap& ports) {
   fill_input_output_port_lookups();
 }
 
-void Node::add_port(const std::string& key, std::shared_ptr<Port> port,
+void GraphNode::add_port(const std::string& key, std::shared_ptr<GraphPort> port,
                     bool is_output) {
   touch_structure();
   port->set_port_type(is_output);
@@ -134,7 +134,7 @@ void Node::add_port(const std::string& key, std::shared_ptr<Port> port,
     port->set_node(shared_from_this());
   } catch (const std::bad_weak_ptr&) {
     throw std::runtime_error(
-        "a Node that owns ports must itself be owned by a std::shared_ptr "
+        "a GraphNode that owns ports must itself be owned by a std::shared_ptr "
         "(every Python-wrapped node is)");
   }
   if (ports_.find(key) == ports_.end()) port_order_.push_back(key);
@@ -142,38 +142,38 @@ void Node::add_port(const std::string& key, std::shared_ptr<Port> port,
   fill_input_output_port_lookups();
 }
 
-void Node::add_input_port(const std::string& key,
-                          std::shared_ptr<Port> port) {
+void GraphNode::add_input_port(const std::string& key,
+                          std::shared_ptr<GraphPort> port) {
   add_port(key, port, false);
 }
 
-void Node::add_output_port(const std::string& key,
-                           std::shared_ptr<Port> port) {
+void GraphNode::add_output_port(const std::string& key,
+                           std::shared_ptr<GraphPort> port) {
   add_port(key, port, true);
 }
 
-std::shared_ptr<Port> Node::get_port(const std::string& name) const {
-  PortMap::const_iterator it = ports_.find(name);
-  return it == ports_.end() ? std::shared_ptr<Port>() : it->second;
+std::shared_ptr<GraphPort> GraphNode::get_port(const std::string& name) const {
+  GraphPortMap::const_iterator it = ports_.find(name);
+  return it == ports_.end() ? std::shared_ptr<GraphPort>() : it->second;
 }
 
-std::shared_ptr<Port> Node::get_input_port(const std::string& name) const {
-  PortMap::const_iterator it = in_.find(name);
-  return it == in_.end() ? std::shared_ptr<Port>() : it->second;
+std::shared_ptr<GraphPort> GraphNode::get_input_port(const std::string& name) const {
+  GraphPortMap::const_iterator it = in_.find(name);
+  return it == in_.end() ? std::shared_ptr<GraphPort>() : it->second;
 }
 
-std::shared_ptr<Port> Node::get_output_port(const std::string& name) const {
-  PortMap::const_iterator it = out_.find(name);
-  return it == out_.end() ? std::shared_ptr<Port>() : it->second;
+std::shared_ptr<GraphPort> GraphNode::get_output_port(const std::string& name) const {
+  GraphPortMap::const_iterator it = out_.find(name);
+  return it == out_.end() ? std::shared_ptr<GraphPort>() : it->second;
 }
 
-Node::PortMap Node::get_ports() const { return ports_; }
+GraphNode::GraphPortMap GraphNode::get_ports() const { return ports_; }
 
-Node::PortMap Node::get_input_ports() const { return in_; }
+GraphNode::GraphPortMap GraphNode::get_input_ports() const { return in_; }
 
-Node::PortMap Node::get_output_ports() const { return out_; }
+GraphNode::GraphPortMap GraphNode::get_output_ports() const { return out_; }
 
-void Node::set_callback(const std::string& callback,
+void GraphNode::set_callback(const std::string& callback,
                         const std::string& callback_type) {
   touch_structure();
   callback_ = callback;
@@ -188,31 +188,31 @@ void Node::set_callback(const std::string& callback,
   }
 }
 
-void Node::set_callback_function(Callback callback) {
+void GraphNode::set_callback_function(Callback callback) {
   touch_structure();
   callback_class_ = callback;
   callback_type_ = 1;
 }
 
-const std::string& Node::get_callback() const { return callback_; }
+const std::string& GraphNode::get_callback() const { return callback_; }
 
-int Node::get_callback_type() const { return callback_type_; }
+int GraphNode::get_callback_type() const { return callback_type_; }
 
-const std::string& Node::get_callback_type_string() const {
+const std::string& GraphNode::get_callback_type_string() const {
   return callback_type_string_;
 }
 
-bool Node::get_node_valid() const { return node_valid_; }
+bool GraphNode::get_node_valid() const { return node_valid_; }
 
-const std::vector<std::string>& Node::get_port_order() const {
+const std::vector<std::string>& GraphNode::get_port_order() const {
   return port_order_;
 }
 
-bool Node::inputs_valid() const {
+bool GraphNode::inputs_valid() const {
   for (const auto& kv : in_) {
     if (kv.second->is_linked()) {
-      std::shared_ptr<Port> output_port = kv.second->get_link();
-      std::shared_ptr<Node> output_node = output_port->get_node();
+      std::shared_ptr<GraphPort> output_port = kv.second->get_link();
+      std::shared_ptr<GraphNode> output_node = output_port->get_node();
       if (output_node && output_node.get() == this) continue;
       if (output_node && !output_node->is_valid()) return false;
     }
@@ -220,13 +220,13 @@ bool Node::inputs_valid() const {
   return true;
 }
 
-bool Node::is_valid() const {
+bool GraphNode::is_valid() const {
   if (in_.empty()) return true;
   if (!inputs_valid()) return false;
   return node_valid_;
 }
 
-void Node::set_valid(bool v) {
+void GraphNode::set_valid(bool v) {
   node_valid_ = v;
   // An explicit invalidation is a claim the inputs cannot support: whatever
   // changed, it is not something a comparison of the input values would
@@ -234,7 +234,7 @@ void Node::set_valid(bool v) {
   if (!v) memo_valid_ = false;
 }
 
-void Node::set_memoize(bool v) {
+void GraphNode::set_memoize(bool v) {
   memoize_ = v;
   // Switching it off drops the record, and that is not tidiness. While off
   // the node evaluates without recording, so the record describes inputs the
@@ -244,7 +244,7 @@ void Node::set_memoize(bool v) {
   if (!v) memo_valid_ = false;
 }
 
-bool Node::memo_matches() const {
+bool GraphNode::memo_matches() const {
   if (!memo_valid_) return false;
   // The inputs, in `in_`'s order, which is a std::map's and therefore stable
   // across calls; each port contributes its length and then its slots, so a
@@ -267,7 +267,7 @@ bool Node::memo_matches() const {
   return at == memo_inputs_.size();
 }
 
-void Node::memo_record() {
+void GraphNode::memo_record() {
   memo_inputs_.clear();
   for (const auto& kv : in_) {
     const std::vector<double>& v = kv.second->get_values_ref();
@@ -277,7 +277,7 @@ void Node::memo_record() {
   memo_valid_ = true;
 }
 
-void Node::evaluate() {
+void GraphNode::evaluate() {
   // chinet: a node with neither a callback object nor an operator does
   // nothing and stays invalid.
   if (!callback_class_ && callback_type_ < 0) return;
@@ -286,8 +286,8 @@ void Node::evaluate() {
 
   if (callback_type_ == 0 && plan_.op != OP_NONE && plan_.operand_a &&
       plan_.operand_b) {
-    Port* v1 = plan_.operand_a;
-    Port* v2 = plan_.operand_b;
+    GraphPort* v1 = plan_.operand_a;
+    GraphPort* v2 = plan_.operand_b;
     if (plan_.op_output == nullptr) {
       throw std::invalid_argument(
           "operator callback '" + callback_ +
@@ -316,8 +316,8 @@ void Node::evaluate() {
   if (callback_class_) callback_class_(in_, out_);
 
   // A node sharing one of our output ports now reads stale results.
-  for (Port* out : plan_.outputs) {
-    if (const std::shared_ptr<Node> n = out->get_node()) {
+  for (GraphPort* out : plan_.outputs) {
+    if (const std::shared_ptr<GraphNode> n = out->get_node()) {
       if (n.get() != this) n->set_valid(false);
     }
   }
@@ -325,7 +325,7 @@ void Node::evaluate() {
 }
 
 //! Rebuild the cached plan when the node's structure has moved on.
-void Node::refresh_plan() const {
+void GraphNode::refresh_plan() const {
   if (plan_.epoch == structure_epoch_ && plan_.name == get_name()) return;
   Plan plan;
   plan.epoch = structure_epoch_;
@@ -351,10 +351,10 @@ void Node::refresh_plan() const {
   if (plan.op != OP_NONE) {
     // The operator protocol: the first two inputs in insertion order, the
     // result written to the output port keyed by the node's own name.
-    Port* operands[2] = {nullptr, nullptr};
+    GraphPort* operands[2] = {nullptr, nullptr};
     int found = 0;
     for (const std::string& key : port_order_) {
-      PortMap::const_iterator it = in_.find(key);
+      GraphPortMap::const_iterator it = in_.find(key);
       if (it == in_.end()) continue;
       operands[found++] = it->second.get();
       if (found == 2) break;
@@ -362,7 +362,7 @@ void Node::refresh_plan() const {
     if (found == 2) {
       plan.operand_a = operands[0];
       plan.operand_b = operands[1];
-      PortMap::const_iterator o = out_.find(get_name());
+      GraphPortMap::const_iterator o = out_.find(get_name());
       if (o != out_.end()) plan.op_output = o->second.get();
     } else {
       // Fewer than two inputs: chinet computes nothing at all.
@@ -373,14 +373,14 @@ void Node::refresh_plan() const {
   plan_ = plan;
 }
 
-void Node::touch_structure() { ++structure_epoch_; }
+void GraphNode::touch_structure() { ++structure_epoch_; }
 
-void Node::update() {
+void GraphNode::update() {
   refresh_plan();
-  for (Port* p : plan_.linked_inputs) {
-    const std::shared_ptr<Port>& source_port = p->get_link_ref();
+  for (GraphPort* p : plan_.linked_inputs) {
+    const std::shared_ptr<GraphPort>& source_port = p->get_link_ref();
     if (!source_port) continue;  // unlinked since the plan was built
-    if (const std::shared_ptr<Node> source_node = source_port->get_node()) {
+    if (const std::shared_ptr<GraphNode> source_node = source_port->get_node()) {
       // Not `this`: an input linked to another port of the *same* node --
       // two variables of one expression that are one number, which is how a
       // parameter shared inside a single model is spelt -- needs no upstream
@@ -407,7 +407,7 @@ void Node::update() {
   if (!node_valid_) {
     // Nothing upstream actually moved: keep the outputs and skip the work.
     // Only reachable through a port write, because every other invalidation
-    // clears the record (Node::set_valid).
+    // clears the record (GraphNode::set_valid).
     if (memoize_ && memo_matches()) {
       ++memo_hits_;
       node_valid_ = true;
@@ -427,8 +427,8 @@ void Node::update() {
     // with nothing to do writes nothing and stays invalid, which is what
     // chinet does and what this class documents.
     if (!node_valid_ && write_epoch_ != before) {
-      for (Port* out : plan_.outputs) {
-        if (const std::shared_ptr<Node> n = out->get_node()) {
+      for (GraphPort* out : plan_.outputs) {
+        if (const std::shared_ptr<GraphNode> n = out->get_node()) {
           if (n.get() != this) n->set_valid(false);
         }
       }
@@ -438,9 +438,9 @@ void Node::update() {
   }
 }
 
-std::string Node::describe() const {
+std::string GraphNode::describe() const {
   std::ostringstream out;
-  out << "Node(name='" << get_name() << "', uid='" << get_uid() << "'";
+  out << "GraphNode(name='" << get_name() << "', uid='" << get_uid() << "'";
   out << ", ports=[";
   bool first = true;
   for (const std::string& key : port_order_) {
@@ -455,12 +455,12 @@ std::string Node::describe() const {
   return out.str();
 }
 
-void Node::fill_input_output_port_lookups() {
+void GraphNode::fill_input_output_port_lookups() {
   touch_structure();
   in_.clear();
   out_.clear();
   for (const std::string& key : port_order_) {
-    PortMap::const_iterator it = ports_.find(key);
+    GraphPortMap::const_iterator it = ports_.find(key);
     if (it == ports_.end()) continue;
     if (it->second->get_is_output()) {
       out_[key] = it->second;

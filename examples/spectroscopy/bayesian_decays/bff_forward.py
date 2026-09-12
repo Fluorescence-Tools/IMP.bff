@@ -85,7 +85,7 @@ class BffForward:
             node = bff.TcspcDecay(d)
             node.set_number_of_lifetimes(self.K)
             node.set_timing(self.dt, self.period)
-            port = bff.Port()
+            port = bff.GraphPort()
             port.value = np.zeros(self.n)
             node.add_output_port(d, port)
             for name, v in (('background', 0.0), ('scatter', 0.0), ('n0', 1.0), ('timeshift', 0.0)):

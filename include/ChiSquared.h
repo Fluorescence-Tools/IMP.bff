@@ -14,8 +14,8 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -49,9 +49,9 @@ enum NoiseModel {
  * Argument errors are thrown as ``std::domain_error``, which is what bff
  * surfaces to Python as ``ValueError``.
  *
- * \see Sampler, Node
+ * \see Sampler, GraphNode
  */
-class IMPBFFEXPORT ChiSquared : public Node {
+class IMPBFFEXPORT ChiSquared : public GraphNode {
  public:
   explicit ChiSquared(const std::string& name = "chi2");
 
@@ -120,7 +120,7 @@ class IMPBFFEXPORT ChiSquared : public Node {
       nothing changes for a graph that only wants chi-square. It exists
       because `Minimizer` needs the residuals rather than their sum, and
       needs them from *any* objective node -- a `ChiSquared`, or a Python
-      `Node` director wrapping a model this library cannot represent. A
+      `GraphNode` director wrapping a model this library cannot represent. A
       port is the one thing both can present. */
   void set_residuals_port_key(const std::string& key) { residuals_key_ = key; }
   const std::string& get_residuals_port_key() const { return residuals_key_; }
@@ -186,7 +186,7 @@ class IMPBFFEXPORT ChiSquared : public Node {
   void evaluate() override;
 
   //! Clear sanitising on this node's numeric transport, then pull as usual.
-  /** The model input is written by `Node::update()` *before* `evaluate()`
+  /** The model input is written by `GraphNode::update()` *before* `evaluate()`
       runs, so the flag cannot be set there: a NaN curve would already have
       been floored by the time this node saw it. */
   void update() override;

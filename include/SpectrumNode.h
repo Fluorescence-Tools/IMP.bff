@@ -20,7 +20,7 @@
  *
  *     LifetimeSpectrumNode -> AnisotropySpectrum -> TcspcDecay -> ChiSquared
  *
- * \see TcspcDecay, LifetimeSpectrum, ChiSquared, Minimizer, Node
+ * \see TcspcDecay, LifetimeSpectrum, ChiSquared, Minimizer, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -34,8 +34,8 @@
 #include <string>
 #include <vector>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -55,14 +55,14 @@ IMPBFF_BEGIN_NAMESPACE
  * | `a0`, `t0`, `a1`, `t1`, ... | amplitude and lifetime of each species |
  *
  * The spectrum is written to the output port keyed by the node's own name,
- * which is the protocol `TcspcDecay`, `ChiSquared` and `Expression` use.
+ * which is the protocol `TcspcDecay`, `ChiSquared` and `GraphExpression` use.
  */
-class IMPBFFEXPORT LifetimeSpectrumNode : public Node {
+class IMPBFFEXPORT LifetimeSpectrumNode : public GraphNode {
  public:
   explicit LifetimeSpectrumNode(const std::string& name = "lifetimes");
 
   //! Build `2 * n` ports named `a0`, `t0`, `a1`, `t1`, ...
-  /** As with `TcspcDecay`, this cannot happen in the constructor: a `Node`
+  /** As with `TcspcDecay`, this cannot happen in the constructor: a `GraphNode`
       that owns ports must already be held by a `shared_ptr`, and a
       Python-wrapped node is constructed before it is owned. */
   void set_number_of_lifetimes(int n);
@@ -92,7 +92,7 @@ class IMPBFFEXPORT LifetimeSpectrumNode : public Node {
 
  private:
   std::vector<double> spectrum_;
-  std::vector<Port*> lifetime_ports_;
+  std::vector<GraphPort*> lifetime_ports_;
   int n_lifetimes_ = 0;
   bool absolute_amplitudes_ = false;
   bool normalize_amplitudes_ = false;
@@ -140,7 +140,7 @@ class IMPBFFEXPORT LifetimeSpectrumNode : public Node {
  * | `l1`, `l2` | the depolarisation mixing factors |
  * | `b0`, `rho0`, `b1`, `rho1`, ... | amplitude and correlation time of each rotation |
  */
-class IMPBFFEXPORT AnisotropySpectrum : public Node {
+class IMPBFFEXPORT AnisotropySpectrum : public GraphNode {
  public:
   //! What the detector selects; anything else leaves the spectrum alone.
   enum Polarization { VM = 0, VV = 1, VH = 2, VV_VH = 3 };
@@ -179,12 +179,12 @@ class IMPBFFEXPORT AnisotropySpectrum : public Node {
  private:
   std::vector<double> rotation_;
   std::vector<double> spectrum_;
-  std::vector<Port*> rotation_ports_;
-  Port* spectrum_port_ = nullptr;
-  Port* r0_port_ = nullptr;
-  Port* g_port_ = nullptr;
-  Port* l1_port_ = nullptr;
-  Port* l2_port_ = nullptr;
+  std::vector<GraphPort*> rotation_ports_;
+  GraphPort* spectrum_port_ = nullptr;
+  GraphPort* r0_port_ = nullptr;
+  GraphPort* g_port_ = nullptr;
+  GraphPort* l1_port_ = nullptr;
+  GraphPort* l2_port_ = nullptr;
   int n_rotations_ = 0;
   Polarization polarization_ = VM;
 
@@ -252,7 +252,7 @@ class IMPBFFEXPORT AnisotropySpectrum : public Node {
  * `(p0, r0, p1, r1, ...)`, the layout `FretSpectrum` reads, with the
  * kernel's own normalisation -- the same array the Python property returns.
  */
-class IMPBFFEXPORT PolymerDistances : public Node {
+class IMPBFFEXPORT PolymerDistances : public GraphNode {
  public:
   explicit PolymerDistances(const std::string& name = "distances");
 
@@ -279,11 +279,11 @@ class IMPBFFEXPORT PolymerDistances : public Node {
   std::string mode_;
   std::vector<double> axis_;
   std::vector<double> spectrum_;
-  std::vector<Port*> parameter_ports_;
+  std::vector<GraphPort*> parameter_ports_;
   int n_k_ = 2000;
 };
 
-class IMPBFFEXPORT GaussianDistances : public Node {
+class IMPBFFEXPORT GaussianDistances : public GraphNode {
  public:
   explicit GaussianDistances(const std::string& name = "distances");
 
@@ -320,7 +320,7 @@ class IMPBFFEXPORT GaussianDistances : public Node {
   std::vector<double> axis_;
   std::vector<double> density_;
   std::vector<double> spectrum_;
-  std::vector<Port*> component_ports_;
+  std::vector<GraphPort*> component_ports_;
   int n_components_ = 0;
   bool distance_between_gaussians_ = false;
 };
@@ -367,7 +367,7 @@ class IMPBFFEXPORT GaussianDistances : public Node {
  * | `tau0` | the donor lifetime $R_0$ was determined at |
  * | `kappa2` | the orientation factor |
  */
-class IMPBFFEXPORT FretSpectrum : public Node {
+class IMPBFFEXPORT FretSpectrum : public GraphNode {
  public:
   explicit FretSpectrum(const std::string& name = "fret");
 
@@ -386,12 +386,12 @@ class IMPBFFEXPORT FretSpectrum : public Node {
 
  private:
   std::vector<double> spectrum_;
-  Port* donor_port_ = nullptr;
-  Port* distance_port_ = nullptr;
-  Port* x_donly_port_ = nullptr;
-  Port* forster_radius_port_ = nullptr;
-  Port* tau0_port_ = nullptr;
-  Port* kappa2_port_ = nullptr;
+  GraphPort* donor_port_ = nullptr;
+  GraphPort* distance_port_ = nullptr;
+  GraphPort* x_donly_port_ = nullptr;
+  GraphPort* forster_radius_port_ = nullptr;
+  GraphPort* tau0_port_ = nullptr;
+  GraphPort* kappa2_port_ = nullptr;
 };
 
 //! Amplitudes times `n`, leaving the time constants alone (ChiSurf's `e1tn`).

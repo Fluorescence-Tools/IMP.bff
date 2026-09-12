@@ -40,7 +40,7 @@ class MalformedInputTests(unittest.TestCase):
         crashed = []
         for text in MALFORMED:
             try:
-                bff.Expression("m").set_expression(text)
+                bff.GraphExpression("m").set_expression(text)
             except (ValueError, TypeError, UnicodeDecodeError, UnicodeEncodeError):
                 continue
             except Exception as exc:  # noqa: BLE001 - any exception beats a crash
@@ -48,7 +48,7 @@ class MalformedInputTests(unittest.TestCase):
                 continue
             # Parsing succeeded; evaluating must still not crash.
             try:
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression(text)
                 names = list(ex.get_variable_names())
                 ex.compute(names, [[1.0]] * len(names))
@@ -60,14 +60,14 @@ class MalformedInputTests(unittest.TestCase):
         """The probe is what callers use to decide on a fallback; it has to
         answer for anything, including input that is not an expression."""
         for text in MALFORMED:
-            result = bff.Expression.is_supported(text)
+            result = bff.GraphExpression.is_supported(text)
             self.assertIn(result, (True, False), text[:30])
 
     def test_deep_nesting_is_bounded(self):
         for depth in (10, 100, 1000, 5000):
             text = "(" * depth + "1.0" + ")" * depth
             try:
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression(text)
                 ex.compute([], [])
             except Exception:
@@ -76,7 +76,7 @@ class MalformedInputTests(unittest.TestCase):
     def test_deep_unary_chain_is_bounded(self):
         for depth in (10, 500, 5000):
             try:
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression("-" * depth + "x")
                 ex.compute(["x"], [[2.0]])
             except Exception:
@@ -84,7 +84,7 @@ class MalformedInputTests(unittest.TestCase):
 
     def test_very_long_expression(self):
         try:
-            ex = bff.Expression("m")
+            ex = bff.GraphExpression("m")
             ex.set_expression("+".join(["x"] * 10000))
             out = ex.compute(["x"], [[1.0]])
             self.assertAlmostEqual(out[0], 10000.0)
@@ -96,25 +96,25 @@ class HostileValueTests(unittest.TestCase):
     def test_non_finite_inputs_do_not_crash(self):
         for expr in ("1/x", "sqrt(x)", "log(x)", "x**x", "exp(x)", "x/x",
                      "abs(x)", "x*x+1"):
-            ex = bff.Expression("m")
+            ex = bff.GraphExpression("m")
             ex.set_expression(expr)
             for values in HOSTILE_VALUES:
                 out = np.asarray(ex.compute(["x"], [values]))
                 self.assertEqual(out.size, 1, f"{expr} {values}")
 
     def test_empty_column(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("x+1")
         self.assertEqual(len(ex.compute(["x"], [[]])), 0)
 
     def test_mismatched_lengths_are_refused(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a+b")
         with self.assertRaises(ValueError):
             ex.compute(["a", "b"], [[1.0, 2.0, 3.0], [1.0, 2.0]])
 
     def test_missing_and_extra_names(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a+b")
         with self.assertRaises(ValueError):
             ex.compute(["a"], [[1.0]])
@@ -123,7 +123,7 @@ class HostileValueTests(unittest.TestCase):
         self.assertAlmostEqual(out[0], 3.0)
 
     def test_evaluating_before_setting_an_expression(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         try:
             ex.compute([], [])
         except Exception:
@@ -131,7 +131,7 @@ class HostileValueTests(unittest.TestCase):
 
     def test_reuse_after_a_failed_parse(self):
         """A refused equation must leave the object usable, not wedged."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*x")
         try:
             ex.set_expression("1+(")
@@ -152,9 +152,9 @@ class FuzzTests(unittest.TestCase):
             n = rng.randint(0, 40)
             text = "".join(rng.choice(self.ALPHABET) for _ in range(n))
             try:
-                if not bff.Expression.is_supported(text):
+                if not bff.GraphExpression.is_supported(text):
                     continue
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression(text)
                 names = list(ex.get_variable_names())
                 if len(names) > 6:
@@ -183,7 +183,7 @@ class FuzzTests(unittest.TestCase):
 
             text = build()
             try:
-                ex = bff.Expression("m")
+                ex = bff.GraphExpression("m")
                 ex.set_expression(text)
             except Exception:
                 continue
@@ -234,7 +234,7 @@ class MultiArgumentFunctionTests(unittest.TestCase):
     COLUMNS = {"x": [1.0, 2.0, 3.0, 4.0], "y": [0.5, 1.5, 2.5, 3.5]}
 
     def compute(self, text):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression(text)
         names = list(self.COLUMNS)
         return np.asarray(ex.compute(names, [self.COLUMNS[k] for k in names]))
@@ -274,7 +274,7 @@ class MultiArgumentFunctionTests(unittest.TestCase):
 
     def test_what_is_still_unimplemented_is_refused_not_guessed(self):
         """No fallback means no wrong answer: an unknown construct is an
-        error, which is what `Expression.h` promises. (`root`/`logn`/`frac`
+        error, which is what `GraphExpression.h` promises. (`root`/`logn`/`frac`
         left this list on 2026-09-02, when they joined the engine so
         tttrlib's DataStore could drop its ExprTk fallback entirely —
         T-20260831-13; their values are pinned below.)"""
@@ -298,7 +298,7 @@ class MultiArgumentFunctionTests(unittest.TestCase):
 
     def test_a_name_that_merely_contains_a_function_name_is_a_variable(self):
         """`summary` must not be read as `sum`, nor `xmin` as `min`."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("summary + xmin")
         got = np.asarray(ex.compute(["summary", "xmin"], [[1.0, 2.0], [3.0, 4.0]]))
         np.testing.assert_allclose(got, [4.0, 6.0])

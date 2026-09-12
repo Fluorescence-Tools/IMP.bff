@@ -1,6 +1,6 @@
 /**
  *  \file IMP/bff/Sampler.cpp
- *  \brief ChiSurf's MCMC samplers over a bff Port/Node model, in C++.
+ *  \brief ChiSurf's MCMC samplers over a bff GraphPort/GraphNode model, in C++.
  *
  *  The implementation notes below name the chisurf function each piece is
  *  ported from; the algorithms are those functions, not re-derivations of
@@ -17,8 +17,8 @@
 #include <IMP/bff/Sampler.h>
 
 #include <IMP/bff/FactorGraph.h>
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 
 #include <algorithm>
 #include <cmath>
@@ -281,7 +281,7 @@ unsigned int Sampler::get_seed() const { return seed_; }
 // --------------------------------------------------------------- parameters
 
 void Sampler::set_parameter_ports(
-    const std::vector<std::shared_ptr<Port> >& parameters) {
+    const std::vector<std::shared_ptr<GraphPort> >& parameters) {
   for (std::size_t i = 0; i < parameters.size(); ++i) {
     if (!parameters[i])
       throw SamplerConfigurationError("parameter " + std::to_string(i) +
@@ -297,7 +297,7 @@ void Sampler::set_parameter_ports(
   initialized_ = false;
 }
 
-std::vector<std::shared_ptr<Port> > Sampler::get_parameter_ports() const {
+std::vector<std::shared_ptr<GraphPort> > Sampler::get_parameter_ports() const {
   return parameters_;
 }
 
@@ -336,7 +336,7 @@ void Sampler::set_bounds(const std::vector<double>& lower,
 
 // ---------------------------------------------------------------- objective
 
-void Sampler::set_objective(std::shared_ptr<Node> node,
+void Sampler::set_objective(std::shared_ptr<GraphNode> node,
                             const std::string& output_port) {
   if (!node)
     throw SamplerConfigurationError("set_objective: the node is a null pointer");
@@ -350,7 +350,7 @@ void Sampler::set_objective(std::shared_ptr<Node> node,
   initialized_ = false;
 }
 
-std::shared_ptr<Node> Sampler::get_objective() const { return objective_node_; }
+std::shared_ptr<GraphNode> Sampler::get_objective() const { return objective_node_; }
 
 void Sampler::set_output_is_log_likelihood(bool v) {
   output_is_log_likelihood_ = v;
@@ -693,7 +693,7 @@ void Sampler::configure_from_ports() {
     lower_.resize(ndim_);
     upper_.resize(ndim_);
     for (unsigned int i = 0; i < ndim_; ++i) {
-      const std::shared_ptr<Port>& p = parameters_[i];
+      const std::shared_ptr<GraphPort>& p = parameters_[i];
       double lb = -std::numeric_limits<double>::infinity();
       double ub = std::numeric_limits<double>::infinity();
       if (p->get_is_bounded()) {

@@ -4,7 +4,7 @@ chisurf.core.fitting.sample and .ensemble implement the stretch move
 (Goodman & Weare), differential evolution with snooker updates (ter Braak)
 and the blocked random-walk Metropolis, all driving chisurf's Python models
 through a port per parameter. bff.Sampler is those algorithms over the bff
-Port/Node runtime, run entirely in C++: the walker is written into the
+GraphPort/GraphNode runtime, run entirely in C++: the walker is written into the
 parameter ports, the node graph is updated and read, and the accept/reject
 is decided without crossing the wrapper -- which measured 1.67 us per port
 set+get against 0.06 us for a Python attribute, paid per proposal per
@@ -35,7 +35,7 @@ to).
 import numpy as np
 import pytest
 
-from IMP.bff import FactorGraph, LIKELIHOOD, PRIOR, Node, Port, Sampler
+from IMP.bff import FactorGraph, LIKELIHOOD, PRIOR, GraphNode, GraphPort, Sampler
 
 # The toy posterior: a 2D correlated Gaussian, chi^2 = d^T P d with
 # P = Sigma^-1, computed by a graph of bff operator nodes -- the same
@@ -46,18 +46,18 @@ P = np.linalg.inv(SIGMA)
 
 
 def const_port(value):
-    return Port(float(value))
+    return GraphPort(float(value))
 
 
 def linked_port(source):
-    p = Port(0.0)
+    p = GraphPort(0.0)
     p.set_link(source)
     return p
 
 
 #: Every node a test builds, kept alive for the process. A downstream
 #: node holds its upstream *ports* strongly but their *nodes* only weakly
-#: (Port.h: a port's node is a weak_ptr) -- chinet's ownership: the
+#: (GraphPort.h: a port's node is a weak_ptr) -- chinet's ownership: the
 #: session or the caller owns the nodes, chisurf registers them on its
 #: session. Without this list the intermediate nodes of a graph are
 #: garbage-collected, their ports' get_node() comes back empty, and
@@ -68,10 +68,10 @@ _KEEP_ALIVE = []
 
 def operator_node(name, a, b, op):
     """A node computing op(a, b) into an output port keyed by its name."""
-    node = Node(name)
+    node = GraphNode(name)
     node.add_input_port("a", a)
     node.add_input_port("b", b)
-    node.add_output_port(name, Port(0.0, False, True))
+    node.add_output_port(name, GraphPort(0.0, False, True))
     node.set_callback(op, "C")
     _KEEP_ALIVE.append(node)
     return node
@@ -84,7 +84,7 @@ def gaussian_graph(mu=MU, precision=P):
     output port is named "chi2"): d = x - mu per axis, the three
     quadratic terms, and their sum.
     """
-    x1, x2 = Port(0.0, name="x1"), Port(0.0, name="x2")
+    x1, x2 = GraphPort(0.0, name="x1"), GraphPort(0.0, name="x2")
     d1 = operator_node("d1", x1, const_port(-float(mu[0])), "addition_double")
     d2 = operator_node("d2", x2, const_port(-float(mu[1])), "addition_double")
     s11 = operator_node("s11", linked_port(d1.get_output_port("d1")),
@@ -110,7 +110,7 @@ def make_sampler(algorithm, seed=7, n_steps=2000, thin=1, **kwargs):
     """A sampler on the correlated-Gaussian toy, ready to run."""
     params, objective = gaussian_graph()
     params[0].set_value(MU[0])
-    params[1].set_value(MU[1])  # keyword form: Port(value=.., name=..) drops positionals
+    params[1].set_value(MU[1])  # keyword form: GraphPort(value=.., name=..) drops positionals
     sampler = Sampler(algorithm, seed)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
@@ -421,7 +421,7 @@ def test_the_walker_spread_is_never_zero_in_any_direction():
 
 def independent_graph():
     """Two independent parameters: x1 ~ N(1, 1), x2 ~ N(-1, 4)"""
-    x1, x2 = Port(0.0, name="x1"), Port(0.0, name="x2")
+    x1, x2 = GraphPort(0.0, name="x1"), GraphPort(0.0, name="x2")
     d1 = operator_node("d1", x1, const_port(-1.0), "addition_double")
     d2 = operator_node("d2", x2, const_port(1.0), "addition_double")
     s1 = operator_node("s1", linked_port(d1.get_output_port("d1")),
@@ -536,17 +536,17 @@ def test_a_warm_up_is_a_small_share_of_the_chain():
 # ------------------------------------------------------- the objective paths
 
 def test_a_python_objective_through_a_node_director():
-    """The existing callback machinery: a Node director whose evaluate()
+    """The existing callback machinery: a GraphNode director whose evaluate()
     runs Python is a Sampler objective (the boundary cost per evaluation
     is exactly what the C++ path removes; the bench measures it)."""
-    from IMP.bff import Node as BffNode
+    from IMP.bff import GraphNode as BffNode
 
     class Chi2Node(BffNode):
         def __init__(self):
             super(Chi2Node, self).__init__("chi2")
-            self.add_input_port("x1", Port(0.0))
-            self.add_input_port("x2", Port(0.0))
-            self.add_output_port("chi2", Port(0.0, False, True))
+            self.add_input_port("x1", GraphPort(0.0))
+            self.add_input_port("x2", GraphPort(0.0))
+            self.add_output_port("chi2", GraphPort(0.0, False, True))
 
         def evaluate(self):
             d = np.array([self.get_input_port("x1").get_value() - MU[0],
@@ -569,7 +569,7 @@ def test_a_log_likelihood_output_port_is_read_as_one():
     directly (here lnlike = -0.5 (x - 0.5)^2); chi^2 is then reported as
     -2 lnlike, the way chisurf's ensemble_result reports a blobless
     chain."""
-    x = Port(0.5, name="x")
+    x = GraphPort(0.5, name="x")
     d = operator_node("d", x, const_port(-0.5), "addition_double")
     sq = operator_node("sq", linked_port(d.get_output_port("d")),
                        linked_port(d.get_output_port("d")), "multiply_double")

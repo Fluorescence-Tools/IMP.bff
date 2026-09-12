@@ -1,8 +1,8 @@
 /**
- *  \file IMP/bff/Node.h
- *  \brief A lazily-evaluated function over named ports: chinet's Node.
+ *  \file IMP/bff/GraphNode.h
+ *  \brief A lazily-evaluated function over named ports: chinet's GraphNode.
  *
- *  A Node owns named ports (inputs and outputs) and computes its outputs
+ *  A GraphNode owns named ports (inputs and outputs) and computes its outputs
  *  from its inputs on demand. Evaluation is lazy and invalidation-driven:
  *  writing an input port invalidates the node, a reactive input evaluates
  *  it immediately, and evaluate() of an upstream node pushes its result
@@ -18,7 +18,7 @@
  *  - a std::function taking the input and output port maps
  *    (set_callback_function), the C++ spelling of chinet's callback_class;
  *  - a virtual evaluate(), which a C++ subclass can override outright --
- *    and, since Node is a SWIG director, a Python subclass too: chinet's
+ *    and, since GraphNode is a SWIG director, a Python subclass too: chinet's
  *    set_python_callback_function (signature introspection, ports from
  *    parameters, outputs from a dict return) lives in the Python layers
  *    on top (chisurf/core/nodes.py), which override evaluate() to call
@@ -26,7 +26,7 @@
  *
  *  Ported from chinet's chinet/node.py (phase 1 of removing chinet from
  *  chisurf). Standalone, like FactorGraph: no IMP particles, restraints
- *  or decorators. Ports are shared_ptr-owned by the node; a Node must be
+ *  or decorators. Ports are shared_ptr-owned by the node; a GraphNode must be
  *  shared_ptr-owned too (its ports hold it weakly), which every
  *  Python-wrapped node is.
  *
@@ -34,11 +34,11 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_NODE_H
-#define IMPBFF_NODE_H
+#ifndef IMPBFF_GRAPHNODE_H
+#define IMPBFF_GRAPHNODE_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphPort.h>
 
 #include <functional>
 #include <map>
@@ -49,55 +49,55 @@
 IMPBFF_BEGIN_NAMESPACE
 
 //! A function over named ports, evaluated lazily when its inputs settle.
-class IMPBFFEXPORT Node : public BaseObject,
-                          public std::enable_shared_from_this<Node> {
+class IMPBFFEXPORT GraphNode : public GraphObject,
+                          public std::enable_shared_from_this<GraphNode> {
  public:
   //! Ports by name; the map every port lookup answers from.
-  typedef std::map<std::string, std::shared_ptr<Port> > PortMap;
+  typedef std::map<std::string, std::shared_ptr<GraphPort> > GraphPortMap;
   //! A C++ callback over the port maps (chinet's callback_class.run).
   /*!
       \param[in] inputs the node's input ports
       \param[out] outputs the node's output ports, to be written
   */
-  typedef std::function<void(const PortMap& inputs, PortMap& outputs)>
+  typedef std::function<void(const GraphPortMap& inputs, GraphPortMap& outputs)>
       Callback;
 
   //! An empty node, invalid until evaluated.
-  explicit Node(const std::string& name = "");
-  virtual ~Node();
+  explicit GraphNode(const std::string& name = "");
+  virtual ~GraphNode();
 
-  //! A node with ports (chinet's Node(ports=...)): port names follow keys.
+  //! A node with ports (chinet's GraphNode(ports=...)): port names follow keys.
   /*!
       A factory rather than a constructor because ports attach to their
       node through a weak_ptr, and a node can only hand those out once a
       shared_ptr owns it -- which is not yet true inside a constructor.
   */
-  static std::shared_ptr<Node> make_node(const std::string& name,
-                                         const PortMap& ports);
+  static std::shared_ptr<GraphNode> make_graph_node(const std::string& name,
+                                         const GraphPortMap& ports);
 
   //! Adopt a port map (chinet's set_ports): each port keeps its own
   //! is_output flag and takes its dict key as its name.
-  void set_ports(const PortMap& ports);
+  void set_ports(const GraphPortMap& ports);
   //! Add a port under a key, as input or output; replaces an existing key.
-  void add_port(const std::string& key, std::shared_ptr<Port> port,
+  void add_port(const std::string& key, std::shared_ptr<GraphPort> port,
                 bool is_output);
   //! Add an input port.
-  void add_input_port(const std::string& key, std::shared_ptr<Port> port);
+  void add_input_port(const std::string& key, std::shared_ptr<GraphPort> port);
   //! Add an output port.
-  void add_output_port(const std::string& key, std::shared_ptr<Port> port);
+  void add_output_port(const std::string& key, std::shared_ptr<GraphPort> port);
 
   //! A port by name, or a null pointer.
-  std::shared_ptr<Port> get_port(const std::string& name) const;
+  std::shared_ptr<GraphPort> get_port(const std::string& name) const;
   //! An input port by name, or a null pointer.
-  std::shared_ptr<Port> get_input_port(const std::string& name) const;
+  std::shared_ptr<GraphPort> get_input_port(const std::string& name) const;
   //! An output port by name, or a null pointer.
-  std::shared_ptr<Port> get_output_port(const std::string& name) const;
+  std::shared_ptr<GraphPort> get_output_port(const std::string& name) const;
   //! All ports.
-  PortMap get_ports() const;
+  GraphPortMap get_ports() const;
   //! The input ports.
-  PortMap get_input_ports() const;
+  GraphPortMap get_input_ports() const;
   //! The output ports.
-  PortMap get_output_ports() const;
+  GraphPortMap get_output_ports() const;
 
   //! Set a string callback (chinet's set_callback).
   /*!
@@ -122,7 +122,7 @@ class IMPBFFEXPORT Node : public BaseObject,
   //! The raw validity flag (chinet's node_valid_), which is what a saved
   //! document carries -- is_valid() additionally consults the inputs.
   bool get_node_valid() const;
-  //! Port keys in insertion order (chinet's ports dict order, which the
+  //! GraphPort keys in insertion order (chinet's ports dict order, which the
   //! map of get_ports() does not preserve).
   const std::vector<std::string>& get_port_order() const;
 
@@ -138,14 +138,14 @@ class IMPBFFEXPORT Node : public BaseObject,
   unsigned long long get_evaluation_count() const { return eval_count_; }
 
 #ifndef SWIG
-  //! About to evaluate. Called by Node and Port; not for callers.
+  //! About to evaluate. Called by GraphNode and GraphPort; not for callers.
   void note_evaluation() { ++eval_count_; }
 #endif
 
   //! Skip `evaluate()` when every input holds what it held last time.
   /*!
       Off by default, and deliberately opt-in: it is only sound for a node
-      that is a *function* of its inputs. An `Expression` is one; a node that
+      that is a *function* of its inputs. An `GraphExpression` is one; a node that
       draws a random number, reads a clock, or accumulates across calls is
       not, and memoising it would freeze its output. The class cannot tell
       which it has -- a Python director is opaque -- so the caller says.
@@ -169,7 +169,7 @@ class IMPBFFEXPORT Node : public BaseObject,
       whose evaluation is cheaper than reading its own inputs should leave
       this off.
 
-      Measured on `Expression("a*exp(-x/t)") -> ChiSquared`, 3 000 updates,
+      Measured on `GraphExpression("a*exp(-x/t)") -> ChiSquared`, 3 000 updates,
       2026-09-08:
 
       | points  | value rewritten | every step new |
@@ -208,7 +208,7 @@ class IMPBFFEXPORT Node : public BaseObject,
   void set_valid(bool v);
 
 #ifndef SWIG
-  //! A port of this node was written. Called by Port; not for callers.
+  //! A port of this node was written. Called by GraphPort; not for callers.
   /*!
       Counts writes so that update() can tell a node that *computed* from one
       that has nothing to do. It cannot ask whether evaluate() was overridden
@@ -227,7 +227,7 @@ class IMPBFFEXPORT Node : public BaseObject,
       somewhere new. Every other invalidation means something the inputs
       cannot show (a dataset swapped, an internal coefficient changed, a
       caller saying "do it again"), and those clear the record so the node
-      really does evaluate. Called by Port; not for callers.
+      really does evaluate. Called by GraphPort; not for callers.
    */
   void invalidate_from_port() {
     node_valid_ = false;
@@ -258,7 +258,7 @@ class IMPBFFEXPORT Node : public BaseObject,
 
   //! Invalidate the cached execution plan.
   //!
-  //! Every structural mutator calls this, and so does a Port whose link
+  //! Every structural mutator calls this, and so does a GraphPort whose link
   //! changed: linking is what decides which inputs the plan has to pull.
   void touch_structure();
 
@@ -285,17 +285,17 @@ class IMPBFFEXPORT Node : public BaseObject,
   //! ``ports_``, so a planned port outlives the plan.
   struct Plan {
     long epoch = -1;
-    //! ``set_name`` is not virtual on BaseObject, so a rename cannot bump
+    //! ``set_name`` is not virtual on GraphObject, so a rename cannot bump
     //! the epoch. The operator writes to the output port keyed by the
     //! node's name, so the plan re-resolves when the name moves.
     std::string name;
-    std::vector<Port*> linked_inputs;
+    std::vector<GraphPort*> linked_inputs;
     Operator op = OP_NONE;
     bool as_int = false;
-    Port* operand_a = nullptr;
-    Port* operand_b = nullptr;
-    Port* op_output = nullptr;
-    std::vector<Port*> outputs;
+    GraphPort* operand_a = nullptr;
+    GraphPort* operand_b = nullptr;
+    GraphPort* op_output = nullptr;
+    std::vector<GraphPort*> outputs;
   };
 
   //! Bring plan_ up to date with the current structure if it is stale.
@@ -304,9 +304,9 @@ class IMPBFFEXPORT Node : public BaseObject,
   mutable Plan plan_;
   long structure_epoch_ = 0;
 
-  PortMap ports_;
-  PortMap in_;
-  PortMap out_;
+  GraphPortMap ports_;
+  GraphPortMap in_;
+  GraphPortMap out_;
   //! Insertion order of ports_ (std::map sorts; chinet's dicts do not, and
   //! the operator callbacks take the first two inputs by insertion order).
   std::vector<std::string> port_order_;
@@ -330,4 +330,4 @@ class IMPBFFEXPORT Node : public BaseObject,
 
 IMPBFF_END_NAMESPACE
 
-#endif // IMPBFF_NODE_H
+#endif // IMPBFF_GRAPHNODE_H

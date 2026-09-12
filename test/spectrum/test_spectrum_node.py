@@ -14,7 +14,7 @@ port. What has to be true of them is narrow and worth stating:
 * magic angle passes the spectrum through untouched, because a VM decay has
   no anisotropy in it at all;
 * and the composition works: `LifetimeSpectrumNode -> AnisotropySpectrum ->
-  TcspcDecay` is one graph and `Node::update()` walks all of it.
+  TcspcDecay` is one graph and `GraphNode::update()` walks all of it.
 """
 
 import math
@@ -36,7 +36,7 @@ def make_source(spectrum, name="src"):
     """A `LifetimeSpectrumNode` holding *spectrum* on its scalar ports."""
     node = bff.LifetimeSpectrumNode(name)
     node.set_number_of_lifetimes(len(spectrum) // 2)
-    node.add_output_port(name, bff.Port([0.0], False, True))
+    node.add_output_port(name, bff.GraphPort([0.0], False, True))
     for i in range(len(spectrum) // 2):
         node.get_input_port("a%d" % i).value = float(spectrum[2 * i])
         node.get_input_port("t%d" % i).value = float(spectrum[2 * i + 1])
@@ -47,7 +47,7 @@ def make_anisotropy(source, b, rho, r0=0.38, g=1.0, l1=0.0, l2=0.0,
                     polarization="vv", name="aniso"):
     node = bff.AnisotropySpectrum(name)
     node.set_number_of_rotations(len(b))
-    node.add_output_port(name, bff.Port([0.0], False, True))
+    node.add_output_port(name, bff.GraphPort([0.0], False, True))
     node.set_polarization_name(polarization)
     node.get_input_port("lifetime_spectrum").link = source.get_output_port(
         source.get_name())
@@ -216,7 +216,7 @@ class AnisotropySpectrumTests(unittest.TestCase):
     def test_an_odd_spectrum_is_refused(self):
         node = bff.AnisotropySpectrum("a")
         node.set_number_of_rotations(1)
-        node.add_output_port("a", bff.Port([0.0], False, True))
+        node.add_output_port("a", bff.GraphPort([0.0], False, True))
         node.set_polarization_name("vv")
         node.get_input_port("lifetime_spectrum").set_values_array(
             np.array([1.0, 4.0, 0.5]))
@@ -282,7 +282,7 @@ class CompositionTests(unittest.TestCase):
 
         decay = bff.TcspcDecay("decay")
         decay.set_number_of_lifetimes(1)
-        decay.add_output_port("decay", bff.Port([0.0], False, True))
+        decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         decay.set_spectrum_from_port(True)
         decay.get_input_port("lifetime_spectrum").link = \
             aniso.get_output_port("aniso")
@@ -343,7 +343,7 @@ class AmplitudeThresholdTests(unittest.TestCase):
     def make_decay(self, spectrum, threshold=0.0, n=64):
         decay = bff.TcspcDecay("decay")
         decay.set_number_of_lifetimes(len(spectrum) // 2)
-        decay.add_output_port("decay", bff.Port([0.0], False, True))
+        decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         decay.set_spectrum_from_port(True)
         decay.get_input_port("lifetime_spectrum").set_values_array(
             np.ascontiguousarray(np.asarray(spectrum, dtype=float)))
@@ -395,7 +395,7 @@ class AmplitudeThresholdTests(unittest.TestCase):
         """
         decay = bff.TcspcDecay("decay")
         decay.set_number_of_lifetimes(2)
-        decay.add_output_port("decay", bff.Port([0.0], False, True))
+        decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         n = 64
         x = np.arange(n) * 0.1
         decay.set_response_array(

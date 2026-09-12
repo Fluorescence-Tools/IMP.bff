@@ -16,7 +16,7 @@ The three paths:
     meaningful.
 ``director``
     ``IMP.bff.Minimizer`` driving the *same* Python residual through a
-    ``Node`` director. **This is the fallback that ships**, for every model
+    ``GraphNode`` director. **This is the fallback that ships**, for every model
     the graph cannot represent. It was rejected as the fallback when it
     measured 1.54 ms against scipy's 1.33; timing `minimize` alone on the
     current build it is 1.11x on the parse fit and 1.06x on the decay --
@@ -29,7 +29,7 @@ The three paths:
     while a director run differences the *director*, in Python. Read the
     ratios as a whole-fit comparison, not as an optimiser one.
 ``graph``
-    ``Expression -> ChiSquared -> Minimizer``. The parameters are ports the
+    ``GraphExpression -> ChiSquared -> Minimizer``. The parameters are ports the
     optimiser writes in C++, the curve is computed in C++, the data live in
     the node; nothing crosses the SWIG boundary per iteration.
 
@@ -42,8 +42,8 @@ existed a lifetime model simply fell back to scipy.
 A second table does the same for a ``FitGroup`` -- which is what the GUI
 actually builds, ``global_optimize_local_first`` shipping ``false`` so a
 group is exactly one optimisation over ``GlobalFitModel``. Its graph is one
-``Expression -> ChiSquared`` per member under a ``JointChiSquared``, with the
-shared parameter as a ``Port`` link. There is no ``director`` row: before
+``GraphExpression -> ChiSquared`` per member under a ``JointChiSquared``, with the
+shared parameter as a ``GraphPort`` link. There is no ``director`` row: before
 this existed a group simply fell back to scipy, so scipy *is* the before.
 
 A final table splits one ``fit.run()`` into optimise / error estimate /
@@ -160,7 +160,7 @@ def make_group(n_members=MEMBERS, n=N, seed=5):
 
     Each member keeps its own amplitude and its own data; the lifetime is one
     number for the whole group, linked the way ChiSurf links it (the
-    follower's ``Parameter.link``, which is a ``Port`` link underneath). So
+    follower's ``Parameter.link``, which is a ``GraphPort`` link underneath). So
     the free vector is one amplitude per member plus the shared lifetime.
     """
     rng = np.random.default_rng(seed)

@@ -453,7 +453,7 @@ struct SelectionExpression::Node {
 namespace {
 
 // Not `Node`: this is an unnamed namespace, whose members are visible at
-// IMP::bff scope in the unity build, and IMP::bff::Node is the reactive
+// IMP::bff scope in the unity build, and IMP::bff::GraphNode is the reactive
 // chinet node (Port.h/Node.h) -- a bare `Node` here made every later file
 // in bff_all.cpp ambiguous.
 typedef SelectionExpression::Node ParseNode;

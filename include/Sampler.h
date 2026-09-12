@@ -1,12 +1,12 @@
 /**
  *  \file IMP/bff/Sampler.h
- *  \brief ChiSurf's MCMC samplers over a bff Port/Node model, in C++.
+ *  \brief ChiSurf's MCMC samplers over a bff GraphPort/GraphNode model, in C++.
  *
  *  Phase 6 of removing chinet from chisurf: the samplers of
  *  chisurf/core/fitting/sample.py and ensemble.py ported 1:1 onto the bff
- *  Port/Node runtime, so that a Markov-chain step never crosses the
- *  SWIG boundary. Phases 1-5 moved the parameter runtime (Port, Node,
- *  Session, FactorGraph) into bff and chisurf onto it; what stayed slow
+ *  GraphPort/GraphNode runtime, so that a Markov-chain step never crosses the
+ *  SWIG boundary. Phases 1-5 moved the parameter runtime (GraphPort, GraphNode,
+ *  GraphSession, FactorGraph) into bff and chisurf onto it; what stayed slow
  *  was the sampler loop itself -- measured at 1.67 us per port set+get
  *  across the boundary against 0.06 us for a Python attribute, paid once
  *  per proposal per parameter. This class writes the walker into the
@@ -110,15 +110,15 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class Port;
-class Node;
+class GraphPort;
+class GraphNode;
 class FactorGraph;
 
 //! Raised for a misconfigured sampler (no objective, fixed ports, a
 //! degenerate ensemble, an unknown algorithm...).
 /*!
     std::domain_error so the wrapper maps it to a ValueError -- the
-    contract chisurf's samplers raise under. LinkCycleError (Port.h)
+    contract chisurf's samplers raise under. GraphLinkCycleError (GraphPort.h)
     derives domain_error for the same reason: IMP's wrapper handler maps
     it to IMP.ValueException, a ValueError, which is what chinet's and
     chisurf's callers catch.
@@ -154,9 +154,9 @@ class IMPBFFEXPORT Sampler {
       sampled and is refused here.
   */
   void set_parameter_ports(
-      const std::vector<std::shared_ptr<Port> >& parameters);
+      const std::vector<std::shared_ptr<GraphPort> >& parameters);
   //! The parameter ports (empty in plain-vector mode).
-  std::vector<std::shared_ptr<Port> > get_parameter_ports() const;
+  std::vector<std::shared_ptr<GraphPort> > get_parameter_ports() const;
   //! The parameter names (the ports' names, or x0, x1, ... without ports).
   std::vector<std::string> get_parameter_names() const;
   //! Override the starting values (the ports' current values by default).
@@ -176,10 +176,10 @@ class IMPBFFEXPORT Sampler {
                  value is chi^2 unless set_output_is_log_likelihood()
                  says otherwise
   */
-  void set_objective(std::shared_ptr<Node> node,
+  void set_objective(std::shared_ptr<GraphNode> node,
                      const std::string& output_port = "chi2");
   //! The objective node, or a null pointer.
-  std::shared_ptr<Node> get_objective() const;
+  std::shared_ptr<GraphNode> get_objective() const;
   //! Read the output port as a log-likelihood instead of a chi^2.
   /*!
       The chi^2 reading is chisurf's (lnlike = -chi2/2, -inf above
@@ -499,9 +499,9 @@ class IMPBFFEXPORT Sampler {
   void seed_blocks();
 
   // ------------------------------------------------------------- the model
-  std::vector<std::shared_ptr<Port> > parameters_;
-  std::shared_ptr<Node> objective_node_;
-  std::shared_ptr<Port> output_port_;
+  std::vector<std::shared_ptr<GraphPort> > parameters_;
+  std::shared_ptr<GraphNode> objective_node_;
+  std::shared_ptr<GraphPort> output_port_;
   bool output_is_log_likelihood_ = false;
   std::function<double(const std::vector<double>&)> objective_function_;
   FactorGraph* factor_graph_ = nullptr;  //!< borrowed

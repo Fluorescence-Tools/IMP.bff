@@ -27,7 +27,7 @@
 // standalone entry does this in its own %init; the generated module entry
 // runs only IMP kernel's numpy init, which initializes kernel's
 // PyArray_API, not this TU's -- every numpy-array typemap then dereferenced
-// NULL and segfaulted (found on cn1: every Port.get_value_view() call).
+// NULL and segfaulted (found on cn1: every GraphPort.get_value_view() call).
     import_array();
 %}
 

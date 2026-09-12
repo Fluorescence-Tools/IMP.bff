@@ -1,4 +1,4 @@
-"""bff.Expression against Python's eval, on ChiSurf's own equation catalogue.
+"""bff.GraphExpression against Python's eval, on ChiSurf's own equation catalogue.
 
 The compiler exists to replace ``eval`` in ChiSurf's parse models, so the
 bar is not "plausible arithmetic" but "the same number numpy produces" --
@@ -63,7 +63,7 @@ def numpy_eval(expression, names, values):
 def bind(expression, x, seed=0):
     """Compile, then invent a plausible value for every free name."""
     rng = np.random.default_rng(seed)
-    ex = bff.Expression("m")
+    ex = bff.GraphExpression("m")
     ex.set_expression(expression)
     names = list(ex.get_variable_names())
     values, py_values = [], []
@@ -83,7 +83,7 @@ def bind(expression, x, seed=0):
 
 class ExpressionArithmeticTests(unittest.TestCase):
     def _check(self, expression, **env):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression(expression)
         names = list(ex.get_variable_names())
         values = [np.atleast_1d(np.asarray(env[n], dtype=float)).tolist()
@@ -120,32 +120,32 @@ class ExpressionArithmeticTests(unittest.TestCase):
         self._check("x*x", x=x)
 
     def test_division_by_zero_is_inf_not_an_error(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("1/x")
         self.assertEqual(ex.compute(["x"], [[0.0]])[0], float("inf"))
 
     def test_variables_are_reported_in_first_appearance_order(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("c+a*x+b*x**2")
         self.assertEqual(list(ex.get_variable_names()), ["c", "a", "x", "b"])
 
     def test_constants_are_not_variables(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("pi*x+e")
         self.assertEqual(list(ex.get_variable_names()), ["x"])
 
     def test_unsupported_input_is_refused(self):
         for bad in ("x @ y", "foo(x)", "1+", "(1+2", "1+2)", "x $ 2"):
             with self.assertRaises(ValueError, msg=bad):
-                bff.Expression("m").set_expression(bad)
-            self.assertFalse(bff.Expression.is_supported(bad), bad)
+                bff.GraphExpression("m").set_expression(bad)
+            self.assertFalse(bff.GraphExpression.is_supported(bad), bad)
 
     def test_is_supported_accepts_the_real_thing(self):
-        self.assertTrue(bff.Expression.is_supported(
+        self.assertTrue(bff.GraphExpression.is_supported(
             "b+1/abs(N)*(1+x/td)**(-1)/sqrt(1+1/s**2*x/td)"))
 
     def test_missing_variable_is_refused(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*x")
         with self.assertRaises(ValueError):
             ex.compute(["a"], [[1.0]])
@@ -154,21 +154,21 @@ class ExpressionArithmeticTests(unittest.TestCase):
 class ExpressionAsANodeTests(unittest.TestCase):
     def test_evaluating_writes_the_curve_to_the_output_port(self):
         x = np.linspace(0.0, 1.0, 5)
-        ex = bff.Expression("model")
+        ex = bff.GraphExpression("model")
         ex.set_expression("a*x+b")
-        ex.add_input_port("a", bff.Port(2.0, name="a"))
-        ex.add_input_port("x", bff.Port(list(x), name="x"))
-        ex.add_input_port("b", bff.Port(1.0, name="b"))
-        ex.add_output_port("model", bff.Port(0.0, False, True))
+        ex.add_input_port("a", bff.GraphPort(2.0, name="a"))
+        ex.add_input_port("x", bff.GraphPort(list(x), name="x"))
+        ex.add_input_port("b", bff.GraphPort(1.0, name="b"))
+        ex.add_output_port("model", bff.GraphPort(0.0, False, True))
         ex.evaluate()
         got = np.asarray(ex.get_output_port("model").value)
         np.testing.assert_allclose(got, 2.0 * x + 1.0, rtol=1e-12)
 
     def test_a_missing_input_port_is_refused(self):
-        ex = bff.Expression("model")
+        ex = bff.GraphExpression("model")
         ex.set_expression("a*x")
-        ex.add_input_port("a", bff.Port(2.0, name="a"))
-        ex.add_output_port("model", bff.Port(0.0, False, True))
+        ex.add_input_port("a", bff.GraphPort(2.0, name="a"))
+        ex.add_output_port("model", bff.GraphPort(0.0, False, True))
         with self.assertRaises(ValueError):
             ex.evaluate()
 
@@ -206,7 +206,7 @@ class CatalogueParityTests(unittest.TestCase):
         x = np.linspace(1e-3, 5.0, 32)
         compiled = skipped = 0
         for index, equation in enumerate(self.equations):
-            if not bff.Expression.is_supported(equation):
+            if not bff.GraphExpression.is_supported(equation):
                 skipped += 1
                 continue
             compiled += 1
@@ -251,7 +251,7 @@ class EveryShippedEquationTests(unittest.TestCase):
         failures = []
         for equation in self.equations:
             try:
-                bff.Expression("m").set_expression(equation)
+                bff.GraphExpression("m").set_expression(equation)
             except Exception as exc:
                 failures.append(f"{equation!r}: {exc}")
         print(f"\nshipped equations: {len(self.equations)} total, "
@@ -290,7 +290,7 @@ class CompiledOncePlanTests(unittest.TestCase):
     """
 
     def test_repeated_evaluation_never_reparses(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a*x+c*x**2")
         x = list(np.linspace(0.0, 1.0, 64))
         names = ["a", "b", "c", "x"]
@@ -301,7 +301,7 @@ class CompiledOncePlanTests(unittest.TestCase):
 
     def test_a_new_equation_recompiles(self):
         """A new equation is a new program, compiled once again."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*x")
         ex.compute(["a", "x"], [[2.0], [1.0, 2.0]])
         self.assertEqual(ex.get_number_of_compilations(), 1)
@@ -313,7 +313,7 @@ class CompiledOncePlanTests(unittest.TestCase):
     def test_changing_the_batch_length_never_recompiles(self):
         """The block evaluator carries no per-length state, so a curve of a
         different length costs nothing extra."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*x")
         ex.compute(["a", "x"], [[2.0], [1.0, 2.0, 3.0]])
         for _ in range(20):
@@ -322,7 +322,7 @@ class CompiledOncePlanTests(unittest.TestCase):
         self.assertEqual(ex.get_number_of_compilations(), 1)
 
     def test_results_are_correct_across_a_shape_change(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*x+1")
         np.testing.assert_allclose(
             np.asarray(ex.compute(["a", "x"], [[2.0], [1.0, 2.0, 3.0]])),
@@ -338,7 +338,7 @@ class BatchEvaluationTests(unittest.TestCase):
     """Whole columns in one call -- what ndxplorer's per-row eval needs."""
 
     def test_a_column_is_one_call(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("(g-b)/(r-b)")
         n = 5000
         rng = np.random.default_rng(3)
@@ -349,14 +349,14 @@ class BatchEvaluationTests(unittest.TestCase):
         self.assertEqual(ex.get_number_of_compilations(), 1)
 
     def test_compute_batch_scores_one_row_at_a_time(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a*a+b")
         rows = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
         got = np.asarray(ex.compute_batch(["a", "b"], rows))
         np.testing.assert_allclose(got, [3.0, 13.0, 31.0])
 
     def test_compute_batch_refuses_a_ragged_row(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("a+b")
         with self.assertRaises(ValueError):
             ex.compute_batch(["a", "b"], [[1.0, 2.0], [3.0]])
@@ -381,7 +381,7 @@ class SharedSubexpressionTests(unittest.TestCase):
         self.block = np.ascontiguousarray(np.vstack([self.x, self.z]))
 
     def _got(self, expression):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression(expression)
         return np.asarray(ex.compute_columns(["x", "z"], self.block))
 
@@ -418,7 +418,7 @@ class SharedSubexpressionTests(unittest.TestCase):
 
     def test_sharing_survives_a_change_of_batch_length(self):
         """The cache is per block, so a shorter curve must not see stale rows."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("exp(-x/1.5)*exp(-x/1.5)")
         for n in (7, 512, 513, 4096, 3):
             x = np.linspace(0.01, 4.0, n)
@@ -445,7 +445,7 @@ class ConstantExponentTests(unittest.TestCase):
         self.block = np.ascontiguousarray(self.x.reshape(1, self.n))
 
     def _check(self, expression, expected):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression(expression)
         got = np.asarray(ex.compute_columns(["x"], self.block))
         np.testing.assert_allclose(got, expected, rtol=1e-12,
@@ -465,7 +465,7 @@ class ConstantExponentTests(unittest.TestCase):
 
     def test_an_exponent_that_is_a_scalar_parameter(self):
         """A fit supplies the exponent as a scalar; it takes the same path."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("x**p")
         for p in (-1.0, -0.5, 0.5, 2.0, 1.7):
             with self.subTest(p=p):
@@ -475,7 +475,7 @@ class ConstantExponentTests(unittest.TestCase):
 
     def test_a_wholly_constant_expression_still_broadcasts(self):
         """Constant folding must not turn a curve into a single number."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("2**(-1)+sqrt(9)*x/x")
         got = np.asarray(ex.compute_columns(["x"], self.block))
         np.testing.assert_allclose(got, np.full(self.n, 3.5), rtol=1e-12)
@@ -499,7 +499,7 @@ class BoundParameterTests(unittest.TestCase):
                             ("b+1/N*(1+x/td)**(-1)/sqrt(1+1/s**2*x/td)",
                              ["b", "N", "td", "s"]),
                             ("(a-b)/(c-b)", ["a", "b", "c"])]:
-            ex = bff.Expression("m")
+            ex = bff.GraphExpression("m")
             ex.set_expression(text)
             ex.bind_parameters(names, "x")
             values = np.arange(1.0, len(names) + 1.0)
@@ -511,7 +511,7 @@ class BoundParameterTests(unittest.TestCase):
 
     def test_binding_survives_changing_the_values(self):
         """The whole point: rebind never, re-evaluate often."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a1*exp(-x/t1)")
         ex.bind_parameters(["b", "a1", "t1"], "x")
         x = np.linspace(0.1, 5.0, 64)
@@ -526,7 +526,7 @@ class BoundParameterTests(unittest.TestCase):
         Binding by position against the engine's order would evaluate the
         right equation against the wrong values, silently.
         """
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("(g-b)/(r-b)")           # engine order: g, b, r
         ex.bind_parameters(["b", "g", "r"], "x")   # caller order: b, g, r
         x = np.linspace(0.1, 1.0, 8)
@@ -534,14 +534,14 @@ class BoundParameterTests(unittest.TestCase):
         np.testing.assert_allclose(got, (5.0 - 1.0) / (9.0 - 1.0))
 
     def test_a_wrong_parameter_count_is_refused(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a1*exp(-x/t1)")
         ex.bind_parameters(["b", "a1", "t1"], "x")
         with self.assertRaises(ValueError):
             ex.compute_curve_bound(np.array([1.0, 2.0]), np.linspace(1, 2, 4))
 
     def test_evaluating_before_binding_is_refused(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a1*exp(-x/t1)")
         self.assertFalse(ex.has_parameter_binding())
         with self.assertRaises(ValueError):
@@ -550,7 +550,7 @@ class BoundParameterTests(unittest.TestCase):
 
     def test_a_new_equation_drops_the_binding(self):
         """Keeping it would read the new equation from the old slots."""
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a1*exp(-x/t1)")
         ex.bind_parameters(["b", "a1", "t1"], "x")
         self.assertTrue(ex.has_parameter_binding())
@@ -558,7 +558,7 @@ class BoundParameterTests(unittest.TestCase):
         self.assertFalse(ex.has_parameter_binding())
 
     def test_binding_a_name_the_equation_does_not_use_is_refused(self):
-        ex = bff.Expression("m")
+        ex = bff.GraphExpression("m")
         ex.set_expression("b+a1*exp(-x/t1)")
         with self.assertRaises(ValueError):
             ex.bind_parameters(["b", "a1"], "x")   # t1 unaccounted for

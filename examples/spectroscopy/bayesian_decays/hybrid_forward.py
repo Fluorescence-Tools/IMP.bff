@@ -123,7 +123,7 @@ class HybridForward:
             nd = bff.TcspcDecay(d)
             nd.set_number_of_lifetimes(self.K)
             nd.set_timing(self.dt, self.s.period)
-            port = bff.Port(); port.value = np.zeros(self.n)
+            port = bff.GraphPort(); port.value = np.zeros(self.n)
             nd.add_output_port(d, port)
             for name, v in (('background', 0.0), ('scatter', 0.0), ('n0', 1.0), ('timeshift', 0.0)):
                 p = nd.get_port(name)

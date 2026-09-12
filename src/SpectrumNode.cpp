@@ -26,9 +26,9 @@ IMPBFF_BEGIN_NAMESPACE
 
 namespace {
 
-void add_scalar_port(Node* node, const std::string& key, double value,
-                     Port** slot) {
-  std::shared_ptr<Port> port(new Port(value));
+void add_scalar_port(GraphNode* node, const std::string& key, double value,
+                     GraphPort** slot) {
+  std::shared_ptr<GraphPort> port(new GraphPort(value));
   node->add_input_port(key, port);
   *slot = port.get();
 }
@@ -37,8 +37,8 @@ void add_scalar_port(Node* node, const std::string& key, double value,
 /** Fit transport, so it does not sanitise: a NaN lifetime has to reach
     `ChiSquared` and make the misfit infinite rather than be floored to
     `tiny`, which in a fit reads as a *good* fit near zero. */
-void publish(Node* node, const std::vector<double>& spectrum) {
-  const std::shared_ptr<Port> out = node->get_output_port(node->get_name());
+void publish(GraphNode* node, const std::vector<double>& spectrum) {
+  const std::shared_ptr<GraphPort> out = node->get_output_port(node->get_name());
   if (!out) {
     throw std::domain_error(
         "'" + node->get_name() +
@@ -93,7 +93,7 @@ std::vector<double> interleaved_product(const std::vector<double>& first,
 // Empty for the reason `TcspcDecay`'s is: `add_port` reaches for
 // `shared_from_this()`, so a node cannot own ports until something owns it.
 LifetimeSpectrumNode::LifetimeSpectrumNode(const std::string& name)
-    : Node(name) {}
+    : GraphNode(name) {}
 
 void LifetimeSpectrumNode::set_number_of_lifetimes(int n) {
   if (n <= 0) {
@@ -107,8 +107,8 @@ void LifetimeSpectrumNode::set_number_of_lifetimes(int n) {
     std::ostringstream a, t;
     a << "a" << i;
     t << "t" << i;
-    Port* amplitude = nullptr;
-    Port* lifetime = nullptr;
+    GraphPort* amplitude = nullptr;
+    GraphPort* lifetime = nullptr;
     // Ports cannot be removed from a node, so a second call with a smaller
     // count leaves the surplus ports visible but unread -- same caveat, and
     // same remedy (build the node once), as `TcspcDecay`.
@@ -157,7 +157,7 @@ void LifetimeSpectrumNode::evaluate() {
 
 // ------------------------------------------------------- AnisotropySpectrum
 
-AnisotropySpectrum::AnisotropySpectrum(const std::string& name) : Node(name) {}
+AnisotropySpectrum::AnisotropySpectrum(const std::string& name) : GraphNode(name) {}
 
 void AnisotropySpectrum::set_number_of_rotations(int n) {
   if (n < 0) {
@@ -165,7 +165,7 @@ void AnisotropySpectrum::set_number_of_rotations(int n) {
         "AnisotropySpectrum::set_number_of_rotations: a negative count");
   }
   if (spectrum_port_ == nullptr) {
-    std::shared_ptr<Port> incoming(new Port(std::vector<double>(2, 1.0)));
+    std::shared_ptr<GraphPort> incoming(new GraphPort(std::vector<double>(2, 1.0)));
     incoming->set_sanitize(false);
     add_input_port(spectrum_port_key(), incoming);
     spectrum_port_ = incoming.get();
@@ -181,8 +181,8 @@ void AnisotropySpectrum::set_number_of_rotations(int n) {
     std::ostringstream b, rho;
     b << "b" << i;
     rho << "rho" << i;
-    Port* amplitude = nullptr;
-    Port* time = nullptr;
+    GraphPort* amplitude = nullptr;
+    GraphPort* time = nullptr;
     if (get_input_port(b.str())) {
       amplitude = get_input_port(b.str()).get();
       time = get_input_port(rho.str()).get();
@@ -273,7 +273,7 @@ void AnisotropySpectrum::evaluate() {
   // nothing owns any more. The scalars keep their pointers; only this one is
   // ever replaced, and one map lookup per evaluation is not a cost a fit can
   // measure.
-  const std::shared_ptr<Port> in = get_input_port(spectrum_port_key());
+  const std::shared_ptr<GraphPort> in = get_input_port(spectrum_port_key());
   if (!in) {
     throw std::domain_error("AnisotropySpectrum '" + get_name() +
                             "' has no '" + spectrum_port_key() + "' port");
@@ -346,7 +346,7 @@ std::string AnisotropySpectrum::describe() const {
 
 // ------------------------------------------------------- PolymerDistances
 
-PolymerDistances::PolymerDistances(const std::string& name) : Node(name) {}
+PolymerDistances::PolymerDistances(const std::string& name) : GraphNode(name) {}
 
 void PolymerDistances::set_mode(const std::string& mode) {
   if (!mode_.empty()) {
@@ -354,7 +354,7 @@ void PolymerDistances::set_mode(const std::string& mode) {
                             "': the mode is set once");
   }
   parameter_ports_.clear();
-  Port* p = nullptr;
+  GraphPort* p = nullptr;
   if (mode == "worm_like_chain" || mode == "worm_like_chain_linker") {
     add_scalar_port(this, "chain_length", 100.0, &p);
     parameter_ports_.push_back(p);
@@ -467,7 +467,7 @@ void PolymerDistances::evaluate() {
 
 // ------------------------------------------------------- GaussianDistances
 
-GaussianDistances::GaussianDistances(const std::string& name) : Node(name) {}
+GaussianDistances::GaussianDistances(const std::string& name) : GraphNode(name) {}
 
 void GaussianDistances::set_number_of_components(int n) {
   if (n <= 0) {
@@ -483,7 +483,7 @@ void GaussianDistances::set_number_of_components(int n) {
     for (int k = 0; k < 4; ++k) {
       std::ostringstream key;
       key << kNames[k] << i;
-      Port* port = nullptr;
+      GraphPort* port = nullptr;
       if (get_input_port(key.str())) {
         port = get_input_port(key.str()).get();
       } else {
@@ -556,16 +556,16 @@ void GaussianDistances::evaluate() {
 
 // ------------------------------------------------------------ FretSpectrum
 
-FretSpectrum::FretSpectrum(const std::string& name) : Node(name) {}
+FretSpectrum::FretSpectrum(const std::string& name) : GraphNode(name) {}
 
 void FretSpectrum::build_ports() {
   if (donor_port_ != nullptr) return;
-  std::shared_ptr<Port> donor(new Port(std::vector<double>{1.0, 4.0}));
+  std::shared_ptr<GraphPort> donor(new GraphPort(std::vector<double>{1.0, 4.0}));
   donor->set_sanitize(false);
   add_input_port(donor_port_key(), donor);
   donor_port_ = donor.get();
 
-  std::shared_ptr<Port> distances(new Port(std::vector<double>{1.0, 52.0}));
+  std::shared_ptr<GraphPort> distances(new GraphPort(std::vector<double>{1.0, 52.0}));
   distances->set_sanitize(false);
   add_input_port(distance_port_key(), distances);
   distance_port_ = distances.get();
@@ -584,8 +584,8 @@ void FretSpectrum::evaluate() {
   }
   // By key, not through the cached pointer, for the reason
   // `AnisotropySpectrum` gives: these two are the ports a caller replaces.
-  const std::shared_ptr<Port> donor_in = get_input_port(donor_port_key());
-  const std::shared_ptr<Port> distance_in = get_input_port(distance_port_key());
+  const std::shared_ptr<GraphPort> donor_in = get_input_port(donor_port_key());
+  const std::shared_ptr<GraphPort> distance_in = get_input_port(distance_port_key());
   if (!donor_in || !distance_in) {
     throw std::domain_error("FretSpectrum '" + get_name() +
                             "' is missing one of its two spectrum ports");

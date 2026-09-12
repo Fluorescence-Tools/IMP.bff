@@ -1,6 +1,22 @@
 # Update Log
 
+## 2026-09-12
+
+- **PRD-141 stage 1a — the graph runtime has names that say what it is**
+  ([PRD-141](prds/prd-141.md)): `Node`/`Port`/`Session`/`EvaluationGraph`/
+  `Expression` are now `GraphNode`/`GraphPort`/`GraphSession`/
+  `GraphEvaluation`/`GraphExpression`; the chinet provenance stays in history,
+  not the public API. No aliases. Bff graph/public API: 283 passed + 42
+  subtests; broader bff slice: 448 + 42; direct ChiSurf consumers: 49 passed,
+  1 skipped + 69 subtests.
+
 ## 2026-09-11
+
+- **PRD-141 starts: one precise flat vocabulary for IMP.bff**
+  ([PRD-141](prds/prd-141.md)): owner-approved hard, behavior-preserving
+  taxonomy migration. IMP's flat layout stays; the first slice is the
+  Graph/Fit/Inference/Bayesian/MCMC core, deliberately away from the active
+  ptolib/Dunbrack work in `RotamerLibrary.cpp` (T-20260910-01).
 
 - **Greedy Olga learns homo-oligomers: the unit of selection becomes the labelling site**
   (`select_informative_sites`, `include/GreedyOlga.h` / `src/GreedyOlga.cpp`): in an oligomer under a

@@ -1,14 +1,14 @@
 /**
- *  \file IMP/bff/Session.cpp
+ *  \file IMP/bff/GraphSession.cpp
  *  \brief Save and load node graphs in chinet's session format (see
- *         Session.h).
+ *         GraphSession.h).
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
 
-#include <IMP/bff/Session.h>
+#include <IMP/bff/GraphSession.h>
 
 #include <IMP/bff/internal/json.h>
 #include <IMP/bff/internal/ordered_map.h>
@@ -108,13 +108,13 @@ std::string emit_number(double e, bool as_int) {
 //! A port's value field: a JSON scalar for a scalar port, a JSON array
 //! for a vector port (empty data writes as []). Link-aware, as chinet's
 //! .value is: a linked port saves the value it reads.
-std::string emit_port_value(const Port& p) {
+std::string emit_port_value(const GraphPort& p) {
   // A bool port writes JSON `true`/`false`, not 1/0: the document should say
   // what the port means, and a reader that restores the value before the
   // value_type (which the session loader does) would otherwise see a plain
   // integer. Codes 0-3 keep chinet's rendering exactly.
   const int element = p.get_element_type();
-  if (element == PORT_BOOL) {
+  if (element == GRAPH_PORT_BOOL) {
     if (p.get_is_vector()) {
       const std::vector<double> values = p.get_value_vector();
       std::string out = "[";
@@ -127,7 +127,7 @@ std::string emit_port_value(const Port& p) {
     if (p.current_size() == 0) return "[]";
     return p.get_value_bool() ? "true" : "false";
   }
-  const bool as_int = element == PORT_INT;
+  const bool as_int = element == GRAPH_PORT_INT;
   if (p.get_is_vector()) {
     std::vector<std::string> elements;
     if (as_int) {
@@ -158,20 +158,20 @@ std::string emit_port_value(const Port& p) {
 //! A port's prior, as a JSON object. chinet's slot is dict-or-null; a
 //! prior string here that does not parse to an object is refused rather
 //! than quietly saved as null (that would be data loss at a distance).
-nlohmann::json port_prior_json(const Port& p) {
+nlohmann::json port_prior_json(const GraphPort& p) {
   if (p.get_prior().empty()) return nlohmann::json();
   nlohmann::json prior =
       nlohmann::json::parse(p.get_prior(), nullptr, false);
   if (prior.is_discarded() || !prior.is_object()) {
     throw std::invalid_argument(
-        "IMP::bff::Session::save: the prior of port '" + p.get_name() +
+        "IMP::bff::GraphSession::save: the prior of port '" + p.get_name() +
         "' is not JSON object text");
   }
   return prior;
 }
 
 //! One port line, chinet's field order.
-std::string port_document(const Port& p) {
+std::string port_document(const GraphPort& p) {
   std::vector<std::pair<std::string, std::string> > fields;
   fields.push_back(std::make_pair("_id", quoted(p.get_uid())));
   fields.push_back(std::make_pair("name", quoted(p.get_name())));
@@ -201,11 +201,11 @@ std::string port_document(const Port& p) {
 
 //! One node line, chinet's field order. "valid" is the raw flag and
 //! "ports" follows the node's own insertion order.
-std::string node_document(const Node& n) {
+std::string node_document(const GraphNode& n) {
   std::vector<std::pair<std::string, std::string> > port_entries;
   const std::vector<std::string> order = n.get_port_order();
   for (std::size_t i = 0; i < order.size(); ++i) {
-    std::shared_ptr<Port> p = n.get_port(order[i]);
+    std::shared_ptr<GraphPort> p = n.get_port(order[i]);
     if (p) port_entries.push_back(std::make_pair(order[i], p->get_uid()));
   }
   std::vector<std::pair<std::string, std::string> > fields;
@@ -225,7 +225,7 @@ std::string node_document(const Node& n) {
 
 //! The session line: chinet's field order, nodes in the order added.
 std::string session_document(
-    const Session& s,
+    const GraphSession& s,
     const std::vector<std::pair<std::string, std::string> >& node_entries) {
   std::vector<std::pair<std::string, std::string> > fields;
   fields.push_back(std::make_pair("_id", quoted(s.get_uid())));
@@ -279,7 +279,7 @@ int doc_int(const OrderedJson& d, const char* key, int fallback) {
     the bounds -- chinet's load did not clip, but chinet-written values
     are always within bounds, so this only bites hand-edited files.
 */
-void apply_port_document(const std::shared_ptr<Port>& p,
+void apply_port_document(const std::shared_ptr<GraphPort>& p,
                          const OrderedJson& d) {
   const OrderedJson* v = doc_find(d, "_id");
   if (v != nullptr && v->is_string()) p->set_uid(v->get<std::string>());
@@ -307,7 +307,7 @@ void apply_port_document(const std::shared_ptr<Port>& p,
   if (v != nullptr) {
     // JSON `true`/`false` is not a number, so a bool port's value would be
     // dropped here and then read back as `false` when value_type restored it.
-    // The value is restored before the type (see Session.h), so this branch
+    // The value is restored before the type (see GraphSession.h), so this branch
     // has to accept booleans itself rather than leave them to the conversion.
     if (v->is_array()) {
       // An all-integer array is restored through the exact entry point; a
@@ -360,7 +360,7 @@ void apply_port_document(const std::shared_ptr<Port>& p,
 
 //! Restore a node's own state from its document (its ports are restored
 //! by the session pass that resolves the ports map).
-void apply_node_document(const std::shared_ptr<Node>& n,
+void apply_node_document(const std::shared_ptr<GraphNode>& n,
                          const OrderedJson& d) {
   const OrderedJson* v = doc_find(d, "_id");
   if (v != nullptr && v->is_string()) n->set_uid(v->get<std::string>());
@@ -380,10 +380,10 @@ void apply_node_document(const std::shared_ptr<Node>& n,
 //! chinet's load order: instantiate every node and port, then -- in
 //! document order -- restore links and node port maps, then fill the
 //! session's node map, then adopt unclaimed ports as free ports.
-std::shared_ptr<Session> rebuild_session(
+std::shared_ptr<GraphSession> rebuild_session(
     const OrderedJson& session_doc,
     const std::vector<OrderedJson>& objects) {
-  std::shared_ptr<Session> session = std::make_shared<Session>();
+  std::shared_ptr<GraphSession> session = std::make_shared<GraphSession>();
   const OrderedJson* v = doc_find(session_doc, "_id");
   if (v != nullptr && v->is_string()) session->set_uid(v->get<std::string>());
   v = doc_find(session_doc, "name");
@@ -394,19 +394,19 @@ std::shared_ptr<Session> rebuild_session(
   }
   session->set_death(doc_int(session_doc, "death", 0));
 
-  std::map<std::string, std::shared_ptr<Port> > ports_by_uid;
-  std::map<std::string, std::shared_ptr<Node> > nodes_by_uid;
+  std::map<std::string, std::shared_ptr<GraphPort> > ports_by_uid;
+  std::map<std::string, std::shared_ptr<GraphNode> > nodes_by_uid;
   for (std::size_t i = 0; i < objects.size(); ++i) {
     const OrderedJson& d = objects[i];
     const std::string type = doc_string(d, "type", "");
     const std::string oid = doc_string(d, "_id", "");
     if (oid.empty()) continue;
     if (type == "port") {
-      std::shared_ptr<Port> p = std::make_shared<Port>();
+      std::shared_ptr<GraphPort> p = std::make_shared<GraphPort>();
       apply_port_document(p, d);
       ports_by_uid[oid] = p;
     } else if (type == "node") {
-      std::shared_ptr<Node> n = std::make_shared<Node>(doc_string(d, "name", ""));
+      std::shared_ptr<GraphNode> n = std::make_shared<GraphNode>(doc_string(d, "name", ""));
       apply_node_document(n, d);
       nodes_by_uid[oid] = n;
     }
@@ -422,9 +422,9 @@ std::shared_ptr<Session> rebuild_session(
     if (type == "port") {
       const OrderedJson* link = doc_find(d, "link");
       if (link == nullptr || !link->is_string()) continue;
-      std::map<std::string, std::shared_ptr<Port> >::iterator self_it =
+      std::map<std::string, std::shared_ptr<GraphPort> >::iterator self_it =
           ports_by_uid.find(doc_string(d, "_id", ""));
-      std::map<std::string, std::shared_ptr<Port> >::iterator target_it =
+      std::map<std::string, std::shared_ptr<GraphPort> >::iterator target_it =
           ports_by_uid.find(link->get<std::string>());
       if (self_it != ports_by_uid.end() && target_it != ports_by_uid.end()) {
         self_it->second->set_link(target_it->second);
@@ -432,14 +432,14 @@ std::shared_ptr<Session> rebuild_session(
     } else if (type == "node") {
       const OrderedJson* ports_map = doc_find(d, "ports");
       if (ports_map == nullptr || !ports_map->is_object()) continue;
-      std::map<std::string, std::shared_ptr<Node> >::iterator node_it =
+      std::map<std::string, std::shared_ptr<GraphNode> >::iterator node_it =
           nodes_by_uid.find(doc_string(d, "_id", ""));
       if (node_it == nodes_by_uid.end()) continue;
       for (OrderedJson::const_iterator it = ports_map->begin();
            it != ports_map->end(); ++it) {
         if (!it.value().is_string()) continue;
         const std::string port_oid = it.value().get<std::string>();
-        std::map<std::string, std::shared_ptr<Port> >::iterator port_it =
+        std::map<std::string, std::shared_ptr<GraphPort> >::iterator port_it =
             ports_by_uid.find(port_oid);
         if (port_it == ports_by_uid.end()) continue;
         node_it->second->add_port(it.key(), port_it->second,
@@ -454,7 +454,7 @@ std::shared_ptr<Session> rebuild_session(
     for (OrderedJson::const_iterator it = nodes_map->begin();
          it != nodes_map->end(); ++it) {
       if (!it.value().is_string()) continue;
-      std::map<std::string, std::shared_ptr<Node> >::iterator node_it =
+      std::map<std::string, std::shared_ptr<GraphNode> >::iterator node_it =
           nodes_by_uid.find(it.value().get<std::string>());
       if (node_it != nodes_by_uid.end()) {
         session->add_node(it.key(), node_it->second);
@@ -469,7 +469,7 @@ std::shared_ptr<Session> rebuild_session(
     if (doc_string(d, "type", "") != "port") continue;
     const std::string oid = doc_string(d, "_id", "");
     if (oid.empty() || claimed.count(oid) > 0) continue;
-    std::map<std::string, std::shared_ptr<Port> >::iterator port_it =
+    std::map<std::string, std::shared_ptr<GraphPort> >::iterator port_it =
         ports_by_uid.find(oid);
     if (port_it != ports_by_uid.end()) session->add_port(port_it->second);
   }
@@ -498,28 +498,28 @@ std::vector<std::string> nonempty_lines(const std::string& content) {
 
 }  // namespace
 
-Session::Session() : BaseObject("session") {}
+GraphSession::GraphSession() : GraphObject("session") {}
 
-Session::~Session() = default;
+GraphSession::~GraphSession() = default;
 
-void Session::add_node(const std::string& key, std::shared_ptr<Node> node) {
+void GraphSession::add_node(const std::string& key, std::shared_ptr<GraphNode> node) {
   if (!node) {
-    throw std::invalid_argument("IMP::bff::Session::add_node: null node");
+    throw std::invalid_argument("IMP::bff::GraphSession::add_node: null node");
   }
   if (nodes_.find(key) == nodes_.end()) node_order_.push_back(key);
   nodes_[key] = node;
 }
 
-Session::NodeMap Session::get_nodes() const { return nodes_; }
+GraphSession::GraphNodeMap GraphSession::get_nodes() const { return nodes_; }
 
-std::shared_ptr<Node> Session::get_node(const std::string& key) const {
-  NodeMap::const_iterator it = nodes_.find(key);
-  return it == nodes_.end() ? std::shared_ptr<Node>() : it->second;
+std::shared_ptr<GraphNode> GraphSession::get_node(const std::string& key) const {
+  GraphNodeMap::const_iterator it = nodes_.find(key);
+  return it == nodes_.end() ? std::shared_ptr<GraphNode>() : it->second;
 }
 
-void Session::add_port(std::shared_ptr<Port> port) {
+void GraphSession::add_port(std::shared_ptr<GraphPort> port) {
   if (!port) {
-    throw std::invalid_argument("IMP::bff::Session::add_port: null port");
+    throw std::invalid_argument("IMP::bff::GraphSession::add_port: null port");
   }
   for (std::size_t i = 0; i < ports_.size(); ++i) {
     if (ports_[i] == port) return;
@@ -527,30 +527,30 @@ void Session::add_port(std::shared_ptr<Port> port) {
   ports_.push_back(port);
 }
 
-Session::PortList Session::get_ports() const { return ports_; }
+GraphSession::GraphPortList GraphSession::get_ports() const { return ports_; }
 
-std::shared_ptr<Port> Session::get_port(const std::string& name) const {
+std::shared_ptr<GraphPort> GraphSession::get_port(const std::string& name) const {
   for (std::size_t i = 0; i < ports_.size(); ++i) {
     if (ports_[i]->get_name() == name) return ports_[i];
   }
-  return std::shared_ptr<Port>();
+  return std::shared_ptr<GraphPort>();
 }
 
-void Session::clear() {
+void GraphSession::clear() {
   nodes_.clear();
   node_order_.clear();
   ports_.clear();
 }
 
-unsigned int Session::get_number_of_nodes() const {
+unsigned int GraphSession::get_number_of_nodes() const {
   return static_cast<unsigned int>(nodes_.size());
 }
 
-unsigned int Session::get_number_of_ports() const {
-  std::set<const Port*> seen;
-  for (NodeMap::const_iterator it = nodes_.begin(); it != nodes_.end(); ++it) {
-    const Node::PortMap ports = it->second->get_ports();
-    for (Node::PortMap::const_iterator pit = ports.begin();
+unsigned int GraphSession::get_number_of_ports() const {
+  std::set<const GraphPort*> seen;
+  for (GraphNodeMap::const_iterator it = nodes_.begin(); it != nodes_.end(); ++it) {
+    const GraphNode::GraphPortMap ports = it->second->get_ports();
+    for (GraphNode::GraphPortMap::const_iterator pit = ports.begin();
          pit != ports.end(); ++pit) {
       seen.insert(pit->second.get());
     }
@@ -561,16 +561,16 @@ unsigned int Session::get_number_of_ports() const {
   return static_cast<unsigned int>(seen.size());
 }
 
-void Session::save(const std::string& path) const {
+void GraphSession::save(const std::string& path) const {
   std::ofstream out(path.c_str(), std::ios::binary | std::ios::trunc);
   if (!out) {
-    throw std::runtime_error("IMP::bff::Session::save: cannot open '" + path +
+    throw std::runtime_error("IMP::bff::GraphSession::save: cannot open '" + path +
                              "' for writing");
   }
 
   std::vector<std::pair<std::string, std::string> > node_entries;
   for (std::size_t i = 0; i < node_order_.size(); ++i) {
-    NodeMap::const_iterator it = nodes_.find(node_order_[i]);
+    GraphNodeMap::const_iterator it = nodes_.find(node_order_[i]);
     if (it != nodes_.end()) {
       node_entries.push_back(std::make_pair(it->first, it->second->get_uid()));
     }
@@ -581,13 +581,13 @@ void Session::save(const std::string& path) const {
   // nodes (or held both ways) is written once, under the first path to it.
   std::set<std::string> written;
   for (std::size_t i = 0; i < node_order_.size(); ++i) {
-    NodeMap::const_iterator it = nodes_.find(node_order_[i]);
+    GraphNodeMap::const_iterator it = nodes_.find(node_order_[i]);
     if (it == nodes_.end()) continue;
     if (!written.insert(it->second->get_uid()).second) continue;
     out << node_document(*it->second) << "\n";
     const std::vector<std::string> order = it->second->get_port_order();
     for (std::size_t k = 0; k < order.size(); ++k) {
-      std::shared_ptr<Port> p = it->second->get_port(order[k]);
+      std::shared_ptr<GraphPort> p = it->second->get_port(order[k]);
       if (!p || !written.insert(p->get_uid()).second) continue;
       out << port_document(*p) << "\n";
     }
@@ -599,22 +599,22 @@ void Session::save(const std::string& path) const {
 
   out.flush();
   if (!out) {
-    throw std::runtime_error("IMP::bff::Session::save: failed writing '" +
+    throw std::runtime_error("IMP::bff::GraphSession::save: failed writing '" +
                              path + "'");
   }
 }
 
-std::shared_ptr<Session> Session::load(const std::string& path) {
+std::shared_ptr<GraphSession> GraphSession::load(const std::string& path) {
   std::ifstream in(path.c_str(), std::ios::binary);
   if (!in) {
-    throw std::runtime_error("IMP::bff::Session::load: cannot open '" + path +
+    throw std::runtime_error("IMP::bff::GraphSession::load: cannot open '" + path +
                              "'");
   }
   const std::string content((std::istreambuf_iterator<char>(in)),
                             std::istreambuf_iterator<char>());
   const std::vector<std::string> lines = nonempty_lines(content);
   if (lines.empty()) {
-    return std::shared_ptr<Session>();  // chinet: an empty file loads as None
+    return std::shared_ptr<GraphSession>();  // chinet: an empty file loads as None
   }
 
   // chinet's format test: a JSONL session line is an object without a
@@ -634,7 +634,7 @@ std::shared_ptr<Session> Session::load(const std::string& path) {
         OrderedJson::parse(content, nullptr, false);
     if (whole.is_discarded() || !whole.is_object()) {
       throw std::runtime_error(
-          "IMP::bff::Session::load: '" + path +
+          "IMP::bff::GraphSession::load: '" + path +
           "' is neither a JSONL session nor a legacy session document");
     }
     const OrderedJson* session_doc = doc_find(whole, "session");
@@ -642,7 +642,7 @@ std::shared_ptr<Session> Session::load(const std::string& path) {
     if (session_doc == nullptr || !session_doc->is_object() ||
         objects == nullptr || !objects->is_array()) {
       throw std::runtime_error(
-          "IMP::bff::Session::load: '" + path +
+          "IMP::bff::GraphSession::load: '" + path +
           "' is a legacy document without a session object and an objects "
           "array");
     }
@@ -659,7 +659,7 @@ std::shared_ptr<Session> Session::load(const std::string& path) {
     OrderedJson d =
         OrderedJson::parse(lines[i], nullptr, false);
     if (d.is_discarded() || !d.is_object()) {
-      throw std::runtime_error("IMP::bff::Session::load: '" + path +
+      throw std::runtime_error("IMP::bff::GraphSession::load: '" + path +
                                "' has a malformed line " +
                                std::to_string(i + 1));
     }
@@ -670,7 +670,7 @@ std::shared_ptr<Session> Session::load(const std::string& path) {
       return rebuild_session(documents[i], documents);
     }
   }
-  return std::shared_ptr<Session>();  // no session line, chinet's None
+  return std::shared_ptr<GraphSession>();  // no session line, chinet's None
 }
 
 IMPBFF_END_NAMESPACE

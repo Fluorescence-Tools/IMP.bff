@@ -44,7 +44,7 @@ class ABStressTests(unittest.TestCase):
 
     def test_many_ports_survive_collection(self):
         """Hundreds of live ports, collected repeatedly, still readable."""
-        ports = [bff.Port(float(i), name=f"bulk{i}") for i in range(N_PORTS)]
+        ports = [bff.GraphPort(float(i), name=f"bulk{i}") for i in range(N_PORTS)]
         for _ in range(5):
             gc.collect()
         for index, port in enumerate(ports):
@@ -69,8 +69,8 @@ class ABStressTests(unittest.TestCase):
         This is the ownership guarantee bff must provide: chisurf links
         parameters and then lets the local handle go out of scope.
         """
-        upstream = bff.Port(3.0, name="upstream")
-        follower = bff.Port(0.0, name="follower")
+        upstream = bff.GraphPort(3.0, name="upstream")
+        follower = bff.GraphPort(0.0, name="follower")
         follower.link = upstream
         upstream.value = 7.25
         del upstream
@@ -112,10 +112,10 @@ class ABStressTests(unittest.TestCase):
         """Nodes keep their ports alive across collection."""
         nodes = []
         for index in range(100):
-            node = bff.Node()
+            node = bff.GraphNode()
             node.name = f"n{index}"
-            node.add_input_port("x", bff.Port(float(index), name=f"x{index}"))
-            node.add_output_port(f"n{index}", bff.Port(0.0, name=f"o{index}"))
+            node.add_input_port("x", bff.GraphPort(float(index), name=f"x{index}"))
+            node.add_output_port(f"n{index}", bff.GraphPort(0.0, name=f"o{index}"))
             nodes.append(node)
         for _ in range(3):
             gc.collect()

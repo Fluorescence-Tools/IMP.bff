@@ -207,7 +207,7 @@ def test_the_node_and_the_free_function_agree():
         node = _b.GaussianDistances("distances")
         node.set_number_of_components(len(MEANS))
         node.set_distance_between_gaussians(two_cloud)
-        node.add_output_port("distances", _b.Port([0.0], False, True))
+        node.add_output_port("distances", _b.GraphPort([0.0], False, True))
         node.set_axis_array(np.ascontiguousarray(AXIS))
         for i in range(len(MEANS)):
             node.get_input_port("mean%d" % i).set_value(MEANS[i])

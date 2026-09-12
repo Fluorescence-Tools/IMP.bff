@@ -21,28 +21,28 @@ _KEEP_ALIVE = []
 
 def _op(name, a, b, op):
     """One operator node, with its result on a port named after the node."""
-    node = bff.Node(name)
+    node = bff.GraphNode(name)
     node.add_input_port("a", a)
     node.add_input_port("b", b)
-    node.add_output_port(name, bff.Port(0.0, False, True))
+    node.add_output_port(name, bff.GraphPort(0.0, False, True))
     node.set_callback(op, "C")
     _KEEP_ALIVE.append(node)
     return node
 
 
 def _follow(port):
-    p = bff.Port(0.0)
+    p = bff.GraphPort(0.0)
     p.set_link(port)
     return p
 
 
 def build_graph(x, y, ey):
     """c + a*x + b*x**2, then its chi-square, as bff nodes."""
-    a, b, c = bff.Port(2.0, name="a"), bff.Port(0.5, name="b"), bff.Port(1.0, name="c")
-    xp = bff.Port(list(x), name="x")
+    a, b, c = bff.GraphPort(2.0, name="a"), bff.GraphPort(0.5, name="b"), bff.GraphPort(1.0, name="c")
+    xp = bff.GraphPort(list(x), name="x")
 
     ax = _op("ax", xp, a, "multiply_double")
-    x2 = _op("x2", xp, bff.Port(list(x)), "multiply_double")
+    x2 = _op("x2", xp, bff.GraphPort(list(x)), "multiply_double")
     bx2 = _op("bx2", _follow(x2.get_output_port("x2")), b, "multiply_double")
     s1 = _op("s1", _follow(ax.get_output_port("ax")),
              _follow(bx2.get_output_port("bx2")), "addition_double")
@@ -50,7 +50,7 @@ def build_graph(x, y, ey):
 
     chi2 = bff.ChiSquared("chi2")
     chi2.add_input_port("model", _follow(model.get_output_port("model")))
-    chi2.add_output_port("chi2", bff.Port(0.0, name="chi2"))
+    chi2.add_output_port("chi2", bff.GraphPort(0.0, name="chi2"))
     chi2.set_data(list(y), list(ey))
     _KEEP_ALIVE.append(chi2)
     return [a, b, c], chi2

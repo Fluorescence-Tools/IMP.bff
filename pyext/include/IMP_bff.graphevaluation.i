@@ -2,12 +2,12 @@
  * The evaluation graph, and how a saved one is checked against the code that
  * rebuilds it.
  *
- * `EvaluationGraph` stores a provenance string per output and never looks
+ * `GraphEvaluation` stores a provenance string per output and never looks
  * inside it. What a useful one contains is a Python question -- a node's
  * module, its class, and a hash of its source -- so it is answered here.
  */
 
-%include "IMP/bff/EvaluationGraph.h"
+%include "IMP/bff/GraphEvaluation.h"
 
 %pythoncode %{
 import hashlib as _eg_hashlib
@@ -65,10 +65,10 @@ def check_provenance(graph, nodes):
     skipped rather than reported: nothing was promised about it.
 
     **Your objects, not the graph's.** `graph.get_output_node(label)` hands
-    back a `Node` -- the same C++ node, same uid, and the Python override
+    back a `GraphNode` -- the same C++ node, same uid, and the Python override
     still runs when it is evaluated -- but *not* the Python object you
     registered, because a director's Python identity is not carried back out
-    through the binding. So its class is `Node` and its provenance would be
+    through the binding. So its class is `GraphNode` and its provenance would be
     meaningless. This function therefore asks for the nodes you rebuilt, which
     you have, since rebuilding them is what made the graph loadable at all.
     """
@@ -135,7 +135,7 @@ def node_code(node, source=None, imports=(), values=None):
 
     `imports` is every module the defining module imported, under the alias it
     used. Wholesale rather than only what the methods name, because a base
-    class is evaluated when the class is created: ``class N(bff.Node)`` never
+    class is evaluated when the class is created: ``class N(bff.GraphNode)`` never
     puts `bff` in any method's names, and capturing only those rebuilds into a
     NameError on the class statement itself.
 
@@ -187,7 +187,7 @@ def rebuild_node_class(code, trusted=False):
         raise ValueError(
             "rebuild_node_class executes the source carried in the document, "
             "so it will not run unless you pass trusted=True. Rebuild the "
-            "nodes yourself and use EvaluationGraph.from_json if you would "
+            "nodes yourself and use GraphEvaluation.from_json if you would "
             "rather the document stayed inert.")
     namespace = {}
     for statement in code["imports"]:
@@ -220,7 +220,7 @@ def graph_code(graph, nodes, sources=None):
 
 
 def rebuild_node_classes(document, trusted=False):
-    """Node name -> class, from a `graph_code` document."""
+    """GraphNode name -> class, from a `graph_code` document."""
     import json as _json
     doc = _json.loads(document) if isinstance(document, str) else document
     return {name: rebuild_node_class(code, trusted=trusted)

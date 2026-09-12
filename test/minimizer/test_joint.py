@@ -1,7 +1,7 @@
 """The grouping: one misfit over several datasets, in C++.
 
-A joint fit is two things. **Sharing a parameter** is `Port::set_link`, which
-bff has had since the Port runtime; **one objective over every dataset** is
+A joint fit is two things. **Sharing a parameter** is `GraphPort::set_link`, which
+bff has had since the GraphPort runtime; **one objective over every dataset** is
 `JointChiSquared`. Together they make a group a graph a `Minimizer` can
 optimise without the caller crossing the SWIG boundary per iteration.
 
@@ -20,30 +20,30 @@ from IMP import bff
 
 
 def make_member(equation, x, y, ey, name):
-    """One dataset: `Expression -> ChiSquared`, residuals on a port."""
-    curve = bff.Expression(name + "_model")
+    """One dataset: `GraphExpression -> ChiSquared`, residuals on a port."""
+    curve = bff.GraphExpression(name + "_model")
     curve.set_expression(equation)
     parameters = {}
     for v in curve.get_variable_names():
         if v == "x":
             continue
-        port = bff.Port(1.0)
+        port = bff.GraphPort(1.0)
         curve.add_input_port(v, port)
         parameters[v] = port
-    axis = bff.Port([0.0])
+    axis = bff.GraphPort([0.0])
     axis.set_values_array(np.ascontiguousarray(x, dtype=float))
     curve.add_input_port("x", axis)
-    out = bff.Port([0.0], False, True)
+    out = bff.GraphPort([0.0], False, True)
     curve.add_output_port(name + "_model", out)
 
     chi2 = bff.ChiSquared(name)
     chi2.set_data_arrays(np.ascontiguousarray(y, dtype=float),
                          np.ascontiguousarray(ey, dtype=float))
-    model_in = bff.Port([0.0])
+    model_in = bff.GraphPort([0.0])
     model_in.link = out
     chi2.add_input_port("model", model_in)
-    chi2.add_output_port(name, bff.Port(0.0, False, True))
-    chi2.add_output_port("residuals", bff.Port([0.0], False, True))
+    chi2.add_output_port(name, bff.GraphPort(0.0, False, True))
+    chi2.add_output_port("residuals", bff.GraphPort([0.0], False, True))
     # The Python proxies have to outlive this function or the C++ graph is
     # left holding nodes whose directors have been collected.
     chi2._graph = (curve, out, model_in, axis)
@@ -69,8 +69,8 @@ def build_group(x, y1, y2, ey):
     p2["t"].link = p1["t"]
 
     joint = bff.JointChiSquared("joint")
-    joint.add_output_port("joint", bff.Port(0.0, False, True))
-    joint.add_output_port("residuals", bff.Port([0.0], False, True))
+    joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
+    joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
     joint.add_member(m1, "residuals")
     joint.add_member(m2, "residuals")
 
@@ -148,7 +148,7 @@ class GroupingTests(unittest.TestCase):
 
         def alone(y):
             member, p = make_member("a*exp(-x/t)", x, y, ey, "solo")
-            member.add_output_port("residuals_solo", bff.Port([0.0], False, True))
+            member.add_output_port("residuals_solo", bff.GraphPort([0.0], False, True))
             for port in p.values():
                 port.value = 1.0
             one = bff.Minimizer()
@@ -182,8 +182,8 @@ class GroupingTests(unittest.TestCase):
         x, y1, y2, ey = two_datasets()
         m1, p1 = make_member("a*exp(-x/t)", x, y1, ey, "only")
         joint = bff.JointChiSquared("joint")
-        joint.add_output_port("joint", bff.Port(0.0, False, True))
-        joint.add_output_port("residuals", bff.Port([0.0], False, True))
+        joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
+        joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
         for port in p1.values():
             port.value = 1.0
@@ -196,8 +196,8 @@ class GroupingTests(unittest.TestCase):
 
     def test_a_member_without_residuals_is_refused(self):
         joint = bff.JointChiSquared("joint")
-        plain = bff.Node("plain")
-        plain.add_output_port("chi2", bff.Port(0.0, False, True))
+        plain = bff.GraphNode("plain")
+        plain.add_output_port("chi2", bff.GraphPort(0.0, False, True))
         with self.assertRaises(ValueError):
             joint.add_member(plain, "residuals")
 
@@ -235,8 +235,8 @@ class GroupingTests(unittest.TestCase):
         m1, p1 = make_member("sqrt(a-x)", x, np.ones(n), ey, "d1")
         m2, p2 = make_member("a*exp(-x/t)", x, np.ones(n), ey, "d2")
         joint = bff.JointChiSquared("joint")
-        joint.add_output_port("joint", bff.Port(0.0, False, True))
-        joint.add_output_port("residuals", bff.Port([0.0], False, True))
+        joint.add_output_port("joint", bff.GraphPort(0.0, False, True))
+        joint.add_output_port("residuals", bff.GraphPort([0.0], False, True))
         joint.add_member(m1, "residuals")
         joint.add_member(m2, "residuals")
 
@@ -257,7 +257,7 @@ class GroupingTests(unittest.TestCase):
 
     def test_an_ordinary_port_still_sanitises(self):
         """Only the fit's transport opts out; a document value is unchanged."""
-        p = bff.Port([1.0])
+        p = bff.GraphPort([1.0])
         p.set_value_vector([float("nan")])
         self.assertGreater(float(np.asarray(p.value)[0]), 0.0)
         self.assertTrue(p.get_sanitize())

@@ -10,7 +10,7 @@
  *    shipped components (okf/validation/impropers_are_dropped.md).
  *  - Building, writing and reporting a system from `name=X,mol2=Y` strings is
  *    CLI, and lives in `bin/imp_bff`.
- *  - Node numbering belongs with the graph, not with the caller: a
+ *  - GraphNode numbering belongs with the graph, not with the caller: a
  *    first-appearance numbering and a sorted one give different orders out,
  *    so `MolecularGraph` keys by the caller's int, `LabelledGraph` by a string
  *    site id, and the rotor and ring questions are methods on them.

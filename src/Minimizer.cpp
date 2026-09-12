@@ -19,8 +19,8 @@
 
 #include <IMP/bff/Minimizer.h>
 
-#include <IMP/bff/Node.h>
-#include <IMP/bff/Port.h>
+#include <IMP/bff/GraphNode.h>
+#include <IMP/bff/GraphPort.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <algorithm>
@@ -488,7 +488,7 @@ void Minimizer::set_algorithm(const std::string& algorithm) {
 const std::string& Minimizer::get_algorithm() const { return algorithm_; }
 
 void Minimizer::set_parameter_ports(
-    const std::vector<std::shared_ptr<Port> >& parameters) {
+    const std::vector<std::shared_ptr<GraphPort> >& parameters) {
   for (std::size_t i = 0; i < parameters.size(); ++i) {
     if (!parameters[i])
       throw MinimizerConfigurationError(
@@ -502,7 +502,7 @@ void Minimizer::set_parameter_ports(
   configure_from_ports();
 }
 
-std::vector<std::shared_ptr<Port> > Minimizer::get_parameter_ports() const {
+std::vector<std::shared_ptr<GraphPort> > Minimizer::get_parameter_ports() const {
   return parameters_;
 }
 
@@ -572,7 +572,7 @@ void Minimizer::set_bounds(const std::vector<double>& lower,
 std::vector<double> Minimizer::get_lower_bounds() const { return lower_; }
 std::vector<double> Minimizer::get_upper_bounds() const { return upper_; }
 
-void Minimizer::set_objective(std::shared_ptr<Node> node,
+void Minimizer::set_objective(std::shared_ptr<GraphNode> node,
                               const std::string& residual_key) {
   if (!node)
     throw MinimizerConfigurationError("set_objective: the node is a null pointer");
@@ -586,7 +586,7 @@ void Minimizer::set_objective(std::shared_ptr<Node> node,
   residual_function_ = nullptr;
 }
 
-std::shared_ptr<Node> Minimizer::get_objective() const {
+std::shared_ptr<GraphNode> Minimizer::get_objective() const {
   return objective_node_;
 }
 
@@ -763,7 +763,7 @@ std::vector<double> Minimizer::evaluate_external(
   if (residual_function_) return residual_function_(xe);
   for (unsigned int i = 0; i < ndim_; ++i) parameters_[i]->set_value(xe[i]);
   objective_node_->update();
-  const std::shared_ptr<Port> out =
+  const std::shared_ptr<GraphPort> out =
       objective_node_->get_output_port(residual_key_);
   if (!out) {
     throw MinimizerConfigurationError(

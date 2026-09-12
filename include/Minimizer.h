@@ -1,6 +1,6 @@
 /**
  *  \file IMP/bff/Minimizer.h
- *  \brief ChiSurf's bounded least-squares optimiser over a bff Port/Node model, in C++.
+ *  \brief ChiSurf's bounded least-squares optimiser over a bff GraphPort/GraphNode model, in C++.
  *
  *  The deterministic counterpart of `Sampler.h`, and the last piece of a fit
  *  that still returned to Python on every iteration. `Sampler` moved the
@@ -22,9 +22,9 @@
  *  iteration.
  *
  *  So the point of the port is composition, not speed in isolation:
- *  `Expression -> ChiSquared -> Minimizer` is a fit that never re-enters the
+ *  `GraphExpression -> ChiSquared -> Minimizer` is a fit that never re-enters the
  *  interpreter. A model bff cannot represent still gains, but less: a Python
- *  `Node` director costs one crossing per residual evaluation instead of the
+ *  `GraphNode` director costs one crossing per residual evaluation instead of the
  *  four or five the numpy path pays.
  *
  *  **The algorithm is MINPACK's, ported rather than re-derived.** `lmdif`
@@ -52,7 +52,7 @@
  *  Jacobian after every fit; here the Jacobian the optimiser already built is
  *  reused, correctly.
  *
- *  \see Sampler, ChiSquared, Expression, Node
+ *  \see Sampler, ChiSquared, GraphExpression, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -79,15 +79,15 @@
 
 IMPBFF_BEGIN_NAMESPACE
 
-class Port;
-class Node;
+class GraphPort;
+class GraphNode;
 
 //! Raised for a misconfigured minimiser (no objective, fixed ports, a
 //! bounds list that does not match the parameters...).
 /*!
     `std::domain_error` so the wrapper maps it to a `ValueError`, which is
     the contract chisurf's optimiser raises under -- the same choice
-    `SamplerConfigurationError` and `LinkCycleError` make.
+    `SamplerConfigurationError` and `GraphLinkCycleError` make.
 */
 class IMPBFFEXPORT MinimizerConfigurationError : public std::domain_error {
  public:
@@ -167,13 +167,13 @@ class IMPBFFEXPORT Minimizer {
   //! The free parameters, as the ports the trial vector is written into.
   /*!
       Values start from the ports' current values and bounds from the ports
-      that enforce them (`Port::get_is_bounded`); a port without enforcement
+      that enforce them (`GraphPort::get_is_bounded`); a port without enforcement
       is unbounded in that direction. A fixed port cannot be optimised and
       is refused here.
   */
   void set_parameter_ports(
-      const std::vector<std::shared_ptr<Port> >& parameters);
-  std::vector<std::shared_ptr<Port> > get_parameter_ports() const;
+      const std::vector<std::shared_ptr<GraphPort> >& parameters);
+  std::vector<std::shared_ptr<GraphPort> > get_parameter_ports() const;
   std::vector<std::string> get_parameter_names() const;
 
   //! The starting point. Defaults to the ports' current values.
@@ -193,24 +193,24 @@ class IMPBFFEXPORT Minimizer {
   //! The node graph producing the residual vector.
   /*!
       \param[in] node the node to evaluate; `ChiSquared` is the intended
-                 one, but any node works -- including a Python `Node`
+                 one, but any node works -- including a Python `GraphNode`
                  director wrapping a model bff cannot represent
       \param[in] residual_key the node's output port carrying the residual
                  vector; empty keeps the current key (default "residuals")
 
       The optimiser writes the trial vector into the parameter ports, calls
-      `Node::update()`, and reads the residuals off that port. Nothing else
+      `GraphNode::update()`, and reads the residuals off that port. Nothing else
       crosses.
   */
-  void set_objective(std::shared_ptr<Node> node,
+  void set_objective(std::shared_ptr<GraphNode> node,
                      const std::string& residual_key = "");
-  std::shared_ptr<Node> get_objective() const;
+  std::shared_ptr<GraphNode> get_objective() const;
   void set_residual_port_key(const std::string& key);
   const std::string& get_residual_port_key() const;
 
   //! A C++ residual function instead of a graph. Not SWIG-wrapped.
   /*! The module carries no `std_function.i`, and a Python callable is a
-      `Node` director anyway -- the same division `Sampler` makes. */
+      `GraphNode` director anyway -- the same division `Sampler` makes. */
   void set_residual_function(
       std::function<std::vector<double>(const std::vector<double>&)> f);
   bool has_objective() const;
@@ -292,7 +292,7 @@ class IMPBFFEXPORT Minimizer {
       **Not parallel, and it cannot be.** The candidates are independent but
       the graph is not: they are scored by writing the shared parameter ports,
       so two threads would race over one set of ports. Parallelism here needs
-      a graph per thread, which is a different feature (a `Node` deep copy)
+      a graph per thread, which is a different feature (a `GraphNode` deep copy)
       and not this one.
 
       The parameter ports are restored to what they held on entry, and the
@@ -474,8 +474,8 @@ class IMPBFFEXPORT Minimizer {
 
   std::string algorithm_ = "leastsq";
 
-  std::vector<std::shared_ptr<Port> > parameters_;
-  std::shared_ptr<Node> objective_node_;
+  std::vector<std::shared_ptr<GraphPort> > parameters_;
+  std::shared_ptr<GraphNode> objective_node_;
   std::string residual_key_ = "residuals";
   std::function<std::vector<double>(const std::vector<double>&)>
       residual_function_;
