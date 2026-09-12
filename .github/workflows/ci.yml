@@ -22,6 +22,9 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # One run per branch/PR. Without this every push queues a fresh copy of the
 # whole matrix behind the last one, and a fix waits on results nobody wants
 # any more. main and tags are exempt: a release build has to finish even if
