@@ -155,7 +155,6 @@ jobs:
           path: imp-bld
           key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
       - name: Build our imp (when the cache is cold)
-        if: steps.imp-cache.outputs.cache-hit != 'true'
         shell: bash -el {0}
         run: |
           # A cache miss leaves no imp-bld directory.  Under bash -e the old
