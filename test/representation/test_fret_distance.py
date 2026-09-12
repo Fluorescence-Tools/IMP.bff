@@ -74,7 +74,7 @@ def test_the_named_transfer_functions_dispatch():
     assert fdist.effective_distance(40.0, "Spline", 6.0) == pytest.approx(40.0)
 
 
-def test_select_informative_pairs_prefers_discriminating_pair():
+def test_select_probe_pairs_prefers_discriminating_pair():
     rng = np.random.RandomState(0)
     n_frames = 20
     # pair 0 separates two conformation clusters; pair 1 is pure noise
@@ -83,8 +83,8 @@ def test_select_informative_pairs_prefers_discriminating_pair():
     effs[:, 0] = 0.2 + 0.6 * labels + rng.normal(0, 0.01, n_frames)
     effs[:, 1] = 0.5 + rng.normal(0, 0.01, n_frames)
     rmsds = np.abs(labels[:, None] - labels[None, :]) * 10.0
-    selected, decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.05, max_pairs=2)
+    selected, decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.05, max_pairs=2)
     assert selected[0] == 0
     assert decay.shape == (2,)
     assert decay[0] <= rmsds.mean() + 1e-6

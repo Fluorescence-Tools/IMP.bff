@@ -23,7 +23,7 @@ IMPBFFEXPORT double rmsd_no_align(
 
 //! RMSD between every pair of frames, as an `(n_frames, n_frames)` matrix.
 /*! The second input a greedy pair selection needs
-    (#IMP::bff::select_informative_pairs): how far apart the ensemble places
+    (#IMP::bff::select_probe_pairs): how far apart the ensemble places
     its conformers, against which a candidate measurement's power to tell them
     apart is weighed. Symmetric and zero on the diagonal, so only the
     `n_frames * (n_frames - 1) / 2` distinct pairs are computed.

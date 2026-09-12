@@ -194,7 +194,7 @@ and where buying more stops paying. The two inputs it needs are computed from
 the ensemble rather than assumed: `ProbeNetworkRestraint::get_pair_efficiencies`
 gives one row of FRET efficiencies per frame, and `pairwise_rmsd` the matrix
 they are weighed against. `examples/labels/plot_pair_selection.py` plots the
-curve. The kernels underneath -- `select_informative_pairs`, `expected_rmsd`,
+curve. The kernels underneath -- `select_probe_pairs`, `expected_rmsd`,
 `expected_rmsd_after_adding`, `chi2_right_tail` -- are public in their own
 right, for a caller who already has the two matrices.
 

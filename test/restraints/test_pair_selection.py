@@ -1,6 +1,6 @@
 """The two inputs greedy pair selection needs, and the pipeline that feeds it.
 
-``select_informative_pairs`` was reachable but unreachable *from a structure*:
+``select_probe_pairs`` was reachable but unreachable *from a structure*:
 its tests handed it synthetic matrices, and nothing in the tree turned an
 ensemble into the ``(n_frames, n_pairs)`` efficiencies and the ``(n, n)`` RMSDs
 it takes. The two halves of that gap are covered here --
@@ -171,8 +171,8 @@ def test_the_two_inputs_feed_the_selector(t4l_restraint):
         coords[i] = [b.get_coordinates() for b in beads]
 
     rmsds = IMP.bff.pairwise_rmsd(coords, True)
-    selected, decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.06, max_pairs=5)
+    selected, decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.06, max_pairs=5)
 
     assert len(selected) == len(decay) == 5
     assert len(set(selected)) == 5, "unique_only defaults on"

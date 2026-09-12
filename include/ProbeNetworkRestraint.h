@@ -420,7 +420,7 @@ public:
     /*! Each pair with its own Förster radius, and as an *efficiency* whatever
         distance type the file asked to be scored on -- planning weighs a pair
         by how far apart it places conformers in the observable, and the
-        expected error #IMP::bff::select_informative_pairs takes is quoted in
+        expected error #IMP::bff::select_probe_pairs takes is quoted in
         efficiency units.
 
         The accessible volumes are re-evaluated first, so a caller that has

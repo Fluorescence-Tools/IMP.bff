@@ -2,6 +2,22 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 2b — separate Labelizer concepts and generic probe selection**
+  ([PRD-141](prds/prd-141.md)): `LabelizerFeatures`, `LabelizerScore`,
+  `LabelizerFRET` and `LabelizerIO` now have independent headers/sources; the
+  accessible-volume provider belongs to FRET. Each file compiles on its own;
+  extracted implementation bodies are unchanged. `GreedyOlga` becomes
+  `ProbePairSelection`, with `select_probe_pairs` / `select_probe_positions`
+  taking `predicted_measurements` / `measurement_error`. The numerical kernel
+  is unchanged; frozen FRET/EPR/PRE cases pin selection order and precision.
+  SWIG, examples/notebooks, benchmark and the ChiSurf forwarder follow the
+  public names. Both IMP and standalone bindings built; 422 IMP, 254
+  standalone (6 expected skips), and 17 ChiSurf tests passed. Public all-header
+  C++17 syntax, Python type/static checks and independent split review pass.
+  The CLI's four pre-existing F821 findings remain recorded in the resume
+  point. Next: probe representations/simulation; the separate rotamer/data
+  edits remain outside this change.
+
 - **PRD-141 stage 2a — Labelizer owns its whole public vocabulary**
   ([PRD-141](prds/prd-141.md)): opaque `Ll*`/`ll_*`/`LL_*` API names are now
   `Labelizer*`/`labelizer_*`/`LABELIZER_*`; FRET pair types and functions say

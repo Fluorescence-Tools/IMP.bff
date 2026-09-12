@@ -1,6 +1,6 @@
 /**
- *  \file IMP/bff/GreedyOlga.h
- *  \brief Greedy Olga — which FRET pair (or, for a homo-oligomer, which
+ *  \file IMP/bff/ProbePairSelection.h
+ *  \brief Greedy probe selection — which probe pair (or, for a homo-oligomer, which
  *         labelling site) to measure next.
  *
  * Experiment planning, after Olga: given an ensemble of candidate structures and
@@ -11,7 +11,7 @@
  * step the whole cost. When the experiment is a homo-oligomer with a
  * statistical labelling mix, the unit changes: sites are mutated once and all
  * their cross-protomer combinations are measured, so
- * #IMP::bff::select_informative_sites greedies over sites and scores each step
+ * #IMP::bff::select_probe_positions greedies over sites and scores each step
  * by the pair set the sites imply.
  *
  * The cost is in the scoring step. Every remaining candidate pair has to be
@@ -25,8 +25,8 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_GREEDYOLGA_H
-#define IMPBFF_GREEDYOLGA_H
+#ifndef IMPBFF_PROBEPAIRSELECTION_H
+#define IMPBFF_PROBEPAIRSELECTION_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -55,7 +55,7 @@ IMPBFFEXPORT std::vector<double> chi2_right_tail(
 
     \param[in] rmsds pairwise RMSD between frames, flat `n * n`
     \param[in] chi2 accumulated chi-squared so far, flat `n * n`
-    \param[in] e_add per-frame efficiency of each candidate, flat `m * n`
+    \param[in] e_add per-frame predicted measurement of each candidate, flat `m * n`
     \param[in] inv_err_sq \f$1/\sigma^2\f$ of the new measurement
     \param[in] ndof degrees of freedom after the addition
     \param[in] diag_weight Olga's diagonal correction on the denominator
@@ -90,7 +90,7 @@ IMPBFFEXPORT double expected_rmsd(
     Repeatedly adds the candidate pair that leaves the smallest expected mean
     RMSD, then reports the precision decay over the selection.
 
-    `effs` is expected to be finite: Olga's GUI does its NaN filtering before
+    `predicted_measurements` is expected to be finite: Olga's GUI does its NaN filtering before
     calling the selector, and so must a caller here.
 
     The result is published as two managed numpy views: the selected pair
@@ -98,19 +98,19 @@ IMPBFFEXPORT double expected_rmsd(
     (same length). Shapes are part of the contract, stated once here rather
     than by a Python wrapper that split a struct into two arrays.
 
-    \param[in] effs,n_frames,n_pairs FRET efficiency per frame and pair
+    \param[in] predicted_measurements,n_frames,n_pairs predicted measurement per frame and pair (FRET, EPR or PRE)
     \param[in] rmsds,n_rmsd_rows,n_rmsd_cols pairwise RMSD between frames
-    \param[in] err expected absolute error in FRET efficiency
+    \param[in] measurement_error expected absolute measurement error, in the prediction units
     \param[in] max_pairs how many to select; capped at `n_pairs`
     \param[in] unique_only a candidate may be selected at most once
     \param[in] diag_weight Olga's diagonal correction on the denominator
     \param[out] out_pairs,n_out_pairs selected pair indices (int view)
     \param[out] out_decay,n_out_decay expected mean RMSD after each (double view)
 */
-IMPBFFEXPORT void select_informative_pairs(
-        double* effs, int n_frames, int n_pairs,
+IMPBFFEXPORT void select_probe_pairs(
+        double* predicted_measurements, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
-        double err, int max_pairs,
+        double measurement_error, int max_pairs,
         bool unique_only = true, double diag_weight = 0.99,
         int** out_pairs = 0, int* n_out_pairs = 0,
         double** out_decay = 0, int* n_out_decay = 0);
@@ -145,26 +145,26 @@ IMPBFFEXPORT void select_informative_pairs(
     \f$|\{p : \mathrm{both\ sites\ chosen}\}|\f$, which the caller can count
     from `pair_sites` directly.
 
-    \param[in] effs,n_frames,n_pairs FRET efficiency per frame and pair
+    \param[in] predicted_measurements,n_frames,n_pairs predicted measurement per frame and pair (FRET, EPR or PRE)
     \param[in] rmsds,n_rmsd_rows,n_rmsd_cols pairwise RMSD between frames
     \param[in] pair_sites,n_site_rows,n_site_cols the two site indices per
                pair, `n_pairs * 2`, values in `[0, n_sites)`
-    \param[in] err expected absolute error in FRET efficiency
+    \param[in] measurement_error expected absolute measurement error, in the prediction units
     \param[in] max_sites how many sites to select; capped at the site count
     \param[in] diag_weight Olga's diagonal correction on the denominator
     \param[out] out_sites,n_out_sites selected site indices (int view)
     \param[out] out_decay,n_out_decay expected mean RMSD after each (double
                 view)
 */
-IMPBFFEXPORT void select_informative_sites(
-        double* effs, int n_frames, int n_pairs,
+IMPBFFEXPORT void select_probe_positions(
+        double* predicted_measurements, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
         int* pair_sites, int n_site_rows, int n_site_cols,
-        double err, int max_sites,
+        double measurement_error, int max_sites,
         double diag_weight = 0.99,
         int** out_sites = 0, int* n_out_sites = 0,
         double** out_decay = 0, int* n_out_decay = 0);
 
 IMPBFF_END_NAMESPACE
 
-#endif //IMPBFF_GREEDYOLGA_H
+#endif //IMPBFF_PROBEPAIRSELECTION_H

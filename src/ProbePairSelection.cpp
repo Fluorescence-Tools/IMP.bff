@@ -1,10 +1,10 @@
 /**
- * \file GreedyOlga.cpp
- * \brief Greedy Olga -- which FRET pair to measure next.
+ * \file ProbePairSelection.cpp
+ * \brief Greedy probe selection -- which probe pair to measure next.
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#include <IMP/bff/GreedyOlga.h>
+#include <IMP/bff/ProbePairSelection.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/bff/Base.h>
@@ -199,14 +199,14 @@ double expected_rmsd(const std::vector<double>& rmsds,
                                 static_cast<std::size_t>(n_frames));
 }
 
-void select_informative_pairs(
-        double* effs, int n_frames, int n_pairs,
+void select_probe_pairs(
+        double* predicted_measurements, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
-        double err, int max_pairs, bool unique_only, double diag_weight,
+        double measurement_error, int max_pairs, bool unique_only, double diag_weight,
         int** out_pairs, int* n_out_pairs,
         double** out_decay, int* n_out_decay) {
     if (n_rmsd_rows != n_rmsd_cols || n_rmsd_rows != n_frames) {
-        IMP_THROW("rmsds must be square and match the frame count of effs",
+        IMP_THROW("rmsds must be square and match the frame count of predicted_measurements",
                   ValueException);
     }
     const int n_take = std::min(max_pairs, n_pairs);
@@ -215,14 +215,14 @@ void select_informative_pairs(
     if (n_frames > 0 && n_pairs > 0 && n_take > 0) {
         const std::size_t n = static_cast<std::size_t>(n_frames);
         const std::size_t m = static_cast<std::size_t>(n_pairs);
-        const double inv_err_sq = 1.0 / (err * err);
+        const double inv_err_sq = 1.0 / (measurement_error * measurement_error);
 
         // Candidate-major, transposed once: the scorer reads one candidate's
         // frames contiguously, and every step would otherwise stride through
-        // `effs`.
+        // `predicted_measurements`.
         std::vector<double> e_t(m * n);
         for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = effs[i * m + k];
+            for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = predicted_measurements[i * m + k];
         }
 
         std::vector<double> chi2(n * n, 0.0);
@@ -289,15 +289,15 @@ void select_informative_pairs(
     }
 }
 
-void select_informative_sites(
-        double* effs, int n_frames, int n_pairs,
+void select_probe_positions(
+        double* predicted_measurements, int n_frames, int n_pairs,
         double* rmsds, int n_rmsd_rows, int n_rmsd_cols,
         int* pair_sites, int n_site_rows, int n_site_cols,
-        double err, int max_sites, double diag_weight,
+        double measurement_error, int max_sites, double diag_weight,
         int** out_sites, int* n_out_sites,
         double** out_decay, int* n_out_decay) {
     if (n_rmsd_rows != n_rmsd_cols || n_rmsd_rows != n_frames) {
-        IMP_THROW("rmsds must be square and match the frame count of effs",
+        IMP_THROW("rmsds must be square and match the frame count of predicted_measurements",
                   ValueException);
     }
     if (n_site_rows != n_pairs) {
@@ -327,13 +327,13 @@ void select_informative_sites(
     if (n_frames > 0 && n_pairs > 0 && n_take > 0) {
         const std::size_t n = static_cast<std::size_t>(n_frames);
         const std::size_t m = static_cast<std::size_t>(n_pairs);
-        const double inv_err_sq = 1.0 / (err * err);
+        const double inv_err_sq = 1.0 / (measurement_error * measurement_error);
 
-        // Candidate-major efficiencies, as in the pair selector: the scorer
+        // Candidate-major predictions, as in the pair selector: the scorer
         // reads one pair's frames contiguously.
         std::vector<double> e_t(m * n);
         for (std::size_t i = 0; i < n; ++i) {
-            for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = effs[i * m + k];
+            for (std::size_t k = 0; k < m; ++k) e_t[k * n + i] = predicted_measurements[i * m + k];
         }
 
         // Pairs per site, and the running bookkeeping: a pair is implied once

@@ -955,7 +955,7 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP_bff.scoring.i"
 
 /* Greedy Olga: which pair to measure next. */
-%include "IMP_bff.greedyolga.i"
+%include "IMP_bff.probepairselection.i"
 
 /* What comes out: (amplitude, rate) pairs. */
 /* MOL2 in: the atoms and bonds a force-field component is built from. */

@@ -138,10 +138,10 @@ def _pairs(args, got):
     """What the cheap dye model costs, and what it gets wrong."""
     combined = {k: v for k, v in got["combined"].items() if v is not None}
 
-    options = bff.LabelizerFretOptions()
+    options = bff.LabelizerFRETOptions()
     options.n_refine = 0
     started = time.time()
-    screened = list(bff.labelizer_pair_scores(_path("1DDB-39.pdb"), combined, options))
+    screened = list(bff.labelizer_fret_pair_scores(_path("1DDB-39.pdb"), combined, options))
     screen_time = time.time() - started
 
     above = sum(1 for v in combined.values()
@@ -154,7 +154,7 @@ def _pairs(args, got):
 
     options.n_refine = args.refine
     started = time.time()
-    refined = list(bff.labelizer_pair_scores(_path("1DDB-39.pdb"), combined, options))
+    refined = list(bff.labelizer_fret_pair_scores(_path("1DDB-39.pdb"), combined, options))
     refine_time = time.time() - started
     print("  + rebuilding the top %d with real accessible volumes: %.2f s"
           % (args.refine, refine_time - screen_time))

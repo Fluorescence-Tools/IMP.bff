@@ -11,6 +11,7 @@ declaration, so what there is to check is structural:
   surface.
 """
 
+from pathlib import Path
 import subprocess
 import sys
 
@@ -39,6 +40,8 @@ FLAT_NAMES = [
     "fit_weighted_residuals",      # deterministic residual helper
     "InferenceFactorGraph",        # inference structure
     "MCMCSampler",                 # Markov-chain sampling engine
+    "select_probe_pairs",           # generic measurement selection
+    "select_probe_positions",       # generic position selection
     "LabelizerScore",              # labelability score row
     "LabelizerFRETOptions",        # FRET pair-score settings
     "labelizer_score_structure",   # Labelizer entry point
@@ -114,6 +117,7 @@ def test_no_retired_names_survive():
         "Dataset", "ChiSquared", "JointChiSquared", "Minimizer",
         "FactorGraph", "PRIOR", "LIKELIHOOD", "HYPER",
         "Sampler", "SamplerConfigurationError",
+        "select_informative_pairs", "select_informative_sites",
         "System", "read_ff_system", "write_ff_system", "read_cgprobe_template",
         "write_cgprobe_template", "resolve_site", "apply_rotamer_coords",
         "generate_rotamers", "compute_exact_efficiency", "calculate_fret_exact",
@@ -192,6 +196,19 @@ def test_import_works_with_the_optional_dependencies_blocked():
                             text=True, timeout=300)
     assert result.returncode == 0, result.stderr[-2000:]
     assert "ok" in result.stdout
+
+
+def test_labelizer_headers_have_distinct_public_homes():
+    headers = Path(__file__).resolve().parents[1] / "include"
+    assert not (headers / "Labelizer.h").exists()
+    for family in ("Features", "Score", "FRET", "IO"):
+        assert (headers / f"Labelizer{family}.h").is_file()
+
+
+def test_probe_pair_selection_has_a_generic_public_home():
+    headers = Path(__file__).resolve().parents[1] / "include"
+    assert not (headers / "GreedyOlga.h").exists()
+    assert (headers / "ProbePairSelection.h").is_file()
 
 
 if __name__ == "__main__":

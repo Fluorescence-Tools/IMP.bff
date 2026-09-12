@@ -181,7 +181,7 @@ def test_the_greedy_selection_still_runs_end_to_end():
     n, m = 30, 12
     effs = rng.random((n, m))
     rmsds = _symmetric(rng, n, 8.0)
-    idx, _ = IMP.bff.select_informative_pairs(effs, rmsds, err=0.05, max_pairs=4)
+    idx, _ = IMP.bff.select_probe_pairs(effs, rmsds, measurement_error=0.05, max_pairs=4)
     assert idx.size == 4
     assert len(set(idx.tolist())) == 4, "greedy with unique_only must not repeat"
     assert np.all((idx >= 0) & (idx < m))

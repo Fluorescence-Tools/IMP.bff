@@ -7,7 +7,7 @@
  *
  */
 #include <IMP/bff/AV.h>
-#include <IMP/bff/Labelizer.h>
+#include <IMP/bff/LabelizerFRET.h>
 #include <IMP/bff/HierarchyBridge.h>
 #include <IMP/bff/AVBuilder.h>
 #include <IMP/bff/StripMask.h>

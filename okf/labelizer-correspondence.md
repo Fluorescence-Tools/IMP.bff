@@ -9,6 +9,14 @@ Conventions: everything ported carries the `labelizer_` / `Labelizer` prefix so 
 model is distinguishable from the module's own physics. Reference line numbers
 are as of the checkout at `../labelizer-backend` on 2026-08-24.
 
+## Public files
+
+The C++ API has four headers, each with a matching source file:
+`LabelizerFeatures.h` for structure properties, `LabelizerScore.h` for the
+labelability model, `LabelizerFRET.h` for pair scoring and its accessible-volume
+provider, and `LabelizerIO.h` for scored containers. Include the header for the
+operation you call; the Python API remains flat under `IMP.bff`.
+
 ## Module by module
 
 | reference module | lines | became | note |
@@ -23,13 +31,13 @@ are as of the checkout at `../labelizer-backend` on 2026-08-24.
 | `methionin_exclusion.py` | 100 | `labelizer_parameter_scores`, tag `me` | |
 | `tryptophan_proximity.py` | 234 | `labelizer_parameter_scores`, tag `tp` | ported *working*; raises in the reference |
 | `charge_environment.py` | 351 | `labelizer_parameter_scores`, tag `ce` | ported *working*; raises in the reference |
-| `fret_score.py` | 978 | `LabelizerFret.h` in full | the biggest module |
+| `fret_score.py` | 978 | `LabelizerFRET.h` in full | the biggest module |
 | `measurement_score.py` | 196 | `LabelizerPairScore`, `labelizer_pair_scores*` | the CSV base class is gone |
 | `fluorophore.py` | 218 | **not ported** — `ProbeLibrary.h` already had it | see *Not ported*, below |
 | `label_lib_functions.py` | 148 | **not ported** — `AVBuilder.h` / `StatesDistance.h` | LabelLib is banned here |
 | `pdbhelper.py` | 108 | `labelizer_read_structure` | over `read_pdb_records` |
 | `auxiliary_functions.py` | 82 | **not ported** | MSMS binary discovery, plus dead code |
-| `config.py` | 147 | `LabelizerOptions`, `LabelizerFretOptions` | constants become defaults on a struct |
+| `config.py` | 147 | `LabelizerOptions`, `LabelizerFRETOptions` | constants become defaults on a struct |
 | `__init__.py` | 65 | `labelizer_model_paper`, `labelizer_available_tables` | |
 
 ## Function by function, where it is not obvious
@@ -38,8 +46,8 @@ are as of the checkout at `../labelizer-backend` on 2026-08-24.
 |---|---|
 | `Labelizer.calc_parameter_score()` (`labelizer.py:216`) | `labelizer_parameter_scores` |
 | `Labelizer.calc_labeling_score()` (`:246`) | `labelizer_labeling_score` |
-| `Labelizer.calc_fret_score()` (`:261`) | `labelizer_pair_scores` / `labelizer_pair_scores_two_states` |
-| `FRETScore.calc_measurement_scores(chains_apo, chains_holo)` (`fret_score.py:479`) and the chain filter at `:728` | `LabelizerFretOptions::donor_chain` / `::acceptor_chain`, plus `::chain_map` for two files that name a chain differently. **Ported 2026-09-07**; it was missing until then, and without it a homodimer cannot be screened at all — see `okf/log.md` 2026-09-07 (1). |
+| `Labelizer.calc_fret_score()` (`:261`) | `labelizer_fret_pair_scores` / `labelizer_pair_scores_two_states` |
+| `FRETScore.calc_measurement_scores(chains_apo, chains_holo)` (`fret_score.py:479`) and the chain filter at `:728` | `LabelizerFRETOptions::donor_chain` / `::acceptor_chain`, plus `::chain_map` for two files that name a chain differently. **Ported 2026-09-07**; it was missing until then, and without it a homodimer cannot be screened at all — see `okf/log.md` 2026-09-07 (1). |
 | `Labelizer.zip_files()` (`:423`) | `labelizer_write_pto` — one container, not a zip |
 | `LabelingParameter.factory(tag)` (`labeling_parameter.py:56`) | a tag string on `LabelizerParameter`; no class hierarchy |
 | `LabelingParameter.calc_score_frequency(v)` (`:184`) | `labelizer_lookup` (numeric) / `labelizer_lookup_key` (categorical) |
@@ -57,7 +65,7 @@ are as of the checkout at `../labelizer-backend` on 2026-08-24.
 | `FRETScore._get_gly_cb_vector(...)` (`:293`) | folded into `labelizer_cbeta_position` |
 | `FRETScore._calc_simple_mean_position(...)` (`:326`) | `labelizer_alpha_cone_mean_position` |
 | `FRETScore._calc_single_av(...)` (`:404`) | `compute_av_from_structure` — the module's own AV |
-| `FRETScore._calc_distances_single(...)` (`:641`) | `labelizer_pair_scores`, with the AVs cached per site |
+| `FRETScore._calc_distances_single(...)` (`:641`) | `labelizer_fret_pair_scores`, with the AVs cached per site |
 | `FRETScore._calc_heat_map(...)` (`:920`) | `labelizer_cbeta_difference_map` |
 | `Fluorophore.calc_foerster_radius(a)` (`fluorophore.py:130`) | `IMP::bff::forster_radius` — already existed, derived not supplied |
 | `llf.effDistance(av1, av2, R0, n)` (`label_lib_functions.py:138`) | `model_distance(s1, s2, "RDAMeanE")` |
@@ -73,10 +81,10 @@ than editing a module-level singleton.
 
 | reference | imp.bff |
 |---|---|
-| `LS_THRESHOLD = 0.5` | `LabelizerFretOptions::label_score_threshold` |
-| `AV_CALC_RADIUS = 20.0` | `LabelizerFretOptions::alpha_cone_radius` |
-| `COLLISION_RADIUS = 1.7` | `LF_COLLISION_RADIUS` (file-local in `LabelizerFret.cpp`) |
-| `GS_PRECISE = 0.8` / `GS_FAST = 1.2` | `LabelizerFretOptions::grid_resolution` |
+| `LS_THRESHOLD = 0.5` | `LabelizerFRETOptions::label_score_threshold` |
+| `AV_CALC_RADIUS = 20.0` | `LabelizerFRETOptions::alpha_cone_radius` |
+| `COLLISION_RADIUS = 1.7` | `LF_COLLISION_RADIUS` (file-local in `LabelizerFRET.cpp`) |
+| `GS_PRECISE = 0.8` / `GS_FAST = 1.2` | `LabelizerFRETOptions::grid_resolution` |
 | `N_KALININ_PRECISE = 100000` | no equivalent — the AV distance is deterministic quadrature, not Monte Carlo |
 | `SPEED = "precise"` | gone; the caller sets the numbers directly |
 | `max_bad_aa_distance = 6`, `min_bad_aa_solvent_exposure = 0.4` | `LabelizerOptions::exclusion_distance`, `::exclusion_exposure` |
@@ -90,7 +98,7 @@ than editing a module-level singleton.
   \(R_0\) from spectra (`forster_radius`). Porting a second one would have
   given the package two descriptions of a dye, which PRD-113 exists to prevent.
   The reference's linker length, width and three radii are *not* dye
-  properties: they are AV parameters, and they live on `LabelizerFretOptions` here and
+  properties: they are AV parameters, and they live on `LabelizerFRETOptions` here and
   on the `AV` decorator in general.
 * **`label_lib_functions.py`** — a wrapper over LabelLib, **banned in imp.bff**
   (owner rule, 2026-08-11). Every call has a native counterpart above.
@@ -114,7 +122,7 @@ than editing a module-level singleton.
 | AV rebuild cost | inner site rebuilt per outer site (`fret_score.py:653`) | placed once per site |
 | a score that was not computed | `-1` (excluded) and `0` (no contribution), in the score column | **absent**, with a `status` saying why |
 | a sequence gap | array-indexed turns bridge it silently | `labelizer_dssp` refuses to bridge; see `test_dssp_does_not_infer_a_peptide_bond_across_a_sequence_gap` |
-| matching sites across two conformations | by residue number (`fret_score.py:512`), so chains collide on a multimer | by `(chain, seq_id)`, with `LabelizerFretOptions::chain_map` when the names differ. The reference's behaviour is not selectable: it returns `distance_2 = 0` for every inter-chain pair, which is not a modelling choice but a defect |
+| matching sites across two conformations | by residue number (`fret_score.py:512`), so chains collide on a multimer | by `(chain, seq_id)`, with `LabelizerFRETOptions::chain_map` when the names differ. The reference's behaviour is not selectable: it returns `distance_2 = 0` for every inter-chain pair, which is not a modelling choice but a defect |
 | the Cbeta difference map on a multimer | indexed by residue number, every chain on the same row | `labelizer_cbeta_difference_map` takes a `chain` |
 | a β-bulge | (the reference's DSSP joins the ladder) | joined by union-find over bridges; without it sheets fragment into isolated `B` |
 | a `G` shorter than three residues | (the reference's DSSP does not emit one) | suppressed — the span must be free, or the residues fall through to `T` |

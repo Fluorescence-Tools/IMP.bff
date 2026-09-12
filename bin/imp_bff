@@ -540,8 +540,8 @@ def select_pairs(fps_json, rmf_file, pdb_files, score_set, max_pairs, err,
     click.echo("Pairwise RMSD...")
     rmsds = IMP.bff.pairwise_rmsd(coords, superpose)
 
-    selected, decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=err, max_pairs=max_pairs, unique_only=unique_only)
+    selected, decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=err, max_pairs=max_pairs, unique_only=unique_only)
 
     # What the expectation is before anything has been measured, so the first
     # selection has something to be a gain over.

@@ -5,7 +5,7 @@ and every cross-protomer combination of the chosen sites is measurable. A dimer
 labelled at sites {1, 2} measures 1:1, 2:2, 1:2 and 2:1 -- four FRET species
 for two mutations. So the greedy must add *sites* and score each step by the
 pair set the enlarged site set implies, not add pairs one double mutant at a
-time (``select_informative_pairs``, the monomer case).
+time (``select_probe_pairs``, the monomer case).
 
 Checked here against a numpy reference of the same algorithm, against the pair
 selector (they must agree exactly when every site owns a single pair), and on
@@ -103,8 +103,8 @@ def test_selection_matches_the_numpy_reference():
     pair_sites = _dimer_pair_sites(range(k))
     max_sites = 4
 
-    got_sites, got_decay = IMP.bff.select_informative_sites(
-        effs, rmsds, pair_sites, err=0.06, max_sites=max_sites)
+    got_sites, got_decay = IMP.bff.select_probe_positions(
+        effs, rmsds, pair_sites, measurement_error=0.06, max_sites=max_sites)
     ref_sites, ref_decay = _reference_select_sites(
         effs, rmsds, pair_sites, 0.06, max_sites)
 
@@ -126,10 +126,10 @@ def test_one_pair_per_site_reduces_to_the_pair_selector():
     rmsds = _symmetric(rng, n, 9.0)
     pair_sites = np.column_stack([np.arange(m), np.arange(m)]).astype(np.int32)
 
-    pair_idx, pair_decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.05, max_pairs=6)
-    site_idx, site_decay = IMP.bff.select_informative_sites(
-        effs, rmsds, pair_sites, err=0.05, max_sites=6)
+    pair_idx, pair_decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.05, max_pairs=6)
+    site_idx, site_decay = IMP.bff.select_probe_positions(
+        effs, rmsds, pair_sites, measurement_error=0.05, max_sites=6)
 
     np.testing.assert_array_equal(np.asarray(site_idx), np.asarray(pair_idx))
     np.testing.assert_allclose(np.asarray(site_decay), np.asarray(pair_decay),
@@ -147,8 +147,8 @@ def test_two_sites_imply_all_four_dimer_measurements():
     rmsds = _symmetric(rng, n, 11.0)
     pair_sites = _dimer_pair_sites([0, 1])
 
-    sites, decay = IMP.bff.select_informative_sites(
-        effs, rmsds, pair_sites, err=0.06, max_sites=2)
+    sites, decay = IMP.bff.select_probe_positions(
+        effs, rmsds, pair_sites, measurement_error=0.06, max_sites=2)
     assert sorted(np.asarray(sites).tolist()) == [0, 1]
 
     inv = 1.0 / 0.06 ** 2
@@ -176,8 +176,8 @@ def test_the_first_site_is_the_one_whose_own_pair_separates():
     ])
     pair_sites = _dimer_pair_sites([0, 1])
 
-    sites, decay = IMP.bff.select_informative_sites(
-        effs, rmsds, pair_sites, err=0.06, max_sites=1)
+    sites, decay = IMP.bff.select_probe_positions(
+        effs, rmsds, pair_sites, measurement_error=0.06, max_sites=1)
     assert np.asarray(sites)[0] == 0
 
     start = IMP.bff.expected_rmsd(
@@ -192,16 +192,16 @@ def test_selection_is_capped_unique_and_empty_safe():
     rmsds = _symmetric(rng, n, 8.0)
     pair_sites = _dimer_pair_sites(range(k))
 
-    sites, decay = IMP.bff.select_informative_sites(
-        effs, rmsds, pair_sites, err=0.06, max_sites=k + 10)
+    sites, decay = IMP.bff.select_probe_positions(
+        effs, rmsds, pair_sites, measurement_error=0.06, max_sites=k + 10)
     idx = np.asarray(sites)
     assert idx.size <= k
     assert len(set(idx.tolist())) == idx.size, "a site is never re-selected"
 
     empty_e = np.empty((n, 0))
     empty_p = np.empty((0, 2), dtype=np.int32)
-    sites, decay = IMP.bff.select_informative_sites(
-        empty_e, rmsds, empty_p, err=0.06, max_sites=3)
+    sites, decay = IMP.bff.select_probe_positions(
+        empty_e, rmsds, empty_p, measurement_error=0.06, max_sites=3)
     assert np.asarray(sites).size == 0
     assert np.asarray(decay).size == 0
 
@@ -214,19 +214,19 @@ def test_bad_inputs_are_named():
 
     negative = np.array([[0, -1]] * m, dtype=np.int32)
     with pytest.raises(ValueError):
-        IMP.bff.select_informative_sites(effs, rmsds, negative,
-                                         err=0.06, max_sites=2)
+        IMP.bff.select_probe_positions(effs, rmsds, negative,
+                                         measurement_error=0.06, max_sites=2)
 
     triplet = np.zeros((m, 3), dtype=np.int32)
     with pytest.raises(ValueError):
-        IMP.bff.select_informative_sites(effs, rmsds, triplet,
-                                         err=0.06, max_sites=2)
+        IMP.bff.select_probe_positions(effs, rmsds, triplet,
+                                         measurement_error=0.06, max_sites=2)
 
     short = np.zeros((n - 1, n - 1))
     with pytest.raises(ValueError):
-        IMP.bff.select_informative_sites(effs, short,
+        IMP.bff.select_probe_positions(effs, short,
                                          _dimer_pair_sites([0, 1, 2]),
-                                         err=0.06, max_sites=2)
+                                         measurement_error=0.06, max_sites=2)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ Which FRET pair to measure next
 An ensemble of candidate structures and a list of labelling pairs you *could*
 measure: which one do you measure first?
 
-``IMP.bff.select_informative_pairs`` answers it the way Olga does (Dimura
+``IMP.bff.select_probe_pairs`` answers it the way Olga does (Dimura
 *et al.*, *Nat. Commun.* **11**, 5394, 2020). A measurement is worth making if
 it separates the ensemble -- if the conformers it cannot tell apart are also
 the ones that are structurally alike. The selector adds the pair that leaves
@@ -76,8 +76,8 @@ print(f"RMSD spread {rmsds[np.triu_indices_from(rmsds, 1)].mean():.2f} A mean, "
 # The selection. ``err`` is the expected absolute error of a FRET efficiency
 # measurement -- the selector's only notion of what an experiment can resolve,
 # and what stops it from believing a hair's-breadth separation.
-selected, decay = IMP.bff.select_informative_pairs(
-    effs, rmsds, err=0.06, max_pairs=10)
+selected, decay = IMP.bff.select_probe_pairs(
+    effs, rmsds, measurement_error=0.06, max_pairs=10)
 
 start = IMP.bff.expected_rmsd(
     rmsds.ravel(), np.zeros(rmsds.size), 1, 0.99, len(frames))

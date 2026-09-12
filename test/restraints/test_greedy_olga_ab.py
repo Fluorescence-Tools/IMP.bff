@@ -4,7 +4,7 @@ The kernels were pinned to the Python that preceded them and, for the
 chi-squared tail, to ``scipy.special.gammaincc``. Neither is Olga. This test
 compiles **Olga's own selector** -- ``src/best_dist.h`` from the checkout at
 ``../chisurf/junk/olga``, verbatim apart from the two edits recorded below --
-and runs it on the same two matrices ``select_informative_pairs`` gets.
+and runs it on the same two matrices ``select_probe_pairs`` gets.
 
 Two edits to the reference, neither semantic:
 
@@ -195,8 +195,8 @@ def test_the_same_pairs_in_the_same_order_on_the_t4l_ensemble(olga, t4l_matrices
     assert effs.shape == (50, 33)
 
     theirs, their_decay = _olga_selection(olga, effs, rmsds, 0.06, 10)
-    mine, my_decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.06, max_pairs=10)
+    mine, my_decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.06, max_pairs=10)
 
     assert list(mine) == theirs, (
         "selection differs: "
@@ -246,8 +246,8 @@ def test_the_same_pairs_on_a_seeded_synthetic_ensemble(olga):
     effs, rmsds = _clustered(11, 12, distinct=True)
 
     theirs, their_decay = _olga_selection(olga, effs, rmsds, 0.05, 8)
-    mine, my_decay = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.05, max_pairs=8)
+    mine, my_decay = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.05, max_pairs=8)
 
     assert list(mine) == theirs
     np.testing.assert_allclose(my_decay[2:], their_decay[2:], atol=5e-5)
@@ -268,8 +268,8 @@ def test_a_near_tie_is_where_the_two_are_allowed_to_disagree(olga):
     inv_err_sq = 1.0 / 0.05 ** 2
 
     theirs, _ = _olga_selection(olga, effs, rmsds, 0.05, 8)
-    mine, _ = IMP.bff.select_informative_pairs(
-        effs, rmsds, err=0.05, max_pairs=8)
+    mine, _ = IMP.bff.select_probe_pairs(
+        effs, rmsds, measurement_error=0.05, max_pairs=8)
     assert list(mine) != theirs, "the seed was chosen because they diverge"
 
     # Only the *first* divergence can be judged: up to it both selectors have

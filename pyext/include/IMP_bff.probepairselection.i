@@ -1,19 +1,19 @@
 /*
- * Greedy Olga: which FRET pair to measure next.
+ * Greedy probe selection: which probe pair to measure next.
  *
  * The kernel takes the two matrices as numpy arrays and publishes a
  * `(pairs, decay)` tuple of managed numpy views. The shapes are part of its
- * contract, stated once in GreedyOlga.h: `(n_frames, n_pairs)` efficiencies in,
+ * contract, stated once in ProbePairSelection.h: `(n_frames, n_pairs)` predicted measurements in,
  * square pairwise RMSDs in, two flat views of the selection out.
  *
- * `select_informative_sites` adds the homo-oligomer door: an `(n_pairs, 2)`
+ * `select_probe_positions` adds the homo-oligomer door: an `(n_pairs, 2)`
  * int array of the two site indices each pair connects, and out come the
  * chosen *sites* -- greedied over by the pair set they imply, which is the
  * unit a statistical labelling mix actually buys.
  */
 
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {
-    (double* effs, int n_frames, int n_pairs),
+    (double* predicted_measurements, int n_frames, int n_pairs),
     (double* rmsds, int n_rmsd_rows, int n_rmsd_cols)
 };
 %apply(int* IN_ARRAY2, int DIM1, int DIM2) {
@@ -28,4 +28,4 @@
     (double** out_decay, int* n_out_decay)
 };
 
-%include "IMP/bff/GreedyOlga.h"
+%include "IMP/bff/ProbePairSelection.h"
