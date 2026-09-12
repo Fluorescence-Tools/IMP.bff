@@ -11,7 +11,7 @@ a hydrophobic patch, or that the two sites never move relative to each other.
 
 `IMP.bff` answers both questions with a native port of the label-site score of
 Gebhardt *et al.*, *Nat. Commun.* **16**, 3305 (2025). Everything is prefixed
-`ll_` / `Ll`, so the ported model is distinguishable from this package's own
+`labelizer_` / `Labelizer`, so the ported model is distinguishable from this package's own
 physics without consulting a design note.
 
 Why it is here at all
@@ -31,7 +31,7 @@ packing — and what was missing was only the scoring layer on top. Nothing in
 `include/` iterated residues and emitted a score column.
 
 So the two external programs are replaced by native kernels
-(#IMP::bff::ll_dssp, #IMP::bff::ll_residue_depth) and the difference is
+(#IMP::bff::labelizer_dssp, #IMP::bff::labelizer_residue_depth) and the difference is
 **measured** rather than asserted. See `okf/validation/labelizer_ab.md`: on the
 reference's own published output the secondary-structure and
 cysteine-resemblance terms agree exactly on every residue of two proteins, and
@@ -74,31 +74,31 @@ Getting a number out
 
     #include <IMP/bff/Labelizer.h>
 
-    const std::vector<LlScore> scores = ll_score_structure(
-            "protein.pdb", ll_model_paper(), LlOptions(), "grades.txt");
+    const std::vector<LabelizerScore> scores = labelizer_score_structure(
+            "protein.pdb", labelizer_model_paper(), LabelizerOptions(), "grades.txt");
 
-Each #IMP::bff::LlScore is one row of `_mmfdb_label_score`: a position, a
+Each #IMP::bff::LabelizerScore is one row of `_mmfdb_label_score`: a position, a
 `score_type`, a value and a `status`. **A position that was not scored carries
 no value at all** — `status` says why. That is not fastidiousness: the
 reference writes `-1` for "excluded" and `0` for "no contribution" into the
 same column as real scores, so its output cannot be read back, and the shipped
 example's conservation column is degenerate as a direct consequence.
 
-Conservation is **imported, never computed** (#IMP::bff::ll_read_consurf). An
+Conservation is **imported, never computed** (#IMP::bff::labelizer_read_consurf). An
 alignment and a rate estimate are a different program; this reads its result.
 
 Which pair to measure
 ---------------------
 
-    LlFretOptions options;
+    LabelizerFRETOptions options;
     options.forster_radius = forster_radius(get_probe("Alexa488"),
                                             get_probe("Alexa647"));
-    const std::vector<LlPairScore> pairs = ll_pair_scores(
-            "protein.pdb", ll_combined_by_key(scores), options);
+    const std::vector<LabelizerFRETPairScore> pairs = labelizer_fret_pair_scores(
+            "protein.pdb", labelizer_combined_by_key(scores), options);
 
 A pair is worth measuring when both sites are labelable **and** the dye–dye
 distance sits where FRET responds to it — near \f$R_0\f$. With two
-conformations (#IMP::bff::ll_pair_scores_two_states) the criterion changes: what
+conformations (#IMP::bff::labelizer_pair_scores_two_states) the criterion changes: what
 matters is that the distance *moves*.
 
 Placing the dye is a cost ladder, and the rungs are not interchangeable:
@@ -146,11 +146,11 @@ right.
 The output is one file
 ----------------------
 
-    ll_write_pto("scored.mmfdb.pto", "protein.pdb", scores, pairs, settings);
+    labelizer_write_pto("scored.mmfdb.pto", "protein.pdb", scores, pairs, settings);
 
 The reference writes six CSVs, four PDBs carrying a dimensionless score in the
 B-factor column, a heat-map JSON and a zip. This writes one container
-(#IMP::bff::ll_write_pto): the structure verbatim and recoverable against its
+(#IMP::bff::labelizer_write_pto): the structure verbatim and recoverable against its
 SHA-256, the scores as tables whose columns are named by MMFDB dictionary
 items, the complete settings, and provenance edges tying them together. A
 `.pto` is an EBML document, so a walker in any language can read it without
@@ -159,14 +159,14 @@ this package.
 Reproducing the paper, defects and all
 --------------------------------------
 
-The default is #IMP::bff::LL_MODEL_PUBLISHED, which reproduces the reference
+The default is #IMP::bff::LABELIZER_MODEL_PUBLISHED, which reproduces the reference
 **including three defects**, because the paper's numbers were computed with
 them: the joined label score of a pair uses `prod ** 0.5` where the geometric
 mean is `prod ** (1/N)`; a term of weight *zero* that happens to read exactly
 `0.0` still zeroes the whole score; and the configurable excluded amino acid is
 written to one attribute and read from another, so it is always methionine.
 
-#IMP::bff::LL_MODEL_CORRECTED fixes all three. Which was used is recorded in
+#IMP::bff::LABELIZER_MODEL_CORRECTED fixes all three. Which was used is recorded in
 the container, so a file always says which numbers it holds.
 
 Where to look next

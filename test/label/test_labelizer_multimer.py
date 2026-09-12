@@ -3,7 +3,7 @@
 Everything else in `test/label/` runs on a single-chain protein, and that is
 exactly where the two defects this file guards against could hide.
 
-**The collision.** `ll_pair_scores_two_states` matched sites across the two
+**The collision.** `labelizer_pair_scores_two_states` matched sites across the two
 conformations on the residue number alone -- `std::map<int, std::size_t>` keyed
 on `seq_id`, the reference's convention (`fret_score.py:512`). On a multimer
 residue 100 of chains F, G and H are one key, the last one inserted wins, and
@@ -41,19 +41,19 @@ def _coordinate_only_model():
     term makes the whole combined score unavailable -- which would leave
     nothing to pair.
     """
-    model = bff.LlParameterList()
+    model = bff.LabelizerParameterList()
     for tag, table in (("se", "N_SE11_MEAN_SURFACE_DIST"),
                        ("cr", "C_CR1_Name"),
                        ("ss", "C_SS1_SS")):
-        model.append(bff.LlParameter(tag, table, 1))
+        model.append(bff.LabelizerParameter(tag, table, 1))
     return model
 
 
 @pytest.fixture(scope="module")
 def label_scores():
-    return bff.ll_combined_by_key(
-        bff.ll_score_structure(MULTIMER, _coordinate_only_model(),
-                               bff.LlOptions(), ""))
+    return bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(MULTIMER, _coordinate_only_model(),
+                               bff.LabelizerOptions(), ""))
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +62,7 @@ def chains(label_scores):
 
 
 def _fret(**kwargs):
-    fret = bff.LlFretOptions()
+    fret = bff.LabelizerFRETOptions()
     fret.n_refine = 0            # the analytic cone; this is about bookkeeping
     for name, value in kwargs.items():
         setattr(fret, name, value)
@@ -84,7 +84,7 @@ def test_a_multimer_paired_with_itself_is_exactly_zero(label_scores):
     is large. The single-chain version of this test (1anf, in
     `test_labelizer_ab_male.py`) passed throughout.
     """
-    pairs = list(bff.ll_pair_scores_two_states(
+    pairs = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores, _fret()))
     assert pairs, "nothing was paired at all"
 
@@ -106,7 +106,7 @@ def test_the_inter_protomer_pair_of_one_residue_is_enumerated(label_scores,
     are exactly what the seq_id-keyed map could not represent.
     """
     first, second = chains[0], chains[1]
-    pairs = list(bff.ll_pair_scores_two_states(
+    pairs = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores,
         _fret(donor_chain=first, acceptor_chain=second)))
     same_residue = [p for p in pairs if p.seq_id_1 == p.seq_id_2]
@@ -120,8 +120,8 @@ def test_the_chain_filter_keeps_only_the_requested_protomer_pair(label_scores,
                                                                  chains):
     first, second = chains[0], chains[1]
     fret = _fret(donor_chain=first, acceptor_chain=second)
-    filtered = list(bff.ll_pair_scores(MULTIMER, label_scores, fret))
-    everything = list(bff.ll_pair_scores(MULTIMER, label_scores, _fret()))
+    filtered = list(bff.labelizer_fret_pair_scores(MULTIMER, label_scores, fret))
+    everything = list(bff.labelizer_fret_pair_scores(MULTIMER, label_scores, _fret()))
 
     assert filtered, "the filter removed everything"
     assert len(filtered) < len(everything), "the filter removed nothing"
@@ -138,7 +138,7 @@ def test_an_unset_chain_filter_changes_nothing(label_scores):
     """The default has to be what the module did before the fields existed."""
     fret = _fret()
     assert fret.donor_chain == "" and fret.acceptor_chain == ""
-    pairs = list(bff.ll_pair_scores(MULTIMER, label_scores, fret))
+    pairs = list(bff.labelizer_fret_pair_scores(MULTIMER, label_scores, fret))
     assert any(p.asym_id_1 != p.asym_id_2 for p in pairs), \
         "with no filter, inter-chain pairs must still be produced"
     assert any(p.asym_id_1 == p.asym_id_2 for p in pairs), \
@@ -152,14 +152,14 @@ def test_the_chain_map_renames_the_second_conformation(label_scores, chains):
     a chain onto a different one must change the answer.
     """
     first, second = chains[0], chains[1]
-    plain = list(bff.ll_pair_scores_two_states(
+    plain = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores,
         _fret(donor_chain=first, acceptor_chain=second)))
 
     identity = bff.MapStringString()
     for chain in chains:
         identity[chain] = chain
-    mapped = list(bff.ll_pair_scores_two_states(
+    mapped = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores,
         _fret(donor_chain=first, acceptor_chain=second, chain_map=identity)))
     assert len(mapped) == len(plain)
@@ -168,7 +168,7 @@ def test_the_chain_map_renames_the_second_conformation(label_scores, chains):
     swap = bff.MapStringString()
     swap[first] = second
     swap[second] = first
-    swapped = list(bff.ll_pair_scores_two_states(
+    swapped = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores,
         _fret(donor_chain=first, acceptor_chain=second, chain_map=swap)))
     assert swapped, "the swap matched nothing"
@@ -185,9 +185,9 @@ def test_the_cbeta_map_is_meaningless_on_a_multimer_without_a_chain(chains):
     only reading that means anything, and it must not be silently equal to the
     unnamed one.
     """
-    structure = bff.ll_read_structure(MULTIMER)
-    first_all, flat_all = bff.ll_cbeta_difference_map(structure, structure)
-    first_one, flat_one = bff.ll_cbeta_difference_map(structure, structure,
+    structure = bff.labelizer_read_structure(MULTIMER)
+    first_all, flat_all = bff.labelizer_cbeta_difference_map(structure, structure)
+    first_one, flat_one = bff.labelizer_cbeta_difference_map(structure, structure,
                                                       chains[0])
     for flat in (flat_all, flat_one):
         matrix = np.asarray(flat)
@@ -216,13 +216,13 @@ def test_a_two_state_pair_survives_the_container(label_scores, chains, tmp_path)
 
     first, second = chains[0], chains[1]
     fret = _fret(donor_chain=first, acceptor_chain=second)
-    two_state = list(bff.ll_pair_scores_two_states(
+    two_state = list(bff.labelizer_pair_scores_two_states(
         MULTIMER, MULTIMER, label_scores, label_scores, fret))[:50]
     assert two_state
 
     path = str(tmp_path / "two_state.mmfdb.pto")
-    bff.ll_write_pto(path, MULTIMER, bff.LlScoreList(), two_state, "{}")
-    back = list(bff.ll_read_pto_pairs(path))
+    bff.labelizer_write_pto(path, MULTIMER, bff.LabelizerScoreList(), two_state, "{}")
+    back = list(bff.labelizer_read_pto_pairs(path))
     assert len(back) == len(two_state)
     for wrote, read in zip(two_state, back):
         assert read.seq_id_1 == wrote.seq_id_1
@@ -231,9 +231,9 @@ def test_a_two_state_pair_survives_the_container(label_scores, chains, tmp_path)
         assert read.distance == pytest.approx(wrote.distance, abs=1e-9)
         assert read.distance_2 == pytest.approx(wrote.distance_2, abs=1e-9)
 
-    single = list(bff.ll_pair_scores(MULTIMER, label_scores, fret))[:20]
+    single = list(bff.labelizer_fret_pair_scores(MULTIMER, label_scores, fret))[:20]
     path = str(tmp_path / "single.mmfdb.pto")
-    bff.ll_write_pto(path, MULTIMER, bff.LlScoreList(), single, "{}")
-    for read in bff.ll_read_pto_pairs(path):
+    bff.labelizer_write_pto(path, MULTIMER, bff.LabelizerScoreList(), single, "{}")
+    for read in bff.labelizer_read_pto_pairs(path):
         assert math.isnan(read.distance_2), \
             "one conformation has no second distance; that must not read as 0"

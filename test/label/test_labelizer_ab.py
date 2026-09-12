@@ -12,7 +12,7 @@ What is pinned, and why each bar sits where it does:
   are a table lookup, so anything short of exact would be a transcription
   error. `ss` being exact is the load-bearing result of the port: the reference
   shells out to the DSSP binary and refuses to run on macOS at all, and
-  :func:`IMP.bff.ll_dssp` reproduces its eight-state assignment on all 195
+  :func:`IMP.bff.labelizer_dssp` reproduces its eight-state assignment on all 195
   residues with no disagreement.
 
 * **`cs` (conservation): the lookup is pinned exactly; the shipped example is
@@ -28,7 +28,7 @@ What is pinned, and why each bar sits where it does:
 
 * **`se` (solvent exposure): a stated tolerance, because it cannot be exact.**
   The published term is MSMS residue depth and the MSMS binaries labelizer
-  ships are 32-bit ppc/i386 Mach-O that do not execute. :func:`ll_residue_depth`
+  ships are 32-bit ppc/i386 Mach-O that do not execute. :func:`labelizer_residue_depth`
   builds the surface natively instead. Measured against the reference on 1DDB:
   no bias (mean +0.015 A), Pearson r = 0.976, and 92% of residues within one
   table bin. The bars below are set from that distribution and are deliberately
@@ -71,7 +71,7 @@ def _reference(tag):
 
 @pytest.fixture(scope="module")
 def structure():
-    return bff.ll_read_structure(_path("1DDB-39.pdb"))
+    return bff.labelizer_read_structure(_path("1DDB-39.pdb"))
 
 
 @pytest.fixture(scope="module")
@@ -82,15 +82,15 @@ def scored():
     actually consumed, feedback loop and all -- because reproducing the
     reference means feeding it what the reference was fed.
     """
-    rows = bff.ll_score_structure(
+    rows = bff.labelizer_score_structure(
         _path("1DDB-39.pdb"),
-        bff.ll_model_paper(),
-        bff.LlOptions(),
+        bff.labelizer_model_paper(),
+        bff.LabelizerOptions(),
         _path("1DDB-39_cs.pdb"),
     )
     out = {}
     for r in rows:
-        key = bff.ll_residue_key(r.asym_id, r.seq_id)
+        key = bff.labelizer_residue_key(r.asym_id, r.seq_id)
         out.setdefault(r.score_type, {})[key] = (
             r.value if r.status == "scored" else None
         )
@@ -130,16 +130,16 @@ def test_the_native_dssp_reproduces_the_reference_assignment(structure):
     published score recovers the letter the reference's DSSP binary assigned
     and the two assignments can be compared directly.
     """
-    table = bff.ll_load_table("C_SS1_SS")
+    table = bff.labelizer_load_table("C_SS1_SS")
     by_value = {round(table.by_key[k], 9): k for k in table.by_key.keys()}
     reference = _reference("ss")
 
-    ours = bff.ll_dssp(structure)
+    ours = bff.labelizer_dssp(structure)
     assert len(ours) == N_RESIDUES
 
     disagreements = []
     for i, residue in enumerate(structure.residues):
-        key = bff.ll_residue_key(residue.chain, residue.seq_id)
+        key = bff.labelizer_residue_key(residue.chain, residue.seq_id)
         want = by_value[round(reference[key], 9)]
         if ours[i] != want:
             disagreements.append((key, want, ours[i]))
@@ -154,9 +154,9 @@ def test_the_conservation_lookup_is_exact_to_the_last_digit():
     values is exactly this lookup, and reproducing it to sixteen digits leaves
     nowhere for an error in the reader or the binning to hide.
     """
-    table = bff.ll_load_table("N_CS2_Score")
-    assert bff.ll_lookup(table, 1.63) == 2.3553071957924936
-    assert bff.ll_lookup(table, 2.36) == 1.6322095472510827
+    table = bff.labelizer_load_table("N_CS2_Score")
+    assert bff.labelizer_lookup(table, 1.63) == 2.3553071957924936
+    assert bff.labelizer_lookup(table, 2.36) == 1.6322095472510827
 
 
 def test_the_shipped_conservation_reference_is_degenerate():
@@ -183,15 +183,15 @@ def test_residue_depth_agrees_with_msms_without_bias(structure):
     at 0.268 A), so the comparison is against bin centres and the bars are set
     accordingly.
     """
-    table = bff.ll_load_table("N_SE11_MEAN_SURFACE_DIST")
+    table = bff.labelizer_load_table("N_SE11_MEAN_SURFACE_DIST")
     by_value = {round(table.values[i], 9): table.bins[i]
                 for i in range(len(table.bins))}
     reference = _reference("se")
 
-    depth = np.asarray(bff.ll_residue_depth(structure, 1.4, 590))
+    depth = np.asarray(bff.labelizer_residue_depth(structure, 1.4, 590))
     ours, refs = [], []
     for i, residue in enumerate(structure.residues):
-        key = bff.ll_residue_key(residue.chain, residue.seq_id)
+        key = bff.labelizer_residue_key(residue.chain, residue.seq_id)
         centre = by_value.get(round(reference[key], 9))
         if centre is None:
             continue

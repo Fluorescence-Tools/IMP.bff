@@ -39,6 +39,10 @@ FLAT_NAMES = [
     "fit_weighted_residuals",      # deterministic residual helper
     "InferenceFactorGraph",        # inference structure
     "MCMCSampler",                 # Markov-chain sampling engine
+    "LabelizerScore",              # labelability score row
+    "LabelizerFRETOptions",        # FRET pair-score settings
+    "labelizer_score_structure",   # Labelizer entry point
+    "labelizer_fret_pair_scores",  # FRET pair-score entry point
     "get_av",                    # avbuilder
     "AccessibleVolume",              # avmodel
     "read_fps_json",                 # fps
@@ -129,12 +133,17 @@ def test_no_retired_names_survive():
         "write_component_template_cif", "write_probe_template_cif",
         "write_rotamer_library",
         # The probe vocabulary is flrCIF's: `_flr_probe_list`, not "dye".
-        "DYE_PAIR_DISTANCE_MEAN", "DYE_PAIR_EFFICIENCY", "LL_DYE_CBETA",
-        "LL_DYE_ACCESSIBLE_VOLUME", "DEFAULT_DYE_RADIUS",
+        "DYE_PAIR_DISTANCE_MEAN", "DYE_PAIR_EFFICIENCY", "LABELIZER_DYE_CBETA",
+        "LABELIZER_DYE_ACCESSIBLE_VOLUME", "DEFAULT_DYE_RADIUS",
     ]
     for name in retired:
         with pytest.raises(AttributeError):
             getattr(IMP.bff, name)
+
+
+def test_labelizer_has_no_historical_abbreviations():
+    assert not any(name.startswith(("Ll", "ll_", "LL_"))
+                   for name in dir(IMP.bff))
 
 
 def test_import_is_lazy_and_click_free():

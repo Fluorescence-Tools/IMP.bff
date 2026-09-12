@@ -2047,7 +2047,7 @@ std::map<std::string, AccessibleVolume> get_avs_for_structure(
 namespace {
 struct InstallLabelizerAvDoor {
     InstallLabelizerAvDoor() {
-        ll_set_av_door([](const std::string& pdb_path, const std::string& chain, int resseq,
+        labelizer_set_av_door([](const std::string& pdb_path, const std::string& chain, int resseq,
                           const std::string& atom_name, double linker_length,
                           double linker_width, double r1, double r2, double r3,
                           double grid_resolution) {

@@ -20,7 +20,7 @@ Two things worth knowing before reading the numbers:
   observation makes a site more likely to be labelable than the base rate, and
   the combined score is unbounded above.
 * **The published arithmetic is the default, defects and all**, because that is
-  what the paper's numbers were computed with. ``LL_MODEL_CORRECTED`` selects
+  what the paper's numbers were computed with. ``LABELIZER_MODEL_CORRECTED`` selects
   the arithmetic the reference's own documentation describes.
 
 The companion example, ``plot_labelizer_fret_pair.py``, takes the second
@@ -48,34 +48,34 @@ data = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 pdb = os.path.join(data, "1DDB-39.pdb")
 conservation = os.path.join(data, "1DDB-39_cs.pdb")
 
-structure = bff.ll_read_structure(pdb)
+structure = bff.labelizer_read_structure(pdb)
 print("%d residues, %d atoms" % (len(structure.residues), len(structure.vdw)))
 
 # --- 2. the structural features, each on its own ----------------------------
 #
-# These are the quantities the model scores. `ll_dssp` is a native
+# These are the quantities the model scores. `labelizer_dssp` is a native
 # Kabsch-Sander assignment -- the reference shells out to the DSSP binary and
 # will not start on macOS at all -- and it reproduces that binary exactly on
 # every residue of this structure.
-secondary = bff.ll_dssp(structure)
-depth = np.asarray(bff.ll_residue_depth(structure, 1.4, 590))
-rsa = np.asarray(bff.ll_relative_solvent_accessibility(
-    structure, bff.LL_MAXASA_WILKE, 1.4, 590))
-hse = np.asarray(bff.ll_half_sphere_exposure(structure, 13.0)).reshape(-1, 2)
+secondary = bff.labelizer_dssp(structure)
+depth = np.asarray(bff.labelizer_residue_depth(structure, 1.4, 590))
+rsa = np.asarray(bff.labelizer_relative_solvent_accessibility(
+    structure, bff.LABELIZER_MAXASA_WILKE, 1.4, 590))
+hse = np.asarray(bff.labelizer_half_sphere_exposure(structure, 13.0)).reshape(-1, 2)
 
 print("secondary structure: " + "".join(
     "%s=%d " % (s, secondary.count(s)) for s in sorted(set(secondary))))
 print("residue depth  %.2f - %.2f A" % (depth.min(), depth.max()))
 
 # --- 3. the score ------------------------------------------------------------
-model = bff.ll_model_paper()
+model = bff.labelizer_model_paper()
 print("model: " + ", ".join("%s(w=%d)" % (p.tag, p.weight) for p in model))
 
-scores = bff.ll_score_structure(pdb, model, bff.LlOptions(), conservation)
+scores = bff.labelizer_score_structure(pdb, model, bff.LabelizerOptions(), conservation)
 
 # The rows are tidy -- one per (position, score_type) -- which is the shape the
 # container stores and the shape a dataframe wants.
-combined = {bff.ll_residue_key(r.asym_id, r.seq_id): r.value
+combined = {bff.labelizer_residue_key(r.asym_id, r.seq_id): r.value
             for r in scores if r.score_type == "combined" and r.status == "scored"}
 best = sorted(combined.items(), key=lambda kv: -kv[1])[:8]
 print("\nbest sites")
@@ -89,11 +89,11 @@ for key, value in best:
 # the dye with the reference's analytic "alpha cone"; `n_refine` then rebuilds
 # the best few with a real accessible volume, which is IMP.bff's own -- the
 # reference calls LabelLib, which this package does not use.
-options = bff.LlFretOptions()
+options = bff.LabelizerFRETOptions()
 options.forster_radius = 52.0
 options.n_refine = 5
 
-pairs = list(bff.ll_pair_scores(pdb, combined, options))
+pairs = list(bff.labelizer_fret_pair_scores(pdb, combined, options))
 print("\n%d pairs above the label-score threshold" % len(pairs))
 print("best pairs")
 for p in pairs[:8]:
@@ -121,11 +121,11 @@ for p in refined:
 # leaves derived files behind that look like inputs the next time.
 work = tempfile.mkdtemp()
 out = os.path.join(work, "1DDB-39.mmfdb.pto")
-settings = bff.ll_settings_json(model, bff.LlOptions(), options, conservation)
-bff.ll_write_pto(out, pdb, scores, pairs[:200], settings)
+settings = bff.labelizer_settings_json(model, bff.LabelizerOptions(), options, conservation)
+bff.labelizer_write_pto(out, pdb, scores, pairs[:200], settings)
 print("\nwrote %s (%d bytes)" % (os.path.basename(out), os.path.getsize(out)))
 print("recovered structure sha256 %s"
-      % bff.ll_extract_pto_structure(
+      % bff.labelizer_extract_pto_structure(
           out, os.path.join(work, "1DDB-39-recovered.pdb")))
 
 # A caveat the reference's own example carries: it passes its conservation PDB
@@ -136,7 +136,7 @@ print("recovered structure sha256 %s"
 
 # --- 6. the picture ----------------------------------------------------------
 seq = [r.seq_id for r in structure.residues]
-values = [combined.get(bff.ll_residue_key(r.chain, r.seq_id), np.nan)
+values = [combined.get(bff.labelizer_residue_key(r.chain, r.seq_id), np.nan)
           for r in structure.residues]
 
 fig, (ax, bx) = plt.subplots(2, 1, figsize=(9, 5.5), sharex=True,

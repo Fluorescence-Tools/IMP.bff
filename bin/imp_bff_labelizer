@@ -63,7 +63,7 @@ PUBLISHED_TAGS = ("cs", "se", "tp", "cr", "ss", "ce")
 
 def _model(drop: set[str]) -> list:
     """The published model, minus any terms the caller dropped."""
-    return [p for p in bff.ll_model_paper() if p.tag not in drop]
+    return [p for p in bff.labelizer_model_paper() if p.tag not in drop]
 
 
 def _show(path: Path) -> int:
@@ -73,9 +73,9 @@ def _show(path: Path) -> int:
               f"one. Score the structure first, which writes "
               f"{path.stem}.mmfdb.pto beside it.", file=sys.stderr)
         return 2
-    scores = bff.ll_read_pto_scores(str(path))
-    pairs = bff.ll_read_pto_pairs(str(path))
-    settings = json.loads(bff.ll_read_pto_settings(str(path)) or "{}")
+    scores = bff.labelizer_read_pto_scores(str(path))
+    pairs = bff.labelizer_read_pto_pairs(str(path))
+    settings = json.loads(bff.labelizer_read_pto_settings(str(path)) or "{}")
 
     by_type: dict[str, list] = {}
     for row in scores:
@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
                          "combined score down with it")
     ap.add_argument("--corrected", action="store_true",
                     help="use the arithmetic the reference documents instead "
-                         "of the arithmetic it runs; see IMP.bff.LlModel")
+                         "of the arithmetic it runs; see IMP.bff.LabelizerModel")
     ap.add_argument("--pairs", action="store_true",
                     help="also score every pair of labelable sites")
     ap.add_argument("--r0", "--forster-radius", type=float, default=52.0,
@@ -183,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.extract_structure is not None:
-        digest = bff.ll_extract_pto_structure(str(args.src),
+        digest = bff.labelizer_extract_pto_structure(str(args.src),
                                               str(args.extract_structure))
         print(f"{args.extract_structure}  sha256 {digest}  verified")
         return 0
@@ -194,9 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     drop = {"cs"} if args.no_conservation else set()
     model = _model(drop)
 
-    options = bff.LlOptions()
-    options.model = (bff.LL_MODEL_CORRECTED if args.corrected
-                     else bff.LL_MODEL_PUBLISHED)
+    options = bff.LabelizerOptions()
+    options.model = (bff.LABELIZER_MODEL_CORRECTED if args.corrected
+                     else bff.LABELIZER_MODEL_PUBLISHED)
 
     conservation = str(args.conservation) if args.conservation else ""
     if not conservation and not args.no_conservation:
@@ -205,9 +205,9 @@ def main(argv: list[str] | None = None) -> int:
               "be too. Pass --no-conservation to score without it.",
               file=sys.stderr)
 
-    scores = bff.ll_score_structure(str(args.src), model, options, conservation)
+    scores = bff.labelizer_score_structure(str(args.src), model, options, conservation)
 
-    fret = bff.LlFretOptions()
+    fret = bff.LabelizerFRETOptions()
     fret.model = options.model
     fret.forster_radius = args.r0
 
@@ -248,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
 
     pairs = []
     if args.pairs or args.second_structure:
-        label_scores = bff.ll_combined_by_key(scores)
+        label_scores = bff.labelizer_combined_by_key(scores)
         if not label_scores:
             print("imp_bff_labelizer: no position has a combined score, so "
                   "there is nothing to pair", file=sys.stderr)
@@ -259,27 +259,27 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             # The second conformation is scored with the same model, so the
             # four label scores of a two-state pair are comparable.
-            scores_2 = bff.ll_score_structure(str(args.second_structure), model,
+            scores_2 = bff.labelizer_score_structure(str(args.second_structure), model,
                                               options, conservation)
-            label_scores_2 = bff.ll_combined_by_key(scores_2)
+            label_scores_2 = bff.labelizer_combined_by_key(scores_2)
             if not label_scores_2:
                 print("imp_bff_labelizer: no position of "
                       f"{args.second_structure} has a combined score",
                       file=sys.stderr)
                 return 1
-            pairs = list(bff.ll_pair_scores_two_states(
+            pairs = list(bff.labelizer_pair_scores_two_states(
                 str(args.src), str(args.second_structure),
                 label_scores, label_scores_2, fret))
             if args.max_pairs > 0:
                 pairs = pairs[:args.max_pairs]
         else:
-            pairs = list(bff.ll_pair_scores(str(args.src), label_scores, fret))
+            pairs = list(bff.labelizer_fret_pair_scores(str(args.src), label_scores, fret))
             if args.max_pairs > 0:
                 pairs = pairs[:args.max_pairs]
 
     out = args.out or args.src.with_suffix("").with_suffix(".mmfdb.pto")
-    settings = bff.ll_settings_json(model, options, fret, conservation)
-    bff.ll_write_pto(str(out), str(args.src), scores, pairs, settings)
+    settings = bff.labelizer_settings_json(model, options, fret, conservation)
+    bff.labelizer_write_pto(str(out), str(args.src), scores, pairs, settings)
 
     scored = sum(1 for r in scores
                  if r.score_type == "combined" and r.status == "scored")

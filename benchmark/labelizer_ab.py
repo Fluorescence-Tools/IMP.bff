@@ -47,18 +47,18 @@ def _reference(tag):
 
 def _agreement(args):
     """Per-parameter agreement against the reference's published scores."""
-    options = bff.LlOptions()
+    options = bff.LabelizerOptions()
     options.probe_radius = args.probe
     options.n_sphere_points = args.points
 
     started = time.time()
-    scores = bff.ll_score_structure(_path("1DDB-39.pdb"), bff.ll_model_paper(),
+    scores = bff.labelizer_score_structure(_path("1DDB-39.pdb"), bff.labelizer_model_paper(),
                                     options, _path("1DDB-39_cs.pdb"))
     elapsed = time.time() - started
 
     got = {}
     for row in scores:
-        key = bff.ll_residue_key(row.asym_id, row.seq_id)
+        key = bff.labelizer_residue_key(row.asym_id, row.seq_id)
         got.setdefault(row.score_type, {})[key] = (
             row.value if row.status == "scored" else None)
 
@@ -99,19 +99,19 @@ def _depth(args):
     published score is binned; the comparison is therefore against bin centres
     and part of the scatter below is that quantisation, not disagreement.
     """
-    table = bff.ll_load_table("N_SE11_MEAN_SURFACE_DIST")
+    table = bff.labelizer_load_table("N_SE11_MEAN_SURFACE_DIST")
     centre = {round(table.values[i], 9): table.bins[i]
               for i in range(len(table.bins))}
     reference = _reference("se")
 
-    structure = bff.ll_read_structure(_path("1DDB-39.pdb"))
+    structure = bff.labelizer_read_structure(_path("1DDB-39.pdb"))
     started = time.time()
-    depth = np.asarray(bff.ll_residue_depth(structure, args.probe, args.points))
+    depth = np.asarray(bff.labelizer_residue_depth(structure, args.probe, args.points))
     elapsed = time.time() - started
 
     ours, refs = [], []
     for i, residue in enumerate(structure.residues):
-        key = bff.ll_residue_key(residue.chain, residue.seq_id)
+        key = bff.labelizer_residue_key(residue.chain, residue.seq_id)
         want = centre.get(round(reference[key], 9))
         if want is None:
             continue
@@ -138,10 +138,10 @@ def _pairs(args, got):
     """What the cheap dye model costs, and what it gets wrong."""
     combined = {k: v for k, v in got["combined"].items() if v is not None}
 
-    options = bff.LlFretOptions()
+    options = bff.LabelizerFretOptions()
     options.n_refine = 0
     started = time.time()
-    screened = list(bff.ll_pair_scores(_path("1DDB-39.pdb"), combined, options))
+    screened = list(bff.labelizer_pair_scores(_path("1DDB-39.pdb"), combined, options))
     screen_time = time.time() - started
 
     above = sum(1 for v in combined.values()
@@ -154,7 +154,7 @@ def _pairs(args, got):
 
     options.n_refine = args.refine
     started = time.time()
-    refined = list(bff.ll_pair_scores(_path("1DDB-39.pdb"), combined, options))
+    refined = list(bff.labelizer_pair_scores(_path("1DDB-39.pdb"), combined, options))
     refine_time = time.time() - started
     print("  + rebuilding the top %d with real accessible volumes: %.2f s"
           % (args.refine, refine_time - screen_time))

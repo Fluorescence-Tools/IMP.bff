@@ -59,30 +59,30 @@ print("R0 via the container = %.1f A"
 # No ConSurf grades ship for MalE, and under the published model a missing term
 # makes the whole combined score unavailable -- correctly, but it leaves
 # nothing to pair. These three terms need only the coordinates.
-model = bff.LlParameterList()
+model = bff.LabelizerParameterList()
 for tag, table in (("se", "N_SE11_MEAN_SURFACE_DIST"),
                    ("cr", "C_CR1_Name"),
                    ("ss", "C_SS1_SS")):
-    model.append(bff.LlParameter(tag, table, 1))
+    model.append(bff.LabelizerParameter(tag, table, 1))
 
-options = bff.LlOptions()
-apo_scores = bff.ll_score_structure(apo_pdb, model, options, "")
-holo_scores = bff.ll_score_structure(holo_pdb, model, options, "")
-apo = bff.ll_combined_by_key(apo_scores)
-holo = bff.ll_combined_by_key(holo_scores)
+options = bff.LabelizerOptions()
+apo_scores = bff.labelizer_score_structure(apo_pdb, model, options, "")
+holo_scores = bff.labelizer_score_structure(holo_pdb, model, options, "")
+apo = bff.labelizer_combined_by_key(apo_scores)
+holo = bff.labelizer_combined_by_key(holo_scores)
 print("\nscored %d positions in each conformation" % len(apo))
 
 # A property of the whole molecule rather than of a site: MBP is acidic, and a
 # charged dye is not indifferent to that.
-net, positive, negative = bff.ll_global_charge(bff.ll_read_structure(holo_pdb))
+net, positive, negative = bff.labelizer_global_charge(bff.labelizer_read_structure(holo_pdb))
 print("net formal charge %+.0f (%+.0f / %.0f)" % (net, positive, negative))
 
 # --- 3. rank the pairs -------------------------------------------------------
-fret = bff.LlFretOptions()
+fret = bff.LabelizerFRETOptions()
 fret.forster_radius = r0
 fret.n_refine = 0          # the cone screen alone; see the caveat below
 
-pairs = list(bff.ll_pair_scores_two_states(
+pairs = list(bff.labelizer_pair_scores_two_states(
     apo_pdb, holo_pdb, apo, holo, fret))
 print("\n%d pairs; the ten worth measuring:" % len(pairs))
 print("   %-14s %8s %8s %8s   %s" % ("pair", "d(apo)", "d(holo)", "delta", "score"))
@@ -104,19 +104,19 @@ print("\ntop 20: %d of 20 contract, by %.1f to %.1f A"
 
 # --- 4. the whole result as one file, and back again -------------------------
 out = os.path.join(work, "MalE_apo_holo.mmfdb.pto")
-settings = bff.ll_settings_json(model, options, fret, "")
-bff.ll_write_pto(out, holo_pdb, holo_scores, pairs[:500], settings)
+settings = bff.labelizer_settings_json(model, options, fret, "")
+bff.labelizer_write_pto(out, holo_pdb, holo_scores, pairs[:500], settings)
 print("\nwrote %s (%.2f MB)"
       % (os.path.basename(out), os.path.getsize(out) / 1048576.0))
 
 # Reading it back needs nothing but the file: the scores, the pairs and the
 # settings that produced them all travel together.
-back_scores = bff.ll_read_pto_scores(out)
-back_pairs = bff.ll_read_pto_pairs(out)
+back_scores = bff.labelizer_read_pto_scores(out)
+back_pairs = bff.labelizer_read_pto_pairs(out)
 print("read back: %d score rows, %d pair rows" % (len(back_scores),
                                                   len(back_pairs)))
 print("recovered structure sha256 %s..."
-      % bff.ll_extract_pto_structure(
+      % bff.labelizer_extract_pto_structure(
           out, os.path.join(work, "MalE-recovered.pdb"))[:16])
 
 # --- 5. the picture ----------------------------------------------------------
@@ -124,8 +124,8 @@ print("recovered structure sha256 %s..."
 # The Cbeta difference map is the change itself, before any dye is involved:
 # how much further apart every pair of positions ends up. The pair score is
 # essentially this map, weighted by where FRET can see it.
-first, flat = bff.ll_cbeta_difference_map(bff.ll_read_structure(apo_pdb),
-                                          bff.ll_read_structure(holo_pdb))
+first, flat = bff.labelizer_cbeta_difference_map(bff.labelizer_read_structure(apo_pdb),
+                                          bff.labelizer_read_structure(holo_pdb))
 matrix = np.asarray(flat)
 n = int(round(np.sqrt(matrix.size)))
 matrix = matrix.reshape(n, n)

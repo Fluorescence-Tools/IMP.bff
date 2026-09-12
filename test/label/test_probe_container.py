@@ -147,7 +147,7 @@ def test_the_container_hands_out_angstrom(container):
     assert from_container == pytest.approx(direct)
     # Angstrom, not nanometres: a dye-pair R0 is tens, not units. This is the
     # assertion that would catch a stray factor of ten reappearing at either
-    # end -- the consumers (LlFretOptions, av_distance) all default to 52.
+    # end -- the consumers (LabelizerFRETOptions, av_distance) all default to 52.
     assert 30.0 < from_container < 90.0
 
 
@@ -331,9 +331,9 @@ def test_the_consumers_default_to_the_same_unit():
     """A default is a claim about a unit too. If these drifted to nanometres
     the port would score every pair against an R0 ten times too small, which
     reads as a protein where no pair is worth measuring rather than as a bug."""
-    assert 20.0 < bff.LlFretOptions().forster_radius < 120.0
+    assert 20.0 < bff.LabelizerFRETOptions().forster_radius < 120.0
     # And the efficiency curve crosses one half at R0, whatever R0 is.
-    r0 = bff.LlFretOptions().forster_radius
+    r0 = bff.LabelizerFRETOptions().forster_radius
     assert bff.fret_efficiency(r0, r0) == pytest.approx(0.5)
 
 

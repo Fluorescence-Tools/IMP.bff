@@ -142,8 +142,8 @@ def test_the_labelizer_score_types_cover_every_parameter():
     """Each of the reference's seven terms maps onto a dictionary value."""
     declared = _enumeration("_mmfdb_label_score.score_type")
     for tag in ["cs", "se", "ss", "ce", "tp", "cr", "me"]:
-        assert bff.ll_score_type(tag) in declared, tag
-    assert bff.ll_score_type("combined") in declared
+        assert bff.labelizer_score_type(tag) in declared, tag
+    assert bff.labelizer_score_type("combined") in declared
 
 
 def test_units_are_a_positive_claim_or_absent():

@@ -25,7 +25,7 @@ tolerance below was stated before the comparison was run
 
 The reference shells out to DSSP and raises `RuntimeError("Unknown platform")`
 on macOS (`secondary_structure.py:126`), so the term could not be evaluated at
-all on this machine. `ll_dssp` is a native Kabsch–Sander implementation and
+all on this machine. `labelizer_dssp` is a native Kabsch–Sander implementation and
 reproduces the reference binary's eight-state assignment on **every one of the
 195 residues** — the state histogram matches term for term
 (`- 64, H 96, S 21, G 3, T 6, I 5`) and the parameter score delta is exactly
@@ -49,7 +49,7 @@ an older DSSP: the disagreement would reappear, and it would not be a bug here.
 
 The published default is MSMS residue depth (`N_SE11_MEAN_SURFACE_DIST`), and
 the MSMS binaries the reference ships are 32-bit ppc/i386 Mach-O that do not
-execute. `ll_residue_depth` builds the solvent-excluded surface natively (the
+execute. `labelizer_residue_depth` builds the solvent-excluded surface natively (the
 probe is rolled on the golden-spiral point set already in
 `SolventAccessibleSurface.h`, and the unoccluded positions are pulled back by
 one probe radius).

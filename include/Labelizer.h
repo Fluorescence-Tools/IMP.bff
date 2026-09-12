@@ -11,12 +11,12 @@
  *    quantities a label-site score is computed from.
  * 2. **Score** (formerly `LabelizerScore.h`) -- the fitted likelihood tables
  *    and the weighted geometric mean over the features.
- * 3. **FRET pair** (formerly `LabelizerFret.h`) -- which two labelling sites
+ * 3. **FRET pair** (formerly `LabelizerFRET.h`) -- which two labelling sites
  *    make the best pair, over the site scores and the distances between them.
  * 4. **IO** (formerly `LabelizerIO.h`) -- a scored structure as one
  *    `.mmfdb.pto` container.
  *
- * The `Ll` prefix and the `ll_` free functions mark what came from the
+ * The `Labelizer` prefix and the `labelizer_` free functions mark what came from the
  * Labelizer package, so a reader can tell the ported model from the module's
  * own physics without consulting a PRD.
  *
@@ -51,12 +51,12 @@
 #include <IMP/bff/bff_config.h>
 
 #include <IMP/bff/Base.h>
-// AccessibleVolume, which `LlAvDoor` below is a function type over. This
+// AccessibleVolume, which `LabelizerAvDoor` below is a function type over. This
 // header used it without declaring it and compiled anyway, because every
 // translation unit that included it happened to include AVModel.h first --
 // true in the standalone build and, until PRD-137 split the sources, in the
 // IMP module build too. Compiled on its own it failed at the typedef, which
-// degraded `LlAvDoor` to an implicit int and produced errors two thousand
+// degraded `LabelizerAvDoor` to an implicit int and produced errors two thousand
 // lines away at the call sites. A header has to stand by itself.
 #include <IMP/bff/AVModel.h>
 
@@ -71,32 +71,32 @@ IMPBFF_BEGIN_NAMESPACE
 // The residue view
 // ---------------------------------------------------------------------------
 
-//! One residue, and where its atoms are in the flat arrays of #LlStructure.
+//! One residue, and where its atoms are in the flat arrays of #LabelizerStructure.
 /*! The backbone indices are resolved once, at read time, because every kernel
     below wants them and each would otherwise re-scan the atom list. A missing
     atom is `-1` and stays `-1`: a residue without a CA cannot be scored, and
     substituting a neighbouring atom yields a plausible, wrong answer. */
-struct IMPBFFEXPORT LlResidue {
+struct IMPBFFEXPORT LabelizerResidue {
     //! Author chain identifier, as the PDB writes it.
     std::string chain;
     //! Author residue number.
     int seq_id;
     //! Three-letter residue name, e.g. `"TRP"`.
     std::string comp_id;
-    //! Indices into #LlStructure::xyz (as triples) and the parallel arrays.
+    //! Indices into #LabelizerStructure::xyz (as triples) and the parallel arrays.
     std::vector<int> atoms;
     //! Backbone atom indices, or -1 when the atom is absent.
     int n, ca, c, o, cb;
 
-    LlResidue() : seq_id(0), n(-1), ca(-1), c(-1), o(-1), cb(-1) {}
-    IMP_SHOWABLE_INLINE(LlResidue,
-                        out << "LlResidue(" << chain << seq_id << ":"
+    LabelizerResidue() : seq_id(0), n(-1), ca(-1), c(-1), o(-1), cb(-1) {}
+    IMP_SHOWABLE_INLINE(LabelizerResidue,
+                        out << "LabelizerResidue(" << chain << seq_id << ":"
                             << comp_id << ")");
 };
-IMP_VALUES(LlResidue, LlResidues);
+IMP_VALUES(LabelizerResidue, LabelizerResidues);
 
 //! A structure as the scoring layer sees it: flat coordinates, grouped residues.
-struct IMPBFFEXPORT LlStructure {
+struct IMPBFFEXPORT LabelizerStructure {
     //! `3N` coordinates, xyzxyz…
     std::vector<double> xyz;
     //! `N` van der Waals radii.
@@ -104,14 +104,14 @@ struct IMPBFFEXPORT LlStructure {
     //! `N` atom names, stripped of padding.
     std::vector<std::string> atom_name;
     //! Residues in file order.
-    std::vector<LlResidue> residues;
+    std::vector<LabelizerResidue> residues;
 
     //! Number of atoms.
     std::size_t size() const { return vdw.size(); }
 };
 
 //! The twenty standard amino acids, three-letter, uppercase.
-IMPBFFEXPORT const std::vector<std::string>& ll_standard_residues();
+IMPBFFEXPORT const std::vector<std::string>& labelizer_standard_residues();
 
 //! Read a structure and group it into residues.
 /*!
@@ -120,7 +120,7 @@ IMPBFFEXPORT const std::vector<std::string>& ll_standard_residues();
 
     \param[in] pdb_path the structure
     \param[in] protein_only keep only the residues named by
-               #ll_standard_residues. This is how the reference's
+               #labelizer_standard_residues. This is how the reference's
                `remove_hetatoms` (`pdbhelper.py:16`, which detaches every
                residue whose hetflag is not blank) is reproduced: the record
                type is not carried on a #IMP::bff::PDBAtomRecord, and for a
@@ -131,7 +131,7 @@ IMPBFFEXPORT const std::vector<std::string>& ll_standard_residues();
     \return the grouped structure
     \throw IOException when the file has no coordinates
 */
-IMPBFFEXPORT LlStructure ll_read_structure(const std::string& pdb_path,
+IMPBFFEXPORT LabelizerStructure labelizer_read_structure(const std::string& pdb_path,
                                            bool protein_only = true,
                                            int model = 0);
 
@@ -151,7 +151,7 @@ IMPBFFEXPORT LlStructure ll_read_structure(const std::string& pdb_path,
     \param[out] out_view,n_out_view three coordinates, or zero-length when the
                 residue lacks the backbone atoms to place one
 */
-IMPBFFEXPORT void ll_cbeta_position(const LlStructure& s, int residue,
+IMPBFFEXPORT void labelizer_cbeta_position(const LabelizerStructure& s, int residue,
                                     double** out_view, int* n_out_view);
 
 //! Half-sphere exposure about Cbeta, the `(up, down)` neighbour counts.
@@ -169,7 +169,7 @@ IMPBFFEXPORT void ll_cbeta_position(const LlStructure& s, int residue,
     \param[out] out_view,n_out_view `2 * n_residues` values, up then down for
                 each residue in `s.residues` order
 */
-IMPBFFEXPORT void ll_half_sphere_exposure(const LlStructure& s, double radius,
+IMPBFFEXPORT void labelizer_half_sphere_exposure(const LabelizerStructure& s, double radius,
                                           double** out_view, int* n_out_view);
 
 // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ IMPBFFEXPORT void ll_half_sphere_exposure(const LlStructure& s, double radius,
 
         E = 332 * 0.42 * 0.20 * (1/r_ON + 1/r_CH - 1/r_OH - 1/r_CN)   kcal/mol
 
-    with a bond declared below #LL_DSSP_HBOND_ENERGY. The amide hydrogen is not
+    with a bond declared below #LABELIZER_DSSP_HBOND_ENERGY. The amide hydrogen is not
     in the file and is placed the way DSSP places it: on N, along the direction
     opposite the preceding residue's C=O.
 
@@ -194,27 +194,27 @@ IMPBFFEXPORT void ll_half_sphere_exposure(const LlStructure& s, double radius,
     \param[in] s the structure
     \return one character per residue, in `s.residues` order
 */
-IMPBFFEXPORT std::string ll_dssp(const LlStructure& s);
+IMPBFFEXPORT std::string labelizer_dssp(const LabelizerStructure& s);
 
 //! The hydrogen-bond energy below which a bond is declared, kcal/mol.
-IMPBFFEXPORT extern const double LL_DSSP_HBOND_ENERGY;
+IMPBFFEXPORT extern const double LABELIZER_DSSP_HBOND_ENERGY;
 
 // ---------------------------------------------------------------------------
 // Solvent exposure
 // ---------------------------------------------------------------------------
 
 //! Which maximum-accessibility scale a relative accessibility is taken against.
-enum LlMaxAsa {
+enum LabelizerMaxAsa {
     //! Tien *et al.* (2013) theoretical maxima. The reference's `N_SE1`.
-    LL_MAXASA_WILKE = 0,
+    LABELIZER_MAXASA_WILKE = 0,
     //! Kabsch and Sander (1983). The reference's `N_SE2`.
-    LL_MAXASA_SANDER = 1,
+    LABELIZER_MAXASA_SANDER = 1,
     //! Miller *et al.* (1987). The reference's `N_SE3`.
-    LL_MAXASA_MILLER = 2
+    LABELIZER_MAXASA_MILLER = 2
 };
 
 //! The maximum solvent-accessible area per residue type, Angstrom squared.
-IMPBFFEXPORT std::map<std::string, double> ll_max_asa(LlMaxAsa scale);
+IMPBFFEXPORT std::map<std::string, double> labelizer_max_asa(LabelizerMaxAsa scale);
 
 //! Solvent-accessible surface area per residue, Angstrom squared.
 /*!
@@ -226,23 +226,23 @@ IMPBFFEXPORT std::map<std::string, double> ll_max_asa(LlMaxAsa scale);
     \param[in] n_sphere_points sampling density per atom
     \param[out] out_view,n_out_view one area per residue
 */
-IMPBFFEXPORT void ll_residue_sasa(const LlStructure& s,
+IMPBFFEXPORT void labelizer_residue_sasa(const LabelizerStructure& s,
                                   double probe_radius, int n_sphere_points,
                                   double** out_view, int* n_out_view);
 
 //! Relative solvent accessibility per residue, a fraction.
 /*!
-    #ll_residue_sasa divided by the residue's maximum. A residue type absent
+    #labelizer_residue_sasa divided by the residue's maximum. A residue type absent
     from the scale yields a negative value, which the caller must treat as
     "not computed" rather than as zero exposure.
 
     \param[in] s the structure
     \param[in] scale which maximum-accessibility table
-    \param[in] probe_radius,n_sphere_points passed to #ll_residue_sasa
+    \param[in] probe_radius,n_sphere_points passed to #labelizer_residue_sasa
     \param[out] out_view,n_out_view one fraction per residue
 */
-IMPBFFEXPORT void ll_relative_solvent_accessibility(
-        const LlStructure& s, LlMaxAsa scale, double probe_radius,
+IMPBFFEXPORT void labelizer_relative_solvent_accessibility(
+        const LabelizerStructure& s, LabelizerMaxAsa scale, double probe_radius,
         int n_sphere_points, double** out_view, int* n_out_view);
 
 //! Mean distance from a residue's atoms to the solvent-excluded surface.
@@ -264,27 +264,27 @@ IMPBFFEXPORT void ll_relative_solvent_accessibility(
     \param[in] n_sphere_points points per atom used to build the surface
     \param[out] out_view,n_out_view one depth per residue, Angstrom
 */
-IMPBFFEXPORT void ll_residue_depth(const LlStructure& s, double probe_radius,
+IMPBFFEXPORT void labelizer_residue_depth(const LabelizerStructure& s, double probe_radius,
                                    int n_sphere_points, double** out_view,
                                    int* n_out_view);
 
 //! Distance from each residue's Cbeta to the solvent-excluded surface.
 /*!
     The observable of the `N_SE10_CB_SURFACE_DIST` table, and a different
-    quantity from #ll_residue_depth: that averages over every atom of the
+    quantity from #labelizer_residue_depth: that averages over every atom of the
     residue, this measures the one atom a label is attached at. The bins differ
     accordingly -- the Cbeta table starts at 0.69 Angstrom where the mean-atom
     table starts at 1.46.
 
     Glycine has no Cbeta and gets the reconstructed one from
-    #ll_cbeta_position, so every residue has a value.
+    #labelizer_cbeta_position, so every residue has a value.
 
     \param[in] s the structure
-    \param[in] probe_radius,n_sphere_points as #ll_residue_depth
+    \param[in] probe_radius,n_sphere_points as #labelizer_residue_depth
     \param[out] out_view,n_out_view one distance per residue, Angstrom;
                 negative where no Cbeta could be placed
 */
-IMPBFFEXPORT void ll_cbeta_depth(const LlStructure& s, double probe_radius,
+IMPBFFEXPORT void labelizer_cbeta_depth(const LabelizerStructure& s, double probe_radius,
                                  int n_sphere_points, double** out_view,
                                  int* n_out_view);
 
@@ -313,7 +313,7 @@ IMPBFFEXPORT void ll_cbeta_depth(const LlStructure& s, double probe_radius,
                 The negative total is reported as a negative number, so the
                 three sum as `net = positive + negative`.
 */
-IMPBFFEXPORT void ll_global_charge(const LlStructure& s, double** out_view,
+IMPBFFEXPORT void labelizer_global_charge(const LabelizerStructure& s, double** out_view,
                                    int* n_out_view);
 
 // ---------------------------------------------------------------------------
@@ -332,14 +332,14 @@ IMPBFFEXPORT void ll_global_charge(const LlStructure& s, double** out_view,
     \return grade by residue key; an empty map when the file holds none
     \throw IOException when the file cannot be read
 */
-IMPBFFEXPORT std::map<std::string, double> ll_read_consurf(
+IMPBFFEXPORT std::map<std::string, double> labelizer_read_consurf(
         const std::string& path);
 
 //! The residue key the score tables and the reference CSVs are indexed by.
 /*! `"<chain><seq_id>"`, e.g. `"A123"` — the reference's own convention
     (`labeling_parameter.py:129`), kept so its output files can be compared
     row for row. */
-IMPBFFEXPORT std::string ll_residue_key(const std::string& chain, int seq_id);
+IMPBFFEXPORT std::string labelizer_residue_key(const std::string& chain, int seq_id);
 
 IMPBFF_END_NAMESPACE
 
@@ -355,7 +355,7 @@ IMPBFF_END_NAMESPACE
  * A 1:1 port of the model published as Gebhardt *et al.*, *Nat. Commun.* **16**,
  * 3305 (2025), whose reference implementation is the Python package
  * `labelizer`. The structural inputs are in
- * #IMP::bff::ll_read_structure and its neighbours in `LabelizerFeatures.h`;
+ * #IMP::bff::labelizer_read_structure and its neighbours in `LabelizerFeatures.h`;
  * this header is the model on top of them.
  *
  * Two things about it are easy to get wrong and are therefore stated here.
@@ -368,8 +368,8 @@ IMPBFF_END_NAMESPACE
  * unbounded quantity.
  *
  * **The published implementation has defects, and they are reproduced by
- * default.** #LlModel selects; see its documentation for what differs. The
- * default is #LL_MODEL_PUBLISHED, so a caller who asks for nothing gets the
+ * default.** #LabelizerModel selects; see its documentation for what differs. The
+ * default is #LABELIZER_MODEL_PUBLISHED, so a caller who asks for nothing gets the
  * numbers in the paper.
  *
  * \authors Thomas-Otavio Peulen
@@ -389,7 +389,7 @@ IMPBFF_BEGIN_NAMESPACE
 //! Reproduce the published implementation, or its intended arithmetic.
 /*!
     Three defects in the reference change a number, and all three are
-    reproduced under #LL_MODEL_PUBLISHED because the paper's values were
+    reproduced under #LABELIZER_MODEL_PUBLISHED because the paper's values were
     computed with them.
 
     1. The joined label score of a pair takes `prod() ** 0.5` where the
@@ -413,11 +413,11 @@ IMPBFF_BEGIN_NAMESPACE
     accessible-volume guard tests its import the wrong way round
     (`fret_score.py:121`). Both are noted where they occur.
 */
-enum LlModel {
+enum LabelizerModel {
     //! The arithmetic the paper's numbers were computed with. The default.
-    LL_MODEL_PUBLISHED = 0,
+    LABELIZER_MODEL_PUBLISHED = 0,
     //! The arithmetic the reference's own documentation describes.
-    LL_MODEL_CORRECTED = 1
+    LABELIZER_MODEL_CORRECTED = 1
 };
 
 // ---------------------------------------------------------------------------
@@ -434,7 +434,7 @@ enum LlModel {
     (`labeling_parameter.py:184`), which is reproduced exactly: interpolating
     would be smoother and would not be this model.
 */
-struct IMPBFFEXPORT LlTable {
+struct IMPBFFEXPORT LabelizerTable {
     //! The table name, e.g. `"C_SS1_SS"`.
     std::string name;
     //! True when the keys are strings rather than bin centres.
@@ -445,10 +445,10 @@ struct IMPBFFEXPORT LlTable {
     std::vector<double> bins;
     std::vector<double> values;
 
-    LlTable() : categorical(false) {}
-    IMP_SHOWABLE_INLINE(LlTable, out << "LlTable(" << name << ")");
+    LabelizerTable() : categorical(false) {}
+    IMP_SHOWABLE_INLINE(LabelizerTable, out << "LabelizerTable(" << name << ")");
 };
-IMP_VALUES(LlTable, LlTables);
+IMP_VALUES(LabelizerTable, LabelizerTables);
 
 //! Load a fitted table by name from the shipped data directory.
 /*!
@@ -459,27 +459,27 @@ IMP_VALUES(LlTable, LlTables);
     \return the table
     \throw IOException when no such table ships
 */
-IMPBFFEXPORT const LlTable& ll_load_table(const std::string& name);
+IMPBFFEXPORT const LabelizerTable& labelizer_load_table(const std::string& name);
 
 //! Every fitted table that ships, by name.
-IMPBFFEXPORT std::vector<std::string> ll_available_tables();
+IMPBFFEXPORT std::vector<std::string> labelizer_available_tables();
 
 //! Look a numeric observable up in a table: the value of the nearest bin.
-IMPBFFEXPORT double ll_lookup(const LlTable& table, double value);
+IMPBFFEXPORT double labelizer_lookup(const LabelizerTable& table, double value);
 
 //! Look a categorical observable up in a table.
 /*! \throw ValueException when the key is not in the table */
-IMPBFFEXPORT double ll_lookup_key(const LlTable& table, const std::string& key);
+IMPBFFEXPORT double labelizer_lookup_key(const LabelizerTable& table, const std::string& key);
 
 //! The one-letter code of a three-letter residue name, or `'X'`.
-IMPBFFEXPORT char ll_one_letter(const std::string& comp_id);
+IMPBFFEXPORT char labelizer_one_letter(const std::string& comp_id);
 
 // ---------------------------------------------------------------------------
 // The model
 // ---------------------------------------------------------------------------
 
 //! One term of the label score: which parameter, which table, what weight.
-struct IMPBFFEXPORT LlParameter {
+struct IMPBFFEXPORT LabelizerParameter {
     //! The reference's two-letter tag: `cs se ss ce tp cr me`.
     std::string tag;
     //! The fitted table this term reads, empty when the term is hard-coded.
@@ -487,24 +487,24 @@ struct IMPBFFEXPORT LlParameter {
     //! The weight, an **integer repeat count** in the geometric mean.
     int weight;
 
-    LlParameter() : weight(0) {}
-    LlParameter(const std::string& t, const std::string& tb, int w)
+    LabelizerParameter() : weight(0) {}
+    LabelizerParameter(const std::string& t, const std::string& tb, int w)
         : tag(t), table(tb), weight(w) {}
-    IMP_SHOWABLE_INLINE(LlParameter,
-                        out << "LlParameter(" << tag << ", w=" << weight << ")");
+    IMP_SHOWABLE_INLINE(LabelizerParameter,
+                        out << "LabelizerParameter(" << tag << ", w=" << weight << ")");
 };
-IMP_VALUES(LlParameter, LlParameters);
+IMP_VALUES(LabelizerParameter, LabelizerParameters);
 
 //! The published model: conservation, solvent exposure, cysteine resemblance
 //! and secondary structure at weight 1; tryptophan and charge at weight 0.
 /*! `label_score_model_paper`, `labelizer.py:40`. The tryptophan and charge
     terms are switched off in the paper, not merely down-weighted. */
-IMPBFFEXPORT std::vector<LlParameter> ll_model_paper();
+IMPBFFEXPORT std::vector<LabelizerParameter> labelizer_model_paper();
 
 //! What the scoring run may be told, beyond the model itself.
-struct IMPBFFEXPORT LlOptions {
+struct IMPBFFEXPORT LabelizerOptions {
     //! Published or corrected arithmetic.
-    LlModel model;
+    LabelizerModel model;
     //! Rolling-probe radius for the surface terms, Angstrom.
     double probe_radius;
     //! Unit-sphere samples per atom for the surface terms.
@@ -514,13 +514,13 @@ struct IMPBFFEXPORT LlOptions {
     //! Exclusion term: the exposure above which the excluded residue counts.
     double exclusion_exposure;
     //! Exclusion term: which residue is excluded. Ignored under
-    //! #LL_MODEL_PUBLISHED, which is always methionine — see #LlModel.
+    //! #LABELIZER_MODEL_PUBLISHED, which is always methionine — see #LabelizerModel.
     std::string exclusion_residue;
     //! Half-sphere radius the tryptophan and charge terms weight exposure by.
     double hse_radius;
 
-    LlOptions()
-        : model(LL_MODEL_PUBLISHED), probe_radius(1.4), n_sphere_points(590),
+    LabelizerOptions()
+        : model(LABELIZER_MODEL_PUBLISHED), probe_radius(1.4), n_sphere_points(590),
           exclusion_distance(6.0), exclusion_exposure(0.4),
           exclusion_residue("MET"), hse_radius(13.0) {}
 };
@@ -541,7 +541,7 @@ struct IMPBFFEXPORT LlOptions {
     CSVs cannot tell a deliberately excluded residue from a genuinely zero
     score, nor either from a real value that happens to be zero.
 */
-struct IMPBFFEXPORT LlScore {
+struct IMPBFFEXPORT LabelizerScore {
     //! `_mmfdb_label_score.asym_id` — the chain, as the file names it.
     std::string asym_id;
     //! `_mmfdb_label_score.seq_id` — the residue number.
@@ -557,11 +557,11 @@ struct IMPBFFEXPORT LlScore {
     //! `unavailable`.
     std::string status;
 
-    LlScore() : seq_id(0), value(0.0), status("unavailable") {}
-    IMP_SHOWABLE_INLINE(LlScore, out << "LlScore(" << asym_id << seq_id << " "
+    LabelizerScore() : seq_id(0), value(0.0), status("unavailable") {}
+    IMP_SHOWABLE_INLINE(LabelizerScore, out << "LabelizerScore(" << asym_id << seq_id << " "
                                      << score_type << "=" << value << ")");
 };
-IMP_VALUES(LlScore, LlScores);
+IMP_VALUES(LabelizerScore, LabelizerScores);
 
 //! The dictionary `score_type` a two-letter reference tag names.
 /*! `cs -> conservation`, `se -> solvent_exposure`, `ss -> secondary_structure`,
@@ -570,7 +570,7 @@ IMP_VALUES(LlScore, LlScores);
     the one `mmfdb_flr_ext.dic` writes down in the description of
     `_mmfdb_label_score.score_type`; the tags themselves are that program's
     private naming and are not dictionary values. */
-IMPBFFEXPORT std::string ll_score_type(const std::string& tag);
+IMPBFFEXPORT std::string labelizer_score_type(const std::string& tag);
 
 // ---------------------------------------------------------------------------
 // The parameters
@@ -580,18 +580,18 @@ IMPBFFEXPORT std::string ll_score_type(const std::string& tag);
 /*!
     One row per (position, parameter) for each parameter in \p model, whatever
     its weight — the reference evaluates weight-zero terms too, and under
-    #LL_MODEL_PUBLISHED that is load-bearing.
+    #LABELIZER_MODEL_PUBLISHED that is load-bearing.
 
     \param[in] s the structure
-    \param[in] model the terms to evaluate; see #ll_model_paper
+    \param[in] model the terms to evaluate; see #labelizer_model_paper
     \param[in] options probe radii, exclusion settings, and the arithmetic
-    \param[in] conservation grades by residue key, from #ll_read_consurf; an
+    \param[in] conservation grades by residue key, from #labelizer_read_consurf; an
                empty map leaves every conservation row `unavailable`
     \return the parameter scores
 */
-IMPBFFEXPORT std::vector<LlScore> ll_parameter_scores(
-        const LlStructure& s, const std::vector<LlParameter>& model,
-        const LlOptions& options,
+IMPBFFEXPORT std::vector<LabelizerScore> labelizer_parameter_scores(
+        const LabelizerStructure& s, const std::vector<LabelizerParameter>& model,
+        const LabelizerOptions& options,
         const std::map<std::string, double>& conservation);
 
 //! The combined label score per position, from parameter scores.
@@ -607,44 +607,44 @@ IMPBFFEXPORT std::vector<LlScore> ll_parameter_scores(
     exactly zero scores zero — the published zero-veto, which is how the
     exclusion term vetoes a site.
 
-    \param[in] parameter_scores the output of #ll_parameter_scores
+    \param[in] parameter_scores the output of #labelizer_parameter_scores
     \param[in] model the same model, for the weights
-    \param[in] options for #LlModel
+    \param[in] options for #LabelizerModel
     \return one `combined` row per position
 */
-IMPBFFEXPORT std::vector<LlScore> ll_labeling_score(
-        const std::vector<LlScore>& parameter_scores,
-        const std::vector<LlParameter>& model, const LlOptions& options);
+IMPBFFEXPORT std::vector<LabelizerScore> labelizer_labeling_score(
+        const std::vector<LabelizerScore>& parameter_scores,
+        const std::vector<LabelizerParameter>& model, const LabelizerOptions& options);
 
 //! Score a structure end to end: features, parameters, and the combination.
 /*!
     The convenience door, and what the program and the examples call.
 
     \param[in] pdb_path the structure
-    \param[in] model the terms; see #ll_model_paper
+    \param[in] model the terms; see #labelizer_model_paper
     \param[in] options the settings
     \param[in] conservation_path a ConSurf `.grades` or B-factor PDB, or empty
     \return the parameter rows followed by the `combined` rows
     \throw IOException when a file cannot be read
 */
-IMPBFFEXPORT std::vector<LlScore> ll_score_structure(
-        const std::string& pdb_path, const std::vector<LlParameter>& model,
-        const LlOptions& options, const std::string& conservation_path = "");
+IMPBFFEXPORT std::vector<LabelizerScore> labelizer_score_structure(
+        const std::string& pdb_path, const std::vector<LabelizerParameter>& model,
+        const LabelizerOptions& options, const std::string& conservation_path = "");
 
 //! The combined score per residue key, for the pair layer.
-/*! \param[in] scores rows from #ll_score_structure or #ll_labeling_score
+/*! \param[in] scores rows from #labelizer_score_structure or #labelizer_labeling_score
     \return `"<chain><seq_id>" -> value`, only for positions with `status`
             `scored` */
-IMPBFFEXPORT std::map<std::string, double> ll_combined_by_key(
-        const std::vector<LlScore>& scores);
+IMPBFFEXPORT std::map<std::string, double> labelizer_combined_by_key(
+        const std::vector<LabelizerScore>& scores);
 
 IMPBFF_END_NAMESPACE
 
  /* IMPBFF_LABELIZERSCORE_H */
 
-// -------- from LabelizerFret.h --------
+// -------- from LabelizerFRET.h --------
 /**
- *  (formerly IMP/bff/LabelizerFret.h, now a section of this file)
+ *  (formerly IMP/bff/LabelizerFRET.h, now a section of this file)
  *  \brief The Labelizer FRET pair score: which two labelling sites make the
  *         most informative FRET assay.
  *
@@ -659,7 +659,7 @@ IMPBFF_END_NAMESPACE
  * #PROBE_MODEL_ALPHA_CONE is the reference's analytic approximation of where the dye
  * mean ends up; #PROBE_MODEL_ACCESSIBLE_VOLUME builds the real cloud. The reference
  * screens every pair with a cheap method and rebuilds only the best few hundred
- * exactly (`fret_score.py:537`), and #ll_pair_scores does the same.
+ * exactly (`fret_score.py:537`), and #labelizer_fret_pair_scores does the same.
  *
  * **On the reference's `weights` switch, which does not arise here.** Its
  * deployed backend calls `calc_fret_score(..., weights=False)`
@@ -692,7 +692,7 @@ enum ProbeModel {
     //! The Cbeta itself. No dye model at all; the reference's `SIMPLE`.
     PROBE_MODEL_CBETA = 0,
     //! The reference's `GEBHARDT` analytic mean position; see
-    //! #ll_alpha_cone_mean_position.
+    //! #labelizer_alpha_cone_mean_position.
     PROBE_MODEL_ALPHA_CONE = 1,
     //! A real accessible volume, through #IMP::bff::get_av. The
     //! reference's `KALININ`, with its LabelLib call replaced.
@@ -700,7 +700,7 @@ enum ProbeModel {
 };
 
 //! The dye and pair settings a FRET pair score needs.
-struct IMPBFFEXPORT LlFretOptions {
+struct IMPBFFEXPORT LabelizerFRETOptions {
     //! Which dye model the screen uses.
     ProbeModel probe_model;
     //! Which dye model the refinement uses; the reference refines with AVs.
@@ -747,8 +747,8 @@ struct IMPBFFEXPORT LlFretOptions {
     double alpha_cone_radius;
     //! The alpha cone's offset; negative derives it as the reference does.
     double alpha_cone_offset;
-    //! Published or corrected arithmetic; see #LlModel.
-    LlModel model;
+    //! Published or corrected arithmetic; see #LabelizerModel.
+    LabelizerModel model;
     //! Restrict pairs to one donor chain and one acceptor chain.
     /*!
         Empty (the default) pairs every labelable site with every other,
@@ -774,18 +774,18 @@ struct IMPBFFEXPORT LlFretOptions {
     */
     std::map<std::string, std::string> chain_map;
 
-    LlFretOptions()
+    LabelizerFRETOptions()
         : probe_model(PROBE_MODEL_ALPHA_CONE),
           refine_probe_model(PROBE_MODEL_ACCESSIBLE_VOLUME), n_refine(300),
           forster_radius(52.0), label_score_threshold(0.5),
           linker_length(20.0), linker_width(4.5), r1(9.0), r2(4.5), r3(1.5),
           grid_resolution(1.5), distance_type("RDAMeanE"),
           alpha_cone_radius(20.0), alpha_cone_offset(-1.0),
-          model(LL_MODEL_PUBLISHED) {}
+          model(LABELIZER_MODEL_PUBLISHED) {}
 };
 
 //! One scored pair of labelling sites.
-struct IMPBFFEXPORT LlPairScore {
+struct IMPBFFEXPORT LabelizerFRETPairScore {
     //! The two positions, as `_flr_poly_probe_position` names a position.
     std::string asym_id_1, asym_id_2;
     int seq_id_1, seq_id_2;
@@ -801,18 +801,18 @@ struct IMPBFFEXPORT LlPairScore {
     //! distinguishable from a screened one.
     ProbeModel probe_model;
 
-    LlPairScore()
+    LabelizerFRETPairScore()
         // `distance_2` defaults to NaN, not 0: zero is a perfectly plausible
         // distance and would be read as an efficiency of 1, so "there is no
         // second conformation" must not look like "the two dyes coincide".
         : seq_id_1(0), seq_id_2(0), value(0.0), distance(0.0),
           distance_2(std::numeric_limits<double>::quiet_NaN()),
           joined_label_score(0.0), probe_model(PROBE_MODEL_CBETA) {}
-    IMP_SHOWABLE_INLINE(LlPairScore,
-                        out << "LlPairScore(" << asym_id_1 << seq_id_1 << "_"
+    IMP_SHOWABLE_INLINE(LabelizerFRETPairScore,
+                        out << "LabelizerFRETPairScore(" << asym_id_1 << seq_id_1 << "_"
                             << asym_id_2 << seq_id_2 << "=" << value << ")");
 };
-IMP_VALUES(LlPairScore, LlPairScores);
+IMP_VALUES(LabelizerFRETPairScore, LabelizerFRETPairScores);
 
 // ---------------------------------------------------------------------------
 // The scores
@@ -820,31 +820,31 @@ IMP_VALUES(LlPairScore, LlPairScores);
 
 //! The combined label score of the sites of a pair.
 /*!
-    Under #LL_MODEL_PUBLISHED this is `prod(scores) ** 0.5`, which is the
+    Under #LABELIZER_MODEL_PUBLISHED this is `prod(scores) ** 0.5`, which is the
     reference's arithmetic (`fret_score.py:220`) and is the geometric mean only
     when there are two scores. With the four scores of a two-conformation pair
     it is the geometric mean *squared*, so the one- and two-conformation pair
-    scores are not on a common scale. #LL_MODEL_CORRECTED uses
+    scores are not on a common scale. #LABELIZER_MODEL_CORRECTED uses
     `prod(scores) ** (1/N)`, which is the line the reference has commented out
     immediately below the one it runs.
 
     \param[in] scores the label scores of the sites, two or four of them
     \param[in] model which arithmetic
 */
-IMPBFFEXPORT double ll_joined_label_score(const std::vector<double>& scores,
-                                          LlModel model = LL_MODEL_PUBLISHED);
+IMPBFFEXPORT double labelizer_joined_label_score(const std::vector<double>& scores,
+                                          LabelizerModel model = LABELIZER_MODEL_PUBLISHED);
 
 //! The pair score of one conformation: best when the efficiency is one half.
 /*! \f$jls \cdot (1 - 2|E - 0.5|)\f$ (`fret_score.py:263`). A pair is most
     informative where the transfer efficiency responds most steeply to the
     distance, which is at \f$R \approx R_0\f$. */
-IMPBFFEXPORT double ll_pair_score_single(double joined_label_score,
+IMPBFFEXPORT double labelizer_pair_score_single(double joined_label_score,
                                          double distance,
                                          double forster_radius);
 
 //! The pair score of two conformations: best when the efficiency changes most.
 /*! \f$jls \cdot |E(d_1) - E(d_2)|\f$ (`fret_score.py:225`). */
-IMPBFFEXPORT double ll_pair_score_double(double joined_label_score,
+IMPBFFEXPORT double labelizer_pair_score_double(double joined_label_score,
                                          double distance_1, double distance_2,
                                          double forster_radius);
 
@@ -857,7 +857,7 @@ IMPBFFEXPORT double ll_pair_score_double(double joined_label_score,
     it is exposed here because a control pair is a real experimental need and
     the formula was already written.
 */
-IMPBFFEXPORT double ll_pair_score_negative_control(double joined_label_score,
+IMPBFFEXPORT double labelizer_pair_score_negative_control(double joined_label_score,
                                                    double distance_1,
                                                    double distance_2,
                                                    double forster_radius);
@@ -892,8 +892,8 @@ IMPBFFEXPORT double ll_pair_score_negative_control(double joined_label_score,
     \param[out] out_view,n_out_view three coordinates, or zero-length when the
                 residue has no placeable Cbeta
 */
-IMPBFFEXPORT void ll_alpha_cone_mean_position(const LlStructure& s, int residue,
-                                              const LlFretOptions& options,
+IMPBFFEXPORT void labelizer_alpha_cone_mean_position(const LabelizerStructure& s, int residue,
+                                              const LabelizerFRETOptions& options,
                                               double** out_view,
                                               int* n_out_view);
 
@@ -908,9 +908,9 @@ IMPBFFEXPORT void ll_alpha_cone_mean_position(const LlStructure& s, int residue,
                 site cannot carry a dye — a buried site whose volume comes back
                 empty returns nothing rather than a fabricated position
 */
-IMPBFFEXPORT void ll_probe_mean_position(const LlStructure& s,
+IMPBFFEXPORT void labelizer_probe_mean_position(const LabelizerStructure& s,
                                        const std::string& pdb_path, int residue,
-                                       const LlFretOptions& options,
+                                       const LabelizerFRETOptions& options,
                                        double** out_view, int* n_out_view);
 
 // ---------------------------------------------------------------------------
@@ -920,27 +920,27 @@ IMPBFFEXPORT void ll_probe_mean_position(const LlStructure& s,
 //! Score every pair of labelable sites of one structure.
 /*!
     Sites whose combined label score is below
-    #LlFretOptions::label_score_threshold are dropped before pairing, so the
+    #LabelizerFRETOptions::label_score_threshold are dropped before pairing, so the
     cost is quadratic in the *labelable* sites rather than in the residues.
 
-    Pairs are screened with #LlFretOptions::probe_model and the top
-    #LlFretOptions::n_refine are then recomputed with
-    #LlFretOptions::refine_probe_model. **Each site's dye position is computed
+    Pairs are screened with #LabelizerFRETOptions::probe_model and the top
+    #LabelizerFRETOptions::n_refine are then recomputed with
+    #LabelizerFRETOptions::refine_probe_model. **Each site's dye position is computed
     once and reused**; the reference rebuilds the inner site's accessible
     volume inside the inner loop (`fret_score.py:653`), which makes its exact
     mode quadratic in AV builds rather than linear. That is a pure cost
-    difference and changes no number, so it is not behind #LlModel.
+    difference and changes no number, so it is not behind #LabelizerModel.
 
     \param[in] pdb_path the structure
     \param[in] label_scores combined scores by residue key, from
-               #IMP::bff::ll_combined_by_key
+               #IMP::bff::labelizer_combined_by_key
     \param[in] options the dye, the pair filter and the arithmetic
     \return the pairs, highest score first
 */
-IMPBFFEXPORT std::vector<LlPairScore> ll_pair_scores(
+IMPBFFEXPORT std::vector<LabelizerFRETPairScore> labelizer_fret_pair_scores(
         const std::string& pdb_path,
         const std::map<std::string, double>& label_scores,
-        const LlFretOptions& options);
+        const LabelizerFRETOptions& options);
 
 //! Score every pair across two conformations of the same molecule.
 /*!
@@ -955,11 +955,11 @@ IMPBFFEXPORT std::vector<LlPairScore> ll_pair_scores(
     \param[in] options the dye, the pair filter and the arithmetic
     \return the pairs, highest score first
 */
-IMPBFFEXPORT std::vector<LlPairScore> ll_pair_scores_two_states(
+IMPBFFEXPORT std::vector<LabelizerFRETPairScore> labelizer_pair_scores_two_states(
         const std::string& pdb_path_1, const std::string& pdb_path_2,
         const std::map<std::string, double>& label_scores_1,
         const std::map<std::string, double>& label_scores_2,
-        const LlFretOptions& options);
+        const LabelizerFRETOptions& options);
 
 //! The change in Cbeta-Cbeta distance between two conformations.
 /*!
@@ -980,8 +980,8 @@ IMPBFFEXPORT std::vector<LlPairScore> ll_pair_scores_two_states(
     \return the residue number the matrix starts at, so a row index can be
             turned back into a position
 */
-IMPBFFEXPORT int ll_cbeta_difference_map(const LlStructure& s1,
-                                         const LlStructure& s2,
+IMPBFFEXPORT int labelizer_cbeta_difference_map(const LabelizerStructure& s1,
+                                         const LabelizerStructure& s2,
                                          double** out_view, int* n_out_view,
                                          const std::string& chain = "");
 
@@ -1023,15 +1023,15 @@ IMPBFF_BEGIN_NAMESPACE
 /*! Every kind this package writes is under the `label.` prefix. `drot.` and
     `rot.bbdep.` belong to the rotamer containers; the namespaces are disjoint
     by agreement so one walker can read both. */
-IMPBFFEXPORT extern const char* const LL_PTO_README;
+IMPBFFEXPORT extern const char* const LABELIZER_PTO_README;
 //! The input structure, byte for byte as it was read.
-IMPBFFEXPORT extern const char* const LL_PTO_STRUCTURE;
+IMPBFFEXPORT extern const char* const LABELIZER_PTO_STRUCTURE;
 //! The per-position scores, one row per (position, score_type).
-IMPBFFEXPORT extern const char* const LL_PTO_SCORES;
+IMPBFFEXPORT extern const char* const LABELIZER_PTO_SCORES;
 //! The pair scores, one row per pair.
-IMPBFFEXPORT extern const char* const LL_PTO_PAIRS;
+IMPBFFEXPORT extern const char* const LABELIZER_PTO_PAIRS;
 //! The complete settings the run used.
-IMPBFFEXPORT extern const char* const LL_PTO_MODEL;
+IMPBFFEXPORT extern const char* const LABELIZER_PTO_MODEL;
 
 //! Write a scored structure as one PTO.MFDB container.
 /*!
@@ -1048,29 +1048,29 @@ IMPBFFEXPORT extern const char* const LL_PTO_MODEL;
     \param[in] path the container to write; `.mmfdb.pto` by convention, though
                conformance is stated by the tags inside and not by the name
     \param[in] pdb_path the structure that was scored, embedded verbatim
-    \param[in] scores rows from #IMP::bff::ll_score_structure
-    \param[in] pairs rows from #IMP::bff::ll_pair_scores, or empty
+    \param[in] scores rows from #IMP::bff::labelizer_score_structure
+    \param[in] pairs rows from #IMP::bff::labelizer_fret_pair_scores, or empty
     \param[in] settings_json the complete settings, as JSON text; a partial
                record is worse than none because it looks reproducible
     \throw IOException when the structure cannot be read or the container
            cannot be written
     \throw ValueException when a value is not a dictionary term
 */
-IMPBFFEXPORT void ll_write_pto(const std::string& path,
+IMPBFFEXPORT void labelizer_write_pto(const std::string& path,
                                const std::string& pdb_path,
-                               const std::vector<LlScore>& scores,
-                               const std::vector<LlPairScore>& pairs,
+                               const std::vector<LabelizerScore>& scores,
+                               const std::vector<LabelizerFRETPairScore>& pairs,
                                const std::string& settings_json);
 
 //! Read the per-position scores back out of a container.
-/*! \param[in] path a container written by #ll_write_pto
+/*! \param[in] path a container written by #labelizer_write_pto
     \return the rows, in the order they were written
     \throw IOException when the file is not a PTO document or holds no scores */
-IMPBFFEXPORT std::vector<LlScore> ll_read_pto_scores(const std::string& path);
+IMPBFFEXPORT std::vector<LabelizerScore> labelizer_read_pto_scores(const std::string& path);
 
 //! Read the pair scores back out of a container.
 /*! \return the rows, or empty when the container carries none */
-IMPBFFEXPORT std::vector<LlPairScore> ll_read_pto_pairs(
+IMPBFFEXPORT std::vector<LabelizerFRETPairScore> labelizer_read_pto_pairs(
         const std::string& path);
 
 //! Recover the embedded structure, verifying it against its checksum.
@@ -1081,18 +1081,18 @@ IMPBFFEXPORT std::vector<LlPairScore> ll_read_pto_pairs(
     \throw IOException when the container has no structure, or when the bytes
            do not hash to what the container says they should
 */
-IMPBFFEXPORT std::string ll_extract_pto_structure(
+IMPBFFEXPORT std::string labelizer_extract_pto_structure(
         const std::string& path, const std::string& out_pdb_path);
 
 //! The settings JSON the run recorded.
-IMPBFFEXPORT std::string ll_read_pto_settings(const std::string& path);
+IMPBFFEXPORT std::string labelizer_read_pto_settings(const std::string& path);
 
 //! The settings of a scoring run, as the JSON the container stores.
 /*! Every field of both options structs, so the run is reproducible from the
     file alone. */
-IMPBFFEXPORT std::string ll_settings_json(
-        const std::vector<LlParameter>& model, const LlOptions& options,
-        const LlFretOptions& fret_options, const std::string& conservation_path);
+IMPBFFEXPORT std::string labelizer_settings_json(
+        const std::vector<LabelizerParameter>& model, const LabelizerOptions& options,
+        const LabelizerFRETOptions& fret_options, const std::string& conservation_path);
 
 // -------- the accessible-volume door the site scores use --------
 //! How a labelling site's accessible volume is built from a structure file.
@@ -1107,11 +1107,11 @@ IMPBFFEXPORT std::string ll_settings_json(
 typedef std::function<AccessibleVolume(
         const std::string& pdb_path, const std::string& chain, int resseq,
         const std::string& atom_name, double linker_length, double linker_width,
-        double r1, double r2, double r3, double grid_resolution)> LlAvDoor;
+        double r1, double r2, double r3, double grid_resolution)> LabelizerAvDoor;
 //! Replace the road (the layer does at load); an empty function restores the core's.
-IMPBFFEXPORT void ll_set_av_door(LlAvDoor door);
+IMPBFFEXPORT void labelizer_set_av_door(LabelizerAvDoor door);
 //! The road in force: "core" or "imp".
-IMPBFFEXPORT std::string ll_get_av_door_name();
+IMPBFFEXPORT std::string labelizer_get_av_door_name();
 
 IMPBFF_END_NAMESPACE
 

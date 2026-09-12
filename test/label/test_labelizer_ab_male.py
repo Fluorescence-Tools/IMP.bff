@@ -58,7 +58,7 @@ def _reference(tag):
 @pytest.fixture(scope="module")
 def holo():
     """1ANF -- maltose-bound, the closed conformation."""
-    return bff.ll_read_structure(_path("1anf.pdb"))
+    return bff.labelizer_read_structure(_path("1anf.pdb"))
 
 
 def test_the_reference_table_is_the_shape_the_paper_published():
@@ -80,10 +80,10 @@ def test_the_structure_matches_the_table(holo):
 def test_cysteine_resemblance_is_exact_on_a_second_protein(holo):
     """A pure lookup, so a second structure is a real check of the mapping."""
     reference = _reference("1ANF")
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("cr", "C_CR1_Name", 1))
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("cr", "C_CR1_Name", 1))
     got = {r.seq_id: r.value
-           for r in bff.ll_parameter_scores(holo, model, bff.LlOptions(), {})}
+           for r in bff.labelizer_parameter_scores(holo, model, bff.LabelizerOptions(), {})}
 
     delta = [abs(got[k] - float(v["cr"])) for k, v in reference.items()
              if k in got]
@@ -103,10 +103,10 @@ def test_the_native_dssp_finds_the_sheet(holo):
     The bar is set below the measurement so drift fails rather than noise.
     """
     reference = _reference("1ANF")
-    table = dict(bff.ll_load_table("C_SS1_SS").by_key)
+    table = dict(bff.labelizer_load_table("C_SS1_SS").by_key)
     by_value = {round(v, 5): k for k, v in table.items()}
 
-    ours = bff.ll_dssp(holo)
+    ours = bff.labelizer_dssp(holo)
     want, got = [], []
     for i, residue in enumerate(holo.residues):
         row = reference.get(residue.seq_id)
@@ -140,9 +140,9 @@ def test_the_three_ten_helix_is_not_a_leftover_stub(holo):
     C-termini where the reference has `T` -- six of them on this structure.
     """
     reference = _reference("1ANF")
-    table = dict(bff.ll_load_table("C_SS1_SS").by_key)
+    table = dict(bff.labelizer_load_table("C_SS1_SS").by_key)
     by_value = {round(v, 5): k for k, v in table.items()}
-    ours = bff.ll_dssp(holo)
+    ours = bff.labelizer_dssp(holo)
 
     n_ref_g = sum(1 for r in reference.values()
                   if by_value.get(round(float(r["ss"]), 5)) == "G")
@@ -206,7 +206,7 @@ def test_the_published_delta_is_the_difference_of_the_two_scores():
 @pytest.fixture(scope="module")
 def apo():
     """1OMP -- maltose-free, the open conformation."""
-    return bff.ll_read_structure(_path("1OMP.pdb"))
+    return bff.labelizer_read_structure(_path("1OMP.pdb"))
 
 
 def _coordinate_only_model():
@@ -216,11 +216,11 @@ def _coordinate_only_model():
     term makes the combined score `unavailable` for every position -- correctly,
     but it leaves nothing to pair. These three terms need only the coordinates.
     """
-    model = bff.LlParameterList()
+    model = bff.LabelizerParameterList()
     for tag, table in (("se", "N_SE11_MEAN_SURFACE_DIST"),
                        ("cr", "C_CR1_Name"),
                        ("ss", "C_SS1_SS")):
-        model.append(bff.LlParameter(tag, table, 1))
+        model.append(bff.LabelizerParameter(tag, table, 1))
     return model
 
 
@@ -230,9 +230,9 @@ def test_the_apo_structure_scores_as_well_as_the_holo_one(apo):
     A DSSP that happened to suit one conformation would show up here.
     """
     reference = _reference("1OMP")
-    table = dict(bff.ll_load_table("C_SS1_SS").by_key)
+    table = dict(bff.labelizer_load_table("C_SS1_SS").by_key)
     by_value = {round(v, 5): k for k, v in table.items()}
-    ours = bff.ll_dssp(apo)
+    ours = bff.labelizer_dssp(apo)
 
     want, got = [], []
     for i, residue in enumerate(apo.residues):
@@ -257,16 +257,16 @@ def test_the_pair_score_finds_the_hinge_closure():
     top-ranked pairs did not do that, the score would be ranking noise.
     """
     model = _coordinate_only_model()
-    options = bff.LlOptions()
-    apo_scores = bff.ll_combined_by_key(
-        bff.ll_score_structure(_path("1OMP.pdb"), model, options, ""))
-    holo_scores = bff.ll_combined_by_key(
-        bff.ll_score_structure(_path("1anf.pdb"), model, options, ""))
+    options = bff.LabelizerOptions()
+    apo_scores = bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(_path("1OMP.pdb"), model, options, ""))
+    holo_scores = bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(_path("1anf.pdb"), model, options, ""))
     assert len(apo_scores) == len(holo_scores) == N_RESIDUES
 
-    fret = bff.LlFretOptions()
+    fret = bff.LabelizerFRETOptions()
     fret.n_refine = 0
-    pairs = list(bff.ll_pair_scores_two_states(
+    pairs = list(bff.labelizer_pair_scores_two_states(
         _path("1OMP.pdb"), _path("1anf.pdb"), apo_scores, holo_scores, fret))
     assert len(pairs) > 10000
 
@@ -293,11 +293,11 @@ def test_a_structure_paired_with_itself_has_nothing_to_report():
     here would mean the two conformations are not being read independently.
     """
     model = _coordinate_only_model()
-    scores = bff.ll_combined_by_key(
-        bff.ll_score_structure(_path("1anf.pdb"), model, bff.LlOptions(), ""))
-    fret = bff.LlFretOptions()
+    scores = bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(_path("1anf.pdb"), model, bff.LabelizerOptions(), ""))
+    fret = bff.LabelizerFRETOptions()
     fret.n_refine = 0
-    pairs = list(bff.ll_pair_scores_two_states(
+    pairs = list(bff.labelizer_pair_scores_two_states(
         _path("1anf.pdb"), _path("1anf.pdb"), scores, scores, fret))
     assert pairs
     assert max(p.value for p in pairs) == 0.0
@@ -307,7 +307,7 @@ def test_a_structure_paired_with_itself_has_nothing_to_report():
 def test_the_difference_map_is_antisymmetric_and_finds_the_hinge(apo, holo):
     """The map is `d_holo(i,j) - d_apo(i,j)`, so it is symmetric in (i, j) and
     zero on the diagonal, and its extremes are the domains that move."""
-    first, flat = bff.ll_cbeta_difference_map(apo, holo)
+    first, flat = bff.labelizer_cbeta_difference_map(apo, holo)
     matrix = np.asarray(flat)
     n = int(round(np.sqrt(matrix.size)))
     assert n * n == matrix.size
@@ -335,15 +335,15 @@ def test_the_accessible_volume_pair_distance_is_not_the_distance_of_the_means():
     error in the thing being ranked.
     """
     model = _coordinate_only_model()
-    scores = bff.ll_combined_by_key(
-        bff.ll_score_structure(_path("1anf.pdb"), model, bff.LlOptions(), ""))
+    scores = bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(_path("1anf.pdb"), model, bff.LabelizerOptions(), ""))
 
     measured = {}
     for distance_type in ("Rmp", "RDAMean", "RDAMeanE"):
-        options = bff.LlFretOptions()
+        options = bff.LabelizerFRETOptions()
         options.n_refine = 4
         options.distance_type = distance_type
-        pairs = [p for p in bff.ll_pair_scores(_path("1anf.pdb"), scores, options)
+        pairs = [p for p in bff.labelizer_fret_pair_scores(_path("1anf.pdb"), scores, options)
                  if p.probe_model == bff.PROBE_MODEL_ACCESSIBLE_VOLUME]
         assert pairs, "no pair was refined with a real volume"
         measured[distance_type] = {(p.seq_id_1, p.seq_id_2): p.distance
@@ -381,15 +381,15 @@ def test_the_point_dye_models_ignore_the_distance_type():
     """A point has one distance to another point, whatever is asked for --
     which is what the reference's SIMPLE and GEBHARDT do too."""
     model = _coordinate_only_model()
-    scores = bff.ll_combined_by_key(
-        bff.ll_score_structure(_path("1anf.pdb"), model, bff.LlOptions(), ""))
+    scores = bff.labelizer_combined_by_key(
+        bff.labelizer_score_structure(_path("1anf.pdb"), model, bff.LabelizerOptions(), ""))
 
     got = []
     for distance_type in ("Rmp", "RDAMeanE"):
-        options = bff.LlFretOptions()
+        options = bff.LabelizerFRETOptions()
         options.n_refine = 0
         options.probe_model = bff.PROBE_MODEL_ALPHA_CONE
         options.distance_type = distance_type
-        pairs = list(bff.ll_pair_scores(_path("1anf.pdb"), scores, options))[:50]
+        pairs = list(bff.labelizer_fret_pair_scores(_path("1anf.pdb"), scores, options))[:50]
         got.append([(p.seq_id_1, p.seq_id_2, round(p.distance, 9)) for p in pairs])
     assert got[0] == got[1]

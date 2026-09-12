@@ -185,7 +185,7 @@ private:
 // The residue view
 // ---------------------------------------------------------------------------
 
-const std::vector<std::string>& ll_standard_residues() {
+const std::vector<std::string>& labelizer_standard_residues() {
     static const std::vector<std::string> names = [] {
         const char* n[20] = {"ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU",
                              "GLY", "HIS", "ILE", "LEU", "LYS", "MET", "PHE",
@@ -195,17 +195,17 @@ const std::vector<std::string>& ll_standard_residues() {
     return names;
 }
 
-std::string ll_residue_key(const std::string& chain, int seq_id) {
+std::string labelizer_residue_key(const std::string& chain, int seq_id) {
     std::ostringstream os;
     os << chain << seq_id;
     return os.str();
 }
 
-LlStructure ll_read_structure(const std::string& pdb_path, bool protein_only,
+LabelizerStructure labelizer_read_structure(const std::string& pdb_path, bool protein_only,
                               int model) {
     const std::vector<PDBAtomRecord> records = read_pdb_records(pdb_path);
     if (records.empty()) {
-        IMP_THROW("ll_read_structure: no coordinates in " << pdb_path,
+        IMP_THROW("labelizer_read_structure: no coordinates in " << pdb_path,
                   IOException);
     }
 
@@ -227,16 +227,16 @@ LlStructure ll_read_structure(const std::string& pdb_path, bool protein_only,
     starts.push_back(records.size());
     const int n_models = static_cast<int>(starts.size()) - 1;
     if (model < 0 || model >= n_models) {
-        IMP_THROW("ll_read_structure: " << pdb_path << " has " << n_models
+        IMP_THROW("labelizer_read_structure: " << pdb_path << " has " << n_models
                   << " model(s); model " << model << " was asked for",
                   ValueException);
     }
     const std::size_t first = starts[model], last = starts[model + 1];
 
-    std::set<std::string> standard(ll_standard_residues().begin(),
-                                   ll_standard_residues().end());
+    std::set<std::string> standard(labelizer_standard_residues().begin(),
+                                   labelizer_standard_residues().end());
 
-    LlStructure s;
+    LabelizerStructure s;
     std::string cur_chain;
     int cur_seq = 0;
     bool have_residue = false;
@@ -246,7 +246,7 @@ LlStructure ll_read_structure(const std::string& pdb_path, bool protein_only,
         if (protein_only && standard.find(res) == standard.end()) continue;
 
         if (!have_residue || r.chain != cur_chain || r.resseq != cur_seq) {
-            LlResidue nr;
+            LabelizerResidue nr;
             nr.chain = r.chain;
             nr.seq_id = r.resseq;
             nr.comp_id = res;
@@ -263,7 +263,7 @@ LlStructure ll_read_structure(const std::string& pdb_path, bool protein_only,
         const std::string name = lf_strip(r.atom_name);
         s.atom_name.push_back(name);
 
-        LlResidue& cr = s.residues.back();
+        LabelizerResidue& cr = s.residues.back();
         cr.atoms.push_back(idx);
         if (name == "N") cr.n = idx;
         else if (name == "CA") cr.ca = idx;
@@ -281,8 +281,8 @@ LlStructure ll_read_structure(const std::string& pdb_path, bool protein_only,
 namespace {
 
 //! The Cbeta of a residue, real or virtual. Returns false when unplaceable.
-bool lf_cbeta(const LlStructure& s, int ri, LfVec& out) {
-    const LlResidue& r = s.residues[ri];
+bool lf_cbeta(const LabelizerStructure& s, int ri, LfVec& out) {
+    const LabelizerResidue& r = s.residues[ri];
     if (r.cb >= 0) {
         out = lf_at(s.xyz, r.cb);
         return true;
@@ -304,7 +304,7 @@ bool lf_cbeta(const LlStructure& s, int ri, LfVec& out) {
 
 }  // namespace
 
-void ll_cbeta_position(const LlStructure& s, int residue, double** out_view,
+void labelizer_cbeta_position(const LabelizerStructure& s, int residue, double** out_view,
                        int* n_out_view) {
     LfVec cb;
     if (residue < 0 || residue >= static_cast<int>(s.residues.size()) ||
@@ -316,7 +316,7 @@ void ll_cbeta_position(const LlStructure& s, int residue, double** out_view,
     if (b) { b[0] = cb.x; b[1] = cb.y; b[2] = cb.z; }
 }
 
-void ll_half_sphere_exposure(const LlStructure& s, double radius,
+void labelizer_half_sphere_exposure(const LabelizerStructure& s, double radius,
                              double** out_view, int* n_out_view) {
     const std::size_t nr = s.residues.size();
     double* out = internal::new_double_view(2 * nr, out_view, n_out_view);
@@ -336,7 +336,7 @@ void ll_half_sphere_exposure(const LlStructure& s, double radius,
     std::vector<int> hit;
 
     for (std::size_t i = 0; i < nr; ++i) {
-        const LlResidue& r = s.residues[i];
+        const LabelizerResidue& r = s.residues[i];
         LfVec cb;
         if (r.ca < 0 || !lf_cbeta(s, static_cast<int>(i), cb)) continue;
         const LfVec ca = lf_at(s.xyz, r.ca);
@@ -358,9 +358,9 @@ void ll_half_sphere_exposure(const LlStructure& s, double radius,
 // Secondary structure -- Kabsch and Sander (1983)
 // ---------------------------------------------------------------------------
 
-const double LL_DSSP_HBOND_ENERGY = -0.5;
+const double LABELIZER_DSSP_HBOND_ENERGY = -0.5;
 
-std::string ll_dssp(const LlStructure& s) {
+std::string labelizer_dssp(const LabelizerStructure& s) {
     const int nr = static_cast<int>(s.residues.size());
     std::string ss(static_cast<std::size_t>(nr), '-');
     if (nr == 0) return ss;
@@ -369,7 +369,7 @@ std::string ll_dssp(const LlStructure& s) {
     std::vector<LfVec> N(nr), CA(nr), C(nr), O(nr), H(nr);
     std::vector<char> ok(nr, 0), has_h(nr, 0);
     for (int i = 0; i < nr; ++i) {
-        const LlResidue& r = s.residues[i];
+        const LabelizerResidue& r = s.residues[i];
         if (r.n < 0 || r.ca < 0 || r.c < 0 || r.o < 0) continue;
         N[i] = lf_at(s.xyz, r.n);
         CA[i] = lf_at(s.xyz, r.ca);
@@ -426,7 +426,7 @@ std::string ll_dssp(const LlStructure& s) {
             const double rCN = lf_dist(C[i], N[j]);
             if (rON < 1e-3 || rCH < 1e-3 || rOH < 1e-3 || rCN < 1e-3) continue;
             const double e = q1q2f * (1.0 / rON + 1.0 / rCH - 1.0 / rOH - 1.0 / rCN);
-            if (e < LL_DSSP_HBOND_ENERGY) hb[i][j] = 1;
+            if (e < LABELIZER_DSSP_HBOND_ENERGY) hb[i][j] = 1;
         }
     }
 
@@ -581,7 +581,7 @@ std::string ll_dssp(const LlStructure& s) {
 // Solvent exposure
 // ---------------------------------------------------------------------------
 
-std::map<std::string, double> ll_max_asa(LlMaxAsa scale) {
+std::map<std::string, double> labelizer_max_asa(LabelizerMaxAsa scale) {
     const char* res[20] = {"ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU",
                            "GLY", "HIS", "ILE", "LEU", "LYS", "MET", "PHE",
                            "PRO", "SER", "THR", "TRP", "TYR", "VAL"};
@@ -595,14 +595,14 @@ std::map<std::string, double> ll_max_asa(LlMaxAsa scale) {
     static const double miller[20] = {113, 241, 158, 151, 140, 189, 183, 85,
                                       194, 182, 180, 211, 204, 218, 143, 122,
                                       146, 259, 229, 160};
-    const double* v = scale == LL_MAXASA_SANDER ? sander
-                    : scale == LL_MAXASA_MILLER ? miller : wilke;
+    const double* v = scale == LABELIZER_MAXASA_SANDER ? sander
+                    : scale == LABELIZER_MAXASA_MILLER ? miller : wilke;
     std::map<std::string, double> m;
     for (int i = 0; i < 20; ++i) m[res[i]] = v[i];
     return m;
 }
 
-void ll_residue_sasa(const LlStructure& s, double probe_radius,
+void labelizer_residue_sasa(const LabelizerStructure& s, double probe_radius,
                      int n_sphere_points, double** out_view, int* n_out_view) {
     const std::size_t nr = s.residues.size();
     double* out = internal::new_double_view(nr, out_view, n_out_view);
@@ -622,7 +622,7 @@ void ll_residue_sasa(const LlStructure& s, double probe_radius,
     }
 }
 
-void ll_relative_solvent_accessibility(const LlStructure& s, LlMaxAsa scale,
+void labelizer_relative_solvent_accessibility(const LabelizerStructure& s, LabelizerMaxAsa scale,
                                        double probe_radius, int n_sphere_points,
                                        double** out_view, int* n_out_view) {
     const std::size_t nr = s.residues.size();
@@ -631,8 +631,8 @@ void ll_relative_solvent_accessibility(const LlStructure& s, LlMaxAsa scale,
 
     double* area = 0;
     int n_area = 0;
-    ll_residue_sasa(s, probe_radius, n_sphere_points, &area, &n_area);
-    const std::map<std::string, double> maxasa = ll_max_asa(scale);
+    labelizer_residue_sasa(s, probe_radius, n_sphere_points, &area, &n_area);
+    const std::map<std::string, double> maxasa = labelizer_max_asa(scale);
     for (std::size_t i = 0; i < nr; ++i) {
         std::map<std::string, double>::const_iterator it =
                 maxasa.find(s.residues[i].comp_id);
@@ -652,7 +652,7 @@ namespace {
     occludes, then pulls each back by one probe radius onto the contact
     surface. Shared by the two depth measures so the expensive part happens
     once per call rather than once per observable. */
-std::vector<double> lf_build_surface(const LlStructure& s, double probe_radius,
+std::vector<double> lf_build_surface(const LabelizerStructure& s, double probe_radius,
                                      int n_sphere_points) {
     const std::vector<double> unit = sphere_points(n_sphere_points);
     const std::size_t n_unit = unit.size() / 3;
@@ -689,7 +689,7 @@ std::vector<double> lf_build_surface(const LlStructure& s, double probe_radius,
 
 }  // namespace
 
-void ll_cbeta_depth(const LlStructure& s, double probe_radius,
+void labelizer_cbeta_depth(const LabelizerStructure& s, double probe_radius,
                     int n_sphere_points, double** out_view, int* n_out_view) {
     const std::size_t nr = s.residues.size();
     double* out = internal::new_double_view(nr, out_view, n_out_view);
@@ -709,7 +709,7 @@ void ll_cbeta_depth(const LlStructure& s, double probe_radius,
     }
 }
 
-void ll_residue_depth(const LlStructure& s, double probe_radius,
+void labelizer_residue_depth(const LabelizerStructure& s, double probe_radius,
                       int n_sphere_points, double** out_view, int* n_out_view) {
     const std::size_t nr = s.residues.size();
     double* out = internal::new_double_view(nr, out_view, n_out_view);
@@ -734,7 +734,7 @@ void ll_residue_depth(const LlStructure& s, double probe_radius,
     }
 }
 
-void ll_global_charge(const LlStructure& s, double** out_view,
+void labelizer_global_charge(const LabelizerStructure& s, double** out_view,
                       int* n_out_view) {
     double* out = internal::new_double_view(3, out_view, n_out_view);
     if (!out) return;
@@ -759,10 +759,10 @@ void ll_global_charge(const LlStructure& s, double** out_view,
 // Conservation, imported
 // ---------------------------------------------------------------------------
 
-std::map<std::string, double> ll_read_consurf(const std::string& path) {
+std::map<std::string, double> labelizer_read_consurf(const std::string& path) {
     std::ifstream in(path.c_str());
     if (!in) {
-        IMP_THROW("ll_read_consurf: cannot read " << path, IOException);
+        IMP_THROW("labelizer_read_consurf: cannot read " << path, IOException);
     }
     std::map<std::string, double> grades;
 
@@ -777,7 +777,7 @@ std::map<std::string, double> ll_read_consurf(const std::string& path) {
             if (line.compare(0, 4, "ATOM") != 0 || line.size() < 66) continue;
             const std::string chain = lf_strip(line.substr(21, 1));
             const int seq = std::atoi(line.substr(22, 4).c_str());
-            const std::string key = ll_residue_key(chain, seq);
+            const std::string key = labelizer_residue_key(chain, seq);
             if (!seen.insert(key).second) continue;
             grades[key] = std::atof(line.substr(60, 6).c_str());
         }
@@ -800,7 +800,7 @@ std::map<std::string, double> ll_read_consurf(const std::string& path) {
         if (colon == std::string::npos || colon < 4) continue;
         const std::string seq = pos.substr(3, colon - 3);
         const std::string chain = pos.substr(colon + 1);
-        grades[ll_residue_key(chain, std::atoi(seq.c_str()))] =
+        grades[labelizer_residue_key(chain, std::atoi(seq.c_str()))] =
                 std::atof(f[3].c_str());
     }
     return grades;
@@ -833,7 +833,7 @@ std::string ls_table_path(const std::string& name) {
 }
 
 //! Distance between two atoms of a structure.
-double ls_dist(const LlStructure& s, int a, int b) {
+double ls_dist(const LabelizerStructure& s, int a, int b) {
     const double dx = s.xyz[3 * a + 0] - s.xyz[3 * b + 0];
     const double dy = s.xyz[3 * a + 1] - s.xyz[3 * b + 1];
     const double dz = s.xyz[3 * a + 2] - s.xyz[3 * b + 2];
@@ -923,21 +923,21 @@ std::string ls_charge_class(const std::string& c) {
 // Tables
 // ---------------------------------------------------------------------------
 
-const LlTable& ll_load_table(const std::string& name) {
-    static std::map<std::string, LlTable> cache;
-    std::map<std::string, LlTable>::iterator it = cache.find(name);
+const LabelizerTable& labelizer_load_table(const std::string& name) {
+    static std::map<std::string, LabelizerTable> cache;
+    std::map<std::string, LabelizerTable>::iterator it = cache.find(name);
     if (it != cache.end()) return it->second;
 
     const std::string path = ls_table_path(name);
     std::ifstream in(path.c_str());
     if (!in) {
-        IMP_THROW("ll_load_table: no fitted table named '" << name << "' at "
+        IMP_THROW("labelizer_load_table: no fitted table named '" << name << "' at "
                   << path, IOException);
     }
     nlohmann::json j;
     in >> j;
 
-    LlTable t;
+    LabelizerTable t;
     t.name = name;
     // The reference reads the domain off the first character of the name:
     // `C_` categorical, `N_`/`I_` numeric (labeling_parameter.py:198).
@@ -962,7 +962,7 @@ const LlTable& ll_load_table(const std::string& name) {
     return cache[name];
 }
 
-std::vector<std::string> ll_available_tables() {
+std::vector<std::string> labelizer_available_tables() {
     // The shipped set, named rather than globbed so a missing file is an
     // error at load rather than a silently shorter list.
     static const char* names[] = {
@@ -978,7 +978,7 @@ std::vector<std::string> ll_available_tables() {
     return std::vector<std::string>(names, names + 29);
 }
 
-double ll_lookup(const LlTable& table, double value) {
+double labelizer_lookup(const LabelizerTable& table, double value) {
     if (table.bins.empty()) return 0.0;
     // Nearest bin centre, no interpolation (labeling_parameter.py:184).
     std::size_t best = 0;
@@ -990,16 +990,16 @@ double ll_lookup(const LlTable& table, double value) {
     return table.values[best];
 }
 
-double ll_lookup_key(const LlTable& table, const std::string& key) {
+double labelizer_lookup_key(const LabelizerTable& table, const std::string& key) {
     std::map<std::string, double>::const_iterator it = table.by_key.find(key);
     if (it == table.by_key.end()) {
-        IMP_THROW("ll_lookup_key: '" << key << "' is not in table "
+        IMP_THROW("labelizer_lookup_key: '" << key << "' is not in table "
                   << table.name, ValueException);
     }
     return it->second;
 }
 
-char ll_one_letter(const std::string& comp_id) {
+char labelizer_one_letter(const std::string& comp_id) {
     static const char* const pairs[20] = {
         "ALA A", "ARG R", "ASN N", "ASP D", "CYS C", "GLN Q", "GLU E",
         "GLY G", "HIS H", "ILE I", "LEU L", "LYS K", "MET M", "PHE F",
@@ -1015,18 +1015,18 @@ char ll_one_letter(const std::string& comp_id) {
 // The model
 // ---------------------------------------------------------------------------
 
-std::vector<LlParameter> ll_model_paper() {
-    std::vector<LlParameter> m;
-    m.push_back(LlParameter("cs", "N_CS2_Score", 1));
-    m.push_back(LlParameter("se", "N_SE11_MEAN_SURFACE_DIST", 1));
-    m.push_back(LlParameter("tp", "", 0));
-    m.push_back(LlParameter("cr", "C_CR1_Name", 1));
-    m.push_back(LlParameter("ss", "C_SS1_SS", 1));
-    m.push_back(LlParameter("ce", "", 0));
+std::vector<LabelizerParameter> labelizer_model_paper() {
+    std::vector<LabelizerParameter> m;
+    m.push_back(LabelizerParameter("cs", "N_CS2_Score", 1));
+    m.push_back(LabelizerParameter("se", "N_SE11_MEAN_SURFACE_DIST", 1));
+    m.push_back(LabelizerParameter("tp", "", 0));
+    m.push_back(LabelizerParameter("cr", "C_CR1_Name", 1));
+    m.push_back(LabelizerParameter("ss", "C_SS1_SS", 1));
+    m.push_back(LabelizerParameter("ce", "", 0));
     return m;
 }
 
-std::string ll_score_type(const std::string& tag) {
+std::string labelizer_score_type(const std::string& tag) {
     if (tag == "cs") return "conservation";
     if (tag == "se") return "solvent_exposure";
     if (tag == "ss") return "secondary_structure";
@@ -1035,7 +1035,7 @@ std::string ll_score_type(const std::string& tag) {
     if (tag == "cr") return "cysteine_resemblance";
     if (tag == "me") return "methionine_exclusion";
     if (tag == "combined") return "combined";
-    IMP_THROW("ll_score_type: unknown parameter tag '" << tag << "'",
+    IMP_THROW("labelizer_score_type: unknown parameter tag '" << tag << "'",
               ValueException);
 }
 
@@ -1043,49 +1043,49 @@ std::string ll_score_type(const std::string& tag) {
 // The parameters
 // ---------------------------------------------------------------------------
 
-std::vector<LlScore> ll_parameter_scores(
-        const LlStructure& s, const std::vector<LlParameter>& model,
-        const LlOptions& options,
+std::vector<LabelizerScore> labelizer_parameter_scores(
+        const LabelizerStructure& s, const std::vector<LabelizerParameter>& model,
+        const LabelizerOptions& options,
         const std::map<std::string, double>& conservation) {
     const std::size_t nr = s.residues.size();
-    std::vector<LlScore> out;
+    std::vector<LabelizerScore> out;
     out.reserve(nr * model.size());
     if (nr == 0) return out;
 
     // Everything the terms below share, computed once. The reference rebuilds
     // the surface and the neighbour search per parameter object.
-    const std::string ss = ll_dssp(s);
+    const std::string ss = labelizer_dssp(s);
 
     double* hse = 0; int n_hse = 0;
-    ll_half_sphere_exposure(s, options.hse_radius, &hse, &n_hse);
+    labelizer_half_sphere_exposure(s, options.hse_radius, &hse, &n_hse);
 
     double* depth = 0; int n_depth = 0;
-    ll_residue_depth(s, options.probe_radius, options.n_sphere_points, &depth,
+    labelizer_residue_depth(s, options.probe_radius, options.n_sphere_points, &depth,
                      &n_depth);
 
     // The exclusion term needs the exposure of every candidate residue, which
     // the reference takes as 1/depth (methionin_exclusion.py:62).
     const std::string excluded =
-            options.model == LL_MODEL_PUBLISHED ? "MET" : options.exclusion_residue;
+            options.model == LABELIZER_MODEL_PUBLISHED ? "MET" : options.exclusion_residue;
 
     // Relative accessibility is a whole-structure computation and there are
     // three scales; compute a scale at most once, and only if a term asks.
     std::map<int, std::vector<double> > rsa_cache;
     struct RsaFor {
-        const LlStructure& s;
-        const LlOptions& o;
+        const LabelizerStructure& s;
+        const LabelizerOptions& o;
         std::map<int, std::vector<double> >& cache;
         const std::vector<double>& operator()(const std::string& table) const {
-            LlMaxAsa scale = LL_MAXASA_WILKE;
+            LabelizerMaxAsa scale = LABELIZER_MAXASA_WILKE;
             if (table.find("Sander") != std::string::npos)
-                scale = LL_MAXASA_SANDER;
+                scale = LABELIZER_MAXASA_SANDER;
             else if (table.find("Miller") != std::string::npos)
-                scale = LL_MAXASA_MILLER;
+                scale = LABELIZER_MAXASA_MILLER;
             std::map<int, std::vector<double> >::iterator it =
                     cache.find(static_cast<int>(scale));
             if (it != cache.end()) return it->second;
             double* v = 0; int n = 0;
-            ll_relative_solvent_accessibility(s, scale, o.probe_radius,
+            labelizer_relative_solvent_accessibility(s, scale, o.probe_radius,
                                               o.n_sphere_points, &v, &n);
             std::vector<double> out(v, v + n);
             std::free(v);
@@ -1097,13 +1097,13 @@ std::vector<LlScore> ll_parameter_scores(
     // and only if a term asks for it.
     std::vector<double> cb_cache;
     struct CbDepthFor {
-        const LlStructure& s;
-        const LlOptions& o;
+        const LabelizerStructure& s;
+        const LabelizerOptions& o;
         std::vector<double>& cache;
         const std::vector<double>& operator()() const {
             if (!cache.empty()) return cache;
             double* v = 0; int n = 0;
-            ll_cbeta_depth(s, o.probe_radius, o.n_sphere_points, &v, &n);
+            labelizer_cbeta_depth(s, o.probe_radius, o.n_sphere_points, &v, &n);
             cache.assign(v, v + n);
             std::free(v);
             return cache;
@@ -1111,12 +1111,12 @@ std::vector<LlScore> ll_parameter_scores(
     } cb_depth_for = {s, options, cb_cache};
 
     for (std::size_t p = 0; p < model.size(); ++p) {
-        const LlParameter& par = model[p];
-        const std::string score_type = ll_score_type(par.tag);
+        const LabelizerParameter& par = model[p];
+        const std::string score_type = labelizer_score_type(par.tag);
 
         for (std::size_t i = 0; i < nr; ++i) {
-            const LlResidue& r = s.residues[i];
-            LlScore row;
+            const LabelizerResidue& r = s.residues[i];
+            LabelizerScore row;
             row.asym_id = r.chain;
             row.seq_id = r.seq_id;
             row.comp_id = r.comp_id;
@@ -1131,9 +1131,9 @@ std::vector<LlScore> ll_parameter_scores(
             }
 
             if (par.tag == "cr") {
-                const LlTable& t = ll_load_table(par.table);
+                const LabelizerTable& t = labelizer_load_table(par.table);
                 if (par.table == "C_CR1_Name") {
-                    const std::string key(1, ll_one_letter(r.comp_id));
+                    const std::string key(1, labelizer_one_letter(r.comp_id));
                     if (t.by_key.count(key)) {
                         row.value = t.by_key.find(key)->second;
                         row.status = "scored";
@@ -1147,24 +1147,24 @@ std::vector<LlScore> ll_parameter_scores(
                 } else if (par.table == "N_CR2_Mass") {
                     const double mass = ls_residue_mass(r.comp_id);
                     if (mass > 0.0) {
-                        row.value = ll_lookup(t, mass);
+                        row.value = labelizer_lookup(t, mass);
                         row.status = "scored";
                     }
                 } else if (par.table == "I_CR4_N_Sidechain") {
                     const double n = ls_sidechain_atoms(r.comp_id);
                     if (n >= 0.0) {
-                        row.value = ll_lookup(t, n);
+                        row.value = labelizer_lookup(t, n);
                         row.status = "scored";
                     }
                 } else {
-                    IMP_THROW("ll_parameter_scores: table '" << par.table
+                    IMP_THROW("labelizer_parameter_scores: table '" << par.table
                               << "' is not an implemented observable for tag "
                               << "'cr'. Implemented: C_CR1_Name, C_CR3_Charge, "
                               << "N_CR2_Mass, I_CR4_N_Sidechain.",
                               ValueException);
                 }
             } else if (par.tag == "ss") {
-                const LlTable& t = ll_load_table(par.table);
+                const LabelizerTable& t = labelizer_load_table(par.table);
                 // SS4/5/6/7 score the structure of a *neighbouring* residue,
                 // so the observable is the letter at an offset -- reading the
                 // letter at i and calling it SS-1 is silently wrong.
@@ -1178,7 +1178,7 @@ std::vector<LlScore> ll_parameter_scores(
                 else known = false;
 
                 if (!known) {
-                    IMP_THROW("ll_parameter_scores: table '" << par.table
+                    IMP_THROW("labelizer_parameter_scores: table '" << par.table
                               << "' is not an implemented observable for tag "
                               << "'ss'. Implemented: C_SS1_SS, C_SS4_SS-1, "
                               << "C_SS5_SS-2, C_SS6_SS+1, C_SS7_SS+2. The phi "
@@ -1218,21 +1218,21 @@ std::vector<LlScore> ll_parameter_scores(
                     // reads the score only, so there is nothing to look them
                     // up with, and guessing would be worse than refusing. The
                     // reference refuses too (conservation_score.py:153).
-                    IMP_THROW("ll_parameter_scores: table '" << par.table
-                              << "' needs ConSurf fields ll_read_consurf does "
+                    IMP_THROW("labelizer_parameter_scores: table '" << par.table
+                              << "' needs ConSurf fields labelizer_read_consurf does "
                               << "not import (confidence bounds, colour bin, "
                               << "variety). Only N_CS2_Score is implemented, "
                               << "as in the reference.", ValueException);
                 }
-                const std::string key = ll_residue_key(r.chain, r.seq_id);
+                const std::string key = labelizer_residue_key(r.chain, r.seq_id);
                 std::map<std::string, double>::const_iterator g =
                         conservation.find(key);
                 if (g != conservation.end()) {
-                    row.value = ll_lookup(ll_load_table(par.table), g->second);
+                    row.value = labelizer_lookup(labelizer_load_table(par.table), g->second);
                     row.status = "scored";
                 }
             } else if (par.tag == "se") {
-                const LlTable& t = ll_load_table(par.table);
+                const LabelizerTable& t = labelizer_load_table(par.table);
                 double observable = 0.0;
                 bool have = false;
                 if (par.table.find("HSE") != std::string::npos) {
@@ -1255,20 +1255,20 @@ std::vector<LlScore> ll_parameter_scores(
                     observable = std::min(depth[i], 4.0);
                     have = true;
                 } else {
-                    IMP_THROW("ll_parameter_scores: table '" << par.table
+                    IMP_THROW("labelizer_parameter_scores: table '" << par.table
                               << "' is not an implemented observable for tag "
                               << "'se'. Implemented: N_SE11_MEAN_SURFACE_DIST, "
                               << "N_SE10_CB_SURFACE_DIST, N_SE1/2/3_RSA_*, "
                               << "I_SE4..I_SE9_HSE*.", ValueException);
                 }
                 if (have) {
-                    row.value = ll_lookup(t, observable);
+                    row.value = labelizer_lookup(t, observable);
                     row.status = "scored";
                 }
             } else if (par.tag == "me") {
                 if (!par.table.empty() &&
                     par.table != "N_ME11_Methionin_Exclusion_Dummy") {
-                    IMP_THROW("ll_parameter_scores: the exclusion term is "
+                    IMP_THROW("labelizer_parameter_scores: the exclusion term is "
                               << "hard-coded (0.001/0.999) and reads no table; "
                               << "'" << par.table << "' would be ignored.",
                               ValueException);
@@ -1281,7 +1281,7 @@ std::vector<LlScore> ll_parameter_scores(
                 bool too_close = false;
                 for (std::size_t j = 0; j < nr && !too_close; ++j) {
                     if (j == i) continue;
-                    const LlResidue& q = s.residues[j];
+                    const LabelizerResidue& q = s.residues[j];
                     if (q.comp_id != excluded || q.ca < 0) continue;
                     if (ls_dist(s, r.ca, q.ca) > options.exclusion_distance)
                         continue;
@@ -1297,7 +1297,7 @@ std::vector<LlScore> ll_parameter_scores(
                 for (int k = 0; k < 5; ++k) {
                     for (std::size_t j = 0; j < nr; ++j) {
                         if (j == i) continue;
-                        const LlResidue& q = s.residues[j];
+                        const LabelizerResidue& q = s.residues[j];
                         if (q.comp_id != "TRP" || q.ca < 0) continue;
                         if (ls_dist(s, r.ca, q.ca) > radii[k]) continue;
                         shell[k] += ls_hse_factor(hse[2 * j + 0], hse[2 * j + 1]);
@@ -1321,7 +1321,7 @@ std::vector<LlScore> ll_parameter_scores(
                 for (int k = 0; k < 4; ++k) {
                     for (std::size_t j = 0; j < nr; ++j) {
                         if (j == i) continue;
-                        const LlResidue& q = s.residues[j];
+                        const LabelizerResidue& q = s.residues[j];
                         if (q.ca < 0) continue;
                         const double c = ls_formal_charge(q.comp_id);
                         if (c == 0.0) continue;
@@ -1348,7 +1348,7 @@ std::vector<LlScore> ll_parameter_scores(
                 row.value = 1.0 - (initial + 1.0) / 2.0;
                 row.status = "scored";
             } else {
-                IMP_THROW("ll_parameter_scores: unknown tag '" << par.tag << "'",
+                IMP_THROW("labelizer_parameter_scores: unknown tag '" << par.tag << "'",
                           ValueException);
             }
             out.push_back(row);
@@ -1363,26 +1363,26 @@ std::vector<LlScore> ll_parameter_scores(
 // The combination
 // ---------------------------------------------------------------------------
 
-std::vector<LlScore> ll_labeling_score(
-        const std::vector<LlScore>& parameter_scores,
-        const std::vector<LlParameter>& model, const LlOptions& options) {
+std::vector<LabelizerScore> labelizer_labeling_score(
+        const std::vector<LabelizerScore>& parameter_scores,
+        const std::vector<LabelizerParameter>& model, const LabelizerOptions& options) {
     // Group by position, keeping the order positions first appear in.
     std::vector<std::string> order;
-    std::map<std::string, std::map<std::string, const LlScore*> > by_pos;
-    std::map<std::string, const LlScore*> exemplar;
+    std::map<std::string, std::map<std::string, const LabelizerScore*> > by_pos;
+    std::map<std::string, const LabelizerScore*> exemplar;
     for (std::size_t i = 0; i < parameter_scores.size(); ++i) {
-        const LlScore& r = parameter_scores[i];
-        const std::string key = ll_residue_key(r.asym_id, r.seq_id);
+        const LabelizerScore& r = parameter_scores[i];
+        const std::string key = labelizer_residue_key(r.asym_id, r.seq_id);
         if (!by_pos.count(key)) { order.push_back(key); exemplar[key] = &r; }
         by_pos[key][r.score_type] = &r;
     }
 
-    std::vector<LlScore> out;
+    std::vector<LabelizerScore> out;
     out.reserve(order.size());
     for (std::size_t i = 0; i < order.size(); ++i) {
         const std::string& key = order[i];
-        const LlScore& ex = *exemplar[key];
-        LlScore row;
+        const LabelizerScore& ex = *exemplar[key];
+        LabelizerScore row;
         row.asym_id = ex.asym_id;
         row.seq_id = ex.seq_id;
         row.comp_id = ex.comp_id;
@@ -1393,8 +1393,8 @@ std::vector<LlScore> ll_labeling_score(
         bool err = false, zero = false;
         std::vector<double> repeated;
         for (std::size_t p = 0; p < model.size(); ++p) {
-            const std::string st = ll_score_type(model[p].tag);
-            std::map<std::string, const LlScore*>::const_iterator it =
+            const std::string st = labelizer_score_type(model[p].tag);
+            std::map<std::string, const LabelizerScore*>::const_iterator it =
                     by_pos[key].find(st);
             if (it == by_pos[key].end() || it->second->status != "scored") {
                 err = true;
@@ -1405,7 +1405,7 @@ std::vector<LlScore> ll_labeling_score(
             // whose weight is zero (labeling_score.py:166). Weight zero does
             // not mean ignored, and that is a defect, not a convention.
             if (v == 0.0) {
-                if (options.model == LL_MODEL_PUBLISHED || model[p].weight > 0)
+                if (options.model == LABELIZER_MODEL_PUBLISHED || model[p].weight > 0)
                     zero = true;
             }
             for (int w = 0; w < model[p].weight; ++w) repeated.push_back(v);
@@ -1429,28 +1429,28 @@ std::vector<LlScore> ll_labeling_score(
     return out;
 }
 
-std::vector<LlScore> ll_score_structure(const std::string& pdb_path,
-                                        const std::vector<LlParameter>& model,
-                                        const LlOptions& options,
+std::vector<LabelizerScore> labelizer_score_structure(const std::string& pdb_path,
+                                        const std::vector<LabelizerParameter>& model,
+                                        const LabelizerOptions& options,
                                         const std::string& conservation_path) {
-    const LlStructure s = ll_read_structure(pdb_path);
+    const LabelizerStructure s = labelizer_read_structure(pdb_path);
     std::map<std::string, double> conservation;
     if (!conservation_path.empty()) {
-        conservation = ll_read_consurf(conservation_path);
+        conservation = labelizer_read_consurf(conservation_path);
     }
-    std::vector<LlScore> out = ll_parameter_scores(s, model, options, conservation);
-    const std::vector<LlScore> combined = ll_labeling_score(out, model, options);
+    std::vector<LabelizerScore> out = labelizer_parameter_scores(s, model, options, conservation);
+    const std::vector<LabelizerScore> combined = labelizer_labeling_score(out, model, options);
     out.insert(out.end(), combined.begin(), combined.end());
     return out;
 }
 
-std::map<std::string, double> ll_combined_by_key(
-        const std::vector<LlScore>& scores) {
+std::map<std::string, double> labelizer_combined_by_key(
+        const std::vector<LabelizerScore>& scores) {
     std::map<std::string, double> out;
     for (std::size_t i = 0; i < scores.size(); ++i) {
         if (scores[i].score_type != "combined") continue;
         if (scores[i].status != "scored") continue;
-        out[ll_residue_key(scores[i].asym_id, scores[i].seq_id)] =
+        out[labelizer_residue_key(scores[i].asym_id, scores[i].seq_id)] =
                 scores[i].value;
     }
     return out;
@@ -1493,7 +1493,7 @@ double lf_distance(const LfPoint& a, const LfPoint& b) {
 //! A dye at a site: its mean position, and its cloud when it has one.
 /*! The cloud is kept, not reduced to its mean, because the pair distance the
     reference reports is a property of the two *distributions* -- see
-    #IMP::bff::LlFretOptions::distance_type. */
+    #IMP::bff::LabelizerFRETOptions::distance_type. */
 struct LfSite {
     int residue;
     std::string key;
@@ -1511,7 +1511,7 @@ struct LfSite {
 /*! Two clouds give the distance the options ask for; two points can only give
     the distance between them, which is what the reference's point models do. */
 double lf_pair_distance(const LfSite& a, const LfSite& b,
-                        const LlFretOptions& options) {
+                        const LabelizerFRETOptions& options) {
     if (a.has_av && b.has_av) {
         return model_distance(a.av, b.av, options.distance_type,
                               options.forster_radius);
@@ -1525,7 +1525,7 @@ double lf_pair_distance(const LfSite& a, const LfSite& b,
 // The scores
 // ---------------------------------------------------------------------------
 
-double ll_joined_label_score(const std::vector<double>& scores, LlModel model) {
+double labelizer_joined_label_score(const std::vector<double>& scores, LabelizerModel model) {
     if (scores.empty()) return 0.0;
     double prod = 1.0;
     for (std::size_t i = 0; i < scores.size(); ++i) prod *= scores[i];
@@ -1533,26 +1533,26 @@ double ll_joined_label_score(const std::vector<double>& scores, LlModel model) {
     // The published exponent is a flat 0.5 whatever the count
     // (fret_score.py:220); the geometric mean is the commented-out line below
     // it. They agree for two scores and not for four.
-    const double exponent = (model == LL_MODEL_PUBLISHED)
+    const double exponent = (model == LABELIZER_MODEL_PUBLISHED)
                                     ? 0.5
                                     : 1.0 / static_cast<double>(scores.size());
     return std::pow(prod, exponent);
 }
 
-double ll_pair_score_single(double joined_label_score, double distance,
+double labelizer_pair_score_single(double joined_label_score, double distance,
                             double forster_radius) {
     const double e = fret_efficiency(distance, forster_radius);
     return joined_label_score * (1.0 - 2.0 * std::fabs(e - 0.5));
 }
 
-double ll_pair_score_double(double joined_label_score, double distance_1,
+double labelizer_pair_score_double(double joined_label_score, double distance_1,
                             double distance_2, double forster_radius) {
     const double e1 = fret_efficiency(distance_1, forster_radius);
     const double e2 = fret_efficiency(distance_2, forster_radius);
     return joined_label_score * std::fabs(e1 - e2);
 }
 
-double ll_pair_score_negative_control(double joined_label_score,
+double labelizer_pair_score_negative_control(double joined_label_score,
                                       double distance_1, double distance_2,
                                       double forster_radius) {
     const double e1 = fret_efficiency(distance_1, forster_radius);
@@ -1566,12 +1566,12 @@ double ll_pair_score_negative_control(double joined_label_score,
 // Where the dye is
 // ---------------------------------------------------------------------------
 
-void ll_alpha_cone_mean_position(const LlStructure& s, int residue,
-                                 const LlFretOptions& options,
+void labelizer_alpha_cone_mean_position(const LabelizerStructure& s, int residue,
+                                 const LabelizerFRETOptions& options,
                                  double** out_view, int* n_out_view) {
     double* cb = 0;
     int n_cb = 0;
-    ll_cbeta_position(s, residue, &cb, &n_cb);
+    labelizer_cbeta_position(s, residue, &cb, &n_cb);
     if (n_cb != 3) {
         std::free(cb);
         internal::new_double_view(0, out_view, n_out_view);
@@ -1639,8 +1639,8 @@ AccessibleVolume core_av_door(const std::string& pdb_path, const std::string& ch
                            r1, r2, r3, grid_resolution, -1.0, 0);
 }
 
-LlAvDoor& av_door() {
-    static LlAvDoor door;
+LabelizerAvDoor& av_door() {
+    static LabelizerAvDoor door;
     return door;
 }
 std::string& av_door_name() {
@@ -1650,26 +1650,26 @@ std::string& av_door_name() {
 
 }  // namespace
 
-void ll_set_av_door(LlAvDoor door) {
+void labelizer_set_av_door(LabelizerAvDoor door) {
     av_door() = door;
     av_door_name() = door ? "imp" : "core";
 }
 
-std::string ll_get_av_door_name() { return av_door_name(); }
+std::string labelizer_get_av_door_name() { return av_door_name(); }
 
-void ll_probe_mean_position(const LlStructure& s, const std::string& pdb_path,
-                          int residue, const LlFretOptions& options,
+void labelizer_probe_mean_position(const LabelizerStructure& s, const std::string& pdb_path,
+                          int residue, const LabelizerFRETOptions& options,
                           double** out_view, int* n_out_view) {
     if (residue < 0 || residue >= static_cast<int>(s.residues.size())) {
         internal::new_double_view(0, out_view, n_out_view);
         return;
     }
     if (options.probe_model == PROBE_MODEL_CBETA) {
-        ll_cbeta_position(s, residue, out_view, n_out_view);
+        labelizer_cbeta_position(s, residue, out_view, n_out_view);
         return;
     }
     if (options.probe_model == PROBE_MODEL_ALPHA_CONE) {
-        ll_alpha_cone_mean_position(s, residue, options, out_view, n_out_view);
+        labelizer_alpha_cone_mean_position(s, residue, options, out_view, n_out_view);
         return;
     }
 
@@ -1677,9 +1677,9 @@ void ll_probe_mean_position(const LlStructure& s, const std::string& pdb_path,
     // comes back empty is a site no dye fits at -- the reference calls that
     // "fewer than a thousand grid points" and skips it (fret_score.py:708);
     // here an empty cloud says the same thing without a magic count.
-    const LlResidue& r = s.residues[residue];
+    const LabelizerResidue& r = s.residues[residue];
     const std::string atom = r.cb >= 0 ? "CB" : "CA";
-    AccessibleVolume av = (av_door() ? av_door() : LlAvDoor(core_av_door))(
+    AccessibleVolume av = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
             pdb_path, r.chain, r.seq_id, atom, options.linker_length,
             options.linker_width, options.r1, options.r2, options.r3,
             options.grid_resolution);
@@ -1706,15 +1706,15 @@ namespace {
 /*! The placement happens once per site. The reference places the inner site
     again for every outer site, which is where its exact mode spends its time. */
 std::vector<LfSite> lf_place_sites(
-        const LlStructure& s, const std::string& pdb_path,
+        const LabelizerStructure& s, const std::string& pdb_path,
         const std::map<std::string, double>& label_scores,
-        const LlFretOptions& options, ProbeModel probe_model) {
-    LlFretOptions o = options;
+        const LabelizerFRETOptions& options, ProbeModel probe_model) {
+    LabelizerFRETOptions o = options;
     o.probe_model = probe_model;
     std::vector<LfSite> out;
     for (std::size_t i = 0; i < s.residues.size(); ++i) {
-        const LlResidue& r = s.residues[i];
-        const std::string key = ll_residue_key(r.chain, r.seq_id);
+        const LabelizerResidue& r = s.residues[i];
+        const std::string key = labelizer_residue_key(r.chain, r.seq_id);
         std::map<std::string, double>::const_iterator it = label_scores.find(key);
         if (it == label_scores.end()) continue;
         if (it->second < options.label_score_threshold) continue;
@@ -1727,7 +1727,7 @@ std::vector<LfSite> lf_place_sites(
             // Keep the cloud: the pair distance is a property of the two
             // distributions, not of their two mean positions.
             const std::string atom = r.cb >= 0 ? "CB" : "CA";
-            const AccessibleVolume built = (av_door() ? av_door() : LlAvDoor(core_av_door))(
+            const AccessibleVolume built = (av_door() ? av_door() : LabelizerAvDoor(core_av_door))(
                     pdb_path, r.chain, r.seq_id, atom, options.linker_length,
                     options.linker_width, options.r1, options.r2, options.r3,
                     options.grid_resolution);
@@ -1754,7 +1754,7 @@ std::vector<LfSite> lf_place_sites(
         } else {
             double* p = 0;
             int n = 0;
-            ll_probe_mean_position(s, pdb_path, static_cast<int>(i), o, &p, &n);
+            labelizer_probe_mean_position(s, pdb_path, static_cast<int>(i), o, &p, &n);
             if (n == 3) {
                 site.mean = LfPoint(p[0], p[1], p[2]);
                 site.placed = true;
@@ -1766,14 +1766,14 @@ std::vector<LfSite> lf_place_sites(
     return out;
 }
 
-bool lf_by_score(const LlPairScore& a, const LlPairScore& b) {
+bool lf_by_score(const LabelizerFRETPairScore& a, const LabelizerFRETPairScore& b) {
     return a.value > b.value;
 }
 
 //! Does this ordered pair of chains match the requested donor/acceptor pair?
 /*! With neither chain set every pair is kept, which is what this module did
     before the fields existed. */
-bool lf_chains_wanted(const LlFretOptions& options, const std::string& first,
+bool lf_chains_wanted(const LabelizerFRETOptions& options, const std::string& first,
                       const std::string& second) {
     if (options.donor_chain.empty() && options.acceptor_chain.empty())
         return true;
@@ -1785,7 +1785,7 @@ bool lf_chains_wanted(const LlFretOptions& options, const std::string& first,
 }
 
 //! The chain of \p state_1 that carries the same site in state 2.
-std::string lf_mapped_chain(const LlFretOptions& options,
+std::string lf_mapped_chain(const LabelizerFRETOptions& options,
                             const std::string& chain) {
     std::map<std::string, std::string>::const_iterator it =
             options.chain_map.find(chain);
@@ -1794,19 +1794,19 @@ std::string lf_mapped_chain(const LlFretOptions& options,
 
 }  // namespace
 
-std::vector<LlPairScore> ll_pair_scores(
+std::vector<LabelizerFRETPairScore> labelizer_fret_pair_scores(
         const std::string& pdb_path,
         const std::map<std::string, double>& label_scores,
-        const LlFretOptions& options) {
-    const LlStructure s = ll_read_structure(pdb_path);
+        const LabelizerFRETOptions& options) {
+    const LabelizerStructure s = labelizer_read_structure(pdb_path);
     const std::vector<LfSite> sites =
             lf_place_sites(s, pdb_path, label_scores, options, options.probe_model);
 
-    std::vector<LlPairScore> out;
+    std::vector<LabelizerFRETPairScore> out;
     for (std::size_t i = 0; i < sites.size(); ++i) {
         for (std::size_t j = i + 1; j < sites.size(); ++j) {
-            const LlResidue& ri = s.residues[sites[i].residue];
-            const LlResidue& rj = s.residues[sites[j].residue];
+            const LabelizerResidue& ri = s.residues[sites[i].residue];
+            const LabelizerResidue& rj = s.residues[sites[j].residue];
             // Only i<j is enumerated, so a donor/acceptor chain pair has to be
             // accepted in either order -- (A5, B7) and (B5, A7) are both
             // "donor in A, acceptor in B" labellings of distinct site pairs.
@@ -1817,14 +1817,14 @@ std::vector<LlPairScore> ll_pair_scores(
             ls.push_back(label_scores.find(sites[i].key)->second);
             ls.push_back(label_scores.find(sites[j].key)->second);
 
-            LlPairScore p;
+            LabelizerFRETPairScore p;
             p.asym_id_1 = ri.chain; p.seq_id_1 = ri.seq_id;
             p.asym_id_2 = rj.chain; p.seq_id_2 = rj.seq_id;
-            p.joined_label_score = ll_joined_label_score(ls, options.model);
+            p.joined_label_score = labelizer_joined_label_score(ls, options.model);
             p.distance = lf_pair_distance(sites[i], sites[j], options);
             p.distance_2 = std::numeric_limits<double>::quiet_NaN();
             p.probe_model = options.probe_model;
-            p.value = ll_pair_score_single(p.joined_label_score, p.distance,
+            p.value = labelizer_pair_score_single(p.joined_label_score, p.distance,
                                            options.forster_radius);
             out.push_back(p);
         }
@@ -1838,8 +1838,8 @@ std::vector<LlPairScore> ll_pair_scores(
                 std::min(static_cast<std::size_t>(options.n_refine), out.size());
         std::set<std::string> wanted;
         for (std::size_t k = 0; k < n; ++k) {
-            wanted.insert(ll_residue_key(out[k].asym_id_1, out[k].seq_id_1));
-            wanted.insert(ll_residue_key(out[k].asym_id_2, out[k].seq_id_2));
+            wanted.insert(labelizer_residue_key(out[k].asym_id_1, out[k].seq_id_1));
+            wanted.insert(labelizer_residue_key(out[k].asym_id_2, out[k].seq_id_2));
         }
         std::map<std::string, double> subset;
         for (std::set<std::string>::const_iterator it = wanted.begin();
@@ -1852,17 +1852,17 @@ std::vector<LlPairScore> ll_pair_scores(
         for (std::size_t k = 0; k < refined.size(); ++k) {
             by_key[refined[k].key] = k;
         }
-        LlFretOptions refine_options = options;
+        LabelizerFRETOptions refine_options = options;
         refine_options.probe_model = options.refine_probe_model;
         for (std::size_t k = 0; k < n; ++k) {
-            const std::string k1 = ll_residue_key(out[k].asym_id_1, out[k].seq_id_1);
-            const std::string k2 = ll_residue_key(out[k].asym_id_2, out[k].seq_id_2);
+            const std::string k1 = labelizer_residue_key(out[k].asym_id_1, out[k].seq_id_1);
+            const std::string k2 = labelizer_residue_key(out[k].asym_id_2, out[k].seq_id_2);
             if (!by_key.count(k1) || !by_key.count(k2)) continue;
             out[k].distance = lf_pair_distance(refined[by_key[k1]],
                                                refined[by_key[k2]],
                                                refine_options);
             out[k].probe_model = options.refine_probe_model;
-            out[k].value = ll_pair_score_single(out[k].joined_label_score,
+            out[k].value = labelizer_pair_score_single(out[k].joined_label_score,
                                                 out[k].distance,
                                                 options.forster_radius);
         }
@@ -1871,13 +1871,13 @@ std::vector<LlPairScore> ll_pair_scores(
     return out;
 }
 
-std::vector<LlPairScore> ll_pair_scores_two_states(
+std::vector<LabelizerFRETPairScore> labelizer_pair_scores_two_states(
         const std::string& pdb_path_1, const std::string& pdb_path_2,
         const std::map<std::string, double>& label_scores_1,
         const std::map<std::string, double>& label_scores_2,
-        const LlFretOptions& options) {
-    const LlStructure s1 = ll_read_structure(pdb_path_1);
-    const LlStructure s2 = ll_read_structure(pdb_path_2);
+        const LabelizerFRETOptions& options) {
+    const LabelizerStructure s1 = labelizer_read_structure(pdb_path_1);
+    const LabelizerStructure s2 = labelizer_read_structure(pdb_path_2);
     const std::vector<LfSite> a =
             lf_place_sites(s1, pdb_path_1, label_scores_1, options, options.probe_model);
     const std::vector<LfSite> b =
@@ -1894,27 +1894,27 @@ std::vector<LlPairScore> ll_pair_scores_two_states(
     // pair. A homodimer screen, where the only measurable distance is
     // i(A)-i(B), could not be done at all.
     //
-    // #LlFretOptions::chain_map covers the case the old comment was reaching
+    // #LabelizerFRETOptions::chain_map covers the case the old comment was reaching
     // for -- two files that name the same chain differently.
     std::map<std::string, std::size_t> by_site;
     for (std::size_t k = 0; k < b.size(); ++k) {
-        const LlResidue& r = s2.residues[b[k].residue];
-        by_site[ll_residue_key(r.chain, r.seq_id)] = k;
+        const LabelizerResidue& r = s2.residues[b[k].residue];
+        by_site[labelizer_residue_key(r.chain, r.seq_id)] = k;
     }
 
-    std::vector<LlPairScore> out;
+    std::vector<LabelizerFRETPairScore> out;
     for (std::size_t i = 0; i < a.size(); ++i) {
-        const LlResidue& ri = s1.residues[a[i].residue];
+        const LabelizerResidue& ri = s1.residues[a[i].residue];
         const std::string ki =
-                ll_residue_key(lf_mapped_chain(options, ri.chain), ri.seq_id);
+                labelizer_residue_key(lf_mapped_chain(options, ri.chain), ri.seq_id);
         if (!by_site.count(ki)) continue;
         for (std::size_t j = i + 1; j < a.size(); ++j) {
-            const LlResidue& rj = s1.residues[a[j].residue];
+            const LabelizerResidue& rj = s1.residues[a[j].residue];
             if (!lf_chains_wanted(options, ri.chain, rj.chain) &&
                 !lf_chains_wanted(options, rj.chain, ri.chain))
                 continue;
             const std::string kj =
-                    ll_residue_key(lf_mapped_chain(options, rj.chain), rj.seq_id);
+                    labelizer_residue_key(lf_mapped_chain(options, rj.chain), rj.seq_id);
             if (!by_site.count(kj)) continue;
 
             const LfSite& bi = b[by_site[ki]];
@@ -1925,14 +1925,14 @@ std::vector<LlPairScore> ll_pair_scores_two_states(
             ls.push_back(label_scores_2.find(bi.key)->second);
             ls.push_back(label_scores_2.find(bj.key)->second);
 
-            LlPairScore p;
+            LabelizerFRETPairScore p;
             p.asym_id_1 = ri.chain; p.seq_id_1 = ri.seq_id;
             p.asym_id_2 = rj.chain; p.seq_id_2 = rj.seq_id;
-            p.joined_label_score = ll_joined_label_score(ls, options.model);
+            p.joined_label_score = labelizer_joined_label_score(ls, options.model);
             p.distance = lf_pair_distance(a[i], a[j], options);
             p.distance_2 = lf_pair_distance(bi, bj, options);
             p.probe_model = options.probe_model;
-            p.value = ll_pair_score_double(p.joined_label_score, p.distance,
+            p.value = labelizer_pair_score_double(p.joined_label_score, p.distance,
                                            p.distance_2, options.forster_radius);
             out.push_back(p);
         }
@@ -1941,12 +1941,12 @@ std::vector<LlPairScore> ll_pair_scores_two_states(
     return out;
 }
 
-int ll_cbeta_difference_map(const LlStructure& s1, const LlStructure& s2,
+int labelizer_cbeta_difference_map(const LabelizerStructure& s1, const LabelizerStructure& s2,
                             double** out_view, int* n_out_view,
                             const std::string& chain) {
     std::map<int, LfPoint> p1, p2;
     for (int pass = 0; pass < 2; ++pass) {
-        const LlStructure& s = pass == 0 ? s1 : s2;
+        const LabelizerStructure& s = pass == 0 ? s1 : s2;
         std::map<int, LfPoint>& into = pass == 0 ? p1 : p2;
         for (std::size_t i = 0; i < s.residues.size(); ++i) {
             // The matrix is indexed by residue number alone, so on a multimer
@@ -1955,7 +1955,7 @@ int ll_cbeta_difference_map(const LlStructure& s1, const LlStructure& s2,
             if (!chain.empty() && s.residues[i].chain != chain) continue;
             double* cb = 0;
             int n = 0;
-            ll_cbeta_position(s, static_cast<int>(i), &cb, &n);
+            labelizer_cbeta_position(s, static_cast<int>(i), &cb, &n);
             if (n == 3) into[s.residues[i].seq_id] = LfPoint(cb[0], cb[1], cb[2]);
             std::free(cb);
         }
@@ -2000,18 +2000,18 @@ IMPBFF_END_NAMESPACE
 
 IMPBFF_BEGIN_NAMESPACE
 
-const char* const LL_PTO_README = "README";
-const char* const LL_PTO_STRUCTURE = "structure.pdb";
-const char* const LL_PTO_SCORES = "label_scores.json";
-const char* const LL_PTO_PAIRS = "label_pairs.json";
-const char* const LL_PTO_MODEL = "label_model.json";
+const char* const LABELIZER_PTO_README = "README";
+const char* const LABELIZER_PTO_STRUCTURE = "structure.pdb";
+const char* const LABELIZER_PTO_SCORES = "label_scores.json";
+const char* const LABELIZER_PTO_PAIRS = "label_pairs.json";
+const char* const LABELIZER_PTO_MODEL = "label_model.json";
 
 namespace {
 
 //! The README that goes in first, so the file explains itself.
 /*! Not documentation *about* the format: the format telling a reader what it
     is, in the file, in language that survives this library not building. */
-const char* const LL_README_TEXT =
+const char* const LABELIZER_README_TEXT =
     "PTO.MFDB label-site container\n"
     "=============================\n"
     "\n"
@@ -2047,17 +2047,17 @@ const char* const LL_README_TEXT =
     "Scores are likelihood ratios, not probabilities: they run from 0 to about\n"
     "4 and the combined score is unbounded above.\n";
 
-std::string ll_read_file(const std::string& path) {
+std::string labelizer_read_file(const std::string& path) {
     std::ifstream in(path.c_str(), std::ios::binary);
     if (!in) {
-        IMP_THROW("ll_write_pto: cannot read " << path, IOException);
+        IMP_THROW("labelizer_write_pto: cannot read " << path, IOException);
     }
     std::ostringstream os;
     os << in.rdbuf();
     return os.str();
 }
 
-void ll_add(PtoWriter& w, const std::string& name, const std::string& kind,
+void labelizer_add(PtoWriter& w, const std::string& name, const std::string& kind,
             const std::string& encoding, const std::string& bytes) {
     w.add(name, kind, encoding, bytes.data(), bytes.size());
 }
@@ -2068,13 +2068,13 @@ void ll_add(PtoWriter& w, const std::string& name, const std::string& kind,
     which this profile does not do -- the profile tags of an object ride in a
     `_tags` member of the object's own JSON. A payload that is not JSON keeps
     its tags in the model object instead. */
-nlohmann::json ll_tags_json(const std::vector<MfdbTag>& tags) {
+nlohmann::json labelizer_tags_json(const std::vector<MfdbTag>& tags) {
     nlohmann::json j = nlohmann::json::object();
     for (std::size_t i = 0; i < tags.size(); ++i) j[tags[i].item] = tags[i].value;
     return j;
 }
 
-nlohmann::json ll_score_row(const LlScore& s) {
+nlohmann::json labelizer_score_row(const LabelizerScore& s) {
     nlohmann::json r;
     r["_mmfdb_label_score.asym_id"] = s.asym_id;
     r["_mmfdb_label_score.seq_id"] = s.seq_id;
@@ -2091,7 +2091,7 @@ nlohmann::json ll_score_row(const LlScore& s) {
     return r;
 }
 
-std::vector<MfdbColumn> ll_score_columns() {
+std::vector<MfdbColumn> labelizer_score_columns() {
     std::vector<MfdbColumn> c;
     c.push_back(MfdbColumn("_mmfdb_label_score.asym_id", "",
                            "_mmfdb_label_score.asym_id",
@@ -2116,7 +2116,7 @@ std::vector<MfdbColumn> ll_score_columns() {
     return c;
 }
 
-std::vector<MfdbColumn> ll_pair_columns() {
+std::vector<MfdbColumn> labelizer_pair_columns() {
     std::vector<MfdbColumn> c;
     c.push_back(MfdbColumn("asym_id_1", "", "_flr_poly_probe_position.asym_id",
                            "Chain of the first position."));
@@ -2143,7 +2143,7 @@ std::vector<MfdbColumn> ll_pair_columns() {
     return c;
 }
 
-const char* ll_dye_model_name(ProbeModel m) {
+const char* labelizer_dye_model_name(ProbeModel m) {
     switch (m) {
         case PROBE_MODEL_CBETA: return "cbeta";
         case PROBE_MODEL_ALPHA_CONE: return "alpha_cone";
@@ -2152,7 +2152,7 @@ const char* ll_dye_model_name(ProbeModel m) {
     return "unknown";
 }
 
-std::string ll_object_text(const std::string& path, const std::string& name) {
+std::string labelizer_object_text(const std::string& path, const std::string& name) {
     PtoReader r(path);
     const int i = r.find(name);
     if (i < 0) return "";
@@ -2166,24 +2166,24 @@ std::string ll_object_text(const std::string& path, const std::string& name) {
 // Writing
 // ---------------------------------------------------------------------------
 
-void ll_write_pto(const std::string& path, const std::string& pdb_path,
-                  const std::vector<LlScore>& scores,
-                  const std::vector<LlPairScore>& pairs,
+void labelizer_write_pto(const std::string& path, const std::string& pdb_path,
+                  const std::vector<LabelizerScore>& scores,
+                  const std::vector<LabelizerFRETPairScore>& pairs,
                   const std::string& settings_json) {
-    const std::string structure = ll_read_file(pdb_path);
+    const std::string structure = labelizer_read_file(pdb_path);
     const std::string structure_sum = mfdb_checksum(structure);
 
     // The scores, tidy: one row per (position, score_type).
     nlohmann::json score_rows = nlohmann::json::array();
     for (std::size_t i = 0; i < scores.size(); ++i) {
-        score_rows.push_back(ll_score_row(scores[i]));
+        score_rows.push_back(labelizer_score_row(scores[i]));
     }
     nlohmann::json score_doc;
     score_doc["rows"] = score_rows;
 
     nlohmann::json pair_rows = nlohmann::json::array();
     for (std::size_t i = 0; i < pairs.size(); ++i) {
-        const LlPairScore& p = pairs[i];
+        const LabelizerFRETPairScore& p = pairs[i];
         nlohmann::json r;
         r["asym_id_1"] = p.asym_id_1;
         r["seq_id_1"] = p.seq_id_1;
@@ -2195,7 +2195,7 @@ void ll_write_pto(const std::string& path, const std::string& pdb_path,
         // distance, and omitting it says that.
         if (p.distance_2 == p.distance_2) r["distance_2"] = p.distance_2;
         r["joined_label_score"] = p.joined_label_score;
-        r["probe_model"] = ll_dye_model_name(p.probe_model);
+        r["probe_model"] = labelizer_dye_model_name(p.probe_model);
         pair_rows.push_back(r);
     }
     nlohmann::json pair_doc;
@@ -2205,21 +2205,21 @@ void ll_write_pto(const std::string& path, const std::string& pdb_path,
     // tags, the operation, and the provenance edges -- everything that is
     // about the file rather than about a row.
     nlohmann::json model_doc;
-    model_doc["_container"] = ll_tags_json(mfdb_container_tags());
-    model_doc["_operation"] = ll_tags_json(mfdb_operation_tags(
+    model_doc["_container"] = labelizer_tags_json(mfdb_container_tags());
+    model_doc["_operation"] = labelizer_tags_json(mfdb_operation_tags(
             "analysis", "labelizer", settings_json, "IMP.bff",
             get_module_version()));
     model_doc["settings"] = nlohmann::json::parse(settings_json);
 
     nlohmann::json edges = nlohmann::json::array();
-    edges.push_back(ll_tags_json(mfdb_edge_tags(
-            LL_PTO_STRUCTURE, LL_PTO_SCORES, "derived_from")));
+    edges.push_back(labelizer_tags_json(mfdb_edge_tags(
+            LABELIZER_PTO_STRUCTURE, LABELIZER_PTO_SCORES, "derived_from")));
     if (!pairs.empty()) {
         // The pair table is coarser than the score table -- one row per two
         // positions -- so the edge names the columns that join them rather
         // than leaving it to position.
-        edges.push_back(ll_tags_json(mfdb_edge_tags(
-                LL_PTO_SCORES, LL_PTO_PAIRS, "maps_rows_of",
+        edges.push_back(labelizer_tags_json(mfdb_edge_tags(
+                LABELIZER_PTO_SCORES, LABELIZER_PTO_PAIRS, "maps_rows_of",
                 "_mmfdb_label_score.seq_id", "seq_id_1")));
     }
     model_doc["_edges"] = edges;
@@ -2228,28 +2228,28 @@ void ll_write_pto(const std::string& path, const std::string& pdb_path,
     const std::string pair_bytes = pair_doc.dump(1);
 
     model_doc["_artifacts"] = nlohmann::json::object();
-    model_doc["_artifacts"][LL_PTO_STRUCTURE] = ll_tags_json(mfdb_artifact_tags(
-            LL_PTO_STRUCTURE, "processed_data", "text", "", -1, structure_sum));
-    model_doc["_artifacts"][LL_PTO_SCORES] = ll_tags_json(mfdb_artifact_tags(
-            LL_PTO_SCORES, "parameter_table", "json", "label_site",
+    model_doc["_artifacts"][LABELIZER_PTO_STRUCTURE] = labelizer_tags_json(mfdb_artifact_tags(
+            LABELIZER_PTO_STRUCTURE, "processed_data", "text", "", -1, structure_sum));
+    model_doc["_artifacts"][LABELIZER_PTO_SCORES] = labelizer_tags_json(mfdb_artifact_tags(
+            LABELIZER_PTO_SCORES, "parameter_table", "json", "label_site",
             static_cast<long>(scores.size()), mfdb_checksum(score_bytes),
-            ll_score_columns()));
+            labelizer_score_columns()));
     if (!pairs.empty()) {
-        model_doc["_artifacts"][LL_PTO_PAIRS] = ll_tags_json(mfdb_artifact_tags(
-                LL_PTO_PAIRS, "analysis_result", "json", "pair",
+        model_doc["_artifacts"][LABELIZER_PTO_PAIRS] = labelizer_tags_json(mfdb_artifact_tags(
+                LABELIZER_PTO_PAIRS, "analysis_result", "json", "pair",
                 static_cast<long>(pairs.size()), mfdb_checksum(pair_bytes),
-                ll_pair_columns()));
+                labelizer_pair_columns()));
     }
     const std::string model_bytes = model_doc.dump(1);
 
     PtoWriter w(path);
-    ll_add(w, LL_PTO_README, "readme", "text", LL_README_TEXT);
-    ll_add(w, LL_PTO_STRUCTURE, "label.structure", "text", structure);
-    ll_add(w, LL_PTO_SCORES, "label.scores", "json", score_bytes);
+    labelizer_add(w, LABELIZER_PTO_README, "readme", "text", LABELIZER_README_TEXT);
+    labelizer_add(w, LABELIZER_PTO_STRUCTURE, "label.structure", "text", structure);
+    labelizer_add(w, LABELIZER_PTO_SCORES, "label.scores", "json", score_bytes);
     if (!pairs.empty()) {
-        ll_add(w, LL_PTO_PAIRS, "label.pairs", "json", pair_bytes);
+        labelizer_add(w, LABELIZER_PTO_PAIRS, "label.pairs", "json", pair_bytes);
     }
-    ll_add(w, LL_PTO_MODEL, "label.model", "json", model_bytes);
+    labelizer_add(w, LABELIZER_PTO_MODEL, "label.model", "json", model_bytes);
     w.close();
 }
 
@@ -2257,18 +2257,18 @@ void ll_write_pto(const std::string& path, const std::string& pdb_path,
 // Reading
 // ---------------------------------------------------------------------------
 
-std::vector<LlScore> ll_read_pto_scores(const std::string& path) {
-    const std::string text = ll_object_text(path, LL_PTO_SCORES);
+std::vector<LabelizerScore> labelizer_read_pto_scores(const std::string& path) {
+    const std::string text = labelizer_object_text(path, LABELIZER_PTO_SCORES);
     if (text.empty()) {
-        IMP_THROW("ll_read_pto_scores: " << path << " carries no "
-                  << LL_PTO_SCORES, IOException);
+        IMP_THROW("labelizer_read_pto_scores: " << path << " carries no "
+                  << LABELIZER_PTO_SCORES, IOException);
     }
     const nlohmann::json j = nlohmann::json::parse(text);
-    std::vector<LlScore> out;
+    std::vector<LabelizerScore> out;
     const nlohmann::json& rows = j.at("rows");
     for (nlohmann::json::const_iterator it = rows.begin(); it != rows.end();
          ++it) {
-        LlScore s;
+        LabelizerScore s;
         s.asym_id = it->at("_mmfdb_label_score.asym_id").get<std::string>();
         s.seq_id = it->at("_mmfdb_label_score.seq_id").get<int>();
         s.comp_id = it->at("_mmfdb_label_score.comp_id").get<std::string>();
@@ -2282,15 +2282,15 @@ std::vector<LlScore> ll_read_pto_scores(const std::string& path) {
     return out;
 }
 
-std::vector<LlPairScore> ll_read_pto_pairs(const std::string& path) {
-    const std::string text = ll_object_text(path, LL_PTO_PAIRS);
-    std::vector<LlPairScore> out;
+std::vector<LabelizerFRETPairScore> labelizer_read_pto_pairs(const std::string& path) {
+    const std::string text = labelizer_object_text(path, LABELIZER_PTO_PAIRS);
+    std::vector<LabelizerFRETPairScore> out;
     if (text.empty()) return out;
     const nlohmann::json j = nlohmann::json::parse(text);
     const nlohmann::json& rows = j.at("rows");
     for (nlohmann::json::const_iterator it = rows.begin(); it != rows.end();
          ++it) {
-        LlPairScore p;
+        LabelizerFRETPairScore p;
         p.asym_id_1 = it->at("asym_id_1").get<std::string>();
         p.seq_id_1 = it->at("seq_id_1").get<int>();
         p.asym_id_2 = it->at("asym_id_2").get<std::string>();
@@ -2316,12 +2316,12 @@ std::vector<LlPairScore> ll_read_pto_pairs(const std::string& path) {
     return out;
 }
 
-std::string ll_extract_pto_structure(const std::string& path,
+std::string labelizer_extract_pto_structure(const std::string& path,
                                      const std::string& out_pdb_path) {
     PtoReader r(path);
-    const int i = r.find(LL_PTO_STRUCTURE);
+    const int i = r.find(LABELIZER_PTO_STRUCTURE);
     if (i < 0) {
-        IMP_THROW("ll_extract_pto_structure: " << path
+        IMP_THROW("labelizer_extract_pto_structure: " << path
                   << " carries no structure", IOException);
     }
     const std::vector<unsigned char> d = r.data(r.objects()[i]);
@@ -2330,17 +2330,17 @@ std::string ll_extract_pto_structure(const std::string& path,
 
     // What the container says it should be. Verification is explicit: opening
     // a file never hashes a payload, extracting one always does.
-    const std::string model = ll_object_text(path, LL_PTO_MODEL);
+    const std::string model = labelizer_object_text(path, LABELIZER_PTO_MODEL);
     if (!model.empty()) {
         const nlohmann::json j = nlohmann::json::parse(model);
         if (j.count("_artifacts") &&
-            j["_artifacts"].count(LL_PTO_STRUCTURE)) {
-            const nlohmann::json& a = j["_artifacts"][LL_PTO_STRUCTURE];
+            j["_artifacts"].count(LABELIZER_PTO_STRUCTURE)) {
+            const nlohmann::json& a = j["_artifacts"][LABELIZER_PTO_STRUCTURE];
             if (a.count("_mmfdb_artifact.checksum")) {
                 const std::string want =
                         a["_mmfdb_artifact.checksum"].get<std::string>();
                 if (want != got) {
-                    IMP_THROW("ll_extract_pto_structure: " << path
+                    IMP_THROW("labelizer_extract_pto_structure: " << path
                               << " does not hold the bytes it says it does: "
                               << "recorded " << want << ", found " << got,
                               IOException);
@@ -2350,37 +2350,37 @@ std::string ll_extract_pto_structure(const std::string& path,
     }
     std::ofstream out(out_pdb_path.c_str(), std::ios::binary);
     if (!out) {
-        IMP_THROW("ll_extract_pto_structure: cannot write " << out_pdb_path,
+        IMP_THROW("labelizer_extract_pto_structure: cannot write " << out_pdb_path,
                   IOException);
     }
     out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     return got;
 }
 
-std::string ll_read_pto_settings(const std::string& path) {
-    const std::string model = ll_object_text(path, LL_PTO_MODEL);
+std::string labelizer_read_pto_settings(const std::string& path) {
+    const std::string model = labelizer_object_text(path, LABELIZER_PTO_MODEL);
     if (model.empty()) return "";
     const nlohmann::json j = nlohmann::json::parse(model);
     return j.count("settings") ? j["settings"].dump() : std::string();
 }
 
-std::string ll_settings_json(const std::vector<LlParameter>& model,
-                             const LlOptions& options,
-                             const LlFretOptions& fret_options,
+std::string labelizer_settings_json(const std::vector<LabelizerParameter>& model,
+                             const LabelizerOptions& options,
+                             const LabelizerFRETOptions& fret_options,
                              const std::string& conservation_path) {
     nlohmann::json j;
     nlohmann::json terms = nlohmann::json::array();
     for (std::size_t i = 0; i < model.size(); ++i) {
         nlohmann::json t;
         t["tag"] = model[i].tag;
-        t["score_type"] = ll_score_type(model[i].tag);
+        t["score_type"] = labelizer_score_type(model[i].tag);
         t["table"] = model[i].table;
         t["weight"] = model[i].weight;
         terms.push_back(t);
     }
     j["model"] = terms;
     j["arithmetic"] =
-            options.model == LL_MODEL_PUBLISHED ? "published" : "corrected";
+            options.model == LABELIZER_MODEL_PUBLISHED ? "published" : "corrected";
     j["probe_radius"] = options.probe_radius;
     j["n_sphere_points"] = options.n_sphere_points;
     j["exclusion_distance"] = options.exclusion_distance;
@@ -2390,8 +2390,8 @@ std::string ll_settings_json(const std::vector<LlParameter>& model,
     j["conservation_path"] = conservation_path;
 
     nlohmann::json f;
-    f["probe_model"] = ll_dye_model_name(fret_options.probe_model);
-    f["refine_probe_model"] = ll_dye_model_name(fret_options.refine_probe_model);
+    f["probe_model"] = labelizer_dye_model_name(fret_options.probe_model);
+    f["refine_probe_model"] = labelizer_dye_model_name(fret_options.refine_probe_model);
     f["n_refine"] = fret_options.n_refine;
     f["forster_radius"] = fret_options.forster_radius;
     f["label_score_threshold"] = fret_options.label_score_threshold;

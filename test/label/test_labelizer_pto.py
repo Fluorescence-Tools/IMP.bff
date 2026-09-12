@@ -150,19 +150,19 @@ def _objects(path):
 def container(tmp_path_factory):
     """A real scored structure, written as a container."""
     pdb = os.path.join(DATA, "1DDB-39.pdb")
-    scores = bff.ll_score_structure(
-        pdb, bff.ll_model_paper(), bff.LlOptions(),
+    scores = bff.labelizer_score_structure(
+        pdb, bff.labelizer_model_paper(), bff.LabelizerOptions(),
         os.path.join(DATA, "1DDB-39_cs.pdb"),
     )
-    options = bff.LlFretOptions()
+    options = bff.LabelizerFRETOptions()
     options.n_refine = 0
-    pairs = list(bff.ll_pair_scores(pdb, bff.ll_combined_by_key(scores), options))[:50]
-    settings = bff.ll_settings_json(
-        bff.ll_model_paper(), bff.LlOptions(), options,
+    pairs = list(bff.labelizer_fret_pair_scores(pdb, bff.labelizer_combined_by_key(scores), options))[:50]
+    settings = bff.labelizer_settings_json(
+        bff.labelizer_model_paper(), bff.LabelizerOptions(), options,
         os.path.join(DATA, "1DDB-39_cs.pdb"),
     )
     out = str(tmp_path_factory.mktemp("pto") / "1DDB-39.mmfdb.pto")
-    bff.ll_write_pto(out, pdb, scores, pairs, settings)
+    bff.labelizer_write_pto(out, pdb, scores, pairs, settings)
     return out, pdb, scores, pairs
 
 
@@ -205,14 +205,14 @@ def test_the_structure_survives_byte_for_byte(container, tmp_path):
     assert embedded == original, "the embedded structure is not the input"
 
     out = str(tmp_path / "recovered.pdb")
-    recorded = bff.ll_extract_pto_structure(path, out)
+    recorded = bff.labelizer_extract_pto_structure(path, out)
     assert recorded == hashlib.sha256(original).hexdigest()
     assert open(out, "rb").read() == original
 
 
 def test_the_scores_round_trip_field_for_field(container):
     path, _, scores, _ = container
-    back = bff.ll_read_pto_scores(path)
+    back = bff.labelizer_read_pto_scores(path)
     assert len(back) == len(scores)
     for a, b in zip(scores, back):
         assert (a.asym_id, a.seq_id, a.comp_id) == (b.asym_id, b.seq_id, b.comp_id)
@@ -224,7 +224,7 @@ def test_the_scores_round_trip_field_for_field(container):
 
 def test_the_pairs_round_trip(container):
     path, _, _, pairs = container
-    back = bff.ll_read_pto_pairs(path)
+    back = bff.labelizer_read_pto_pairs(path)
     assert len(back) == len(pairs)
     for a, b in zip(pairs, back):
         assert (a.seq_id_1, a.seq_id_2) == (b.seq_id_1, b.seq_id_2)

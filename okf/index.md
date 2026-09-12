@@ -44,7 +44,7 @@ shared index.
   strip), tests and pins.
 * [Labelizer correspondence](labelizer-correspondence.md) - What became what in
   the 1:1 port of the Labelizer label-site score (PRD-120): every reference
-  module and function mapped to its `ll_*`/`Ll*` counterpart, where the
+  module and function mapped to its `labelizer_*`/`Labelizer*` counterpart, where the
   constants went, what was deliberately not ported, and which reference
   defects are reproduced on purpose. Its measured agreement is in
   [validation/labelizer_ab.md](validation/labelizer_ab.md).

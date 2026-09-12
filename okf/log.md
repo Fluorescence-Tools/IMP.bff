@@ -2,6 +2,13 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 2a — Labelizer owns its whole public vocabulary**
+  ([PRD-141](prds/prd-141.md)): opaque `Ll*`/`ll_*`/`LL_*` API names are now
+  `Labelizer*`/`labelizer_*`/`LABELIZER_*`; FRET pair types and functions say
+  `LabelizerFRET*` / `labelizer_fret_pair_*`. The `imp_bff_labelizer` command
+  and stored provenance remain the distinct method name. 368 label/CLI/public
+  API tests passed.
+
 - **PRD-141 stage 1f — curvature steps have an Optimization home**
   ([PRD-141](prds/prd-141.md)): `LineSearch.h` is `Optimization.h` and its
   generic `StepResult` is `OptimizationStepResult`; the Cholesky helpers and
@@ -87,10 +94,10 @@
 
 - **The Labelizer LS gets a notebook example** (`ipynb/example/labelizer_score.ipynb`): the label score via
   the native port (PRD-120) as an executed notebook -- `3GUN-processed.pdb` under the no-conservation model
-  (T4L ships no ConSurf grades; `cs` dropped, the `--no-conservation` semantics), features + `ll_score_structure`
+  (T4L ships no ConSurf grades; `cs` dropped, the `--no-conservation` semantics), features + `labelizer_score_structure`
   in 0.1 s, all 162 residues scored, top site A135 (LS 1.89). One figure: LS along the sequence above the
   per-term heatmap; the structure embedded color-coded by LS (LS in the B-factor column, `3GUN_LS.pdb`,
-  py3Dmol/3Dmol.js, red = high); a bridge cell runs `ll_pair_scores` (R0 52, n_refine 5, 4560 pairs) so the
+  py3Dmol/3Dmol.js, red = high); a bridge cell runs `labelizer_pair_scores` (R0 52, n_refine 5, 4560 pairs) so the
   sites flow into `greedy_pair_selection.ipynb`; and a parity section replays the labelizer.org webserver
   (REST contract reverse-engineered from its SPA: `POST backend/load_pdb {chains,pdbID,payload}` →
   `POST backend/analysis` → poll `GET backend/analysis/{job}` → fetch `{pdbID}_LSlong.csv`; job
@@ -134,7 +141,7 @@
   277 ConSurf grades files across 85 proteins that no client could reach. New REST surface:
   `GET backend/conservationscore/<entry_id>` lists the chains with grades on disk, `GET
   backend/conservationscore/<entry_id>/<chain>` serves the grades PDB (normalised grade in the B-factor,
-  exactly what `ll_read_consurf` reads); rows whose ConSurf job never delivered 404 with the JSON error
+  exactly what `labelizer_read_consurf` reads); rows whose ConSurf job never delivered 404 with the JSON error
   shape. The notebook's conservation section gains the webserver route: T4 lysozyme has real grades under
   **148L chain E** (`148L_consurf_grades.pdb`, cached, cache-first fetch), and the full model vs
   no-conservation comparison runs on T4L itself -- 164 sites, top-10 overlap 7/10, cs lifts E44 into the
@@ -383,18 +390,18 @@ transporter) for a two-colour FRET experiment. The screen wanted the only pairs
 such an experiment can produce — residue *i* on one protomer to residue *i* on
 the other — and the module could not express them.
 
-* **`ll_pair_scores_two_states` matched sites on the residue number alone**
+* **`labelizer_pair_scores_two_states` matched sites on the residue number alone**
   (`src/LabelizerFret.cpp`, `std::map<int, std::size_t> by_seq`), which is the
   reference's convention (`fret_score.py:512`). On a multimer residue 100 of
   chains A, B and C is one key, the last one inserted wins, and an inter-chain
   pair therefore got the **same site on both sides of the second state**:
   `distance_2` came back 0, `E(0)` is 1, and the score was `jls·|E(d₁) − 1|`.
   Silently, for every such pair, with no status saying so. The map is keyed on
-  `ll_residue_key(chain, seq_id)` now, with `LlFretOptions::chain_map` for the
+  `labelizer_residue_key(chain, seq_id)` now, with `LabelizerFretOptions::chain_map` for the
   case the old comment was reaching for — two files that name a chain
   differently.
 * **There was no way to say "donor in this chain, acceptor in that one."**
-  `LlFretOptions::donor_chain` / `::acceptor_chain` (empty = today's behaviour)
+  `LabelizerFretOptions::donor_chain` / `::acceptor_chain` (empty = today's behaviour)
   restore the reference's `chains_apo`/`chains_holo` argument
   (`fret_score.py:479`, filter at `:728`), which
   [`okf/labelizer-correspondence.md`](labelizer-correspondence.md) did not list
@@ -403,7 +410,7 @@ the other — and the module could not express them.
   has four chains, two dimers — it mixes in lattice contacts that produce
   "distances" of 43–121 Å.
 
-`ll_cbeta_difference_map` has the same collision by construction: it is indexed
+`labelizer_cbeta_difference_map` has the same collision by construction: it is indexed
 by residue number, so it describes one chain. It takes a `chain` argument now
 (default empty, i.e. unchanged) and the header says why.
 
@@ -421,8 +428,8 @@ reference Python labelizer, patched, and runs it on cordeshub. Its
 `vendor/labelizer/PATCHES.md` records 20 defects in the reference, of which the
 one that matters most is `fret_score.py:220` — the joined label score is
 `prod**0.5`, correct only for two scores, while the two-conformation case has
-four. The port here has that one right already (`ll_joined_label_score` under
-`LL_MODEL_CORRECTED`; `LL_MODEL_PUBLISHED` reproduces it on purpose).
+four. The port here has that one right already (`labelizer_joined_label_score` under
+`LABELIZER_MODEL_CORRECTED`; `LABELIZER_MODEL_PUBLISHED` reproduces it on purpose).
 
 ## 2026-09-04 (28) — the excitation and emission crosstalk matrices moved here from chisurf
 
@@ -4723,7 +4730,7 @@ merely self-consistent with our writer.
 is the authority. `_mmfdb_probe.probe_type` enumerates `dye`,
 `fluorescent_protein`, `spin_label`, `unspecified` -- which `ProbeType` already
 matched -- so the work was the surface around it: `DYE_PAIR_*` ->
-`PROBE_PAIR_*`, `LlDyeModel`/`LL_DYE_*` -> `ProbeModel`/`PROBE_MODEL_*`,
+`PROBE_PAIR_*`, `LabelizerDyeModel`/`LABELIZER_DYE_*` -> `ProbeModel`/`PROBE_MODEL_*`,
 `DEFAULT_DYE_RADIUS` -> `DEFAULT_PROBE_RADIUS`,
 `pair_distribution_from_dyes` -> `pair_distribution_from_probes`,
 `data/rotamer_library/R0/dye_library.cif` -> `probe_library.cif` (its constant
@@ -6312,7 +6319,7 @@ jobs.
 
 **R0 is Angstrom at the source.** It returned nanometres while every consumer
 of it -- `fret_efficiency`, `av_distance`,
-`AVPairDistanceMeasurement::forster_radius`, `LlFretOptions` -- worked in
+`AVPairDistanceMeasurement::forster_radius`, `LabelizerFretOptions` -- worked in
 Angstrom, so six call sites multiplied by ten and one nearly shipped without.
 `forster_radius` converts once now; **the spectra stay nanometres**, which is
 what a spectrometer, a datasheet and the overlap integral are in. Gone with it:
@@ -6733,7 +6740,7 @@ design, so it is a decision and not a default.
   exactly zero, which is the check that the two conformations are read
   independently.
 
-* **`ll_dssp` no longer bridges a sequence gap.** Array-adjacent is not
+* **`labelizer_dssp` no longer bridges a sequence gap.** Array-adjacent is not
   chain-adjacent: a dropped residue (an unnatural amino acid, a modified
   residue) or an unresolved loop leaves a hole in the author numbering, and the
   turn logic was indexing by array position — reading residues 99 and 103 as

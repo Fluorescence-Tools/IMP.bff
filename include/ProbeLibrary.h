@@ -428,7 +428,7 @@ IMPBFFEXPORT int probe_library_to_pto(const std::string& path,
     `"Alexa488"` works as well as `"AlexaFluor488"`.
 
     **Angstrom**, like every length in this package --
-    #IMP::bff::LlFretOptions::forster_radius (default 52),
+    #IMP::bff::LabelizerFRETOptions::forster_radius (default 52),
     #IMP::bff::av_distance, #IMP::bff::fret_efficiency. This function used to
     be the one place nanometres met Angstrom, because
     #IMP::bff::forster_radius returned nm; since 2026-08-25 that conversion

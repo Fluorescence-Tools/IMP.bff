@@ -60,7 +60,7 @@ def test_labelizer_scores_a_structure(tmp_path):
     program = _program("imp_bff_labelizer")
     assert program.main([PDB, "--no-conservation", "-o", str(out)]) == 0
     assert out.is_file()
-    assert len(IMP.bff.ll_read_pto_scores(str(out))) > 0
+    assert len(IMP.bff.labelizer_read_pto_scores(str(out))) > 0
 
 
 def test_labelizer_show_says_what_it_wants(tmp_path, capsys):

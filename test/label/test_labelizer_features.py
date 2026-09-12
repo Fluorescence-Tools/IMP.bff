@@ -35,13 +35,13 @@ def _path(name):
 @pytest.fixture(scope="module")
 def helical():
     """1DDB: mouse BID, all-helical, one chain."""
-    return bff.ll_read_structure(_path("1DDB-39.pdb"))
+    return bff.labelizer_read_structure(_path("1DDB-39.pdb"))
 
 
 @pytest.fixture(scope="module")
 def alpha_beta():
     """1anf: maltose-binding protein, a mixed alpha/beta fold."""
-    return bff.ll_read_structure(_path("1anf.pdb"))
+    return bff.labelizer_read_structure(_path("1anf.pdb"))
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ def test_only_the_first_model_of_an_nmr_entry_is_read(helical):
 
 
 def test_several_chains_stay_several_chains():
-    s = bff.ll_read_structure(_path("3j0e.pdb"))
+    s = bff.labelizer_read_structure(_path("3j0e.pdb"))
     assert {r.chain for r in s.residues} == {"F", "G", "H"}
 
 
@@ -71,7 +71,7 @@ def test_a_glycine_gets_a_reconstructed_cbeta(helical):
     assert glycines, "1DDB has glycines"
     for i in glycines:
         assert helical.residues[i].cb < 0, "a glycine has no real CB"
-        position = bff.ll_cbeta_position(helical, i)
+        position = bff.labelizer_cbeta_position(helical, i)
         assert len(position) == 3
         ca = np.asarray(helical.xyz).reshape(-1, 3)[helical.residues[i].ca]
         # A real CA-CB bond is 1.53 A; the construction must land near it.
@@ -83,7 +83,7 @@ def test_a_glycine_gets_a_reconstructed_cbeta(helical):
 # ---------------------------------------------------------------------------
 
 def test_dssp_returns_one_code_per_residue_from_the_eight(helical):
-    ss = bff.ll_dssp(helical)
+    ss = bff.labelizer_dssp(helical)
     assert len(ss) == len(helical.residues)
     assert set(ss) <= set("HBEGITS-")
 
@@ -94,7 +94,7 @@ def test_an_alpha_beta_protein_gets_strands(alpha_beta):
     Maltose-binding protein is a two-domain alpha/beta fold; an implementation
     that never assigned `E` would pass every 1DDB test and be badly wrong here.
     """
-    ss = bff.ll_dssp(alpha_beta)
+    ss = bff.labelizer_dssp(alpha_beta)
     counts = {c: ss.count(c) for c in set(ss)}
     assert counts.get("E", 0) > 40, "MBP has substantial beta sheet: %r" % counts
     assert counts.get("H", 0) > 100, "and more helix than sheet: %r" % counts
@@ -111,8 +111,8 @@ def test_an_alpha_beta_protein_gets_strands(alpha_beta):
 def test_no_hydrogen_bond_is_inferred_across_a_chain_break():
     """The amide hydrogen is placed from the *preceding* residue's C=O, which
     is meaningless across a chain boundary."""
-    s = bff.ll_read_structure(_path("3j0e.pdb"))
-    ss = bff.ll_dssp(s)
+    s = bff.labelizer_read_structure(_path("3j0e.pdb"))
+    ss = bff.labelizer_dssp(s)
     assert len(ss) == len(s.residues)
     firsts = [i for i, r in enumerate(s.residues)
               if i == 0 or s.residues[i - 1].chain != r.chain]
@@ -128,10 +128,10 @@ def test_no_hydrogen_bond_is_inferred_across_a_chain_break():
 
 def test_exposure_measures_agree_about_which_residues_are_buried(helical):
     """Three independent measures, so they must correlate or one is wrong."""
-    depth = np.asarray(bff.ll_residue_depth(helical, 1.4, 200))
-    rsa = np.asarray(bff.ll_relative_solvent_accessibility(
-        helical, bff.LL_MAXASA_WILKE, 1.4, 200))
-    hse = np.asarray(bff.ll_half_sphere_exposure(helical, 13.0)).reshape(-1, 2)
+    depth = np.asarray(bff.labelizer_residue_depth(helical, 1.4, 200))
+    rsa = np.asarray(bff.labelizer_relative_solvent_accessibility(
+        helical, bff.LABELIZER_MAXASA_WILKE, 1.4, 200))
+    hse = np.asarray(bff.labelizer_half_sphere_exposure(helical, 13.0)).reshape(-1, 2)
 
     assert len(depth) == len(rsa) == len(hse) == len(helical.residues)
     assert (depth > 0).all(), "every residue is some distance from the surface"
@@ -145,9 +145,9 @@ def test_exposure_measures_agree_about_which_residues_are_buried(helical):
 
 def test_the_three_max_asa_scales_differ_but_agree_in_order():
     # dict(): the SWIG map proxy indexes but has no .get
-    wilke = dict(bff.ll_max_asa(bff.LL_MAXASA_WILKE))
-    sander = dict(bff.ll_max_asa(bff.LL_MAXASA_SANDER))
-    miller = dict(bff.ll_max_asa(bff.LL_MAXASA_MILLER))
+    wilke = dict(bff.labelizer_max_asa(bff.LABELIZER_MAXASA_WILKE))
+    sander = dict(bff.labelizer_max_asa(bff.LABELIZER_MAXASA_SANDER))
+    miller = dict(bff.labelizer_max_asa(bff.LABELIZER_MAXASA_MILLER))
     assert len(wilke) == len(sander) == len(miller) == 20
     # Glycine is the smallest residue on every scale, and that is not a
     # convention -- it has no side chain.
@@ -169,8 +169,8 @@ def test_the_three_max_asa_scales_differ_but_agree_in_order():
 
 def test_a_residue_type_outside_the_scale_is_not_computed(helical):
     """Negative says 'no relative value'; zero would say 'fully buried'."""
-    rsa = np.asarray(bff.ll_relative_solvent_accessibility(
-        helical, bff.LL_MAXASA_WILKE, 1.4, 200))
+    rsa = np.asarray(bff.labelizer_relative_solvent_accessibility(
+        helical, bff.LABELIZER_MAXASA_WILKE, 1.4, 200))
     # 1DDB is protein-only, so nothing should be flagged here -- the point is
     # that the flag is negative and not zero when it does fire.
     assert (rsa >= 0).all()
@@ -181,8 +181,8 @@ def test_a_residue_type_outside_the_scale_is_not_computed(helical):
 # ---------------------------------------------------------------------------
 
 def test_every_shipped_table_loads():
-    for name in bff.ll_available_tables():
-        table = bff.ll_load_table(name)
+    for name in bff.labelizer_available_tables():
+        table = bff.labelizer_load_table(name)
         assert table.name == name
         if name.startswith("C_"):
             assert table.categorical and len(table.by_key) > 0
@@ -200,7 +200,7 @@ _TAG_OF = {"CR": "cr", "SS": "ss", "SE": "se", "CS": "cs", "ME": "me"}
 #: available, and refusing is the reference's behaviour too -- it raises
 #: `NotImplementedError` for every table but the one it implements per term.
 UNIMPLEMENTED = {
-    # ConSurf fields `ll_read_consurf` does not import.
+    # ConSurf fields `labelizer_read_consurf` does not import.
     "N_CS3_Lower_Score", "N_CS4_Upper_Score", "I_CS1_Color",
     "I_CS5_Variety_Length", "C_CS6_Cys_In_Variety",
     # Bin centres span -153 to +333 degrees, which is neither the -180..180
@@ -209,7 +209,7 @@ UNIMPLEMENTED = {
 }
 
 
-@pytest.mark.parametrize("table", sorted(bff.ll_available_tables()))
+@pytest.mark.parametrize("table", sorted(bff.labelizer_available_tables()))
 def test_a_table_is_either_implemented_or_refused_never_guessed(table, helical):
     """The property that matters: **no table silently returns the wrong
     observable.**
@@ -225,16 +225,16 @@ def test_a_table_is_either_implemented_or_refused_never_guessed(table, helical):
     own observable or raise saying why not.
     """
     tag = _TAG_OF[table.split("_")[1][:2]]
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter(tag, table, 1))
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter(tag, table, 1))
 
     if table in UNIMPLEMENTED:
         with pytest.raises(Exception) as excinfo:
-            bff.ll_parameter_scores(helical, model, bff.LlOptions(), {})
+            bff.labelizer_parameter_scores(helical, model, bff.LabelizerOptions(), {})
         assert table in str(excinfo.value)
         return
 
-    rows = bff.ll_parameter_scores(helical, model, bff.LlOptions(), {})
+    rows = bff.labelizer_parameter_scores(helical, model, bff.LabelizerOptions(), {})
     assert len(rows) == len(helical.residues)
     scored = [r.value for r in rows if r.status == "scored"]
 
@@ -255,28 +255,28 @@ def test_a_table_is_either_implemented_or_refused_never_guessed(table, helical):
         # (`{}`) and exists only so the reference's loader does not fail; the
         # exclusion score is hard-coded 0.001/0.999 -- see
         # `test_the_exclusion_term_uses_a_thousandfold_penalty_not_a_zero`.
-        assert len(bff.ll_load_table(table).bins) == 0  # an ndarray now, not a tuple
+        assert len(bff.labelizer_load_table(table).bins) == 0  # an ndarray now, not a tuple
         assert {round(v, 6) for v in scored} <= {0.001, 0.999}
         return
 
     # Every other value has to be a value the table actually contains: a
     # lookup returns a table entry, never something computed from one.
-    permitted = (set(dict(bff.ll_load_table(table).by_key).values())
+    permitted = (set(dict(bff.labelizer_load_table(table).by_key).values())
                  if table.startswith("C_")
-                 else set(bff.ll_load_table(table).values))
+                 else set(bff.labelizer_load_table(table).values))
     assert all(any(abs(v - p) < 1e-12 for p in permitted) for v in scored), \
         "%s returned a value that is not in the table" % table
 
 
 def test_the_neighbour_secondary_structure_tables_read_the_neighbour(helical):
     """`C_SS4_SS-1` must score residue i-1, not residue i."""
-    ss = bff.ll_dssp(helical)
-    table = dict(bff.ll_load_table("C_SS4_SS-1").by_key)
+    ss = bff.labelizer_dssp(helical)
+    table = dict(bff.labelizer_load_table("C_SS4_SS-1").by_key)
 
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("ss", "C_SS4_SS-1", 1))
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("ss", "C_SS4_SS-1", 1))
     rows = {r.seq_id: r for r in
-            bff.ll_parameter_scores(helical, model, bff.LlOptions(), {})}
+            bff.labelizer_parameter_scores(helical, model, bff.LabelizerOptions(), {})}
 
     for i, residue in enumerate(helical.residues):
         row = rows[residue.seq_id]
@@ -292,8 +292,8 @@ def test_the_neighbour_secondary_structure_tables_read_the_neighbour(helical):
 
 def test_the_cbeta_depth_is_not_the_mean_atom_depth(helical):
     """`N_SE10` and `N_SE11` are different observables on the same surface."""
-    mean = np.asarray(bff.ll_residue_depth(helical, 1.4, 200))
-    cbeta = np.asarray(bff.ll_cbeta_depth(helical, 1.4, 200))
+    mean = np.asarray(bff.labelizer_residue_depth(helical, 1.4, 200))
+    cbeta = np.asarray(bff.labelizer_cbeta_depth(helical, 1.4, 200))
     assert len(cbeta) == len(mean) == len(helical.residues)
     assert (cbeta > 0).all()
     # Correlated -- both measure burial -- but not the same number.
@@ -302,37 +302,37 @@ def test_the_cbeta_depth_is_not_the_mean_atom_depth(helical):
 
 
 def test_a_numeric_lookup_takes_the_nearest_bin_and_does_not_interpolate():
-    table = bff.ll_load_table("N_SE11_MEAN_SURFACE_DIST")
+    table = bff.labelizer_load_table("N_SE11_MEAN_SURFACE_DIST")
     bins = list(table.bins)
     values = list(table.values)
     # Exactly on a bin centre.
-    assert bff.ll_lookup(table, bins[3]) == values[3]
+    assert bff.labelizer_lookup(table, bins[3]) == values[3]
     # Just inside the next bin's half-width -- still the same value, because
     # nothing is interpolated.
     midpoint = 0.5 * (bins[3] + bins[4])
-    assert bff.ll_lookup(table, bins[3] + 0.01) == values[3]
-    assert bff.ll_lookup(table, midpoint - 1e-6) == values[3]
+    assert bff.labelizer_lookup(table, bins[3] + 0.01) == values[3]
+    assert bff.labelizer_lookup(table, midpoint - 1e-6) == values[3]
     # Outside the table: clamped to the end bin, never extrapolated.
-    assert bff.ll_lookup(table, -1e6) == values[0]
-    assert bff.ll_lookup(table, 1e6) == values[-1]
+    assert bff.labelizer_lookup(table, -1e6) == values[0]
+    assert bff.labelizer_lookup(table, 1e6) == values[-1]
 
 
 def test_cysteine_scores_highest_and_tryptophan_lowest():
     """The cysteine-resemblance table is the model's chemical intuition."""
-    by_key = dict(bff.ll_load_table("C_CR1_Name").by_key)
+    by_key = dict(bff.labelizer_load_table("C_CR1_Name").by_key)
     assert max(by_key, key=by_key.get) == "C"
     assert min(by_key, key=by_key.get) == "W"
     assert by_key["S"] > by_key["L"]
 
 
 def test_the_published_model_switches_two_terms_off():
-    model = {p.tag: p.weight for p in bff.ll_model_paper()}
+    model = {p.tag: p.weight for p in bff.labelizer_model_paper()}
     assert model == {"cs": 1, "se": 1, "cr": 1, "ss": 1, "tp": 0, "ce": 0}
 
 
 def test_every_tag_maps_to_a_dictionary_score_type():
     for tag in ["cs", "se", "ss", "ce", "tp", "cr", "me"]:
-        assert bff.ll_score_type(tag) in bff.mfdb_label_score_types()
+        assert bff.labelizer_score_type(tag) in bff.mfdb_label_score_types()
 
 
 # ---------------------------------------------------------------------------
@@ -347,12 +347,12 @@ def test_the_joined_label_score_defect_is_reproduced_and_correctable():
     double-conformation pair scores are not on a common scale.
     """
     two = [1.5, 2.0]
-    assert bff.ll_joined_label_score(two, bff.LL_MODEL_PUBLISHED) == \
-        pytest.approx(bff.ll_joined_label_score(two, bff.LL_MODEL_CORRECTED))
+    assert bff.labelizer_joined_label_score(two, bff.LABELIZER_MODEL_PUBLISHED) == \
+        pytest.approx(bff.labelizer_joined_label_score(two, bff.LABELIZER_MODEL_CORRECTED))
 
     four = [1.5, 2.0, 1.5, 2.0]
-    published = bff.ll_joined_label_score(four, bff.LL_MODEL_PUBLISHED)
-    corrected = bff.ll_joined_label_score(four, bff.LL_MODEL_CORRECTED)
+    published = bff.labelizer_joined_label_score(four, bff.LABELIZER_MODEL_PUBLISHED)
+    corrected = bff.labelizer_joined_label_score(four, bff.LABELIZER_MODEL_CORRECTED)
     assert published == pytest.approx(3.0)
     assert corrected == pytest.approx(np.prod(four) ** 0.25)
     assert published == pytest.approx(corrected ** 2)
@@ -364,19 +364,19 @@ def test_a_weight_zero_term_still_vetoes_under_the_published_model():
     rows = []
     for tag, value in [("cs", 1.5), ("se", 1.5), ("cr", 1.5), ("ss", 1.5),
                        ("tp", 0.0), ("ce", 1.0)]:
-        row = bff.LlScore()
+        row = bff.LabelizerScore()
         row.asym_id, row.seq_id, row.comp_id = "A", 1, "SER"
-        row.score_type = bff.ll_score_type(tag)
+        row.score_type = bff.labelizer_score_type(tag)
         row.value, row.status = value, "scored"
         rows.append(row)
 
-    options = bff.LlOptions()
-    options.model = bff.LL_MODEL_PUBLISHED
-    published = bff.ll_labeling_score(rows, bff.ll_model_paper(), options)
+    options = bff.LabelizerOptions()
+    options.model = bff.LABELIZER_MODEL_PUBLISHED
+    published = bff.labelizer_labeling_score(rows, bff.labelizer_model_paper(), options)
     assert published[0].value == 0.0, "the weight-0 zero must veto"
 
-    options.model = bff.LL_MODEL_CORRECTED
-    corrected = bff.ll_labeling_score(rows, bff.ll_model_paper(), options)
+    options.model = bff.LABELIZER_MODEL_CORRECTED
+    corrected = bff.labelizer_labeling_score(rows, bff.labelizer_model_paper(), options)
     assert corrected[0].value == pytest.approx(1.5), \
         "a term of weight 0 must not be consulted"
 
@@ -386,15 +386,15 @@ def test_an_unavailable_term_makes_the_combination_unavailable():
     different facts and must stay different."""
     rows = []
     for tag in ["cs", "se", "cr", "ss", "tp", "ce"]:
-        row = bff.LlScore()
+        row = bff.LabelizerScore()
         row.asym_id, row.seq_id, row.comp_id = "A", 1, "SER"
-        row.score_type = bff.ll_score_type(tag)
+        row.score_type = bff.labelizer_score_type(tag)
         if tag == "cs":
             row.status = "unavailable"
         else:
             row.value, row.status = 1.5, "scored"
         rows.append(row)
-    out = bff.ll_labeling_score(rows, bff.ll_model_paper(), bff.LlOptions())
+    out = bff.labelizer_labeling_score(rows, bff.labelizer_model_paper(), bff.LabelizerOptions())
     assert out[0].status == "unavailable"
 
 
@@ -402,19 +402,19 @@ def test_the_weight_is_a_repeat_count_not_an_exponent():
     """`labeling_score.py:187` multiplies a term in `weight` times and takes
     the root over the total count. For integer weights that equals the
     exponent form, and the reference offers no other."""
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("cs", "N_CS2_Score", 3))
-    model.append(bff.LlParameter("se", "N_SE11_MEAN_SURFACE_DIST", 1))
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("cs", "N_CS2_Score", 3))
+    model.append(bff.LabelizerParameter("se", "N_SE11_MEAN_SURFACE_DIST", 1))
 
     rows = []
     for tag, value in [("cs", 2.0), ("se", 0.5)]:
-        row = bff.LlScore()
+        row = bff.LabelizerScore()
         row.asym_id, row.seq_id, row.comp_id = "A", 1, "SER"
-        row.score_type = bff.ll_score_type(tag)
+        row.score_type = bff.labelizer_score_type(tag)
         row.value, row.status = value, "scored"
         rows.append(row)
 
-    out = bff.ll_labeling_score(rows, model, bff.LlOptions())
+    out = bff.labelizer_labeling_score(rows, model, bff.LabelizerOptions())
     assert out[0].value == pytest.approx((2.0 ** 3 * 0.5) ** (1.0 / 4.0))
 
 
@@ -425,9 +425,9 @@ def test_the_weight_is_a_repeat_count_not_an_exponent():
 def test_the_exclusion_term_uses_a_thousandfold_penalty_not_a_zero(helical):
     """0.001/0.999 rather than 0/1 is deliberate: a zero would trip the
     zero-veto and take the whole score to zero, and -1 means an error."""
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("me", "N_ME11_Methionin_Exclusion_Dummy", 1))
-    rows = bff.ll_parameter_scores(helical, model, bff.LlOptions(), {})
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("me", "N_ME11_Methionin_Exclusion_Dummy", 1))
+    rows = bff.labelizer_parameter_scores(helical, model, bff.LabelizerOptions(), {})
     values = {round(r.value, 6) for r in rows if r.status == "scored"}
     assert values <= {0.001, 0.999}
     assert 0.999 in values
@@ -443,7 +443,7 @@ def test_dssp_does_not_infer_a_peptide_bond_across_a_sequence_gap(tmp_path):
     Two very ordinary inputs leave a gap in the author numbering: a crystal
     structure with an unresolved loop, and any structure carrying a residue the
     reader drops -- an unnatural amino acid such as pAcF, a modified residue.
-    Before this was guarded, `ll_dssp` indexed turns by array position, so it
+    Before this was guarded, `labelizer_dssp` indexed turns by array position, so it
     read residues 99 and 103 as three apart when a missing residue 100 had made
     them four, and asserted a 3-turn that does not exist. It produced a
     confident wrong assignment rather than an error, which is the worst kind.
@@ -461,13 +461,13 @@ def test_dssp_does_not_infer_a_peptide_bond_across_a_sequence_gap(tmp_path):
                 continue          # residue 100 is simply not there
             fh.write(line)
 
-    whole = bff.ll_read_structure(_path("1DDB-39.pdb"))
-    holed = bff.ll_read_structure(str(gapped))
+    whole = bff.labelizer_read_structure(_path("1DDB-39.pdb"))
+    holed = bff.labelizer_read_structure(str(gapped))
     assert len(holed.residues) == len(whole.residues) - 1
 
-    by_seq_whole = {r.seq_id: bff.ll_dssp(whole)[i]
+    by_seq_whole = {r.seq_id: bff.labelizer_dssp(whole)[i]
                     for i, r in enumerate(whole.residues)}
-    by_seq_holed = {r.seq_id: bff.ll_dssp(holed)[i]
+    by_seq_holed = {r.seq_id: bff.labelizer_dssp(holed)[i]
                     for i, r in enumerate(holed.residues)}
 
     changed = [s for s in sorted(set(by_seq_whole) & set(by_seq_holed))
@@ -495,16 +495,16 @@ def test_a_gap_does_not_shift_the_scores_of_other_residues(tmp_path):
                 continue
             fh.write(line)
 
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("cr", "C_CR1_Name", 1))
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("cr", "C_CR1_Name", 1))
     whole = {(r.asym_id, r.seq_id): r.value
-             for r in bff.ll_parameter_scores(
-                 bff.ll_read_structure(_path("1DDB-39.pdb")), model,
-                 bff.LlOptions(), {})}
+             for r in bff.labelizer_parameter_scores(
+                 bff.labelizer_read_structure(_path("1DDB-39.pdb")), model,
+                 bff.LabelizerOptions(), {})}
     holed = {(r.asym_id, r.seq_id): r.value
-             for r in bff.ll_parameter_scores(
-                 bff.ll_read_structure(str(gapped)), model,
-                 bff.LlOptions(), {})}
+             for r in bff.labelizer_parameter_scores(
+                 bff.labelizer_read_structure(str(gapped)), model,
+                 bff.LabelizerOptions(), {})}
 
     assert ("A", 100) in whole and ("A", 100) not in holed
     for key in holed:
@@ -626,7 +626,7 @@ def test_the_global_charge_agrees_with_a_residue_census(helical):
     reimplement the thing it is testing by accident.
     """
     import collections
-    net, positive, negative = bff.ll_global_charge(helical)
+    net, positive, negative = bff.labelizer_global_charge(helical)
     census = collections.Counter(r.comp_id for r in helical.residues)
 
     # Histidine counts as +1, as the `ce` term counts it. That is wrong at
@@ -642,11 +642,11 @@ def test_the_global_charge_is_the_same_table_the_charge_term_uses(helical):
     """If these two ever disagreed about what is charged, a site's charge
     environment and its protein's net charge would be describing different
     molecules."""
-    net, positive, negative = bff.ll_global_charge(helical)
+    net, positive, negative = bff.labelizer_global_charge(helical)
     # A structure of only neutral residues must give zero on both counts.
-    model = bff.LlParameterList()
-    model.append(bff.LlParameter("ce", "", 1))
-    rows = bff.ll_parameter_scores(helical, model, bff.LlOptions(), {})
+    model = bff.LabelizerParameterList()
+    model.append(bff.LabelizerParameter("ce", "", 1))
+    rows = bff.labelizer_parameter_scores(helical, model, bff.LabelizerOptions(), {})
     assert rows, "the charge term must still evaluate"
     # Non-trivial charge in this structure, so the census above is a real test.
     assert positive > 0 and negative < 0

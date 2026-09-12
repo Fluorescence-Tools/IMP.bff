@@ -8,18 +8,18 @@
  * result structs, the containers they travel in, and the numpy array
  * properties.
  *
- * The `Ll` prefix and the `ll_` free functions mark what came from the
+ * The `Labelizer` prefix and the `labelizer_` free functions mark what came from the
  * Labelizer package, so a reader can tell the ported model from the module's
  * own physics without consulting a PRD.
  */
 
 /* Value semantics before the header that declares them: SWIG resolves a type
    at the point of use, and the containers below instantiate on these. */
-IMP_SWIG_VALUE(IMP::bff, LlResidue, LlResidues);
-IMP_SWIG_VALUE(IMP::bff, LlTable, LlTables);
-IMP_SWIG_VALUE(IMP::bff, LlParameter, LlParameters);
-IMP_SWIG_VALUE(IMP::bff, LlScore, LlScores);
-IMP_SWIG_VALUE(IMP::bff, LlPairScore, LlPairScores);
+IMP_SWIG_VALUE(IMP::bff, LabelizerResidue, LabelizerResidues);
+IMP_SWIG_VALUE(IMP::bff, LabelizerTable, LabelizerTables);
+IMP_SWIG_VALUE(IMP::bff, LabelizerParameter, LabelizerParameters);
+IMP_SWIG_VALUE(IMP::bff, LabelizerScore, LabelizerScores);
+IMP_SWIG_VALUE(IMP::bff, LabelizerFRETPairScore, LabelizerFRETPairScores);
 /* The three Mfdb* value types are declared in swig.i-in now, ahead of
    RotamerLibrary.h, which needs MfdbTags for `write_drot_with_provenance`. */
 
@@ -27,10 +27,10 @@ IMP_SWIG_VALUE(IMP::bff, LlPairScore, LlPairScores);
 
 /* The containers the free functions above take and return. Instantiated after
    the headers, on types SWIG has already seen. */
-%template(LlResidueList) std::vector<IMP::bff::LlResidue>;
-%template(LlParameterList) std::vector<IMP::bff::LlParameter>;
-%template(LlScoreList) std::vector<IMP::bff::LlScore>;
-%template(LlPairScoreList) std::vector<IMP::bff::LlPairScore>;
+%template(LabelizerResidueList) std::vector<IMP::bff::LabelizerResidue>;
+%template(LabelizerParameterList) std::vector<IMP::bff::LabelizerParameter>;
+%template(LabelizerScoreList) std::vector<IMP::bff::LabelizerScore>;
+%template(LabelizerPairScoreList) std::vector<IMP::bff::LabelizerFRETPairScore>;
 %template(MfdbTagList) std::vector<IMP::bff::MfdbTag>;
 %template(MfdbColumnList) std::vector<IMP::bff::MfdbColumn>;
 %template(MfdbAttributionList) std::vector<IMP::bff::MfdbAttribution>;
