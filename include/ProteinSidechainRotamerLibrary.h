@@ -69,7 +69,8 @@ IMP_VALUES(ProteinSidechainDunbrackRotamers, ProteinSidechainDunbrackRotamersLis
     records exactly as they lie in the binary -- plus a `rot.bbdep.header`
     describing the bin scheme, the record layout and the library's
     provenance, and a `drot.catalog` naming the residues. Each object is
-    brotli'd on its own, which takes the 13.76 MB binary to about 3.3 MB.
+    compressed independently with Zstd level 3. Readers also accept existing
+    Brotli-compressed containers.
 
     \param[in] bin_path FASPR's `dun2010bbdep.bin`
     \param[in] path the container to write

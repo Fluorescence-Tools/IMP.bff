@@ -124,11 +124,7 @@ def test_a_container_of_ones_own_round_trips(tmp_path):
 
 
 def test_a_payload_that_compresses_hugely_still_reads(tmp_path):
-    """The decompressed size is written into the payload, because the one-shot
-    decoder reports a buffer that is too small as an *error* -- so a reader
-    that guesses the size from the compressed length (`size * 8`) fails on
-    anything that compresses better than eight times. The UNRES text is 2.4 MB
-    of digits in a fraction of that."""
+    """Highly compressible grids decode without guessing their expanded size."""
     t = IMP.bff.PotentialTable("flat", "pot.grid")
     t.shape = [500000]
     t.values = [0.0] * 500000          # compresses by ~1000x
@@ -137,6 +133,47 @@ def test_a_payload_that_compresses_hugely_still_reads(tmp_path):
     back = IMP.bff.read_potential_table("flat", path)
     assert back.table.size == 500000
     assert not back.table.any()
+
+
+def test_new_tables_are_standard_zstd_payloads(tmp_path):
+    pto = pytest.importorskip("ptolib.pto")
+    pytest.importorskip("zstandard")
+    grid = IMP.bff.PotentialTable("grid", "pot.grid")
+    grid.values, grid.shape = [1.0, -2.0, 3.0], [3]
+    path = tmp_path / "zstd.pto"
+    manifest = json.dumps({"tables": {"grid": {"shape": [3]}}})
+    IMP.bff.write_potential_tables(str(path), [grid], manifest)
+    with pto.PtoReader(path) as reader:
+        for obj in reader.objects():
+            assert obj.encoding.endswith("+zstd")
+            raw = reader.read(obj)
+            assert len(raw) == obj.raw_size
+            if obj.name == "manifest.json":
+                assert raw.decode() == manifest
+            else:
+                np.testing.assert_array_equal(np.frombuffer(raw, dtype="<f8"), grid.values)
+    assert IMP.bff.read_potential_manifest(str(path)) == manifest
+    np.testing.assert_array_equal(IMP.bff.read_potential_table("grid", str(path)).table,
+                                  grid.values)
+
+
+def test_legacy_size_prefixed_brotli_tables_still_read(tmp_path):
+    pto = pytest.importorskip("ptolib.pto")
+    brotli = pytest.importorskip("brotli")
+    manifest = json.dumps({"tables": {"grid": {"shape": [3]}}})
+    values = np.array([1., -2., 3.], dtype="<f8")
+    path = tmp_path / "legacy.pto"
+    with pto.PtoWriter(path) as writer:
+        for name, kind, encoding, raw in (
+            ("manifest.json", "pot.manifest", "utf8", manifest.encode()),
+            ("grid", "pot.grid", "f64", values.tobytes()),
+        ):
+            packed = len(raw).to_bytes(8, "little") + brotli.compress(raw)
+            writer.add(name, kind, packed, encoding=encoding + "+brotli")
+    assert IMP.bff.read_potential_manifest(str(path)) == manifest
+    table = IMP.bff.read_potential_table("grid", str(path))
+    assert list(table.shape) == [3]
+    np.testing.assert_array_equal(table.table, values)
 
 
 # ---------------------------------------------------------------------------

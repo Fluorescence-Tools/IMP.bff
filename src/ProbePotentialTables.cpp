@@ -19,44 +19,13 @@
 #include <cstring>
 #include <memory>
 
-// The vendored codec, the same one `.drot` uses. The paths are relative to
-// `src/`, which is where this file also sits.
-
 IMPBFF_BEGIN_NAMESPACE
 
 namespace {
 
-//! brotli, behind an eight-octet little-endian decompressed size.
-/*! The size is in the payload because the decoder needs the whole output
-    buffer up front and reports a buffer that is too small as an error, not
-    as "needs more room". A reader that guesses the size from the compressed
-    length -- `size * 8`, which is what `.drot`'s reader does -- therefore
-    fails outright on anything that compresses better than eight times, and
-    a table of repeated numbers compresses far better than that: the UNRES
-    text is 2.4 MB of digits in 100 KB. Writing the length down costs eight
-    octets and removes the guess.
-
-    Named apart from `.drot`'s copies because the module is built as one
-    translation unit, where two file-local functions of one name collide. */
-std::vector<unsigned char> pot_brotli_compress(
-        const std::vector<unsigned char>& in, int quality = 11) {
-    std::vector<unsigned char> packed;
-    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
-                             quality, packed)) {
-        IMP_THROW("write_potential_tables: brotli compression failed",
-                  IOException);
-    }
-    std::vector<unsigned char> out;
-    out.reserve(8 + packed.size());
-    unsigned long long raw = in.size();
-    for (int i = 0; i < 8; ++i) {
-        out.push_back(static_cast<unsigned char>((raw >> (8 * i)) & 0xff));
-    }
-    out.insert(out.end(), packed.begin(), packed.end());
-    return out;
-}
-
-//! The inverse: read the size, allocate exactly that, decode once.
+//! Decode the legacy eight-byte-size-prefixed Brotli payload.
+/*! Older potential containers label this private envelope +brotli. New
+    containers use standard Zstd frames and ptolib's generic reader. */
 std::vector<unsigned char> pot_brotli_decompress(const unsigned char* data,
                                                  std::size_t size) {
     if (size < 8) {
@@ -176,11 +145,14 @@ std::string read_potential_manifest(std::string path) {
     }
     const std::vector<std::uint64_t> matches = reader.find_all(kManifestName);
     if (matches.empty()) return std::string("{}");
-    // This format prefixes its brotli stream with the decoded size.
-    const std::vector<unsigned char> stored = reader.read_stored(matches.front());
-    const std::vector<unsigned char> raw =
-            reader.object(matches.front()).encoding.find("brotli") != std::string::npos
-            ? pot_brotli_decompress(stored.data(), stored.size()) : stored;
+    const pto::PtoObject object = reader.object(matches.front());
+    std::vector<unsigned char> raw;
+    if (pto::split_encoding(object.encoding).codec == "brotli") {
+        const std::vector<unsigned char> stored = reader.read_stored(object.uid);
+        raw = pot_brotli_decompress(stored.data(), stored.size());
+    } else {
+        raw = reader.read(object.uid);
+    }
     return std::string(raw.begin(), raw.end());
 }
 
@@ -199,10 +171,13 @@ PotentialTable read_potential_table(std::string name, std::string path) {
                   IOException);
     }
     const pto::PtoObject object = reader.object(matches.front());
-    // Decode the legacy size-prefixed stream once, outside generic PTO codecs.
-    const std::vector<unsigned char> stored = reader.read_stored(object.uid);
-    const std::vector<unsigned char> raw = object.encoding.find("brotli") != std::string::npos
-            ? pot_brotli_decompress(stored.data(), stored.size()) : stored;
+    std::vector<unsigned char> raw;
+    if (pto::split_encoding(object.encoding).codec == "brotli") {
+        const std::vector<unsigned char> stored = reader.read_stored(object.uid);
+        raw = pot_brotli_decompress(stored.data(), stored.size());
+    } else {
+        raw = reader.read(object.uid);
+    }
 
     PotentialTable table(name, object.kind);
     if (object.kind == kPmfKind) {
@@ -220,6 +195,10 @@ PotentialTable read_potential_table(std::string name, std::string path) {
 void write_potential_tables(const std::string& path,
                             const std::vector<PotentialTable>& tables,
                             const std::string& manifest_json) {
+    if (!pto::can_compress("zstd")) {
+        IMP_THROW("write_potential_tables: unavailable output codec 'zstd'",
+                  IOException);
+    }
     pto::File writer;
     if (!writer.create(path, "", std::string(pto::kDefaultBanner) +
             "\nThis container was written by IMP.bff.\nhttps://github.com/tpeulen/IMP.bff\n")) {
@@ -228,11 +207,8 @@ void write_potential_tables(const std::string& path,
     writer.set_writing_app("IMP.bff");
     const std::vector<unsigned char> manifest(manifest_json.begin(),
                                               manifest_json.end());
-    const std::vector<unsigned char> packed_manifest =
-            pot_brotli_compress(manifest);
-    if (!writer.add("pot.manifest", "utf8+brotli", kManifestName,
-               packed_manifest.empty() ? NULL : &packed_manifest[0],
-               packed_manifest.size())) {
+    if (!writer.add_coded("pot.manifest", "utf8", "zstd", kManifestName,
+                          manifest.data(), manifest.size(), 3)) {
         IMP_THROW("PTO: writing manifest failed: " << writer.error(), IOException);
     }
 
@@ -243,11 +219,10 @@ void write_potential_tables(const std::string& path,
                 is_text ? std::vector<unsigned char>(t.text.begin(),
                                                      t.text.end())
                         : to_bytes(t.values);
-        const std::vector<unsigned char> packed = pot_brotli_compress(raw);
-        if (!writer.add(is_text ? kPmfKind : kGridKind,
-                   is_text ? "utf8+brotli" : "f64+brotli",
+        if (!writer.add_coded(is_text ? kPmfKind : kGridKind,
+                   is_text ? "utf8" : "f64", "zstd",
                    stored_name(t.name, is_text ? kPmfKind : kGridKind),
-                   packed.empty() ? NULL : &packed[0], packed.size())) {
+                   raw.data(), raw.size(), 3)) {
             IMP_THROW("PTO: writing " << t.name << " failed: " << writer.error(), IOException);
         }
     }

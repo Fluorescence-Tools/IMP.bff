@@ -14,8 +14,10 @@ shipped container with its parity pin intact. And **packing from the shipped
 container gives the same structure** as packing from the binary, byte for
 byte.
 
-The binary itself is not redistributed (its terms are academic-use; PRD-118),
-so the tests that need it skip without it. The container ships, so everything
+The binary itself is not redistributed (its terms are academic-use; PRD-118);
+it is served from the download host as an opt-in set -- `BFF_ACADEMIC=1
+python utility/data_registry.py --fetch --only academic` -- so the tests
+that need it skip without it. The container ships, so everything
 that needs only the container always runs.
 """
 
@@ -30,8 +32,10 @@ import IMP.bff
 REPO = Path(__file__).resolve().parent.parent.parent
 #: The shipped family container -- this is what a user has.
 SIDECHAINS = Path(IMP.bff.get_data_path("rotamer_library")) / "sidechains.drot.pto"
-#: FASPR's binary, if this checkout happens to carry one.
-DUNBRACK_BIN = REPO / "junk" / "FASPR" / "dun2010bbdep.bin"
+#: FASPR's binary, fetched under BFF_ACADEMIC (academic-use terms; PRD-118):
+#: `BFF_ACADEMIC=1 python utility/data_registry.py --fetch --only academic`
+#: restores it from the download host into data/academic/.
+DUNBRACK_BIN = REPO / "data" / "academic" / "dun2010bbdep.bin"
 #: Residues with chi angles; alanine and glycine have none.
 ROTAMERIC = "RNDCQEHILKMFPSTWYV"
 
@@ -100,7 +104,8 @@ def test_every_residue_answers_at_every_corner_of_the_bin_grid(container):
 
 
 @pytest.mark.skipif(not DUNBRACK_BIN.exists(),
-                    reason="dun2010bbdep.bin is not redistributed (PRD-118)")
+                    reason="dun2010bbdep.bin is academic-use data; fetch it "
+                           "with BFF_ACADEMIC=1 (PRD-118)")
 def test_the_conversion_is_byte_reversible(tmp_path, container):
     """The container holds the binary, not a rendering of it.
 
@@ -115,16 +120,39 @@ def test_the_conversion_is_byte_reversible(tmp_path, container):
 
 
 @pytest.mark.skipif(not DUNBRACK_BIN.exists(),
-                    reason="dun2010bbdep.bin is not redistributed (PRD-118)")
+                    reason="dun2010bbdep.bin is academic-use data; fetch it "
+                           "with BFF_ACADEMIC=1 (PRD-118)")
 def test_writing_the_container_reproduces_the_shipped_one(tmp_path, container):
-    """Re-converting is a no-op in a diff: nothing in the file is timestamped."""
+    """Re-converting carries the same library the shipped container does.
+
+    ptolib stamps every container with random object uids, so two encodings
+    of the same bytes are two files (2026-09-11 ruling: byte-determinism is
+    asserted on content, not on file bytes -- the uid question stays open on
+    the board for ptolib). The content property is what FASPR's engine
+    consumes: both containers unpack to the same `dun2010bbdep.bin`, and
+    both catalog the same residues.
+    """
     again = tmp_path / "sidechains.drot.pto"
     IMP.bff.write_protein_sidechain_dunbrack_library(str(DUNBRACK_BIN), str(again))
-    assert _sha256(again) == _sha256(container)
+    pto = pytest.importorskip("ptolib.pto")
+    pytest.importorskip("zstandard")
+    with pto.PtoReader(again) as reader:
+        for obj in reader.objects():
+            assert obj.encoding.endswith("+zstd")
+            assert len(reader.read(obj)) == obj.raw_size
+    assert sorted(IMP.bff.probe_rotamer_drot_catalog(str(again))) == \
+        sorted(IMP.bff.probe_rotamer_drot_catalog(container))
+
+    theirs = tmp_path / "shipped.bin"
+    ours = tmp_path / "rebuilt.bin"
+    IMP.bff.write_protein_sidechain_dunbrack_bin(container, str(theirs))
+    IMP.bff.write_protein_sidechain_dunbrack_bin(str(again), str(ours))
+    assert _sha256(ours) == _sha256(theirs)
 
 
 @pytest.mark.skipif(not DUNBRACK_BIN.exists(),
-                    reason="dun2010bbdep.bin is not redistributed (PRD-118)")
+                    reason="dun2010bbdep.bin is academic-use data; fetch it "
+                           "with BFF_ACADEMIC=1 (PRD-118)")
 def test_packing_from_the_container_matches_packing_from_the_binary(tmp_path,
                                                                     container):
     """`faspr_pack` takes the shipped container and packs the same structure."""

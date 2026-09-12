@@ -182,18 +182,20 @@ struct IMPBFFEXPORT ProbeRotamerDrotEncoding {
     double grid_a;
     //! Compact rung only: step for bond angles and dihedrals, degrees.
     double grid_deg;
-    //! brotli quality, 0-11 (11 is what the shipped libraries use). The
-    //! window is the codec's, the largest standard one (24) at every
-    //! quality -- what the shipped libraries are pinned against.
+    //! Payload codec: zstd for normal files; brotli for distribution or streaming.
+    std::string codec;
+    //! Compression level for #codec. The default is Zstd level 3. For
+    //! Brotli distribution output, set codec="brotli" and quality=11;
+    //! Brotli accepts qualities 0-11 and uses the standard 24-bit window.
     int quality;
 
     ProbeRotamerDrotEncoding()
-        : lossless(true), grid_a(0.001), grid_deg(0.01), quality(11) {}
+        : lossless(true), grid_a(0.001), grid_deg(0.01), codec("zstd"), quality(3) {}
 
     IMP_SHOWABLE_INLINE(ProbeRotamerDrotEncoding,
                         out << "DrotEncoding("
                             << (lossless ? "lossless f32" : "compact i16")
-                            << ", brotli q" << quality << ")");
+                            << ", " << codec << " level " << quality << ")");
 };
 IMP_VALUES(ProbeRotamerDrotEncoding, ProbeRotamerDrotEncodings);
 

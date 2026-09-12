@@ -72,26 +72,6 @@ int bin_of(double angle_deg) {
     return bin;
 }
 
-std::vector<unsigned char> brotli_pack(const std::vector<unsigned char>& in) {
-    std::vector<unsigned char> out;
-    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
-                             11, out)) {
-        IMP_THROW("dunbrack: brotli compression failed", IOException);
-    }
-    return out;
-}
-
-std::vector<unsigned char> brotli_unpack(const std::vector<unsigned char>& in,
-                                         std::size_t expected) {
-    std::vector<unsigned char> out;
-    if (!pto::decompress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
-                               expected, out)) {
-        IMP_THROW("dunbrack: the payload did not decompress to its stated "
-                  << expected << " bytes", IOException);
-    }
-    return out;
-}
-
 std::string object_name(char code) {
     return std::string(1, code) + "/bbdep.records";
 }
@@ -111,6 +91,10 @@ void ProteinSidechainDunbrackRotamers::get_probability(double** out_view,
 
 void write_protein_sidechain_dunbrack_library(const std::string& bin_path,
                             const std::string& path) {
+    if (!pto::can_compress("zstd")) {
+        IMP_THROW("write_dunbrack_library: unavailable output codec 'zstd'",
+                  IOException);
+    }
     std::FILE* f = std::fopen(bin_path.c_str(), "rb");
     if (f == NULL) {
         IMP_THROW("write_dunbrack_library: cannot open " << bin_path,
@@ -162,8 +146,7 @@ void write_protein_sidechain_dunbrack_library(const std::string& bin_path,
     hj << "}}";
     const std::string header = hj.str();
     std::vector<unsigned char> hb(header.begin(), header.end());
-    const std::vector<unsigned char> hp = brotli_pack(hb);
-    if (pto.add("rot.bbdep.header", "json+brotli", "bbdep.json", hp.empty() ? NULL : &hp[0], hp.size()) == 0) {
+    if (pto.add_coded("rot.bbdep.header", "json", "zstd", "bbdep.json", hb.data(), hb.size(), 3) == 0) {
         IMP_THROW("PTO: writing " << pto.filename() << " failed: "
                   << pto.error(), IOException);
     }
@@ -179,8 +162,7 @@ void write_protein_sidechain_dunbrack_library(const std::string& bin_path,
     cj << "]}";
     const std::string catalog = cj.str();
     std::vector<unsigned char> cb(catalog.begin(), catalog.end());
-    const std::vector<unsigned char> cp = brotli_pack(cb);
-    if (pto.add("drot.catalog", "json+brotli", "drot.catalog", cp.empty() ? NULL : &cp[0], cp.size()) == 0) {
+    if (pto.add_coded("drot.catalog", "json", "zstd", "drot.catalog", cb.data(), cb.size(), 3) == 0) {
         IMP_THROW("PTO: writing " << pto.filename() << " failed: "
                   << pto.error(), IOException);
     }
@@ -195,8 +177,7 @@ void write_protein_sidechain_dunbrack_library(const std::string& bin_path,
             IMP_THROW("write_dunbrack_library: reading " << bin_path
                       << " for residue " << r.code << " failed", IOException);
         }
-        const std::vector<unsigned char> packed = brotli_pack(records);
-        if (pto.add("rot.bbdep.records", "faspr20+brotli", object_name(r.code), packed.empty() ? NULL : &packed[0], packed.size()) == 0) {
+        if (pto.add_coded("rot.bbdep.records", "faspr20", "zstd", object_name(r.code), records.data(), records.size(), 3) == 0) {
             IMP_THROW("PTO: writing " << pto.filename() << " failed: "
                       << pto.error(), IOException);
         }
@@ -263,14 +244,12 @@ ProteinSidechainDunbrackRotamers read_protein_sidechain_dunbrack_rotamers(const 
         IMP_THROW("read_dunbrack_rotamers: " << path << " has no records for "
                   << r->code, IOException);
     }
-    // ptolib's reader decodes by the object's encoding; brotli_unpack's
-    // second pass here decompressed plain records and failed.
+    // decoded records cover every backbone bin, regardless of codec
     const std::vector<unsigned char> records = pto.read(matches.front());
-    if (records.size() != static_cast<std::size_t>(r->n_rotamers) *
-                                   residue_bytes(*r)) {
+    if (records.size() != residue_bytes(*r)) {
         IMP_THROW("read_dunbrack_rotamers: " << path << " holds "
                   << records.size() << " bytes for " << r->code
-                  << ", expected " << r->n_rotamers * residue_bytes(*r),
+                  << ", expected " << residue_bytes(*r),
                   IOException);
     }
 

@@ -99,6 +99,9 @@ IMPBFFEXPORT PotentialTable read_potential_table(std::string name,
     patch.
 
     \param[in] path the container to write
+    Each payload uses standard Zstd level 3 compression. Existing containers
+    with size-prefixed Brotli payloads remain readable.
+
     \param[in] tables the tables; each is compressed on its own
     \param[in] manifest_json attached under `manifest.json`
     \throw IOException when the file cannot be written

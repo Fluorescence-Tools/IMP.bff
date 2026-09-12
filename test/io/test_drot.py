@@ -1,12 +1,9 @@
 """`.drot` rotamer libraries: write, read back, and what the shipped set holds.
 
-`.drot` is the internal-coordinate library store of PRD-118 -- a brotli+tar
-container carrying the template, the Z-matrix and, per conformer, its own base
-coordinates, bond lengths, bond angles and dihedrals. Both halves live in this
-package (`write_drot`/`read_drot`, C++, vendored brotli both ways), so they are
-tested together against real shipped data: a writer is only correct with
-respect to a reader, and a container format that round-trips through its own
-two halves has still proved nothing until the numbers come back.
+New `.drot` libraries use PTO with independently compressed Zstd payloads.
+Brotli remains available for distribution, and legacy Brotli/tar and PTO
+libraries remain readable. Tests check both numerical round trips and the
+stored bytes through ptolib's independent Python reader.
 
 The gate that matters is **losslessness**. The FRETpredict parity pins
 (`test/cgprobe/rotamer/test_fretpredict_pins.py`) are recorded at 1e-5 in E, and
@@ -93,6 +90,69 @@ def _read(path):
     xyz = np.asarray(lib.get_coords(), dtype=np.float64).reshape(
         lib.n_rotamers, lib.n_atoms, 3)
     return lib, xyz
+
+
+def _codec_ensemble():
+    xyz = np.array([[[0., 0., 0.], [1.4, 0., 0.],
+                     [2.1, 1.2, 0.], [3.4, 1.2, 0.5]]])
+    return xyz, np.ones(1), ["C1", "C2", "C3", "C4"], ["C"] * 4, ["DYE"] * 4
+
+
+def test_default_codec_is_zstd():
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
+    assert encoding.codec == "zstd"
+    assert encoding.quality == 3
+
+
+@pytest.mark.parametrize("codec,level", [("zstd", 3), ("brotli", 11)])
+def test_codec_payloads_decode_independently(tmp_path, codec, level):
+    pto = pytest.importorskip("ptolib.pto")
+    pytest.importorskip("zstandard" if codec == "zstd" else "brotli")
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
+    encoding.codec, encoding.quality = codec, level
+    path = _write(tmp_path / "codec.drot.pto", _codec_ensemble(), encoding)
+    with pto.PtoReader(path) as reader:
+        assert reader.objects()
+        for obj in reader.objects():
+            assert obj.encoding.endswith("+" + codec)
+            assert len(reader.read(obj)) == obj.raw_size
+    np.testing.assert_allclose(_read(path)[1], _codec_ensemble()[0], atol=LOSSLESS_TOL_A)
+
+
+def test_mixed_codec_bundle_preserves_stored_payloads(tmp_path):
+    pto = pytest.importorskip("ptolib.pto")
+    pytest.importorskip("zstandard")
+    pytest.importorskip("brotli")
+    sources, expected = [], {}
+    for codec in ("zstd", "brotli"):
+        encoding = IMP.bff.ProbeRotamerDrotEncoding()
+        encoding.codec, encoding.quality = codec, 3 if codec == "zstd" else 11
+        path = _write(tmp_path / (codec + ".pto"), _codec_ensemble(), encoding)
+        sources.append(str(path))
+        with pto.PtoReader(path) as reader:
+            for obj in reader.objects():
+                expected[codec + "/" + obj.name] = (obj.encoding, bytes(reader.data(obj)))
+    bundle = tmp_path / "mixed.pto"
+    IMP.bff.write_probe_rotamer_drot_bundle(sources, ["zstd", "brotli"], str(bundle))
+    with pto.PtoReader(bundle) as reader:
+        for obj in reader.objects():
+            if obj.name == "drot.catalog":
+                assert obj.encoding == "json+zstd"
+            else:
+                assert (obj.encoding, bytes(reader.data(obj))) == expected.pop(obj.name)
+    assert not expected
+    for codec in ("zstd", "brotli"):
+        np.testing.assert_allclose(_read(str(bundle) + "::" + codec)[1],
+                                   _codec_ensemble()[0], atol=LOSSLESS_TOL_A)
+
+
+def test_unknown_codec_is_rejected_before_creating_file(tmp_path):
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
+    encoding.codec = "unknown"
+    path = tmp_path / "invalid.pto"
+    with pytest.raises(Exception, match="codec"):
+        _write(path, _codec_ensemble(), encoding)
+    assert not path.exists()
 
 
 def test_roundtrip_is_lossless(tmp_path, ensemble):

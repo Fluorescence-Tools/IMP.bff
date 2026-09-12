@@ -829,23 +829,20 @@ std::vector<unsigned char> pack_weights(const std::vector<double>& w,
     return out;
 }
 
-// -- layer 3: brotli --------------------------------------------------------
-
-//! The window is ptolib's, the largest standard one (24) at every quality,
-//! so quality 11 here writes what the shipped libraries were pinned against.
-std::vector<unsigned char> brotli_compress(
-        const std::vector<unsigned char>& in, int quality) {
-    std::vector<unsigned char> out;
-    if (!pto::compress_bytes("brotli", in.empty() ? NULL : &in[0], in.size(),
-                             quality, out)) {
-        IMP_THROW("write_drot: brotli compression failed", IOException);
+//! Validate output compression before creating a destination file.
+void validate_drot_codec(const ProbeRotamerDrotEncoding& encoding) {
+    if ((encoding.codec != "zstd" && encoding.codec != "brotli") ||
+        !pto::can_compress(encoding.codec)) {
+        IMP_THROW("write_drot: unavailable output codec '" << encoding.codec
+                  << "'", ValueException);
     }
-    return out;
+    if (encoding.codec == "brotli" &&
+        (encoding.quality < 0 || encoding.quality > 11)) {
+        IMP_THROW("write_drot: brotli quality must be between 0 and 11",
+                  ValueException);
+    }
 }
 
-// -- helpers ----------------------------------------------------------------
-
-//! One member: compressed on its own, attached under its kind.
 //! Escape a string for a JSON scalar.
 /*! Provenance values are free text -- an algorithm name carries parentheses and
     a settings blob is itself JSON -- so the quotes and backslashes in them must
@@ -878,9 +875,8 @@ void add_object(pto::File& pto, const std::string& name,
                 const std::string& kind, const std::string& encoding_name,
                 const std::vector<unsigned char>& payload,
                 const ProbeRotamerDrotEncoding& encoding) {
-    const std::vector<unsigned char> packed =
-            brotli_compress(payload, encoding.quality);
-    if (pto.add(kind, encoding_name, name, packed.empty() ? NULL : &packed[0], packed.size()) == 0) {
+    if (pto.add_coded(kind, encoding_name, encoding.codec, name,
+                      payload.data(), payload.size(), encoding.quality) == 0) {
         IMP_THROW("PTO: writing " << pto.filename() << " failed: "
                   << pto.error(), IOException);
     }
@@ -902,6 +898,8 @@ std::string fixed(double v, int digits) {
 void write_probe_rotamer_drot_bundle(const std::vector<std::string>& sources,
                        const std::vector<std::string>& names,
                        const std::string& path) {
+    const ProbeRotamerDrotEncoding defaults;
+    validate_drot_codec(defaults);
     if (sources.size() != names.size()) {
         IMP_THROW("write_drot_bundle: " << sources.size() << " sources but "
                   << names.size() << " names", ValueException);
@@ -937,8 +935,7 @@ void write_probe_rotamer_drot_bundle(const std::vector<std::string>& sources,
         cj << '"' << names[i] << '"';
     }
     cj << "]}";
-    const ProbeRotamerDrotEncoding defaults;
-    add_object(pto, "drot.catalog", "drot.catalog", "json+brotli",
+    add_object(pto, "drot.catalog", "drot.catalog", "json",
                to_bytes(cj.str()), defaults);
 
     for (std::size_t i = 0; i < sources.size(); ++i) {
@@ -983,6 +980,7 @@ void write_drot_impl(const std::string& path,
                 const std::vector<std::string>& resnames,
                 double* rotamer_weights, int n_rotamer_weights,
                 const ProbeRotamerDrotEncoding& encoding, const MfdbTags& provenance) {
+    validate_drot_codec(encoding);
     const int n_atoms = static_cast<int>(atom_names.size());
     if (n_atoms < 4) {
         IMP_THROW("write_drot: need at least four atoms, got " << n_atoms,
@@ -1139,13 +1137,7 @@ void write_drot_impl(const std::string& path,
        << "\"}";
 
     // -- the PTO envelope --------------------------------------------------
-    // Each member is one attached object, compressed on its own. The joint
-    // brotli context the single tar stream had is what that gives up, and
-    // measured over the 95 shipped libraries it is worth nothing: 19.60 MB
-    // against 19.64 MB, because tar's 512-byte headers go away and pay for
-    // it. What is bought is the envelope every other artefact in the stack
-    // already rides -- one grammar, kinds a reader can ask for by name, and
-    // payloads on an 8-byte boundary.
+    // independent codec frames preserve selective reads
     pto::File pto;
     if (!pto.create(path, "",
             std::string(pto::kDefaultBanner) + "\nThis container was written by IMP.bff.\nhttps://github.com/tpeulen/IMP.bff\n")) {
@@ -1153,12 +1145,12 @@ void write_drot_impl(const std::string& path,
                   << pto.error(), IOException);
     }
     pto.set_writing_app("IMP.bff");
-    const std::string enc = std::string(f32 ? "f32.col" : "i16.col") + "+brotli";
-    add_object(pto, "drot.json", "drot.header", "json+brotli",
+    const std::string enc = std::string(f32 ? "f32.col" : "i16.col");
+    add_object(pto, "drot.json", "drot.header", "json",
                to_bytes(hj.str()), encoding);
-    add_object(pto, "template.cif", "drot.template", "mmcif+brotli",
+    add_object(pto, "template.cif", "drot.template", "mmcif",
                to_bytes(cif.str()), encoding);
-    add_object(pto, "rows.json", "drot.rows", "json+brotli",
+    add_object(pto, "rows.json", "drot.rows", "json",
                to_bytes(rj.str()), encoding);
     add_object(pto, std::string("base") + suffix, "drot.grid", enc, mbase,
                encoding);
@@ -1169,7 +1161,7 @@ void write_drot_impl(const std::string& path,
     add_object(pto, std::string("phi") + suffix, "drot.grid", enc, mphi,
                encoding);
     add_object(pto, "weights.bin", "drot.weights",
-               std::string(counts ? "varint" : "f32") + "+brotli", mweights,
+               std::string(counts ? "varint" : "f32"), mweights,
                encoding);
     if (!provenance.empty()) {
         // mmCIF item/value pairs, as JSON so a reader needs no CIF parser to
@@ -1183,7 +1175,7 @@ void write_drot_impl(const std::string& path,
                << "\",\"value\":\"" << json_escape(provenance[i].value) << "\"}";
         }
         pj << ']';
-        add_object(pto, "provenance.json", "drot.provenance", "json+brotli",
+        add_object(pto, "provenance.json", "drot.provenance", "json",
                    to_bytes(pj.str()), encoding);
     }
     const bool committed = pto.commit();

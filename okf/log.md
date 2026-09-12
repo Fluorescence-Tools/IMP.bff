@@ -11519,3 +11519,5 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
 ## 2026-09-12 — ptolib foundation hardening
 
 Refreshed include/internal/ptolib.h from the sibling ptolib checkout. Fixes per-column compression corruption, malformed store bounds, and embedded codec build selection. Actual src/internal/Ptolib.cpp compiled as C++14 with warnings as errors; container/store-file/codec regression suites linked against it all pass. Full IMP.bff rebuild was not run. In-place PTO edits remain nontransactional, now documented upstream. Verification details: ../../ptolib/.omx/reports/ptolib-foundation.md.
+
+- 2026-09-12 — modular ptolib and codec migration: linked the maintained source package; old implementation macros removed. Public header is 171 KB; BFF normal writes use Zstd level 3 with legacy Brotli import and explicit Brotli output. Fresh tttrlib 489 / IMP.bff 46 / chimol 37 tests pass; decoder-only bff validated. Detailed evidence: ../../ptolib/.omx/reports/ptolib-modular-codecs.md. Changes remain uncommitted.

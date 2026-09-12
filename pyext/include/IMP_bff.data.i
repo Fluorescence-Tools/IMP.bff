@@ -11,11 +11,27 @@
  * first time it is asked for. The same code serves the standalone module and
  * the IMP module build: it wraps the extension's get_data_path, which both
  * shadow modules call.
+ *
+ * registry.json also names data/academic/ -- licence-gated files the
+ * project may not redistribute (FASPR's dun2010bbdep.bin). They are never
+ * fetched, explicitly or by an all-fetch, unless BFF_ACADEMIC is set, and
+ * no build packages them.
  */
 %pythoncode %{
 import os as _os
 
 DATA_URL = _os.environ.get("IMP_BFF_DATA_URL", "https://www.peulen.xyz/downloads/imp.bff/")
+
+
+def _academic_on():
+    """BFF_ACADEMIC set to anything but an explicit negative: the user
+    asserts the academic-use terms of the opt-in data set (PRD-118)."""
+    return _os.environ.get("BFF_ACADEMIC", "").strip().lower() not in (
+        "", "0", "false", "no")
+
+
+def _is_academic(file_name):
+    return file_name.replace(_os.sep, "/").startswith("academic/")
 
 
 def _package_data_dir():
@@ -62,17 +78,32 @@ def get_data_registry():
 
 def fetch_data(file_names=None, progressbar=False):
     """Fetch registry files into the cache (all of them when `file_names` is
-    None) and return their paths. Needs `pooch`."""
+    None) and return their paths. Needs `pooch`.
+
+    `academic/` files are refused -- and left out of an all-fetch -- unless
+    BFF_ACADEMIC is set: their licence lets a user take them for academic
+    use, not this package redistribute or auto-download them."""
     registry = get_data_registry()
     if not registry:
         return []
-    names = list(registry) if file_names is None else list(file_names)
-    unknown = [n for n in names if n not in registry]
+    if file_names is None:
+        if not _academic_on():
+            file_names = [n for n in registry if not _is_academic(n)]
+    else:
+        file_names = list(file_names)
+    unknown = [n for n in file_names if n not in registry]
     if unknown:
         raise IOException("not in the data registry: " + ", ".join(unknown))
+    if not _academic_on():
+        gated = [n for n in file_names if _is_academic(n)]
+        if gated:
+            raise IOException(
+                ", ".join(gated) + " is academic-use data (not "
+                "redistributable); set BFF_ACADEMIC=1 to download it from "
+                + DATA_URL)
     import pooch
     pup = pooch.create(path=get_data_cache_dir(), base_url=DATA_URL, registry=registry)
-    return [pup.fetch(n, progressbar=progressbar) for n in names]
+    return [pup.fetch(n, progressbar=progressbar) for n in file_names]
 
 
 def _fetching_get_data_path(file_name):

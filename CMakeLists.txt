@@ -2,10 +2,9 @@
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set (CMAKE_CXX_STANDARD 14)
 
-  # CMake >= 4.0 refuses to run at all below this floor ("Compatibility with
-  # CMake < 3.5 has been removed"); 3.5 is the lowest version that still
-  # parses everything below.
-  cmake_minimum_required(VERSION 3.5)
+  # ptolib requires CMake 3.16; this also enables linking the generated module
+  # target from this maintained parent directory (CMP0079).
+  cmake_minimum_required(VERSION 3.16)
   project(imp_module)
 
   # Default Python3_FIND_STRATEGY to LOCATION
@@ -84,4 +83,15 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
 else()
   INCLUDE(ModuleBuild.cmake)
+endif()
+
+# Generated IMP module files are regenerated on configure. Keep dependency
+# wiring here, after they have created the module library.
+if(TARGET IMP.bff-lib)
+  if(NOT TARGET ptolib::ptolib)
+    add_subdirectory(thirdparty/ptolib EXCLUDE_FROM_ALL)
+  endif()
+  target_link_libraries(IMP.bff-lib ptolib::ptolib)
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ptolib/include/ptolib"
+          DESTINATION include)
 endif()
