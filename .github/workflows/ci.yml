@@ -163,7 +163,7 @@ jobs:
           # ran and the job failed in 1s.  Treat a missing directory as an
           # ordinary cache miss.
           if [ -d imp-bld ]; then
-            archive=$(find imp-bld -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit)
+            archive=$(find imp-bld -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit 2>/dev/null || true)
             if [ -n "$archive" ]; then
               exit 0
             fi
