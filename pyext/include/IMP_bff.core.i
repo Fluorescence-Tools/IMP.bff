@@ -626,8 +626,13 @@ IMP_SWIG_VALUE(IMP::bff, ModelSearchResult, ModelSearchResults);
 %shared_ptr(IMP::bff::ModelSearchProblem);
 %shared_ptr(IMP::bff::TabularModelSearchProblem);
 %shared_ptr(IMP::bff::FittingModelSearchProblem);
+%shared_ptr(IMP::bff::MultiStructureModelSearchProblem);
 %shared_ptr(IMP::bff::ModelSearch);
 %include "IMP/bff/ModelSearch.h"
+// SWIG 4.5 does not infer the vector proxy for this typedef when it first
+// appears as the return type of a virtual method.  Declare the proxy after
+// the header so generated wrappers use std::vector::operator[].
+%template(ModelSearchActions) std::vector<IMP::bff::ModelSearchAction>;
 
 %extend IMP::bff::MCMCSampler {
     %pythoncode {
