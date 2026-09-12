@@ -2,6 +2,12 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 1f — curvature steps have an Optimization home**
+  ([PRD-141](prds/prd-141.md)): `LineSearch.h` is `Optimization.h` and its
+  generic `StepResult` is `OptimizationStepResult`; the Cholesky helpers and
+  `DampedNewton` remain intentionally general. Public all-header plus an
+  instantiated `DampedNewton` compile under C++17.
+
 - **PRD-141 stage 1e — posterior machinery is visibly Bayesian**
   ([PRD-141](prds/prd-141.md)): P-spline, transforms, transformed prior,
   Fisher scoring, Laplace evidence and delta-method headers now use the

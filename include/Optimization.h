@@ -6,8 +6,8 @@
  * Copyright 2007-2023 IMP Inventors. All rights reserved.
  */
 
-#ifndef IMPBFF_LINESEARCH_H
-#define IMPBFF_LINESEARCH_H
+#ifndef IMPBFF_OPTIMIZATION_H
+#define IMPBFF_OPTIMIZATION_H
 
 #include <cmath>
 #include <cstddef>
@@ -118,7 +118,7 @@ inline bool cholesky_solve(const double* A, const double* b, std::size_t n, doub
 }
 
 //! What one step attempt did.
-struct StepResult {
+struct OptimizationStepResult {
   bool accepted = false;        //!< the objective decreased
   double f_new = 0.0;           //!< its value at the accepted point
   double decrement = 0.0;       //!< `grad . step`, the scale-free convergence measure
@@ -195,9 +195,9 @@ class DampedNewton {
    * \param f_old its current value, as a quantity being MINIMISED (`-log p`)
    * \param theta the parameters, advanced in place on acceptance
    */
-  StepResult step(const double* A, const double* grad, std::size_t n,
+  OptimizationStepResult step(const double* A, const double* grad, std::size_t n,
                   double f_old, double* theta, Objective f) {
-    StepResult r;
+    OptimizationStepResult r;
     std::vector<double> damped(n * n), s(n, 0.0), cand(n);
     std::vector<double> diag(n);
     for (std::size_t i = 0; i < n; ++i)
@@ -270,4 +270,4 @@ class DampedNewton {
 
 IMPBFF_END_NAMESPACE
 
-#endif  // IMPBFF_LINESEARCH_H
+#endif  // IMPBFF_OPTIMIZATION_H
