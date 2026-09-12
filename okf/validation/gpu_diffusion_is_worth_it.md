@@ -171,7 +171,7 @@ ng = 41 and nothing measurable at ng = 81; the rest is the dispatch itself.
 
 ## The backend exists now, and f16 turned out to be flux-form-specific
 
-`gpu/imp_bff_wgpu.c` is the plugin the door in `Compute.h` was built for: a C
+`gpu/imp_bff_wgpu.c` is the plugin the door in `ComputeBackend.h` was built for: a C
 library that links nothing, resolves every wgpu entry point with dlopen from a
 path the Python side finds, and installs itself beside the extension module.
 `IMP.bff.get_compute_backend_name()` answers `wgpu:Metal:Apple M1 Pro:f16`.
@@ -256,7 +256,7 @@ actually competing for:
 - **Which CPU is in the denominator has to be checked, not assumed.** The
   wheel in the test venv is built without OpenMP, so running the benchmark
   against it silently compares the GPU to *one* thread and inflates every
-  ratio by two to three. `main()` now prints `parallel_threads()` for that
+  ratio by two to three. `main()` now prints `openmp_thread_count()` for that
   reason.
 - **This is not the backend.** It is wgpu driven from Python; the C plugin has
   its own dispatch overhead, likely lower. And the adjoint is not measured at

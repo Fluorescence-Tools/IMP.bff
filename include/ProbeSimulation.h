@@ -27,7 +27,7 @@
 #define IMPBFF_PROBE_SIMULATION_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <limits>
 #include <string>

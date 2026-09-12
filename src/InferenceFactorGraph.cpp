@@ -8,6 +8,7 @@
  */
 
 #include <IMP/bff/InferenceFactorGraph.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <IMP/bff/internal/json.h>
 

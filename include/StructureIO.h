@@ -24,7 +24,7 @@
 
 #include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <map>
 #include <string>

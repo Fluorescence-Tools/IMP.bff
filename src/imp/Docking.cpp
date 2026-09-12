@@ -6,7 +6,7 @@
  */
 #include <IMP/bff/Docking.h>
 // olga_vdw_particle_radius
-#include <IMP/bff/HierarchyBridge.h>
+#include <IMP/bff/IMPHierarchyBridge.h>
 
 #include <IMP/bff/States.h>
 #include <IMP/bff/ProbeAccessibleVolumeMeanDistanceRestraint.h>
@@ -27,7 +27,7 @@
 #include <IMP/core/ExcludedVolumeRestraint.h>
 #include <IMP/core/XYZR.h>
 #include <IMP/core/rigid_bodies.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <IMP/bff/internal/Text.h>
 
 #include <algorithm>

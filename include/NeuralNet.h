@@ -6,7 +6,7 @@
  * network trained there evaluates identically here; this header is the face
  * that bff and its bindings use. What it adds is where the arithmetic runs:
  * `predict()` offers the whole forward pass to whatever
- * `IMP/bff/Compute.h` has loaded, and runs it on the CPU when nothing is
+ * `IMP/bff/ComputeBackend.h` has loaded, and runs it on the CPU when nothing is
  * loaded, when the backend declines, or when the batch is too small to be
  * worth the trip.
  *
@@ -18,7 +18,7 @@
 #define IMPBFF_NEURALNET_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <memory>
 #include <string>

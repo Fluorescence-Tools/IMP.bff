@@ -27,7 +27,7 @@
 #include <IMP/bff/SelectionExpression.h>
 
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <set>
 #include <string>

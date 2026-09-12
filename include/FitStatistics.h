@@ -9,6 +9,7 @@
 #ifndef IMPBFF_FITSTATISTICS_H
 #define IMPBFF_FITSTATISTICS_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <vector>

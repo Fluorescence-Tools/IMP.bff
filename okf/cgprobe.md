@@ -15,12 +15,13 @@ its own header and source. Template, force-field, topology and potential
 files use `Probe*` names; scoring orchestration is `RotamerScoring`.
 `get_probe_data_dir()` still resolves the same shipped `data/cgprobe` data.
 
-The historical discussion below includes retired package paths. Remaining
-library taxonomy work is tracked in [PRD-141](prds/prd-141.md): probe rotamers
-and protein side-chain libraries still need separation after the shared
-rotamer-reader work is released. The current continuation preserves the
-recorded potential-table decoding and molecular Mass-setup failures; those
-are separate behavior fixes, not part of the file/API migration.
+The historical discussion below includes retired package paths. The complete
+[PRD-141](prds/prd-141.md) taxonomy now separates `ProbeRotamer`,
+`FRETRotamer`, `FPSRotamer`, `ProbeRotamerLibrary` and
+`ProteinSidechainRotamerLibrary`. The packer is `pack_protein_sidechains`.
+Rotamer computation is in bff's C++ implementation; imp-tricks examples are
+consumers. [Completion evidence](validation/taxonomy-completion.md) records
+the full tests and the independent source/header builds.
 
 **What it is.** `IMP.bff.cgprobe` models a fluorescent label as an atomistic dye
 + linker: labelling a residue in its backbone frame (`attach_dyes`,
@@ -31,7 +32,7 @@ libraries (FRETpredict's, module data `data/rotamer_library`: one
 self-contained `<stem>_cutoff<N>.drot` per library since 2026-08-24, with the
 `<stem>.pdb` + `<stem>_cutoff<N>.bcif` + weights triple still read — the cutoff
 in a library name is honoured),
-FRETpredict-compatible rotamer FRET (`RotamerFRET`: screened libraries,
+FRETpredict-compatible rotamer FRET (`FRETRotamer`: screened libraries,
 E_static/E_dyn1/E_dyn2, ⟨κ²⟩, Z; parity pinned to FRETpredict), linker
 sampling (`LinkerSampler`, `generate_linker_rotamers`, torsion/rigid-body
 RRT), Boltzmann / mean-field / kinetic weights, the exact kinetic master
@@ -40,12 +41,12 @@ equation (`fret_efficiency_exact_kinetic`), density analysis, MD/MC runner
 
 **The library store** is `.drot` ([format](drot-format.md), PRD-118): a
 brotli+tar container of a template, a Z-matrix and per-conformer internal
-coordinates, read *and written* in the module (`read_drot`/`write_drot` over a
+coordinates, read *and written* in the module (`read_probe_rotamer_drot`/`write_probe_rotamer_drot` over a
 vendored brotli codec, built by `imp_bff_traj2drot`) and lossless to ~1e-6 Å,
 which is what keeps the FRETpredict pins inside their tolerance. Spin labels
 (EPR/DEER, NMR/PRE) are the same story: DEER-PREdict's MTSSL/BASL/MA-proxyl
 libraries (cloned at `junk/DEERpredict/`, the same pdb+dcd+weights layout)
-convert unchanged. FASPR itself is ported 1:1 to C++ as `IMP.bff.faspr_pack`
+convert unchanged. FASPR itself is ported 1:1 to C++ as `IMP.bff.pack_protein_sidechains`
 (protein side-chain packing on the Dunbrack-2010 library, parity-pinned to the
 reference executable; the library is caller-supplied, not redistributed).
 
@@ -90,7 +91,7 @@ live in bff; chisurf `forster.py`/`kappa2.py` are the DUP side). quest
 `dye_diffusion` overlap: out of scope.
 
 **PRDs.** [PRD-107](prds/prd-107.md) (consolidation, parity, flat API) and
-[PRD-108](prds/prd-108.md) (`RotamerEnsemble` / fps.json `R1`, the AV↔rotamer
+[PRD-108](prds/prd-108.md) (`ProbeRotamerEnsemble` / fps.json `R1`, the AV↔rotamer
 table `validation/av_vs_rotamer.md`, `LangevinDyeSampler`). Follow-ons: C++
 `R1` in `ProbeNetworkRestraint` (not motivated by the table), per-dye AV-parameter
 calibration, harder rotamer screening (σ-scaling 1), folding

@@ -48,12 +48,12 @@ def container():
 
 
 def test_the_catalog_lists_every_rotameric_residue(container):
-    assert sorted(IMP.bff.drot_catalog(container)) == sorted(ROTAMERIC)
+    assert sorted(IMP.bff.probe_rotamer_drot_catalog(container)) == sorted(ROTAMERIC)
 
 
 def test_a_bin_holds_the_rotamers_that_backbone_allows(container):
     """A helix-ish backbone gives lysine several rotamers, ordered by weight."""
-    got = IMP.bff.read_dunbrack_rotamers(container, "K", -60.0, -45.0)
+    got = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, "K", -60.0, -45.0)
     assert got.n_chi == 4 and got.n_rotamers > 1
     chi = np.asarray(got.get_chi()).reshape(got.n_rotamers, got.n_chi)
     probability = np.asarray(got.get_probability())
@@ -67,15 +67,15 @@ def test_a_bin_holds_the_rotamers_that_backbone_allows(container):
 
 def test_the_cuts_are_the_callers(container):
     """Taking the bin whole gives at least as much as the default cuts."""
-    default = IMP.bff.read_dunbrack_rotamers(container, "F", -60.0, -45.0)
-    whole = IMP.bff.read_dunbrack_rotamers(container, "F", -60.0, -45.0, 0.0, 1.0)
+    default = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, "F", -60.0, -45.0)
+    whole = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, "F", -60.0, -45.0, 0.0, 1.0)
     assert whole.n_rotamers >= default.n_rotamers
 
 
 def test_backbone_actually_selects(container):
     """A different (phi, psi) is a different distribution, not the same one."""
-    helix = IMP.bff.read_dunbrack_rotamers(container, "W", -60.0, -45.0, 0.0, 1.0)
-    sheet = IMP.bff.read_dunbrack_rotamers(container, "W", -120.0, 130.0, 0.0, 1.0)
+    helix = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, "W", -60.0, -45.0, 0.0, 1.0)
+    sheet = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, "W", -120.0, 130.0, 0.0, 1.0)
     a = np.asarray(helix.get_probability())
     b = np.asarray(sheet.get_probability())
     n = min(a.size, b.size)
@@ -85,7 +85,7 @@ def test_backbone_actually_selects(container):
 def test_alanine_and_glycine_are_refused(container):
     for residue in ("A", "G", "X"):
         with pytest.raises(Exception):
-            IMP.bff.read_dunbrack_rotamers(container, residue, -60.0, -45.0)
+            IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, residue, -60.0, -45.0)
 
 
 def test_every_residue_answers_at_every_corner_of_the_bin_grid(container):
@@ -93,7 +93,7 @@ def test_every_residue_answers_at_every_corner_of_the_bin_grid(container):
     for residue in ROTAMERIC:
         for phi in (-180.0, -175.0, 0.0, 175.0, 180.0):
             for psi in (-180.0, 180.0):
-                got = IMP.bff.read_dunbrack_rotamers(container, residue, phi, psi,
+                got = IMP.bff.read_protein_sidechain_dunbrack_rotamers(container, residue, phi, psi,
                                                      0.0, 1.0)
                 assert got.n_rotamers > 0, (residue, phi, psi)
                 assert len(got.chi) == got.n_rotamers * got.n_chi
@@ -110,7 +110,7 @@ def test_the_conversion_is_byte_reversible(tmp_path, container):
     *numbers* cannot.
     """
     back = tmp_path / "dun2010bbdep.bin"
-    IMP.bff.write_dunbrack_bin(container, str(back))
+    IMP.bff.write_protein_sidechain_dunbrack_bin(container, str(back))
     assert _sha256(back) == _sha256(DUNBRACK_BIN)
 
 
@@ -119,7 +119,7 @@ def test_the_conversion_is_byte_reversible(tmp_path, container):
 def test_writing_the_container_reproduces_the_shipped_one(tmp_path, container):
     """Re-converting is a no-op in a diff: nothing in the file is timestamped."""
     again = tmp_path / "sidechains.drot.pto"
-    IMP.bff.write_dunbrack_library(str(DUNBRACK_BIN), str(again))
+    IMP.bff.write_protein_sidechain_dunbrack_library(str(DUNBRACK_BIN), str(again))
     assert _sha256(again) == _sha256(container)
 
 
@@ -140,8 +140,8 @@ def test_packing_from_the_container_matches_packing_from_the_binary(tmp_path,
 
     from_bin = tmp_path / "from_bin.pdb"
     from_container = tmp_path / "from_container.pdb"
-    IMP.bff.faspr_pack(str(clean), str(from_bin), str(DUNBRACK_BIN))
-    IMP.bff.faspr_pack(str(clean), str(from_container), container)
+    IMP.bff.pack_protein_sidechains(str(clean), str(from_bin), str(DUNBRACK_BIN))
+    IMP.bff.pack_protein_sidechains(str(clean), str(from_container), container)
     assert _sha256(from_container) == _sha256(from_bin)
 
 

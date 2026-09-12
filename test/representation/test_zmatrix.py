@@ -176,7 +176,7 @@ def test_kernel_agrees_with_faspr_repack():
     with tempfile.TemporaryDirectory() as td:
         inp, out = Path(td) / "in.pdb", Path(td) / "out.pdb"
         inp.write_text("\n".join(lines) + "\n")
-        IMP.bff.faspr_pack(str(inp), str(out), str(rotlib))
+        IMP.bff.pack_protein_sidechains(str(inp), str(out), str(rotlib))
         atoms = {}
         for l in out.read_text().splitlines():
             if l.startswith("ATOM") and l[21] == "A" and int(l[22:26]) == 19:

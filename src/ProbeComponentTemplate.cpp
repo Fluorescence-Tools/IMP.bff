@@ -8,7 +8,7 @@
 
 #include <IMP/bff/internal/Cif.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include "ihm_format.h"
 

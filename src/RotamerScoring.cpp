@@ -10,14 +10,14 @@
 #include <numeric>
 #include <IMP/bff/RotamerScoring.h>
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/Rotamer.h>
+#include <IMP/bff/ProbeRotamer.h>
 #include <IMP/bff/ZMatrix.h>
 
 #include <IMP/bff/internal/OutputView.h>
 
 #include <IMP/bff/internal/Text.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cctype>
@@ -533,8 +533,8 @@ RotamerScoreResult get_rotamer_score(
         double temperature, bool ignore_h, bool electrostatic,
         const std::string& potential, double sigma_scaling,
         double epsilon_scaling) {
-    const int potential_code = potential == "lj" ? ROTAMER_POTENTIAL_LJ
-            : potential == "gauss" ? ROTAMER_POTENTIAL_GAUSS
+    const int potential_code = potential == "lj" ? PROBE_ROTAMER_POTENTIAL_LJ
+            : potential == "gauss" ? PROBE_ROTAMER_POTENTIAL_GAUSS
             : -1;
     if (potential_code < 0) {
         IMP_THROW("Unknown potential '" << potential << "'", ValueException);
@@ -645,7 +645,7 @@ RotamerScoreResult get_rotamer_score(
         }
     }
 
-    const std::vector<double> energies = rotamer_interaction_energies(
+    const std::vector<double> energies = probe_rotamer_interaction_energies(
             selected.data(), static_cast<int>(selected.size()),
             prot_pos.data(), static_cast<int>(prot_pos.size()),
             rmin_ij.data(), static_cast<int>(rmin_ij.size()),

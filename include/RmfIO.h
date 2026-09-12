@@ -4,7 +4,7 @@
  *
  * `rmf` is one of this module's modules (see `dependencies.py`), so these sit
  * beside the readers they belong with and the library they read is the same
- * #IMP::bff::RotamerLibrary every other reader returns.
+ * #IMP::bff::ProbeRotamerLibrary every other reader returns.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -25,7 +25,7 @@
 // a caller finds out at compile time rather than at link time.
 #ifndef IMPBFF_NO_RMF
 #include <IMP/bff/HierarchyFrame.h>
-#include <IMP/bff/RotamerLibrary.h>
+#include <IMP/bff/ProbeRotamerLibrary.h>
 #include <IMP/bff/StructureTable.h>
 
 #include <memory>
@@ -68,7 +68,7 @@ IMPBFFEXPORT void write_rmf(double* coords, int n_atoms, int n_dim,
            coordinates do not match `n_rotamers * n_atoms * 3`
 */
 IMPBFFEXPORT void write_rotamer_library_rmf(const std::string& path,
-                                            const RotamerLibrary& library);
+                                            const ProbeRotamerLibrary& library);
 
 //! Read a rotamer library from an RMF file.
 /*!
@@ -78,7 +78,7 @@ IMPBFFEXPORT void write_rotamer_library_rmf(const std::string& path,
             which is what a container of static conformers looks like.
     \throw IOException when neither \p path nor `path + ".rmf3"` exists
 */
-IMPBFFEXPORT RotamerLibrary read_rotamer_library_rmf(const std::string& path);
+IMPBFFEXPORT ProbeRotamerLibrary read_rotamer_library_rmf(const std::string& path);
 
 //! Every frame of an RMF trajectory, as #IMP::bff::ProteinFrame values.
 /*! The PDB side of this is #IMP::bff::load_protein_frames and the frame

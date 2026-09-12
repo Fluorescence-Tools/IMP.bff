@@ -7,7 +7,7 @@
 #include <IMP/bff/ProbePairSelection.h>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cmath>

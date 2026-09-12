@@ -48,7 +48,7 @@ nothing to ship.**
 |---|---|
 | the plugin | ~700 lines of C against wgpu-native's Rust ABI, which moves between major versions |
 | the vendored header | 6 766 lines, kept in step with whatever wgpu-py ships |
-| the contract | restated in C because `Compute.h` is C++, kept in sync by a text-matching test |
+| the contract | restated in C because `ComputeBackend.h` is C++, kept in sync by a text-matching test |
 | the traps | three abort-class validation errors found so far (workgroup count, binding size, a default that is not zero); wgpu validation failures panic in a callback that cannot unwind, so they kill the process rather than declining |
 | **platforms** | **it has only ever been compiled and run on macOS/Metal.** Vulkan and D3D12 have never executed a line of it |
 
@@ -89,7 +89,7 @@ third-party plugin exists; still churn.
 
 ## What is worth keeping regardless of the above
 
-- **The door.** `Compute.h` is small, and taking the whole loop rather than
+- **The door.** `ComputeBackend.h` is small, and taking the whole loop rather than
   one step is the right granularity -- the same judgement saved the network
   path from a per-GEMM design that would have moved a hundred megabytes per
   layer.

@@ -49,6 +49,7 @@
 #include <ostream>
 #include <set>
 #include <string>
+#include <map>
 #include <vector>
 
 IMPBFF_BEGIN_NAMESPACE

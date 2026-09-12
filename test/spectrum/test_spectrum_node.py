@@ -34,7 +34,7 @@ def interleaved(amplitudes, times):
 
 def make_source(spectrum, name="src"):
     """A `LifetimeSpectrumNode` holding *spectrum* on its scalar ports."""
-    node = bff.LifetimeSpectrumNode(name)
+    node = bff.PhotophysicsLifetimeSpectrumNode(name)
     node.set_number_of_lifetimes(len(spectrum) // 2)
     node.add_output_port(name, bff.GraphPort([0.0], False, True))
     for i in range(len(spectrum) // 2):
@@ -45,7 +45,7 @@ def make_source(spectrum, name="src"):
 
 def make_anisotropy(source, b, rho, r0=0.38, g=1.0, l1=0.0, l2=0.0,
                     polarization="vv", name="aniso"):
-    node = bff.AnisotropySpectrum(name)
+    node = bff.PhotophysicsAnisotropySpectrumNode(name)
     node.set_number_of_rotations(len(b))
     node.add_output_port(name, bff.GraphPort([0.0], False, True))
     node.set_polarization_name(polarization)
@@ -93,7 +93,7 @@ class LifetimeSpectrumNodeTests(unittest.TestCase):
         np.testing.assert_allclose(evaluated(node), [2.0, 1.0])
 
     def test_a_spectrum_with_no_species_is_refused(self):
-        node = bff.LifetimeSpectrumNode("empty")
+        node = bff.PhotophysicsLifetimeSpectrumNode("empty")
         self.assertRaises(ValueError, node.set_number_of_lifetimes, 0)
 
 
@@ -209,12 +209,12 @@ class AnisotropySpectrumTests(unittest.TestCase):
         Defaulting would return the spectrum unchanged, which is a model with
         no anisotropy -- a wrong answer wearing the shape of a right one.
         """
-        node = bff.AnisotropySpectrum("a")
+        node = bff.PhotophysicsAnisotropySpectrumNode("a")
         node.set_number_of_rotations(1)
         self.assertRaises(ValueError, node.set_polarization_name, "vertical")
 
     def test_an_odd_spectrum_is_refused(self):
-        node = bff.AnisotropySpectrum("a")
+        node = bff.PhotophysicsAnisotropySpectrumNode("a")
         node.set_number_of_rotations(1)
         node.add_output_port("a", bff.GraphPort([0.0], False, True))
         node.set_polarization_name("vv")
@@ -280,7 +280,7 @@ class CompositionTests(unittest.TestCase):
         source = make_source([1.0, 4.0])
         aniso = make_anisotropy(source, [1.0], [10.0], polarization="vv")
 
-        decay = bff.TcspcDecay("decay")
+        decay = bff.TCSPCDecay("decay")
         decay.set_number_of_lifetimes(1)
         decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         decay.set_spectrum_from_port(True)
@@ -341,7 +341,7 @@ class AmplitudeThresholdTests(unittest.TestCase):
     """
 
     def make_decay(self, spectrum, threshold=0.0, n=64):
-        decay = bff.TcspcDecay("decay")
+        decay = bff.TCSPCDecay("decay")
         decay.set_number_of_lifetimes(len(spectrum) // 2)
         decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         decay.set_spectrum_from_port(True)
@@ -393,7 +393,7 @@ class AmplitudeThresholdTests(unittest.TestCase):
         disappear *permanently* -- and an optimiser walking an amplitude
         through zero does exactly that.
         """
-        decay = bff.TcspcDecay("decay")
+        decay = bff.TCSPCDecay("decay")
         decay.set_number_of_lifetimes(2)
         decay.add_output_port("decay", bff.GraphPort([0.0], False, True))
         n = 64
@@ -425,7 +425,7 @@ class AmplitudeThresholdTests(unittest.TestCase):
             np.asarray(decay.get_lifetime_spectrum(), float), [1.0, 4.0])
 
     def test_a_negative_threshold_is_refused(self):
-        decay = bff.TcspcDecay("decay")
+        decay = bff.TCSPCDecay("decay")
         decay.set_number_of_lifetimes(1)
         self.assertRaises(ValueError, decay.set_amplitude_threshold, -1e-12)
 

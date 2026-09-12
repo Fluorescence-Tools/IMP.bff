@@ -12,7 +12,7 @@ timestamp: '2026-08-19T00:00:00Z'
 **Status: fixed in the standalone build (2026-09-08), still open in the IMP
 module build.** The standalone CMake now takes `OpenMP_CXX_FLAGS` when CMake
 fills it and otherwise finds `libomp` itself and passes `-Xclang -fopenmp`;
-`built_with_openmp()` returns true and `parallel_threads()` reads 8 on this
+`built_with_openmp()` returns true and `openmp_thread_count()` reads 8 on this
 machine, where both used to read false and 1. The suite passes with the
 pragmas executing for the first time: 724/0 on the IMP-free lane, and the
 quenching tests repeat stably.
@@ -85,7 +85,7 @@ out of Python; the threading contributed nothing, because there was none.
 
 ## Making it visible
 
-`IMP.bff.built_with_openmp()` and `IMP.bff.parallel_threads()` report the truth
+`IMP.bff.built_with_openmp()` and `IMP.bff.openmp_thread_count()` report the truth
 at runtime, and `test/fret/test_greedy_olga.py::test_the_speed_figures_are_single_threaded`
 asserts the two agree. If the build ever gains OpenMP that test still passes —
 but the assertion documents that the recorded figures became lower bounds.

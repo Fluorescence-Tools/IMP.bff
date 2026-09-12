@@ -8,7 +8,7 @@
 // IMP::atom::Atom, used by value below and so needed complete
 #include <IMP/atom/Atom.h>
 // atom_name
-#include <IMP/bff/HierarchyBridge.h>
+#include <IMP/bff/IMPHierarchyBridge.h>
 // create_probe_restraints
 #include <IMP/bff/ProbePotentialRestraints.h>
 
@@ -35,7 +35,7 @@
 #include <IMP/core/RestraintsScoringFunction.h>
 #include <IMP/core/SphereDistancePairScore.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <IMP/random.h>
 
 #include <algorithm>

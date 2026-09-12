@@ -10,11 +10,13 @@
 #include <filesystem>
 #include <random>
 #include <sstream>
+#else
+#include <unistd.h>
 #endif
 #include <IMP/bff/StripMask.h>
 
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cctype>
 #include <cstdio>

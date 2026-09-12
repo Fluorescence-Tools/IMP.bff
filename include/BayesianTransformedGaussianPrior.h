@@ -9,6 +9,7 @@
 #ifndef IMPBFF_BAYESIANTRANSFORMEDGAUSSIANPRIOR_H
 #define IMPBFF_BAYESIANTRANSFORMEDGAUSSIANPRIOR_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>

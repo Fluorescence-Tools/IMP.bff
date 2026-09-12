@@ -16,7 +16,7 @@
 #include <IMP/core/XYZ.h>
 #include <IMP/core/rigid_bodies.h>
 #include <IMP/algebra/Rotation3D.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cmath>

@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff import RotamerFRET
+from IMP.bff import FRETRotamer
 
 _HERE = Path(__file__).resolve().parent
 _PINS = _HERE.parents[1] / "references" / "cgprobe_fretpredict_pins.json"
@@ -38,12 +38,12 @@ def _fixture(name: str, tmp_path: Path) -> Path:
     return dst
 
 
-def _run(system: dict, case: dict, tmp_path: Path) -> RotamerFRET:
+def _run(system: dict, case: dict, tmp_path: Path) -> FRETRotamer:
     pdb = _fixture(system["structure"], tmp_path)
     residues = case.get("residues", system["residues"])
     chains = case.get("chains", system["chains"])
     libs = case.get("libraries", system["libraries"])
-    fret = RotamerFRET(
+    fret = FRETRotamer(
         str(pdb), residues, chains=chains, libname_1=libs[0],
         libname_2=libs[1], output_prefix=str(tmp_path / "res"),
         **case["kwargs"])

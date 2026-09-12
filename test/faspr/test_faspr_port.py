@@ -1,7 +1,7 @@
 """The 1:1 FASPR C++ port: backbone fidelity and parity with the reference.
 
-``IMP.bff.faspr_pack`` (``src/Faspr*``, declared in
-``include/RotamerLibrary.h``) is a
+``IMP.bff.pack_protein_sidechains`` (``src/Faspr*``, declared in
+``include/ProbeRotamerLibrary.h``) is a
 behaviour-identical vendoring of FASPR 20200309 wrapped in
 ``IMP::bff::faspr``: same energies, same DEE / tree-decomposition search,
 same tie-breaking, float math untouched. These tests pin that claim:
@@ -134,7 +134,7 @@ def _pack(tmp_path, rotlib):
     inp = tmp_path / "3gun_clean.pdb"
     out = tmp_path / "3gun_port.pdb"
     _clean_pdb(REPO / "examples" / "structure" / "T4L" / "3GUN.pdb", inp)
-    IMP.bff.faspr_pack(str(inp), str(out), str(rotlib))
+    IMP.bff.pack_protein_sidechains(str(inp), str(out), str(rotlib))
     assert out.exists(), "faspr_pack wrote no output"
     return inp, out
 
@@ -207,7 +207,7 @@ def test_pack_parity_with_reference_executable(tmp_path, capfd):
 
 def test_pack_missing_library_raises(tmp_path):
     with pytest.raises(Exception):
-        IMP.bff.faspr_pack(str(tmp_path / "none_in.pdb"),
+        IMP.bff.pack_protein_sidechains(str(tmp_path / "none_in.pdb"),
                            str(tmp_path / "none_out.pdb"),
                            str(tmp_path / "no_such_library.bin"))
 
@@ -216,7 +216,7 @@ def test_pack_verbose_logs(tmp_path, capfd):
     rotlib = _rotlib()
     inp, out = _pack(tmp_path, rotlib)
     capfd.readouterr()  # drain
-    IMP.bff.faspr_pack(str(inp), str(tmp_path / "v.pdb"), str(rotlib),
+    IMP.bff.pack_protein_sidechains(str(inp), str(tmp_path / "v.pdb"), str(rotlib),
                        verbose=True)
     captured = capfd.readouterr()
     assert "FASPR" in captured.out or "residues" in captured.out

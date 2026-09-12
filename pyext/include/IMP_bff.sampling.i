@@ -36,7 +36,7 @@ IMP_SWIG_OBJECT(IMP::bff, RRTCollision, RRTCollisions);
 
 %feature("director") IMP::bff::RRTCollision;
 
-/* Linker.h needs RotamerLibrary (wrapped above, in core.i): the sampler
+/* Linker.h needs ProbeRotamerLibrary (wrapped above, in core.i): the sampler
    returns one. Its geometry half used to be wrapped earlier, on its own. */
 %include "IMP/bff/Linker.h"
 %include "IMP/bff/RRT.h"

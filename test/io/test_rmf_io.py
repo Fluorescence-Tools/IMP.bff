@@ -3,7 +3,7 @@
 `rmf` is one of this module's modules (`dependencies.py`), so these are
 ordinary C++. What these tests pin:
 
-* the rotamer pair reads and writes an `IMP.bff.RotamerLibrary` -- the same
+* the rotamer pair reads and writes an `IMP.bff.ProbeRotamerLibrary` -- the same
   value `read_drot` and `read_rotamer_library` return;
 * paths are `std::string`, so a `pathlib.Path` is `str()`-ed by the caller;
 * `write_rmf` takes the description as JSON text rather than a dict.
@@ -18,7 +18,7 @@ import IMP.bff as fio
 
 
 def _library(n_rotamers=3, n_atoms=4, with_transitions=True):
-    lib = fio.RotamerLibrary()
+    lib = fio.ProbeRotamerLibrary()
     lib.n_rotamers = n_rotamers
     lib.n_atoms = n_atoms
     rng = np.random.default_rng(7)

@@ -9,6 +9,7 @@
 #ifndef IMPBFF_BAYESIANPSPLINE_H
 #define IMPBFF_BAYESIANPSPLINE_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>

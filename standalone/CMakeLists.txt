@@ -115,7 +115,7 @@ endif()
 #
 # So: take what CMake found when it is usable, and otherwise look for libomp
 # ourselves and pass `-Xclang -fopenmp`, which is what AppleClang wants.
-# `IMP::bff::built_with_openmp()` and `parallel_threads()` report the outcome
+# `IMP::bff::built_with_openmp()` and `openmp_thread_count()` report the outcome
 # at run time, so a build that silently lost it can be caught from Python.
 find_package(OpenMP QUIET)
 set(IMPBFF_OPENMP_FLAGS "")
@@ -182,7 +182,7 @@ foreach(h ${_internal_headers})
 endforeach()
 
 # ---- the sources: the core, and the layer when IMP is there
-file(GLOB _core_sources "${IMPBFF_ROOT}/src/*.cpp")
+file(GLOB _core_sources "${IMPBFF_ROOT}/src/*.cpp" "${IMPBFF_ROOT}/src/internal/*.cpp")
 # ImpLayer.cpp exists only for IMP's own unity build, which compiles no
 # subdirectory; here the layer's sources are named directly.
 list(FILTER _core_sources EXCLUDE REGEX "/ImpLayer\\.cpp$")
@@ -216,7 +216,7 @@ endif()
 
 # The compute backend is optional at run time, so it must also be optional at
 # build time: OFF both skips the plugin and compiles the loader out of
-# Compute.cpp, leaving no dlopen anywhere. IMP's module tooling has no
+# ComputeBackend.cpp, leaving no dlopen anywhere. IMP's module tooling has no
 # per-module options, so that build says the same thing with a compiler flag:
 # `cmake .. -DCMAKE_CXX_FLAGS=-DIMPBFF_WITH_GPU=0`.
 option(IMPBFF_WITH_GPU "Build and allow the run-time-loaded WGSL compute backend" ON)
@@ -233,7 +233,7 @@ target_compile_definitions(imp_bff PRIVATE IMPBFF_COMPILATION IMPBFF_EXPORTS
   IMPBFF_STANDALONE_DATA_DIR="${IMPBFF_DATA_DIR}"
   IMPBFF_STANDALONE_EXAMPLE_DIR="${IMPBFF_EXAMPLE_DIR}")
 if(IMPBFF_WITH_IMP)
-  # Base.h takes its IMP branch, and IMP's headers are on the path instead of
+  # IMPCompatibility.h takes its IMP branch, and IMP's headers are on the path instead of
   # the shims
   target_compile_definitions(imp_bff PUBLIC IMPBFF_WITH_IMP=1)
   target_include_directories(imp_bff
@@ -329,7 +329,7 @@ if(IMPBFF_PYTHON)
         set(_idx -1)
       endif()
     endif()
-    if(_idx EQUAL -1 AND NOT n STREQUAL "Base.h")
+    if(_idx EQUAL -1 AND NOT n STREQUAL "IMPCompatibility.h")
       string(APPEND _agg_content "#include <IMP/bff/${n}>\n")
     endif()
   endforeach()

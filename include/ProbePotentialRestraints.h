@@ -47,7 +47,7 @@
 #include <IMP/core/StatisticalPairScore.h>
 #include <IMP/core/Cosine.h>
 #include <IMP/bff/RotamerScoring.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <string>
 #include <vector>

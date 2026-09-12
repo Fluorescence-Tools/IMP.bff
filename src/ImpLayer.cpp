@@ -18,15 +18,15 @@
  */
 
 #include "imp/ProbeAccessibleVolumeDecorator.cpp"
-#include "imp/AlgebraBridge.cpp"
+#include "imp/IMPAlgebraBridge.cpp"
 #include "imp/ProbeAccessibleVolumeMeanDistanceRestraint.cpp"
 #include "imp/ProbeAccessibleVolumeOccupancyMap.cpp"
 #include "imp/Docking.cpp"
 #include "imp/MolecularProbeSimulation.cpp"
-#include "imp/EmBridge.cpp"
+#include "imp/IMPEMBridge.cpp"
 #include "imp/FPSExport.cpp"
 #include "imp/FPSProject.cpp"
-#include "imp/HierarchyBridge.cpp"
+#include "imp/IMPHierarchyBridge.cpp"
 #include "imp/ProbePotentialRestraints.cpp"
 #include "imp/ProbeAttachment.cpp"
 #include "imp/ProbeDynamics.cpp"

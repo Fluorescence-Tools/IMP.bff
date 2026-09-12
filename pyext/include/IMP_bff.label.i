@@ -3,7 +3,7 @@
  * segmentation (`SequenceAlignment.h`, wrapped earlier in core.i beside the
  * Smith-Waterman they are built on) -- the value type and the keyword
  * arguments. The attachment itself (`ProbeAttachment.h`) is the connection
- * layer's, in probeattachment.i; `Quenching.h` has carried the quencher and
+ * layer's, in probeattachment.i; `PhotophysicsQuenching.h` has carried the quencher and
  * its parameters since an earlier batch. This file holds no Python.
  */
 

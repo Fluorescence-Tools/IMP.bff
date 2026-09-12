@@ -9,7 +9,7 @@
  * changes. That is the constraint PRD-110 defends and the reason this is a
  * plugin rather than a build option.
  *
- * The contract is IMP/bff/Compute.h, restated below because that header is
+ * The contract is IMP/bff/ComputeBackend.h, restated below because that header is
  * C++ and this file is C: a backend may be built by a different compiler than
  * the library that loads it, and a std::vector across that line is a promise
  * neither side can keep. `test/test_compute_abi.py` fails if the two drift.
@@ -43,7 +43,7 @@
 #  define DLSYM(h, s) dlsym((h), (s))
 #endif
 
-/* ---- the contract, mirroring IMP/bff/Compute.h -------------------------- */
+/* ---- the contract, mirroring IMP/bff/ComputeBackend.h -------------------------- */
 #define IMPBFF_COMPUTE_BACKEND_ABI 2
 typedef int (*ImpBffPropagateFn)(const double* cur, const double* d,
                                  const double* decay, const double* bounds,

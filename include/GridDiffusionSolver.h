@@ -18,7 +18,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/DiffusionSolver.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <string>
 #include <utility>

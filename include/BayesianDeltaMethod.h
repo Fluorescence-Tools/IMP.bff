@@ -8,6 +8,7 @@
 #ifndef IMPBFF_BAYESIANDELTAMETHOD_H
 #define IMPBFF_BAYESIANDELTAMETHOD_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 

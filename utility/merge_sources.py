@@ -6,9 +6,9 @@ PRD-138: the layout stays flat (IMP's module tooling globs ``include/*.h`` and
 that by hand a dozen times is a dozen chances to drop an include or leave a
 dangling ``%include``; this does it as one reviewable operation::
 
-    utility/merge_sources.py --into include/Fcs.h \\
+    utility/merge_sources.py --into include/FCS.h \\
         include/FcsMdf.h include/FcsSaturation.h include/FcsSaturationCurve.h
-    utility/merge_sources.py --into src/Fcs.cpp \\
+    utility/merge_sources.py --into src/FCS.cpp \\
         src/FcsMdf.cpp src/FcsSaturation.cpp src/FcsSaturationCurve.cpp
 
 What it does, in order:

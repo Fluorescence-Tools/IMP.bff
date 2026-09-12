@@ -425,7 +425,7 @@ IMPBFF_END_NAMESPACE
 
 // -------- from ProbeAccessibleVolume.h (the States base class) --------
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <map>
 #include <string>

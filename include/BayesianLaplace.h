@@ -9,6 +9,7 @@
 #ifndef IMPBFF_BAYESIANLAPLACE_H
 #define IMPBFF_BAYESIANLAPLACE_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <limits>

@@ -238,8 +238,8 @@ def test_the_transform_refuses_impossible_input(amp, val, match):
 # --------------------------------------------------------------------------
 def test_a_spectrum_is_a_value_not_a_handle():
     """`IMP_SWIG_VALUE`, so a copy is independent."""
-    s = IMP.bff.LifetimeSpectrum(np.array([0.4, 0.2]), np.array([0.25, 1.0]))
-    t = IMP.bff.LifetimeSpectrum(s.amplitudes, s.rate_constants, s.exact)
+    s = IMP.bff.PhotophysicsLifetimeSpectrum(np.array([0.4, 0.2]), np.array([0.25, 1.0]))
+    t = IMP.bff.PhotophysicsLifetimeSpectrum(s.amplitudes, s.rate_constants, s.exact)
     assert t.n_species == 2
     np.testing.assert_array_equal(t.amplitudes, s.amplitudes)
 

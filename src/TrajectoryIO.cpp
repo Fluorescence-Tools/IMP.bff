@@ -7,7 +7,7 @@
 #include <IMP/bff/TrajectoryIO.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 // The C implementation of ihm, vendored by IMP at
 // modules/core/dependency/python-ihm/src/. Only the header is included: the

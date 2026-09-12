@@ -9,6 +9,7 @@
 #ifndef IMPBFF_OPTIMIZATION_H
 #define IMPBFF_OPTIMIZATION_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <limits>

@@ -96,7 +96,7 @@ Commit trail (all on `dev`):
 |---|---|---|
 | `avbuilder.i` | 1 | **IN PROGRESS RIGHT NOW** — see below |
 | `petquenching.i` | 2 | `_pet_table`/QUENCHER_ATOMS dict constants, `residue_sites`/`quencher_atoms` etc. free functions |
-| `dyesampling.i` | 3 | `simulate_dye_diffusion`, `simulate_photon_trace`, etc. + RotamerLibrary/DyeDiffusionTrajectory properties |
+| `dyesampling.i` | 3 | `simulate_dye_diffusion`, `simulate_photon_trace`, etc. + ProbeRotamerLibrary/DyeDiffusionTrajectory properties |
 | `photophysics.i` | 2 | kappa2/s2 wrappers, `kappa2_from_dipoles` etc. — many reshape-only wrappers |
 | `quenching.i` | 1 | `_cube`/`_flat`/`_kappa2` helpers + ~15 kernel wrappers + `radial_diffusion_map` (see handoff) |
 

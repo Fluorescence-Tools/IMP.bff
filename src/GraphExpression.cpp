@@ -22,7 +22,7 @@
 
 // The engine is ptolib's (https://github.com/tpeulen/ptolib), carried here as
 // the verbatim copy `include/internal/ptolib.h` and compiled once in
-// `src/Pto.cpp`. One implementation serves this node, tttrlib's DataStore
+// `src/MMFDBProfile.cpp`. One implementation serves this node, tttrlib's DataStore
 // gating and every other consumer; `test/test_vendored_headers.py` fails on
 // drift from the sibling checkout. ptolib owns it; changes go there.
 #include <IMP/bff/internal/ptolib.h>

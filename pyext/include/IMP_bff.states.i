@@ -90,7 +90,7 @@ IMP_SWIG_VALUE(IMP::bff, FRETDistanceConverter, FRETDistanceConverters);
 // a caller that can reshape wrongly -- this repository has paid for exactly
 // that twice (a density transposed by a C-order reshape, a `radius1` written
 // into three radii). They were hand-written Python properties on the
-// `RotamerEnsemble` subclass, so `States` itself did not have them and the
+// `ProbeRotamerEnsemble` subclass, so `States` itself did not have them and the
 // shape lived in one representation but not the other; declaring them here
 // puts it on the base class, once, for every representation.
 %attribute(IMP::bff::States, int, n_points, get_n_points);

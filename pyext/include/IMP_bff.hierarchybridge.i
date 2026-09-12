@@ -5,7 +5,7 @@
  * the overloads return (ProteinFrame, StripReport, SelectionAtom, the
  * PathMap) is known.
  */
-%include "IMP/bff/HierarchyBridge.h"
+%include "IMP/bff/IMPHierarchyBridge.h"
 
 // PathMap.set_particles(ps) stays a method in Python; in C++ the lattice knows
 // no particle and the layer installs a sphere source on it instead.
@@ -17,7 +17,7 @@
 
 // The lattice as an IMP::em::DensityMap: the layer's door, and the old
 // PathMap method spelling kept for Python.
-%include "IMP/bff/EmBridge.h"
+%include "IMP/bff/IMPEMBridge.h"
 %extend IMP::bff::PathMap {
     IMP::em::DensityMap* create_density_map() const {
         return IMP::bff::create_density_map($self);
@@ -26,4 +26,4 @@
 
 // The rigid-body configuration <-> IMP::algebra::Transformation3D conversions
 // (formerly RRT.h); the core plans in plain numbers.
-%include "IMP/bff/AlgebraBridge.h"
+%include "IMP/bff/IMPAlgebraBridge.h"

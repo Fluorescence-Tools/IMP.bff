@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from IMP.bff import RotamerFRET, protein_frames_from_rmf
+from IMP.bff import FRETRotamer, protein_frames_from_rmf
 
 
 @pytest.mark.parametrize("fixed_r0", [False, True])
@@ -37,7 +37,7 @@ def test_rotamer_fretpredict_parity_parameter_matrix(
         **kwargs,
     )
     fretpredict.run()
-    imp = RotamerFRET(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
+    imp = FRETRotamer(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
     imp.run()
 
     _assert_output_files_match(fp_prefix, imp_prefix, residues=kwargs["residues"])
@@ -72,7 +72,7 @@ def test_rotamer_fretpredict_parity_user_reweight(tmp_path: Path, fixed_r0: bool
         **kwargs,
     )
     fretpredict.run()
-    imp = RotamerFRET.from_frames(protein_frames_from_rmf(str(rmf)),
+    imp = FRETRotamer.from_frames(protein_frames_from_rmf(str(rmf)),
                               output_prefix=str(imp_prefix),
                               **_imp_kwargs(kwargs))
     imp.run()
@@ -102,7 +102,7 @@ def test_rotamer_fretpredict_parity_boltzmann_reweight(tmp_path: Path) -> None:
         **kwargs,
     )
     fretpredict.run()
-    imp = RotamerFRET(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
+    imp = FRETRotamer(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
     imp.run()
 
     fretpredict.reweight(boltzmann_weights=True)
@@ -140,7 +140,7 @@ def test_rotamer_fretpredict_parity_swapped_sites(tmp_path: Path) -> None:
         **kwargs,
     )
     fretpredict.run()
-    imp = RotamerFRET(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
+    imp = FRETRotamer(str(pdb), output_prefix=str(imp_prefix), **_imp_kwargs(kwargs))
     imp.run()
 
     _assert_output_files_match(fp_prefix, imp_prefix, residues=kwargs["residues"])
@@ -174,7 +174,7 @@ def test_rotamer_fretpredict_parity_two_frame_rmf(tmp_path: Path) -> None:
         **kwargs,
     )
     fretpredict.run()
-    imp = RotamerFRET.from_frames(protein_frames_from_rmf(str(rmf)),
+    imp = FRETRotamer.from_frames(protein_frames_from_rmf(str(rmf)),
                               output_prefix=str(imp_prefix),
                               **_imp_kwargs(kwargs))
     imp.run()

@@ -7,8 +7,8 @@
 #define IMPBFF_PROBESAMPLING_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
-#include <IMP/bff/RotamerLibrary.h>
+#include <IMP/bff/IMPCompatibility.h>
+#include <IMP/bff/ProbeRotamerLibrary.h>
 #include <string>
 #include <vector>
 
@@ -29,7 +29,7 @@ inline int grid_center_index(int ng) { return (ng - 1) / 2; }
     its own trajectory, so the memory grows with the count while the useful
     sampling saturates long before a large machine's core count does.
 
-    Not IMP::bff::parallel_threads(), which reports *OpenMP's* view and is 1 in
+    Not IMP::bff::openmp_thread_count(), which reports *OpenMP's* view and is 1 in
     this build because `OpenMP_CXX_FLAGS` is empty. These walks are
     `std::thread`s and run whatever the hardware has.
 */
@@ -166,7 +166,7 @@ IMPBFFEXPORT void equilibrium_occupancy(
 
     \throw IOException when the trajectory has no frames
 */
-IMPBFFEXPORT RotamerLibrary load_rotamer_library_trajectory(
+IMPBFFEXPORT ProbeRotamerLibrary load_rotamer_library_trajectory(
         const std::string& pdb_path, const std::string& trajectory_path,
         const std::string& weights_path = "", int max_frames = -1);
 

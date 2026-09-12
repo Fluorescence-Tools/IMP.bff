@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from IMP.bff import RotamerEnsemble, RotamerSiteOptions, rotamer_ensembles_from_fps
-from IMP.bff import RotamerFRET
+from IMP.bff import ProbeRotamerEnsemble, ProbeRotamerSiteOptions, fps_rotamer_ensembles
+from IMP.bff import FRETRotamer
 from IMP.bff import ProbeAccessibleVolume, States
 from IMP.bff import av_pair_statistics, histogram_rda
 from IMP.bff import states_mean_fret_distance as mean_fret_distance
@@ -45,10 +45,10 @@ def hsp90(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def pair(hsp90):
-    options = RotamerSiteOptions(temperature=293, electrostatic=True)
-    d = RotamerEnsemble.from_site(str(hsp90), "A", 452,
+    options = ProbeRotamerSiteOptions(temperature=293, electrostatic=True)
+    d = ProbeRotamerEnsemble.from_site(str(hsp90), "A", 452,
                                   "AlexaFluor 594 C1R cutoff30", options=options)
-    a = RotamerEnsemble.from_site(str(hsp90), "B", 637,
+    a = ProbeRotamerEnsemble.from_site(str(hsp90), "B", 637,
                                   "AlexaFluor 568 C1R cutoff30", options=options)
     return d, a
 
@@ -113,8 +113,8 @@ def test_matches_fretpredict_and_rotamer_fret(pair, hsp90, tmp_path):
     # so nothing here has to know a conversion factor.
     assert eff.forster_radius == pytest.approx(pins["R0_angstrom"], abs=1e-3)
     assert d.partition == pytest.approx(pins["Z"][0], abs=1e-5) and a.partition == pytest.approx(pins["Z"][1], abs=1e-5)
-    # the same numbers RotamerFRET (built on the ensembles) reports
-    fret = RotamerFRET(str(hsp90), [452, 637], chains=["A", "B"], temperature=293, electrostatic=True,
+    # the same numbers FRETRotamer (built on the ensembles) reports
+    fret = FRETRotamer(str(hsp90), [452, 637], chains=["A", "B"], temperature=293, electrostatic=True,
                        donor="AlexaFluor 594", acceptor="AlexaFluor 568",
                        libname_1="AlexaFluor 594 C1R cutoff30", libname_2="AlexaFluor 568 C1R cutoff30",
                        output_prefix=str(tmp_path / "x"))
@@ -145,10 +145,10 @@ def test_from_fps_positions(hsp90, tmp_path):
         },
         "Distances": {"d1_a1": {"position1_name": "d1", "position2_name": "a1"}},
     }))
-    options = RotamerSiteOptions(temperature=293, electrostatic=True)
-    ens = rotamer_ensembles_from_fps(str(fps), str(hsp90), options=options)
+    options = ProbeRotamerSiteOptions(temperature=293, electrostatic=True)
+    ens = fps_rotamer_ensembles(str(fps), str(hsp90), options=options)
     assert set(ens) == {"d1"}                             # a1 names no library
-    ens = rotamer_ensembles_from_fps(str(fps), str(hsp90),
+    ens = fps_rotamer_ensembles(str(fps), str(hsp90),
                                      {"a1": "AlexaFluor 568 C1R cutoff30"}, options)
     assert set(ens) == {"d1", "a1"} and ens["a1"].n_rotamers == 7 and ens["a1"].position_name == "a1"
 
@@ -156,35 +156,35 @@ def test_from_fps_positions(hsp90, tmp_path):
 def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     """R1 entries write, validate, read back; the docking filter drops them."""
     from IMP.bff import (
-        distances_from_ensembles, rotamer_positions_payload, write_rotamer_fps)
+        fps_rotamer_distances_from_ensembles, fps_rotamer_positions_payload, write_fps_rotamer)
     import IMP.bff as fps_schema
     from IMP.bff import fps_positions_for_docking, read_fps_json
 
     d, a = pair
     # The entries cross as JSON text, which is what every fps.json function in
     # this module takes and returns.
-    positions = rotamer_positions_payload({"d1": d, "a1": a})
+    positions = fps_rotamer_positions_payload({"d1": d, "a1": a})
     entries = json.loads(positions)
     assert entries["d1"]["simulation_type"] == "R1"
     assert entries["d1"]["rotamer_library"] == "AlexaFluor 594 C1R cutoff30"
     for dtype in ("RDAMean", "RDAMeanE", "Rmp"):
-        entry = json.loads(distances_from_ensembles(
+        entry = json.loads(fps_rotamer_distances_from_ensembles(
             {"d1": d, "a1": a}, [("d1", "a1")], 50.4,
             distance_type=dtype))["d1_a1"]
         assert entry["distance_type"] == dtype and 20 < entry["distance"] < 90
-    distances = distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4)
+    distances = fps_rotamer_distances_from_ensembles({"d1": d, "a1": a}, [("d1", "a1")], 50.4)
     # <R_DA>_E (kappa2 = 2/3, the fps.json convention) is what av_pair_statistics gives
     _rmp, _rda, rda_e_av, _sig = av_pair_statistics(d, a, forster_radius=50.4, n_samples=200000)
     assert json.loads(distances)["d1_a1"]["distance"] == pytest.approx(rda_e_av, abs=0.3)
     # with the ensembles' dipoles it reproduces the orientation-resolved static efficiency
-    dip = json.loads(distances_from_ensembles(
+    dip = json.loads(fps_rotamer_distances_from_ensembles(
         {"d1": d, "a1": a}, [("d1", "a1")], 50.4, kappa2="dipoles"))
     eff = d.pair_distribution(a, forster_radius=50.4)
     r_e = 50.4 * (1.0 / eff.static_efficiency - 1.0) ** (1.0 / 6.0)
     assert dip["d1_a1"]["distance"] == pytest.approx(r_e, rel=1e-9)
 
     out = tmp_path / "rotamer.fps.json"
-    write_rotamer_fps(str(out), positions, distances)               # validated on write
+    write_fps_rotamer(str(out), positions, distances)               # validated on write
     doc = read_fps_json(str(out))
     p = json.loads(doc.positions)
     dist = json.loads(doc.distances)
@@ -203,7 +203,7 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
         "Positions": {"p1": {"chain_identifier": "A", "residue_seq_number": 10, "atom_name": "CB",
                              "simulation_type": "AV1", "linker_length": 20.0, "linker_width": 4.5, "radius1": 3.5}},
         "Distances": {}}))
-    write_rotamer_fps(str(out), positions, distances, merge_into=str(av_file))
+    write_fps_rotamer(str(out), positions, distances, merge_into=str(av_file))
     doc = read_fps_json(str(out))
     p = json.loads(doc.positions)
     dist = json.loads(doc.distances)
@@ -213,9 +213,9 @@ def test_r1_positions_round_trip_and_docking_filter(pair, tmp_path):
     kept_d = json.loads(kept_doc.distances)
     assert set(kept_p) == {"p1"} and kept_d == {}
     # the ensembles come back from the file
-    ens = rotamer_ensembles_from_fps(
+    ens = fps_rotamer_ensembles(
         str(out), str(hsp90_path(pair)),
-        options=RotamerSiteOptions(temperature=293, electrostatic=True))
+        options=ProbeRotamerSiteOptions(temperature=293, electrostatic=True))
     assert set(ens) == {"d1", "a1"} and ens["d1"].n_rotamers == 37
 
 

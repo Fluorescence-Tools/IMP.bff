@@ -8,12 +8,12 @@
 #include <IMP/bff/ProbePotentialTables.h>
 
 #include <IMP/bff/ProbeDataPaths.h>
-#include <IMP/bff/Pto.h>
+#include <IMP/bff/internal/ptolib.h>
 #include <IMP/bff/internal/OutputView.h>
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/internal/json.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cstring>
@@ -152,8 +152,11 @@ std::string get_potential_container_path() {
 }
 
 std::vector<std::string> potential_table_names(std::string path) {
-    PtoReader reader(container_path(path));
-    const std::vector<PtoObject>& objects = reader.objects();
+    pto::File reader;
+    if (!reader.open(container_path(path), false)) {
+        IMP_THROW("PTO: cannot open container " << container_path(path) << ": " << reader.error(), IOException);
+    }
+    const std::vector<pto::PtoObject>& objects = reader.objects();
     std::vector<std::string> out;
     for (std::size_t i = 0; i < objects.size(); ++i) {
         if (objects[i].name == kManifestName) continue;
@@ -167,28 +170,39 @@ std::vector<std::string> potential_table_names(std::string path) {
 }
 
 std::string read_potential_manifest(std::string path) {
-    PtoReader reader(container_path(path));
-    const int i = reader.find(kManifestName);
-    if (i < 0) return std::string("{}");
-    // ptolib's reader decodes by the object's encoding -- no second pass.
-    const std::vector<unsigned char> raw = reader.data(reader.objects()[i]);
+    pto::File reader;
+    if (!reader.open(container_path(path), false)) {
+        IMP_THROW("PTO: cannot open container " << container_path(path) << ": " << reader.error(), IOException);
+    }
+    const std::vector<std::uint64_t> matches = reader.find_all(kManifestName);
+    if (matches.empty()) return std::string("{}");
+    // This format prefixes its brotli stream with the decoded size.
+    const std::vector<unsigned char> stored = reader.read_stored(matches.front());
+    const std::vector<unsigned char> raw =
+            reader.object(matches.front()).encoding.find("brotli") != std::string::npos
+            ? pot_brotli_decompress(stored.data(), stored.size()) : stored;
     return std::string(raw.begin(), raw.end());
 }
 
 PotentialTable read_potential_table(std::string name, std::string path) {
     const std::string file = container_path(path);
-    PtoReader reader(file);
+    pto::File reader;
+    if (!reader.open(file, false)) {
+        IMP_THROW("PTO: cannot open container " << file << ": " << reader.error(), IOException);
+    }
     // A table is stored either as text (`name.pmf`) or as a grid (`name`).
-    int i = reader.find(stored_name(name, kPmfKind));
-    if (i < 0) i = reader.find(name);
-    if (i < 0) {
+    std::vector<std::uint64_t> matches = reader.find_all(stored_name(name, kPmfKind));
+    if (matches.empty()) matches = reader.find_all(name);
+    if (matches.empty()) {
         IMP_THROW("the container at " << file << " has no table called `"
                                       << name << "`",
                   IOException);
     }
-    const PtoObject& object = reader.objects()[i];
-    // ptolib's reader decodes by the object's encoding -- no second pass.
-    const std::vector<unsigned char> raw = reader.data(object);
+    const pto::PtoObject object = reader.object(matches.front());
+    // Decode the legacy size-prefixed stream once, outside generic PTO codecs.
+    const std::vector<unsigned char> stored = reader.read_stored(object.uid);
+    const std::vector<unsigned char> raw = object.encoding.find("brotli") != std::string::npos
+            ? pot_brotli_decompress(stored.data(), stored.size()) : stored;
 
     PotentialTable table(name, object.kind);
     if (object.kind == kPmfKind) {
@@ -206,14 +220,21 @@ PotentialTable read_potential_table(std::string name, std::string path) {
 void write_potential_tables(const std::string& path,
                             const std::vector<PotentialTable>& tables,
                             const std::string& manifest_json) {
-    PtoWriter writer(path);
+    pto::File writer;
+    if (!writer.create(path, "", std::string(pto::kDefaultBanner) +
+            "\nThis container was written by IMP.bff.\nhttps://github.com/tpeulen/IMP.bff\n")) {
+        IMP_THROW("PTO: cannot open " << path << " for writing: " << writer.error(), IOException);
+    }
+    writer.set_writing_app("IMP.bff");
     const std::vector<unsigned char> manifest(manifest_json.begin(),
                                               manifest_json.end());
     const std::vector<unsigned char> packed_manifest =
             pot_brotli_compress(manifest);
-    writer.add(kManifestName, "pot.manifest", "utf8+brotli",
+    if (!writer.add("pot.manifest", "utf8+brotli", kManifestName,
                packed_manifest.empty() ? NULL : &packed_manifest[0],
-               packed_manifest.size());
+               packed_manifest.size())) {
+        IMP_THROW("PTO: writing manifest failed: " << writer.error(), IOException);
+    }
 
     for (std::size_t i = 0; i < tables.size(); ++i) {
         const PotentialTable& t = tables[i];
@@ -223,10 +244,15 @@ void write_potential_tables(const std::string& path,
                                                      t.text.end())
                         : to_bytes(t.values);
         const std::vector<unsigned char> packed = pot_brotli_compress(raw);
-        writer.add(stored_name(t.name, is_text ? kPmfKind : kGridKind),
-                   is_text ? kPmfKind : kGridKind,
+        if (!writer.add(is_text ? kPmfKind : kGridKind,
                    is_text ? "utf8+brotli" : "f64+brotli",
-                   packed.empty() ? NULL : &packed[0], packed.size());
+                   stored_name(t.name, is_text ? kPmfKind : kGridKind),
+                   packed.empty() ? NULL : &packed[0], packed.size())) {
+            IMP_THROW("PTO: writing " << t.name << " failed: " << writer.error(), IOException);
+        }
+    }
+    if (!writer.commit()) {
+        IMP_THROW("PTO: writing " << path << " failed: " << writer.error(), IOException);
     }
     writer.close();
 }

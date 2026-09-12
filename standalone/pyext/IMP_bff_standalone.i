@@ -22,12 +22,12 @@
 #include <boost/range/distance.hpp>
 #endif
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include "bff_core_headers.h"
 %}
 
 /* The SWIG side of the module's vocabulary: the export/namespace macros and
-   Base.h's standalone branch (IMP_VALUES, IMP_SHOWABLE_INLINE, ...). IMP's
+   IMPCompatibility.h's standalone branch (IMP_VALUES, IMP_SHOWABLE_INLINE, ...). IMP's
    kernel interface provides these to a module's SWIG; here the headers do. */
 /* numpy.i (pulled in by core.i) needs the C API initialised once per module;
    IMP's kernel does this in IMP_kernel.import_numpy.i. */
@@ -60,16 +60,16 @@
 %include <IMP/bff/bff_config.h>
 
 #ifndef IMPBFF_WITH_IMP
-/* Base.h hides its C++ exception classes from SWIG; the module makes Python
+/* IMPCompatibility.h hides its C++ exception classes from SWIG; the module makes Python
    ones (IMP_bff_standalone.macros.i), as IMP's kernel does. */
 %ignore IMP::Pointer;
 %ignore IMP::Object::ref;
 %ignore IMP::Object::unref;
 %ignore IMP::Object::release_ref;
 %include <IMP/Object.h>
-%include <IMP/bff/Base.h>
+%include <IMP/bff/IMPCompatibility.h>
 #else
-/* Where IMP is linked, Base.h forwards to IMP's own headers, and those need
+/* Where IMP is linked, IMPCompatibility.h forwards to IMP's own headers, and those need
    IMP's SWIG interfaces to parse -- which is exactly what this module does
    not want (they make the extension import _IMP_kernel). SWIG does not
    compile anything, though: it only has to *parse* the declarations, so it

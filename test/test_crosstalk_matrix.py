@@ -32,7 +32,7 @@ PAYLOAD_VALUES = [0.9, 0.1, 0.05, 0.95]
 
 
 def test_select_reorders_and_zero_fills():
-    m = bff.CrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
+    m = bff.PhotophysicsCrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
     sel = m.select(["A", "D", "X"], ["red", "green"])
     assert list(sel.get_rows()) == ["A", "D", "X"]
     assert list(sel.get_columns()) == ["red", "green"]
@@ -43,14 +43,14 @@ def test_select_reorders_and_zero_fills():
 
 
 def test_get_by_label_zero_for_missing():
-    m = bff.CrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
+    m = bff.PhotophysicsCrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
     assert m.get("D", "green") == pytest.approx(0.9)
     assert m.get("D", "violet") == 0.0
     assert m.get("X", "green") == 0.0
 
 
 def test_scale_row_and_column():
-    m = bff.CrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
+    m = bff.PhotophysicsCrosstalkMatrix(PAYLOAD_ROWS, PAYLOAD_COLUMNS, PAYLOAD_VALUES)
     m.scale_row("A", 0.5)          # a quantum yield
     m.scale_column("red", 0.8)     # a detection efficiency
     assert m.get("A", "red") == pytest.approx(0.95 * 0.5 * 0.8)
@@ -61,7 +61,7 @@ def test_scale_row_and_column():
 
 def test_constructor_checks_the_shape():
     with pytest.raises(Exception):
-        bff.CrosstalkMatrix(["D"], ["green", "red"], [1.0])
+        bff.PhotophysicsCrosstalkMatrix(["D"], ["green", "red"], [1.0])
 
 
 # ------------------------------------------------------------------- the algebra

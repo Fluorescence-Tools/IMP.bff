@@ -7,7 +7,7 @@
 
 #include <IMP/bff/ProbeDataPaths.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cerrno>
 #include <cstring>

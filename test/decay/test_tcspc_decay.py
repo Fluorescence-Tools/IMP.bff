@@ -55,7 +55,7 @@ def build(n_lifetimes=1, irf=None, name="decay"):
     """A node with its ports made and its response set."""
     if irf is None:
         irf = response()
-    node = bff.TcspcDecay(name)
+    node = bff.TCSPCDecay(name)
     node.set_number_of_lifetimes(n_lifetimes)
     node.add_output_port(name, bff.GraphPort([0.0], False, True))
     node.set_response_array(np.ascontiguousarray(irf, dtype=float))
@@ -249,14 +249,14 @@ class NodeBehaviourTests(unittest.TestCase):
         self.assertFalse(node.get_output_port("decay").get_sanitize())
 
     def test_a_node_without_a_response_refuses_to_evaluate(self):
-        node = bff.TcspcDecay("decay")
+        node = bff.TCSPCDecay("decay")
         node.set_number_of_lifetimes(1)
         node.add_output_port("decay", bff.GraphPort([0.0], False, True))
         with self.assertRaises(ValueError):
             node.update()
 
     def test_a_node_without_components_refuses_to_evaluate(self):
-        node = bff.TcspcDecay("decay")
+        node = bff.TCSPCDecay("decay")
         node.set_number_of_lifetimes(0)
         node.add_output_port("decay", bff.GraphPort([0.0], False, True))
         node.set_response_array(np.ascontiguousarray(response()))
@@ -264,7 +264,7 @@ class NodeBehaviourTests(unittest.TestCase):
             node.update()
 
     def test_a_non_positive_period_is_refused(self):
-        node = bff.TcspcDecay("decay")
+        node = bff.TCSPCDecay("decay")
         node.set_number_of_lifetimes(1)
         with self.assertRaises(ValueError):
             node.set_timing(DT, 0.0)
@@ -484,7 +484,7 @@ class SpectrumPortTests(unittest.TestCase):
     def _basis_node(self, negative=False, **options):
         irf = response()
         node = build(4, irf)
-        node.add_output_port(bff.TcspcDecay.basis_port_key(),
+        node.add_output_port(bff.TCSPCDecay.basis_port_key(),
                              bff.GraphPort([0.0], False, True))
         node.set_emit_basis(True)
         node.set_spectrum_from_port(True)
@@ -510,7 +510,7 @@ class SpectrumPortTests(unittest.TestCase):
         """max relative error of the basis against a forward difference."""
         base = self._curve_at(node, spectrum)
         basis = np.asarray(
-            node.get_output_port(bff.TcspcDecay.basis_port_key())
+            node.get_output_port(bff.TCSPCDecay.basis_port_key())
             .get_value_view()).reshape(len(base), -1).copy()
         worst = 0.0
         for s in range(basis.shape[1]):
@@ -608,6 +608,6 @@ class SpectrumPortTests(unittest.TestCase):
             node.update()
 
     def test_the_flag_is_refused_before_the_ports_exist(self):
-        node = bff.TcspcDecay("decay")
+        node = bff.TCSPCDecay("decay")
         with self.assertRaises(ValueError):
             node.set_spectrum_from_port(True)

@@ -25,7 +25,7 @@ Kish's effective sample size,
 
 which says how many independent conformers the weighted ensemble is really
 carrying. It is on every ensemble as
-`RotamerEnsemble.effective_sample_size`.
+`ProbeRotamerEnsemble.effective_sample_size`.
 
 # Measured, on the bundled parity fixtures
 

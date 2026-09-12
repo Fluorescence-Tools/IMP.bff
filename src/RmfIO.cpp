@@ -224,7 +224,7 @@ void write_rmf(double* coords, int n_atoms, int n_dim, const std::string& path,
 }
 
 void write_rotamer_library_rmf(const std::string& path,
-                               const RotamerLibrary& library) {
+                               const ProbeRotamerLibrary& library) {
     const int n_rotamers = library.n_rotamers;
     const int n_atoms = library.n_atoms;
     if (n_rotamers <= 0 || n_atoms <= 0) {
@@ -548,7 +548,7 @@ void RmfStructureWriter::close() {
     impl_->file.reset();
 }
 
-RotamerLibrary read_rotamer_library_rmf(const std::string& path) {
+ProbeRotamerLibrary read_rotamer_library_rmf(const std::string& path) {
     std::string file = path;
     if (!internal::file_exists(file)) {
         if (internal::file_exists(with_rmf3(file))) {
@@ -577,7 +577,7 @@ RotamerLibrary read_rotamer_library_rmf(const std::string& path) {
             fh.get_category(kKineticCategory), kTransitionKey);
     RMF::NodeConstHandle root_node = fh.get_root_node();
 
-    RotamerLibrary lib;
+    ProbeRotamerLibrary lib;
     lib.path = file;
     lib.n_atoms = static_cast<int>(atoms.size());
     lib.n_rotamers = static_cast<int>(fh.get_number_of_frames());

@@ -15,7 +15,7 @@
 #include <IMP/bff/internal/Text.h>
 #include <IMP/bff/ProbeLibrary.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 // Vendored with IMP and exported by libimp_atom; ProbeForceFieldCIF.cpp reads its
 // eighteen `_ff_*` categories through the same parser, in the same text mode.
@@ -601,7 +601,8 @@ IMPBFF_END_NAMESPACE
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 
-#include <IMP/bff/Pto.h>
+#include <IMP/bff/MMFDBProfile.h>
+#include <IMP/bff/internal/ptolib.h>
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/internal/json.h>
 
@@ -746,10 +747,13 @@ std::map<std::string, Probe>::const_iterator dc_lookup(
 }
 
 std::string dc_object_text(const std::string& path, const std::string& name) {
-    PtoReader r(path);
-    const int i = r.find(name);
-    if (i < 0) return "";
-    const std::vector<unsigned char> d = r.data(r.objects()[i]);
+    pto::File r;
+    if (!r.open(path, false)) {
+        IMP_THROW("PTO: cannot open container " << path << ": " << r.error(), IOException);
+    }
+    const std::vector<std::uint64_t> matches = r.find_all(name);
+    if (matches.empty()) return "";
+    const std::vector<unsigned char> d = r.read(matches.front());
     return std::string(d.begin(), d.end());
 }
 
@@ -902,14 +906,25 @@ void probe_write_pto(const std::string& path,
     }
     const std::string model_bytes = model.dump(1);
 
-    PtoWriter w(path);
-    w.add("README", "readme", "text", DYE_README, std::strlen(DYE_README));
-    w.add(PROBE_PTO_PROBES, "mfdb.probes", "json", probe_bytes.data(),
-          probe_bytes.size());
-    w.add(PROBE_PTO_SPECTRA, "mfdb.spectra", "json", spectrum_bytes.data(),
-          spectrum_bytes.size());
-    w.add(PROBE_PTO_MODEL, "mfdb.model", "json", model_bytes.data(),
-          model_bytes.size());
+    pto::File w;
+    if (!w.create(path, "", std::string(pto::kDefaultBanner) +
+            "\nThis container was written by IMP.bff.\nhttps://github.com/tpeulen/IMP.bff\n")) {
+        IMP_THROW("PTO: cannot open " << path << " for writing: " << w.error(), IOException);
+    }
+    w.set_writing_app("IMP.bff");
+    if (!w.add("readme", "text", "README",
+               reinterpret_cast<const unsigned char*>(DYE_README), std::strlen(DYE_README)) ||
+        !w.add("mfdb.probes", "json", PROBE_PTO_PROBES,
+               reinterpret_cast<const unsigned char*>(probe_bytes.data()), probe_bytes.size()) ||
+        !w.add("mfdb.spectra", "json", PROBE_PTO_SPECTRA,
+               reinterpret_cast<const unsigned char*>(spectrum_bytes.data()), spectrum_bytes.size()) ||
+        !w.add("mfdb.model", "json", PROBE_PTO_MODEL,
+               reinterpret_cast<const unsigned char*>(model_bytes.data()), model_bytes.size())) {
+        IMP_THROW("PTO: writing " << path << " failed: " << w.error(), IOException);
+    }
+    if (!w.commit()) {
+        IMP_THROW("PTO: writing " << path << " failed: " << w.error(), IOException);
+    }
     w.close();
 }
 

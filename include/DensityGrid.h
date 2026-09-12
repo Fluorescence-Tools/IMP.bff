@@ -32,7 +32,7 @@
 #define IMPBFF_DENSITYGRID_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <IMP/Object.h>
 #include <IMP/algebra/Vector3D.h>

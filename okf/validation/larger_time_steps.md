@@ -177,7 +177,7 @@ exponential route is on the table.
 
 ## It is implemented
 
-`src/KrylovDiffusion.cpp`, reached as `diffusion_propagate_krylov()` (trace and
+`src/DiffusionSolverKrylov.cpp`, reached as `diffusion_propagate_krylov()` (trace and
 final density) and `diffusion_trace_krylov()` (trace only, half the work,
 which is what calibration wants). Wall clock on the same fixture, ng = 41/61/81,
 4 000 steps, reported every 100 -- one thread, which is what the library

@@ -8,7 +8,7 @@
 #include <IMP/bff/ProbeRestraints.h>
 
 #include <IMP/bff/ProbeAccessibleVolume.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cmath>
 

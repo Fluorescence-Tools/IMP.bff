@@ -11,14 +11,14 @@ timestamp: '2026-08-24T00:00:00Z'
 
 A `.drot` file is one dye+linker rotamer library: an ensemble of conformers
 with a weight each, stored as internal coordinates. It is written by
-`IMP::bff::write_drot` (`include/DrotWriter.h`, program
-`bin/imp_bff_traj2drot`) and read by `IMP::bff::read_drot`
+`IMP::bff::write_probe_rotamer_drot` (`include/DrotWriter.h`, program
+`bin/imp_bff_traj2drot`) and read by `IMP::bff::read_probe_rotamer_drot`
 (`include/DrotReader.h`). Both sides go through ptolib's built-in
 brotli codec (`compress_bytes`/`decompress_bytes` under the name `"brotli"` —
 ptolib 0.4.0 embeds the codec in the vendored PTO core
 (`include/internal/ptolib.h`, a verbatim copy of
 [ptolib](https://github.com/tpeulen/ptolib), the header tttrlib carries too;
-`include/Pto.h` is the thin `PtoWriter`/`PtoReader` face over it), so neither
+`include/MMFDBProfile.h` is the thin `PtoWriter`/`PtoReader` face over it), so neither
 adds a dependency — the container is shared with tttrlib by one header and with
 chimol by specification, not by linkage
 ([the convergence record](../../chimol/okf/references/pto-chm-convergence.md)). The design ledger — what was measured and what was rejected — is
@@ -39,11 +39,11 @@ what changes together:
 Inside, each library is a set of objects named `<library>/<member>`, and a
 `drot.catalog` object at the head lists them. One library is addressed by a
 **locator** — `dyes.drot.pto::A48_C1R_cutoff10`, the container, `::`, the
-library — which is what `resolve_rotamer_library_path` answers with and what
-`read_drot` takes. A plain path still means a container holding one library,
+library — which is what `resolve_probe_rotamer_library_path` answers with and what
+`read_probe_rotamer_drot` takes. A plain path still means a container holding one library,
 which is what a user's own file is.
 
-Bundling is a copy: `write_drot_bundle` moves payload bytes across unread, so
+Bundling is a copy: `write_probe_rotamer_drot_bundle` moves payload bytes across unread, so
 a family container holds exactly what its parts held (measured: 19,675,419
 bytes against the 19,683,305 of the 95 separate files — the difference is
 their EBML headers, now shared). Reading one library out of it costs that
@@ -59,14 +59,14 @@ psi) bin, the rotamers with their chi angles, their spreads and a probability.
 So it carries kinds of its own — `rot.bbdep.header` and, per residue,
 `rot.bbdep.records` — and no element ID was invented for it either. Its
 records are FASPR's own 20-byte layout, byte for byte, which makes
-`write_dunbrack_bin` an exact inverse and lets the vendored FASPR engine (it
+`write_protein_sidechain_dunbrack_bin` an exact inverse and lets the vendored FASPR engine (it
 seeks in that file) run against the shipped container with its parity pin
 intact. See [`include/DunbrackLibrary.h`](../include/DunbrackLibrary.h).
 
 ## The container
 
 A **PTO** document — EBML (RFC 8794), `DocType "pto"` — written through
-[`include/Pto.h`](../include/Pto.h), the face over the vendored
+[`include/MMFDBProfile.h`](../include/MMFDBProfile.h), the face over the vendored
 [ptolib](https://github.com/tpeulen/ptolib) header (`include/internal/ptolib.h`).
 Libraries written before 2026-09-07 carry one SeekHead and every object in one
 `Attachments` element; ptolib reads those as it reads its own, read-only. One file per library, named
@@ -136,7 +136,7 @@ c++ -std=c++17 -I/tmp/ebml/include ../tttrlib/test/tools/pto_ebml_check.cpp \
 
 ```json
 {"format": "drot", "version": 10, "container": "pto",
- "producer": "IMP.bff write_drot",
+ "producer": "IMP.bff write_probe_rotamer_drot",
  "n_atoms": 83, "n_rotamers": 711, "n_rows": 73, "n_base": 10,
  "base_offset": [46, 47, 48, 50, 79, 49, 51, 52, 53, 80],
  "grids": {
@@ -188,7 +188,7 @@ and the torsion-only draft of this format proved it again: rebuilding on
 
 ## Versions
 
-`read_drot` reads v5, v7, v8, v9 and v10. **v10 is v9's payload in the PTO
+`read_probe_rotamer_drot` reads v5, v7, v8, v9 and v10. **v10 is v9's payload in the PTO
 envelope** — every number is laid out identically, and the version bumped
 because a v9 reader cannot find `drot.json` in a file it cannot walk. v9 is the
 same members in a brotli-compressed tar. v5–v8 are the prototype's: int16 grids

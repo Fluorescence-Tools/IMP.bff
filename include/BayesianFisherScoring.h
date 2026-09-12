@@ -8,6 +8,7 @@
 #ifndef IMPBFF_BAYESIANFISHERSCORING_H
 #define IMPBFF_BAYESIANFISHERSCORING_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <thread>

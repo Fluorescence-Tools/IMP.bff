@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-HEADER = ROOT / "include" / "Compute.h"
+HEADER = ROOT / "include" / "ComputeBackend.h"
 PLUGIN = ROOT / "gpu" / "imp_bff_wgpu.c"
 
 pytestmark = pytest.mark.skipif(not PLUGIN.is_file(), reason="no gpu/ in this tree")

@@ -10,7 +10,8 @@
 #include <sstream>
 #include <limits>
 #include <IMP/bff/internal/json.h>
-#include <IMP/bff/Pto.h>
+#include <IMP/bff/MMFDBProfile.h>
+#include <IMP/bff/internal/ptolib.h>
 
 IMPBFF_BEGIN_NAMESPACE
 
@@ -71,15 +72,16 @@ std::string labelizer_read_file(const std::string& path) {
     return os.str();
 }
 
-void labelizer_add(PtoWriter& w, const std::string& name, const std::string& kind,
+void labelizer_add(pto::File& w, const std::string& name, const std::string& kind,
             const std::string& encoding, const std::string& bytes) {
-    w.add(name, kind, encoding, bytes.data(), bytes.size());
+    if (!w.add(kind, encoding, name,
+               reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size())) {
+        IMP_THROW("PTO: writing " << name << " failed: " << w.error(), IOException);
+    }
 }
 
 //! The tags of one object, flattened into the JSON its payload carries.
-/*! PtoWriter frames bytes and carries a kind and an encoding; it has no tag
-    element. Rather than add one -- which would change the container format,
-    which this profile does not do -- the profile tags of an object ride in a
+/*! The profile tags of an object ride in a
     `_tags` member of the object's own JSON. A payload that is not JSON keeps
     its tags in the model object instead. */
 nlohmann::json labelizer_tags_json(const std::vector<MfdbTag>& tags) {
@@ -167,10 +169,13 @@ const char* labelizer_dye_model_name(ProbeModel m) {
 }
 
 std::string labelizer_object_text(const std::string& path, const std::string& name) {
-    PtoReader r(path);
-    const int i = r.find(name);
-    if (i < 0) return "";
-    const std::vector<unsigned char> d = r.data(r.objects()[i]);
+    pto::File r;
+    if (!r.open(path, false)) {
+        IMP_THROW("PTO: cannot open container " << path << ": " << r.error(), IOException);
+    }
+    const std::vector<std::uint64_t> matches = r.find_all(name);
+    if (matches.empty()) return "";
+    const std::vector<unsigned char> d = r.read(matches.front());
     return std::string(d.begin(), d.end());
 }
 
@@ -256,7 +261,12 @@ void labelizer_write_pto(const std::string& path, const std::string& pdb_path,
     }
     const std::string model_bytes = model_doc.dump(1);
 
-    PtoWriter w(path);
+    pto::File w;
+    if (!w.create(path, "", std::string(pto::kDefaultBanner) +
+            "\nThis container was written by IMP.bff.\nhttps://github.com/tpeulen/IMP.bff\n")) {
+        IMP_THROW("PTO: cannot open " << path << " for writing: " << w.error(), IOException);
+    }
+    w.set_writing_app("IMP.bff");
     labelizer_add(w, LABELIZER_PTO_README, "readme", "text", LABELIZER_README_TEXT);
     labelizer_add(w, LABELIZER_PTO_STRUCTURE, "label.structure", "text", structure);
     labelizer_add(w, LABELIZER_PTO_SCORES, "label.scores", "json", score_bytes);
@@ -264,6 +274,9 @@ void labelizer_write_pto(const std::string& path, const std::string& pdb_path,
         labelizer_add(w, LABELIZER_PTO_PAIRS, "label.pairs", "json", pair_bytes);
     }
     labelizer_add(w, LABELIZER_PTO_MODEL, "label.model", "json", model_bytes);
+    if (!w.commit()) {
+        IMP_THROW("PTO: writing " << path << " failed: " << w.error(), IOException);
+    }
     w.close();
 }
 
@@ -332,13 +345,16 @@ std::vector<LabelizerFRETPairScore> labelizer_read_pto_pairs(const std::string& 
 
 std::string labelizer_extract_pto_structure(const std::string& path,
                                      const std::string& out_pdb_path) {
-    PtoReader r(path);
-    const int i = r.find(LABELIZER_PTO_STRUCTURE);
-    if (i < 0) {
+    pto::File r;
+    if (!r.open(path, false)) {
+        IMP_THROW("PTO: cannot open container " << path << ": " << r.error(), IOException);
+    }
+    const std::vector<std::uint64_t> matches = r.find_all(LABELIZER_PTO_STRUCTURE);
+    if (matches.empty()) {
         IMP_THROW("labelizer_extract_pto_structure: " << path
                   << " carries no structure", IOException);
     }
-    const std::vector<unsigned char> d = r.data(r.objects()[i]);
+    const std::vector<unsigned char> d = r.read(matches.front());
     const std::string bytes(d.begin(), d.end());
     const std::string got = mfdb_checksum(bytes);
 

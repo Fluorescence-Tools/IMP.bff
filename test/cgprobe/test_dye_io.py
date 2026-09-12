@@ -124,7 +124,7 @@ class TestRotamerLibraryRead:
     def test_rotamer_library_structure(self):
         """The numpy/text reader, against files numpy and the shell wrote."""
         import numpy as np
-        from IMP.bff import read_rotamer_library
+        from IMP.bff import read_probe_rotamer_library
 
         coords = np.array([[[1.0, 2.0, 3.0]],
                            [[4.0, 5.0, 6.0]],
@@ -138,7 +138,7 @@ class TestRotamerLibraryRead:
             with open(base + "_atoms.txt", "w") as f:
                 f.write("C1\n")
 
-            reloaded = read_rotamer_library(base)
+            reloaded = read_probe_rotamer_library(base)
 
             assert len(reloaded.weights) == 3, "Weight count mismatch"
             assert reloaded.n_rotamers == 3, "Rotamer count mismatch"
@@ -157,14 +157,14 @@ class TestRotamerLibraryNormalize:
 
     def test_normalize_weights(self):
         """Verify weight normalization sums to 1.0."""
-        from IMP.bff import normalize_weights
-        from IMP.bff import RotamerLibrary
+        from IMP.bff import normalize_probe_rotamer_weights
+        from IMP.bff import ProbeRotamerLibrary
 
-        lib = RotamerLibrary()
+        lib = ProbeRotamerLibrary()
         lib.weights = [50.0, 30.0, 20.0]
         lib.n_rotamers = 3
 
-        normalized = normalize_weights(lib)
+        normalized = normalize_probe_rotamer_weights(lib)
 
         total = sum(normalized.weights)
         assert abs(total - 1.0) < 1e-6, f"Weights should sum to 1.0, got {total}"

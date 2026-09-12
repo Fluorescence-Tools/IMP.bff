@@ -26,11 +26,11 @@
 #include <IMP/core/Harmonic.h>
 #include <IMP/core/SphereDistancePairScore.h>
 #include <IMP/core/XYZR.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 // for the restraint factories that came from RotamerScoring.cpp
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/Rotamer.h>
+#include <IMP/bff/ProbeRotamer.h>
 #include <IMP/algebra/vector_generators.h>
 #include <IMP/constants.h>
 #include <boost/random/mersenne_twister.hpp>

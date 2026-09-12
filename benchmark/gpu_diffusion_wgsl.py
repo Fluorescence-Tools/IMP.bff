@@ -478,7 +478,7 @@ def main(reps=5, sizes=((41, 4000), (61, 4000), (81, 4000)), n_out=100):
     # Ohne diese Zeile ist die CPU-Spalte nicht lesbar: derselbe Aufruf ist
     # ein- oder achtthreadig, je nachdem, welcher Build importiert wurde.
     print("CPU: %d thread(s), OpenMP %s"
-          % (b.parallel_threads(), "on" if b.built_with_openmp() else "off"))
+          % (b.openmp_thread_count(), "on" if b.built_with_openmp() else "off"))
     print("%-8s %-16s %10s %9s %10s %11s"
           % ("Grid", "variant", "time (ms)", "vs naive", "vs CPU", "deviation"))
     for ng, n_steps in sizes:

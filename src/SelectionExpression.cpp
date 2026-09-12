@@ -7,7 +7,7 @@
 
 #include <IMP/bff/internal/Text.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cctype>

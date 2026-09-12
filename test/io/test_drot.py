@@ -81,15 +81,15 @@ def program():
 
 def _write(path, ensemble, encoding=None):
     xyz, weights, names, elements, resnames = ensemble
-    IMP.bff.write_drot(str(path), np.ascontiguousarray(xyz).ravel(),
+    IMP.bff.write_probe_rotamer_drot(str(path), np.ascontiguousarray(xyz).ravel(),
                        names, elements, resnames,
                        np.ascontiguousarray(weights),
-                       encoding or IMP.bff.DrotEncoding())
+                       encoding or IMP.bff.ProbeRotamerDrotEncoding())
     return path
 
 
 def _read(path):
-    lib = IMP.bff.read_drot(str(path))
+    lib = IMP.bff.read_probe_rotamer_drot(str(path))
     xyz = np.asarray(lib.get_coords(), dtype=np.float64).reshape(
         lib.n_rotamers, lib.n_atoms, 3)
     return lib, xyz
@@ -115,7 +115,7 @@ def test_the_store_is_self_contained(tmp_path, ensemble):
     _write(out, ensemble)
     assert not list(out.parent.glob("*.pdb"))
 
-    library = IMP.bff.load_rotamer_library(str(out))
+    library = IMP.bff.load_probe_rotamer_library(str(out))
     _, _, names, _, resnames = ensemble
     assert list(library.atom_names) == names
     assert list(library.resnames) == resnames
@@ -126,7 +126,7 @@ def test_compact_rung_is_smaller_and_says_so(tmp_path, ensemble):
     """`--grid` buys size at a cost the format states rather than hides."""
     xyz = ensemble[0]
     lossless = _write(tmp_path / "lossless.drot", ensemble)
-    encoding = IMP.bff.DrotEncoding()
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
     encoding.lossless = False
     encoding.grid_a = 0.001
     encoding.grid_deg = 0.01
@@ -138,11 +138,17 @@ def test_compact_rung_is_smaller_and_says_so(tmp_path, ensemble):
     assert LOSSLESS_TOL_A < err < 0.1
 
 
-def test_writing_twice_gives_the_same_bytes(tmp_path, ensemble):
-    """No timestamps, no uid: re-encoding a library is a no-op in a diff."""
+def test_writing_twice_gives_the_same_content(tmp_path, ensemble):
+    """Container UIDs vary; every decoded library value must be identical."""
     a = _write(tmp_path / "a.drot", ensemble)
     b = _write(tmp_path / "b.drot", ensemble)
-    assert a.read_bytes() == b.read_bytes()
+    first, first_coords = _read(a)
+    second, second_coords = _read(b)
+    np.testing.assert_array_equal(first_coords, second_coords)
+    np.testing.assert_array_equal(first.weights, second.weights)
+    for column in ("atom_names", "elements", "resnames"):
+        assert list(getattr(first, column)) == list(getattr(second, column))
+    assert first.metadata == second.metadata
 
 
 def test_shipped_libraries_reproduce_their_bcif():
@@ -154,7 +160,7 @@ def test_shipped_libraries_reproduce_their_bcif():
     """
     family = DATA / "dyes.drot.pto"
     if family.exists():                       # the shipped shape: one family
-        libraries = list(IMP.bff.drot_catalog(str(family)))[:6]
+        libraries = list(IMP.bff.probe_rotamer_drot_catalog(str(family)))[:6]
         pairs = [f"{family}::{name}" for name in libraries]
     else:                                     # a directory of one-library files
         pairs = [str(p) for p in sorted(DATA.glob("*_cutoff*.drot.pto"))[:6]]
@@ -187,15 +193,15 @@ def test_a_family_container_holds_many_libraries(tmp_path, ensemble):
     singles = []
     for i, n in enumerate((3, 5)):                 # two small, different libraries
         one = tmp_path / f"lib{i}.drot.pto"
-        IMP.bff.write_drot(str(one), np.ascontiguousarray(xyz[:n]).ravel(),
+        IMP.bff.write_probe_rotamer_drot(str(one), np.ascontiguousarray(xyz[:n]).ravel(),
                            names, elements, resnames, weights[:n],
-                           IMP.bff.DrotEncoding())
+                           IMP.bff.ProbeRotamerDrotEncoding())
         singles.append(one)
 
     family = tmp_path / "family.drot.pto"
-    IMP.bff.write_drot_bundle([str(p) for p in singles], ["alpha", "beta"],
+    IMP.bff.write_probe_rotamer_drot_bundle([str(p) for p in singles], ["alpha", "beta"],
                               str(family))
-    assert list(IMP.bff.drot_catalog(str(family))) == ["alpha", "beta"]
+    assert list(IMP.bff.probe_rotamer_drot_catalog(str(family))) == ["alpha", "beta"]
 
     for one, name in zip(singles, ("alpha", "beta")):
         want, want_xyz = _read(one)
@@ -207,27 +213,27 @@ def test_a_family_container_holds_many_libraries(tmp_path, ensemble):
                               np.asarray(want.get_weights()))
 
     with pytest.raises(Exception):
-        IMP.bff.read_drot(f"{family}::gamma")          # names what it has
+        IMP.bff.read_probe_rotamer_drot(f"{family}::gamma")          # names what it has
 
 
 def test_rejects_shapes_that_do_not_agree(tmp_path, ensemble):
     xyz, weights, names, elements, resnames = ensemble
     out = str(tmp_path / "bad.drot")
     with pytest.raises(Exception):
-        IMP.bff.write_drot(out, np.ascontiguousarray(xyz).ravel()[:-3],
+        IMP.bff.write_probe_rotamer_drot(out, np.ascontiguousarray(xyz).ravel()[:-3],
                            names, elements, resnames, weights,
-                           IMP.bff.DrotEncoding())
+                           IMP.bff.ProbeRotamerDrotEncoding())
     with pytest.raises(Exception):
-        IMP.bff.write_drot(out, np.ascontiguousarray(xyz).ravel(),
+        IMP.bff.write_probe_rotamer_drot(out, np.ascontiguousarray(xyz).ravel(),
                            names, elements, resnames, weights[:-1],
-                           IMP.bff.DrotEncoding())
+                           IMP.bff.ProbeRotamerDrotEncoding())
 
 
 def test_rejects_a_file_that_is_not_a_drot(tmp_path):
     junk = tmp_path / "not.drot"
     junk.write_bytes(b"\x00\x01\x02not a brotli stream")
     with pytest.raises(Exception):
-        IMP.bff.read_drot(str(junk))
+        IMP.bff.read_probe_rotamer_drot(str(junk))
 
 
 def test_program_converts_a_shipped_library(tmp_path, program, capsys):
@@ -260,9 +266,9 @@ def test_a_library_without_residue_names_round_trips(tmp_path, ensemble):
     """Residue names are optional -- the template loop drops the column."""
     xyz, weights, names, elements, _ = ensemble
     out = tmp_path / "nores.drot"
-    IMP.bff.write_drot(str(out), np.ascontiguousarray(xyz).ravel(),
+    IMP.bff.write_probe_rotamer_drot(str(out), np.ascontiguousarray(xyz).ravel(),
                        names, elements, [], np.ascontiguousarray(weights),
-                       IMP.bff.DrotEncoding())
+                       IMP.bff.ProbeRotamerDrotEncoding())
     lib, back = _read(out)
     assert list(lib.atom_names) == names
     assert list(lib.resnames) == []
@@ -276,11 +282,11 @@ def test_compact_rung_refuses_a_grid_it_cannot_hold(tmp_path, ensemble):
     molecule, which is the one failure mode a store must not have.
     """
     xyz, weights, names, elements, resnames = ensemble
-    encoding = IMP.bff.DrotEncoding()
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
     encoding.lossless = False
     encoding.grid_a = 1e-6
     with pytest.raises(Exception, match="int16|lossless"):
-        IMP.bff.write_drot(str(tmp_path / "toofine.drot"),
+        IMP.bff.write_probe_rotamer_drot(str(tmp_path / "toofine.drot"),
                            np.ascontiguousarray(xyz).ravel(),
                            names, elements, resnames,
                            np.ascontiguousarray(weights), encoding)
@@ -297,14 +303,15 @@ def test_a_payload_that_compresses_hugely_still_reads(tmp_path):
     shipped `.drot` is under the ratio, which is why nothing had noticed; this
     file is not. The reader streams now, so there is nothing to guess.
     """
-    n_rotamers, n_atoms = 400, 40
+    n_rotamers, n_atoms = 4000, 40
     # a connected chain -- the writer builds a Z-matrix, so the molecule has to
-    # be one -- repeated 400 times with a whisper of noise, which is what makes
+    # be one -- repeated 4000 times so fixed container indexes do not dominate
+    # the compression-ratio check, with a whisper of noise. This makes
     # the payload compress the way a real near-rigid library would
     rng = np.random.default_rng(4)
     one = np.array([[1.5 * i, 0.35 * (i % 2), 0.0] for i in range(n_atoms)])
     xyz = np.repeat(one[None, :, :], n_rotamers, axis=0)
-    # only the first few move, so the grid is 400 near-identical blocks -- the
+    # only the first few move, so the grid is 4000 near-identical blocks -- the
     # shape a library of a rigid dye on a short linker has
     xyz[:, :4] += rng.normal(scale=0.05, size=(n_rotamers, 4, 3))
     weights = np.full(n_rotamers, 1.0 / n_rotamers)
@@ -313,13 +320,13 @@ def test_a_payload_that_compresses_hugely_still_reads(tmp_path):
     resnames = ["DYE"] * n_atoms
 
     path = tmp_path / "flat.drot.pto"
-    IMP.bff.write_drot(str(path), np.ascontiguousarray(xyz).ravel(),
+    IMP.bff.write_probe_rotamer_drot(str(path), np.ascontiguousarray(xyz).ravel(),
                        names, elements, resnames,
                        np.ascontiguousarray(weights))
     raw = n_rotamers * n_atoms * 3 * 4          # float32 grids
     assert path.stat().st_size * 8 < raw, "this file has to beat the old guess"
 
-    lib = IMP.bff.read_drot(str(path))
+    lib = IMP.bff.read_probe_rotamer_drot(str(path))
     assert lib.n_rotamers == n_rotamers
     assert lib.n_atoms == n_atoms
     back = np.asarray(lib.get_coords(), dtype=np.float64).reshape(

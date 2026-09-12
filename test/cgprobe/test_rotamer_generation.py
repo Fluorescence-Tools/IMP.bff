@@ -7,7 +7,7 @@ import tempfile
 
 from IMP.bff import cluster_frames_leader, assign_frames_to_clusters
 from IMP.bff import boltzmann_weights, cluster_weights
-from IMP.bff import read_rotamer_library
+from IMP.bff import read_probe_rotamer_library
 
 
 class TestRotamerGeneration(unittest.TestCase):
@@ -46,7 +46,7 @@ class TestRotamerGeneration(unittest.TestCase):
         self.assertGreater(c_weights[0], c_weights[1])
 
     def test_io_cycle(self):
-        from IMP.bff import RotamerLibrary
+        from IMP.bff import ProbeRotamerLibrary
 
         coords = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
                            [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]]])
@@ -62,7 +62,7 @@ class TestRotamerGeneration(unittest.TestCase):
             with open(base + "_atoms.txt", "w") as f:
                 f.write("C1\nC2\n")
 
-            read_lib = read_rotamer_library(base)
+            read_lib = read_probe_rotamer_library(base)
             self.assertEqual(len(read_lib.weights), 2)
             self.assertEqual(list(read_lib.atom_names), ["C1", "C2"])
             self.assertEqual(read_lib.n_rotamers, 2)

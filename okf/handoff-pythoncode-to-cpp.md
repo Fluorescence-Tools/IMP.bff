@@ -94,7 +94,7 @@ _LAZY["AVNetworkRestraintWrapper"] = _build_av_network_restraint_wrapper
 
 Files: `avmeandistance.i` (AVNetworkRestraintWrapper),
 `structureio.i` (write_rmf, read/write_rotamer_library_rmf),
-`rotamer_ensemble.i` (RotamerEnsemble subclasses States)
+`rotamer_ensemble.i` (ProbeRotamerEnsemble subclasses States)
 
 ### Category 5: IMP.pmi subclasses
 
@@ -125,7 +125,7 @@ Files: `avmeandistance.i` (AVNetworkRestraintWrapper),
 | 10 | `petquenching.i` | 121 | Dict-returning wrappers, `_pet_table` helper, properties. |
 | 11 | `dyediffusion.i` | 140 | `_as_cube` reshape, properties, `run` wrapper. |
 | 12 | `avmodel.i` | 157 | `_av_flat`/`_av_params` helpers, properties on States/AV/ACV. |
-| 13 | `dyesampling.i` | 183 | Properties on RotamerLibrary/DyeDiffusionTrajectory, `simulate_dye_diffusion` wrapper. |
+| 13 | `dyesampling.i` | 183 | Properties on ProbeRotamerLibrary/DyeDiffusionTrajectory, `simulate_dye_diffusion` wrapper. |
 | 14 | `photophysics.i` | 223 | ~15 functions, all reshape + call C++. |
 | 15 | `statesdistance.i` | 195 | Properties on FRETPairGeometry/FRETPairEfficiencies, dict surface. |
 | 16 | `quenchingmodel.i` | 313 | `_as_obstacles`/`_as_volume` helpers, properties, update methods. |
@@ -143,7 +143,7 @@ Files: `avmeandistance.i` (AVNetworkRestraintWrapper),
 | # | File | Lines | What to do |
 |---|---|---|---|
 | 20 | `structureio.i` | 373 | ~15 reshape wrappers + 3 lazy RMF builders. RMF stays lazy Python. |
-| 21 | `rotamer_ensemble.i` | 248 | `RotamerEnsemble` subclasses `States`. Must become C++ class. |
+| 21 | `rotamer_ensemble.i` | 248 | `ProbeRotamerEnsemble` subclasses `States`. Must become C++ class. |
 | 22 | `avmeandistance.i` | 156 | `estimate_position_uncertainty` wrapper + `AVNetworkRestraintWrapper` (IMP.pmi subclass, stays lazy Python). |
 
 ### Phase 4: IMP API glue — large (4 files, ~4,500 lines)
@@ -159,7 +159,7 @@ Files: `avmeandistance.i` (AVNetworkRestraintWrapper),
 
 | # | File | Lines | What to do |
 |---|---|---|---|
-| 27 | `rotamer.i` | 1,406 | `load_rotamer_library`, `RotamerFRET`, file I/O + orchestration. |
+| 27 | `rotamer.i` | 1,406 | `load_probe_rotamer_library`, `FRETRotamer`, file I/O + orchestration. |
 | 28 | `docking.i` | 1,431 | IMP.pmi docking engine. Heavy PMI dependency. |
 | 29 | `sim.i` | 1,490 | IMP.pmi MD/MC runner. Heavy PMI dependency. |
 
@@ -181,9 +181,9 @@ Current order (from `swig.i-in`):
 ```
 types.i → DataPaths.h → pathmap.i → av.i → HierarchyFrame.h →
 petquenching.i → quenching.i → fps.i → dye.i → avdistance.i →
-BrownianWalk.h → DiffusionSolver.h → PhotonSimulation.h → QuenchedDecay.h →
+BrownianWalk.h → DiffusionSolver.h → PhotophysicsPhotonSimulation.h → QuenchedDecay.h →
 RotamerEnergy.h → scoring.i → greedyolga.i →
-LifetimeSpectrum.h → Mol2IO.h → SequenceAlignment.h → LinkerGeometry.h →
+PhotophysicsLifetimeSpectrum.h → Mol2IO.h → SequenceAlignment.h → LinkerGeometry.h →
 RotamerStatistics.h → Clustering.h → MolecularGraph.h →
 forcefield.i → ForceFieldCIF.h → cif.i →
 label.i → topology.i → rotamer.i → sampling.i → sim.i → docking.i →
@@ -248,13 +248,13 @@ use `std::function`:
 std::string read_evaluators_json(const std::string& path);
 ```
 
-### RotamerEnsemble (rotamer_ensemble.i)
+### ProbeRotamerEnsemble (rotamer_ensemble.i)
 
 Subclasses `States` (a SWIG value type). In C++ this is straightforward
 inheritance:
 
 ```cpp
-class RotamerEnsemble : public States {
+class ProbeRotamerEnsemble : public States {
     std::vector<double> atoms_;  // (n, n_atoms, 3) flat
     std::vector<std::string> atom_names_;
     // ...
@@ -321,13 +321,13 @@ Headers in `include/` (55 headers):
 | `Scoring.h` | CHARMM36 LJ, boltzmann, AABB, rotamer score |
 | `RotamerEnergy.h` | Pair energy matrix, all-pairs kernels |
 | `FRETPair.h` | Pair geometry, efficiencies |
-| `OrientationFactor.h` | kappa^2 distributions |
-| `ExchangeFRET.h` | Master equation, averaging limits |
-| `InteractionTerms.h` | PETTerm, FRETTerm, RadiativeTerm |
-| `LifetimeSpectrum.h` | (amplitude, rate) pairs |
+| `FRETOrientationFactor.h` | kappa^2 distributions |
+| `FRETExchange.h` | Master equation, averaging limits |
+| `PhotophysicsInteractionTerms.h` | PETTerm, FRETTerm, RadiativeTerm |
+| `PhotophysicsLifetimeSpectrum.h` | (amplitude, rate) pairs |
 | `DyeLibrary.h` | Dye, Spectrum |
 | `PETQuenching.h` | Quencher, PETParameters, ResidueQuenching |
-| `QuenchingModel.h` | DynamicAV, QuenchedDonorDecay |
+| `PhotophysicsQuenchingModel.h` | DynamicAV, QuenchedDonorDecay |
 | `QuenchingGrid.h` | slow_factor_grid, quenching_rate_grid |
 | `QuenchingMap.h` | quenching_rate_map, fret_rate_map |
 | `FRETRateTrace.h` | fret_rate_trace |
@@ -336,7 +336,7 @@ Headers in `include/` (55 headers):
 | `BrownianWalk.h` | Brownian walker |
 | `DiffusionSolver.h` | Field-picture solver |
 | `GridDiffusionSolver.h` | Grid diffusion solver |
-| `PhotonSimulation.h` | Photon Monte Carlo |
+| `PhotophysicsPhotonSimulation.h` | Photon Monte Carlo |
 | `StatesDistance.h` | fret_pair_geometry, histogram_rda |
 | `DistanceCalibration.h` | fit_transfer_polynomial |
 | `AVDistance.h` | random_distances, density_to_points |
@@ -359,6 +359,6 @@ Headers in `include/` (55 headers):
 | `PathMap.h` | AV solver internals |
 | `AVOccupancyMap.h` | Shared obstacle raster |
 | `LabelingRestraints.h` | Chi-squared scoring |
-| `ModelPrecision.h` | Position uncertainty |
+| `DockingPrecision.h` | Position uncertainty |
 | `DyeDiffusion.h` | Particle-picture walk |
 | `DataPaths.h` | Shipped data location |

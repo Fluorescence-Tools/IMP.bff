@@ -13,7 +13,7 @@ directly with every number in that one:
   multiply-adds with the stencil weights precomputed, which is the same
   arithmetic the tuned WGSL kernel does;
 * the **Krylov** route -- the whole propagation as one matrix exponential,
-  the method `src/KrylovDiffusion.cpp` implements.
+  the method `src/DiffusionSolverKrylov.cpp` implements.
 
 Both eager and under `torch.compile`, because the difference is not small: the
 step is seven elementwise operations on a grid, and eager torch launches each

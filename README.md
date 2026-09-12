@@ -15,7 +15,7 @@ Labels are modelled two ways: as **accessible volumes** (`IMP.bff.AV`,
 atomistic dye + linker placed on a residue from a rotamer library (the
 FRETpredict libraries ship as module data) or sampled over its linker degrees
 of freedom, screened against the protein and turned into R0/κ²/FRET
-efficiencies (`IMP.bff.RotamerFRET`, `IMP.bff.attach_dyes`, ...). Every public
+efficiencies (`IMP.bff.FRETRotamer`, `IMP.bff.attach_dyes`, ...). Every public
 name is reachable flat as `IMP.bff.<Name>`; the manual page
 `doc/manual/structure/structure_cgprobe.ipynb` walks the explicit route, and
 `okf/cgprobe.md` records how the code is organised.
@@ -26,11 +26,11 @@ Two packages, one import name. Both give you `import IMP.bff`; they own the
 same files, so install one or the other, not both.
 
 **`bff` — the core, no IMP.** Label distributions and accessible volumes,
-explicit dyes from a rotamer library (`RotamerFRET`), dye diffusion on a
+explicit dyes from a rotamer library (`FRETRotamer`), dye diffusion on a
 grid (`ProbeDiffusionSimulation`, `DynamicAccessibleVolume`), linker
 sampling (`RRTTree`), probe force fields (`create_forcefield_system`),
-side-chain packing (`faspr_pack`), the whole fitting stack (`Minimizer`,
-`TcspcDecay`, `ChiSquared`, FCS, κ²), the labelling-site score, and
+side-chain packing (`pack_protein_sidechains`), the whole fitting stack (`Minimizer`,
+`TCSPCDecay`, `ChiSquared`, FCS, κ²), the labelling-site score, and
 structure and trajectory IO.
 
 ```bash
@@ -103,7 +103,7 @@ print(IMP.bff.mean_fret_distance(av.get_points(), av2.get_points(), 52.0))
 Explicit dyes instead of volumes, with no IMP either:
 
 ```python
-fret = IMP.bff.RotamerFRET()              # dye + linker from a rotamer library
+fret = IMP.bff.FRETRotamer()              # dye + linker from a rotamer library
 sim = IMP.bff.ProbeDiffusionSimulation()  # a dye diffusing on its linker
 ```
 

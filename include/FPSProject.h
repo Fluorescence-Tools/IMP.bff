@@ -37,7 +37,7 @@
 #include <IMP/bff/bff_config.h>
 #include <IMP/bff/Docking.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <string>
 #include <vector>

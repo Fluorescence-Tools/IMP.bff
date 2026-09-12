@@ -12,7 +12,7 @@
 #include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 #include <IMP/bff/StructureIO.h>
 #include <IMP/bff/internal/GridShape.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cstdlib>
 #include <cstring>

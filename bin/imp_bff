@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import csv
+import glob
 import json
 import math
 import os
@@ -54,7 +56,7 @@ from IMP.bff import (
 from IMP.bff import ProbeAccessibleVolume, get_av_from_structure
 from IMP.bff import (
     av_pair_statistics, chi2_score, fret_pair_efficiencies, fret_pair_geometry)
-from IMP.bff import RotamerEnsemble
+from IMP.bff import ProbeRotamerEnsemble
 
 
 # --------------------------------------------------------------------------
@@ -967,7 +969,7 @@ def analyze_tc(input_rmf, dt, show_all):
     if not len(lib.transitions):
         click.echo("No transition matrix found.")
         return
-    # `read_rotamer_library_rmf` answers an `IMP.bff.RotamerLibrary` now, whose
+    # `read_rotamer_library_rmf` answers an `IMP.bff.ProbeRotamerLibrary` now, whose
     # `transitions` are flat and whose weights are `weights` -- one value for
     # every rotamer-library reader, where this one used to hand back a dict.
     counts = [float(x) for x in lib.transitions]
@@ -1465,7 +1467,7 @@ def predict(
     else:
         raise click.UsageError("--chain must be omitted or provided exactly twice")
 
-    fret = RotamerFRET(
+    fret = IMP.bff.FRETRotamer(
         protein_path,
         list(residues),
         chains=chain_values,
@@ -1524,12 +1526,12 @@ def av_for_position(pdb: str, pos: Dict[str, Any], disc_step: Optional[float] = 
 
 
 def ensemble_for_position(pdb: str, pos: Dict[str, Any], library: str,
-                          options=None, position_name: str = "") -> RotamerEnsemble:
+                          options=None, position_name: str = "") -> ProbeRotamerEnsemble:
     """The screened rotamer ensemble of ``library`` at the position's residue."""
-    return RotamerEnsemble.from_site(
+    return ProbeRotamerEnsemble.from_site(
         str(pdb), pos.get("chain_identifier") or "",
         int(pos["residue_seq_number"]), library,
-        options if options is not None else IMP.bff.RotamerSiteOptions(),
+        options if options is not None else IMP.bff.ProbeRotamerSiteOptions(),
         position_name)
 
 
@@ -1586,7 +1588,7 @@ def compare_av_and_rotamer_positions(
     p_heavy = np.array([not n.startswith("H") for n in p_names])
     p_coords = frame.coords
 
-    def _interpenetration_weight(ens: RotamerEnsemble, cutoff: float = 2.5, min_weight: float = 1e-3) -> Tuple[float, float]:
+    def _interpenetration_weight(ens: ProbeRotamerEnsemble, cutoff: float = 2.5, min_weight: float = 1e-3) -> Tuple[float, float]:
         """(weight on rotamers whose heavy atoms come within ``cutoff`` Å of a
         protein heavy atom outside the labelled residue, min such distance over
         rotamers carrying more than ``min_weight``)."""
@@ -1609,7 +1611,7 @@ def compare_av_and_rotamer_positions(
         av = av_for_position(pdb, pos, disc_step)
         ens = ensemble_for_position(
             pdb, pos, libraries[name],
-            IMP.bff.RotamerSiteOptions(temperature=temperature), name)
+            IMP.bff.ProbeRotamerSiteOptions(temperature=temperature), name)
         w_clash, d_min = _interpenetration_weight(ens)
         def _extent(cloud: ProbeAccessibleVolume) -> float:
             if cloud.n_points == 0:
@@ -4310,7 +4312,7 @@ def estimate_errors(
     """
     import statistics
 
-    _ensure_output_dir(output_dir)
+    ensure_dir(str(output_dir))
     params = params or IMP.bff.DockingParameters()
     args = [
         (i, os.path.join(output_dir, f"trial_{i:03d}"),

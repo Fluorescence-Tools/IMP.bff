@@ -43,6 +43,7 @@ class Tests(IMP.test.TestCase):
     # DecayConvolution.h is the spectroscopy module's, and while it said in
     # its own header that it was "kept in step", nothing checked that it was.
     VENDORED = {
+        "Dual.h": ("math",),
         "MlpCore.h": ("math",),
         "LatticeDiffusion.h": ("math",),
         "DecayConvolution.h": ("spectroscopy", "decay"),
@@ -67,7 +68,9 @@ class Tests(IMP.test.TestCase):
             for forbidden in ("Mat.h", "nlohmann", "Registry.h", "SimPcgRandom", "Eigen", "IMP/"):
                 self.assertNotIn('#include "' + forbidden, text, name)
                 self.assertNotIn("#include <" + forbidden, text, name)
-            self.assertIn("TTTRLIB_" + name[:-2].upper() + "_H", text)
+            guard = ("TTTRLIB_FSCONV_H" if name == "DecayConvolution.h"
+                     else "TTTRLIB_" + name[:-2].upper() + "_H")
+            self.assertIn(guard, text)
 
     def test_copies_match_tttrlib_when_the_checkout_is_present(self):
         for name in self.VENDORED:

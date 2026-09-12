@@ -54,13 +54,13 @@ print(f"{frames.shape[0]} conformers of {frames.shape[1]} atoms")
 # dipole directions between atoms ~1.7 A apart, and those errors do not
 # average away.
 out = Path("A48_C1R_cutoff30.drot.pto")
-IMP.bff.write_drot(str(out), np.ascontiguousarray(frames).ravel(),
+IMP.bff.write_probe_rotamer_drot(str(out), np.ascontiguousarray(frames).ravel(),
                    names, elements, resnames, np.ascontiguousarray(weights),
-                   IMP.bff.DrotEncoding())
+                   IMP.bff.ProbeRotamerDrotEncoding())
 print(f"wrote {out} ({out.stat().st_size} bytes)")
 
 # --- 3. read it back and check it is the same ensemble ---------------------
-library = IMP.bff.read_drot(str(out))
+library = IMP.bff.read_probe_rotamer_drot(str(out))
 back = library.coords
 print(f"round trip: {library.n_rotamers} rotamers, "
       f"max deviation {np.abs(back - frames).max():.2e} A, "
@@ -72,9 +72,9 @@ print(f"round trip: {library.n_rotamers} rotamers, "
 # stem names. A library of a dye that is *not* in the registry is passed as a
 # loaded dict with its own `metadata` instead.
 pdb = str(get_structure_dir("1DG3.pdb"))
-donor = IMP.bff.RotamerEnsemble.from_site(pdb, "A", 481, str(out),
+donor = IMP.bff.ProbeRotamerEnsemble.from_site(pdb, "A", 481, str(out),
                                           position_name="A481")
-acceptor = IMP.bff.RotamerEnsemble.from_site(
+acceptor = IMP.bff.ProbeRotamerEnsemble.from_site(
     pdb, "A", 496, "AlexaFluor 594 C1R cutoff30", position_name="A496")
 print(f"donor {donor.n_rotamers} rotamers, Z={donor.partition:.3f}, "
       f"mean position {donor.mean_position.round(1)}")
@@ -87,7 +87,7 @@ print(f"R0 = {eff.forster_radius / 10:.2f} nm at <kappa2> = "
 
 # The same library through the registry name gives the same numbers -- the
 # store changed, the ensemble did not.
-shipped = IMP.bff.RotamerEnsemble.from_site(
+shipped = IMP.bff.ProbeRotamerEnsemble.from_site(
     pdb, "A", 481, "AlexaFluor 488 C1R cutoff30", position_name="A481")
 print(f"same as the shipped library: "
       f"{abs(shipped.partition - donor.partition) < 1e-9}")

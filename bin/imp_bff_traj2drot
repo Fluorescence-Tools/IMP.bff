@@ -8,7 +8,7 @@ bond angle and dihedral per row. Two things follow. The file is
 so unlike `.bcif` it needs no `.pdb` beside it -- and a conformer *is* a
 dihedral vector, which is what continuous side-chain sampling needs.
 
-Since v10 the members ride the **PTO** container (`IMP/bff/Pto.h`), the EBML
+Since v10 the members ride the **PTO** container (`IMP/bff/MMFDBProfile.h`), the EBML
 envelope this stack shares -- `.mmfbd.pto` for photons, `.chm.pto` for
 structures, `.drot.pto` here -- so a written library is named
 `<stem>.drot.pto`. Each member is compressed on its own, which over the 95
@@ -107,7 +107,7 @@ def read_frames(src: Path, n_atoms: int, top: Path | None) -> np.ndarray:
         traj = mdtraj.load(str(src), top=str(top))
         return np.asarray(traj.xyz, dtype=np.float64) * 10.0   # nm -> A
     if suffix == ".drot" or src.name.lower().endswith(".drot.pto"):
-        lib = IMP.bff.read_drot(str(src))
+        lib = IMP.bff.read_probe_rotamer_drot(str(src))
         return np.asarray(lib.get_coords(), dtype=np.float64).reshape(
             lib.n_rotamers, lib.n_atoms, 3)
     flat = IMP.bff.read_trajectory(str(src), n_atoms, -1)
@@ -153,12 +153,12 @@ def convert(src: Path, dst: Path, top: Path | None, weights_path: Path | None,
         sys.exit(f"{src.name}: {len(weights)} weights for {len(xyz)} frames "
                  f"-- pass --cluster to build weights from populations")
 
-    encoding = IMP.bff.DrotEncoding()
+    encoding = IMP.bff.ProbeRotamerDrotEncoding()
     if grid_a is not None:
         encoding.lossless = False
         encoding.grid_a = grid_a
         encoding.grid_deg = grid_deg
-    IMP.bff.write_drot(str(dst), np.ascontiguousarray(xyz).ravel(),
+    IMP.bff.write_probe_rotamer_drot(str(dst), np.ascontiguousarray(xyz).ravel(),
                        names, elements, resnames,
                        np.ascontiguousarray(weights), encoding)
 
@@ -166,7 +166,7 @@ def convert(src: Path, dst: Path, top: Path | None, weights_path: Path | None,
             f"{dst.stat().st_size} bytes "
             f"({'lossless' if grid_a is None else f'{grid_a} A grid'})")
     if verify:
-        lib = IMP.bff.read_drot(str(dst))
+        lib = IMP.bff.read_probe_rotamer_drot(str(dst))
         back = np.asarray(lib.get_coords(), dtype=np.float64).reshape(
             lib.n_rotamers, lib.n_atoms, 3)
         if back.shape != xyz.shape:
@@ -244,10 +244,10 @@ def bundle(sources: list[Path], out: Path) -> int:
     seen = {n for n in names}
     if len(seen) != len(names):
         sys.exit("two sources would take the same library name")
-    IMP.bff.write_drot_bundle([str(s) for s in sources], names, str(out))
+    IMP.bff.write_probe_rotamer_drot_bundle([str(s) for s in sources], names, str(out))
 
     total = sum(s.stat().st_size for s in sources)
-    listed = list(IMP.bff.drot_catalog(str(out)))
+    listed = list(IMP.bff.probe_rotamer_drot_catalog(str(out)))
     if sorted(listed) != sorted(names):
         sys.exit(f"{out}: the catalog does not list what went in")
     print(f"{out.name}: {len(names)} libraries, {out.stat().st_size} bytes "

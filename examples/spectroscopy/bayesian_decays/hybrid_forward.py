@@ -120,7 +120,7 @@ class HybridForward:
         #: one bff node per detector
         self.node, self.out, self.spec_port, self.buf = {}, {}, {}, {}
         for d in self.s.dets:
-            nd = bff.TcspcDecay(d)
+            nd = bff.TCSPCDecay(d)
             nd.set_number_of_lifetimes(self.K)
             nd.set_timing(self.dt, self.s.period)
             port = bff.GraphPort(); port.value = np.zeros(self.n)

@@ -8,7 +8,7 @@
  */
 #include <IMP/bff/ProbeAccessibleVolumeDecorator.h>
 #include <IMP/bff/LabelizerFRET.h>
-#include <IMP/bff/HierarchyBridge.h>
+#include <IMP/bff/IMPHierarchyBridge.h>
 #include <IMP/bff/ProbeAccessibleVolumeBuilder.h>
 #include <IMP/bff/StripMask.h>
 #include <IMP/atom/Atom.h>

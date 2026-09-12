@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vendor FASPR 1:1 into imp.bff: flat src/Faspr*.h + src/Faspr*.cpp.
+"""Generate FASPR port intermediates under build/faspr-port.
 
 Mechanical transforms only (numerics untouched):
   * wrap declarations/definitions in namespace IMP::bff::faspr
@@ -8,15 +8,18 @@ Mechanical transforms only (numerics untouched):
   * exit(0) -> faspr_fail()  (throws; defined in Utility)
   * sprintf -> snprintf (macOS deprecation, identical behaviour)
 
-FASPR.cpp (the CLI main) is not ported; its pipeline becomes src/Faspr.cpp.
+FASPR.cpp (the CLI main) is not ported. The reviewed intermediates are
+amalgamated into src/internal/ProteinSidechainFaspr.h and .cpp; generating
+them must not add duplicate translation units to the production source tree.
 """
 import re
 import sys
 from pathlib import Path
 
-SRC = Path("/Users/tpeulen/dev/imp.bff/junk/FASPR/src")
-DST_H = Path("/Users/tpeulen/dev/imp.bff/src")
-DST_C = Path("/Users/tpeulen/dev/imp.bff/src")
+REPO = Path(__file__).resolve().parents[1]
+SRC = REPO / "junk" / "FASPR" / "src"
+DST_H = REPO / "build" / "faspr-port"
+DST_C = DST_H
 DST_H.mkdir(parents=True, exist_ok=True)
 
 UNITS = ["Utility", "AAName", "Structure", "RotamerBuilder",
@@ -26,7 +29,7 @@ BANNER = """/* Vendored 1:1 from FASPR (github.com/tommyhuangthu/FASPR, version
  * 20200309) into IMP.bff by tools/port_faspr.py -- behaviour-identical port
  * wrapped in namespace IMP::bff::faspr. Only mechanical changes: namespace,
  * include guards/prefixes, exit() -> throwing faspr_fail(), MSVC pragmas
- * dropped, sprintf -> snprintf. See IMP/bff/Faspr.h for the license
+ * dropped, sprintf -> snprintf. See src/internal/ProteinSidechainFaspr.h for the license
  * preserved below and the citation. */
 """
 

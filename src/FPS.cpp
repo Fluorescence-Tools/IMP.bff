@@ -25,7 +25,7 @@
 #include <cmath>
 #include <limits>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <set>

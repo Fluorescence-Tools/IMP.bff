@@ -9,7 +9,7 @@
 
 #include <IMP/bff/VdwRadii.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cstdio>

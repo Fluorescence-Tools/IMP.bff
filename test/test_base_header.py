@@ -1,7 +1,7 @@
-"""`Base.h`: the module's vocabulary compiles with no IMP on the include path.
+"""`IMPCompatibility.h`: the module's vocabulary compiles with no IMP on the include path.
 
 Nearly every header here says `IMP_THROW`, `IMP_SHOWABLE_INLINE` or
-`IMP_VALUES`. `include/Base.h` is the one door those come through: with IMP
+`IMP_VALUES`. `include/IMPCompatibility.h` is the one door those come through: with IMP
 present it forwards to IMP's definitions, and with `IMPBFF_STANDALONE`
 defined it supplies equivalents of its own. That second branch is the whole
 basis of the independent core, and nothing in the ordinary build ever
@@ -31,7 +31,7 @@ import tempfile
 import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_BASE_H = os.path.join(_ROOT, "include", "Base.h")
+_BASE_H = os.path.join(_ROOT, "include", "IMPCompatibility.h")
 _SHIMS = os.path.join(_ROOT, "standalone", "include")  # the standalone build's IMP/ tree
 
 _CONFIG_STUB = """\
@@ -44,7 +44,7 @@ _CONFIG_STUB = """\
 """
 
 _TU = r"""
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <iostream>
 #include <vector>
 
@@ -90,7 +90,7 @@ class TestBaseHeaderStandalone(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         inc = os.path.join(self.tmp, "IMP", "bff")
         os.makedirs(inc)
-        shutil.copy(_BASE_H, os.path.join(inc, "Base.h"))
+        shutil.copy(_BASE_H, os.path.join(inc, "IMPCompatibility.h"))
         # the shim tree the standalone build puts on the path: IMP/Object.h,
         # IMP/Pointer.h, IMP/constants.h, IMP/algebra/ -- and nothing of IMP's
         for name in os.listdir(os.path.join(_SHIMS, "IMP")):
@@ -130,7 +130,7 @@ class TestBaseHeaderStandalone(unittest.TestCase):
         self.assertIn("SE:no such file", out)       # catchable as std::exception
 
     def test_without_the_flag_and_without_imp_it_does_not_compile(self):
-        # Proves the flag is the switch. If this ever starts passing, Base.h
+        # Proves the flag is the switch. If this ever starts passing, IMPCompatibility.h
         # has grown an IMP-free path that is on by default -- which would be a
         # different design, and one that should be chosen, not stumbled into.
         if not self.cxx:
@@ -147,7 +147,7 @@ class TestBaseHeaderStandalone(unittest.TestCase):
         src = open(_BASE_H).read()
         m = re.search(r"#ifndef IMPBFF_STANDALONE(.*?)#else(.*?)#endif  // IMPBFF_STANDALONE",
                       src, re.S)
-        self.assertIsNotNone(m, "Base.h no longer has the two-branch shape")
+        self.assertIsNotNone(m, "IMPCompatibility.h no longer has the two-branch shape")
         imp_branch, standalone_branch = m.group(1), m.group(2)
         self.assertRegex(imp_branch, r"#include <IMP/exception\.h>")
         for inc in re.findall(r"#include <(IMP/[^>]+)>", standalone_branch):

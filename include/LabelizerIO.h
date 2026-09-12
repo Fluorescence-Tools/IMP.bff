@@ -16,10 +16,10 @@
  * This writes **one file**. It holds the structure verbatim, the scores as
  * tables whose columns are named by `_mmfdb_label_score` items, and the
  * complete settings; every controlled value is a term from the MMFDB
- * dictionary, checked by `Pto.h`'s profile section before it is written.
+ * dictionary, checked by `MMFDBProfile.h`'s profile section before it is written.
  *
- * The container is #IMP::bff::PtoWriter's and the vocabulary is
- * `Pto.h`'s. Nothing here invents either.
+ * The container is `pto::File`'s and the vocabulary is
+ * `MMFDBProfile.h`'s. Nothing here invents either.
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <IMP/bff/LabelizerFRET.h>
-#include <IMP/bff/Pto.h>
+#include <IMP/bff/MMFDBProfile.h>
 
 IMPBFF_BEGIN_NAMESPACE
 

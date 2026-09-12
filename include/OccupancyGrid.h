@@ -21,7 +21,7 @@
 #include <IMP/Pointer.h>
 #include <IMP/algebra/Vector3D.h>
 #include <IMP/algebra/VectorD.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cstddef>
 #include <cstdint>

@@ -17,7 +17,7 @@
 #include <IMP/bff/internal/json.h>
 
 #include <IMP/algebra/Vector3D.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <algorithm>
 #include <cctype>

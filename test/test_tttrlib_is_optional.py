@@ -101,7 +101,7 @@ class Tests(IMP.test.TestCase):
             "sys.meta_path.insert(0, Block())\n"
             "import IMP, IMP.bff\n"
             "m = IMP.Model()\n"
-            "assert IMP.bff.AV is not None\n"
+            "assert IMP.bff.ProbeAccessibleVolumeDecorator is not None\n"
             "assert IMP.bff.PathMap is not None\n"
             "print('ok')\n"
         )

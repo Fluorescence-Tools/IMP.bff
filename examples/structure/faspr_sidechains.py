@@ -3,7 +3,7 @@
 Repacking protein side chains with the FASPR port
 =================================================
 
-``IMP.bff.faspr_pack`` is a 1:1 C++ port of FASPR (Huang, Pearce & Zhang,
+``IMP.bff.pack_protein_sidechains`` is a 1:1 C++ port of FASPR (Huang, Pearce & Zhang,
 Bioinformatics 2020; `source <https://github.com/tommyhuangthu/FASPR>`__,
 MIT): it rebuilds every rotatable side chain of a protein backbone on the
 Dunbrack-2010 backbone-dependent rotamer library and searches the global
@@ -72,7 +72,7 @@ def main():
     backbone = here / "T4L" / "3GUN.pdb"
     repacked = here / "T4L" / "3GUN_faspr_port.pdb"
 
-    IMP.bff.faspr_pack(str(backbone), str(repacked), str(rotlib))
+    IMP.bff.pack_protein_sidechains(str(backbone), str(repacked), str(rotlib))
     print(f"repacked {backbone.name} -> {repacked.name}")
 
     # chi1 before/after for a few buried and surface residues

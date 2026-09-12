@@ -8,7 +8,7 @@
   `IMP/Pointer.h`, `IMP/constants.h`, `IMP/algebra/VectorD.h` and
   `Vector3D.h`. They implement the subset of IMP's vocabulary the core uses,
   under IMP's names, so a core source compiles against either.
-  `include/Base.h` (the module's one door for IMP's macros) includes them in
+  `include/IMPCompatibility.h` (the module's one door for IMP's macros) includes them in
   its `IMPBFF_STANDALONE` branch.
 - `CMakeLists.txt` -- the build of `libimp_bff` from every source outside
   the connection layer (`src/imp/`, reached in the IMP build by
@@ -83,5 +83,5 @@ small set and both builds fetch a registry file the first time
 
 The IMP-module build is the top-level `CMakeLists.txt` and is untouched by
 any of this. `test/expensive_test_standalone_core_compiles.py` is the gate
-that the core needs nothing of IMP; `test/test_base_header.py` that Base.h's
+that the core needs nothing of IMP; `test/test_base_header.py` that IMPCompatibility.h's
 standalone branch reaches only the shims.

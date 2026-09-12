@@ -6,7 +6,7 @@
  */
 #include <IMP/bff/ProbeAttachment.h>
 // atom_name, selection_from_expression
-#include <IMP/bff/HierarchyBridge.h>
+#include <IMP/bff/IMPHierarchyBridge.h>
 
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/internal/Text.h>
@@ -18,7 +18,7 @@
 #include <IMP/atom/Selection.h>
 #include <IMP/atom/hierarchy_tools.h>
 #include <IMP/core/XYZ.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <IMP/rotamer/RotamerCalculator.h>
 #include <IMP/rotamer/RotamerLibrary.h>
 

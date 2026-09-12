@@ -2,7 +2,7 @@
 
 `include/internal/Random.h` is a copy of tttrlib's
 `modules/math/include/Random.h`, and the two Monte-Carlo samplers in
-`OrientationFactor.cpp` (`wobbling_kappa2_distribution`,
+`FRETOrientationFactor.cpp` (`wobbling_kappa2_distribution`,
 `sample_kappa2_diffusion_with_traps`) draw through it instead of a local
 `std::mt19937_64`, so their randomness follows the rest of the app's
 `TTTR_RNG_SEED` / `TTTR_RNG_ENGINE` discipline rather than a third,

@@ -82,7 +82,7 @@ class BffForward:
         self._buf = np.empty(2 * self.K)
         self._buf[1::2] = self.taus
         for d in self.dets:
-            node = bff.TcspcDecay(d)
+            node = bff.TCSPCDecay(d)
             node.set_number_of_lifetimes(self.K)
             node.set_timing(self.dt, self.period)
             port = bff.GraphPort()

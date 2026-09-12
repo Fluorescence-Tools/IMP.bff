@@ -9,6 +9,7 @@
 #ifndef IMPBFF_BAYESIANTRANSFORMS_H
 #define IMPBFF_BAYESIANTRANSFORMS_H
 
+#include <IMP/bff/IMPCompatibility.h>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>

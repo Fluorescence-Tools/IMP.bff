@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 import IMP.bff as fps
-from IMP.bff import read_rotamer_fps, rotamer_fret_from_fps
-from IMP.bff import RotamerFRET
-from IMP.bff import load_protein_frames, load_rotamer_library
+from IMP.bff import read_fps_rotamer, fps_rotamer_fret
+from IMP.bff import FRETRotamer
+from IMP.bff import load_protein_frames, load_probe_rotamer_library
 from IMP.bff import forster_radius_from_spectra
 # Invoking the command through imp-tricks' aggregator would make an imp.bff
 # test depend on the layer above it, so it is invoked directly. The group now
@@ -40,7 +40,7 @@ def test_calculate_r0_matches_fretpredict_pp11_reference() -> None:
 
 def test_load_rotamer_library_from_fretpredict_name() -> None:
     """FRETpredict-style library names resolve to the bundled libraries."""
-    lib = load_rotamer_library("AlexaFluor 488 C1R cutoff30")
+    lib = load_probe_rotamer_library("AlexaFluor 488 C1R cutoff30")
     assert lib.coords.ndim == 3
     assert lib.coords.shape[0] > 1
     assert lib.weights.sum() == pytest.approx(1.0)
@@ -59,11 +59,11 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
     container per family (`dyes.drot.pto`) -- which is why neither the suffix
     nor the file name is what this test pins, the cutoff is.
     """
-    from IMP.bff import resolve_rotamer_library_path
+    from IMP.bff import resolve_probe_rotamer_library_path
     sizes = {}
     for cutoff in (10, 20, 30):
         name = f"AlexaFluor 488 C1R cutoff{cutoff}"
-        path = resolve_rotamer_library_path(name)
+        path = resolve_probe_rotamer_library_path(name)
         # A shipped dye lives in the family container, so the answer is a
         # locator (`dyes.drot.pto::A48_C1R_cutoff10`); a standalone library
         # resolves to a path. Either way the cutoff is what is pinned.
@@ -71,14 +71,14 @@ def test_library_name_cutoff_selects_that_cutoff() -> None:
         assert container.endswith((".drot.pto", ".drot", ".bcif"))
         assert (inside or Path(container).name).startswith(
             f"A48_C1R_cutoff{cutoff}")
-        lib = load_rotamer_library(name)
+        lib = load_probe_rotamer_library(name)
         sizes[cutoff] = lib.coords.shape[0]
         assert lib.weights.shape == (sizes[cutoff],)
         assert lib.weights.sum() == pytest.approx(1.0)
         assert len(lib.resnames) == len(lib.atom_names) == lib.coords.shape[1]
     assert sizes == {10: 711, 20: 123, 30: 33}
     # the default (no cutoff in the name) is FRETpredict's default, cutoff 30
-    assert load_rotamer_library("AlexaFluor 488 C1R").coords.shape[0] == 33
+    assert load_probe_rotamer_library("AlexaFluor 488 C1R").coords.shape[0] == 33
 
 
 def test_fps_json_roundtrip(tmp_path: Path) -> None:
@@ -126,7 +126,7 @@ def test_read_rotamer_fps_label_distributions(tmp_path: Path) -> None:
         },
     }
     fps.write_text(json.dumps(payload))
-    selection = read_rotamer_fps(str(fps))
+    selection = read_fps_rotamer(str(fps))
     donor, acceptor, distance = (selection.donor, selection.acceptor,
                                  selection.distance)
     assert donor.name == "d1"
@@ -173,9 +173,9 @@ def test_rotamer_fret_from_fps(tmp_path: Path) -> None:
         )
     )
     pdb = _fixture_pdb("openHsp90.pdb", tmp_path)
-    fret = rotamer_fret_from_fps(str(fps), str(pdb), fixed_R0=True, r0=55.0,
+    fret = fps_rotamer_fret(str(fps), str(pdb), fixed_R0=True, r0=55.0,
                                  output_prefix=str(tmp_path / "from_fps"))
-    assert isinstance(fret, RotamerFRET)
+    assert isinstance(fret, FRETRotamer)
     # the configuration is C++ values: a wrapped vector, not a list
     assert list(fret.residues) == [452, 637]
     assert list(fret.chains) == ["A", "B"]

@@ -12,7 +12,7 @@
 
 #include <regex>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 // Vendored with IMP and exported by libimp_atom; TrajectoryIO.cpp uses the
 // same reader in binary mode, this one in text mode.

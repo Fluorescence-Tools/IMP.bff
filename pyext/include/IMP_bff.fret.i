@@ -8,7 +8,7 @@
  * `g.get_R()`, `e.get_E()`, `e.static_efficiency`.
  *
  * The rate trace (the former `FRETRateTrace.h`) takes its orientation factor
- * as a double, so it needs nothing of OrientationFactor.h wrapped first; it
+ * as a double, so it needs nothing of FRETOrientationFactor.h wrapped first; it
  * used to be wrapped early, beside the quenching fields, and is here now
  * because the pair values must come after their value declarations below.
  */

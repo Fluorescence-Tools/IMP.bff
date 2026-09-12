@@ -49,7 +49,7 @@
 #include <IMP/bff/States.h>
 #include <IMP/bff/bff_config.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <cereal/access.hpp>
 #include <cereal/types/string.hpp>
@@ -341,7 +341,7 @@ IMPBFFEXPORT void write_evaluators_json(const std::string& path,
 // An fps.json distance entry as a C++ value: what a pair of positions was
 // measured to be, with its type and its error. It was declared beside the
 // AV decorator (the connection layer) but nothing in it is IMP's; the
-// fps.json reader in internal/FPSReaderWriter.h fills it, and the network
+// fps.json reader in internal/FPSLegacyIO.h fills it, and the network
 // restraint reads it. Here since PRD-137 step 5.
 //! One fps.json distance measurement between two labelled positions.
 class IMPBFFEXPORT AVPairDistanceMeasurement{

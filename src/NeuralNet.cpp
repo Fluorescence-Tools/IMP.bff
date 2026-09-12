@@ -6,7 +6,7 @@
  */
 #include <IMP/bff/NeuralNet.h>
 
-#include <IMP/bff/Compute.h>
+#include <IMP/bff/ComputeBackend.h>
 #include <IMP/bff/internal/OutputView.h>
 
 #define TTTRLIB_MLPCORE_NAMESPACE IMP::bff::internal

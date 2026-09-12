@@ -28,18 +28,18 @@ producer is the third option and the only one that composes."
 
 | class | header | produces |
 |---|---|---|
-| `LifetimeSpectrumNode` | `SpectrumNode.h` | an interleaved (amplitude, lifetime) spectrum from its parts |
-| `AnisotropySpectrum` | `SpectrumNode.h` | the parallel/perpendicular spectra from a spectrum plus rotational parameters |
-| `FretSpectrum` | `SpectrumNode.h` | a spectrum from a donor spectrum and a distance distribution |
+| `PhotophysicsLifetimeSpectrumNode` | `SpectrumNode.h` | an interleaved (amplitude, lifetime) spectrum from its parts |
+| `PhotophysicsAnisotropySpectrumNode` | `SpectrumNode.h` | the parallel/perpendicular spectra from a spectrum plus rotational parameters |
+| `FRETSpectrumNode` | `SpectrumNode.h` | a spectrum from a donor spectrum and a distance distribution |
 | `PolymerDistances` | `SpectrumNode.h` | a distance distribution from a polymer model |
 | `GaussianDistances` | `SpectrumNode.h` | a distance distribution from Gaussian components |
-| `TcspcDecay` | `TcspcDecay.h` | the model curve through the instrument |
+| `TCSPCDecay` | `TCSPCDecay.h` | the model curve through the instrument |
 | `ChiSquared` | `ChiSquared.h` | the objective for one curve |
 | `JointChiSquared` | `JointChiSquared.h` | the objective over several |
-| `FcsMdfCurve`, `FcsSaturationCurve` | `Fcs.h` | correlation curves |
+| `FCSMdfCurve`, `FCSSaturationCurve` | `FCS.h` | correlation curves |
 | `Expression` | `Expression.h` | an arbitrary equation over ports |
 
-`TcspcDecay` is worth reading closely, because it is the largest single piece
+`TCSPCDecay` is worth reading closely, because it is the largest single piece
 of a decay analysis that is already done. Its ports are the amplitudes and
 lifetimes (or a whole spectrum through `lifetime_spectrum`), `scatter`,
 `background`, `n0` -- which it *writes* when autoscaling -- and `timeshift`.
@@ -55,11 +55,11 @@ Rows are `reference-bayesian-decay-model.md` §5, with its measured costs.
 | chain node | cost | status |
 |---|---|---|
 | `transforms` | negligible | **missing, generic.** Unconstrained → constrained (logit, log, softmax, sum-to-zero). No spectroscopy in it; bff's, if it is wanted. |
-| `spectrum` | negligible | **`LifetimeSpectrumNode`.** |
+| `spectrum` | negligible | **`PhotophysicsLifetimeSpectrumNode`.** |
 | `distribution` | negligible | **partial.** `PolymerDistances` and `GaussianDistances` produce distance distributions from *their* parameterisations; a spline-basis one does not exist. Generic enough to belong here. |
-| `physics amplitudes` | ~6 ms | **`FretSpectrum` + `AnisotropySpectrum`** cover the FRET and anisotropy parts. Crosstalk and the transfer maps are the consumer's. |
-| `instrument basis` | ~3 ms each | **`TcspcDecay`.** |
-| `expected counts` | ~2 ms | **`TcspcDecay`** (scatter, background, scale are its ports). |
+| `physics amplitudes` | ~6 ms | **`FRETSpectrumNode` + `PhotophysicsAnisotropySpectrumNode`** cover the FRET and anisotropy parts. Crosstalk and the transfer maps are the consumer's. |
+| `instrument basis` | ~3 ms each | **`TCSPCDecay`.** |
+| `expected counts` | ~2 ms | **`TCSPCDecay`** (scatter, background, scale are its ports). |
 | `log likelihood` | negligible | **`ChiSquared` / `JointChiSquared`**, with `"poisson"`. |
 | `log prior` | negligible | **missing, generic.** Gaussian, uniform, half-normal on named variables. |
 | `jacobian` | 15 ms analytic, 100 ms by AD | **missing, and the one that matters most.** This is exactly the node that measured as 32% of a TCSPC fit when it crossed into Python. |
@@ -93,7 +93,7 @@ carry, because the source is not the closure. A document that carried code
 would also execute when loaded, which is not a property to give a file that
 is shared between colleagues.
 
-**This is a second argument for C++ nodes.** A graph of `TcspcDecay`,
+**This is a second argument for C++ nodes.** A graph of `TCSPCDecay`,
 `ChiSquared` and their kin is describable by name and by parameter, so it
 *can* be saved and reloaded whole. A graph of Python callbacks can only be
 saved as naming plus a fingerprint, with the caller rebuilding the code. The

@@ -7,7 +7,7 @@
  */
 
 %{
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <IMP/algebra/VectorD.h>
 #include <cereal/archives/binary.hpp>
 #include <sstream>
@@ -58,7 +58,7 @@ static void imp_bff_handle_exception(void) {
         PyErr_SetString(imp_bff_io_exception, e.what());
     } catch (const std::length_error &e) {
         PyErr_SetString(imp_bff_internal_exception, e.what());
-    /* the module's own (Base.h's standalone branch) */
+    /* the module's own (IMPCompatibility.h's standalone branch) */
     } catch (const IMP::ValueException &e) {
         PyErr_SetString(imp_bff_value_exception, e.what());
     } catch (const IMP::ModelException &e) {

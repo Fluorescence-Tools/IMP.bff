@@ -13,7 +13,7 @@
  */
 #include <IMP/bff/MolecularProbeSimulation.h>
 
-#include <IMP/bff/HierarchyBridge.h>
+#include <IMP/bff/IMPHierarchyBridge.h>
 #include <IMP/bff/ProbeAttachment.h>
 #include <IMP/bff/ProbeDynamics.h>
 #include <IMP/bff/internal/OutputView.h>

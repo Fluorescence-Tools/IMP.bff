@@ -288,9 +288,9 @@ IMPBFF_END_NAMESPACE
  *
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
-#include <IMP/bff/OrientationFactor.h>
+#include <IMP/bff/FRETOrientationFactor.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 
 IMPBFF_BEGIN_NAMESPACE

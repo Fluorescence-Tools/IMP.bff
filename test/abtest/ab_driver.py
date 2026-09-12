@@ -10,7 +10,7 @@ Two documented deviations are mapped here rather than silently skipped:
 * **Unbounded bounds.** chinet reports ``(None, None)`` when a port is not
   bounded; bff stores the bounds regardless and reports ``(nan, nan)``. Both
   are normalised to ``(None, None)`` when ``is_bounded`` is false.
-* **Cycle errors.** chinet raises ``GraphLinkCycleError``, bff raises the SWIG
+* **Cycle errors.** chinet raises ``LinkCycleError``, bff raises the SWIG
   ``ValueError`` subclass. Both are recorded as ``"cycle-rejected"``.
 
 Anything else that differs is a bug in bff and must be fixed there.
@@ -40,7 +40,7 @@ def _read(port, name):
     """Read an attribute the way whichever runtime exposes it.
 
     bff has ``get_<name>()`` accessors, chinet plain properties. Attribute
-    lookup goes through the *type* because chinet's ``GraphPort.__getattr__``
+    lookup goes through the *type* because chinet's ``Port.__getattr__``
     forwards unknown names to the underlying numpy array, which would turn a
     missing accessor into a confusing numpy error instead of a clean miss.
     """
@@ -96,7 +96,7 @@ class PortAdapter:
         """Link to another port, reporting a refused cycle uniformly."""
         try:
             self.port.link = other.port
-        except (ValueError, rc.GraphLinkCycleError):
+        except (ValueError, rc.LinkCycleError):
             return CYCLE_REJECTED
         return None
 
@@ -169,14 +169,16 @@ class Runtime:
         return rc if self.kind == "ref" else bff
 
     def make_port(self, label, value=0.0, name=None, **kwargs):
-        port = self._module().GraphPort(value, name=name or label, **kwargs)
+        port_type = rc.Port if self.kind == "ref" else bff.GraphPort
+        port = port_type(value, name=name or label, **kwargs)
         adapter = PortAdapter(port, label)
         self.ports.append(adapter)
         self._labels[id(port)] = label
         return adapter
 
     def make_graph_node(self, label, name=None):
-        node = self._module().GraphNode()
+        node_type = rc.Node if self.kind == "ref" else bff.GraphNode
+        node = node_type()
         node.name = name or label
         adapter = NodeAdapter(node, label)
         self.nodes.append(adapter)

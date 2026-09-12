@@ -35,7 +35,7 @@ def _reference(rot, prot, rmin_ij, eps_ij, q_rot, q_prot, potential, electrostat
                                 * np.exp(-d[ri, pj] / 10.0))
         m = d < 10.0
         if np.any(m):
-            if potential == IMP.bff.ROTAMER_POTENTIAL_LJ:
+            if potential == IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ:
                 pot[i] += np.sum(lj_energy(d[m], rmin_ij[m], eps_ij[m], r_floor=0.0))
             else:
                 pot[i] += np.sum(eps_ij[m] * np.exp(-0.5 * np.power(d[m] / rmin_ij[m], 2)))
@@ -44,7 +44,7 @@ def _reference(rot, prot, rmin_ij, eps_ij, q_rot, q_prot, potential, electrostat
 
 def _call(rot, prot, rmin_ij, eps_ij, q_rot, q_prot, potential, electrostatic):
     n_rot, n_dye, _ = rot.shape
-    out = IMP.bff.rotamer_interaction_energies(
+    out = IMP.bff.probe_rotamer_interaction_energies(
         np.ascontiguousarray(rot).ravel(), np.ascontiguousarray(prot).ravel(),
         np.ascontiguousarray(rmin_ij).ravel(), np.ascontiguousarray(eps_ij).ravel(),
         np.ascontiguousarray(q_rot) if electrostatic else np.empty(0),
@@ -63,8 +63,8 @@ def _case(seed, n_rot=25, n_dye=20, n_prot=400):
             rng.choice([-1.0, 0.0, 1.0], n_prot))
 
 
-@pytest.mark.parametrize("potential", [IMP.bff.ROTAMER_POTENTIAL_LJ,
-                                       IMP.bff.ROTAMER_POTENTIAL_GAUSS])
+@pytest.mark.parametrize("potential", [IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ,
+                                       IMP.bff.PROBE_ROTAMER_POTENTIAL_GAUSS])
 @pytest.mark.parametrize("electrostatic", [False, True])
 def test_matches_the_python_it_replaced(potential, electrostatic):
     rot, prot, rmin, eps, qr, qp = _case(3)
@@ -77,7 +77,7 @@ def test_matches_the_python_it_replaced(potential, electrostatic):
 def test_electrostatics_are_off_when_no_charges_are_given():
     """An empty charge array is the switch, not a flag that can disagree with it."""
     rot, prot, rmin, eps, qr, qp = _case(5)
-    got = _call(rot, prot, rmin, eps, qr, qp, IMP.bff.ROTAMER_POTENTIAL_LJ, False)
+    got = _call(rot, prot, rmin, eps, qr, qp, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, False)
     assert np.all(got[:, 1] == 0.0)
 
 
@@ -88,8 +88,8 @@ def test_a_pair_beyond_the_cutoff_contributes_nothing():
     far = np.array([[10.1, 0.0, 0.0]])
     rmin = np.array([[3.0]])
     eps = np.array([[0.2]])
-    n = _call(rot, near, rmin, eps, None, None, IMP.bff.ROTAMER_POTENTIAL_LJ, False)
-    f = _call(rot, far, rmin, eps, None, None, IMP.bff.ROTAMER_POTENTIAL_LJ, False)
+    n = _call(rot, near, rmin, eps, None, None, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, False)
+    f = _call(rot, far, rmin, eps, None, None, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, False)
     assert n[0, 0] != 0.0
     assert f[0, 0] == 0.0
 
@@ -99,10 +99,10 @@ def test_the_lj_well_has_its_minimum_at_rmin():
     rmin, eps = 3.5, 0.25
     rot = np.array([[[0.0, 0.0, 0.0]]])
     at_min = _call(rot, np.array([[rmin, 0.0, 0.0]]), np.array([[rmin]]),
-                   np.array([[eps]]), None, None, IMP.bff.ROTAMER_POTENTIAL_LJ, False)
+                   np.array([[eps]]), None, None, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, False)
     assert at_min[0, 0] == pytest.approx(-eps)
     closer = _call(rot, np.array([[rmin * 0.8, 0.0, 0.0]]), np.array([[rmin]]),
-                   np.array([[eps]]), None, None, IMP.bff.ROTAMER_POTENTIAL_LJ, False)
+                   np.array([[eps]]), None, None, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, False)
     assert closer[0, 0] > at_min[0, 0], "the repulsive wall must rise"
 
 
@@ -113,7 +113,7 @@ def test_screened_coulomb_falls_off_faster_than_bare():
     vals = []
     for r in (3.0, 6.0, 12.0):
         got = _call(rot, np.array([[r, 0.0, 0.0]]), np.array([[3.0]]), np.array([[0.0]]),
-                    q, q, IMP.bff.ROTAMER_POTENTIAL_LJ, True)
+                    q, q, IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ, True)
         vals.append(got[0, 1])
         assert got[0, 1] == pytest.approx(7.0 / r * np.exp(-r / 10.0))
     assert vals[0] > vals[1] > vals[2] > 0.0
@@ -121,9 +121,9 @@ def test_screened_coulomb_falls_off_faster_than_bare():
 
 def test_empty_inputs_do_not_crash():
     empty = np.empty(0)
-    assert list(IMP.bff.rotamer_interaction_energies(
+    assert list(IMP.bff.probe_rotamer_interaction_energies(
         empty, empty, empty, empty, empty, empty, 0, 0, 0,
-        IMP.bff.ROTAMER_POTENTIAL_LJ)) == []
+        IMP.bff.PROBE_ROTAMER_POTENTIAL_LJ)) == []
 
 
 def test_the_scorer_still_produces_normalised_weights():

@@ -1,7 +1,7 @@
 ---
 type: validation
 title: "Can chisurf use bff's Dataset, and why it does not already"
-description: Asked whether chisurf can use bff for the magic-angle error propagation, and why bff curves are not used throughout. Half the answer is that it already does — chisurf's model side calls bff nodes today, including AnisotropySpectrum and ChiSquared. The data side does not, and the reasons are real: DataCurve carries an axis, file provenance and a GUI object model across 61 files, and until today bff's Dataset had no axis at all. The strongest argument for moving is one chisurf already concedes in its own code: it flattens 2-D data to 1-D and carries the shape in a metadata dictionary, used by two readers and the fit controller. That is a shape, badly.
+description: Asked whether chisurf can use bff for the magic-angle error propagation, and why bff curves are not used throughout. Half the answer is that it already does — chisurf's model side calls bff nodes today, including PhotophysicsAnisotropySpectrumNode and ChiSquared. The data side does not, and the reasons are real: DataCurve carries an axis, file provenance and a GUI object model across 61 files, and until today bff's Dataset had no axis at all. The strongest argument for moving is one chisurf already concedes in its own code: it flattens 2-D data to 1-D and carries the shape in a metadata dictionary, used by two readers and the fit controller. That is a shape, badly.
 resource: /Users/tpeulen/dev/imp.bff
 tags: [validation, imp.bff, chisurf, dataset, prd-140]
 timestamp: '2026-09-08T00:00:00Z'
@@ -11,7 +11,7 @@ timestamp: '2026-09-08T00:00:00Z'
 ## It already does, on the model side
 
 `chisurf/core/fluorescence/mfd/patterns.py` builds an anisotropy spectrum by
-constructing `bff.AnisotropySpectrum`, wiring its ports and evaluating it.
+constructing `bff.PhotophysicsAnisotropySpectrumNode`, wiring its ports and evaluating it.
 `chisurf/core/fitting/minimizer.py` sets `ChiSquared`'s noise model per fit.
 So the question is not whether chisurf can use bff nodes — it does, in the
 place where the model is computed.

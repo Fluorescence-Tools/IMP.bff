@@ -64,9 +64,9 @@ FLAT_NAMES = [
     "create_probe_protein_system",      # topology (C++, ProbeTopology.h)
     "probe_forcefield_system",         # topology (C++, ProbeTopology.h)
     "AttachedProbeDynamics",            # sampling (pythoncode, flat)
-    "RotamerEnsemble",               # rotamer_ensemble (C++, Rotamer.h)
-    "RotamerFRET",                   # rotamer_ensemble (C++, Rotamer.h)
-    "load_rotamer_library",          # rotamer (C++, RotamerSite.h)
+    "ProbeRotamerEnsemble",               # rotamer_ensemble (C++, Rotamer.h)
+    "FRETRotamer",                   # rotamer_ensemble (C++, Rotamer.h)
+    "load_probe_rotamer_library",          # rotamer (C++, RotamerSite.h)
     # `build_system_from_specs` was here. It was the `build-system` command's
     # body -- build a system, write the CIF, print what it holds -- so it is
     # in `bin/imp_bff` with the command, not in the library. What the library
@@ -165,7 +165,7 @@ def test_import_is_lazy_and_click_free():
     code = (
         "import sys; sys.modules['click'] = None\n"
         "import IMP.bff\n"
-        "IMP.bff.RotamerFRET; IMP.bff.forster_radius_from_spectra; IMP.bff.strip_hierarchy\n"
+        "IMP.bff.FRETRotamer; IMP.bff.forster_radius_from_spectra; IMP.bff.strip_hierarchy\n"
         "IMP.bff.attach_probes\n"
         "print('ok')\n"
     )

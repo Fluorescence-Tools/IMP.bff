@@ -213,20 +213,20 @@ using IMP::bff::internal::file_exists;
 
 }  // namespace
 
-RotamerLibrary load_rotamer_library_trajectory(const std::string& pdb_path,
+ProbeRotamerLibrary load_rotamer_library_trajectory(const std::string& pdb_path,
                                     const std::string& trajectory_path,
                                     const std::string& weights_path,
                                     int max_frames) {
-    RotamerLibrary out;
+    ProbeRotamerLibrary out;
 
     // A `.drot` is the whole library in one file (PRD-118): it carries the
     // atom names and the weights, so the PDB and the weights file beside it
     // -- when there are any -- have nothing left to say.
-    // A `.drot` path, or a locator into a family container -- `read_drot`
+    // A `.drot` path, or a locator into a family container -- `read_probe_rotamer_drot`
     // takes either, so this only has to recognise one.
-    const std::string container = split_drot_locator(trajectory_path)[0];
+    const std::string container = split_probe_rotamer_drot_locator(trajectory_path)[0];
     if (ends_with(container, ".drot") || ends_with(container, ".drot.pto")) {
-        const RotamerLibrary drot = read_drot(trajectory_path);
+        const ProbeRotamerLibrary drot = read_probe_rotamer_drot(trajectory_path);
         out.atom_names = drot.atom_names;
         out.n_atoms = drot.n_atoms;
         out.n_rotamers = max_frames > 0 && drot.n_rotamers > max_frames
@@ -333,7 +333,7 @@ std::vector<std::string> get_reference_rotamer_files(
     if (!file_exists(traj)) {
         const std::string family = lib_dir + "/dyes.drot.pto";
         if (file_exists(family)) {
-            const std::vector<std::string> listed = drot_catalog(family);
+            const std::vector<std::string> listed = probe_rotamer_drot_catalog(family);
             for (std::size_t i = 0; i < listed.size(); ++i) {
                 if (listed[i] == library) {
                     traj = family + "::" + library;
@@ -342,11 +342,11 @@ std::vector<std::string> get_reference_rotamer_files(
             }
         }
     }
-    if (!file_exists(split_drot_locator(traj)[0])) {
+    if (!file_exists(split_probe_rotamer_drot_locator(traj)[0])) {
         traj = stem.str() + ".bcif";
     }
 
-    if (!file_exists(pdb.str()) || !file_exists(split_drot_locator(traj)[0])) {
+    if (!file_exists(pdb.str()) || !file_exists(split_probe_rotamer_drot_locator(traj)[0])) {
         IMP_THROW("Missing required reference files for " << probe_name,
                   IOException);
     }

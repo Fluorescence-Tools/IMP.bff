@@ -35,7 +35,7 @@ shared index.
 * [The fit graph](log.md) - not a page of its own yet, but the four entries
   that describe it are `log.md` **2026-09-01 (9)** through **(12)**: the whole
   optimisation in C++ (`Minimizer`), the grouping (`JointChiSquared`), the
-  group builder in ChiSurf, and the TCSPC decay (`TcspcDecay`) whose kernels
+  group builder in ChiSurf, and the TCSPC decay (`TCSPCDecay`) whose kernels
   are tttrlib's. Together they are the arrangement the three repositories now
   fit with -- **bff builds the network, tttrlib computes the curves, ChiSurf
   is not between them.**

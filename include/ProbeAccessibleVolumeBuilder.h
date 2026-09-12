@@ -36,7 +36,7 @@
 #include <IMP/algebra/VectorD.h>
 
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 
 #include <map>

@@ -17,6 +17,7 @@
  */
 
 #include <IMP/bff/Linker.h>
+#include <IMP/algebra/Vector3D.h>
 
 #include <cmath>
 #include <stdexcept>
@@ -124,7 +125,7 @@ IMPBFF_END_NAMESPACE
 #include <IMP/bff/ProbeTopology.h>
 #include <IMP/bff/internal/OutputView.h>
 
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/normal_distribution.hpp>
@@ -324,7 +325,7 @@ LinkerSamplingResult sample_linker(const std::string& mol2_path, int n_steps,
     return out;
 }
 
-RotamerLibrary generate_linker_rotamers(
+ProbeRotamerLibrary generate_linker_rotamers(
         const std::string& mol2_path, int n_steps, int write_every,
         double step_size_dih, double step_size_ang, double cluster_threshold,
         double temperature, int seed, const std::string& anchor_atom,
@@ -336,7 +337,7 @@ RotamerLibrary generate_linker_rotamers(
                           step_size_ang, temperature, seed, anchor_atom);
     const Mol2Component component = read_mol2_component(mol2_path, "dye");
 
-    RotamerLibrary library;
+    ProbeRotamerLibrary library;
     library.path = mol2_path;
     library.n_atoms = sampled.n_atoms;
     std::vector<Mol2Atom> atoms = component.atoms;

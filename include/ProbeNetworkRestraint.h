@@ -31,7 +31,7 @@
 
 #include <IMP/bff/ProbeAccessibleVolumeDecorator.h>
 #include <IMP/bff/internal/ThreadPool.h>
-#include <IMP/bff/internal/FPSReaderWriter.h>
+#include <IMP/bff/internal/FPSLegacyIO.h>
 #include <IMP/bff/internal/json.h>
 
 #include <vector>

@@ -6,7 +6,7 @@
  * `Probe` and `Spectrum` were frozen dataclasses holding numpy arrays, a CIF
  * reader built on `ihm.format`'s Python parser with a hand-rolled mtime cache,
  * and a Förster radius computed with `np.trapezoid`. None of that is arithmetic
- * that needed C++; what needed it is the same thing `LifetimeSpectrum` needed,
+ * that needed C++; what needed it is the same thing `PhotophysicsLifetimeSpectrum` needed,
  * which is that the *object* be a C++ value the way `atom`'s and `core`'s are.
  * Everything that reads or computes is C++ -- the name-keyed front door the
  * rotamer code uses, the `_cgprobe_metadata` read, and the two flrCIF item

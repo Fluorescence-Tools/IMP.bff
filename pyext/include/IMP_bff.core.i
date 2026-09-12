@@ -15,7 +15,7 @@ import numpy as np
 %}
 
 /* Does this build actually thread? The kernels ask; the compiler may not listen. */
-%include "IMP/bff/Parallel.h"
+%include "IMP/bff/OpenMP.h"
 
 /* STL templates and the numpy typemaps everything below depends on. */
 %include "IMP_bff.types.i"
@@ -534,37 +534,13 @@ def get_session():
 %shared_ptr(IMP::bff::FitJointChiSquared);
 %include "IMP/bff/FitJointChiSquared.h"
 
-/*
- * A TCSPC decay as a node: the multi-exponential model curve a
- * time-correlated instrument produces, so a lifetime fit joins a parse fit
- * on the graph instead of returning to Python once per iteration.
- *
- * The kernels are tttrlib's, taken header-only from the vendored copy of
- * DecayConvolution.h; this class is the graph around them, exactly as
- * GraphExpression is the graph around tttrlib's expression engine.
- */
-%apply(double* IN_ARRAY1, int DIM1) {(double* in_response, int n_response)};
-%apply(double* IN_ARRAY1, int DIM1) {(double* in_data_y, int n_data_y)};
-%apply(double* IN_ARRAY1, int DIM1) {(double* in_data_ey, int n_data_ey)};
-%apply(double* IN_ARRAY1, int DIM1) {(double* in_table, int n_table)};
-%shared_ptr(IMP::bff::TcspcDecay);
-%include "IMP/bff/TcspcDecay.h"
+%include "IMP_bff.tcspcdecay.i"
 
-/*
- * The other half of a decay model: the nodes that *produce* the interleaved
- * spectrum TcspcDecay reconvolves. Kept separate from the instrument on
- * purpose -- every TCSPC model shares the instrument and differs only in the
- * photophysics upstream of it, so folding the physics into TcspcDecay would
- * make that class the union of every model anyone fits, and folding it into
- * the caller would put the deriving back in Python once per iteration.
- */
-%apply(double* IN_ARRAY1, int DIM1) {(double* in_axis, int n_axis)};
-%shared_ptr(IMP::bff::LifetimeSpectrumNode);
-%shared_ptr(IMP::bff::AnisotropySpectrum);
-%shared_ptr(IMP::bff::PolymerDistances);
-%shared_ptr(IMP::bff::GaussianDistances);
-%shared_ptr(IMP::bff::FretSpectrum);
-%include "IMP/bff/SpectrumNode.h"
+%include "IMP_bff.photophysicslifetimespectrumnode.i"
+%include "IMP_bff.photophysicsanisotropyspectrumnode.i"
+%include "IMP_bff.polymerdistances.i"
+%include "IMP_bff.gaussiandistances.i"
+%include "IMP_bff.fretspectrumnode.i"
 
 /*
  * A model equation compiled once and evaluated in C++, so ChiSurf's parse
@@ -589,9 +565,9 @@ def get_session():
  * instrument calibration -- what the light path does to a photon between the
  * laser and the detector -- which the light-path calculator builds a payload
  * of and every corrected model consumes. ChiSurf keeps the calculator and the
- * views; the definition and the algebra are this (see IMP_bff.crosstalk.i).
+ * views; the definition and the algebra are this (see IMP_bff.photophysicscrosstalkmatrix.i).
  */
-%include "IMP_bff.crosstalk.i"
+%include "IMP_bff.photophysicscrosstalkmatrix.i"
 
 /*
  * ChiSurf's bounded Levenberg-Marquardt, over the same GraphPort/GraphNode graph
@@ -837,7 +813,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, FitMinimizerObserver);
  * .i file per header earns its place only when it carries real content:
  * IMP_SWIG_OBJECT/DECORATOR declarations for reference-counted types, %ignore
  * for a method that will not marshal, a %feature("shadow"). Two do
- * (IMP_bff.probeaccessiblevolumedecorator.i, IMP_bff.pathmap.i, IMP_bff.observables.i); the fourteen
+ * (IMP_bff.probeaccessiblevolumedecorator.i, IMP_bff.pathmap.i, IMP_bff.photophysicslifetimespectrum.i); the fourteen
  * one-line wrappers that used
  * to sit beside them did not, and are gone.
  */
@@ -915,7 +891,7 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    how hard, the fields a quenched dye lives in (stickiness, PET rate, FRET
    rate), the photon race along a walk, and the solvent-accessible surface that
    says how buried a quencher is. */
-%include "IMP_bff.quenching.i"
+%include "IMP_bff.photophysicsquenching.i"
 
 /* A probe as a species -- dye, fluorescent protein or spin label: what it is,
    its spectra where it has them, the Förster radius they give, its .pto
@@ -943,13 +919,7 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
    provenance helpers that go with it are Python, so they live in their own
    interface file. */
 %include "IMP_bff.graphevaluation.i"
-/* The photon trace returns delay and emitted-flag views, and the decay curve
-   accumulates in place into the caller's histogram. The %apply has to sit
-   here, before the header that declares them. */
-%apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_delays, int* n_delays)};
-%apply(unsigned char** ARGOUTVIEWM_ARRAY1, int* DIM1) {(unsigned char** out_emitted, int* n_emitted)};
-%apply(double* INPLACE_ARRAY1, int DIM1) {(double* decay, int n_decay)};
-%include "IMP/bff/PhotonSimulation.h"
+%include "IMP_bff.photophysicsphotonsimulation.i"
 
 /* Scoring orchestration: CHARMM36, LJ, Boltzmann, AABB, rotamer score. */
 %include "IMP_bff.rotamerscoring.i"
@@ -996,38 +966,13 @@ IMP_SWIG_VALUE(IMP::bff, ProteinFrame, ProteinFrames);
 %include "IMP/bff/ProbeForceFieldCIF.h"
 
 /* The force-field system out, template CIF, and rotamer library IO. */
-// The rotamer library value -- an ensemble of conformers with a weight
-// each -- before the three readers that return one: the numpy/text pair
-// (componenttemplate.i), the PDB+trajectory loader (probesampling.i)
-// and `read_drot`.
-IMP_SWIG_VALUE(IMP::bff, RotamerLibrary, RotamerLibraries);
-// Same as `ProteinFrame::coords`: the shaped attributes below replace the raw
-// members, so a library answers `(n_rotamers, n_atoms, 3)` and not a flat
-// vector a caller has to fold by hand.
-%ignore IMP::bff::RotamerLibrary::coords;
-%ignore IMP::bff::RotamerLibrary::weights;
-/* RotamerLibrary.h now carries the `.drot` reader and writer, and
-   `write_drot_with_provenance` takes #MfdbTags, so the profile header has to be
-   wrapped before this one rather than in labelizer.i, where it used to sit.
-   The value semantics must come with it. Without these, MfdbTags arrives as an opaque
-   SwigPyObject with no destructor and the wrapper rejects it by type. */
+/* MMFDB vocabulary precedes typed library provenance. */
 IMP_SWIG_VALUE(IMP::bff, MfdbTag, MfdbTags);
 IMP_SWIG_VALUE(IMP::bff, MfdbColumn, MfdbColumns);
 IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
-/* Pto.h is the container too, since PRD-138 folded PtoProfile.h into it. The
-   container classes are kept out of the binding for now: nothing in Python
-   reads or writes a .pto except through the typed doors (the rotamer library,
-   the probe container, the Labelizer store), and whether to publish a raw
-   reader/writer is the interface pass's decision, not a consolidation's. */
-%ignore IMP::bff::PtoObject;
-%ignore IMP::bff::PtoWriter;
-%ignore IMP::bff::PtoReader;
-%include "IMP/bff/Pto.h"
-%include "IMP/bff/RotamerLibrary.h"
-%attribute_np3(IMP::bff::RotamerLibrary, std::vector<double>, coords,
-               get_coords, n_rotamers, 3, set_coords);
-%attribute_np(IMP::bff::RotamerLibrary, std::vector<double>, weights,
-              get_weights, set_weights);
+%include "IMP/bff/MMFDBProfile.h"
+%include "IMP_bff.proberotamerlibrary.i"
+%include "IMP_bff.proteinsidechainrotamerlibrary.i"
 
 %include "IMP_bff.probecomponenttemplate.i"
 
@@ -1042,7 +987,7 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* The cgprobe samplers: linker Metropolis, rotamer libraries, RRT, kinetics. */
 /* where a kernel runs, and how an accelerator is found */
-%include "IMP_bff.compute.i"
+%include "IMP_bff.computebackend.i"
 
 /* the shape every simulation shares (PRD-139) */
 %include "IMP_bff.probesimulation.i"
@@ -1069,11 +1014,11 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* The channels that deactivate an excited dye. They consume `States`, so they
    come after the object that is one. */
-%include "IMP_bff.interactionterms.i"
+%include "IMP_bff.photophysicsinteractionterms.i"
 
 /* The output contract, a C++ value with a Python surface. Its `from_states`
    reduction sums the terms, so it comes after them. */
-%include "IMP_bff.observables.i"
+%include "IMP_bff.photophysicslifetimespectrum.i"
 
 /* FRET over every pair of two labelled ensembles, and the rate along one
    dye's trajectory. The pair values consume `States`. */
@@ -1083,13 +1028,14 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
    between two labels that used to sit here are in states.i, with the
    States they consume (PRD-138); this header is wrapped where it always was. */
 %include "IMP_bff.distributions.i"
+%include "IMP_bff.fcs.i"
 
 /* Chi-squared scoring of labelling data, with and without volumes. */
 %include "IMP_bff.proberestraints.i"
 
 /* What repeated docking says about a model's precision (the restraint that
    does the docking is the connection layer's, in layer.i). */
-%include "IMP_bff.modelprecision.i"
+%include "IMP_bff.dockingprecision.i"
 
 /* The particle picture of a tethered dye: the walk, the photons, the
    equilibrium, as kernels and as an object. */
@@ -1101,17 +1047,19 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 
 /* One labelled site's donor decay, both ways. Last of the physics: it consumes
    an accessible volume, the PET tables, the walk and the grid solver. */
-%include "IMP_bff.quenchingmodel.i"
+%include "IMP_bff.photophysicsquenchingmodel.i"
 
 /* The third rotamer family in the same container: the Dunbrack-2010
    backbone-dependent side-chain table, which is a distribution over (phi,
    psi) rather than an ensemble and so has kinds of its own. */
 %apply(double** ARGOUTVIEWM_ARRAY1, int* DIM1) {(double** out_view, int* n_out_view)};
 
-/* The rotamer layer, all of it: RotamerEnsemble subclasses States (a SWIG
+/* The rotamer layer, all of it: ProbeRotamerEnsemble subclasses States (a SWIG
    value type) and returns the FRET pair values, so the whole header waits
    until after both. */
-%include "IMP_bff.rotamer.i"
+%include "IMP_bff.proberotamer.i"
+%include "IMP_bff.fretrotamer.i"
+%include "IMP_bff.fpsrotamer.i"
 
 /* The parameter tables the coarse-grained potentials read; the potentials
    themselves are IMP restraints, in layer.i. */
@@ -1136,16 +1084,16 @@ IMP_SWIG_VALUE(IMP::bff, MfdbAttribution, MfdbAttributions);
 %include "IMP_bff.labellib.i"
 
 /*
- * The command line, compiled. bin_main runs one sub of the compiled bin --
+ * The command line, compiled. command_line_main runs one sub of the compiled bin --
  * the bin/ scripts whose subject is the IMP-free core, callable from a
  * wheel with no IMP at all (PRD-137; the owner's ruling of 2026-09-09 that
  * the command line belongs to the library). The subs and their grammar live
- * in include/Bin.h and src/Bin.cpp; the console script is the few lines
+ * in include/CommandLine.h and src/CommandLine.cpp; the console script is the few lines
  * below.
  */
 namespace IMP {
 namespace bff {
-int bin_main(const std::vector<std::string>& args);
+int command_line_main(const std::vector<std::string>& args);
 std::string get_build();
 }
 }
@@ -1158,7 +1106,7 @@ KB_KCAL = None  # set after kb_kcal is wrapped, below
 def bin_cli(argv=None):
     """The compiled command line, as a console script entry point."""
     import sys
-    return bin_main(sys.argv[1:] if argv is None else list(argv))
+    return command_line_main(sys.argv[1:] if argv is None else list(argv))
 %}
 
 %pythoncode %{

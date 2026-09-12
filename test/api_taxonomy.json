@@ -1,0 +1,557 @@
+{
+  "paths": {
+    "include/Fcs.h": [
+      "include/FCS.h"
+    ],
+    "src/Fcs.cpp": [
+      "src/FCS.cpp"
+    ],
+    "include/TcspcDecay.h": [
+      "include/TCSPCDecay.h"
+    ],
+    "src/TcspcDecay.cpp": [
+      "src/TCSPCDecay.cpp"
+    ],
+    "include/ExchangeFRET.h": [
+      "include/FRETExchange.h"
+    ],
+    "src/ExchangeFRET.cpp": [
+      "src/FRETExchange.cpp"
+    ],
+    "include/OrientationFactor.h": [
+      "include/FRETOrientationFactor.h"
+    ],
+    "src/OrientationFactor.cpp": [
+      "src/FRETOrientationFactor.cpp"
+    ],
+    "include/InteractionTerms.h": [
+      "include/PhotophysicsInteractionTerms.h"
+    ],
+    "src/InteractionTerms.cpp": [
+      "src/PhotophysicsInteractionTerms.cpp"
+    ],
+    "include/PhotonSimulation.h": [
+      "include/PhotophysicsPhotonSimulation.h"
+    ],
+    "src/PhotonSimulation.cpp": [
+      "src/PhotophysicsPhotonSimulation.cpp"
+    ],
+    "include/CrosstalkMatrix.h": [
+      "include/PhotophysicsCrosstalkMatrix.h"
+    ],
+    "src/CrosstalkMatrix.cpp": [
+      "src/PhotophysicsCrosstalkMatrix.cpp"
+    ],
+    "include/Quenching.h": [
+      "include/PhotophysicsQuenching.h"
+    ],
+    "src/Quenching.cpp": [
+      "src/PhotophysicsQuenching.cpp"
+    ],
+    "include/QuenchingModel.h": [
+      "include/PhotophysicsQuenchingModel.h"
+    ],
+    "src/QuenchingModel.cpp": [
+      "src/PhotophysicsQuenchingModel.cpp"
+    ],
+    "include/LifetimeSpectrum.h": [
+      "include/PhotophysicsLifetimeSpectrum.h"
+    ],
+    "src/LifetimeSpectrum.cpp": [
+      "src/PhotophysicsLifetimeSpectrum.cpp"
+    ],
+    "include/Polarisation.h": [
+      "include/PhotophysicsPolarisation.h"
+    ],
+    "pyext/include/IMP_bff.crosstalk.i": [
+      "pyext/include/IMP_bff.photophysicscrosstalkmatrix.i"
+    ],
+    "pyext/include/IMP_bff.observables.i": [
+      "pyext/include/IMP_bff.photophysicslifetimespectrum.i"
+    ],
+    "pyext/include/IMP_bff.interactionterms.i": [
+      "pyext/include/IMP_bff.photophysicsinteractionterms.i"
+    ],
+    "pyext/include/IMP_bff.quenching.i": [
+      "pyext/include/IMP_bff.photophysicsquenching.i"
+    ],
+    "pyext/include/IMP_bff.quenchingmodel.i": [
+      "pyext/include/IMP_bff.photophysicsquenchingmodel.i"
+    ],
+    "include/ModelPrecision.h": [
+      "include/DockingPrecision.h"
+    ],
+    "src/ModelPrecision.cpp": [
+      "src/DockingPrecision.cpp"
+    ],
+    "include/AlgebraBridge.h": [
+      "include/IMPAlgebraBridge.h"
+    ],
+    "src/imp/AlgebraBridge.cpp": [
+      "src/imp/IMPAlgebraBridge.cpp"
+    ],
+    "include/EmBridge.h": [
+      "include/IMPEMBridge.h"
+    ],
+    "src/imp/EmBridge.cpp": [
+      "src/imp/IMPEMBridge.cpp"
+    ],
+    "include/HierarchyBridge.h": [
+      "include/IMPHierarchyBridge.h"
+    ],
+    "src/imp/HierarchyBridge.cpp": [
+      "src/imp/IMPHierarchyBridge.cpp"
+    ],
+    "include/Bin.h": [
+      "include/CommandLine.h"
+    ],
+    "src/Bin.cpp": [
+      "src/CommandLine.cpp"
+    ],
+    "include/Compute.h": [
+      "include/ComputeBackend.h"
+    ],
+    "src/Compute.cpp": [
+      "src/ComputeBackend.cpp"
+    ],
+    "include/Parallel.h": [
+      "include/OpenMP.h"
+    ],
+    "src/Parallel.cpp": [
+      "src/OpenMP.cpp"
+    ],
+    "include/Base.h": [
+      "include/IMPCompatibility.h"
+    ],
+    "include/internal/FPSReaderWriter.h": [
+      "include/internal/FPSLegacyIO.h"
+    ],
+    "src/FPSReaderWriter.cpp": [
+      "src/internal/FPSLegacyIO.cpp"
+    ],
+    "src/KrylovDiffusion.cpp": [
+      "src/DiffusionSolverKrylov.cpp"
+    ],
+    "pyext/include/IMP_bff.modelprecision.i": [
+      "pyext/include/IMP_bff.dockingprecision.i"
+    ],
+    "pyext/include/IMP_bff.compute.i": [
+      "pyext/include/IMP_bff.computebackend.i"
+    ],
+    "include/FftLength.h": [
+      "include/internal/FftLength.h"
+    ],
+    "include/Rebin.h": [
+      "include/internal/Rebin.h"
+    ],
+    "src/Functions.cpp": [
+      "src/internal/Functions.cpp"
+    ],
+    "src/Faspr.cpp": [
+      "src/internal/ProteinSidechainFaspr.cpp"
+    ],
+    "src/Faspr.h": [
+      "src/internal/ProteinSidechainFaspr.h"
+    ],
+    "include/Pto.h": [
+      "include/MMFDBProfile.h"
+    ],
+    "src/Pto.cpp": [
+      "src/MMFDBProfile.cpp"
+    ],
+    "include/RotamerLibrary.h": [
+      "include/ProbeRotamerLibrary.h",
+      "include/ProteinSidechainRotamerLibrary.h"
+    ],
+    "src/RotamerLibrary.cpp": [
+      "src/ProbeRotamerLibrary.cpp",
+      "src/ProteinSidechainRotamerLibrary.cpp"
+    ],
+    "include/Rotamer.h": [
+      "include/ProbeRotamer.h",
+      "include/FRETRotamer.h",
+      "include/FPSRotamer.h"
+    ],
+    "src/Rotamer.cpp": [
+      "src/ProbeRotamer.cpp",
+      "src/FRETRotamer.cpp",
+      "src/FPSRotamer.cpp"
+    ],
+    "include/SpectrumNode.h": [
+      "include/PhotophysicsLifetimeSpectrumNode.h",
+      "include/PhotophysicsAnisotropySpectrumNode.h",
+      "include/FRETSpectrumNode.h",
+      "include/GaussianDistances.h",
+      "include/PolymerDistances.h"
+    ],
+    "src/SpectrumNode.cpp": [
+      "src/PhotophysicsLifetimeSpectrumNode.cpp",
+      "src/PhotophysicsAnisotropySpectrumNode.cpp",
+      "src/FRETSpectrumNode.cpp",
+      "src/GaussianDistances.cpp",
+      "src/PolymerDistances.cpp"
+    ],
+    "pyext/include/IMP_bff.rotamer.i": [
+      "pyext/include/IMP_bff.proberotamer.i",
+      "pyext/include/IMP_bff.fretrotamer.i",
+      "pyext/include/IMP_bff.fpsrotamer.i"
+    ],
+    "include/Node.h": [
+      "include/GraphNode.h"
+    ],
+    "src/Node.cpp": [
+      "src/GraphNode.cpp"
+    ],
+    "include/Port.h": [
+      "include/GraphPort.h"
+    ],
+    "src/Port.cpp": [
+      "src/GraphPort.cpp"
+    ],
+    "include/Session.h": [
+      "include/GraphSession.h"
+    ],
+    "src/Session.cpp": [
+      "src/GraphSession.cpp"
+    ],
+    "include/EvaluationGraph.h": [
+      "include/GraphEvaluation.h"
+    ],
+    "src/EvaluationGraph.cpp": [
+      "src/GraphEvaluation.cpp"
+    ],
+    "include/Expression.h": [
+      "include/GraphExpression.h"
+    ],
+    "src/Expression.cpp": [
+      "src/GraphExpression.cpp"
+    ],
+    "include/FactorGraph.h": [
+      "include/InferenceFactorGraph.h"
+    ],
+    "src/FactorGraph.cpp": [
+      "src/InferenceFactorGraph.cpp"
+    ],
+    "include/Sampler.h": [
+      "include/MCMCSampler.h"
+    ],
+    "src/Sampler.cpp": [
+      "src/MCMCSampler.cpp"
+    ],
+    "include/PSpline.h": [
+      "include/BayesianPSpline.h"
+    ],
+    "include/TransformedGaussianPrior.h": [
+      "include/BayesianTransformedGaussianPrior.h"
+    ],
+    "include/Transforms.h": [
+      "include/BayesianTransforms.h"
+    ],
+    "include/FisherScoring.h": [
+      "include/BayesianFisherScoring.h"
+    ],
+    "include/Laplace.h": [
+      "include/BayesianLaplace.h"
+    ],
+    "include/DeltaMethod.h": [
+      "include/BayesianDeltaMethod.h"
+    ],
+    "include/LineSearch.h": [
+      "include/Optimization.h"
+    ],
+    "include/Dataset.h": [
+      "include/FitDataset.h"
+    ],
+    "src/Dataset.cpp": [
+      "src/FitDataset.cpp"
+    ],
+    "include/ChiSquared.h": [
+      "include/FitChiSquared.h"
+    ],
+    "src/ChiSquared.cpp": [
+      "src/FitChiSquared.cpp"
+    ],
+    "include/JointChiSquared.h": [
+      "include/FitJointChiSquared.h"
+    ],
+    "src/JointChiSquared.cpp": [
+      "src/FitJointChiSquared.cpp"
+    ],
+    "include/Minimizer.h": [
+      "include/FitMinimizer.h"
+    ],
+    "src/Minimizer.cpp": [
+      "src/FitMinimizer.cpp"
+    ],
+    "include/GreedyOlga.h": [
+      "include/ProbePairSelection.h"
+    ],
+    "src/GreedyOlga.cpp": [
+      "src/ProbePairSelection.cpp"
+    ],
+    "include/Simulation.h": [
+      "include/ProbeSimulation.h"
+    ],
+    "src/Simulation.cpp": [
+      "src/ProbeSimulation.cpp"
+    ],
+    "include/DyeDynamics.h": [
+      "include/MolecularProbeSimulation.h"
+    ],
+    "src/imp/DyeDynamics.cpp": [
+      "src/imp/MolecularProbeSimulation.cpp"
+    ],
+    "include/ComponentTemplate.h": [
+      "include/ProbeComponentTemplate.h"
+    ],
+    "src/ComponentTemplate.cpp": [
+      "src/ProbeComponentTemplate.cpp"
+    ],
+    "include/ForceFieldCIF.h": [
+      "include/ProbeForceFieldCIF.h"
+    ],
+    "src/ForceFieldCIF.cpp": [
+      "src/ProbeForceFieldCIF.cpp"
+    ],
+    "include/TopologyBuild.h": [
+      "include/ProbeTopology.h"
+    ],
+    "src/TopologyBuild.cpp": [
+      "src/ProbeTopology.cpp"
+    ],
+    "include/Scoring.h": [
+      "include/RotamerScoring.h"
+    ],
+    "src/Scoring.cpp": [
+      "src/RotamerScoring.cpp"
+    ],
+    "include/Potentials.h": [
+      "include/ProbePotentialRestraints.h"
+    ],
+    "src/imp/Potentials.cpp": [
+      "src/imp/ProbePotentialRestraints.cpp"
+    ],
+    "include/PotentialTables.h": [
+      "include/ProbePotentialTables.h"
+    ],
+    "src/PotentialTables.cpp": [
+      "src/ProbePotentialTables.cpp"
+    ],
+    "include/AV.h": [
+      "include/ProbeAccessibleVolumeDecorator.h"
+    ],
+    "src/imp/AV.cpp": [
+      "src/imp/ProbeAccessibleVolumeDecorator.cpp"
+    ],
+    "include/AVModel.h": [
+      "include/ProbeAccessibleVolume.h"
+    ],
+    "src/AVModel.cpp": [
+      "src/ProbeAccessibleVolume.cpp"
+    ],
+    "include/AVBuilder.h": [
+      "include/ProbeAccessibleVolumeBuilder.h"
+    ],
+    "src/AVBuilder.cpp": [
+      "src/ProbeAccessibleVolumeBuilder.cpp"
+    ],
+    "include/AVMeanDistanceRestraint.h": [
+      "include/ProbeAccessibleVolumeMeanDistanceRestraint.h"
+    ],
+    "src/imp/AVMeanDistanceRestraint.cpp": [
+      "src/imp/ProbeAccessibleVolumeMeanDistanceRestraint.cpp"
+    ],
+    "include/AVOccupancyMap.h": [
+      "include/ProbeAccessibleVolumeOccupancyMap.h"
+    ],
+    "src/imp/AVOccupancyMap.cpp": [
+      "src/imp/ProbeAccessibleVolumeOccupancyMap.cpp"
+    ],
+    "include/DataPaths.h": [
+      "include/ProbeDataPaths.h"
+    ],
+    "src/DataPaths.cpp": [
+      "src/ProbeDataPaths.cpp"
+    ],
+    "include/Labelizer.h": [
+      "include/LabelizerFeatures.h",
+      "include/LabelizerScore.h",
+      "include/LabelizerFRET.h",
+      "include/LabelizerIO.h"
+    ],
+    "src/Labelizer.cpp": [
+      "src/LabelizerFeatures.cpp",
+      "src/LabelizerScore.cpp",
+      "src/LabelizerFRET.cpp",
+      "src/LabelizerIO.cpp"
+    ]
+  },
+  "symbols": {
+    "RotamerLibrary": "ProbeRotamerLibrary",
+    "RotamerLibraries": "ProbeRotamerLibraries",
+    "DrotEncoding": "ProbeRotamerDrotEncoding",
+    "DunbrackRotamers": "ProteinSidechainDunbrackRotamers",
+    "DunbrackRotamersList": "ProteinSidechainDunbrackRotamersList",
+    "read_drot": "read_probe_rotamer_drot",
+    "split_drot_locator": "split_probe_rotamer_drot_locator",
+    "drot_catalog": "probe_rotamer_drot_catalog",
+    "drot_provenance": "probe_rotamer_drot_provenance",
+    "write_drot": "write_probe_rotamer_drot",
+    "write_drot_bundle": "write_probe_rotamer_drot_bundle",
+    "write_drot_with_provenance": "write_probe_rotamer_drot_with_provenance",
+    "read_rotamer_library": "read_probe_rotamer_library",
+    "normalize_weights": "normalize_probe_rotamer_weights",
+    "write_dunbrack_library": "write_protein_sidechain_dunbrack_library",
+    "write_dunbrack_bin": "write_protein_sidechain_dunbrack_bin",
+    "read_dunbrack_rotamers": "read_protein_sidechain_dunbrack_rotamers",
+    "DrotEncodings": "ProbeRotamerDrotEncodings",
+    "RotamerPotential": "ProbeRotamerPotential",
+    "ROTAMER_POTENTIAL_LJ": "PROBE_ROTAMER_POTENTIAL_LJ",
+    "ROTAMER_POTENTIAL_GAUSS": "PROBE_ROTAMER_POTENTIAL_GAUSS",
+    "RotamerSiteOptions": "ProbeRotamerSiteOptions",
+    "RotamerSiteOptionsList": "ProbeRotamerSiteOptionsList",
+    "RotamerEnsemble": "ProbeRotamerEnsemble",
+    "RotamerEnsembles": "ProbeRotamerEnsembles",
+    "MapStringRotamerEnsemble": "MapStringProbeRotamerEnsemble",
+    "RotamerFRET": "FRETRotamer",
+    "FRETFrameResult": "FRETRotamerFrameResult",
+    "FRETFrameResults": "FRETRotamerFrameResults",
+    "RotamerPosition": "FPSRotamerPosition",
+    "RotamerPositions": "FPSRotamerPositions",
+    "RotamerDistance": "FPSRotamerDistance",
+    "RotamerDistances": "FPSRotamerDistances",
+    "RotamerFpsSelection": "FPSRotamerSelection",
+    "RotamerFpsSelections": "FPSRotamerSelections",
+    "rotamer_interaction_energies": "probe_rotamer_interaction_energies",
+    "rotamer_library_registry": "probe_rotamer_library_registry",
+    "rotamer_library_metadata": "probe_rotamer_library_metadata",
+    "rotamer_library_metadata_for_path": "probe_rotamer_library_metadata_for_path",
+    "resolve_rotamer_library_path": "resolve_probe_rotamer_library_path",
+    "load_rotamer_library": "load_probe_rotamer_library",
+    "infer_rotamer_resnames": "infer_probe_rotamer_resnames",
+    "rotamer_position_from_payload": "fps_rotamer_position_from_payload",
+    "rotamer_distance_from_payload": "fps_rotamer_distance_from_payload",
+    "read_rotamer_fps": "read_fps_rotamer",
+    "rotamer_position_payload": "fps_rotamer_position_payload",
+    "rotamer_positions_payload": "fps_rotamer_positions_payload",
+    "distances_from_ensembles": "fps_rotamer_distances_from_ensembles",
+    "rotamer_ensembles_from_fps": "fps_rotamer_ensembles",
+    "write_rotamer_fps": "write_fps_rotamer",
+    "rotamer_fret_from_fps": "fps_rotamer_fret",
+    "FcsMdfCurve": "FCSMdfCurve",
+    "FcsSaturationCurve": "FCSSaturationCurve",
+    "TcspcDecay": "TCSPCDecay",
+    "CrosstalkMatrix": "PhotophysicsCrosstalkMatrix",
+    "LifetimeSpectrum": "PhotophysicsLifetimeSpectrum",
+    "LifetimeSpectrums": "PhotophysicsLifetimeSpectrums",
+    "LifetimeSpectrumNode": "PhotophysicsLifetimeSpectrumNode",
+    "AnisotropySpectrum": "PhotophysicsAnisotropySpectrumNode",
+    "FretSpectrum": "FRETSpectrumNode",
+    "PositionUncertainty": "DockingPositionUncertainty",
+    "PositionUncertainties": "DockingPositionUncertainties",
+    "bin_main": "command_line_main",
+    "bin_subs": "command_line_subcommands",
+    "parallel_threads": "openmp_thread_count",
+    "faspr_pack": "pack_protein_sidechains",
+    "Node": "GraphNode",
+    "Port": "GraphPort",
+    "Session": "GraphSession",
+    "EvaluationGraph": "GraphEvaluation",
+    "RunReport": "GraphRunReport",
+    "Expression": "GraphExpression",
+    "BaseObject": "GraphObject",
+    "LinkCycleError": "GraphLinkCycleError",
+    "FactorGraph": "InferenceFactorGraph",
+    "FactorKind": "InferenceFactorKind",
+    "Sampler": "MCMCSampler",
+    "SamplerConfigurationError": "MCMCSamplerConfigurationError",
+    "Dataset": "FitDataset",
+    "ChiSquared": "FitChiSquared",
+    "JointChiSquared": "FitJointChiSquared",
+    "Minimizer": "FitMinimizer",
+    "SimulationTrajectory": "ProbeSimulationTrajectory",
+    "DyeSimulation": "MolecularProbeSimulation",
+    "AccessibleVolume": "ProbeAccessibleVolume",
+    "AV": "ProbeAccessibleVolumeDecorator",
+    "AVMeanDistanceRestraint": "ProbeAccessibleVolumeMeanDistanceRestraint",
+    "AVOccupancyMap": "ProbeAccessibleVolumeOccupancyMap",
+    "get_cgprobe_data_dir": "get_probe_data_dir",
+    "select_informative_pairs": "select_probe_pairs",
+    "select_informative_sites": "select_probe_positions"
+  },
+  "exported_before": [
+    "AnisotropySpectrum",
+    "CrosstalkMatrix",
+    "DrotEncoding",
+    "DunbrackRotamers",
+    "FRETFrameResult",
+    "FRETFrameResults",
+    "FcsMdfCurve",
+    "FcsSaturationCurve",
+    "FretSpectrum",
+    "LifetimeSpectrum",
+    "LifetimeSpectrumNode",
+    "LifetimeSpectrums",
+    "MapStringRotamerEnsemble",
+    "PositionUncertainties",
+    "PositionUncertainty",
+    "ROTAMER_POTENTIAL_GAUSS",
+    "ROTAMER_POTENTIAL_LJ",
+    "RotamerDistance",
+    "RotamerDistances",
+    "RotamerEnsemble",
+    "RotamerEnsembles",
+    "RotamerFRET",
+    "RotamerFpsSelection",
+    "RotamerFpsSelections",
+    "RotamerLibraries",
+    "RotamerLibrary",
+    "RotamerPosition",
+    "RotamerPositions",
+    "RotamerSiteOptions",
+    "RotamerSiteOptionsList",
+    "TcspcDecay",
+    "bin_main",
+    "distances_from_ensembles",
+    "drot_catalog",
+    "drot_provenance",
+    "faspr_pack",
+    "infer_rotamer_resnames",
+    "load_rotamer_library",
+    "normalize_weights",
+    "parallel_threads",
+    "read_drot",
+    "read_dunbrack_rotamers",
+    "read_rotamer_fps",
+    "read_rotamer_library",
+    "resolve_rotamer_library_path",
+    "rotamer_distance_from_payload",
+    "rotamer_ensembles_from_fps",
+    "rotamer_fret_from_fps",
+    "rotamer_interaction_energies",
+    "rotamer_library_metadata",
+    "rotamer_library_metadata_for_path",
+    "rotamer_library_registry",
+    "rotamer_position_from_payload",
+    "rotamer_position_payload",
+    "rotamer_positions_payload",
+    "split_drot_locator",
+    "write_drot",
+    "write_drot_bundle",
+    "write_drot_with_provenance",
+    "write_dunbrack_bin",
+    "write_dunbrack_library",
+    "write_rotamer_fps"
+  ],
+  "investigations": {
+    "States": "Retained: exposes general weighted point clouds, distance statistics, and non-probe callers; probe-only ownership is not established.",
+    "GaussianDistances and PolymerDistances": "Retain scientific names in independent headers; generic distributions, not photophysics.",
+    "ImpBffComputeBackend": "C ABI struct and plugin entry symbol retained; filename changes only, layout/version unchanged.",
+    "Quenching": "Explicit Photophysics rename row takes precedence over later generic keep-list.",
+    "molecularprobesimulation": "Exact molecular header/topic row takes precedence over stale explicitprobesimulation mention.",
+    "RmfIO": "Retained: the explicit map defers RMF acronym changes to an IMP-wide pass.",
+    "RotamerScoring": "Keep consolidated orchestration: masks, LJ parameter assembly and weighting are shared by topology/restraint consumers; no separate ownership boundary warrants another split.",
+    "FftLength and Rebin": "No production include consumers were found; moved to include/internal as directed.",
+    "Header-only rename rows": "Existing specific kernel/function spellings are retained when the plan names only a header; explicit primary-type renames and ProbeRotamer family splits are recorded in symbols."
+  }
+}

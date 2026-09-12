@@ -109,7 +109,7 @@ IMPBFF_END_NAMESPACE
  *
  */
 #include <IMP/bff/Mol2IO.h>
-#include <IMP/bff/RotamerLibrary.h>
+#include <IMP/bff/ProbeRotamerLibrary.h>
 
 #include <string>
 
@@ -209,7 +209,7 @@ IMPBFFEXPORT LinkerSamplingResult sample_linker(
     its representative's -- a broad shallow basin holds more of the ensemble
     than a narrow deep one, and only the sum says so.
 */
-IMPBFFEXPORT RotamerLibrary generate_linker_rotamers(
+IMPBFFEXPORT ProbeRotamerLibrary generate_linker_rotamers(
         const std::string& mol2_path, int n_steps = 10000,
         int write_every = 10, double step_size_dih = 0.1,
         double step_size_ang = 0.02, double cluster_threshold = 0.5,

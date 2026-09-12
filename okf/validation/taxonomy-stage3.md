@@ -1,5 +1,7 @@
 # Probe taxonomy migration: verification and existing failures
 
+**Historical checkpoint:** superseded by [the completed migration](taxonomy-completion.md). The owner overrode the reader hold; the recorded failures are resolved or corrected in that continuation.
+
 The simulation, accessible-volume, template/topology/force-field, scoring and
 probe-data file migration follows PRD-141. No numerical algorithm or data
 fixture changed. The simulation and AV bodies compare identically after the

@@ -23,7 +23,7 @@
 #define IMPBFF_MOLECULAR_PROBE_SIMULATION_H
 
 #include <IMP/bff/bff_config.h>
-#include <IMP/bff/Base.h>
+#include <IMP/bff/IMPCompatibility.h>
 #include <IMP/bff/HierarchyFrame.h>
 #include <IMP/bff/ProbeSimulation.h>
 

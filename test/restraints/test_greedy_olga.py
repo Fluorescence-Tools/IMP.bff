@@ -195,9 +195,9 @@ def test_the_speed_figures_are_single_threaded():
     ever starts failing, the build gained OpenMP -- and every speed figure in
     this repository's commit messages became a lower bound.
     """
-    assert IMP.bff.parallel_threads() >= 1
+    assert IMP.bff.openmp_thread_count() >= 1
     if not IMP.bff.built_with_openmp():
-        assert IMP.bff.parallel_threads() == 1
+        assert IMP.bff.openmp_thread_count() == 1
 
 
 if __name__ == "__main__":

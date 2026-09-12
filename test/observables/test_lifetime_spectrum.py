@@ -19,7 +19,7 @@ import pytest
 
 import IMP.bff
 from IMP.bff import (
-    LifetimeSpectrum,
+    PhotophysicsLifetimeSpectrum,
     fret_efficiency_from_lifetimes,
     lifetime_spectrum_from_rates,
 )
@@ -28,7 +28,7 @@ from IMP.bff import (
 # --- the type ----------------------------------------------------------------
 
 def test_a_single_exponential_is_exactly_one():
-    s = LifetimeSpectrum([1.0], [0.25])
+    s = PhotophysicsLifetimeSpectrum([1.0], [0.25])
     assert s.species_averaged_lifetime == pytest.approx(4.0)
     assert s.intensity_averaged_lifetime == pytest.approx(4.0)
     assert s.decay(np.array([4.0]))[0] == pytest.approx(np.exp(-1.0))
@@ -36,7 +36,7 @@ def test_a_single_exponential_is_exactly_one():
 
 def test_the_two_averages_differ_and_by_how_much():
     """70 % at 4 ns, 30 % at 1 ns: 3.10 by molecule, 3.71 by photon."""
-    s = LifetimeSpectrum([0.7, 0.3], [1 / 4.0, 1 / 1.0])
+    s = PhotophysicsLifetimeSpectrum([0.7, 0.3], [1 / 4.0, 1 / 1.0])
     assert s.species_averaged_lifetime == pytest.approx(3.1)
     assert s.intensity_averaged_lifetime == pytest.approx(11.5 / 3.1)
     assert s.intensity_averaged_lifetime > s.species_averaged_lifetime
@@ -47,13 +47,13 @@ def test_the_intensity_average_is_never_the_smaller_one():
     rng = np.random.default_rng(1)
     for _ in range(30):
         n = int(rng.integers(2, 10))
-        s = LifetimeSpectrum(rng.random(n) + 0.1, rng.uniform(0.05, 5.0, n))
+        s = PhotophysicsLifetimeSpectrum(rng.random(n) + 0.1, rng.uniform(0.05, 5.0, n))
         assert s.intensity_averaged_lifetime >= s.species_averaged_lifetime - 1e-12
 
 
 def test_rates_not_lifetimes_is_the_stored_form():
     """A zero rate is a legitimate non-decaying population."""
-    s = LifetimeSpectrum([1.0, 1.0], [0.0, 0.5])
+    s = PhotophysicsLifetimeSpectrum([1.0, 1.0], [0.0, 0.5])
     assert np.isinf(s.lifetimes[0])
     assert s.decay(np.array([1e6]))[0] == pytest.approx(1.0), "it must not decay"
     assert np.isinf(s.species_averaged_lifetime)
@@ -61,24 +61,24 @@ def test_rates_not_lifetimes_is_the_stored_form():
 
 def test_a_negative_rate_is_refused():
     with pytest.raises(ValueError, match="growing population"):
-        LifetimeSpectrum([1.0], [-0.1])
+        PhotophysicsLifetimeSpectrum([1.0], [-0.1])
 
 
 def test_mismatched_lengths_are_refused():
     with pytest.raises(ValueError, match="one rate per amplitude"):
-        LifetimeSpectrum([1.0, 1.0], [0.5])
+        PhotophysicsLifetimeSpectrum([1.0, 1.0], [0.5])
 
 
 def test_amplitudes_are_not_silently_normalised():
     """Normalising would discard a quantum yield."""
-    s = LifetimeSpectrum([0.4, 0.2], [1.0, 2.0])
+    s = PhotophysicsLifetimeSpectrum([0.4, 0.2], [1.0, 2.0])
     assert s.total_amplitude == pytest.approx(0.6)
     assert s.decay(np.array([0.0]))[0] == pytest.approx(0.6)
     assert s.normalized().total_amplitude == pytest.approx(1.0)
 
 
 def test_decay_is_the_flat_kernel_on_the_caller_axis():
-    s = LifetimeSpectrum([1.0], [0.25])
+    s = PhotophysicsLifetimeSpectrum([1.0], [0.25])
     t = np.linspace(0.0, 10.0, 12).reshape(3, 4)
     # decay() is the 1-D kernel: it evaluates F(t) on a flat time axis and
     # returns a flat view. The caller's axis shape is not restated by the
@@ -120,7 +120,7 @@ def test_coarse_graining_error_falls_with_the_square_of_the_bin_width():
 
 
 def test_coarse_graining_marks_the_result_approximate_only_if_it_merged():
-    exact = LifetimeSpectrum([1.0, 1.0], [0.5, 2.0])
+    exact = PhotophysicsLifetimeSpectrum([1.0, 1.0], [0.5, 2.0])
     assert exact.coarse_grain(1024).exact, "nothing was merged, so nothing was lost"
     assert not exact.coarse_grain(1).exact
 
@@ -153,8 +153,8 @@ def test_efficiency_uses_the_species_average():
     realistic case: a dye near an acceptor is exactly the one whose lifetime
     moves.
     """
-    donor = LifetimeSpectrum([0.5, 0.5], [1 / 4.0, 1 / 1.0])
-    da = LifetimeSpectrum([0.5, 0.5], [1 / 1.0, 1 / 1.0])   # only the 4 ns one transfers
+    donor = PhotophysicsLifetimeSpectrum([0.5, 0.5], [1 / 4.0, 1 / 1.0])
+    da = PhotophysicsLifetimeSpectrum([0.5, 0.5], [1 / 1.0, 1 / 1.0])   # only the 4 ns one transfers
 
     assert donor.species_averaged_lifetime == pytest.approx(2.5)
     assert da.species_averaged_lifetime == pytest.approx(1.0)
@@ -168,14 +168,14 @@ def test_efficiency_uses_the_species_average():
 
 
 def test_efficiency_limits():
-    donor = LifetimeSpectrum([1.0], [0.25])
+    donor = PhotophysicsLifetimeSpectrum([1.0], [0.25])
     assert fret_efficiency_from_lifetimes(donor, donor) == pytest.approx(0.0)
     assert fret_efficiency_from_lifetimes(
-        donor, LifetimeSpectrum([1.0], [1e9])) == pytest.approx(1.0, abs=1e-6)
+        donor, PhotophysicsLifetimeSpectrum([1.0], [1e9])) == pytest.approx(1.0, abs=1e-6)
 
 
 def test_efficiency_of_a_dead_donor_is_zero_not_a_divide():
-    dead = LifetimeSpectrum([1.0], [np.inf]) if False else LifetimeSpectrum([0.0], [1.0])
+    dead = PhotophysicsLifetimeSpectrum([1.0], [np.inf]) if False else PhotophysicsLifetimeSpectrum([0.0], [1.0])
     assert fret_efficiency_from_lifetimes(dead, dead) == 0.0
 
 
@@ -195,7 +195,7 @@ def test_the_static_limit_is_exact_when_the_rate_does_not_move():
         400000, np.full(4000, kq_val), t_step, tau0, random_seed=1)
     measured = dts[emitted > 0].mean()
 
-    spectrum = LifetimeSpectrum([1.0], [1.0 / tau0 + kq_val])
+    spectrum = PhotophysicsLifetimeSpectrum([1.0], [1.0 / tau0 + kq_val])
     assert measured == pytest.approx(spectrum.species_averaged_lifetime, rel=0.02)
 
 
@@ -215,9 +215,9 @@ def test_a_moving_rate_breaks_the_static_limit_measurably():
     dts, emitted = photon.simulate_photon_trace(400000, kq, t_step, tau0, random_seed=2)
     measured = dts[emitted > 0].mean()
 
-    static = LifetimeSpectrum([0.5, 0.5],
+    static = PhotophysicsLifetimeSpectrum([0.5, 0.5],
                               [1 / tau0 + slow, 1 / tau0 + fast])
-    averaged = LifetimeSpectrum([1.0], [1 / tau0 + 0.5 * (slow + fast)])
+    averaged = PhotophysicsLifetimeSpectrum([1.0], [1 / tau0 + 0.5 * (slow + fast)])
 
     assert measured == pytest.approx(averaged.species_averaged_lifetime, rel=0.05)
     assert abs(measured - static.species_averaged_lifetime) > 0.2, (
@@ -230,7 +230,7 @@ def test_no_convolution_anywhere_in_the_observables_package():
     The check used to glob ``pyext/src/observables/*.py`` -- a directory that
     stopped existing when the package became one module, so it scanned nothing
     and passed on an empty loop. The contract now lives in
-    ``pyext/IMP_bff.observables.i`` and its header, so those are what it reads.
+    ``pyext/include/IMP_bff.photophysicslifetimespectrum.i`` and its header, so those are what it reads.
 
     ``imp_bff.observables.i`` no longer carries ``%pythoncode`` (it was ported
     to C++), so there is no Python surface to scan; the C++ check below is the
@@ -250,11 +250,11 @@ def test_no_convolution_anywhere_in_the_observables_package():
 
     # The Python surface is gone -- the file has no %pythoncode. Guard that it
     # stays that way: a ported file must not grow a Python wrapper back.
-    swig = (root / "pyext" / "IMP_bff.observables.i").read_text()
+    swig = (root / "pyext" / "include" / "IMP_bff.photophysicslifetimespectrum.i").read_text()
     assert "%pythoncode" not in swig, "observables.i must stay python-free"
 
     # The C++ side: comments stripped, then whole identifiers.
-    for name in ("include/LifetimeSpectrum.h", "src/LifetimeSpectrum.cpp"):
+    for name in ("include/PhotophysicsLifetimeSpectrum.h", "src/PhotophysicsLifetimeSpectrum.cpp"):
         path = root / name
         assert path.exists(), path
         code = re.sub(r"//[^\n]*|/\*.*?\*/", " ", path.read_text(), flags=re.S).lower()

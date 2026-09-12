@@ -5,7 +5,7 @@
  * Copyright 2007-2026 IMP Inventors. All rights reserved.
  */
 #include <IMP/bff/DiffusionSolver.h>
-#include <IMP/bff/Compute.h>
+#include <IMP/bff/ComputeBackend.h>
 #include <IMP/bff/internal/OutputView.h>
 // The solver and its adjoint are tttrlib's LatticeDiffusion.h, vendored
 // verbatim (test/test_vendored_headers.py keeps the copy identical). This file
@@ -35,7 +35,7 @@ void diffusion_propagate(
         int ng, int flux_form, int n_steps, int n_out,
         double** out_fluorescence, int* n_out_fluorescence,
         double** out_view, int* n_out_view) {
-    // An accelerator gets the whole propagation or none of it (Compute.h).
+    // An accelerator gets the whole propagation or none of it (ComputeBackend.h).
     // It may decline per call -- too small to be worth the transfer, or a
     // precision it cannot hold -- and then this falls through to the CPU
     // below with nothing written.

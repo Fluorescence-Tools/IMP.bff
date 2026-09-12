@@ -2,6 +2,19 @@
 
 ## 2026-09-12
 
+- **PRD-141 complete under the owner's controlling taxonomy plan**
+  ([evidence](validation/taxonomy-completion.md)): probe/sidechain libraries,
+  ProbeRotamer/FRETRotamer/FPSRotamer, photophysics and five producer nodes,
+  bridge/command/compute/OpenMP/compatibility names, and internal helpers are
+  migrated. Bff's PTO facade is removed; typed consumers use ptolib directly.
+  The later reader hold was explicitly overruled. Full IMP: 2530 pass +276
+  subtests, no failures; full standalone and downstream suites are green.
+  All 108 public headers and the standalone non-unity core compile. Existing
+  potential decoding and Mass setup defects, stale adapters/capability tests,
+  and vendored convolution drift are addressed with preserved numerical
+  behavior. Pre-existing reader/data corrections remain separate worktree
+  changes, not absorbed into the taxonomy commit.
+
 - **Rotamer consumers finished after the ownership audit**: no rotamer/cgdye
   implementation remains in imp-tricks source. `imp-tricks` `6ee5385`
   removes dead registrations and makes the two legacy examples use bff's
@@ -11499,3 +11512,7 @@ distinguishable from the vendored `numpy.i`. Two name collisions removed —
   naive kernel managed 4.8-5.9x. Untried and listed in the note: f16 weights, tiling with workgroup memory,
   renumbering the density into the compacted layout, hoisting the CPU parallel region out of the step loop, and
   -- the real prize -- an integrator that does not need four thousand steps.
+
+## 2026-09-12 — ptolib foundation hardening
+
+Refreshed include/internal/ptolib.h from the sibling ptolib checkout. Fixes per-column compression corruption, malformed store bounds, and embedded codec build selection. Actual src/internal/Ptolib.cpp compiled as C++14 with warnings as errors; container/store-file/codec regression suites linked against it all pass. Full IMP.bff rebuild was not run. In-place PTO edits remain nontransactional, now documented upstream. Verification details: ../../ptolib/.omx/reports/ptolib-foundation.md.

@@ -34,7 +34,7 @@ The three paths:
     the node; nothing crosses the SWIG boundary per iteration.
 
 A third table does the same for a **TCSPC lifetime fit** -- the model
-anyone actually fits. Its curve is `IMP.bff.TcspcDecay`, which reconvolves
+anyone actually fits. Its curve is `IMP.bff.TCSPCDecay`, which reconvolves
 the lifetime spectrum with the measured response using tttrlib's own
 kernels; there is no ``director`` row for it either, because before the node
 existed a lifetime model simply fell back to scipy.

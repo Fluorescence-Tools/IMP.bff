@@ -26,7 +26,7 @@ def get_all_dyes():
 def test_rotamer_sampling_all_dyes(probe_name):
     """Test that every rotamer library can be loaded and sampled."""
     lib_path = os.path.join(ROTAMER_LIB_DIR, f"{probe_name}.rmf3")
-    # An `IMP.bff.RotamerLibrary` -- the same value every other reader
+    # An `IMP.bff.ProbeRotamerLibrary` -- the same value every other reader
     # returns. This one used to hand back a dict, because it was Python.
     lib = read_rotamer_library_rmf(lib_path)
 
