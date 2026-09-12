@@ -16,7 +16,7 @@
  */
 #include <IMP/bff/Sampler.h>
 
-#include <IMP/bff/FactorGraph.h>
+#include <IMP/bff/InferenceFactorGraph.h>
 #include <IMP/bff/GraphNode.h>
 #include <IMP/bff/GraphPort.h>
 
@@ -376,12 +376,12 @@ bool Sampler::has_objective() const {
 
 // ----------------------------------------------------------------- blocking
 
-void Sampler::set_factor_graph(FactorGraph* graph) {
+void Sampler::set_factor_graph(InferenceFactorGraph* graph) {
   factor_graph_ = graph;
   initialized_ = false;
 }
 
-FactorGraph* Sampler::get_factor_graph() const {
+InferenceFactorGraph* Sampler::get_factor_graph() const {
   return factor_graph_;
 }
 

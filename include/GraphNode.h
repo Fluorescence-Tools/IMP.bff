@@ -25,7 +25,7 @@
  *    the Python callable over the port maps.
  *
  *  Ported from chinet's chinet/node.py (phase 1 of removing chinet from
- *  chisurf). Standalone, like FactorGraph: no IMP particles, restraints
+ *  chisurf). Standalone, like InferenceFactorGraph: no IMP particles, restraints
  *  or decorators. Ports are shared_ptr-owned by the node; a GraphNode must be
  *  shared_ptr-owned too (its ports hold it weakly), which every
  *  Python-wrapped node is.

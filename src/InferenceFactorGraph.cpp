@@ -1,13 +1,13 @@
 /**
- *  \file FactorGraph.cpp
- *  \brief The factor structure of a model's posterior (see FactorGraph.h).
+ *  \file InferenceFactorGraph.cpp
+ *  \brief The factor structure of a model's posterior (see InferenceFactorGraph.h).
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
 
-#include <IMP/bff/FactorGraph.h>
+#include <IMP/bff/InferenceFactorGraph.h>
 
 #include <IMP/bff/internal/json.h>
 
@@ -39,9 +39,9 @@ struct DisjointSets {
 
 }  // namespace
 
-FactorGraph::FactorGraph() = default;
+InferenceFactorGraph::InferenceFactorGraph() = default;
 
-void FactorGraph::add_variable(const std::string& key, const std::string& name,
+void InferenceFactorGraph::add_variable(const std::string& key, const std::string& name,
                                int index, int fit_index, int size,
                                const std::string& role) {
   if (variable_index_of_.count(key)) {
@@ -64,7 +64,7 @@ void FactorGraph::add_variable(const std::string& key, const std::string& name,
   invalidate();
 }
 
-void FactorGraph::add_factor(const std::string& key, FactorKind kind,
+void InferenceFactorGraph::add_factor(const std::string& key, InferenceFactorKind kind,
                              const std::vector<std::string>& scope,
                              int fit_index, int size) {
   if (factor_index_of_.count(key)) {
@@ -90,7 +90,7 @@ void FactorGraph::add_factor(const std::string& key, FactorKind kind,
   invalidate();
 }
 
-void FactorGraph::invalidate() {
+void InferenceFactorGraph::invalidate() {
   has_moral_ = false;
   moral_.clear();
   has_order_min_fill_ = false;
@@ -101,23 +101,23 @@ void FactorGraph::invalidate() {
   cliques_.clear();
 }
 
-unsigned int FactorGraph::get_number_of_variables() const {
+unsigned int InferenceFactorGraph::get_number_of_variables() const {
   return static_cast<unsigned int>(variables_.size());
 }
 
-unsigned int FactorGraph::get_number_of_factors() const {
+unsigned int InferenceFactorGraph::get_number_of_factors() const {
   return static_cast<unsigned int>(factors_.size());
 }
 
-unsigned int FactorGraph::get_number_of_likelihood_factors() const {
+unsigned int InferenceFactorGraph::get_number_of_likelihood_factors() const {
   unsigned int n = 0;
   for (const auto& f : factors_) {
-    if (f.kind == LIKELIHOOD) ++n;
+    if (f.kind == INFERENCE_FACTOR_LIKELIHOOD) ++n;
   }
   return n;
 }
 
-std::vector<std::string> FactorGraph::get_variable_keys() const {
+std::vector<std::string> InferenceFactorGraph::get_variable_keys() const {
   std::vector<const Variable*> vs;
   vs.reserve(variables_.size());
   for (const auto& v : variables_) vs.push_back(&v);
@@ -131,27 +131,27 @@ std::vector<std::string> FactorGraph::get_variable_keys() const {
   return out;
 }
 
-std::vector<std::string> FactorGraph::get_factor_keys() const {
+std::vector<std::string> InferenceFactorGraph::get_factor_keys() const {
   std::vector<std::string> out;
   out.reserve(factors_.size());
   for (const auto& f : factors_) out.push_back(f.key);
   return out;
 }
 
-int FactorGraph::index_of(const std::string& key) const {
+int InferenceFactorGraph::index_of(const std::string& key) const {
   auto it = variable_index_of_.find(key);
   if (it == variable_index_of_.end()) return -1;
   return variables_[it->second].index;
 }
 
-std::string FactorGraph::key_at(int index) const {
+std::string InferenceFactorGraph::key_at(int index) const {
   for (const auto& v : variables_) {
     if (v.index == index) return v.key;
   }
   return "";
 }
 
-std::vector<std::string> FactorGraph::factors_of(
+std::vector<std::string> InferenceFactorGraph::factors_of(
     const std::string& key) const {
   auto it = variable_index_of_.find(key);
   if (it == variable_index_of_.end()) return {};
@@ -160,7 +160,7 @@ std::vector<std::string> FactorGraph::factors_of(
   return out;
 }
 
-std::vector<std::string> FactorGraph::variables_of(
+std::vector<std::string> InferenceFactorGraph::variables_of(
     const std::string& factor_key) const {
   auto it = factor_index_of_.find(factor_key);
   if (it == factor_index_of_.end()) return {};
@@ -169,7 +169,7 @@ std::vector<std::string> FactorGraph::variables_of(
   return out;
 }
 
-const std::vector<std::set<int> >& FactorGraph::moral_adjacency() const {
+const std::vector<std::set<int> >& InferenceFactorGraph::moral_adjacency() const {
   if (has_moral_) return moral_;
   moral_.assign(variables_.size(), {});
   for (const auto& f : factors_) {
@@ -186,7 +186,7 @@ const std::vector<std::set<int> >& FactorGraph::moral_adjacency() const {
   return moral_;
 }
 
-bool FactorGraph::is_complete() const {
+bool InferenceFactorGraph::is_complete() const {
   const auto& adj = moral_adjacency();
   const std::size_t n = adj.size();
   // The adjacency is symmetric, so this sum is *twice* the edge count. It
@@ -201,7 +201,7 @@ bool FactorGraph::is_complete() const {
   return directed == n * (n - 1);
 }
 
-std::vector<std::vector<std::string> > FactorGraph::connected_components()
+std::vector<std::vector<std::string> > InferenceFactorGraph::connected_components()
     const {
   const auto& adj = moral_adjacency();
   const int n = static_cast<int>(adj.size());
@@ -244,7 +244,7 @@ std::vector<std::vector<std::string> > FactorGraph::connected_components()
   return out;
 }
 
-std::vector<std::string> FactorGraph::get_elimination_order(
+std::vector<std::string> InferenceFactorGraph::get_elimination_order(
     const std::string& heuristic) const {
   bool use_min_fill;
   if (heuristic == "min_fill") {
@@ -339,7 +339,7 @@ std::vector<std::string> FactorGraph::get_elimination_order(
   return out;
 }
 
-std::vector<std::vector<std::string> > FactorGraph::compute_cliques(
+std::vector<std::vector<std::string> > InferenceFactorGraph::compute_cliques(
     const std::vector<int>& order) const {
   // Simulate the elimination: each eliminated variable plus its
   // then-remaining neighbours is a clique of the triangulated graph.
@@ -394,7 +394,7 @@ std::vector<std::vector<std::string> > FactorGraph::compute_cliques(
   return out;
 }
 
-std::vector<std::vector<std::string> > FactorGraph::get_cliques() const {
+std::vector<std::vector<std::string> > InferenceFactorGraph::get_cliques() const {
   if (has_cliques_) return cliques_;
   if (variables_.empty()) {
     cliques_.clear();
@@ -418,7 +418,7 @@ std::vector<std::vector<std::string> > FactorGraph::get_cliques() const {
   return cliques_;
 }
 
-int FactorGraph::get_treewidth() const {
+int InferenceFactorGraph::get_treewidth() const {
   const auto& cs = get_cliques();
   if (cs.empty()) return 0;
   std::size_t widest = 0;
@@ -426,7 +426,7 @@ int FactorGraph::get_treewidth() const {
   return static_cast<int>(widest) - 1;
 }
 
-std::vector<JunctionTreeEdge> FactorGraph::get_junction_tree_edges() const {
+std::vector<InferenceJunctionTreeEdge> InferenceFactorGraph::get_junction_tree_edges() const {
   const auto& cliques = get_cliques();
   const int n = static_cast<int>(cliques.size());
   struct Candidate {
@@ -450,7 +450,7 @@ std::vector<JunctionTreeEdge> FactorGraph::get_junction_tree_edges() const {
                      return a.weight > b.weight;
                    });
   DisjointSets ds(n);
-  std::vector<JunctionTreeEdge> edges;
+  std::vector<InferenceJunctionTreeEdge> edges;
   for (const auto& c : candidates) {
     if (ds.find(c.i) != ds.find(c.j)) {
       ds.unite(c.i, c.j);
@@ -463,7 +463,7 @@ std::vector<JunctionTreeEdge> FactorGraph::get_junction_tree_edges() const {
                                             const std::string& y) {
         return index_of(x) < index_of(y);
       });
-      JunctionTreeEdge e;
+      InferenceJunctionTreeEdge e;
       e.first = c.i;
       e.second = c.j;
       e.separator = sep;
@@ -471,15 +471,15 @@ std::vector<JunctionTreeEdge> FactorGraph::get_junction_tree_edges() const {
     }
   }
   std::sort(edges.begin(), edges.end(),
-            [](const JunctionTreeEdge& a, const JunctionTreeEdge& b) {
+            [](const InferenceJunctionTreeEdge& a, const InferenceJunctionTreeEdge& b) {
               if (a.first != b.first) return a.first < b.first;
               return a.second < b.second;
             });
   return edges;
 }
 
-std::vector<std::vector<std::string> > FactorGraph::get_separators() const {
-  std::vector<JunctionTreeEdge> edges = get_junction_tree_edges();
+std::vector<std::vector<std::string> > InferenceFactorGraph::get_separators() const {
+  std::vector<InferenceJunctionTreeEdge> edges = get_junction_tree_edges();
   std::set<std::vector<std::string> > seen;
   for (const auto& e : edges) {
     if (!e.separator.empty()) seen.insert(e.separator);
@@ -493,7 +493,7 @@ std::vector<std::vector<std::string> > FactorGraph::get_separators() const {
   return out;
 }
 
-std::vector<std::vector<std::string> > FactorGraph::get_sampling_blocks()
+std::vector<std::vector<std::string> > InferenceFactorGraph::get_sampling_blocks()
     const {
   // Group variables by their likelihood-factor neighbourhood: two variables
   // land in the same block exactly when the same set of datasets depends
@@ -503,7 +503,7 @@ std::vector<std::vector<std::string> > FactorGraph::get_sampling_blocks()
   for (int v = 0; v < static_cast<int>(variables_.size()); ++v) {
     std::set<int> nb;
     for (int f : incidence_[v]) {
-      if (factors_[f].kind == LIKELIHOOD && factors_[f].fit_index >= 0) {
+      if (factors_[f].kind == INFERENCE_FACTOR_LIKELIHOOD && factors_[f].fit_index >= 0) {
         nb.insert(factors_[f].fit_index);
       }
     }
@@ -545,22 +545,22 @@ std::vector<std::vector<std::string> > FactorGraph::get_sampling_blocks()
   return out;
 }
 
-int FactorGraph::get_variable_size(const std::string& key) const {
+int InferenceFactorGraph::get_variable_size(const std::string& key) const {
   auto it = variable_index_of_.find(key);
   return it == variable_index_of_.end() ? 0 : variables_[it->second].size;
 }
 
-std::string FactorGraph::get_variable_role(const std::string& key) const {
+std::string InferenceFactorGraph::get_variable_role(const std::string& key) const {
   auto it = variable_index_of_.find(key);
   return it == variable_index_of_.end() ? std::string() : variables_[it->second].role;
 }
 
-FactorKind FactorGraph::get_factor_kind(const std::string& factor_key) const {
+InferenceFactorKind InferenceFactorGraph::get_factor_kind(const std::string& factor_key) const {
   auto it = factor_index_of_.find(factor_key);
-  return it == factor_index_of_.end() ? PRIOR : factors_[it->second].kind;
+  return it == factor_index_of_.end() ? INFERENCE_FACTOR_PRIOR : factors_[it->second].kind;
 }
 
-unsigned int FactorGraph::get_number_of_factors_of_kind(FactorKind kind) const {
+unsigned int InferenceFactorGraph::get_number_of_factors_of_kind(InferenceFactorKind kind) const {
   unsigned int n = 0;
   for (const auto& f : factors_) {
     if (f.kind == kind) ++n;
@@ -568,7 +568,7 @@ unsigned int FactorGraph::get_number_of_factors_of_kind(FactorKind kind) const {
   return n;
 }
 
-int FactorGraph::factor_cost(const std::vector<std::string>& block) const {
+int InferenceFactorGraph::factor_cost(const std::vector<std::string>& block) const {
   long long total = 0;
   for (const auto& key : affected_factors(block)) {
     auto it = factor_index_of_.find(key);
@@ -578,7 +578,7 @@ int FactorGraph::factor_cost(const std::vector<std::string>& block) const {
   return static_cast<int>(total > cap ? cap : total);
 }
 
-int FactorGraph::block_cost(const std::vector<std::string>& block) const {
+int InferenceFactorGraph::block_cost(const std::vector<std::string>& block) const {
   // Two factors, and both are the point of the number. How many local fits
   // have to be redone when this block moves -- which is what it has always
   // been -- times how big the block is, which is the product of its
@@ -604,7 +604,7 @@ int FactorGraph::block_cost(const std::vector<std::string>& block) const {
   return static_cast<int>(cost > cap ? cap : cost);
 }
 
-std::string FactorGraph::to_json() const {
+std::string InferenceFactorGraph::to_json() const {
   nlohmann::json j;
   j["format"] = "imp.bff.factorgraph";
   j["version"] = 1;
@@ -638,22 +638,22 @@ std::string FactorGraph::to_json() const {
   return j.dump(2);
 }
 
-void FactorGraph::from_json(const std::string& json) {
+void InferenceFactorGraph::from_json(const std::string& json) {
   nlohmann::json j = nlohmann::json::parse(json, nullptr, false);
   if (j.is_discarded()) {
-    IMP_THROW("FactorGraph::from_json: not JSON", IMP::ValueException);
+    IMP_THROW("InferenceFactorGraph::from_json: not JSON", IMP::ValueException);
   }
   if (j.contains("format") &&
       j.at("format").get<std::string>() != "imp.bff.factorgraph") {
-    IMP_THROW("FactorGraph::from_json: unexpected format '"
+    IMP_THROW("InferenceFactorGraph::from_json: unexpected format '"
                       << j.at("format").get<std::string>() << "'",
               IMP::ValueException);
   }
   if (!j.contains("variables") || !j.contains("factors")) {
-    IMP_THROW("FactorGraph::from_json: the document needs 'variables' and "
+    IMP_THROW("InferenceFactorGraph::from_json: the document needs 'variables' and "
               "'factors'", IMP::ValueException);
   }
-  FactorGraph fresh;
+  InferenceFactorGraph fresh;
   for (const auto& v : j.at("variables")) {
     fresh.add_variable(v.at("key").get<std::string>(),
                        v.value("name", std::string()),
@@ -664,20 +664,20 @@ void FactorGraph::from_json(const std::string& json) {
     std::vector<std::string> scope;
     for (const auto& s : f.at("scope")) scope.push_back(s.get<std::string>());
     fresh.add_factor(f.at("key").get<std::string>(),
-                     static_cast<FactorKind>(f.value("kind", 0)), scope,
+                     static_cast<InferenceFactorKind>(f.value("kind", 0)), scope,
                      f.value("fit_index", -1), f.value("size", 0));
   }
   *this = fresh;
 }
 
-void FactorGraph::save(const std::string& path) const {
+void InferenceFactorGraph::save(const std::string& path) const {
   std::ofstream out(path.c_str());
   if (!out) IMP_THROW("cannot write " << path, IMP::ValueException);
   out << to_json();
   if (!out) IMP_THROW("failed while writing " << path, IMP::ValueException);
 }
 
-void FactorGraph::load(const std::string& path) {
+void InferenceFactorGraph::load(const std::string& path) {
   std::ifstream in(path.c_str());
   if (!in) IMP_THROW("cannot read " << path, IMP::ValueException);
   std::ostringstream all;
@@ -685,7 +685,7 @@ void FactorGraph::load(const std::string& path) {
   from_json(all.str());
 }
 
-std::vector<std::string> FactorGraph::affected_factors(
+std::vector<std::string> InferenceFactorGraph::affected_factors(
     const std::vector<std::string>& changed) const {
   std::set<int> touched;
   for (const auto& k : changed) {
@@ -699,14 +699,14 @@ std::vector<std::string> FactorGraph::affected_factors(
   return out;
 }
 
-std::vector<int> FactorGraph::affected_fits(
+std::vector<int> InferenceFactorGraph::affected_fits(
     const std::vector<std::string>& changed) const {
   std::set<int> out;
   for (const auto& k : changed) {
     auto it = variable_index_of_.find(k);
     if (it == variable_index_of_.end()) continue;
     for (int f : incidence_[it->second]) {
-      if (factors_[f].kind == LIKELIHOOD && factors_[f].fit_index >= 0) {
+      if (factors_[f].kind == INFERENCE_FACTOR_LIKELIHOOD && factors_[f].fit_index >= 0) {
         out.insert(factors_[f].fit_index);
       }
     }
@@ -714,10 +714,10 @@ std::vector<int> FactorGraph::affected_fits(
   return std::vector<int>(out.begin(), out.end());
 }
 
-std::vector<std::string> FactorGraph::get_unexplained_variables() const {
+std::vector<std::string> InferenceFactorGraph::get_unexplained_variables() const {
   std::vector<bool> covered(variables_.size(), false);
   for (const auto& f : factors_) {
-    if (f.kind != LIKELIHOOD) continue;
+    if (f.kind != INFERENCE_FACTOR_LIKELIHOOD) continue;
     for (int v : f.scope) covered[v] = true;
   }
   std::vector<const Variable*> unexplained;
@@ -734,16 +734,16 @@ std::vector<std::string> FactorGraph::get_unexplained_variables() const {
   return out;
 }
 
-std::string FactorGraph::describe() const {
+std::string InferenceFactorGraph::describe() const {
   std::ostringstream lines;
   long long free_numbers = 0;
   for (const auto& v : variables_) free_numbers += v.size;
   lines << "variables      : " << variables_.size() << " ("
         << free_numbers << " free numbers)\n";
   lines << "likelihoods    : " << get_number_of_likelihood_factors() << "\n";
-  lines << "priors         : " << get_number_of_factors_of_kind(PRIOR) << "\n";
-  if (get_number_of_factors_of_kind(HYPER)) {
-    lines << "hyper factors  : " << get_number_of_factors_of_kind(HYPER) << "\n";
+  lines << "priors         : " << get_number_of_factors_of_kind(INFERENCE_FACTOR_PRIOR) << "\n";
+  if (get_number_of_factors_of_kind(INFERENCE_FACTOR_HYPER)) {
+    lines << "hyper factors  : " << get_number_of_factors_of_kind(INFERENCE_FACTOR_HYPER) << "\n";
   }
   lines << "treewidth      : " << get_treewidth() << "\n";
   lines << "components     : " << connected_components().size() << "\n";

@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/FactorGraph.h
+ *  \file IMP/bff/InferenceFactorGraph.h
  *  \brief The factor structure of a model's posterior, as an explicit graph.
  *
  *  A posterior factorises exactly:
@@ -41,8 +41,8 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_FACTORGRAPH_H
-#define IMPBFF_FACTORGRAPH_H
+#ifndef IMPBFF_INFERENCEFACTORGRAPH_H
+#define IMPBFF_INFERENCEFACTORGRAPH_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -54,20 +54,20 @@
 IMPBFF_BEGIN_NAMESPACE
 
 //! What a factor is: a dataset likelihood or a per-variable prior.
-enum FactorKind {
-  PRIOR = 0,
-  LIKELIHOOD = 1,
+enum InferenceFactorKind {
+  INFERENCE_FACTOR_PRIOR = 0,
+  INFERENCE_FACTOR_LIKELIHOOD = 1,
   //! A factor over a hyperparameter and the variables it governs.
   /*!
       Not a prior on one constant: a roughness penalty couples every
       coefficient of the curve it smooths *and* the weight that scales it, and
       integrating that weight out rather than optimising it is what makes such
-      an analysis work. Declared as a PRIOR it is indistinguishable from a
+      an analysis work. Declared as a INFERENCE_FACTOR_PRIOR it is indistinguishable from a
       Gaussian on a scalar, and the elimination order that follows is not the
       one the analysis uses. Scope semantics are the others': it couples
       everything it names.
   */
-  HYPER = 2
+  INFERENCE_FACTOR_HYPER = 2
 };
 
 //! One edge of a junction (clique) tree, joining two maximal cliques.
@@ -75,7 +75,7 @@ enum FactorKind {
     The edge carries the separator: the variables the two cliques share.
     Conditioning on a separator makes the two sides independent.
 */
-struct JunctionTreeEdge {
+struct InferenceJunctionTreeEdge {
   //! Index of the first clique (into the clique list the tree is over).
   int first;
   //! Index of the second clique.
@@ -86,7 +86,7 @@ struct JunctionTreeEdge {
 
 //! Stream a junction-tree edge (clique pair and its separator).
 inline std::ostream& operator<<(std::ostream& out,
-                                const JunctionTreeEdge& e) {
+                                const InferenceJunctionTreeEdge& e) {
   out << "(" << e.first << ", " << e.second << ")[";
   for (std::size_t i = 0; i < e.separator.size(); ++i) {
     if (i) out << ", ";
@@ -110,9 +110,9 @@ inline std::ostream& operator<<(std::ostream& out,
     factor drops the caches. All queries are deterministic: ties break on
     the variable's flat-vector index.
 */
-class IMPBFFEXPORT FactorGraph {
+class IMPBFFEXPORT InferenceFactorGraph {
  public:
-  FactorGraph();
+  InferenceFactorGraph();
 
   //! Add a free parameter (a variable of the posterior).
   /*!
@@ -142,12 +142,12 @@ class IMPBFFEXPORT FactorGraph {
       moral graph.
 
       \param[in] key stable identifier of the factor
-      \param[in] kind PRIOR or LIKELIHOOD
+      \param[in] kind INFERENCE_FACTOR_PRIOR or INFERENCE_FACTOR_LIKELIHOOD
       \param[in] scope keys of the variables this factor depends on
       \param[in] fit_index local fit of a likelihood factor, or -1
       \param[in] size number of residuals the factor contributes
   */
-  void add_factor(const std::string& key, FactorKind kind,
+  void add_factor(const std::string& key, InferenceFactorKind kind,
                   const std::vector<std::string>& scope,
                   int fit_index = -1, int size = 0);
 
@@ -185,10 +185,10 @@ class IMPBFFEXPORT FactorGraph {
   int get_variable_size(const std::string& key) const;
   //! A variable's role as the caller declared it; empty if none or absent.
   std::string get_variable_role(const std::string& key) const;
-  //! A factor's kind; PRIOR for an unknown key, so check with factor_keys().
-  FactorKind get_factor_kind(const std::string& factor_key) const;
+  //! A factor's kind; INFERENCE_FACTOR_PRIOR for an unknown key, so check with factor_keys().
+  InferenceFactorKind get_factor_kind(const std::string& factor_key) const;
   //! Factors of one kind.
-  unsigned int get_number_of_factors_of_kind(FactorKind kind) const;
+  unsigned int get_number_of_factors_of_kind(InferenceFactorKind kind) const;
 
   //! The graph as a JSON document: every variable and factor, nothing derived.
   /*!
@@ -260,7 +260,7 @@ class IMPBFFEXPORT FactorGraph {
       separator size, the standard construction guaranteeing the
       running-intersection property. A disconnected fit gives a forest.
   */
-  std::vector<JunctionTreeEdge> get_junction_tree_edges() const;
+  std::vector<InferenceJunctionTreeEdge> get_junction_tree_edges() const;
 
   //! The distinct separators of the junction tree, longest first.
   /*!
@@ -321,7 +321,7 @@ class IMPBFFEXPORT FactorGraph {
   };
   struct Factor {
     std::string key;
-    FactorKind kind;
+    InferenceFactorKind kind;
     std::vector<int> scope;  // variable positions
     int fit_index;
     int size;
@@ -349,4 +349,4 @@ class IMPBFFEXPORT FactorGraph {
 
 IMPBFF_END_NAMESPACE
 
-#endif // IMPBFF_FACTORGRAPH_H
+#endif // IMPBFF_INFERENCEFACTORGRAPH_H

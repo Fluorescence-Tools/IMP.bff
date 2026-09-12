@@ -6,7 +6,7 @@
  *  chisurf/core/fitting/sample.py and ensemble.py ported 1:1 onto the bff
  *  GraphPort/GraphNode runtime, so that a Markov-chain step never crosses the
  *  SWIG boundary. Phases 1-5 moved the parameter runtime (GraphPort, GraphNode,
- *  GraphSession, FactorGraph) into bff and chisurf onto it; what stayed slow
+ *  GraphSession, InferenceFactorGraph) into bff and chisurf onto it; what stayed slow
  *  was the sampler loop itself -- measured at 1.67 us per port set+get
  *  across the boundary against 0.06 us for a Python attribute, paid once
  *  per proposal per parameter. This class writes the walker into the
@@ -51,7 +51,7 @@
  *    cap bound, and it should be zero on a converged run.
  *
  *  - "metropolis": the blocked random-walk Metropolis of
- *    walk_mcmc_blocked. Blocks come from an attached FactorGraph's
+ *    walk_mcmc_blocked. Blocks come from an attached InferenceFactorGraph's
  *    sampling blocks (two parameters share a block when the same set of
  *    datasets depends on both) or from an explicit partition, and the
  *    fallback is a single block covering every parameter -- an ordinary
@@ -112,7 +112,7 @@ IMPBFF_BEGIN_NAMESPACE
 
 class GraphPort;
 class GraphNode;
-class FactorGraph;
+class InferenceFactorGraph;
 
 //! Raised for a misconfigured sampler (no objective, fixed ports, a
 //! degenerate ensemble, an unknown algorithm...).
@@ -212,13 +212,13 @@ class IMPBFFEXPORT Sampler {
       falls back to one block over everything, with the same warning
       chisurf logs. Only the "metropolis" algorithm uses blocks.
 
-      The graph is borrowed (FactorGraph is a plain class, not
+      The graph is borrowed (InferenceFactorGraph is a plain class, not
       shared_ptr-owned -- the caller keeps it alive for the sampler's
       lifetime, as chisurf's fit keeps its graph).
   */
-  void set_factor_graph(FactorGraph* graph);
+  void set_factor_graph(InferenceFactorGraph* graph);
   //! The attached factor graph, or a null pointer.
-  FactorGraph* get_factor_graph() const;
+  InferenceFactorGraph* get_factor_graph() const;
   //! An explicit block partition: flat indices and one size per block.
   void set_blocks(const std::vector<int>& flat_indices,
                   const std::vector<int>& block_sizes);
@@ -504,7 +504,7 @@ class IMPBFFEXPORT Sampler {
   std::shared_ptr<GraphPort> output_port_;
   bool output_is_log_likelihood_ = false;
   std::function<double(const std::vector<double>&)> objective_function_;
-  FactorGraph* factor_graph_ = nullptr;  //!< borrowed
+  InferenceFactorGraph* factor_graph_ = nullptr;  //!< borrowed
 
   unsigned int ndim_ = 0;
   std::vector<double> initial_values_;

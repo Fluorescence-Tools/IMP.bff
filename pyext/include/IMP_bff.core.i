@@ -37,8 +37,8 @@ import numpy as np
    C++ `int` is 32 bits, so an integer port has to speak int64 or large
    values fall through to the double overload and come back rounded. */
 %template(VectorInt64) std::vector<long long >;
-%include "IMP/bff/FactorGraph.h"
-%template(VectorJunctionTreeEdge) std::vector<IMP::bff::JunctionTreeEdge>;
+%include "IMP/bff/InferenceFactorGraph.h"
+%template(VectorInferenceJunctionTreeEdge) std::vector<IMP::bff::InferenceJunctionTreeEdge>;
 
 /*
  * The reactive GraphPort/GraphNode runtime ported from chinet (phase 1 of removing

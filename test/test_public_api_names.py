@@ -37,6 +37,7 @@ FLAT_NAMES = [
     "FitJointChiSquared",         # grouped objectives
     "FitMinimizer",               # deterministic optimizer
     "fit_weighted_residuals",      # deterministic residual helper
+    "InferenceFactorGraph",        # inference structure
     "get_av",                    # avbuilder
     "AccessibleVolume",              # avmodel
     "read_fps_json",                 # fps
@@ -106,6 +107,7 @@ def test_no_retired_names_survive():
         "Node", "Port", "Session", "EvaluationGraph", "Expression",
         # Fitting owns its data/objective/optimizer vocabulary.
         "Dataset", "ChiSquared", "JointChiSquared", "Minimizer",
+        "FactorGraph", "PRIOR", "LIKELIHOOD", "HYPER",
         "System", "read_ff_system", "write_ff_system", "read_cgprobe_template",
         "write_cgprobe_template", "resolve_site", "apply_rotamer_coords",
         "generate_rotamers", "compute_exact_efficiency", "calculate_fret_exact",

@@ -9,26 +9,26 @@ no IMP particles taking part in the graph.
 """
 import pytest
 
-from IMP.bff import FactorGraph, LIKELIHOOD, PRIOR
+from IMP.bff import InferenceFactorGraph, INFERENCE_FACTOR_LIKELIHOOD, INFERENCE_FACTOR_PRIOR
 
 
 def single_dataset_graph(n_locals=3):
     """One dataset whose likelihood reads every parameter: a complete graph."""
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     keys = []
     for i in range(n_locals):
         key = f"x{i}"
         keys.append(key)
         g.add_variable(key, key, i, 0)
-    g.add_factor("L0", LIKELIHOOD, keys, 0, 32)
+    g.add_factor("L0", INFERENCE_FACTOR_LIKELIHOOD, keys, 0, 32)
     for key in keys:
-        g.add_factor(f"pi_{key}", PRIOR, [key], -1, 1)
+        g.add_factor(f"pi_{key}", INFERENCE_FACTOR_PRIOR, [key], -1, 1)
     return g, keys
 
 
 def star_graph(n_datasets=4, n_globals=2, n_locals=2):
     """Datasets with local parameters sharing a few globals: a star."""
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     index = 0
     local_keys = {}
     for k in range(n_datasets):
@@ -44,16 +44,16 @@ def star_graph(n_datasets=4, n_globals=2, n_locals=2):
         global_keys.append(key)
         index += 1
     for k in range(n_datasets):
-        g.add_factor(f"L{k}", LIKELIHOOD, local_keys[k] + global_keys, k, 32)
+        g.add_factor(f"L{k}", INFERENCE_FACTOR_LIKELIHOOD, local_keys[k] + global_keys, k, 32)
     for keys in local_keys.values():
         for key in keys:
-            g.add_factor(f"pi_{key}", PRIOR, [key], -1, 1)
+            g.add_factor(f"pi_{key}", INFERENCE_FACTOR_PRIOR, [key], -1, 1)
     return g, local_keys, global_keys
 
 
 def unlinked_group(n_datasets=3, n_locals=2):
     """Datasets that share nothing: n independent sub-problems."""
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     index = 0
     local_keys = {}
     for k in range(n_datasets):
@@ -62,7 +62,7 @@ def unlinked_group(n_datasets=3, n_locals=2):
             g.add_variable(key, f"x{j}", index, k)
             local_keys.setdefault(k, []).append(key)
             index += 1
-        g.add_factor(f"L{k}", LIKELIHOOD, local_keys[k], k, 32)
+        g.add_factor(f"L{k}", INFERENCE_FACTOR_LIKELIHOOD, local_keys[k], k, 32)
     return g, local_keys
 
 
@@ -85,7 +85,7 @@ def test_complete_graph_shortcut_agrees_with_the_result():
 
 
 def test_empty_graph_has_no_cliques():
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     assert g.get_cliques() == ()
     assert g.get_treewidth() == 0
     assert g.get_number_of_variables() == 0
@@ -98,12 +98,12 @@ def test_unknown_heuristic_raises():
 
 
 def test_duplicate_keys_and_unknown_scope_raise():
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     g.add_variable("x", "x", 0, 0)
     with pytest.raises(Exception):
         g.add_variable("x", "x", 1, 0)
     with pytest.raises(Exception):
-        g.add_factor("L", LIKELIHOOD, ["nope"], 0, 1)
+        g.add_factor("L", INFERENCE_FACTOR_LIKELIHOOD, ["nope"], 0, 1)
 
 
 def test_linking_a_parameter_creates_a_star_with_one_separator():
@@ -202,10 +202,10 @@ def test_junction_tree_edges_carry_their_separator():
 
 
 def test_unexplained_variables_are_reported():
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     g.add_variable("seen", "seen", 0, 0)
     g.add_variable("blind", "blind", 1, 0)
-    g.add_factor("L0", LIKELIHOOD, ["seen"], 0, 8)
+    g.add_factor("L0", INFERENCE_FACTOR_LIKELIHOOD, ["seen"], 0, 8)
     assert g.get_unexplained_variables() == ("blind",)
 
 
@@ -245,11 +245,11 @@ def test_a_four_variable_star_is_not_complete():
     it never hit the coincidence; that is why this needs its own test rather
     than a bigger one.
     """
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     g.add_variable("shared", "a", 0, -1)
     for k in range(3):
         g.add_variable(f"local{k}", "c", k + 1, k)
-        g.add_factor(f"L{k}", LIKELIHOOD, ["shared", f"local{k}"], k, 32)
+        g.add_factor(f"L{k}", INFERENCE_FACTOR_LIKELIHOOD, ["shared", f"local{k}"], k, 32)
 
     cliques = [tuple(c) for c in g.get_cliques()]
     assert len(cliques) == 3, cliques

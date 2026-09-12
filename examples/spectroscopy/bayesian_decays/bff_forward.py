@@ -146,7 +146,7 @@ class BffForward:
 
 
 def structural_graph(graph, model):
-    """The model's structure as a `bff.FactorGraph`: which variables exist,
+    """The model's structure as a `bff.InferenceFactorGraph`: which variables exist,
     which factors touch which of them, and what that implies for how it can be
     decomposed.
 
@@ -157,7 +157,7 @@ def structural_graph(graph, model):
     """
     import IMP.bff as bff
     L = model['L']
-    fg = bff.FactorGraph()
+    fg = bff.InferenceFactorGraph()
     idx = 0
     for name, (a, b) in sorted(graph.offsets.items(), key=lambda kv: kv[1][0]):
         fg.add_variable(name, name, idx)

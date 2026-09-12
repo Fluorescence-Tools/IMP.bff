@@ -808,7 +808,7 @@ def _per_channel_information(spec, model, p_true=None, photons=3e5, step=1e-4):
 
 
 def structural_graph(spec: Experiment, model: dict, scopes=None, p_true=None, photons=3e5):
-    """The model as an `IMP.bff.FactorGraph`: which unknowns exist, which
+    """The model as an `IMP.bff.InferenceFactorGraph`: which unknowns exist, which
     factors touch which of them, and what that implies for how the posterior
     can be decomposed.
 
@@ -820,7 +820,7 @@ def structural_graph(spec: Experiment, model: dict, scopes=None, p_true=None, ph
     import IMP.bff as bff
     g = graph(spec, model, None, photons=photons)
     scopes = factor_scopes(spec, model, p_true, photons) if scopes is None else scopes
-    fg = bff.FactorGraph()
+    fg = bff.InferenceFactorGraph()
     for i, name in enumerate(sorted(g.offsets, key=lambda n: g.offsets[n][0])):
         fg.add_variable(name, name, i)
     for name in sorted(g.offsets):

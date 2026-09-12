@@ -13,7 +13,7 @@
  *
  *  Ported from chinet's chinet/port.py (phase 1 of removing chinet from
  *  chisurf: bff absorbs the parameter/node runtime). This layer is
- *  deliberately standalone, like FactorGraph: no IMP particles, restraints
+ *  deliberately standalone, like InferenceFactorGraph: no IMP particles, restraints
  *  or decorators take part. Persistence is phase 2: GraphSession.h reads and
  *  writes the chinet document from this state (the document dict itself,
  *  chinet's schema.py and db.py/MMFDB backend are not ported; GraphObject

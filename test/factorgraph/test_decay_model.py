@@ -17,10 +17,10 @@ What that shape is, and why each part needs something the class did not have:
 * **Roles.** distribution, physics, calibration, instrument, hyper. The
   consumer kept a parallel dictionary because the class had nowhere to put
   them.
-* **A HYPER factor.** `log10_lam` appears in no likelihood's scope at all: it
+* **A INFERENCE_FACTOR_HYPER factor.** `log10_lam` appears in no likelihood's scope at all: it
   reaches the data only through the roughness factor that couples it to all 24
   distribution coefficients. That is what makes it a hyperparameter rather
-  than a parameter, and as a PRIOR it would be indistinguishable from a
+  than a parameter, and as a INFERENCE_FACTOR_PRIOR it would be indistinguishable from a
   Gaussian on one constant.
 """
 
@@ -41,14 +41,14 @@ def spec():
 
 
 def _build(spec):
-    g = IMP.bff.FactorGraph()
+    g = IMP.bff.InferenceFactorGraph()
     offset = 0
     for v in spec["variables"]:
         g.add_variable(v["key"], v.get("name", v["key"]), offset, -1,
                        v.get("size", 1), v.get("role", ""))
         offset += v.get("size", 1)
-    kinds = {"PRIOR": IMP.bff.PRIOR, "LIKELIHOOD": IMP.bff.LIKELIHOOD,
-             "HYPER": IMP.bff.HYPER}
+    kinds = {"PRIOR": IMP.bff.INFERENCE_FACTOR_PRIOR, "LIKELIHOOD": IMP.bff.INFERENCE_FACTOR_LIKELIHOOD,
+             "HYPER": IMP.bff.INFERENCE_FACTOR_HYPER}
     for f in spec["factors"]:
         g.add_factor(f["key"], kinds[f["kind"]], f["scope"],
                      f.get("fit_index", -1), f.get("size", 0))
@@ -103,10 +103,10 @@ def test_the_cost_law_on_a_block_whose_width_is_the_only_difference(graph):
     """The same claim without the real graph's incidental structure: two
     graphs alike but for one variable's size."""
     def one(size):
-        g = IMP.bff.FactorGraph()
+        g = IMP.bff.InferenceFactorGraph()
         g.add_variable("wide", "wide", 0, -1, size)
         g.add_variable("s", "s", size, -1, 1)
-        g.add_factor("L", IMP.bff.LIKELIHOOD, ["wide", "s"], 0, 100)
+        g.add_factor("L", IMP.bff.INFERENCE_FACTOR_LIKELIHOOD, ["wide", "s"], 0, 100)
         return g.block_cost(["wide", "s"])
     assert one(24) == 24 * one(1)
 
@@ -122,8 +122,8 @@ def test_a_hyperparameter_forces_no_local_fit(graph):
 
 
 def test_the_hyperparameter_is_not_a_prior(graph):
-    assert graph.get_factor_kind("rough:c") == IMP.bff.HYPER
-    assert graph.get_number_of_factors_of_kind(IMP.bff.HYPER) == 1
+    assert graph.get_factor_kind("rough:c") == IMP.bff.INFERENCE_FACTOR_HYPER
+    assert graph.get_number_of_factors_of_kind(IMP.bff.INFERENCE_FACTOR_HYPER) == 1
     assert "hyper factors  : 1" in graph.describe()
 
 
@@ -165,7 +165,7 @@ def test_the_decomposition_is_computed_over_the_real_scopes(graph):
 
 def test_a_round_trip_reproduces_the_graph(graph, tmp_path):
     text = graph.to_json()
-    back = IMP.bff.FactorGraph()
+    back = IMP.bff.InferenceFactorGraph()
     back.from_json(text)
     assert back.to_json() == text
     assert back.describe() == graph.describe()
@@ -179,13 +179,13 @@ def test_a_round_trip_reproduces_the_graph(graph, tmp_path):
 
     path = tmp_path / "graph.json"
     graph.save(str(path))
-    loaded = IMP.bff.FactorGraph()
+    loaded = IMP.bff.InferenceFactorGraph()
     loaded.load(str(path))
     assert loaded.to_json() == text
 
 
 def test_loading_something_else_is_refused():
-    g = IMP.bff.FactorGraph()
+    g = IMP.bff.InferenceFactorGraph()
     with pytest.raises(ValueError):
         g.from_json("{not json")
     with pytest.raises(ValueError):
@@ -195,10 +195,10 @@ def test_loading_something_else_is_refused():
 
 def test_the_defaults_are_the_old_behaviour():
     """Calls written before variables had sizes must mean what they meant."""
-    g = IMP.bff.FactorGraph()
+    g = IMP.bff.InferenceFactorGraph()
     g.add_variable("a", "a", 0)
     g.add_variable("b", "b", 1)
-    g.add_factor("L", IMP.bff.LIKELIHOOD, ["a", "b"], 0, 10)
+    g.add_factor("L", IMP.bff.INFERENCE_FACTOR_LIKELIHOOD, ["a", "b"], 0, 10)
     assert g.get_variable_size("a") == 1
     assert g.get_variable_role("a") == ""
     assert g.block_cost(["a", "b"]) == len(g.affected_fits(["a", "b"]))

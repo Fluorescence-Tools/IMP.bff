@@ -35,7 +35,7 @@ to).
 import numpy as np
 import pytest
 
-from IMP.bff import FactorGraph, LIKELIHOOD, PRIOR, GraphNode, GraphPort, Sampler
+from IMP.bff import InferenceFactorGraph, INFERENCE_FACTOR_LIKELIHOOD, INFERENCE_FACTOR_PRIOR, GraphNode, GraphPort, Sampler
 
 # The toy posterior: a 2D correlated Gaussian, chi^2 = d^T P d with
 # P = Sigma^-1, computed by a graph of bff operator nodes -- the same
@@ -436,13 +436,13 @@ def independent_graph():
 
 
 def independent_factor_graph():
-    g = FactorGraph()
+    g = InferenceFactorGraph()
     g.add_variable("x1", "x1", 0, 0)
     g.add_variable("x2", "x2", 1, 1)
-    g.add_factor("L0", LIKELIHOOD, ["x1"], 0, 8)
-    g.add_factor("L1", LIKELIHOOD, ["x2"], 1, 8)
-    g.add_factor("pi_x1", PRIOR, ["x1"], -1, 1)
-    g.add_factor("pi_x2", PRIOR, ["x2"], -1, 1)
+    g.add_factor("L0", INFERENCE_FACTOR_LIKELIHOOD, ["x1"], 0, 8)
+    g.add_factor("L1", INFERENCE_FACTOR_LIKELIHOOD, ["x2"], 1, 8)
+    g.add_factor("pi_x1", INFERENCE_FACTOR_PRIOR, ["x1"], -1, 1)
+    g.add_factor("pi_x2", INFERENCE_FACTOR_PRIOR, ["x2"], -1, 1)
     return g
 
 

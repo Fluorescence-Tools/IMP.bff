@@ -2,6 +2,13 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 1c — factor structure is inference, not generic graph**
+  ([PRD-141](prds/prd-141.md)): `FactorGraph`, its kind enum and junction-tree
+  edge are now `Inference*` with `INFERENCE_FACTOR_*` public constants. The
+  on-disk `PRIOR`/`LIKELIHOOD`/`HYPER` strings are deliberately unchanged.
+  Bff: 498 passed, 5 skipped + 42 subtests; ChiSurf factor-graph/sampler:
+  55 passed.
+
 - **PRD-141 stage 1b — deterministic fitting gets its own vocabulary**
   ([PRD-141](prds/prd-141.md)): `Dataset`, `ChiSquared`,
   `JointChiSquared`, `Minimizer`, their enum/observer/helper support, headers
