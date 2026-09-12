@@ -50,7 +50,10 @@ standalone test run. Ruff and mypy pass on the added public/simulation guards;
 all changed Python files parse. The imp-tricks follow-up is consumer-only: its source tree has no remaining
 rotamer implementation. Legacy example imports/value assumptions and dead
 CLI registrations are migrated to the existing bff API in the companion
-change. Complete scientific example runs are not claimed here.
+change (`imp-tricks` commit `6ee5385`). Its three durable numerical tests,
+CLI help and both example help commands pass on the applied files. Synthetic
+placement/weight parity is within 1e-13; a real T4L backbone/ensemble smoke
+check also passes. Complete scientific plotting runs are not claimed here.
 
 Reproduce the IMP comparison (arm64 environment, repository root):
 

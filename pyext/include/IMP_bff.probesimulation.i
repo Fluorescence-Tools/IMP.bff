@@ -25,4 +25,3 @@ IMP_SWIG_VALUE(IMP::bff, ProbeSimulationTrajectory, ProbeSimulationTrajectories)
 %attribute(IMP::bff::ProbeSimulationTrajectory, int, n_atoms, n_atoms);
 %attribute_py(IMP::bff::ProbeSimulationTrajectory, std::vector<std::string>,
               atom_names, atom_names);
-

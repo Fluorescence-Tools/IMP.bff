@@ -2,6 +2,15 @@
 
 ## 2026-09-12
 
+- **Rotamer consumers finished after the ownership audit**: no rotamer/cgdye
+  implementation remains in imp-tricks source. `imp-tricks` `6ee5385`
+  removes dead registrations and makes the two legacy examples use bff's
+  C++ library/placement/scoring APIs, retaining raw dipole populations.
+  Three durable tests and all three help entry points pass; real T4L and
+  synthetic 1e-13 parity checks pass. Shared notes and the AV reference are
+  in ChiSurf `c7c911edc`. Bff stage 3a is `ea2d9f8`; the next library split
+  remains gated by T-20260910-01. See [verification](validation/taxonomy-stage3.md).
+
 - **PRD-141 stage 3a — probe representations and simulations have their own files**
   ([PRD-141](prds/prd-141.md), [verification](validation/taxonomy-stage3.md)):
   common `ProbeSimulation` / `ProbeSimulationTrajectory`, molecular and grid
