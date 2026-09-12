@@ -158,7 +158,13 @@ jobs:
         if: steps.imp-cache.outputs.cache-hit != 'true'
         shell: bash -el {0}
         run: |
-          find imp-bld -type f -name '*.conda' -print -quit | grep -q . && exit 0
+          # A cache miss leaves no imp-bld directory.  Under bash -e the old
+          # find|grep guard exited here with status 1, so rattler-build never
+          # ran and the job failed in 1s.  Treat a missing directory as an
+          # ordinary cache miss.
+          if [ -d imp-bld ] && find imp-bld -type f -name '*.conda' -print -quit | grep -q .; then
+            exit 0
+          fi
           if [ "$RUNNER_OS" = "Windows" ]; then
             RB="$RATTLER_BUILD_EXE"
           else
