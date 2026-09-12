@@ -162,8 +162,11 @@ jobs:
           # find|grep guard exited here with status 1, so rattler-build never
           # ran and the job failed in 1s.  Treat a missing directory as an
           # ordinary cache miss.
-          if [ -d imp-bld ] && find imp-bld -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit | grep -q .; then
-            exit 0
+          if [ -d imp-bld ]; then
+            archive=$(find imp-bld -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit)
+            if [ -n "$archive" ]; then
+              exit 0
+            fi
           fi
           if [ "$RUNNER_OS" = "Windows" ]; then
             RB="$RATTLER_BUILD_EXE"
