@@ -65,7 +65,7 @@ bool is_unbounded(double v) { return !std::isfinite(v); }
     is also the more accurate of the two for small matrices: the rotations
     are orthogonal to working precision, so a nearly singular `J'J` keeps the
     relative accuracy of its small eigenvalues, which is exactly the corner
-    this is used in. `Sampler.cpp` carries the eigenvalue-only sibling of
+    this is used in. `MCMCSampler.cpp` carries the eigenvalue-only sibling of
     this routine; the covariance needs the vectors too, so it cannot share.
 */
 void symmetric_eigen(std::vector<double>& a, int n,

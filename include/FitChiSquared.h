@@ -35,7 +35,7 @@ enum FitNoiseModel {
  * to cross into Python to learn how badly a parameter vector fits.
  *
  * The node takes the model curve on an input port and writes chi-square to
- * an output port, which is exactly the shape `Sampler::set_objective()`
+ * an output port, which is exactly the shape `MCMCSampler::set_objective()`
  * consumes: a whole fit becomes one node graph, and a move costs no
  * interpreter at all.
  *
@@ -44,12 +44,12 @@ enum FitNoiseModel {
  * truncated to the shorter of data and model, optionally multiplied by a
  * fit mask, then squared and summed with NaN counting as an infinite
  * misfit. Priors are deliberately *not* part of it -- a reported chi-square
- * is the data misfit alone, and `Sampler` adds the prior separately.
+ * is the data misfit alone, and `MCMCSampler` adds the prior separately.
  *
  * Argument errors are thrown as ``std::domain_error``, which is what bff
  * surfaces to Python as ``ValueError``.
  *
- * \see Sampler, GraphNode
+ * \see MCMCSampler, GraphNode
  */
 class IMPBFFEXPORT FitChiSquared : public GraphNode {
  public:

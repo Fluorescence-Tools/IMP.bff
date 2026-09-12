@@ -3,7 +3,7 @@
 chisurf.core.fitting.sample and .ensemble implement the stretch move
 (Goodman & Weare), differential evolution with snooker updates (ter Braak)
 and the blocked random-walk Metropolis, all driving chisurf's Python models
-through a port per parameter. bff.Sampler is those algorithms over the bff
+through a port per parameter. bff.MCMCSampler is those algorithms over the bff
 GraphPort/GraphNode runtime, run entirely in C++: the walker is written into the
 parameter ports, the node graph is updated and read, and the accept/reject
 is decided without crossing the wrapper -- which measured 1.67 us per port
@@ -26,7 +26,7 @@ prior scenarios of test_prior_posterior_sampling.py) onto the C++ surface:
 - blocked and unblocked runs agree statistically; blocks come from the
   factor graph's sampling blocks, an explicit partition, or one block.
 
-Not ported: the ensemble *slice* sampler (stays Python; see Sampler.h),
+Not ported: the ensemble *slice* sampler (stays Python; see MCMCSampler.h),
 chisurf's pool/vectorize plumbing (a C++ loop has no pool to call), and
 the curvature-seeded block covariances (Fit.covariance_matrix is a chisurf
 concept; the C++ sampler seeds the diagonal fallback chisurf falls back
@@ -35,7 +35,7 @@ to).
 import numpy as np
 import pytest
 
-from IMP.bff import InferenceFactorGraph, INFERENCE_FACTOR_LIKELIHOOD, INFERENCE_FACTOR_PRIOR, GraphNode, GraphPort, Sampler
+from IMP.bff import InferenceFactorGraph, INFERENCE_FACTOR_LIKELIHOOD, INFERENCE_FACTOR_PRIOR, GraphNode, GraphPort, MCMCSampler
 
 # The toy posterior: a 2D correlated Gaussian, chi^2 = d^T P d with
 # P = Sigma^-1, computed by a graph of bff operator nodes -- the same
@@ -111,7 +111,7 @@ def make_sampler(algorithm, seed=7, n_steps=2000, thin=1, **kwargs):
     params, objective = gaussian_graph()
     params[0].set_value(MU[0])
     params[1].set_value(MU[1])  # keyword form: GraphPort(value=.., name=..) drops positionals
-    sampler = Sampler(algorithm, seed)
+    sampler = MCMCSampler(algorithm, seed)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     kwargs.pop("thin", None)
@@ -235,7 +235,7 @@ def test_a_forbidden_region_is_never_entered():
         p.set_is_bounded(True)
     params[0].set_bounds(0.75, 1.25)
     params[1].set_bounds(-0.75, -0.25)
-    sampler = Sampler("stretch", 13)
+    sampler = MCMCSampler("stretch", 13)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(1500)
@@ -253,7 +253,7 @@ def test_a_forbidden_region_is_never_entered():
 
 def test_unbounded_ports_are_unbounded():
     params, objective = gaussian_graph()
-    sampler = Sampler("stretch", 13)
+    sampler = MCMCSampler("stretch", 13)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_bounds([-1e30, -1e30], [1e30, 1e30])
@@ -272,7 +272,7 @@ def test_a_gaussian_prior_pulls_the_posterior_mean():
     params[0].set_value(2.0)
     params[1].set_value(-0.5)
     params[0].set_prior('{"kind": "normal", "mu": 2.0, "sigma": 0.1}')
-    sampler = Sampler("stretch", 17)
+    sampler = MCMCSampler("stretch", 17)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(2500)
@@ -289,7 +289,7 @@ def test_a_gaussian_prior_pulls_the_posterior_mean():
 
 def test_a_flat_prior_chain_is_not_pulled():
     params, objective = gaussian_graph()
-    sampler = Sampler("stretch", 17)
+    sampler = MCMCSampler("stretch", 17)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(1500)
@@ -301,7 +301,7 @@ def test_a_prior_can_forbid_a_region():
     params[0].set_value(2.5)
     params[1].set_value(-0.5)
     params[0].set_prior('{"kind": "uniform", "lb": 2.0, "ub": 3.0}')
-    sampler = Sampler("stretch", 19)
+    sampler = MCMCSampler("stretch", 19)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(1500)
@@ -316,7 +316,7 @@ def test_walkers_that_span_nothing_are_refused():
     """chisurf: a degenerate ensemble cannot explore; it refuses."""
     params, objective = gaussian_graph()
     start = [[0.0, 0.0]] * 10
-    sampler = Sampler("stretch", 23)
+    sampler = MCMCSampler("stretch", 23)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_walker_start(start)
@@ -326,7 +326,7 @@ def test_walkers_that_span_nothing_are_refused():
 
 def test_the_stretch_move_needs_enough_walkers_to_span_the_space():
     params, objective = gaussian_graph()
-    sampler = Sampler("stretch", 23)
+    sampler = MCMCSampler("stretch", 23)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_number_of_walkers(3)  # < 2 * ndim and < 4
@@ -339,7 +339,7 @@ def test_live_dangerously_skips_the_walker_requirement():
     # a non-degenerate 4-walker cloud (fewer than the 2*ndim the stretch
     # move wants, and a start that spans the plane)
     start = [[0.0, -0.4], [0.1, -0.6], [0.2, -0.5], [0.3, -0.55]]
-    sampler = Sampler("stretch", 23)
+    sampler = MCMCSampler("stretch", 23)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_number_of_walkers(4)
@@ -380,7 +380,7 @@ def test_the_result_has_the_shape_every_sampler_promises():
 def test_the_de_population_size_is_configurable_and_defaults_sensibly():
     """chisurf defaults to max(8, 2*ndim) and never below 4."""
     params, objective = gaussian_graph()
-    sampler = Sampler("de", 37)
+    sampler = MCMCSampler("de", 37)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     assert sampler.get_number_of_chains() == 8  # max(8, 2*2)
@@ -395,7 +395,7 @@ def test_de_restores_the_starting_values_afterwards():
     params, objective = gaussian_graph()
     params[0].set_value(MU[0])
     params[1].set_value(MU[1])
-    sampler = Sampler("de", 41)
+    sampler = MCMCSampler("de", 41)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(300)
@@ -409,7 +409,7 @@ def test_the_walker_spread_is_never_zero_in_any_direction():
     params, objective = gaussian_graph(mu=np.array([0.0, 0.0]),
                                        precision=np.diag([1.0, 1.0]))
     params[0].set_value(0.0)
-    sampler = Sampler("stretch", 43)
+    sampler = MCMCSampler("stretch", 43)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(5)
@@ -449,7 +449,7 @@ def independent_factor_graph():
 @pytest.mark.parametrize("blocks_from", ["factor_graph", "explicit"])
 def test_blocked_sampler_reports_per_block_acceptance(blocks_from):
     params, objective = independent_graph()
-    sampler = Sampler("metropolis", 47)
+    sampler = MCMCSampler("metropolis", 47)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     if blocks_from == "factor_graph":
@@ -471,7 +471,7 @@ def test_blocked_and_unblocked_runs_agree_statistically():
     chains = {}
     for label, use_blocks in (("blocked", True), ("single", False)):
         params, objective = independent_graph()
-        sampler = Sampler("metropolis", 53)
+        sampler = MCMCSampler("metropolis", 53)
         sampler.set_parameter_ports(params)
         sampler.set_objective(objective, "chi2")
         if use_blocks:
@@ -492,7 +492,7 @@ def test_blocked_and_unblocked_runs_agree_statistically():
 
 def test_explicit_blocks_are_respected():
     params, objective = gaussian_graph()
-    sampler = Sampler("metropolis", 59)
+    sampler = MCMCSampler("metropolis", 59)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_blocks([0, 1], [2])
@@ -502,7 +502,7 @@ def test_explicit_blocks_are_respected():
 
 def test_a_factor_graph_block_partition_is_used():
     params, objective = independent_graph()
-    sampler = Sampler("metropolis", 61)
+    sampler = MCMCSampler("metropolis", 61)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     graph = independent_factor_graph()  # borrowed: keep it alive
@@ -514,7 +514,7 @@ def test_a_factor_graph_block_partition_is_used():
 def test_a_single_block_covers_everything_without_a_graph():
     """chisurf: a single-dataset fit is one block -- an ordinary walk."""
     params, objective = gaussian_graph()
-    sampler = Sampler("metropolis", 63)
+    sampler = MCMCSampler("metropolis", 63)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.run(200)
@@ -524,7 +524,7 @@ def test_a_single_block_covers_everything_without_a_graph():
 def test_a_warm_up_is_a_small_share_of_the_chain():
     """chisurf's blocked default: clip(steps/20, 100, 500) sweeps."""
     params, objective = gaussian_graph()
-    sampler = Sampler("metropolis", 67)
+    sampler = MCMCSampler("metropolis", 67)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_n_adapt(0)
@@ -537,7 +537,7 @@ def test_a_warm_up_is_a_small_share_of_the_chain():
 
 def test_a_python_objective_through_a_node_director():
     """The existing callback machinery: a GraphNode director whose evaluate()
-    runs Python is a Sampler objective (the boundary cost per evaluation
+    runs Python is a MCMCSampler objective (the boundary cost per evaluation
     is exactly what the C++ path removes; the bench measures it)."""
     from IMP.bff import GraphNode as BffNode
 
@@ -554,7 +554,7 @@ def test_a_python_objective_through_a_node_director():
             self.get_output_port("chi2").set_value(float(d @ P @ d))
 
     node = Chi2Node()
-    sampler = Sampler("stretch", 71)
+    sampler = MCMCSampler("stretch", 71)
     sampler.set_parameter_ports([node.get_input_port("x1"),
                                  node.get_input_port("x2")])
     sampler.set_objective(node, "chi2")
@@ -575,7 +575,7 @@ def test_a_log_likelihood_output_port_is_read_as_one():
                        linked_port(d.get_output_port("d")), "multiply_double")
     lnlike = operator_node("lnlike", linked_port(sq.get_output_port("sq")),
                            const_port(-0.5), "multiply_double")
-    sampler = Sampler("stretch", 73)
+    sampler = MCMCSampler("stretch", 73)
     sampler.set_parameter_ports([x])
     sampler.set_objective(lnlike, "lnlike")
     sampler.set_output_is_log_likelihood(True)
@@ -590,14 +590,14 @@ def test_a_log_likelihood_output_port_is_read_as_one():
 def test_fixed_parameter_ports_are_refused():
     params, objective = gaussian_graph()
     params[0].set_fixed(True)
-    sampler = Sampler("stretch", 79)
+    sampler = MCMCSampler("stretch", 79)
     with pytest.raises(ValueError):
         sampler.set_parameter_ports(params)
 
 
 def test_a_sampler_without_an_objective_is_refused():
     params, _ = gaussian_graph()
-    sampler = Sampler("stretch", 79)
+    sampler = MCMCSampler("stretch", 79)
     sampler.set_parameter_ports(params)
     with pytest.raises(ValueError):
         sampler.run(10)
@@ -608,7 +608,7 @@ def test_an_unknown_algorithm_is_refused():
     does now, so the example has to be a name that really is not a backend --
     otherwise this test passes by accident the day one is added."""
     with pytest.raises(ValueError):
-        Sampler("hamiltonian")
+        MCMCSampler("hamiltonian")
 
 
 # ------------------------------------------------------------ misc surface
@@ -630,7 +630,7 @@ def test_the_temperature_flattens_acceptance_but_stays_valid():
 def test_slice_is_selected_by_every_name_it_is_known_by():
     """`zeus` is the package people arrive from; `slice` is the move."""
     for name in ("slice", "zeus", "ensemble_slice", "sample_slice"):
-        assert Sampler(name, 1).get_algorithm() == "slice"
+        assert MCMCSampler(name, 1).get_algorithm() == "slice"
 
 
 def test_slice_recovers_the_width_of_the_target():

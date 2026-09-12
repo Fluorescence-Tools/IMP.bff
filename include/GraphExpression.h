@@ -53,7 +53,7 @@ IMPBFF_BEGIN_NAMESPACE
  * *wrongly*: ExprTk evaluated a multi-argument function at element 0 and
  * broadcast the result, so ``hypot(x,y)`` came back constant, silently.
  *
- * \see FitChiSquared, GraphNode, Sampler
+ * \see FitChiSquared, GraphNode, MCMCSampler
  */
 
 class IMPBFFEXPORT GraphExpression : public GraphNode {

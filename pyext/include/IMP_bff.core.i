@@ -74,7 +74,7 @@ import numpy as np
    ports) live in chisurf's core/nodes.py, not here. Directors and
    %shared_ptr cooperate through SWIG's shared_ptr director support.
 
-   The director lifetime (T-20260901-13): a C++ FitMinimizer or Sampler holds
+   The director lifetime (T-20260901-13): a C++ FitMinimizer or MCMCSampler holds
    a Python GraphNode subclass across the whole run through a shared_ptr, but
    the director keeps only a *weak* pointer back to the Python proxy -- a
    ResidualNode bound to `_` was collected when the next tuple unpacking
@@ -84,7 +84,7 @@ import numpy as np
    `get_ref_count`, and GraphNode is a plain shared_ptr class, not an
    IMP::Object -- the macro would read as protection and protect nothing.
    The real fix mirrors the C++ ownership on the Python side: the
-   %pythonappend hooks below set_objective (FitMinimizer, Sampler) stash the
+   %pythonappend hooks below set_objective (FitMinimizer, MCMCSampler) stash the
    node proxy on the wrapper that holds the shared_ptr, so the proxy lives
    exactly as long as the C++ reference does. */
 %feature("director") IMP::bff::GraphNode;
@@ -481,23 +481,23 @@ def get_session():
  * template this module may name (see IMP_bff.types.i); get_block_sizes()
  * is the wrapped read of the same partition.
  */
-%shared_ptr(IMP::bff::Sampler);
+%shared_ptr(IMP::bff::MCMCSampler);
 /* Same GraphNode-director lifetime fix as FitMinimizer::set_objective
    (T-20260901-13): the sampler holds the objective node by shared_ptr for
    its lifetime, so the Python proxy must live as long. */
-%pythonappend IMP::bff::Sampler::set_objective %{
+%pythonappend IMP::bff::MCMCSampler::set_objective %{
         self.__dict__['_objective_node_keepalive'] = (
             args[0] if args else kwargs.get('node'))
 %}
-%ignore IMP::bff::Sampler::set_objective_function;
-%ignore IMP::bff::Sampler::set_observer;
-%ignore IMP::bff::Sampler::get_blocks;
-%include "IMP/bff/Sampler.h"
+%ignore IMP::bff::MCMCSampler::set_objective_function;
+%ignore IMP::bff::MCMCSampler::set_observer;
+%ignore IMP::bff::MCMCSampler::get_blocks;
+%include "IMP/bff/MCMCSampler.h"
 
 /*
  * The data misfit of a model curve, as a node in the model graph. Lets a
  * whole fit -- parameters, model, chi-square -- live in one C++ graph, so
- * Sampler can drive it without crossing into Python per move. Ported from
+ * MCMCSampler can drive it without crossing into Python per move. Ported from
  * ChiSurf's calculate_weighted_residuals / get_chi2.
  */
 /* Numpy in and out for the residual path: it runs once per fit iteration for
@@ -595,7 +595,7 @@ def get_session():
 
 /*
  * ChiSurf's bounded Levenberg-Marquardt, over the same GraphPort/GraphNode graph
- * `Sampler` walks. `fit.run()` becomes one crossing instead of one per
+ * `MCMCSampler` walks. `fit.run()` becomes one crossing instead of one per
  * parameter per iteration; see FitMinimizer.h for why that, and not the
  * optimiser's own arithmetic, is what the port is for.
  *
@@ -606,7 +606,7 @@ def get_session():
  * dialog held only by a raw pointer would be collected mid-fit.
  *
  * set_residual_function is not wrapped: a Python residual is a GraphNode
- * director, which is the same division Sampler makes.
+ * director, which is the same division MCMCSampler makes.
  */
 IMP_SWIG_OBJECT(IMP::bff, FitMinimizerObserver, MinimizerObservers);
 /* IMP_SWIG_DIRECTOR, not a bare %feature("director"): the C++ side holds
@@ -636,7 +636,7 @@ IMP_SWIG_DIRECTOR(IMP::bff, FitMinimizerObserver);
 %apply(double* IN_ARRAY2, int DIM1, int DIM2) {(double* in_candidates, int n_rows, int n_cols)};
 %include "IMP/bff/FitMinimizer.h"
 
-%extend IMP::bff::Sampler {
+%extend IMP::bff::MCMCSampler {
     %pythoncode {
         algorithm = property(lambda self: self.get_algorithm(),
                              lambda self, v: self.set_algorithm(v))

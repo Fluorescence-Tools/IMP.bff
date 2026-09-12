@@ -529,7 +529,7 @@ class GraphObjectiveTests(unittest.TestCase):
         self.assertLess(m.chi2, 1e-6)
 
     def test_chi_squared_still_writes_its_scalar(self):
-        """The residual port is additive: a `Sampler` reading chi-square off
+        """The residual port is additive: a `MCMCSampler` reading chi-square off
         the same node must be unaffected."""
         x = np.linspace(0.1, 5.0, 20)
         y = 2.0 * np.exp(-x / 0.5)
@@ -578,7 +578,7 @@ class GraphObjectiveTests(unittest.TestCase):
         self.assertTrue(np.all(np.isnan(
             np.asarray(chi2.get_output_port("residuals").value))))
         # The *scalar* chi-square port keeps chinet's clamp, deliberately:
-        # it is a document value, a `Sampler` reads it, and the largest
+        # it is a document value, a `MCMCSampler` reads it, and the largest
         # double rejects a move exactly as an infinity would. Only the
         # transport the optimiser reads had to stop sanitising.
         self.assertEqual(chi2.get_output_port("chi2").value,

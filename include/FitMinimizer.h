@@ -2,8 +2,8 @@
  *  \file IMP/bff/FitMinimizer.h
  *  \brief ChiSurf's bounded least-squares optimiser over a bff GraphPort/GraphNode model, in C++.
  *
- *  The deterministic counterpart of `Sampler.h`, and the last piece of a fit
- *  that still returned to Python on every iteration. `Sampler` moved the
+ *  The deterministic counterpart of `MCMCSampler.h`, and the last piece of a fit
+ *  that still returned to Python on every iteration. `MCMCSampler` moved the
  *  Markov walk into C++; this moves `fit.run()` -- the Levenberg-Marquardt
  *  minimisation chisurf's `core/math/optimization/leastsqbound.py` performs
  *  through `scipy.optimize._minpack._lmdif`.
@@ -52,7 +52,7 @@
  *  Jacobian after every fit; here the Jacobian the optimiser already built is
  *  reused, correctly.
  *
- *  \see Sampler, FitChiSquared, GraphExpression, GraphNode
+ *  \see MCMCSampler, FitChiSquared, GraphExpression, GraphNode
  *
  * \authors Thomas-Otavio Peulen
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
@@ -87,7 +87,7 @@ class GraphNode;
 /*!
     `std::domain_error` so the wrapper maps it to a `ValueError`, which is
     the contract chisurf's optimiser raises under -- the same choice
-    `SamplerConfigurationError` and `GraphLinkCycleError` make.
+    `MCMCSamplerConfigurationError` and `GraphLinkCycleError` make.
 */
 class IMPBFFEXPORT FitMinimizerConfigurationError : public std::domain_error {
  public:
@@ -210,7 +210,7 @@ class IMPBFFEXPORT FitMinimizer {
 
   //! A C++ residual function instead of a graph. Not SWIG-wrapped.
   /*! The module carries no `std_function.i`, and a Python callable is a
-      `GraphNode` director anyway -- the same division `Sampler` makes. */
+      `GraphNode` director anyway -- the same division `MCMCSampler` makes. */
   void set_residual_function(
       std::function<std::vector<double>(const std::vector<double>&)> f);
   bool has_objective() const;

@@ -191,7 +191,7 @@ IMPBFFEXPORT double reference_rmsd(const ReferenceFits& fits);
 //! Control parameters for rigid-body FRET docking.
 struct IMPBFFEXPORT DockingParameters {
     //! Which sampler #IMP::bff::dock runs.
-    /*! One interface, four backends -- the names #IMP::bff::Sampler takes:
+    /*! One interface, four backends -- the names #IMP::bff::MCMCSampler takes:
 
         - `"metropolis"` (aliases `"mc"`, `"walk"`): a single-chain random
           walk over the pose vector. The plain one, and the default.

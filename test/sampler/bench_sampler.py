@@ -1,4 +1,4 @@
-"""The speed evidence for phase 6: bff.Sampler against the same samplers
+"""The speed evidence for phase 6: bff.MCMCSampler against the same samplers
 in Python.
 
 Not collected by pytest -- the name is bench_, not test_. Run it directly:
@@ -8,7 +8,7 @@ Not collected by pytest -- the name is bench_, not test_. Run it directly:
 Three samplers on the same toy problem (the 2D correlated Gaussian of
 test_sampler.py), N steps of the stretch move per walker, 16 walkers:
 
-(i)   bff.Sampler with the node-graph objective -- the C++ path: the
+(i)   bff.MCMCSampler with the node-graph objective -- the C++ path: the
       walker is written into the parameter ports, the node graph is
       updated and read, and the accept/reject is decided, all in C++;
 (ii)  the same stretch move in Python (chisurf's EnsembleSampler._step
@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-from IMP.bff import GraphNode, GraphPort, Sampler
+from IMP.bff import GraphNode, GraphPort, MCMCSampler
 
 MU = np.array([1.0, -0.5])
 SIGMA = np.array([[1.0, 0.8], [0.8, 2.0]])
@@ -93,7 +93,7 @@ def bench_cpp_sampler():
     params, objective = gaussian_graph()
     params[0].set_value(MU[0])
     params[1].set_value(MU[1])
-    sampler = Sampler("stretch", 42)
+    sampler = MCMCSampler("stretch", 42)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_number_of_walkers(N_WALKERS)
@@ -178,7 +178,7 @@ def main():
     pyg_evals, pyg_steps = bench_python_graph_sampler()
     pyo_evals, pyo_steps = bench_python_objective_sampler()
     print()
-    print(f"(i)   bff.Sampler, node-graph objective   : "
+    print(f"(i)   bff.MCMCSampler, node-graph objective   : "
           f"{cpp_steps:10.0f} steps/s  ({cpp_evals:10.0f} walker-evals/s)")
     print(f"(ii)  python sampler, same graph via bff  : "
           f"{pyg_steps:10.0f} steps/s  ({pyg_evals:10.0f} walker-evals/s)")

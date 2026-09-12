@@ -1,4 +1,4 @@
-"""A Python GraphNode held only by its FitMinimizer/Sampler must survive (T-20260901-13).
+"""A Python GraphNode held only by its FitMinimizer/MCMCSampler must survive (T-20260901-13).
 
 The C++ side keeps a shared_ptr to the objective node, but a SWIG director
 keeps only a weak pointer back to the Python proxy: before the fix, a
@@ -50,7 +50,7 @@ class TestNodeLifetime(unittest.TestCase):
 
     def test_a_dropped_python_node_survives_a_sampler_run(self):
         node = Residual()
-        s = bff.Sampler("metropolis", 7)
+        s = bff.MCMCSampler("metropolis", 7)
         s.set_parameter_ports(node._p)
         s.set_objective(node, "residuals")
         node = None

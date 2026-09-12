@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/Sampler.h
+ *  \file IMP/bff/MCMCSampler.h
  *  \brief ChiSurf's MCMC samplers over a bff GraphPort/GraphNode model, in C++.
  *
  *  Phase 6 of removing chinet from chisurf: the samplers of
@@ -95,8 +95,8 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#ifndef IMPBFF_SAMPLER_H
-#define IMPBFF_SAMPLER_H
+#ifndef IMPBFF_MCMCSAMPLER_H
+#define IMPBFF_MCMCSAMPLER_H
 
 #include <IMP/bff/bff_config.h>
 
@@ -123,15 +123,15 @@ class InferenceFactorGraph;
     it to IMP.ValueException, a ValueError, which is what chinet's and
     chisurf's callers catch.
 */
-class IMPBFFEXPORT SamplerConfigurationError : public std::domain_error {
+class IMPBFFEXPORT MCMCSamplerConfigurationError : public std::domain_error {
  public:
-  explicit SamplerConfigurationError(const std::string& what_arg)
+  explicit MCMCSamplerConfigurationError(const std::string& what_arg)
       : std::domain_error(what_arg) {}
 };
 
 //! ChiSurf's samplers (stretch, differential evolution, blocked
 //! Metropolis) over free-parameter ports and a node-graph objective.
-class IMPBFFEXPORT Sampler {
+class IMPBFFEXPORT MCMCSampler {
  public:
   //! Configure the algorithm and the seed; everything else is set later.
   /*!
@@ -140,9 +140,9 @@ class IMPBFFEXPORT Sampler {
                  resolve_sampler accepts are aliases of these.
       \param[in] seed the RNG seed; a fixed seed gives a reproducible run
   */
-  explicit Sampler(const std::string& algorithm = "stretch",
+  explicit MCMCSampler(const std::string& algorithm = "stretch",
                    unsigned int seed = 42u);
-  ~Sampler();
+  ~MCMCSampler();
 
   // ------------------------------------------------------------ parameters
 
@@ -458,7 +458,7 @@ class IMPBFFEXPORT Sampler {
   std::vector<double> de_noise_;
 
   // ------------------------------------------------------------- internals
-  //! Validate the configuration; throw SamplerConfigurationError.
+  //! Validate the configuration; throw MCMCSamplerConfigurationError.
   void validate() const;
   //! Derive bounds, priors and names from the ports (idempotent).
   void configure_from_ports();
@@ -560,4 +560,4 @@ class IMPBFFEXPORT Sampler {
 
 IMPBFF_END_NAMESPACE
 
-#endif // IMPBFF_SAMPLER_H
+#endif // IMPBFF_MCMCSAMPLER_H

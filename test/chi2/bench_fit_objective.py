@@ -63,7 +63,7 @@ def main():
     ey = np.ones_like(y) * SIGMA
 
     params, objective = build_graph(x, y, ey)
-    sampler = bff.Sampler("stretch", 42)
+    sampler = bff.MCMCSampler("stretch", 42)
     sampler.set_parameter_ports(params)
     sampler.set_objective(objective, "chi2")
     sampler.set_number_of_walkers(N_WALKERS)

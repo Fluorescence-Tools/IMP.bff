@@ -22,7 +22,7 @@
 #include <IMP/container/ListSingletonContainer.h>
 #include <IMP/algebra/vector_generators.h>
 #include <IMP/core/ConjugateGradients.h>
-#include <IMP/bff/Sampler.h>
+#include <IMP/bff/MCMCSampler.h>
 #include <IMP/bff/RmfIO.h>
 #include <IMP/core/ExcludedVolumeRestraint.h>
 #include <IMP/core/XYZR.h>
@@ -1415,7 +1415,7 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
 
     // Everything the samplers share: one objective, one set of bounds, one
     // chain. The backend is a string, which is the whole point of routing
-    // through IMP::bff::Sampler rather than writing a walk here.
+    // through IMP::bff::MCMCSampler rather than writing a walk here.
     const double kt = params.mc_temperature > 0.0 ? params.mc_temperature : 1.0;
     double best = std::numeric_limits<double>::infinity();
     std::vector<double> best_v = pose.home();
@@ -1444,7 +1444,7 @@ DockingResult dock(const std::vector<std::string>& pdb_paths,
     }
 #endif
 
-    Sampler sampler(params.sampler.empty() ? std::string("metropolis")
+    MCMCSampler sampler(params.sampler.empty() ? std::string("metropolis")
                                            : params.sampler);
     sampler.set_objective_function(
             [&](const std::vector<double>& v) -> double {

@@ -285,7 +285,7 @@ void FitChiSquared::evaluate() {
   }
   out->set_value(chi2_);
   // The residuals themselves, when the graph asked for them. Absent by
-  // default: a `Sampler` wants the scalar and would otherwise pay for a
+  // default: a `MCMCSampler` wants the scalar and would otherwise pay for a
   // copy of the whole residual vector on every move.
   const std::shared_ptr<GraphPort> res = get_output_port(residuals_key_);
   if (res) res->set_value_vector(wres_);

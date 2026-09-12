@@ -194,7 +194,7 @@ if __name__ == "__main__":
 class WholeFitInCppTests(unittest.TestCase):
     """A polynomial fit whose model *and* objective are bff nodes.
 
-    This is the end of the chain the port exists for: Sampler drives
+    This is the end of the chain the port exists for: MCMCSampler drives
     parameters, the graph computes the curve, FitChiSquared scores it, and no
     step of a move enters Python.
     """
@@ -231,7 +231,7 @@ class WholeFitInCppTests(unittest.TestCase):
         """The three terms are collinear by construction, so the marginals
         are wide while the *prediction* is tight. The curve is what the fit
         actually determines, so that is what is asserted."""
-        sampler = bff.Sampler("stretch", 7)
+        sampler = bff.MCMCSampler("stretch", 7)
         sampler.set_parameter_ports(self.params)
         sampler.set_objective(self.objective, "chi2")
         sampler.set_number_of_walkers(16)

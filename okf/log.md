@@ -2,6 +2,14 @@
 
 ## 2026-09-12
 
+- **PRD-141 stage 1d — the Markov engine is MCMC, not a generic Sampler**
+  ([PRD-141](prds/prd-141.md)): `Sampler` / `SamplerConfigurationError` are
+  now `MCMCSampler` / `MCMCSamplerConfigurationError` across headers, sources,
+  SWIG, docking and the ChiSurf `sampler_bff` boundary. No alias. Bff
+  Graph/Fit/Inference/MCMC slice: 514 passed, 5 skipped + 42 subtests;
+  ChiSurf factor-graph/sampler consumers: 55 passed. Next: `Bayesian*` /
+  `Optimization*`.
+
 - **PRD-141 stage 1c — factor structure is inference, not generic graph**
   ([PRD-141](prds/prd-141.md)): `FactorGraph`, its kind enum and junction-tree
   edge are now `Inference*` with `INFERENCE_FACTOR_*` public constants. The

@@ -1,5 +1,5 @@
 /**
- *  \file IMP/bff/Sampler.cpp
+ *  \file IMP/bff/MCMCSampler.cpp
  *  \brief ChiSurf's MCMC samplers over a bff GraphPort/GraphNode model, in C++.
  *
  *  The implementation notes below name the chisurf function each piece is
@@ -14,7 +14,7 @@
  *  Copyright 2007-2026 IMP Inventors. All rights reserved.
  *
  */
-#include <IMP/bff/Sampler.h>
+#include <IMP/bff/MCMCSampler.h>
 
 #include <IMP/bff/InferenceFactorGraph.h>
 #include <IMP/bff/GraphNode.h>
@@ -235,14 +235,14 @@ std::string json_string(const std::string& s, std::size_t& i) {
 
 // ---------------------------------------------------------------- lifecycle
 
-Sampler::Sampler(const std::string& algorithm, unsigned int seed)
+MCMCSampler::MCMCSampler(const std::string& algorithm, unsigned int seed)
     : algorithm_("stretch"), seed_(seed), rng_(seed) {
   set_algorithm(algorithm);
 }
 
-Sampler::~Sampler() {}
+MCMCSampler::~MCMCSampler() {}
 
-void Sampler::set_algorithm(const std::string& algorithm) {
+void MCMCSampler::set_algorithm(const std::string& algorithm) {
   std::string canonical;
   if (algorithm == "stretch" || algorithm == "ensemble" ||
       algorithm == "sample_ensemble" || algorithm == "affine" ||
@@ -259,7 +259,7 @@ void Sampler::set_algorithm(const std::string& algorithm) {
              algorithm == "walk_mcmc_blocked") {
     canonical = "metropolis";
   } else {
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "unknown sampler algorithm '" + algorithm +
         "'; expected 'stretch', 'slice', 'de' or 'metropolis'");
   }
@@ -269,25 +269,25 @@ void Sampler::set_algorithm(const std::string& algorithm) {
   }
 }
 
-const std::string& Sampler::get_algorithm() const { return algorithm_; }
+const std::string& MCMCSampler::get_algorithm() const { return algorithm_; }
 
-void Sampler::set_seed(unsigned int seed) {
+void MCMCSampler::set_seed(unsigned int seed) {
   seed_ = seed;
   rng_.seed(seed);
 }
 
-unsigned int Sampler::get_seed() const { return seed_; }
+unsigned int MCMCSampler::get_seed() const { return seed_; }
 
 // --------------------------------------------------------------- parameters
 
-void Sampler::set_parameter_ports(
+void MCMCSampler::set_parameter_ports(
     const std::vector<std::shared_ptr<GraphPort> >& parameters) {
   for (std::size_t i = 0; i < parameters.size(); ++i) {
     if (!parameters[i])
-      throw SamplerConfigurationError("parameter " + std::to_string(i) +
+      throw MCMCSamplerConfigurationError("parameter " + std::to_string(i) +
                                " is a null port");
     if (parameters[i]->get_fixed())
-      throw SamplerConfigurationError(
+      throw MCMCSamplerConfigurationError(
           "parameter '" + parameters[i]->get_name() +
           "' is fixed; a fixed port cannot be sampled (chisurf samples "
           "the free parameters)");
@@ -297,11 +297,11 @@ void Sampler::set_parameter_ports(
   initialized_ = false;
 }
 
-std::vector<std::shared_ptr<GraphPort> > Sampler::get_parameter_ports() const {
+std::vector<std::shared_ptr<GraphPort> > MCMCSampler::get_parameter_ports() const {
   return parameters_;
 }
 
-std::vector<std::string> Sampler::get_parameter_names() const {
+std::vector<std::string> MCMCSampler::get_parameter_names() const {
   if (!names_.empty()) return names_;
   std::vector<std::string> out;
   for (std::size_t i = 0; i < parameters_.size(); ++i)
@@ -311,21 +311,21 @@ std::vector<std::string> Sampler::get_parameter_names() const {
   return out;
 }
 
-void Sampler::set_initial_values(const std::vector<double>& values) {
+void MCMCSampler::set_initial_values(const std::vector<double>& values) {
   initial_values_ = values;
   if (ndim_ == 0) ndim_ = static_cast<unsigned int>(values.size());
   initialized_ = false;
 }
 
-std::vector<double> Sampler::get_initial_values() const { return initial_values_; }
+std::vector<double> MCMCSampler::get_initial_values() const { return initial_values_; }
 
-void Sampler::set_bounds(const std::vector<double>& lower,
+void MCMCSampler::set_bounds(const std::vector<double>& lower,
                          const std::vector<double>& upper) {
   if (lower.size() != upper.size())
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "set_bounds: lower and upper must have the same length");
   if (ndim_ != 0 && lower.size() != ndim_)
-    throw SamplerConfigurationError("set_bounds: expected " +
+    throw MCMCSamplerConfigurationError("set_bounds: expected " +
                              std::to_string(ndim_) + " bounds, got " +
                              std::to_string(lower.size()));
   lower_ = lower;
@@ -336,12 +336,12 @@ void Sampler::set_bounds(const std::vector<double>& lower,
 
 // ---------------------------------------------------------------- objective
 
-void Sampler::set_objective(std::shared_ptr<GraphNode> node,
+void MCMCSampler::set_objective(std::shared_ptr<GraphNode> node,
                             const std::string& output_port) {
   if (!node)
-    throw SamplerConfigurationError("set_objective: the node is a null pointer");
+    throw MCMCSamplerConfigurationError("set_objective: the node is a null pointer");
   if (!node->get_output_port(output_port))
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "set_objective: node '" + node->get_name() +
         "' has no output port '" + output_port + "'");
   objective_node_ = node;
@@ -350,51 +350,51 @@ void Sampler::set_objective(std::shared_ptr<GraphNode> node,
   initialized_ = false;
 }
 
-std::shared_ptr<GraphNode> Sampler::get_objective() const { return objective_node_; }
+std::shared_ptr<GraphNode> MCMCSampler::get_objective() const { return objective_node_; }
 
-void Sampler::set_output_is_log_likelihood(bool v) {
+void MCMCSampler::set_output_is_log_likelihood(bool v) {
   output_is_log_likelihood_ = v;
 }
 
-bool Sampler::get_output_is_log_likelihood() const {
+bool MCMCSampler::get_output_is_log_likelihood() const {
   return output_is_log_likelihood_;
 }
 
-void Sampler::set_objective_function(
+void MCMCSampler::set_objective_function(
     std::function<double(const std::vector<double>&)> objective) {
   if (!objective)
-    throw SamplerConfigurationError("set_objective_function: a null function");
+    throw MCMCSamplerConfigurationError("set_objective_function: a null function");
   objective_function_ = objective;
   objective_node_.reset();
   output_port_.reset();
   initialized_ = false;
 }
 
-bool Sampler::has_objective() const {
+bool MCMCSampler::has_objective() const {
   return objective_node_ != nullptr || objective_function_ != nullptr;
 }
 
 // ----------------------------------------------------------------- blocking
 
-void Sampler::set_factor_graph(InferenceFactorGraph* graph) {
+void MCMCSampler::set_factor_graph(InferenceFactorGraph* graph) {
   factor_graph_ = graph;
   initialized_ = false;
 }
 
-InferenceFactorGraph* Sampler::get_factor_graph() const {
+InferenceFactorGraph* MCMCSampler::get_factor_graph() const {
   return factor_graph_;
 }
 
-void Sampler::set_blocks(const std::vector<int>& flat_indices,
+void MCMCSampler::set_blocks(const std::vector<int>& flat_indices,
                          const std::vector<int>& block_sizes) {
   explicit_blocks_.clear();
   std::size_t offset = 0;
   for (std::size_t b = 0; b < block_sizes.size(); ++b) {
     const int size = block_sizes[b];
     if (size <= 0)
-      throw SamplerConfigurationError("set_blocks: block sizes must be positive");
+      throw MCMCSamplerConfigurationError("set_blocks: block sizes must be positive");
     if (offset + static_cast<std::size_t>(size) > flat_indices.size())
-      throw SamplerConfigurationError("set_blocks: more block entries than indices");
+      throw MCMCSamplerConfigurationError("set_blocks: more block entries than indices");
     std::vector<int> block(
         flat_indices.begin() + offset,
         flat_indices.begin() + offset + static_cast<std::size_t>(size));
@@ -402,7 +402,7 @@ void Sampler::set_blocks(const std::vector<int>& flat_indices,
       if (ndim_ != 0 &&
           (block[i] < 0 ||
            block[i] >= static_cast<int>(ndim_)))
-        throw SamplerConfigurationError("set_blocks: index out of range");
+        throw MCMCSamplerConfigurationError("set_blocks: index out of range");
     }
     explicit_blocks_.push_back(block);
     offset += static_cast<std::size_t>(size);
@@ -410,14 +410,14 @@ void Sampler::set_blocks(const std::vector<int>& flat_indices,
   initialized_ = false;
 }
 
-std::vector<std::vector<int> > Sampler::get_blocks() const {
+std::vector<std::vector<int> > MCMCSampler::get_blocks() const {
   std::vector<std::vector<int> > out;
   for (std::size_t b = 0; b < blocks_.size(); ++b)
     out.push_back(blocks_[b].indices);
   return out;
 }
 
-std::vector<int> Sampler::get_block_sizes() const {
+std::vector<int> MCMCSampler::get_block_sizes() const {
   std::vector<int> out;
   for (std::size_t b = 0; b < blocks_.size(); ++b)
     out.push_back(static_cast<int>(blocks_[b].indices.size()));
@@ -426,55 +426,55 @@ std::vector<int> Sampler::get_block_sizes() const {
 
 // ---------------------------------------------------------------- tunables
 
-void Sampler::set_number_of_walkers(int n) {
+void MCMCSampler::set_number_of_walkers(int n) {
   n_walkers_setting_ = n;
   initialized_ = false;
 }
 
-int Sampler::get_number_of_walkers() const {
+int MCMCSampler::get_number_of_walkers() const {
   if (algorithm_ != "stretch" && algorithm_ != "slice") return 1;
   if (n_walkers_setting_ > 0) return n_walkers_setting_;
   const int d = static_cast<int>(ndim_);
   return std::max(2 * d + 2, 10);
 }
 
-void Sampler::set_stretch_scale(double a) {
+void MCMCSampler::set_stretch_scale(double a) {
   if (!(a > 1.0))
-    throw SamplerConfigurationError("the stretch scale must exceed one");
+    throw MCMCSamplerConfigurationError("the stretch scale must exceed one");
   stretch_scale_ = a;
 }
 
-double Sampler::get_stretch_scale() const { return stretch_scale_; }
+double MCMCSampler::get_stretch_scale() const { return stretch_scale_; }
 
-double Sampler::get_slice_mu() const { return slice_mu_; }
+double MCMCSampler::get_slice_mu() const { return slice_mu_; }
 
-void Sampler::set_slice_mu(double mu) {
+void MCMCSampler::set_slice_mu(double mu) {
   if (!(mu > 0.0))
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "the slice direction scale must be positive");
   slice_mu_ = mu;
   // An explicit scale is a decision; tuning would overwrite it.
   slice_tuning_ = false;
 }
 
-void Sampler::set_slice_max_steps(int n) {
+void MCMCSampler::set_slice_max_steps(int n) {
   slice_max_steps_ = n > 0 ? n : 10000;
 }
 
-int Sampler::get_slice_max_steps() const { return slice_max_steps_; }
+int MCMCSampler::get_slice_max_steps() const { return slice_max_steps_; }
 
-long Sampler::get_slice_truncations() const { return slice_truncations_; }
+long MCMCSampler::get_slice_truncations() const { return slice_truncations_; }
 
-void Sampler::set_live_dangerously(bool v) { live_dangerously_ = v; }
+void MCMCSampler::set_live_dangerously(bool v) { live_dangerously_ = v; }
 
-bool Sampler::get_live_dangerously() const { return live_dangerously_; }
+bool MCMCSampler::get_live_dangerously() const { return live_dangerously_; }
 
-void Sampler::set_number_of_chains(int n) {
+void MCMCSampler::set_number_of_chains(int n) {
   n_chains_setting_ = n;
   initialized_ = false;
 }
 
-int Sampler::get_number_of_chains() const {
+int MCMCSampler::get_number_of_chains() const {
   if (algorithm_ != "de") return 1;
   int n = n_chains_setting_ > 0
               ? n_chains_setting_
@@ -482,37 +482,37 @@ int Sampler::get_number_of_chains() const {
   return std::max(4, n);
 }
 
-void Sampler::set_jitter(double jitter) {
+void MCMCSampler::set_jitter(double jitter) {
   if (!(jitter >= 0.0))
-    throw SamplerConfigurationError("the jitter must not be negative");
+    throw MCMCSamplerConfigurationError("the jitter must not be negative");
   jitter_ = jitter;
 }
 
-double Sampler::get_jitter() const { return jitter_; }
+double MCMCSampler::get_jitter() const { return jitter_; }
 
-void Sampler::set_snooker(double fraction) {
+void MCMCSampler::set_snooker(double fraction) {
   if (!(fraction >= 0.0 && fraction <= 1.0))
-    throw SamplerConfigurationError("the snooker fraction must lie in [0, 1]");
+    throw MCMCSamplerConfigurationError("the snooker fraction must lie in [0, 1]");
   snooker_ = fraction;
 }
 
-double Sampler::get_snooker() const { return snooker_; }
+double MCMCSampler::get_snooker() const { return snooker_; }
 
-void Sampler::set_step_size(double step_size) {
+void MCMCSampler::set_step_size(double step_size) {
   if (!(step_size > 0.0))
-    throw SamplerConfigurationError("the step size must be positive");
+    throw MCMCSamplerConfigurationError("the step size must be positive");
   step_size_ = step_size;
 }
 
-double Sampler::get_step_size() const { return step_size_; }
+double MCMCSampler::get_step_size() const { return step_size_; }
 
-void Sampler::set_proposal_covariance(
+void MCMCSampler::set_proposal_covariance(
     const std::vector<std::vector<double> >& cov) {
   if (!cov.empty()) {
     const std::size_t n = cov.size();
     for (const std::vector<double>& row : cov) {
       if (row.size() != n) {
-        throw SamplerConfigurationError(
+        throw MCMCSamplerConfigurationError(
             "set_proposal_covariance: the covariance must be square");
       }
     }
@@ -520,51 +520,51 @@ void Sampler::set_proposal_covariance(
   proposal_covariance_ = cov;
 }
 
-std::vector<std::vector<double> > Sampler::get_proposal_covariance() const {
+std::vector<std::vector<double> > MCMCSampler::get_proposal_covariance() const {
   return proposal_covariance_;
 }
 
-void Sampler::set_n_adapt(int n) { n_adapt_setting_ = n; }
+void MCMCSampler::set_n_adapt(int n) { n_adapt_setting_ = n; }
 
-int Sampler::get_n_adapt() const { return n_adapt_setting_; }
+int MCMCSampler::get_n_adapt() const { return n_adapt_setting_; }
 
-void Sampler::set_temp(double temp) {
+void MCMCSampler::set_temp(double temp) {
   if (!(temp > 0.0))
-    throw SamplerConfigurationError("the temperature must be positive");
+    throw MCMCSamplerConfigurationError("the temperature must be positive");
   temp_ = temp;
 }
 
-double Sampler::get_temp() const { return temp_; }
+double MCMCSampler::get_temp() const { return temp_; }
 
-void Sampler::set_chi2max(double chi2max) { chi2max_ = chi2max; }
+void MCMCSampler::set_chi2max(double chi2max) { chi2max_ = chi2max; }
 
-double Sampler::get_chi2max() const { return chi2max_; }
+double MCMCSampler::get_chi2max() const { return chi2max_; }
 
-void Sampler::set_walker_start_std(double std) {
+void MCMCSampler::set_walker_start_std(double std) {
   if (!(std > 0.0))
-    throw SamplerConfigurationError("the walker start spread must be positive");
+    throw MCMCSamplerConfigurationError("the walker start spread must be positive");
   walker_start_std_ = std;
 }
 
-double Sampler::get_walker_start_std() const { return walker_start_std_; }
+double MCMCSampler::get_walker_start_std() const { return walker_start_std_; }
 
-void Sampler::set_walker_start(
+void MCMCSampler::set_walker_start(
     const std::vector<std::vector<double> >& start) {
   walker_start_override_ = start;
   initialized_ = false;
 }
 
-std::vector<std::vector<double> > Sampler::get_walker_start() const {
+std::vector<std::vector<double> > MCMCSampler::get_walker_start() const {
   return walker_start_override_;
 }
 
-void Sampler::set_observer(std::function<void(int, int)> observer) {
+void MCMCSampler::set_observer(std::function<void(int, int)> observer) {
   observer_ = observer;
 }
 
 // --------------------------------------------------------------- internals
 
-double Sampler::PriorSpec::get(const std::string& name,
+double MCMCSampler::PriorSpec::get(const std::string& name,
                                double fallback) const {
   for (std::size_t i = 0; i < numbers.size(); ++i)
     if (numbers[i].first == name) return numbers[i].second;
@@ -572,7 +572,7 @@ double Sampler::PriorSpec::get(const std::string& name,
 }
 
 //! chisurf priors.py, kind for kind; unknown kinds contribute nothing.
-double Sampler::prior_lnpdf(const PriorSpec& spec, double x) {
+double MCMCSampler::prior_lnpdf(const PriorSpec& spec, double x) {
   const double inf = std::numeric_limits<double>::infinity();
   const double k2pi = 6.283185307179586476925286766559;
   const double half_ln_2pi = 0.918938533204672741780329736406;
@@ -631,7 +631,7 @@ double Sampler::prior_lnpdf(const PriorSpec& spec, double x) {
   return 0.0;  // an unrecognised kind is no prior (prior_from_state -> None)
 }
 
-Sampler::PriorSpec Sampler::parse_prior(const std::string& json) {
+MCMCSampler::PriorSpec MCMCSampler::parse_prior(const std::string& json) {
   PriorSpec spec;
   if (json.empty()) return spec;
   std::size_t i = 0;
@@ -667,7 +667,7 @@ Sampler::PriorSpec Sampler::parse_prior(const std::string& json) {
   }
 }
 
-void Sampler::configure_from_ports() {
+void MCMCSampler::configure_from_ports() {
   if (parameters_.empty()) {
     // Plain-vector mode: no ports, no priors, bounds only when explicit.
     if (!bounds_explicit_) {
@@ -721,7 +721,7 @@ void Sampler::configure_from_ports() {
 }
 
 //! chisurf fit.lnprior with explicit bounds: the box first, then the priors.
-double Sampler::log_prior(const std::vector<double>& x) const {
+double MCMCSampler::log_prior(const std::vector<double>& x) const {
   const double inf = std::numeric_limits<double>::infinity();
   for (unsigned int i = 0; i < ndim_; ++i) {
     if (x[i] < lower_[i] || x[i] > upper_[i]) return -inf;
@@ -736,7 +736,7 @@ double Sampler::log_prior(const std::vector<double>& x) const {
 }
 
 //! chisurf fit.lnprob_parts: the prior short-circuits the evaluation.
-Sampler::Parts Sampler::evaluate(const std::vector<double>& x) {
+MCMCSampler::Parts MCMCSampler::evaluate(const std::vector<double>& x) {
   ++n_evaluations_;
   const double inf = std::numeric_limits<double>::infinity();
   Parts parts;
@@ -750,7 +750,7 @@ Sampler::Parts Sampler::evaluate(const std::vector<double>& x) {
   if (objective_function_) {
     lnlike = objective_function_(x);
     if (std::isnan(lnlike))
-      throw SamplerConfigurationError("the log-probability returned NaN");
+      throw MCMCSamplerConfigurationError("the log-probability returned NaN");
     parts.chi2 = -2.0 * lnlike;
   } else {
     for (unsigned int i = 0; i < ndim_; ++i)
@@ -758,7 +758,7 @@ Sampler::Parts Sampler::evaluate(const std::vector<double>& x) {
     objective_node_->update();
     const double value = output_port_->get_value();
     if (std::isnan(value))
-      throw SamplerConfigurationError("the log-probability returned NaN");
+      throw MCMCSamplerConfigurationError("the log-probability returned NaN");
     if (output_is_log_likelihood_) {
       lnlike = value;
       parts.chi2 = -2.0 * value;
@@ -777,7 +777,7 @@ Sampler::Parts Sampler::evaluate(const std::vector<double>& x) {
   return parts;
 }
 
-std::vector<std::vector<double> > Sampler::spread_walkers(int n) const {
+std::vector<std::vector<double> > MCMCSampler::spread_walkers(int n) const {
   // chisurf's _ensemble_walker_start: the bounded range where there is
   // one, the value (floored by the absolute std) where there is not, so
   // no direction is ever left without spread.
@@ -806,7 +806,7 @@ std::vector<std::vector<double> > Sampler::spread_walkers(int n) const {
 }
 
 //! chisurf's walkers_independent, through the Gram matrix eigenvalues.
-bool Sampler::walkers_independent(
+bool MCMCSampler::walkers_independent(
     const std::vector<std::vector<double> >& coords) const {
   const std::size_t n = coords.size();
   if (n < 2 || ndim_ == 0) return false;
@@ -856,21 +856,21 @@ bool Sampler::walkers_independent(
   return std::sqrt(lmax / lmin) <= 1e8;
 }
 
-void Sampler::validate() const {
+void MCMCSampler::validate() const {
   if (ndim_ == 0)
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "no parameters: call set_parameter_ports() or set_initial_values()");
   if (!has_objective())
-    throw SamplerConfigurationError(
+    throw MCMCSamplerConfigurationError(
         "no objective: call set_objective() or set_objective_function()");
   if (!initial_values_.empty() && initial_values_.size() != ndim_)
-    throw SamplerConfigurationError("the initial values do not match the parameters");
+    throw MCMCSamplerConfigurationError("the initial values do not match the parameters");
   if (bounds_explicit_ &&
       (lower_.size() != ndim_ || upper_.size() != ndim_))
-    throw SamplerConfigurationError("the bounds do not match the parameters");
+    throw MCMCSamplerConfigurationError("the bounds do not match the parameters");
 }
 
-void Sampler::rebuild_blocks() {
+void MCMCSampler::rebuild_blocks() {
   blocks_.clear();
   std::vector<std::vector<int> > partition;
   if (!explicit_blocks_.empty()) {
@@ -919,7 +919,7 @@ void Sampler::rebuild_blocks() {
 
 //! chisurf's _seed_block_covariances: the caller's curvature where it is
 //! finite and positive definite for a block, the diagonal otherwise.
-void Sampler::seed_blocks() {
+void MCMCSampler::seed_blocks() {
   const bool have_full =
       proposal_covariance_.size() == static_cast<std::size_t>(ndim_);
   for (std::size_t b = 0; b < blocks_.size(); ++b) {
@@ -975,7 +975,7 @@ void Sampler::seed_blocks() {
   }
 }
 
-void Sampler::DualAveraging::restart(double log_eps) {
+void MCMCSampler::DualAveraging::restart(double log_eps) {
   mu = log_eps;
   log_eps = log_eps;
   log_eps_bar = log_eps;
@@ -983,7 +983,7 @@ void Sampler::DualAveraging::restart(double log_eps) {
   counter = 0;
 }
 
-double Sampler::DualAveraging::update(double alpha) {
+double MCMCSampler::DualAveraging::update(double alpha) {
   ++counter;
   const double eta = 1.0 / (static_cast<double>(counter) + t0);
   h_bar = (1.0 - eta) * h_bar + eta * (target - alpha);
@@ -993,7 +993,7 @@ double Sampler::DualAveraging::update(double alpha) {
   return log_eps;
 }
 
-void Sampler::initialize_ensemble() {
+void MCMCSampler::initialize_ensemble() {
   configure_from_ports();
   walkers_.clear();
   walker_parts_.clear();
@@ -1009,22 +1009,22 @@ void Sampler::initialize_ensemble() {
   if (algorithm_ == "stretch" || algorithm_ == "slice") {
     const int n = get_number_of_walkers();
     if (n < 4)
-      throw SamplerConfigurationError(
+      throw MCMCSamplerConfigurationError(
           "an ensemble of " + std::to_string(n) +
           " walkers is too small to be split into two halves that propose "
           "from each other; use at least 4");
     if (n < 2 * static_cast<int>(ndim_) && !live_dangerously_)
-      throw SamplerConfigurationError(
+      throw MCMCSamplerConfigurationError(
           "an ensemble of " + std::to_string(n) + " walkers cannot span " +
           std::to_string(ndim_) + " dimensions; use at least " +
           std::to_string(2 * ndim_) + " walkers");
     walkers_ = walker_start_override_.empty() ? spread_walkers(n)
                                               : walker_start_override_;
     if (walkers_.size() < 4)
-      throw SamplerConfigurationError(
+      throw MCMCSamplerConfigurationError(
           "the explicit walker start must hold at least 4 walkers");
     if (!walkers_independent(walkers_))
-      throw SamplerConfigurationError(
+      throw MCMCSamplerConfigurationError(
           "Initial state has a large condition number. The walkers span "
           "less than the full parameter space, so the chain cannot explore "
           "it -- spread them out.");
@@ -1068,7 +1068,7 @@ void Sampler::initialize_ensemble() {
   initialized_ = true;
 }
 
-void Sampler::record_state() {
+void MCMCSampler::record_state() {
   for (std::size_t w = 0; w < walkers_.size(); ++w) {
     chain_.push_back(walkers_[w]);
     log_prob_.push_back(walker_parts_[w].lnpost);
@@ -1084,7 +1084,7 @@ void Sampler::record_state() {
 
 // ------------------------------------------------------------------- moves
 
-std::vector<double> Sampler::slice_along(const std::vector<double>& x,
+std::vector<double> MCMCSampler::slice_along(const std::vector<double>& x,
                                          const std::vector<double>& direction,
                                          double log_p_x, int* expansions,
                                          int* contractions, bool* truncated) {
@@ -1149,7 +1149,7 @@ std::vector<double> Sampler::slice_along(const std::vector<double>& x,
   return x;
 }
 
-void Sampler::slice_step() {
+void MCMCSampler::slice_step() {
   // Karamanis & Beutler's ensemble slice sampler, which is what zeus runs:
   // the halves and the differential direction of "stretch" above, and a
   // slice along that direction instead of a Metropolis proposal.
@@ -1218,7 +1218,7 @@ void Sampler::slice_step() {
   }
 }
 
-void Sampler::stretch_step() {
+void MCMCSampler::stretch_step() {
   // EnsembleSampler._step: two randomly assigned halves, a stretch per
   // active walker along the line to a complementary walker, accepted in
   // log space against (ndim - 1) ln z.
@@ -1265,7 +1265,7 @@ void Sampler::stretch_step() {
   }
 }
 
-void Sampler::de_generation(long generation_index) {
+void MCMCSampler::de_generation(long generation_index) {
   // sample_differential_evolution._generation, including the every-tenth
   // gamma = 1 jump and the snooker updates with their line Jacobian.
   const double gamma0 =
@@ -1338,7 +1338,7 @@ void Sampler::de_generation(long generation_index) {
   }
 }
 
-void Sampler::blocked_sweep(bool adapt) {
+void MCMCSampler::blocked_sweep(bool adapt) {
   // walk_mcmc_blocked._sweep: a correlated proposal per block, accepted in
   // log space, with dual averaging of the per-block log scale in warm-up.
   std::vector<double> current = walkers_[0];
@@ -1390,7 +1390,7 @@ void Sampler::blocked_sweep(bool adapt) {
 
 // -------------------------------------------------------------------- run
 
-void Sampler::run(int n_steps, int thin) {
+void MCMCSampler::run(int n_steps, int thin) {
   thin_ = std::max(1, thin);
   validate();
   if (!initialized_) {
@@ -1533,9 +1533,9 @@ void Sampler::run(int n_steps, int thin) {
   }
 }
 
-void Sampler::step() { run(1, 1); }
+void MCMCSampler::step() { run(1, 1); }
 
-void Sampler::reset() {
+void MCMCSampler::reset() {
   walkers_.clear();
   walker_parts_.clear();
   chain_.clear();
@@ -1552,34 +1552,34 @@ void Sampler::reset() {
 
 // ----------------------------------------------------------------- results
 
-std::vector<std::vector<double> > Sampler::get_chain() const {
+std::vector<std::vector<double> > MCMCSampler::get_chain() const {
   return chain_;
 }
 
-std::vector<std::vector<double> > Sampler::get_chain_of_walker(
+std::vector<std::vector<double> > MCMCSampler::get_chain_of_walker(
     int walker) const {
   std::vector<std::vector<double> > out;
   const std::size_t n = walkers_.size();
   if (n == 0) return out;
   if (walker < 0 || static_cast<std::size_t>(walker) >= n)
-    throw SamplerConfigurationError("no walker " + std::to_string(walker));
+    throw MCMCSamplerConfigurationError("no walker " + std::to_string(walker));
   for (unsigned int s = 0; s < iteration_; ++s)
     out.push_back(chain_[static_cast<std::size_t>(s) * n +
                          static_cast<std::size_t>(walker)]);
   return out;
 }
 
-std::vector<std::vector<double> > Sampler::get_walkers() const {
+std::vector<std::vector<double> > MCMCSampler::get_walkers() const {
   return walkers_;
 }
 
-std::vector<double> Sampler::get_log_prob() const { return log_prob_; }
+std::vector<double> MCMCSampler::get_log_prob() const { return log_prob_; }
 
-std::vector<double> Sampler::get_lnprior() const { return ln_prior_; }
+std::vector<double> MCMCSampler::get_lnprior() const { return ln_prior_; }
 
-std::vector<double> Sampler::get_chi2() const { return chi2_; }
+std::vector<double> MCMCSampler::get_chi2() const { return chi2_; }
 
-double Sampler::get_acceptance_rate() const {
+double MCMCSampler::get_acceptance_rate() const {
   if (iteration_ == 0) return std::nan("");
   if (algorithm_ == "stretch") {
     double sum = 0.0;
@@ -1602,12 +1602,12 @@ double Sampler::get_acceptance_rate() const {
          static_cast<double>(std::max<long>(1, proposed));
 }
 
-std::vector<double> Sampler::get_acceptance_fractions() const {
+std::vector<double> MCMCSampler::get_acceptance_fractions() const {
   if (algorithm_ == "stretch") return acceptance_fractions_;
   return std::vector<double>(1, get_acceptance_rate());
 }
 
-std::vector<double> Sampler::get_block_acceptance_rates() const {
+std::vector<double> MCMCSampler::get_block_acceptance_rates() const {
   std::vector<double> out;
   for (std::size_t b = 0; b < blocks_.size(); ++b)
     out.push_back(blocks_[b].proposed > 0
@@ -1617,17 +1617,17 @@ std::vector<double> Sampler::get_block_acceptance_rates() const {
   return out;
 }
 
-unsigned int Sampler::get_number_of_evaluations() const {
+unsigned int MCMCSampler::get_number_of_evaluations() const {
   return n_evaluations_;
 }
 
-unsigned int Sampler::get_iteration() const { return iteration_; }
+unsigned int MCMCSampler::get_iteration() const { return iteration_; }
 
-unsigned int Sampler::get_number_of_parameters() const { return ndim_; }
+unsigned int MCMCSampler::get_number_of_parameters() const { return ndim_; }
 
-std::string Sampler::describe() const {
+std::string MCMCSampler::describe() const {
   std::ostringstream out;
-  out << "Sampler(algorithm='" << algorithm_ << "', n_parameters=" << ndim_
+  out << "MCMCSampler(algorithm='" << algorithm_ << "', n_parameters=" << ndim_
       << ", n_walkers=" << walkers_.size() << ", iteration=" << iteration_
       << ", acceptance_rate=" << get_acceptance_rate() << ")";
   return out.str();
