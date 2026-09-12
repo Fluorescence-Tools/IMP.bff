@@ -2,6 +2,16 @@
 
 ## 2026-09-12
 
+- **CI stability fix (T-20260912-12):**
+  `IMP module (Ubuntu and macOS)` and `Build the conda package` now invoke
+  `rattler-build` through `conda run` instead of `mamba run` in non-Windows
+  paths. This addresses an observed runner-side wrapper parse failure
+  (`/var/folders/...: line 5: exec: --: invalid option`) that caused both the
+  `Build our imp` and `Build the conda package` steps to fail.
+  The test stage now creates the `bff-test` environment and runs pytest via
+  `conda` primitives (`conda create`, `conda run`) to avoid the same wrapper
+  edge cases and activation state issues in the shell on hosted runners.
+
 - **Native multi-topology fitting search (T-20260912-08)**:
   `MultiStructureModelSearchProblem` adds a separate path for model structures
   whose objective graphs differ. One canonical scalar-owner registry is the

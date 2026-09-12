@@ -172,7 +172,10 @@ jobs:
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
           else
-            mamba run -n test --no-capture-output rattler-build build \
+            # conda's run wrapper is robust across hosted runners; avoid the mamba
+            # shell-wrapper edge case where command arguments can be interpreted as
+            # options on some runner variants.
+            conda run -n test --no-capture-output rattler-build build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
@@ -220,7 +223,9 @@ jobs:
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            mamba run -n test --no-capture-output rattler-build build \
+            # conda run is intentionally used here for the same wrapper robustness
+            # as above in the non-Windows build path.
+            conda run -n test --no-capture-output rattler-build build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
@@ -245,7 +250,7 @@ jobs:
             # --strict-channel-priority: our imp must win the 2.25.0 tie
             # against conda-forge's (whose build carries the historical bff
             # on the same paths) even if its build number ever ties again.
-            mamba create -y -n bff-test --strict-channel-priority \
+            conda create -y -n bff-test --strict-channel-priority \
               -c ./conda-bld -c ./imp-bld -c conda-forge \
               imp.bff pytest pooch && break
             [ "$attempt" -lt 3 ] || exit 1
@@ -260,20 +265,33 @@ jobs:
       - name: Run fast + medium tests
         shell: bash -el {0}
         run: |
-          conda activate bff-test
-          # Our imp's compiled-in data/example paths do not survive rattler's
-          # prefix relocation; these are the env vars IMP::internal checks
-          # first (verified on cn1). Resolved here, not in a workflow env
-          # block: CONDA_PREFIX exists only after conda activate, so the
-          # expression form expanded empty and every lookup got /share/IMP.
-          export IMP_DATA="$CONDA_PREFIX/share/IMP"
-          export IMP_EXAMPLE_DATA="$CONDA_PREFIX/share/doc/IMP/examples"
-          # bash 3.2 (the macOS runners' /bin/bash) has no mapfile
-          TESTS=()
-          while IFS= read -r f; do TESTS+=("$f"); done \
-              < <(find test \( -name 'test_*.py' -o -name 'medium_test_*.py' \) | sort)
-          echo "${#TESTS[@]} test files selected"
-          pytest "${TESTS[@]}" -v
+          # Keep test discovery and execution in the same interpreter invocation
+          # to avoid shell-feature differences across runners.
+          conda run -n bff-test --no-capture-output python - <<'PY'
+            import os
+            import subprocess
+            import sys
+            from pathlib import Path
+
+            # Our imp's compiled-in data/example paths do not survive rattler's
+            # prefix relocation; set these first (IMP checks here first).
+            conda_prefix = os.environ["CONDA_PREFIX"]
+            os.environ["IMP_DATA"] = str(Path(conda_prefix) / "share" / "IMP")
+            os.environ["IMP_EXAMPLE_DATA"] = str(Path(conda_prefix) / "share" / "doc" / "IMP" / "examples")
+
+            tests = sorted(
+                str(p) for p in Path("test").rglob("*.py")
+                if p.name.startswith("test_") or p.name.startswith("medium_test_")
+            )
+            if not tests:
+              print("No matching fast/medium tests found under test/")
+              sys.exit(0)
+
+            print(f"{len(tests)} test files selected")
+            sys.exit(
+                subprocess.call([sys.executable, "-m", "pytest", *tests, "-v"])
+            )
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
