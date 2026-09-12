@@ -162,7 +162,7 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             RB="$RATTLER_BUILD_EXE"
           else
-            RB="$CONDA/bin/rattler-build"
+            RB="$CONDA/envs/test/bin/rattler-build"
           fi
           "$RB" build --recipe conda-recipe/imp/recipe.yaml \
                       --env-isolation none \
@@ -207,7 +207,7 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             RB="$RATTLER_BUILD_EXE"
           else
-            RB="$CONDA/bin/rattler-build"
+            RB="$CONDA/envs/test/bin/rattler-build"
           fi
           "$RB" build --recipe conda-recipe/recipe.yaml \
                       --env-isolation none \
