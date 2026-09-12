@@ -13,7 +13,10 @@
   potential decoding and Mass setup defects, stale adapters/capability tests,
   and vendored convolution drift are addressed with preserved numerical
   behavior. Pre-existing reader/data corrections remain separate worktree
-  changes, not absorbed into the taxonomy commit.
+  changes, not absorbed into the taxonomy commit. Final taxonomy `54b36b4`,
+  ChiSurf `fafb002e4`, imp-tricks `9cce724`. The concurrent modular ptolib
+  package also builds in isolation: 375 API/container/rotamer tests pass,
+  with all four shipped potential tables readable.
 
 - **Rotamer consumers finished after the ownership audit**: no rotamer/cgdye
   implementation remains in imp-tricks source. `imp-tricks` `6ee5385`

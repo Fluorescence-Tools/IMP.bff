@@ -96,5 +96,8 @@ single-header vendor layout with a separately built source package. That
 owner's CMake, forwarding header, implementation shim, vendor tests and
 thirdparty package changes are preserved as separate working-tree changes.
 The taxonomy commit contains the independently tested private implementation
-TU and does not absorb the modularization. An isolated package-integration
-build is tracked separately from the taxonomy verification above.
+TU and does not absorb the modularization. The isolated package-integration build also passes: 375 API/container/rotamer
+tests with 6 expected skips, plus all four shipped potential-table reads.
+This check uses `/private/tmp/prd141-modular-integration` and does not modify
+the other task's vendor/build edits. Taxonomy commit: `54b36b4`; downstream
+commits: ChiSurf `fafb002e4`, imp-tricks `9cce724`.
