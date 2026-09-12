@@ -69,7 +69,7 @@ tests:
       - imp_bff_fetch_data --list
       # the surface a consumer relies on, so a package missing half its
       # classes fails here rather than in chisurf
-      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('Dataset', 'sync_dataset', 'ChiSquared', 'JointChiSquared', 'EvaluationGraph', 'Minimizer', 'TcspcDecay')]"
+      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('FitDataset', 'sync_dataset', 'FitChiSquared', 'FitJointChiSquared', 'GraphEvaluation', 'FitMinimizer', 'TCSPCDecay')]"
       # the plugin is built and installed beside the extension; it stays
       # unused until a wgpu library is present, which is a machine question
       - python -c "import IMP.bff as b; assert b.built_with_gpu_support()"

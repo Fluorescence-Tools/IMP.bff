@@ -52,7 +52,8 @@ set DISABLED=EMageFit:bayesianem:bff:cgal:cnmultifit:domino:em2d:emseqfinder:exa
 :: one, link against kernel32 instead (which pretty much everything links
 :: against, so this doesn't introduce an extra dependency)
 
-cmake -DCMAKE_PREFIX_PATH="%PREFIX:\=/%;%PREFIX:\=/%\Library" ^
+cmake -DDOXYGEN_EXECUTABLE=DOXYGEN_EXECUTABLE-NOTFOUND ^
+      -DCMAKE_PREFIX_PATH="%PREFIX:\=/%;%PREFIX:\=/%\Library" ^
       -DCMAKE_BUILD_TYPE=Release -DIMP_DISABLED_MODULES=%DISABLED% ^
       -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX:\=/%" ^
       -DCMAKE_INSTALL_LIBDIR=bin ^

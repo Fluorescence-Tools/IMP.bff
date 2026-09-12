@@ -103,7 +103,7 @@ tests:
       # this build, not the IMP-free core (recipe-core.yaml asserts 'core')
       # the spot-check runs first: it says how deep the surface goes, so a
       # get_build failure here is not hiding a missing-wrap failure behind it
-      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('Dataset', 'ChiSquared', 'JointChiSquared', 'EvaluationGraph', 'Minimizer', 'TcspcDecay')]"
+      - python -c "import IMP.bff as b; [getattr(b, n) for n in ('FitDataset', 'FitChiSquared', 'FitJointChiSquared', 'GraphEvaluation', 'FitMinimizer', 'TCSPCDecay')]"
       - python -c "import IMP.bff as b; assert b.get_build() == 'imp', b.get_build()"
       # the compute door is compiled in; whether a *backend* loads is a
       # run-time question about the machine and is deliberately not asserted
