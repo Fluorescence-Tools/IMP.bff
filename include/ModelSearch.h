@@ -212,6 +212,112 @@ class IMPBFFEXPORT FittingModelSearchProblem : public ModelSearchProblem {
   FittingModelSearchProblem& operator=(const FittingModelSearchProblem&) = delete;
 };
 
+//! A callback-free fitting search whose structures have different graphs.
+/*!
+  The problem owns one canonical parameter registry.  Every structure names
+  every registered parameter and must supply the exact same owner #GraphPort
+  for that canonical id.  A structure may omit a parameter from its objective
+  topology by marking it fixed, but it does not get a private copy.  Switching
+  structures therefore selects an objective graph while values, bounds, links,
+  and snapshots remain properties of one shared native parameter state.
+
+  Each structure also declares its starting value and fixed mask.  Values of
+  parameters that remain free across a transition are warm-started in place.
+  Newly enabled parameters and fixed structural constants take the target
+  structure's declared starting value.  No value is copied between graphs and
+  no parameter is matched by a port or node name.
+
+  The default reward is `-chi2/2`.  Optional BIC metadata changes it to
+  `-(chi2 + complexity * log(effective_sample_size))/2`; an explicit scalar
+  score output overrides both.  A #FitJointChiSquared is simply another
+  objective graph, so single and joint fits use the same path.
+*/
+class IMPBFFEXPORT MultiStructureModelSearchProblem
+    : public ModelSearchProblem {
+ public:
+  MultiStructureModelSearchProblem();
+  ~MultiStructureModelSearchProblem();
+
+  //! Register one stable canonical id and its scalar, unlinked owner port.
+  void add_parameter(const std::string& canonical_id,
+                     std::shared_ptr<GraphPort> owner);
+  std::vector<std::string> get_parameter_ids() const;
+  std::shared_ptr<GraphPort> get_parameter(
+      const std::string& canonical_id) const;
+
+  //! Register a complete native objective topology and parameter state.
+  /*!
+    `parameter_ids`, `parameter_ports`, `initial_values`, and `fixed_mask`
+    describe the complete canonical registry. IDs may be in any order, but
+    none may be duplicated or omitted. Every supplied port must be the exact
+    owner already registered for its id.
+  */
+  void add_structure(
+      const std::string& key, std::shared_ptr<GraphNode> objective,
+      const std::vector<std::string>& parameter_ids,
+      const std::vector<std::shared_ptr<GraphPort> >& parameter_ports,
+      const std::vector<double>& initial_values,
+      const std::vector<int>& fixed_mask,
+      const std::string& residual_key = "residuals");
+  std::vector<std::string> get_structure_keys() const;
+  std::shared_ptr<GraphNode> get_structure_objective(
+      const std::string& key) const;
+  //! Retain one upstream node that belongs to a structure's complete graph.
+  /*!
+    Graph links retain ports while a port retains its attached node weakly.
+    Registering upstream nodes here gives the problem ownership of the full
+    topology. The objective passed to #add_structure is retained already.
+  */
+  void add_structure_node(const std::string& structure_key,
+                          std::shared_ptr<GraphNode> node);
+
+  void set_initial_structure(const std::string& key);
+  void add_action(const std::string& parent_structure,
+                  const std::string& action_key,
+                  const std::string& result_structure, double prior = 1.0,
+                  bool terminal = false);
+
+  //! Use this structure's scalar output directly as reward.
+  void set_structure_score_output(const std::string& structure_key,
+                                  const std::string& output_key);
+  void clear_structure_score_output(const std::string& structure_key);
+  //! Optional scalar/bool output defining result.acceptable.
+  void set_structure_acceptable_output(const std::string& structure_key,
+                                       const std::string& output_key);
+  void clear_structure_acceptable_output(const std::string& structure_key);
+  //! Use BIC scoring for this structure when there is no explicit score.
+  void set_structure_bic_metadata(const std::string& structure_key,
+                                  double effective_sample_size,
+                                  double complexity);
+  void clear_structure_bic_metadata(const std::string& structure_key);
+
+  ModelSearchState get_initial_state() override;
+  ModelSearchActions get_actions(
+      const ModelSearchState& state) override;
+  ModelSearchState evaluate(const ModelSearchState& parent,
+                            const ModelSearchAction& action) override;
+  void request_cancel() override;
+  void clear_cancel() override;
+  void activate_state(const ModelSearchState& state) override;
+
+  bool has_cached_state(const std::string& state_key) const;
+  std::vector<double> get_cached_values(const std::string& state_key) const;
+  std::vector<int> get_cached_fixed(const std::string& state_key) const;
+  void restore_state(const std::string& state_key);
+  const std::string& get_active_structure() const;
+  std::shared_ptr<GraphNode> get_active_objective() const;
+  int get_last_fit_status() const;
+  const std::string& get_last_failure() const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+  MultiStructureModelSearchProblem(
+      const MultiStructureModelSearchProblem&) = delete;
+  MultiStructureModelSearchProblem& operator=(
+      const MultiStructureModelSearchProblem&) = delete;
+};
+
 //! Search controls, independent of any fitting model or data family.
 class IMPBFFEXPORT ModelSearchConfig {
  public:

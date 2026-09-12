@@ -21,3 +21,8 @@
 %shared_ptr(IMP::bff::FCSMdfCurve);
 %shared_ptr(IMP::bff::FCSSaturationCurve);
 %include "IMP/bff/FCS.h"
+
+// Complete analytical-FCS topology families over one canonical parameter
+// registry, ready for BFF's native ModelSearch.
+IMP_SWIG_VALUE(IMP::bff, FCSModelSearchConfig, FCSModelSearchConfigs);
+%include "IMP/bff/FCSModelSearch.h"

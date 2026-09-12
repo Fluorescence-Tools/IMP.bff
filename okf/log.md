@@ -2,6 +2,25 @@
 
 ## 2026-09-12
 
+- **Native multi-topology fitting search (T-20260912-08)**:
+  `MultiStructureModelSearchProblem` adds a separate path for model structures
+  whose objective graphs differ. One canonical scalar-owner registry is the
+  only parameter state; every structure must cover it completely with the
+  exact same owner ports, declared seeds/fixed masks, its native objective,
+  and optional direct-score, acceptability, or BIC metadata. Common free
+  parameters stay warm in that registry across topology switches, while newly
+  enabled parameters take the target seed. Successful states cache canonical
+  values/masks; cancellation and failed minimization restore the parent state
+  and graph; winner activation restores and evaluates the selected topology.
+  Upstream nodes can be retained as part of each complete structure graph, so
+  graph lifetime is owned in BFF rather than by Python proxy attributes. The
+  adapter contains no Python callback, director, fallback, name matching, or
+  model-family branch. The existing same-graph
+  `FittingModelSearchProblem` remains unchanged. The arm64 library and SWIG
+  wrapper built, 11 focused model-search tests and 343 public-header/API tests
+  passed before the final graph-node lifetime method was added; that last
+  method is queued for the shared factory rebuild.
+
 - **Model-independent MCTS core (T-20260912-04)**: `ModelSearch` now owns
   lazy tree expansion, PUCT traversal, seeded root Dirichlet noise,
   ancestor-cycle refusal, canonical-collapse termination, cooperative atomic
