@@ -144,18 +144,16 @@ jobs:
       # module's surface. So the job builds imp itself, from conda-forge's
       # recipe (conda-recipe/imp/, trimmed to the 14 modules bff uses,
       # bff disabled) and cached by the recipe's content.
-      # Restore/save split (tttrlib's discipline): the key carries the run
-      # id, so a run whose imp build died midway can never save a half-empty
-      # tree under the recipe's hash and poison every later run -- the cold
-      # cache "even after a fresh build" was exactly that. The prefix
-      # restore-key picks up whichever run last succeeded.
+      # The key is stable for this runner and recipe revision, so successful
+      # builds are exact cache hits on later runs. A failed build is never
+      # saved, which prevents a partial dependency tree from poisoning the
+      # next run.
       - name: Restore our imp package
         id: imp-cache
         uses: actions/cache/restore@v4
         with:
           path: imp-bld
-          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-${{ github.run_id }}
-          restore-keys: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-
+          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
       - name: Build our imp (when the cache is cold)
         if: steps.imp-cache.outputs.cache-hit != 'true'
         shell: bash -el {0}
@@ -174,7 +172,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: imp-bld
-          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}-${{ github.run_id }}
+          key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
       # The large data (data/registry.json) is not in git: it comes from the
       # download host, cached between runs keyed by the registry (tttrlib's
       # pattern) so only a changed registry downloads again. The build
