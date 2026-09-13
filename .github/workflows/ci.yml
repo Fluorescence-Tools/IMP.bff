@@ -195,7 +195,13 @@ jobs:
             # same activation path the shell uses, so runtime context is explicit.
             source "${CONDA}/etc/profile.d/conda.sh"
             conda activate "${CONDA}/envs/test"
-            "$RATTLER_BUILD_BIN" --version
+            if command -v strace >/dev/null; then
+              strace -f -o /tmp/rattler-build.strace "$RATTLER_BUILD_BIN" --version || true
+              echo "rattler-build --version strace:"
+              sed -n '1,160p' /tmp/rattler-build.strace
+            else
+              "$RATTLER_BUILD_BIN" --version
+            fi
             echo "rattler-build path: $RATTLER_BUILD_BIN"
             file "$RATTLER_BUILD_BIN"
             echo "rattler-build dependencies:"
@@ -269,7 +275,13 @@ jobs:
             # same activation path the shell uses, so runtime context is explicit.
             source "${CONDA}/etc/profile.d/conda.sh"
             conda activate "${CONDA}/envs/test"
-            "$RATTLER_BUILD_BIN" --version
+            if command -v strace >/dev/null; then
+              strace -f -o /tmp/rattler-build.strace "$RATTLER_BUILD_BIN" --version || true
+              echo "rattler-build --version strace:"
+              sed -n '1,160p' /tmp/rattler-build.strace
+            else
+              "$RATTLER_BUILD_BIN" --version
+            fi
             echo "rattler-build path: $RATTLER_BUILD_BIN"
             file "$RATTLER_BUILD_BIN"
             echo "rattler-build dependencies:"
