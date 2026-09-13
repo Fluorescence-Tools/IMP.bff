@@ -174,10 +174,15 @@ jobs:
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
           else
-            # conda's run wrapper is robust across hosted runners; avoid the mamba
-            # shell-wrapper edge case where command arguments can be interpreted as
-            # options on some runner variants.
-            conda run -n test --no-capture-output rattler-build build \
+            # The `conda`/`mamba` runners on GitHub-hosted agents can occasionally
+            # mask launch failures behind an immediate exit-code 1; invoke the
+            # binary directly from the known "test" environment for reliable
+            # diagnostics and output.
+            if [ ! -x "${CONDA}/envs/test/bin/rattler-build" ]; then
+              echo "::error::expected ${CONDA}/envs/test/bin/rattler-build to exist"
+              exit 1
+            fi
+            "${CONDA}/envs/test/bin/rattler-build" build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
@@ -225,9 +230,7 @@ jobs:
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            # conda run is intentionally used here for the same wrapper robustness
-            # as above in the non-Windows build path.
-            conda run -n test --no-capture-output rattler-build build \
+            "${CONDA}/envs/test/bin/rattler-build" build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
