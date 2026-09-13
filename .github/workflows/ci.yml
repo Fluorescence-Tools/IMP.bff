@@ -191,11 +191,11 @@ jobs:
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
           else
-            # The `conda`/`mamba` runners on GitHub-hosted agents can
-            # occasionally mask launch failures behind an immediate exit-code 1.
-            # Resolve the binary path defensively because it can live in base
-            # or a different environment.
-            "$RATTLER_BUILD_BIN" build \
+            # `rattler-build` can be installed into an isolated conda env that
+            # this shell is not tracking; `conda run` keeps the env context
+            # intact while preserving the real process exit codes.
+            conda run -n test --no-capture-output "$RATTLER_BUILD_BIN" \
+                build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
@@ -259,7 +259,8 @@ jobs:
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            "$RATTLER_BUILD_BIN" build \
+            conda run -n test --no-capture-output "$RATTLER_BUILD_BIN" \
+                build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
