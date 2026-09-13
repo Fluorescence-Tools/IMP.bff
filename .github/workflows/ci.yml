@@ -194,7 +194,8 @@ jobs:
             # `rattler-build` can be installed into an isolated conda env that
             # this shell is not tracking; `conda run` keeps the env context
             # intact while preserving the real process exit codes.
-            conda run -n test --no-capture-output "$RATTLER_BUILD_BIN" \
+            conda run -n test rattler-build --version
+            conda run -n test rattler-build \
                 build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
@@ -259,7 +260,8 @@ jobs:
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            conda run -n test --no-capture-output "$RATTLER_BUILD_BIN" \
+            conda run -n test rattler-build --version
+            conda run -n test rattler-build \
                 build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
