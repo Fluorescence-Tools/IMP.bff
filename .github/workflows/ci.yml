@@ -133,7 +133,7 @@ jobs:
           echo "RATTLER_BUILD_EXE=$($exe -replace '\\','/')" >> $env:GITHUB_ENV
       - name: Install rattler-build (Linux and macOS)
         if: runner.os != 'Windows'
-        shell: bash -el {0}
+        shell: bash -e {0}
         run: |
           tag="v0.76.0"
           case "$RUNNER_OS" in
@@ -185,7 +185,7 @@ jobs:
           path: imp-bld
           key: imp-trimmed-${{ runner.os }}-${{ hashFiles('conda-recipe/imp/**') }}
       - name: Build our imp (when the cache is cold)
-        shell: bash -el {0}
+        shell: bash -e {0}
         run: |
           if [ -z "${RATTLER_BUILD_EXE}" ]; then
             echo "::error::could not locate rattler-build"
@@ -222,7 +222,7 @@ jobs:
           path: ~/.cache/imp-bff-data
           key: imp-bff-data-${{ hashFiles('data/registry.json') }}
       - name: Fetch the large data
-        shell: bash -el {0}
+        shell: bash -e {0}
         run: |
           python -m pip install -q pooch
           # cgprobe only: the 229-file rotamer_library is the bulk of the
@@ -233,7 +233,7 @@ jobs:
           echo "IMP_BFF_DATA_CACHE=$HOME/.cache/imp-bff-data" >> "$GITHUB_ENV"
 
       - name: Build the conda package
-        shell: bash -el {0}
+        shell: bash -e {0}
         # --env-isolation none: rattler-build's default (`strict`) hands
         # build.sh a clean environment, which silently cost two caches --
         # IMP_BFF_DATA_CACHE never reached it, so every package build
@@ -264,7 +264,7 @@ jobs:
       # extraction ("Could not set lock", empty index.json). Transient, not a
       # dependency problem -- a clean retry always passes.
       - name: Install the freshly built package into a test env
-        shell: bash -el {0}
+        shell: bash -e {0}
         run: |
           for attempt in 1 2 3; do
             # --strict-channel-priority: our imp must win the 2.25.0 tie
@@ -283,7 +283,7 @@ jobs:
       # pytest's default `test_*.py` glob, so the file lists are built
       # explicitly rather than relying on collection.
       - name: Run fast + medium tests
-        shell: bash -el {0}
+        shell: bash -e {0}
         run: |
           # Keep test discovery and execution in the same interpreter invocation
           # to avoid shell-feature differences across runners.
