@@ -111,10 +111,8 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
           echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
 
-      # Windows: `bash -el` steps degraded into a cmd banner and never ran
-      # mamba (two runs in a row), so the builder is the standalone release
-      # binary -- Rust, no conda needed. Linux and macOS keep the conda
-      # package.
+      # Windows, Linux and macOS use the same standalone rattler-build binary
+      # release to avoid conda-launcher issues in GitHub Actions.
       - name: Install rattler-build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -136,7 +134,37 @@ jobs:
       - name: Install rattler-build (Linux and macOS)
         if: runner.os != 'Windows'
         shell: bash -el {0}
-        run: mamba install -y rattler-build
+        run: |
+          tag="v0.76.0"
+          case "$RUNNER_OS" in
+            Linux)
+              asset="rattler-build-x86_64-unknown-linux-musl.tar.gz"
+              ;;
+            macOS)
+              asset="rattler-build-aarch64-apple-darwin.tar.gz"
+              ;;
+            *)
+              echo "::error::unsupported runner OS: $RUNNER_OS"
+              exit 1
+              ;;
+          esac
+
+          dest="${RUNNER_TEMP}/rattler-build"
+          mkdir -p "${dest}"
+          url="https://github.com/prefix-dev/rattler-build/releases/download/${tag}/${asset}"
+          echo "downloading rattler-build from ${url}"
+          curl -fL -o "${dest}/${asset}" "${url}"
+          tar -xzf "${dest}/${asset}" -C "${dest}"
+
+          RATTLER_BUILD_EXE="${dest}/${asset%.tar.gz}/rattler-build"
+          if [ ! -f "$RATTLER_BUILD_EXE" ]; then
+            echo "::error::failed to unpack rattler-build from ${asset}"
+            find "${dest}" -maxdepth 2 -type f
+            exit 1
+          fi
+          chmod +x "$RATTLER_BUILD_EXE"
+          echo "RATTLER_BUILD_EXE=${RATTLER_BUILD_EXE}" >> "$GITHUB_ENV"
+          "$RATTLER_BUILD_EXE" --version
 
       # ── our own imp ────────────────────────────────────────────────────────
       # The published conda-forge imp ships salilab/imp's historical bff
@@ -159,23 +187,11 @@ jobs:
       - name: Build our imp (when the cache is cold)
         shell: bash -el {0}
         run: |
-          RATTLER_BUILD_BIN="${CONDA}/envs/test/bin/rattler-build"
-          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
-            RATTLER_BUILD_BIN="${CONDA}/bin/rattler-build"
-          fi
-          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
-            RATTLER_BUILD_BIN="$(command -v rattler-build || true)"
-          fi
-
-          if [ -z "$RATTLER_BUILD_BIN" ]; then
+          if [ -z "${RATTLER_BUILD_EXE}" ]; then
             echo "::error::could not locate rattler-build"
-            echo "CONDA=$CONDA"
-            which conda || true
-            ls -la "${CONDA}/bin" | head -n 20 || true
-            ls -la "${CONDA}/envs/test/bin" | head -n 20 || true
             exit 1
           fi
-          echo "Using rattler-build=$RATTLER_BUILD_BIN"
+          echo "Using rattler-build=$RATTLER_BUILD_EXE"
           # A cache miss leaves no imp-bld directory.  Under bash -e the old
           # find|grep guard exited here with status 1, so rattler-build never
           # ran and the job failed in 1s.  Treat a missing directory as an
@@ -186,32 +202,9 @@ jobs:
               exit 0
             fi
           fi
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            "$RATTLER_BUILD_EXE" build --recipe conda-recipe/imp/recipe.yaml \
-                --env-isolation none \
-                --channel conda-forge --output-dir imp-bld
-          else
-            # `rattler-build` is installed in `envs/test`; launch through the
-            # same activation path the shell uses, so runtime context is explicit.
-            source "${CONDA}/etc/profile.d/conda.sh"
-            conda activate "${CONDA}/envs/test"
-            if command -v strace >/dev/null; then
-              strace -f -o /tmp/rattler-build.strace "$RATTLER_BUILD_BIN" --version || true
-              echo "rattler-build --version strace:"
-              sed -n '1,160p' /tmp/rattler-build.strace
-            else
-              "$RATTLER_BUILD_BIN" --version
-            fi
-            echo "rattler-build path: $RATTLER_BUILD_BIN"
-            file "$RATTLER_BUILD_BIN"
-            echo "rattler-build dependencies:"
-            ldd "$RATTLER_BUILD_BIN" || true
-            "$RATTLER_BUILD_BIN" build \
-                --recipe conda-recipe/imp/recipe.yaml \
-                --env-isolation none \
-                --channel conda-forge --output-dir imp-bld
-            conda deactivate
-          fi
+          "$RATTLER_BUILD_EXE" build --recipe conda-recipe/imp/recipe.yaml \
+              --env-isolation none \
+              --channel conda-forge --output-dir imp-bld
       - name: Save our imp package
         if: steps.imp-cache.outputs.cache-hit != 'true' && success()
         uses: actions/cache/save@v4
@@ -249,50 +242,15 @@ jobs:
         # (wiped with the work dir). `none` inherits the host environment,
         # tttrlib's effective behavior under conda-build.
         run: |
-          RATTLER_BUILD_BIN="${CONDA}/envs/test/bin/rattler-build"
-          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
-            RATTLER_BUILD_BIN="${CONDA}/bin/rattler-build"
-          fi
-          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
-            RATTLER_BUILD_BIN="$(command -v rattler-build || true)"
-          fi
-          if [ -z "$RATTLER_BUILD_BIN" ]; then
+          if [ -z "${RATTLER_BUILD_EXE}" ]; then
             echo "::error::could not locate rattler-build"
-            echo "CONDA=$CONDA"
-            which conda || true
-            ls -la "${CONDA}/bin" | head -n 20 || true
-            ls -la "${CONDA}/envs/test/bin" | head -n 20 || true
             exit 1
           fi
-          echo "Using rattler-build=$RATTLER_BUILD_BIN"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            "$RATTLER_BUILD_EXE" build --recipe conda-recipe/recipe.yaml \
-                --env-isolation none \
-                --channel ./imp-bld --channel conda-forge \
-                --output-dir conda-bld
-          else
-            # `rattler-build` is installed in `envs/test`; launch through the
-            # same activation path the shell uses, so runtime context is explicit.
-            source "${CONDA}/etc/profile.d/conda.sh"
-            conda activate "${CONDA}/envs/test"
-            if command -v strace >/dev/null; then
-              strace -f -o /tmp/rattler-build.strace "$RATTLER_BUILD_BIN" --version || true
-              echo "rattler-build --version strace:"
-              sed -n '1,160p' /tmp/rattler-build.strace
-            else
-              "$RATTLER_BUILD_BIN" --version
-            fi
-            echo "rattler-build path: $RATTLER_BUILD_BIN"
-            file "$RATTLER_BUILD_BIN"
-            echo "rattler-build dependencies:"
-            ldd "$RATTLER_BUILD_BIN" || true
-            "$RATTLER_BUILD_BIN" build \
-                --recipe conda-recipe/recipe.yaml \
-                --env-isolation none \
-                --channel ./imp-bld --channel conda-forge \
-                --output-dir conda-bld
-            conda deactivate
-          fi
+          echo "Using rattler-build=$RATTLER_BUILD_EXE"
+          "$RATTLER_BUILD_EXE" build --recipe conda-recipe/recipe.yaml \
+              --env-isolation none \
+              --channel ./imp-bld --channel conda-forge \
+              --output-dir conda-bld
 
       - name: Compiler cache statistics
         if: always()
