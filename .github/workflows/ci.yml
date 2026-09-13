@@ -159,6 +159,23 @@ jobs:
       - name: Build our imp (when the cache is cold)
         shell: bash -el {0}
         run: |
+          RATTLER_BUILD_BIN="${CONDA}/envs/test/bin/rattler-build"
+          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
+            RATTLER_BUILD_BIN="${CONDA}/bin/rattler-build"
+          fi
+          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
+            RATTLER_BUILD_BIN="$(command -v rattler-build || true)"
+          fi
+
+          if [ -z "$RATTLER_BUILD_BIN" ]; then
+            echo "::error::could not locate rattler-build"
+            echo "CONDA=$CONDA"
+            which conda || true
+            ls -la "${CONDA}/bin" | head -n 20 || true
+            ls -la "${CONDA}/envs/test/bin" | head -n 20 || true
+            exit 1
+          fi
+          echo "Using rattler-build=$RATTLER_BUILD_BIN"
           # A cache miss leaves no imp-bld directory.  Under bash -e the old
           # find|grep guard exited here with status 1, so rattler-build never
           # ran and the job failed in 1s.  Treat a missing directory as an
@@ -174,15 +191,11 @@ jobs:
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
           else
-            # The `conda`/`mamba` runners on GitHub-hosted agents can occasionally
-            # mask launch failures behind an immediate exit-code 1; invoke the
-            # binary directly from the known "test" environment for reliable
-            # diagnostics and output.
-            if [ ! -x "${CONDA}/envs/test/bin/rattler-build" ]; then
-              echo "::error::expected ${CONDA}/envs/test/bin/rattler-build to exist"
-              exit 1
-            fi
-            "${CONDA}/envs/test/bin/rattler-build" build \
+            # The `conda`/`mamba` runners on GitHub-hosted agents can
+            # occasionally mask launch failures behind an immediate exit-code 1.
+            # Resolve the binary path defensively because it can live in base
+            # or a different environment.
+            "$RATTLER_BUILD_BIN" build \
                 --recipe conda-recipe/imp/recipe.yaml \
                 --env-isolation none \
                 --channel conda-forge --output-dir imp-bld
@@ -224,13 +237,29 @@ jobs:
         # (wiped with the work dir). `none` inherits the host environment,
         # tttrlib's effective behavior under conda-build.
         run: |
+          RATTLER_BUILD_BIN="${CONDA}/envs/test/bin/rattler-build"
+          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
+            RATTLER_BUILD_BIN="${CONDA}/bin/rattler-build"
+          fi
+          if [ ! -x "$RATTLER_BUILD_BIN" ]; then
+            RATTLER_BUILD_BIN="$(command -v rattler-build || true)"
+          fi
+          if [ -z "$RATTLER_BUILD_BIN" ]; then
+            echo "::error::could not locate rattler-build"
+            echo "CONDA=$CONDA"
+            which conda || true
+            ls -la "${CONDA}/bin" | head -n 20 || true
+            ls -la "${CONDA}/envs/test/bin" | head -n 20 || true
+            exit 1
+          fi
+          echo "Using rattler-build=$RATTLER_BUILD_BIN"
           if [ "$RUNNER_OS" = "Windows" ]; then
             "$RATTLER_BUILD_EXE" build --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
                 --output-dir conda-bld
           else
-            "${CONDA}/envs/test/bin/rattler-build" build \
+            "$RATTLER_BUILD_BIN" build \
                 --recipe conda-recipe/recipe.yaml \
                 --env-isolation none \
                 --channel ./imp-bld --channel conda-forge \
